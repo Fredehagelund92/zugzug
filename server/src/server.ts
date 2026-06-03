@@ -17,6 +17,27 @@ const actor = (req: Request) => req.headers.get("x-user-id")?.trim() || "u_ada";
 await connect();
 console.log("· connected (MotherDuck + Postgres attached)");
 
+/* scheduler — every minute, if any wired source is due (per its 15m/hourly/
+   daily cadence), run a full scanSources. scanSources handles all wired
+   sources, so a coarse trigger is fine at this scale. Single in-flight guard
+   prevents overlap if a scan takes longer than the tick. */
+let scanInFlight = false;
+async function scheduleTick(): Promise<void> {
+  if (scanInFlight) return;
+  try {
+    if (!(await repo.anyScanDue(new Date()))) return;
+    scanInFlight = true;
+    const n = await repo.scanSources();
+    console.log(`· scheduler: scanned ${n} source${n === 1 ? "" : "s"}`);
+  } catch (e) {
+    console.error("· scheduler tick failed:", e);
+  } finally {
+    scanInFlight = false;
+  }
+}
+setInterval(() => { void scheduleTick(); }, 60_000);
+console.log("· scheduler started (1m tick)");
+
 const server = Bun.serve({
   port: env.port,
   idleTimeout: 120,
@@ -114,6 +135,12 @@ const server = Bun.serve({
         if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
           const { table, column } = (await req.json()) as { table: string; column: string };
           await repo.addSource(id, table, column);
+          return noContent();
+        }
+        // PUT /api/dimensions/:id/sources/schedule {table, column, schedule}
+        if (seg[3] === "sources" && seg[4] === "schedule" && seg.length === 5 && method === "PUT") {
+          const { table, column, schedule } = (await req.json()) as { table: string; column: string; schedule: string | null };
+          await repo.setSourceSchedule(id, table, column, schedule);
           return noContent();
         }
         // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical

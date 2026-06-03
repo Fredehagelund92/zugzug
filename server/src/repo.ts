@@ -33,6 +33,8 @@ export interface DimensionMeta {
 export interface SourceInfo {
   table: string; column: string; dimension: string; dimId: string;
   present: boolean; rows: number; values: number; unmapped: number; scanned: boolean;
+  schedule?: string | null;     // null | '15m' | 'hourly' | 'daily'
+  scannedAt?: string | null;    // ISO timestamp of last scan
 }
 export interface SchemaFacet { schema: string; columns: number; unmapped: number; missing: number }
 export interface CatalogTable { schema: string; table: string; columns: string[] }
@@ -109,11 +111,13 @@ export async function listSources(opts: { q?: string; schema?: string; status?: 
   else if (opts.status === "clean") where.push(`COALESCE(st.present, false) AND COALESCE(st.unmapped, 0) = 0`);
   else if (opts.status === "missing") where.push(`st.scanned_at IS NOT NULL AND NOT st.present`);
 
-  const rows = await all<{ dimId: string; dimension: string; table: string; column: string; present: boolean; rows: bigint; values: bigint; unmapped: bigint; scanned: boolean }>(
+  const rows = await all<{ dimId: string; dimension: string; table: string; column: string; present: boolean; rows: bigint; values: bigint; unmapped: bigint; scanned: boolean; schedule: string | null; scannedAt: Date | string | null }>(
     `SELECT s.dim_id AS "dimId", d.label AS dimension, s.source_table AS "table", s.source_column AS column,
             COALESCE(st.present, false) AS present, COALESCE(st.rows, 0) AS rows,
             COALESCE(st.distinct_values, 0) AS values, COALESCE(st.unmapped, 0) AS unmapped,
-            (st.scanned_at IS NOT NULL) AS scanned
+            (st.scanned_at IS NOT NULL) AS scanned,
+            s.schedule AS schedule,
+            st.scanned_at AS "scannedAt"
      FROM ${pg("dimension_source")} s
      JOIN ${pg("dimension")} d ON d.id = s.dim_id
      LEFT JOIN ${pg("source_stat")} st ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
@@ -121,7 +125,13 @@ export async function listSources(opts: { q?: string; schema?: string; status?: 
      ORDER BY COALESCE(st.unmapped, 0) DESC, s.source_table, s.source_column
      LIMIT 1000`, params,
   );
-  return rows.map((r) => ({ table: r.table, column: r.column, dimension: r.dimension, dimId: r.dimId, present: !!r.present, rows: Number(r.rows), values: Number(r.values), unmapped: Number(r.unmapped), scanned: !!r.scanned }));
+  return rows.map((r) => ({
+    table: r.table, column: r.column, dimension: r.dimension, dimId: r.dimId,
+    present: !!r.present, rows: Number(r.rows), values: Number(r.values),
+    unmapped: Number(r.unmapped), scanned: !!r.scanned,
+    schedule: r.schedule ?? null,
+    scannedAt: r.scannedAt ? (r.scannedAt instanceof Date ? r.scannedAt.toISOString() : String(r.scannedAt)) : null,
+  }));
 }
 
 /** Per-schema rollup for the facet rail — turns N source columns into ~systems. */
@@ -229,6 +239,35 @@ export async function addSource(dimId: string, table: string, column: string): P
   await run(
     `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column) VALUES ($1,$2,$3)
      ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`, [dimId, table, column],
+  );
+}
+
+/** Set (or clear) the automatic scan cadence for a wired source. Valid values:
+ *  null (no schedule), '15m', 'hourly', 'daily'. */
+export async function setSourceSchedule(dimId: string, table: string, column: string, schedule: string | null): Promise<void> {
+  const valid = schedule === null || ["15m", "hourly", "daily"].includes(schedule);
+  if (!valid) throw new Error(`invalid schedule: ${schedule}`);
+  await run(
+    `UPDATE ${pg("dimension_source")} SET schedule = $1
+     WHERE dim_id = $2 AND source_table = $3 AND source_column = $4`,
+    [schedule, dimId, table, column],
+  );
+}
+
+/** Returns true when at least one wired source is due for its scheduled scan,
+ *  given the last scanned_at on source_stat. The scheduler uses this as a cheap
+ *  is-anything-pending check before triggering scanSources (which scans them all). */
+export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
+  const rows = await all<{ schedule: string; scanned_at: Date | string | null }>(
+    `SELECT s.schedule, st.scanned_at
+     FROM ${pg("dimension_source")} s
+     LEFT JOIN ${pg("source_stat")} st
+       ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
+     WHERE s.schedule IS NOT NULL`,
+  );
+  const dueMs = (s: string) => s === "15m" ? 15 * 60_000 : s === "hourly" ? 60 * 60_000 : s === "daily" ? 24 * 60 * 60_000 : Infinity;
+  return rows.some((r) =>
+    !r.scanned_at || (now.getTime() - new Date(r.scanned_at).getTime()) >= dueMs(r.schedule),
   );
 }
 

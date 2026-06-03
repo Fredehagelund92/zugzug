@@ -45,6 +45,8 @@ export async function ensureSchema(): Promise<void> {
     source_column VARCHAR NOT NULL,
     PRIMARY KEY (dim_id, source_table, source_column)
   )`);
+  // optional cadence for an automatic scan: NULL | '15m' | 'hourly' | 'daily'.
+  await run(`ALTER TABLE ${pg("dimension_source")} ADD COLUMN IF NOT EXISTS schedule VARCHAR`);
 
   // enrichment fields: extra attribute columns on a dimension's dim_ table
   // (region, currency, …). The registry; the columns themselves are ALTERed in.
