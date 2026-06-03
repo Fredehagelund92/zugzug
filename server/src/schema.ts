@@ -149,6 +149,7 @@ export async function ensureSchema(): Promise<void> {
     user_id    VARCHAR NOT NULL,
     expires_at TIMESTAMP NOT NULL
   )`);
+  await run(`CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON ${pg("sessions")} (user_id)`);
 
   // workspace-global preferences (single row, id=1) — the auto-match bands
   // (publish_threshold = auto-publish on scan; suggest_threshold = surface as
