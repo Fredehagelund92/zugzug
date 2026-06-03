@@ -359,8 +359,14 @@ export function MasterTables() {
           }
           onDeleteColumn={(field) => void deleteColumn(activeId, field)}
           onLayoutChange={(partial) => {
-            setLayout((cur) => ({ ...cur, ...partial }));
-            setGridLayout(activeId, partial);
+            // persist the FULLY MERGED config: the server does a full replace, so
+            // sending just the partial wipes the other persisted keys (order/hidden
+            // gone when only `widths` changes, etc.)
+            setLayout((cur) => {
+              const next = { ...cur, ...partial };
+              setGridLayout(activeId, next);
+              return next;
+            });
           }}
           empty={<div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">no master records yet — import from a source above, or add one below</div>}
         />

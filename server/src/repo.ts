@@ -735,23 +735,32 @@ export async function changeColumnType(
     : newType === "date" ? "DATE"
     : "VARCHAR";
   const tmp = `${field}__tmp_${Date.now().toString(36)}`;
-  await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN ${qid(tmp)} ${newSql}`);
-  for (const p of parsed) {
-    if (p.bad && !coerceInvalidToNull) continue;
-    await run(`UPDATE ${cq(m.dimTable)} SET ${qid(tmp)} = $1 WHERE ${keyc} = $2`, [p.v, p.k]);
-  }
-  await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN ${col}`);
-  await run(`ALTER TABLE ${cq(m.dimTable)} RENAME COLUMN ${qid(tmp)} TO ${col}`);
 
+  // Atomic ADD → UPDATE → DROP → RENAME: a crash between DROP and RENAME
+  // would lose the original column irreversibly. Mirror deleteColumn's
+  // BEGIN/COMMIT/ROLLBACK pattern.
   let finalOptions: string[] | undefined;
   if (newType === "select") {
     finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))];
   }
 
-  await run(
-    `UPDATE ${pg("dimension_field")} SET type = $1, options = $2 WHERE dim_id = $3 AND field = $4`,
-    [newType, newType === "select" ? JSON.stringify(finalOptions ?? []) : null, dimId, field],
-  );
+  await run(`BEGIN`);
+  try {
+    await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN ${qid(tmp)} ${newSql}`);
+    for (const p of parsed) {
+      if (p.bad && !coerceInvalidToNull) continue;
+      await run(`UPDATE ${cq(m.dimTable)} SET ${qid(tmp)} = $1 WHERE ${keyc} = $2`, [p.v, p.k]);
+    }
+    await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN ${col}`);
+    await run(`ALTER TABLE ${cq(m.dimTable)} RENAME COLUMN ${qid(tmp)} TO ${col}`);
+    await run(
+      `UPDATE ${pg("dimension_field")} SET type = $1, options = $2 WHERE dim_id = $3 AND field = $4`,
+      [newType, newType === "select" ? JSON.stringify(finalOptions ?? []) : null, dimId, field],
+    );
+    await run(`COMMIT`);
+  } catch (e) {
+    await run(`ROLLBACK`); throw e;
+  }
   await appendAudit("Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
   return { ok: true, options: finalOptions };
 }
