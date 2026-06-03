@@ -11,7 +11,7 @@ import { valueRows } from "../data";
 import type { MappingValue } from "../data";
 import { useDimensions, addDimension, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
-import { useGridCursor, useUndoStack } from "../components/datagrid";
+import { useGridCursor, useUndoStack, Chip } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
 
 /* Value mapping — match messy source values to one master record. Each accept /
@@ -283,7 +283,11 @@ function MappingInner() {
                     </div>
                   ) : <span className="font-mono text-[11px] text-ink-3">—</span>}
                 </div>
-                <div>{row.status === "mapped" ? <Badge tone="ok" dot>Mapped</Badge> : row.status === "skipped" ? <Badge>Skipped</Badge> : <Badge tone="warn" dot>New</Badge>}</div>
+                <div>{row.status === "mapped"
+                  ? <Chip label="Mapped" bucket="chip-1" dot />
+                  : row.status === "skipped"
+                    ? <Chip label="Skipped" bucket="chip-5" />
+                    : <Chip label="New" bucket="chip-2" dot />}</div>
                 <div className="flex items-center justify-end gap-1.5">
                   {r.suggestion && row.status !== "mapped" && (
                     <button type="button" aria-label="Accept" title="Accept suggestion" onClick={() => accept(r.value)} className="grid h-7 w-7 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-accent hover:text-accent"><IconCheck className="h-3.5 w-3.5" /></button>
