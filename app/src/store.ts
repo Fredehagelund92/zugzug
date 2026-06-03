@@ -24,6 +24,8 @@ export interface AuditEntry { id: string; at: string; user: User; action: string
 export interface SourceInfo {
   table: string; column: string; dimension: string; dimId: string;
   present: boolean; rows: number; values: number; unmapped: number; scanned: boolean;
+  schedule?: string | null;     // null | '15m' | 'hourly' | 'daily'
+  scannedAt?: string | null;    // ISO timestamp of last scan
 }
 
 export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
@@ -155,6 +157,16 @@ export async function scanSources(): Promise<number> {
 /** Wire a warehouse column to a dimension, then refresh the sources list. */
 export async function addSource(dimId: string, table: string, column: string): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/sources`, { method: "POST", body: JSON.stringify({ table, column }) });
+  await refreshSources();
+  emit();
+}
+
+/** Set (or clear) an automatic scan cadence on a wired source. */
+export async function setSourceSchedule(dimId: string, table: string, column: string, schedule: string | null): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/sources/schedule`, {
+    method: "PUT",
+    body: JSON.stringify({ table, column, schedule }),
+  });
   await refreshSources();
   emit();
 }

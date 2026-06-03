@@ -5,9 +5,21 @@ import { Kpi } from "../components/Kpi";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
+import { ScanScheduleMenu } from "../components/ScanScheduleMenu";
 import { IconSearch, IconWand, IconArrowRight } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useDimensions, useSources, scanSources, deriveCanonical, type SourceInfo } from "../store";
+import { useDimensions, useSources, scanSources, deriveCanonical, setSourceSchedule, type SourceInfo } from "../store";
+
+const SCHED_LABEL: Record<string, string> = { "15m": "Auto every 15m", hourly: "Auto hourly", daily: "Auto daily" };
+
+function ago(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sec < 60) return `Last scanned ${sec}s ago`;
+  if (sec < 3600) return `Last scanned ${Math.round(sec / 60)}m ago`;
+  if (sec < 86400) return `Last scanned ${Math.round(sec / 3600)}h ago`;
+  return `Last scanned ${Math.round(sec / 86400)}d ago`;
+}
 
 /* Sources (pillar 1) — a work queue over the source REGISTRY, not a 1000-row dump.
    Facet rail collapses systems; search finds any column; status chips default to
@@ -161,13 +173,21 @@ export function Sources() {
                   <div className="flex items-center gap-2">
                     <span className="truncate font-mono text-[12.5px] text-ink"><span className="text-ink-3">{r.table.split(".")[0]}.</span>{tableName.split(".").slice(-1)[0]}<span className="text-ink-3">.{r.column}</span></span>
                     {!r.present && r.scanned && <Badge>not found</Badge>}
-                    {!r.scanned && <span className="font-mono text-[9px] text-ink-3">unscanned</span>}
+                    {!r.scanned && !r.scannedAt && <span className="font-mono text-[9px] text-ink-3">unscanned</span>}
                   </div>
-                  <div className="mt-0.5 font-mono text-[10px] text-ink-3">→ {r.dimension}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[10px] text-ink-3">
+                    <span>→ {r.dimension}</span>
+                    {r.schedule && <span className="text-accent">· {SCHED_LABEL[r.schedule] ?? r.schedule}</span>}
+                    {r.scannedAt && <span>· {ago(r.scannedAt)}</span>}
+                  </div>
                 </div>
                 <span className="text-right font-mono text-[12px] text-ink-2 tabular-nums">{r.rows.toLocaleString()}</span>
                 <span className="text-right font-mono text-[12px] text-ink-3 tabular-nums">{r.values}</span>
                 <span className="flex items-center justify-end gap-2">
+                  <ScanScheduleMenu
+                    value={r.schedule ?? null}
+                    onChange={(next) => { void setSourceSchedule(r.dimId, r.table, r.column, next); }}
+                  />
                   <button type="button"
                     aria-label={`Import master records from ${r.table}.${r.column}`}
                     title="Import master records from this column's distinct values"
