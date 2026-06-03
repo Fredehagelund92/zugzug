@@ -128,6 +128,11 @@
 @keyframes zz-pulse { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.34; } }
 @keyframes zz-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
+/* dual-range thumb pointer events: the input wrapper has pointer-events:none
+   so it doesn't block the colored band underneath; the thumbs re-enable. */
+.zz-range::-webkit-slider-thumb { pointer-events: auto; }
+.zz-range::-moz-range-thumb { pointer-events: auto; }
+
 /* a single, consistent focus indicator across every focusable element.
    Token-driven, so it follows the live accent + light/dark. */
 @layer base {

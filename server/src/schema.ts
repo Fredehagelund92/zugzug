@@ -104,6 +104,19 @@ export async function ensureSchema(): Promise<void> {
     last_seen TIMESTAMP NOT NULL
   )`);
 
+  // workspace-global preferences (single row, id=1) — the auto-match bands
+  // (publish_threshold = auto-publish on scan; suggest_threshold = surface as
+  // a suggestion). Defaults are 95 / 80.
+  await run(`CREATE TABLE IF NOT EXISTS ${pg("preferences")} (
+    id                INT PRIMARY KEY,
+    publish_threshold INT NOT NULL,
+    suggest_threshold INT NOT NULL,
+    updated_at        TIMESTAMP NOT NULL
+  )`);
+  await run(`INSERT INTO ${pg("preferences")} (id, publish_threshold, suggest_threshold, updated_at)
+    VALUES (1, 95, 80, current_timestamp)
+    ON CONFLICT (id) DO NOTHING`);
+
   // seed the demo team if the users table is empty
   const existing = await all<{ n: bigint }>(`SELECT count(*) AS n FROM ${pg("users")}`);
   if (Number(existing[0]?.n ?? 0) === 0) {
@@ -112,4 +125,12 @@ export async function ensureSchema(): Promise<void> {
       await run(`INSERT INTO ${pg("active_sessions")} (user_id, last_seen) VALUES ($1, current_timestamp)`, [u.id]);
     }
   }
+
+  // system 'Auto-match' user — owns drafts created automatically when a scan
+  // surfaces a suggestion above the publish threshold. Idempotent for existing DBs.
+  await run(
+    `INSERT INTO ${pg("users")} (id, name, initials)
+     VALUES ('u_system','Auto-match','AM')
+     ON CONFLICT (id) DO NOTHING`,
+  );
 }
