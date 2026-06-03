@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import { TextCell } from "./cells/TextCell";
@@ -49,6 +49,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // ── Task 21: column order + drag state ─────────────────────────────────────
   const [order, setOrder] = useState<string[] | null>(null);
   const [drag, setDrag] = useState<{ field: string; overIndex: number | null } | null>(null);
+  // ref mirror of `drag` so onPointerDown's closed-over onMove can read the
+  // live value (the hold-timer starts AFTER pointerdown — at pointerdown
+  // time, `drag` is null in the closure)
+  const dragRef = useRef(drag);
+  useEffect(() => { dragRef.current = drag; }, [drag]);
 
   // resolved visible columns honor `order` if set; otherwise prop order
   const orderedVisible = useMemo(() => {
@@ -135,7 +140,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     setDrag({ field: c.field, overIndex: null });
                   }, 200);
                   const onMove = (ev: PointerEvent) => {
-                    if (!drag) return;
+                    if (!dragRef.current) return;
                     // determine which header column we're over via element-at-point
                     const target = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
                     const headerEl = target?.closest<HTMLElement>("[data-header]");
@@ -192,7 +197,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     }
                   }}
                   onHide={() => {
-                    const hidden = [...visible.filter((v) => v.hidden).map((v) => v.field), c.field];
+                    // include any already-hidden columns from the full prop list — `visible`
+                    // is the post-filter set and never contains them
+                    const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), c.field];
                     props.onLayoutChange?.({ hidden });
                   }}
                   onDelete={() => props.onDeleteColumn?.(c.field)}
