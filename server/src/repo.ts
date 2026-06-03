@@ -11,7 +11,7 @@ import { all, get, run } from "./db.ts";
 import { env, pg } from "./env.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
-export interface FieldDef { field: string; label: string; type: string }
+export interface FieldDef { field: string; label: string; type: string; options?: string[] }
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
 export interface SourceOccurrence { table: string; column: string; rows: number }
 export interface MappingValue {
@@ -630,7 +630,18 @@ export async function retireCanonical(dimId: string, key: string): Promise<{ ok:
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
 export async function listFields(dimId: string): Promise<FieldDef[]> {
-  return all<FieldDef>(`SELECT field, label, type FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`, [dimId]);
+  const rows = await all<{ field: string; label: string; type: string; options: unknown }>(
+    `SELECT field, label, type, options FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
+    [dimId],
+  );
+  return rows.map((r) => {
+    let opts: string[] | undefined;
+    if (Array.isArray(r.options)) opts = r.options as string[];
+    else if (typeof r.options === "string" && r.options.length > 0) {
+      try { const parsed = JSON.parse(r.options); if (Array.isArray(parsed)) opts = parsed as string[]; } catch {}
+    }
+    return { field: r.field, label: r.label, type: r.type, options: opts };
+  });
 }
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
@@ -638,19 +649,39 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
 const SQL_TYPE: Record<string, string> = { text: "VARCHAR", number: "NUMERIC", boolean: "BOOLEAN", date: "DATE" };
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈
- *  text | number | boolean | date (defaults text). */
-export async function addField(dimId: string, label: string, type = "text"): Promise<{ field: string } | null> {
+ *  text | number | boolean | date | select. Select columns store an ordered
+ *  option list in `dimension_field.options` (JSON); the dim_ column is VARCHAR
+ *  (the value IS the option label). */
+export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const t = SQL_TYPE[type] ? type : "text";
+  const t = SQL_TYPE[type] ? type : (type === "select" ? "select" : "text");
   const field = slug(label);
   if (!field || field === "label" || field === slug(m.keyCol)) return null; // reserved
-  await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${SQL_TYPE[t]}`);
+  const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
+  await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
+  const opts = t === "select" ? JSON.stringify(options ?? []) : null;
   await run(
-    `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, created_at) VALUES ($1,$2,$3,$4, current_timestamp)
-     ON CONFLICT (dim_id, field) DO NOTHING`, [dimId, field, label.trim(), t]);
+    `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at) VALUES ($1,$2,$3,$4,$5, current_timestamp)
+     ON CONFLICT (dim_id, field) DO NOTHING`, [dimId, field, label.trim(), t, opts]);
   await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
   return { field };
+}
+
+/** Append a new option to a select column's options list. No-op if the option
+ *  already exists (case-sensitive). Returns the resulting options list. */
+export async function addColumnOption(dimId: string, field: string, label: string): Promise<{ options: string[] } | null> {
+  const f = (await listFields(dimId)).find((x) => x.field === field);
+  if (!f || f.type !== "select") return null;
+  const existing = f.options ?? [];
+  if (existing.includes(label)) return { options: existing };
+  const next = [...existing, label];
+  await run(
+    `UPDATE ${pg("dimension_field")} SET options = $1::json WHERE dim_id = $2 AND field = $3`,
+    [JSON.stringify(next), dimId, field],
+  );
+  await appendAudit("Added option", `${label} → ${field}`);
+  return { options: next };
 }
 
 /** Set one enrichment field on a canonical record (only registered fields),
