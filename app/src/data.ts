@@ -24,7 +24,7 @@ export const metrics: Metric[] = [
    many raw values resolve to it, and any enrichment attribute values */
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
 /* an enrichment attribute column on a dimension (e.g. currency, locale) */
-export interface FieldDef { field: string; label: string; type: string }
+export interface FieldDef { field: string; label: string; type: string; options?: string[] }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence { table: string; column: string; rows: number }
 
