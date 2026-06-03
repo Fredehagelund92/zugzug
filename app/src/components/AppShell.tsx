@@ -11,7 +11,7 @@ import {
   IconSettings,
   IconChevron,
 } from "./Icons";
-import { useDimensions, collaborators } from "../store";
+import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { ShortcutsOverlay } from "./datagrid";
 
@@ -42,6 +42,49 @@ function ZigRule() {
       <path d="M0 4 L8 1 L16 7 L24 1 L32 7 L40 1 L48 7 L56 1 L64 7 L72 1 L80 7 L88 1 L96 4"
         stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function UserMenu() {
+  const [open, setOpen] = useState(false);
+
+  const signOut = () => {
+    fetch("/api/auth/logout", { method: "POST" })
+      .then(() => { window.location.href = "/login"; })
+      .catch(() => { window.location.href = "/login"; });
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title={currentUser.name}
+        className="grid h-8 w-8 place-items-center rounded-pill border border-line-2 bg-surface-3 font-mono text-[10px] text-ink-2 ring-1 ring-accent transition-colors hover:bg-hover"
+      >
+        {currentUser.initials}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-10 z-20 min-w-[160px] rounded-sm border border-line bg-surface shadow-md">
+            <div className="border-b border-line px-3 py-2">
+              <p className="text-[13px] font-medium text-ink">{currentUser.name}</p>
+              {currentUser.email && (
+                <p className="text-[11px] text-ink-3">{currentUser.email}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              className="w-full px-3 py-2 text-left text-[13px] text-ink-2 hover:bg-hover hover:text-ink"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -157,14 +200,7 @@ export function AppShell() {
           <div className="flex-1" />
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
-            <div className="flex items-center -space-x-2">
-              {collaborators.map((u, i) => (
-                <span key={u.id} title={`${u.name}${i === 0 ? " (you)" : ""}`}
-                  className={cx("grid h-8 w-8 place-items-center rounded-pill border-2 border-surface bg-surface-3 font-mono text-[10px] text-ink-2", i === 0 && "ring-1 ring-accent")}>
-                  {u.initials}
-                </span>
-              ))}
-            </div>
+            <UserMenu />
           </div>
         </header>
 
