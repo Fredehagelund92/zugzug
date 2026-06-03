@@ -40,7 +40,8 @@ function cookie(name: string, value: string, maxAge: number): string {
 }
 
 function clearCookie(name: string): string {
-  return `${name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`;
+  const base = `${name}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`;
+  return isSecure ? `${base}; Secure` : base;
 }
 
 // ---- session ---------------------------------------------------------------
@@ -132,11 +133,14 @@ export async function handleGoogleCallback(req: Request): Promise<Response> {
   // Domain check
   if (email.split("@")[1] !== env.allowedDomain) return loginError("domain", clearState);
 
-  // Allowlist check (empty table = bootstrap mode)
+  // Allowlist check (empty table = bootstrap mode). ON CONFLICT DO NOTHING
+  // makes the INSERT idempotent and closes the race where two simultaneous
+  // first-logins both see n=0 — the second insert is a no-op, and both users
+  // end up in the allowlist (both get in), which is the safe failure mode.
   const [{ n }] = await all<{ n: bigint }>(`SELECT count(*) AS n FROM ${pg("allowed_emails")}`);
   if (Number(n) === 0) {
     await run(
-      `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at) VALUES ($1, 'bootstrap', current_timestamp)`,
+      `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at) VALUES ($1, 'bootstrap', current_timestamp) ON CONFLICT (email) DO NOTHING`,
       [email],
     );
   } else {
@@ -198,7 +202,7 @@ export async function handleMe(req: Request): Promise<Response> {
 // ---- internal helpers ------------------------------------------------------
 
 function loginError(error: string, clearStateCookie: string): Response {
-  const headers = new Headers({ Location: `/login?error=${error}` });
+  const headers = new Headers({ Location: `/login?${new URLSearchParams({ error })}` });
   headers.append("Set-Cookie", clearStateCookie);
   return new Response(null, { status: 302, headers });
 }
