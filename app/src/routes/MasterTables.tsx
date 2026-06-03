@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
@@ -12,6 +12,8 @@ import {
   useDimensions, useSources, addDimension,
   addCanonical, renameCanonical, mergeCanonical, retireCanonical, fetchVariants, deriveCanonical,
   addField, setFieldValue, addColumnOption,
+  renameColumn, changeColumnType, deleteColumn,
+  getGridLayout, setGridLayout, type GridLayoutConfig,
 } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid } from "../components/datagrid";
@@ -72,6 +74,10 @@ export function MasterTables() {
   const external = dim.keyKind === "external_id";
 
   const activeId = dim.id;
+
+  // hydrate per-user layout (widths/order/hidden) when the dimension changes
+  const [layout, setLayout] = useState<GridLayoutConfig>({});
+  useEffect(() => { void getGridLayout(activeId).then(setLayout); }, [activeId]);
 
   // column defs for <DataGrid>. The first three are pinned (checkbox is
   // managed by the grid itself; "Master record" and "Key" are pinned-left
@@ -141,8 +147,24 @@ export function MasterTables() {
           : <span className="font-mono text-[11px] text-ink-3">0</span>,
       },
     ];
-    return cols;
-  }, [fields, engineer, dim.keyCol, external, open]);
+    // apply persisted layout: width, hidden, order
+    const ordered = cols
+      .map((c) => ({
+        ...c,
+        width: layout.widths?.[c.field] ?? c.width,
+        hidden: layout.hidden?.includes(c.field) ?? false,
+      }))
+      .sort((a, b) => {
+        const ord = layout.order ?? [];
+        const ai = ord.indexOf(a.field);
+        const bi = ord.indexOf(b.field);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    return ordered;
+  }, [fields, engineer, dim.keyCol, external, open, layout]);
 
   // <DataGrid> reads (row as any)[c.field]. The MasterTables CanonicalValue
   // shape stores attribute values in c.fields[field]; flatten before passing
@@ -283,6 +305,15 @@ export function MasterTables() {
             await setFieldValue(activeId, rowKey, field, v);
           }}
           onAddColumnOption={(field, label) => addColumnOption(activeId, field, label)}
+          onRenameColumn={(field, label) => void renameColumn(activeId, field, label)}
+          onChangeColumnType={(field, newType, opts) =>
+            changeColumnType(activeId, field, newType, opts?.options, opts?.coerceInvalidToNull ?? false)
+          }
+          onDeleteColumn={(field) => void deleteColumn(activeId, field)}
+          onLayoutChange={(partial) => {
+            setLayout((cur) => ({ ...cur, ...partial }));
+            setGridLayout(activeId, partial);
+          }}
           empty={<div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">no master records yet — import from a source above, or add one below</div>}
         />
 
