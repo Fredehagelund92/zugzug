@@ -322,6 +322,15 @@ function MappingInner() {
                   })()}
                 </div>
               )}
+              {focused && !isOpen && (
+                <div className="border-b border-line bg-surface-2/40 px-4 py-1.5 pl-[52px] font-mono text-[10.5px] text-ink-3">
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">A</kbd> accept</span>
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">M</kbd> master</span>
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">S</kbd> skip</span>
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">R</kbd> reset</span>
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">?</kbd> all shortcuts</span>
+                </div>
+              )}
             </Fragment>
           );
         })}
