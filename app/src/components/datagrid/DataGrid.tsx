@@ -39,12 +39,23 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     return [...rows].sort(cmp);
   }, [rows, sort]);
 
+  // ── Task 20: per-column widths ──────────────────────────────────────────────
+  const [widths, setWidths] = useState<Record<string, number>>(() => Object.fromEntries(
+    visible.filter((c) => c.width).map((c) => [c.field, c.width!]),
+  ));
+
+  const colWidth = (field: string) => widths[field] ?? visible.find((c) => c.field === field)?.width;
+
   // template: optional checkbox + each visible column's width
   const gridStyle = useMemo(() => {
-    const tracks = visible.map((c) => (c.width ? `${c.width}px` : "minmax(96px, 1fr)"));
+    const tracks = visible.map((c) => {
+      const w = colWidth(c.field);
+      return w ? `${w}px` : "minmax(96px, 1fr)";
+    });
     if (selectionCol) tracks.unshift("28px");
     return { gridTemplateColumns: tracks.join(" ") };
-  }, [visible, selectionCol]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, selectionCol, widths]);
 
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = async (rk: string, field: string, value: unknown) => {
@@ -121,6 +132,34 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     props.onLayoutChange?.({ hidden });
                   }}
                   onDelete={() => props.onDeleteColumn?.(c.field)}
+                />
+              )}
+              {/* Task 20: right-edge resize grip */}
+              {!c.pinnedLeft && (
+                <span
+                  aria-hidden
+                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors group-hover:bg-line-2"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    const startX = e.clientX;
+                    const headerEl = (e.currentTarget.parentElement as HTMLElement);
+                    const startW = headerEl.getBoundingClientRect().width;
+                    const onMove = (ev: PointerEvent) => {
+                      const next = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
+                      setWidths((w) => ({ ...w, [c.field]: next }));
+                    };
+                    const onUp = () => {
+                      window.removeEventListener("pointermove", onMove);
+                      window.removeEventListener("pointerup", onUp);
+                      // commit the final width via the host
+                      setWidths((w) => {
+                        props.onLayoutChange?.({ widths: w });
+                        return w;
+                      });
+                    };
+                    window.addEventListener("pointermove", onMove);
+                    window.addEventListener("pointerup", onUp);
+                  }}
                 />
               )}
             </div>
