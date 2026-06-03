@@ -115,10 +115,10 @@ const server = Bun.serve({
       // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
       if (seg[1] === "grid-layout" && seg.length === 3) {
         const dimId = decodeURIComponent(seg[2]!);
-        if (method === "GET") return json(await repo.getGridLayout(actor(req).id, dimId));
+        if (method === "GET") return json(await repo.getGridLayout(actor(req), dimId));
         if (method === "PATCH") {
           const body = (await req.json()) as repo.GridLayoutConfig;
-          await repo.setGridLayout(actor(req).id, dimId, body);
+          await repo.setGridLayout(actor(req), dimId, body);
           return noContent();
         }
       }
