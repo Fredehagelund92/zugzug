@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
+import { UndoStackProvider } from "./components/datagrid";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { Dashboard } from "./routes/Dashboard";
@@ -30,23 +31,25 @@ const root = document.getElementById("root")!;
 
 createRoot(root).render(
   <React.StrictMode>
-    <EngineerModeProvider>
-      <BootGate>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Navigate to="/app" replace />} />
-            <Route element={<AppShell />}>
-              <Route path="/app" element={<Dashboard />} />
-              <Route path="/app/mapping" element={<Mapping />} />
-              <Route path="/app/sources" element={<Sources />} />
-              <Route path="/app/tables" element={<MasterTables />} />
-              <Route path="/app/settings" element={<Settings />} />
-            </Route>
-            <Route path="/design" element={<Showcase />} />
-            <Route path="*" element={<Navigate to="/app" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </BootGate>
-    </EngineerModeProvider>
+    <UndoStackProvider>
+      <EngineerModeProvider>
+        <BootGate>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Navigate to="/app" replace />} />
+              <Route element={<AppShell />}>
+                <Route path="/app" element={<Dashboard />} />
+                <Route path="/app/mapping" element={<Mapping />} />
+                <Route path="/app/sources" element={<Sources />} />
+                <Route path="/app/tables" element={<MasterTables />} />
+                <Route path="/app/settings" element={<Settings />} />
+              </Route>
+              <Route path="/design" element={<Showcase />} />
+              <Route path="*" element={<Navigate to="/app" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </BootGate>
+      </EngineerModeProvider>
+    </UndoStackProvider>
   </React.StrictMode>,
 );
