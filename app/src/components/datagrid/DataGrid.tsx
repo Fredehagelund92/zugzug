@@ -46,16 +46,31 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
   const colWidth = (field: string) => widths[field] ?? visible.find((c) => c.field === field)?.width;
 
-  // template: optional checkbox + each visible column's width
+  // ── Task 21: column order + drag state ─────────────────────────────────────
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [drag, setDrag] = useState<{ field: string; overIndex: number | null } | null>(null);
+
+  // resolved visible columns honor `order` if set; otherwise prop order
+  const orderedVisible = useMemo(() => {
+    if (!order) return visible;
+    const byField = new Map(visible.map((c) => [c.field, c]));
+    const out: typeof visible = [];
+    for (const f of order) { const c = byField.get(f); if (c) out.push(c); }
+    // append columns that aren't in `order` yet (newly added)
+    for (const c of visible) if (!order.includes(c.field)) out.push(c);
+    return out;
+  }, [visible, order]);
+
+  // template: optional checkbox + each visible column's width (uses orderedVisible)
   const gridStyle = useMemo(() => {
-    const tracks = visible.map((c) => {
+    const tracks = orderedVisible.map((c) => {
       const w = colWidth(c.field);
       return w ? `${w}px` : "minmax(96px, 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
     return { gridTemplateColumns: tracks.join(" ") };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, selectionCol, widths]);
+  }, [orderedVisible, selectionCol, widths]);
 
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = async (rk: string, field: string, value: unknown) => {
@@ -63,7 +78,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   };
 
   const cursor = useGridCursor({
-    rows: sortedRows, rowKey, columns: visible,
+    rows: sortedRows, rowKey, columns: orderedVisible,
     onCommit: () => { /* the editor's onBlur handles the actual value commit */ },
     onSelectAll: () => selection?.onChange(sortedRows.map(rowKey)),
     onUndo: () => undo.undo(),
@@ -97,20 +112,69 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             aria-label="Select all"
           />
         )}
-        {visible.map((c) => {
+        {orderedVisible.map((c) => {
           const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
           return (
             <div key={c.field}
               className={cx("group relative flex items-center gap-1 truncate", c.align === "right" && "justify-end")}
               data-header={c.field}
             >
-              <span className="truncate">{c.label}{sortGlyph}</span>
+              {/* Task 21: dragged-column wash + drop-target line */}
+              {drag?.field === c.field && <span className="absolute inset-0 bg-accent-wash" aria-hidden />}
+              {drag?.overIndex != null && orderedVisible[drag.overIndex]?.field === c.field && (
+                <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" aria-hidden />
+              )}
+
+              {/* Task 21: hold-then-drag label */}
+              <span className={cx("truncate cursor-grab select-none", c.pinnedLeft && "cursor-default")}
+                onPointerDown={(_e) => {
+                  if (c.pinnedLeft) return;
+                  let holding = true;
+                  const holdTimer = window.setTimeout(() => {
+                    if (!holding) return;
+                    setDrag({ field: c.field, overIndex: null });
+                  }, 200);
+                  const onMove = (ev: PointerEvent) => {
+                    if (!drag) return;
+                    // determine which header column we're over via element-at-point
+                    const target = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+                    const headerEl = target?.closest<HTMLElement>("[data-header]");
+                    const overField = headerEl?.dataset.header ?? null;
+                    if (overField == null) return;
+                    const next = orderedVisible.findIndex((x) => x.field === overField);
+                    setDrag((d) => d ? { ...d, overIndex: next } : d);
+                  };
+                  const onUp = () => {
+                    holding = false;
+                    window.clearTimeout(holdTimer);
+                    window.removeEventListener("pointermove", onMove);
+                    window.removeEventListener("pointerup", onUp);
+                    setDrag((d) => {
+                      if (!d || d.overIndex == null) return null;
+                      const from = orderedVisible.findIndex((x) => x.field === d.field);
+                      if (from < 0 || from === d.overIndex) return null;
+                      const next = [...orderedVisible.map((x) => x.field)];
+                      next.splice(from, 1);
+                      next.splice(d.overIndex, 0, d.field);
+                      setOrder(next);
+                      props.onLayoutChange?.({ order: next });
+                      return null;
+                    });
+                  };
+                  window.addEventListener("pointermove", onMove);
+                  window.addEventListener("pointerup", onUp);
+                }}
+              >{c.label}{sortGlyph}</span>
+
+              {/* Task 19: ⋯ menu button */}
               {!c.pinnedLeft && (
                 <button type="button" aria-label="Column menu"
                   className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
                   onClick={() => setMenuFor((s) => s === c.field ? null : c.field)}
                 >⋯</button>
               )}
+
+              {/* Task 19: ColumnHeaderMenu */}
               {menuFor === c.field && (
                 <ColumnHeaderMenu
                   column={c}
@@ -134,6 +198,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   onDelete={() => props.onDeleteColumn?.(c.field)}
                 />
               )}
+
               {/* Task 20: right-edge resize grip */}
               {!c.pinnedLeft && (
                 <span
@@ -185,7 +250,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             {selectionCol && (
               <Checkbox state={selected ? "on" : "off"} onClick={() => toggle(rk)} aria-label={`Select row ${rk}`} />
             )}
-            {visible.map((c) => {
+            {orderedVisible.map((c) => {
               const focused = cursor.cursor?.rowKey === rk && cursor.cursor?.field === c.field;
               const editing = focused && cursor.cursor?.editing;
               const value = (row as any)[c.field];
