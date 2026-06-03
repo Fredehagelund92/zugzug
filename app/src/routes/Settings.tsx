@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { ThresholdRange } from "../components/ThresholdRange";
 import { cx } from "../lib/cx";
 import { useEngineerMode } from "../lib/engineer-mode";
-import { usePreferences, setPreferences } from "../store";
+import { usePreferences, setPreferences, currentUser } from "../store";
 
 /* Settings — workspace, appearance (theme), the DuckDB connection, and matching
    defaults. Token-driven, squared. UI only. */
@@ -32,6 +32,97 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const input = "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-accent";
+
+interface Member { email: string; addedBy: string; addedAt: string }
+
+function TeamSection() {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [addEmail, setAddEmail] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const load = () => {
+    fetch("/api/team/members")
+      .then((r) => r.json())
+      .then((data: Member[]) => setMembers(data))
+      .catch(() => {});
+  };
+
+  useEffect(load, []);
+
+  const add = async () => {
+    setAddError(null);
+    if (!addEmail.trim()) return;
+    setAdding(true);
+    try {
+      const res = await fetch("/api/team/members", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: addEmail.trim().toLowerCase() }),
+      });
+      if (res.status === 409) { setAddError("Already added."); return; }
+      if (res.status === 400) { setAddError("Must be a @example.com email."); return; }
+      if (!res.ok) { setAddError("Something went wrong."); return; }
+      setAddEmail("");
+      load();
+    } finally {
+      setAdding(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const remove = async (email: string) => {
+    const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, { method: "DELETE" });
+    if (res.ok) load();
+  };
+
+  const myEmail = currentUser.email;
+
+  return (
+    <Section title="Team" hint="Only people on this list can log in. Any team member can add or remove others.">
+      <ul className="divide-y divide-line rounded-sm border border-line">
+        {members.length === 0 && (
+          <li className="px-4 py-3 text-[13px] text-ink-3">No members yet.</li>
+        )}
+        {members.map((m) => (
+          <li key={m.email} className="flex items-center gap-3 px-4 py-2.5">
+            <span className="flex-1 font-mono text-[12px] text-ink">{m.email}</span>
+            <span className="text-[11px] text-ink-3">
+              added by {m.addedBy === "bootstrap" ? "bootstrap" : m.addedBy}
+            </span>
+            {m.email !== myEmail && (
+              <button
+                type="button"
+                onClick={() => remove(m.email)}
+                className="text-[11px] text-ink-3 hover:text-warn"
+              >
+                Remove
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-start gap-2">
+        <div className="flex-1 space-y-1">
+          <input
+            ref={inputRef}
+            className={input}
+            placeholder="colleague@example.com"
+            value={addEmail}
+            onChange={(e) => { setAddEmail(e.target.value); setAddError(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
+            disabled={adding}
+          />
+          {addError && <p className="font-mono text-[11px] text-warn">{addError}</p>}
+        </div>
+        <Button onClick={() => void add()} disabled={adding || !addEmail.trim()}>
+          {adding ? "Adding…" : "Add"}
+        </Button>
+      </div>
+    </Section>
+  );
+}
 
 export function Settings() {
   const { engineer, setEngineer } = useEngineerMode();
@@ -144,6 +235,10 @@ export function Settings() {
             />
           </Field>
         </Section>
+      </div>
+
+      <div className="zz-rise" style={{ animationDelay: "220ms" }}>
+        <TeamSection />
       </div>
     </div>
   );
