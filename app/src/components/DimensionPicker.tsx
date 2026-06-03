@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { cx } from "../lib/cx";
 import { IconPlus, IconCheck, IconX, IconChevron, IconSearch } from "./Icons";
 import { slug } from "../store";
+import { useEngineerMode } from "../lib/engineer-mode";
 import type { MappingDimension } from "../data";
 
 /* DimensionPicker — a searchable switcher for the master-data dimension you're
@@ -34,6 +35,7 @@ export function DimensionPicker({
   onSelect: (id: string) => void;
   onCreate: (name: string, keyKind: "slug" | "external_id") => void;
 }) {
+  const { engineer } = useEngineerMode();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [q, setQ] = useState("");
@@ -69,7 +71,9 @@ export function DimensionPicker({
             <span className="truncate font-display text-[14px] font-semibold text-ink">{active.dimension}</span>
             {aStats.fresh > 0 && <span className="shrink-0 rounded-pill bg-warn-soft px-1.5 font-mono text-[10px] text-warn">{aStats.fresh} new</span>}
           </div>
-          <div className="truncate font-mono text-[10px] text-ink-3">{active.mapTable}</div>
+          <div className="truncate font-mono text-[10px] text-ink-3">
+            {engineer ? active.mapTable : `${aStats.total - aStats.fresh} mapped · ${aStats.fresh} new`}
+          </div>
         </div>
         <IconChevron className={cx("h-4 w-4 shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
       </button>
@@ -96,7 +100,9 @@ export function DimensionPicker({
                             <span className={cx("truncate font-display text-[13.5px] font-semibold", on ? "text-accent" : "text-ink")}>{d.dimension}</span>
                             {s.fresh > 0 && <span className="shrink-0 rounded-pill bg-warn-soft px-1.5 font-mono text-[10px] text-warn">{s.fresh}</span>}
                           </div>
-                          <div className="truncate font-mono text-[10px] text-ink-3">{d.mapTable}</div>
+                          <div className="truncate font-mono text-[10px] text-ink-3">
+                            {engineer ? d.mapTable : `${s.total - s.fresh} mapped · ${s.fresh} new`}
+                          </div>
                         </div>
                         <span className="shrink-0 font-mono text-[10px] text-ink-3 tabular-nums">{s.total ? `${s.pct}%` : "empty"}</span>
                         {on && <IconCheck className="h-4 w-4 shrink-0 text-accent" />}
@@ -118,7 +124,9 @@ export function DimensionPicker({
                 placeholder="e.g. Currency"
                 className="w-full rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent" />
               <div className="mt-2 font-mono text-[10px] leading-relaxed text-ink-3">
-                creates <span className="text-ink-2">zugzug.dim_{slug(name) || "…"}</span> + <span className="text-ink-2">zugzug.map_{slug(name) || "…"}</span>
+                {engineer
+                  ? <>creates <span className="text-ink-2">zugzug.dim_{slug(name) || "…"}</span> + <span className="text-ink-2">zugzug.map_{slug(name) || "…"}</span></>
+                  : <>Creates a new master list{name.trim() ? <> called <span className="text-ink-2">"{name.trim()}"</span></> : ""}</>}
               </div>
               <label className="mt-2.5 flex items-center gap-2 font-mono text-[11px] text-ink-2">
                 <input type="checkbox" checked={externalId} onChange={(e) => setExternalId(e.target.checked)} className="h-3.5 w-3.5 accent-[var(--accent)]" />
