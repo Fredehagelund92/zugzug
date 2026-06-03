@@ -13,7 +13,7 @@ import type { MappingDimension } from "./data";
    DELETE then refetch the affected slice and notify subscribers.
    ============================================================================ */
 
-export interface User { id: string; name: string; initials: string }
+export interface User { id: string; name: string; initials: string; email?: string }
 export interface Draft {
   dimId: string; raw: string; status: "mapped" | "skipped";
   targetLabel: string | null; targetKey: string | null; user: User; at: string;
@@ -53,7 +53,7 @@ const emit = () => listeners.forEach((l) => l());
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...opts,
-    headers: { "content-type": "application/json", "x-user-id": currentUser.id, ...opts?.headers },
+    headers: { "content-type": "application/json", ...opts?.headers },
   });
   if (!res.ok) throw new Error(`${opts?.method ?? "GET"} ${path} → ${res.status} ${await res.text().catch(() => "")}`);
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
