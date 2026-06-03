@@ -4,4 +4,5 @@ export { UndoStackProvider, useUndoStack } from "./UndoStack";
 export { useGridCursor } from "./useGridCursor";
 export { bucket, hash32 } from "./bucket";
 export { SelectCell } from "./cells/SelectCell";
+export { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 export type { ColumnDef, CellType, Cursor, CellCtx, EditCtx, DataGridProps } from "./types";
