@@ -72,12 +72,12 @@ export function Sources() {
   const [derived, setDerived] = useState<string | null>(null);
   const derive = async (s: SourceInfo) => {
     const n = await deriveCanonical(s.dimId, s.table, s.column);
-    setDerived(n > 0 ? `Seeded ${n} canonical value${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}` : `${s.table}.${s.column} has no rows to derive`);
+    setDerived(n > 0 ? `Imported ${n} master record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}` : `${s.table}.${s.column} has no rows to import`);
     setTimeout(() => setDerived(null), 3200);
   };
 
   const CHIPS: { k: Status | "all"; label: string; n: number }[] = [
-    { k: "needs", label: "Needs attention", n: counts.needs },
+    { k: "needs", label: "Needs review", n: counts.needs },
     { k: "all", label: "All", n: sources.length },
     { k: "clean", label: "Clean", n: counts.clean },
     { k: "missing", label: "Not found", n: counts.missing },
@@ -91,7 +91,7 @@ export function Sources() {
         <div>
           <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">Discovery</div>
           <h1 className="mt-1.5 font-display text-[clamp(28px,4vw,44px)] font-extrabold leading-none tracking-[-0.035em] text-ink">Sources</h1>
-          <p className="mt-3 max-w-[56ch] text-ink-2">The warehouse columns wired to each dimension. Scan flags the values not yet mapped to a canonical — before they resolve to NULL downstream.</p>
+          <p className="mt-3 max-w-[56ch] text-ink-2">The warehouse columns wired to each master list. Scan flags the values not yet matched to a master record — before they go missing downstream.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" icon={<IconArrowRight className="h-4 w-4" />} onClick={() => setCatalog(true)}>Wire a source</Button>
@@ -168,7 +168,7 @@ export function Sources() {
                 <span className="text-right font-mono text-[12px] text-ink-2 tabular-nums">{r.rows.toLocaleString()}</span>
                 <span className="text-right font-mono text-[12px] text-ink-3 tabular-nums">{r.values}</span>
                 <span className="flex items-center justify-end gap-2">
-                  <button type="button" title="Derive canonical from this column's distinct values"
+                  <button type="button" title="Import master records from this column's distinct values"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); derive(r); }}
                     className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 opacity-0 transition-opacity hover:border-accent hover:text-accent group-hover:opacity-100">
                     <IconWand className="h-3 w-3" />
