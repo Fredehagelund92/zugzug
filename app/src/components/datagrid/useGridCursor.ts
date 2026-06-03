@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ColumnDef, Cursor } from "./types";
 
 /* useGridCursor — owns the (rowKey, field, editing) cursor + the keyboard
@@ -26,7 +26,7 @@ export function useGridCursor<Row>({
   const ref = useRef<HTMLDivElement>(null);
 
   // visible navigable columns (skip hidden + non-editable pinned utility columns)
-  const navCols = columns.filter((c) => !c.hidden && c.editable !== false);
+  const navCols = useMemo(() => columns.filter((c) => !c.hidden && c.editable !== false), [columns]);
 
   const move = useCallback((dx: number, dy: number) => {
     setCursor((cur) => {
