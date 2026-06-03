@@ -17,3 +17,6 @@ dist/
 ***REMOVED*** OS / editor cruft
 .DS_Store
 *.log
+
+***REMOVED*** brainstorm companion (mockups, transient state)
+.superpowers/
