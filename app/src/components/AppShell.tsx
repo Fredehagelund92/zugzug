@@ -9,9 +9,9 @@ import {
   IconTables,
   IconSources,
   IconSettings,
-  IconSearch,
 } from "./Icons";
 import { useDimensions, collaborators } from "../store";
+import { useEngineerMode } from "../lib/engineer-mode";
 
 /* AppShell — the signed-in product chrome: a branded command rail (sidebar) +
    topbar + routed content. Layout in Tailwind; colour/type via token utilities. */
@@ -28,12 +28,13 @@ function ZigRule() {
 
 export function AppShell() {
   const dims = useDimensions();
+  const { engineer } = useEngineerMode();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
-    { to: "/app/mapping", label: "Value mapping", Icon: IconMapping, count: totalNew },
+    { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
     { to: "/app/sources", label: "Sources", Icon: IconSources, count: undefined },
-    { to: "/app/tables", label: "Master tables", Icon: IconTables, count: dims.length },
+    { to: "/app/tables", label: "Master lists", Icon: IconTables, count: dims.length },
     { to: "/app/settings", label: "Settings", Icon: IconSettings },
   ];
   return (
@@ -80,11 +81,11 @@ export function AppShell() {
         <div className="border-t border-line p-4">
           <div className="flex items-center gap-2 font-mono text-[11px] text-ink">
             <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-            analytics.duckdb
+            {engineer ? "analytics.duckdb" : "Connected to warehouse"}
           </div>
           <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-ink-3">
-            <span>warehouse · live</span>
-            <span>{dims.length} tables</span>
+            <span>{engineer ? "warehouse · live" : "live"}</span>
+            <span>{dims.length} {engineer ? "tables" : `master list${dims.length === 1 ? "" : "s"}`}</span>
           </div>
         </div>
       </aside>
@@ -92,14 +93,7 @@ export function AppShell() {
       {/* main column */}
       <div className="flex min-w-0 flex-col">
         <header className="sticky top-0 z-40 flex h-[var(--ak-topbar)] items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-6 backdrop-blur-md">
-          <label className="flex w-full max-w-md items-center gap-2 rounded-sm border border-line-2 bg-bg px-3 py-1.5 text-ink-3 focus-within:border-accent">
-            <IconSearch className="h-4 w-4" />
-            <input
-              placeholder="Search tables, columns, mappings…"
-              className="w-full bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
-            />
-            <kbd className="rounded-sm border border-line-2 bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-3">⌘K</kbd>
-          </label>
+          <div className="flex-1" />
           <div className="ml-auto flex items-center gap-3">
             <EngineerModeToggle />
             <ThemeToggle />
