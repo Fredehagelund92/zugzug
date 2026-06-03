@@ -112,6 +112,17 @@ const server = Bun.serve({
         }
       }
 
+      // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
+      if (seg[1] === "grid-layout" && seg.length === 3) {
+        const dimId = decodeURIComponent(seg[2]!);
+        if (method === "GET") return json(await repo.getGridLayout(actor(req).id, dimId));
+        if (method === "PATCH") {
+          const body = (await req.json()) as repo.GridLayoutConfig;
+          await repo.setGridLayout(actor(req).id, dimId, body);
+          return noContent();
+        }
+      }
+
       if (seg[1] === "dimensions") {
         // GET /api/dimensions ; POST /api/dimensions {name}
         if (seg.length === 2) {
@@ -168,6 +179,22 @@ const server = Bun.serve({
           const { label } = (await req.json()) as { label: string };
           const res = await repo.addColumnOption(id, field, label);
           return res ? json(res) : json({ error: "not a select column" }, 400);
+        }
+        // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
+        if (seg[3] === "fields" && seg.length === 5) {
+          const field = decodeURIComponent(seg[4]!);
+          if (method === "PUT") {
+            const body = (await req.json()) as { label?: string; type?: string; options?: string[]; coerceInvalidToNull?: boolean };
+            if (body.label != null) {
+              await repo.renameColumn(id, field, body.label);
+            }
+            if (body.type != null) {
+              const res = await repo.changeColumnType(id, field, body.type, body.options, body.coerceInvalidToNull ?? false);
+              return json(res);
+            }
+            return noContent();
+          }
+          if (method === "DELETE") return json(await repo.deleteColumn(id, field));
         }
         // canonical record management
         if (seg[3] === "canonical") {
