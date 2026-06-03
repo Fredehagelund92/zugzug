@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
+import { EngineerModeToggle } from "./EngineerModeToggle";
 import {
   IconDashboard,
   IconMapping,
@@ -100,6 +101,7 @@ export function AppShell() {
             <kbd className="rounded-sm border border-line-2 bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-3">⌘K</kbd>
           </label>
           <div className="ml-auto flex items-center gap-3">
+            <EngineerModeToggle />
             <ThemeToggle />
             <div className="flex items-center -space-x-2">
               {collaborators.map((u, i) => (
