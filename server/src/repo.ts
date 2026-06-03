@@ -256,15 +256,25 @@ export async function setSourceSchedule(dimId: string, table: string, column: st
 
 /** Returns true when at least one wired source is due for its scheduled scan,
  *  given the last scanned_at on source_stat. The scheduler uses this as a cheap
- *  is-anything-pending check before triggering scanSources (which scans them all). */
+ *  is-anything-pending check before triggering scanSources (which scans them all).
+ *  Returns false (silently) if the app-state schema hasn't been provisioned yet —
+ *  the scheduler tick should no-op on a fresh DB, not spam the logs. */
 export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
-  const rows = await all<{ schedule: string; scanned_at: Date | string | null }>(
-    `SELECT s.schedule, st.scanned_at
-     FROM ${pg("dimension_source")} s
-     LEFT JOIN ${pg("source_stat")} st
-       ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
-     WHERE s.schedule IS NOT NULL`,
-  );
+  let rows: { schedule: string; scanned_at: Date | string | null }[];
+  try {
+    rows = await all<{ schedule: string; scanned_at: Date | string | null }>(
+      `SELECT s.schedule, st.scanned_at
+       FROM ${pg("dimension_source")} s
+       LEFT JOIN ${pg("source_stat")} st
+         ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
+       WHERE s.schedule IS NOT NULL`,
+    );
+  } catch (e) {
+    // schema not yet ensured (fresh DB before bootstrap) — quietly no-op.
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/schema "zugzug_app" does not exist|Table with name "zugzug_app\./.test(msg)) return false;
+    throw e;
+  }
   const dueMs = (s: string) => s === "15m" ? 15 * 60_000 : s === "hourly" ? 60 * 60_000 : s === "daily" ? 24 * 60 * 60_000 : Infinity;
   return rows.some((r) =>
     !r.scanned_at || (now.getTime() - new Date(r.scanned_at).getTime()) >= dueMs(r.schedule),
