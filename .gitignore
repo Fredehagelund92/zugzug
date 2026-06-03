@@ -1,0 +1,19 @@
+***REMOVED*** dependencies
+node_modules/
+
+***REMOVED*** build output
+dist/
+
+***REMOVED*** secrets / local env (DATABASE_URL, MOTHERDUCK_TOKEN live here)
+.env
+.env.*
+!.env.example
+
+***REMOVED*** local DuckDB engine files
+*.duckdb
+*.duckdb.wal
+.data/
+
+***REMOVED*** OS / editor cruft
+.DS_Store
+*.log
