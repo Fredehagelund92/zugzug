@@ -189,13 +189,14 @@ export async function handleLogout(req: Request): Promise<Response> {
 /** GET /api/auth/me — return session user or 401. Used by BootGate. */
 export async function handleMe(req: Request): Promise<Response> {
   const user = await getSessionUser(req);
+  const cors = { "access-control-allow-origin": "*" };
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), {
     status: 401,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...cors },
   });
   return new Response(JSON.stringify(user), {
     status: 200,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...cors },
   });
 }
 
