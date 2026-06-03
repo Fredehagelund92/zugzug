@@ -124,8 +124,12 @@ export async function ensureSchema(): Promise<void> {
   // email and google_sub are nullable to preserve existing demo rows.
   await run(`ALTER TABLE ${pg("users")} ADD COLUMN IF NOT EXISTS email VARCHAR`);
   await run(`ALTER TABLE ${pg("users")} ADD COLUMN IF NOT EXISTS google_sub VARCHAR`);
-  await run(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON ${pg("users")} (email) WHERE email IS NOT NULL`);
-  await run(`CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique ON ${pg("users")} (google_sub) WHERE google_sub IS NOT NULL`);
+  // Partial unique indexes aren't supported by DuckDB's postgres extension yet
+  // ("Creating partial indexes is not supported currently"). Best-effort: the
+  // CREATE will work when issued against Postgres directly; through the bridge
+  // it's a no-op, and we lean on the app layer + the unique columns elsewhere.
+  try { await run(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON ${pg("users")} (email) WHERE email IS NOT NULL`); } catch {}
+  try { await run(`CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique ON ${pg("users")} (google_sub) WHERE google_sub IS NOT NULL`); } catch {}
 
   await run(`CREATE TABLE IF NOT EXISTS ${pg("active_sessions")} (
     user_id   VARCHAR PRIMARY KEY,
