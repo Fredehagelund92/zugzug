@@ -3,8 +3,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
-import { initStore } from "./store";
 import { EngineerModeProvider } from "./lib/engineer-mode";
+import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { Dashboard } from "./routes/Dashboard";
 import { Mapping } from "./routes/Mapping";
@@ -23,21 +23,15 @@ declare global {
 }
 window.BrandApp = { setAccent, setTheme, toggleTheme };
 
-// Preload backend state so the first render has dimensions/drafts/audit/users,
-// then mount. (An async boot fn rather than top-level await, which Vite's build
-// target rejects.)
+// Mount React immediately; BootGate runs initStore() and shows a styled
+// skeleton (or styled API-error with Retry) while it resolves, instead of
+// the previous blank page → raw-HTML-on-failure dance.
 const root = document.getElementById("root")!;
 
-async function boot() {
-  try {
-    await initStore();
-  } catch (e) {
-    root.innerHTML = `<pre style="font:14px ui-monospace,monospace;padding:2rem;color:var(--danger)">Can't reach the Zug Zug API.\nStart it with:  cd server && bun run start\n\n${String(e)}</pre>`;
-    return;
-  }
-  createRoot(root).render(
-    <React.StrictMode>
-      <EngineerModeProvider>
+createRoot(root).render(
+  <React.StrictMode>
+    <EngineerModeProvider>
+      <BootGate>
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Navigate to="/app" replace />} />
@@ -52,9 +46,7 @@ async function boot() {
             <Route path="*" element={<Navigate to="/app" replace />} />
           </Routes>
         </BrowserRouter>
-      </EngineerModeProvider>
-    </React.StrictMode>,
-  );
-}
-
-void boot();
+      </BootGate>
+    </EngineerModeProvider>
+  </React.StrictMode>,
+);
