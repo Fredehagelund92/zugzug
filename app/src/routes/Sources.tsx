@@ -189,9 +189,6 @@ export function Sources() {
       return next;
     });
   };
-  const collapseAll = () => setOpenSchemas(new Set());
-  const expandAll = () => setOpenSchemas(new Set(groups.map((g) => g.schema)));
-
   const CHIPS: { k: Status; label: string; n: number }[] = [
     { k: "needs", label: "Needs review", n: counts.needs },
     { k: "all", label: "All", n: sources.length },
@@ -199,7 +196,7 @@ export function Sources() {
   ];
 
   const SORTS: { k: Sort; label: string }[] = [
-    { k: "impact", label: "By impact" },
+    { k: "impact", label: "Most affected" },
     { k: "recent", label: "Recently scanned" },
     { k: "name", label: "Alphabetical" },
   ];
@@ -312,15 +309,6 @@ export function Sources() {
             className="border-0 bg-transparent text-[12.5px] text-ink-2 outline-none hover:text-ink">
             {SORTS.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
           </select>
-
-          {/* expand/collapse all — scales with schema count */}
-          {groups.length > 1 && q.trim().length === 0 && (
-            <div className="flex items-center gap-2 border-l border-line pl-3 font-mono text-[10.5px] text-ink-3">
-              <button type="button" onClick={expandAll} className="hover:text-ink">expand all</button>
-              <span className="opacity-40">·</span>
-              <button type="button" onClick={collapseAll} className="hover:text-ink">collapse all</button>
-            </div>
-          )}
         </div>
 
         {/* ─── GROUPED LEDGER ─── */}
@@ -396,7 +384,7 @@ function SchemaSection({ group, open, onToggle, expanded, setExpanded, onSchedul
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="group sticky top-[57px] z-10 grid w-full grid-cols-[20px_minmax(0,1fr)_auto_auto] items-center gap-4 bg-surface-2/60 px-7 py-2.5 text-left backdrop-blur-sm hover:bg-surface-2"
+        className="group grid w-full grid-cols-[20px_minmax(0,1fr)_auto_auto] items-center gap-4 bg-surface-2/60 px-7 py-2.5 text-left transition-colors hover:bg-surface-2"
       >
         <IconChevron className={cx("h-3 w-3 shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
         <div className="flex min-w-0 items-baseline gap-3">
