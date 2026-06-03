@@ -5,6 +5,7 @@ import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
 import { BooleanCell } from "./cells/BooleanCell";
 import { DateCell } from "./cells/DateCell";
+import { SelectCell } from "./cells/SelectCell";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
 import type { DataGridProps, CellType } from "./types";
@@ -124,7 +125,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                             cancel: () => cursor.stopEdit(),
                           })
                         : c.type === "select"
-                          ? null  // SelectCell.Editor is wired in Phase 2 (Task 10)
+                          ? <SelectCell.Editor
+                              row={row} rowKey={rk} field={c.field} value={value} focused
+                              commit={(v: unknown) => { cursor.stopEdit(); void commitValue(rk, c.field, v); }}
+                              cancel={() => cursor.stopEdit()}
+                              options={c.options ?? []}
+                              onCreate={async (label: string) => {
+                                if (!props.onAddColumnOption) return c.options ?? [];
+                                return await props.onAddColumnOption(c.field, label);
+                              }}
+                            />
                           : <CellEditor type={c.type} ctx={{
                               ...ctx,
                               commit: (v: unknown) => { cursor.stopEdit(); void commitValue(rk, c.field, v); },
@@ -133,7 +143,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     : (c.render
                         ? c.render(row, ctx)
                         : c.type === "select"
-                          ? null  // SelectCell.Renderer in Phase 2
+                          ? <SelectCell.Renderer {...ctx} />
                           : <CellRenderer type={c.type} ctx={ctx} />)}
                 </div>
               );
@@ -146,13 +156,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 }
 
 function CellRenderer({ type, ctx }: { type: CellType; ctx: any }) {
-  if (type === "select") return null; // wired in Phase 2
+  if (type === "select") return <SelectCell.Renderer {...ctx} />;
   const C = CELLS[type as Exclude<CellType, "select">];
   return <C.Renderer {...ctx} />;
 }
 
 function CellEditor({ type, ctx }: { type: CellType; ctx: any }) {
-  if (type === "select") return null; // wired in Phase 2
+  if (type === "select") return null; // select uses inline SelectCell.Editor in the body (needs options + onCreate)
   const C = CELLS[type as Exclude<CellType, "select">];
   return <C.Editor {...ctx} />;
 }
