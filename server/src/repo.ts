@@ -170,7 +170,58 @@ export async function scanSources(): Promise<number> {
       [r.dimId, r.table, r.column, present, rows, distinct, unmapped],
     );
   }
+
+  // automation: for every dimension, auto-stage drafts where a freshly-scanned
+  // raw value matches an existing canonical label case-insensitively. This is
+  // a confidence=100 deterministic match — fuzzy/AI suggestion machinery is a
+  // future fast-follow. Only runs when the warehouse is attached + the prefs
+  // publish threshold allows exact matches (always true today; the threshold
+  // matters when fuzzy lands).
+  if (env.attachWarehouse) {
+    const prefs = await getPreferences();
+    if (prefs.publishThreshold <= 100) {
+      const dimIds = [...new Set(regs.map((r) => r.dimId))];
+      for (const id of dimIds) await autoStageExactMatches(id);
+    }
+  }
+
   return regs.length;
+}
+
+/** Auto-stage a draft (owned by u_system) for every warehouse raw value that
+ *  case-insensitively matches an existing canonical label and is not yet in
+ *  the dimension's lookup table. The match is deterministic — no AI, no fuzzy
+ *  — so it always lands above any reasonable publish threshold. */
+export async function autoStageExactMatches(dimId: string): Promise<number> {
+  const meta = await get<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
+    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
+     FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
+  if (!meta) return 0;
+  // External-ID dims have nullable labels (names come live from the warehouse) —
+  // exact-label matching against an empty/null label table is meaningless. Skip.
+  if (meta.keyKind === "external_id") return 0;
+
+  const sources = await liveSources(dimId);
+  if (!sources.length) return 0;
+  const keyc = qid(meta.keyCol);
+
+  // For every distinct warehouse value, find a canonical row whose label
+  // matches case-insensitively, and whose raw is not yet in map_*.
+  const matches = await all<{ raw: string; key: string; label: string }>(`
+    WITH occ AS (${occUnion(sources)})
+    SELECT DISTINCT o.raw AS raw, c.${keyc} AS key, c.label AS label
+    FROM occ o
+    JOIN ${cq(meta.dimTable)} c ON lower(c.label) = lower(o.raw)
+    LEFT JOIN ${cq(meta.mapTable)} m ON lower(m.raw) = lower(o.raw)
+    WHERE m.raw IS NULL AND c.label IS NOT NULL
+  `).catch(() => [] as { raw: string; key: string; label: string }[]);
+
+  if (!matches.length) return 0;
+  for (const m of matches) {
+    await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system");
+  }
+  await appendAuditAs("u_system", "Auto-matched", `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`);
+  return matches.length;
 }
 
 /** Register a warehouse column as a source for a dimension (idempotent). */
