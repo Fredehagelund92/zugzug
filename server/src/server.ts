@@ -5,14 +5,13 @@
 import { connect } from "./db.ts";
 import { env } from "./env.ts";
 import * as repo from "./repo.ts";
+import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout } from "./auth.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
 const noContent = () => new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } });
 const err = (e: unknown, status = 500) => json({ error: e instanceof Error ? e.message : String(e) }, status);
 
-/** the acting user — demo presence via a header, default Ada. */
-const actor = (req: Request) => req.headers.get("x-user-id")?.trim() || "u_ada";
 
 await connect();
 console.log("· connected (MotherDuck + Postgres attached)");
@@ -48,9 +47,23 @@ const server = Bun.serve({
     const method = req.method;
 
     if (method === "OPTIONS")
-      return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS", "access-control-allow-headers": "content-type,x-user-id" } });
+      return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS", "access-control-allow-headers": "content-type" } });
 
     if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
+
+    // Auth routes — no session required
+    if (seg[1] === "auth") {
+      if (seg[2] === "google" && method === "GET") return handleGoogleRedirect(req);
+      if (seg[2] === "callback" && method === "GET") return handleGoogleCallback(req);
+      if (seg[2] === "me" && method === "GET") return handleMe(req);
+      if (seg[2] === "logout" && method === "POST") return handleLogout(req);
+      return json({ error: "not found" }, 404);
+    }
+
+    // Session gate — all other /api/* routes require a valid session
+    const sessionUser = await getSessionUser(req);
+    if (!sessionUser) return json({ error: "Unauthorized" }, 401);
+    const me = sessionUser.id;
 
     try {
       // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold}
@@ -66,7 +79,6 @@ const server = Bun.serve({
       // GET /api/users → { currentUser, collaborators }
       if (seg[1] === "users" && seg.length === 2 && method === "GET") {
         const users = await repo.listUsers();
-        const me = actor(req);
         return json({ currentUser: users.find((u) => u.id === me) ?? users[0], collaborators: users });
       }
 
@@ -107,7 +119,7 @@ const server = Bun.serve({
         if (method === "GET") return json(await repo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
         if (method === "POST") {
           const { action, detail } = (await req.json()) as { action: string; detail: string };
-          await repo.appendAuditAs(actor(req), action, detail);
+          await repo.appendAuditAs(me, action, detail);
           return noContent();
         }
       }
@@ -115,10 +127,10 @@ const server = Bun.serve({
       // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
       if (seg[1] === "grid-layout" && seg.length === 3) {
         const dimId = decodeURIComponent(seg[2]!);
-        if (method === "GET") return json(await repo.getGridLayout(actor(req), dimId));
+        if (method === "GET") return json(await repo.getGridLayout(me, dimId));
         if (method === "PATCH") {
           const body = (await req.json()) as repo.GridLayoutConfig;
-          await repo.setGridLayout(actor(req), dimId, body);
+          await repo.setGridLayout(me, dimId, body);
           return noContent();
         }
       }
@@ -143,11 +155,11 @@ const server = Bun.serve({
           if (seg.length === 4 && method === "GET") return json(await repo.listDrafts(id));
           if (seg.length === 4 && method === "PUT") {
             const b = (await req.json()) as { raw: string; status: "mapped" | "skipped"; targetLabel: string | null; targetKey: string | null };
-            await repo.saveDraft(id, b.raw, b.status, b.targetLabel ?? null, b.targetKey ?? null, actor(req));
+            await repo.saveDraft(id, b.raw, b.status, b.targetLabel ?? null, b.targetKey ?? null, me);
             return noContent();
           }
           if (seg.length === 5 && method === "DELETE") {
-            await repo.discardDraft(id, decodeURIComponent(seg[4]!), actor(req));
+            await repo.discardDraft(id, decodeURIComponent(seg[4]!), me);
             return noContent();
           }
         }
@@ -223,7 +235,7 @@ const server = Bun.serve({
         }
         // POST /api/dimensions/:id/commit
         if (seg[3] === "commit" && seg.length === 4 && method === "POST")
-          return json(await repo.commit(id, actor(req)));
+          return json(await repo.commit(id, me));
       }
 
       return json({ error: `no route for ${method} ${pathname}` }, 404);
