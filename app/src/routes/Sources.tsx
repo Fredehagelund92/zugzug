@@ -168,7 +168,9 @@ export function Sources() {
                 <span className="text-right font-mono text-[12px] text-ink-2 tabular-nums">{r.rows.toLocaleString()}</span>
                 <span className="text-right font-mono text-[12px] text-ink-3 tabular-nums">{r.values}</span>
                 <span className="flex items-center justify-end gap-2">
-                  <button type="button" title="Import master records from this column's distinct values"
+                  <button type="button"
+                    aria-label={`Import master records from ${r.table}.${r.column}`}
+                    title="Import master records from this column's distinct values"
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); derive(r); }}
                     className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 opacity-0 transition-opacity hover:border-accent hover:text-accent group-hover:opacity-100">
                     <IconWand className="h-3 w-3" />
