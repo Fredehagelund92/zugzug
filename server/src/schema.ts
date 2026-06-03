@@ -120,9 +120,30 @@ export async function ensureSchema(): Promise<void> {
     name     VARCHAR NOT NULL,
     initials VARCHAR NOT NULL
   )`);
+  // Idempotent: add auth columns to existing users table.
+  // email and google_sub are nullable to preserve existing demo rows.
+  await run(`ALTER TABLE ${pg("users")} ADD COLUMN IF NOT EXISTS email VARCHAR`);
+  await run(`ALTER TABLE ${pg("users")} ADD COLUMN IF NOT EXISTS google_sub VARCHAR`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON ${pg("users")} (email) WHERE email IS NOT NULL`);
+  await run(`CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique ON ${pg("users")} (google_sub) WHERE google_sub IS NOT NULL`);
+
   await run(`CREATE TABLE IF NOT EXISTS ${pg("active_sessions")} (
     user_id   VARCHAR PRIMARY KEY,
     last_seen TIMESTAMP NOT NULL
+  )`);
+
+  // allowlist: only explicitly added emails may log in. Empty = bootstrap mode.
+  await run(`CREATE TABLE IF NOT EXISTS ${pg("allowed_emails")} (
+    email      VARCHAR PRIMARY KEY,
+    added_by   VARCHAR NOT NULL,
+    added_at   TIMESTAMP NOT NULL
+  )`);
+
+  // server-side sessions — the zz_sid cookie holds only the session id.
+  await run(`CREATE TABLE IF NOT EXISTS ${pg("sessions")} (
+    id         VARCHAR PRIMARY KEY,
+    user_id    VARCHAR NOT NULL,
+    expires_at TIMESTAMP NOT NULL
   )`);
 
   // workspace-global preferences (single row, id=1) — the auto-match bands
