@@ -2,11 +2,10 @@ import { useState } from "react";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
-import { IconSun, IconMoon } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useTheme } from "../theme";
+import { useEngineerMode } from "../lib/engineer-mode";
 
-/* Settings — workspace, appearance (theme), the DuckDB connection, and mapping
+/* Settings — workspace, appearance (theme), the DuckDB connection, and matching
    defaults. Token-driven, squared. UI only. */
 
 function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
@@ -33,7 +32,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const input = "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-accent";
 
 export function Settings() {
-  const { theme, setTheme } = useTheme();
+  const { engineer, setEngineer } = useEngineerMode();
   const [threshold, setThreshold] = useState(90);
   const [autoAccept, setAutoAccept] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -55,73 +54,93 @@ export function Settings() {
       <div className="zz-rise" style={{ animationDelay: "60ms" }}>
         <Section title="Workspace">
           <Field label="Name"><input className={input} defaultValue="Better Collective · Data" /></Field>
-          <Field label="Region">
-            <select className={cx(input, "appearance-none")} defaultValue="EU (Frankfurt)">
-              <option>EU (Frankfurt)</option><option>US (Virginia)</option>
-            </select>
-          </Field>
         </Section>
       </div>
 
       <div className="zz-rise" style={{ animationDelay: "100ms" }}>
-        <Section title="Appearance" hint="The accent is fixed to the Zug Zug brand. Choose your default theme.">
-          <Field label="Theme">
-            <div className="flex w-fit items-center gap-1 rounded-sm border border-line-2 bg-bg p-1">
-              {(["light", "dark"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setTheme(t)}
-                  className={cx("flex items-center gap-2 rounded-sm px-3 py-1.5 font-mono text-[12px] capitalize transition-colors",
-                    theme === t ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink")}>
-                  {t === "light" ? <IconSun className="h-3.5 w-3.5" /> : <IconMoon className="h-3.5 w-3.5" />}{t}
-                </button>
-              ))}
-            </div>
+        <Section title="Appearance" hint="Theme follows the toggle in the top bar.">
+          <Field label="Engineer details">
+            <button type="button" onClick={() => setEngineer(!engineer)} className="flex items-center gap-3 text-left">
+              <span className={cx("relative h-5 w-9 rounded-pill border transition-colors", engineer ? "border-accent bg-accent" : "border-line-2 bg-surface-2")}>
+                <span className={cx("absolute top-0.5 h-3.5 w-3.5 rounded-pill bg-surface transition-all", engineer ? "left-4" : "left-0.5")} />
+              </span>
+              <span className="text-[13px] text-ink-2">Show warehouse table names, SQL, and join warnings</span>
+            </button>
           </Field>
         </Section>
       </div>
 
       <div className="zz-rise" style={{ animationDelay: "140ms" }}>
-        <Section title="Connections" hint="Reads your warehouse (MotherDuck), writes canonical to its own MotherDuck database, and keeps multi-user app state in Postgres.">
-          <div className="rounded-sm border border-line bg-bg p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">Warehouse</span><Badge>read-only</Badge></div>
-              <Badge tone="ok" dot>connected</Badge>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-3">
-              <span className="text-ink-2">md:analytics</span><span>·</span><span>attached &amp; scanned for source values — never written to</span>
-            </div>
-          </div>
-          <div className="rounded-sm border border-line bg-bg p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">Canonical store</span><Badge>MotherDuck</Badge></div>
-              <Badge tone="ok" dot>connected</Badge>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-3">
-              <span className="text-ink-2">md:zugzug</span><span>·</span><span>its own database — every dim_* canonical + map_* crosswalk dbt joins</span>
-            </div>
-          </div>
-          <div className="rounded-sm border border-line bg-bg p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">App state</span><Badge tone="accent">Postgres</Badge></div>
-              <Badge tone="ok" dot>connected</Badge>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-3">
-              <span className="text-ink-2">postgres://zugzug</span><span>·</span><span>drafts, audit log, users &amp; presence — the multi-user layer</span>
-            </div>
-          </div>
-          <p className="font-mono text-[10.5px] leading-relaxed text-ink-3">DuckDB <span className="text-ink-2">ATTACH … (TYPE postgres)</span> bridges them — a single scan can join live drafts ⋈ canonical ⋈ warehouse.</p>
+        <Section title="Connections" hint={engineer ? "Reads your warehouse (MotherDuck), writes master records to its own MotherDuck database, and keeps multi-user app state in Postgres." : "Where Zug Zug is connected."}>
+          {engineer ? (
+            <>
+              <div className="rounded-sm border border-line bg-bg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">Warehouse</span><Badge>read-only</Badge></div>
+                  <Badge tone="ok" dot>connected</Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-3">
+                  <span className="text-ink-2">md:analytics</span><span>·</span><span>attached &amp; scanned for source values — never written to</span>
+                </div>
+              </div>
+              <div className="rounded-sm border border-line bg-bg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">Master store</span><Badge>MotherDuck</Badge></div>
+                  <Badge tone="ok" dot>connected</Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-3">
+                  <span className="text-ink-2">md:zugzug</span><span>·</span><span>its own database — every dim_* master + map_* lookup dbt joins</span>
+                </div>
+              </div>
+              <div className="rounded-sm border border-line bg-bg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">App state</span><Badge tone="accent">Postgres</Badge></div>
+                  <Badge tone="ok" dot>connected</Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-3">
+                  <span className="text-ink-2">postgres://zugzug</span><span>·</span><span>drafts, audit log, users &amp; presence — the multi-user layer</span>
+                </div>
+              </div>
+              <p className="font-mono text-[10.5px] leading-relaxed text-ink-3">DuckDB <span className="text-ink-2">ATTACH … (TYPE postgres)</span> bridges them — a single scan can join live drafts ⋈ master ⋈ warehouse.</p>
+            </>
+          ) : (
+            <>
+              <div className="rounded-sm border border-line bg-bg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
+                  <Badge tone="ok" dot>connected</Badge>
+                </div>
+                <div className="mt-1 text-[12.5px] text-ink-3">Reading from your warehouse — read-only.</div>
+              </div>
+              <div className="rounded-sm border border-line bg-bg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-display text-[14px] font-semibold text-ink">Master store</span>
+                  <Badge tone="ok" dot>connected</Badge>
+                </div>
+                <div className="mt-1 text-[12.5px] text-ink-3">Stores every master list — this is what downstream models pick up.</div>
+              </div>
+              <div className="rounded-sm border border-line bg-bg p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-display text-[14px] font-semibold text-ink">Workspace</span>
+                  <Badge tone="ok" dot>connected</Badge>
+                </div>
+                <div className="mt-1 text-[12.5px] text-ink-3">Drafts, history, and your team — the collaborative layer.</div>
+              </div>
+            </>
+          )}
         </Section>
       </div>
 
       <div className="zz-rise" style={{ animationDelay: "180ms" }}>
-        <Section title="Mapping defaults" hint="How aggressively Zug Zug resolves new values.">
-          <Field label={`Auto-map confidence threshold — ${threshold}%`}>
+        <Section title="Matching defaults" hint="How aggressively Zug Zug matches new values when a scan finds them.">
+          <Field label={`Auto-match confidence threshold — ${threshold}%`}>
             <input type="range" min={50} max={100} value={threshold} onChange={(e) => setThreshold(+e.target.value)} className="w-full max-w-sm accent-[var(--accent)]" />
           </Field>
           <button type="button" onClick={() => setAutoAccept((v) => !v)} className="flex items-center gap-3 text-left">
             <span className={cx("relative h-5 w-9 rounded-pill border transition-colors", autoAccept ? "border-accent bg-accent" : "border-line-2 bg-surface-2")}>
               <span className={cx("absolute top-0.5 h-3.5 w-3.5 rounded-pill bg-surface transition-all", autoAccept ? "left-4" : "left-0.5")} />
             </span>
-            <span className="text-[13px] text-ink-2">Auto-accept suggestions above the threshold on scan</span>
+            <span className="text-[13px] text-ink-2">Auto-match suggestions above the threshold when a scan runs</span>
           </button>
         </Section>
       </div>
