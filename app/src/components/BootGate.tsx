@@ -3,10 +3,6 @@ import { initStore } from "../store";
 import { Mark } from "./Mark";
 import { Button } from "./Button";
 
-/* BootGate — wraps the router so React mounts immediately and the async
-   initStore() call shows a styled skeleton instead of a blank page (or, on
-   API failure, a styled error with retry — never raw HTML in #root). */
-
 type State = { kind: "loading" } | { kind: "ready" } | { kind: "error"; detail: string };
 
 export function BootGate({ children }: { children: ReactNode }) {
@@ -14,9 +10,17 @@ export function BootGate({ children }: { children: ReactNode }) {
 
   const boot = () => {
     setState({ kind: "loading" });
-    initStore().then(
-      () => setState({ kind: "ready" }),
-      (e: unknown) => setState({ kind: "error", detail: e instanceof Error ? e.message : String(e) }),
+    (async () => {
+      const meRes = await fetch("/api/auth/me");
+      if (meRes.status === 401) {
+        window.location.replace("/login");
+        return;
+      }
+      if (!meRes.ok) throw new Error(`API unreachable (${meRes.status})`);
+      await initStore();
+      setState({ kind: "ready" });
+    })().catch((e: unknown) =>
+      setState({ kind: "error", detail: e instanceof Error ? e.message : String(e) }),
     );
   };
 
@@ -49,7 +53,6 @@ export function BootGate({ children }: { children: ReactNode }) {
     );
   }
 
-  // loading
   return (
     <div className="zz-canvas grid min-h-screen place-items-center p-8">
       <div className="flex items-center gap-2.5">
