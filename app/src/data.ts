@@ -1,9 +1,9 @@
 /* data.ts — typed mock fixtures for Zug Zug (no backend).
 
-   The app reconciles messy SOURCE VALUES (found across many warehouse tables) to
-   one CANONICAL value, and commits the result to DuckDB: a `dim_*` canonical table
-   + a `map_*` crosswalk table. The hard part is the constant stream of NEW values
-   that would otherwise silently resolve to NULL downstream. */
+   The app matches messy SOURCE VALUES (found across many warehouse tables) to one
+   MASTER record, and commits the result to DuckDB: a `dim_*` master table + a
+   `map_*` lookup table. The hard part is the constant stream of NEW values that
+   would otherwise silently resolve to NULL downstream. */
 
 export interface Metric {
   label: string;
@@ -20,19 +20,19 @@ export const metrics: Metric[] = [
   { label: "Rows at risk", value: "11.4k", delta: "-2.1k", dir: "down", spark: [60, 55, 48, 44, 38, 30, 24] },
 ];
 
-/* a canonical value: the human label + the key written to the dim/map tables,
-   how many raw variants resolve to it, and any enrichment attribute values */
+/* a master record: the human label + the key written to the dim/map tables, how
+   many raw values resolve to it, and any enrichment attribute values */
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
-/* an enrichment attribute column on a dimension (e.g. region, currency) */
+/* an enrichment attribute column on a dimension (e.g. currency, locale) */
 export interface FieldDef { field: string; label: string; type: string }
-/* where a raw value was seen in the warehouse (provenance + row impact) */
+/* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence { table: string; column: string; rows: number }
 
 export interface MappingValue {
   value: string;             // the raw source value (multilingual, codes, emoji, typos)
   status: "mapped" | "new";  // already in the map table, or freshly discovered
-  current: string | null;    // canonical label already mapped (when mapped)
-  suggestion: string | null; // AI-proposed canonical label (for new values)
+  current: string | null;    // master label already mapped (when mapped)
+  suggestion: string | null; // AI-proposed master label (for new values)
   confidence: number;
   firstSeen?: string;
   sources: SourceOccurrence[]; // every source table.column it appears in
@@ -41,9 +41,9 @@ export interface MappingValue {
 export interface MappingDimension {
   id: string;
   dimension: string;     // human label
-  dimTable: string;      // DuckDB canonical table, e.g. zugzug.dim_country
-  mapTable: string;      // DuckDB crosswalk table, e.g. zugzug.map_country
-  keyCol: string;        // canonical key column written to both
+  dimTable: string;      // DuckDB master table, e.g. zugzug.dim_country
+  mapTable: string;      // DuckDB lookup table, e.g. zugzug.map_country
+  keyCol: string;        // master key column written to both
   keyKind?: "slug" | "external_id"; // 'external_id' → key is a warehouse ID, name resolved live
   rows: number;          // rows already in the map table
   canonical: CanonicalValue[];
