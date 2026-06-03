@@ -30,7 +30,7 @@ export const env = {
   allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || "bettercollective.com",
   /** Public origin of this app — used to build the OAuth redirect_uri.
    *  In dev: http://localhost:5173 (Vite proxies /api). In prod: https://yourapp.com */
-  origin: process.env.ORIGIN?.trim() || "http://localhost:5173",
+  origin: (process.env.ORIGIN?.trim() || "http://localhost:5173").replace(/\/$/, ""),
 };
 
 /** Fully-qualified Postgres app-state table name, e.g. oltp.zugzug_app.draft */
