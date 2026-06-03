@@ -652,6 +652,27 @@ export async function appendAudit(action: string, detail: string): Promise<void>
   await appendAuditAs("u_ada", action, detail);
 }
 
+/* --- workspace-global preferences (single row, id=1) --- */
+export interface Preferences { publishThreshold: number; suggestThreshold: number }
+
+export async function getPreferences(): Promise<Preferences> {
+  const row = (await all<{ publish_threshold: number; suggest_threshold: number }>(
+    `SELECT publish_threshold, suggest_threshold FROM ${pg("preferences")} WHERE id = 1`,
+  ))[0];
+  return row
+    ? { publishThreshold: Number(row.publish_threshold), suggestThreshold: Number(row.suggest_threshold) }
+    : { publishThreshold: 95, suggestThreshold: 80 };
+}
+
+export async function setPreferences(p: Preferences): Promise<void> {
+  const publish = Math.max(0, Math.min(100, Math.round(p.publishThreshold)));
+  const suggest = Math.max(0, Math.min(publish, Math.round(p.suggestThreshold)));
+  await run(
+    `UPDATE ${pg("preferences")} SET publish_threshold = $1, suggest_threshold = $2, updated_at = current_timestamp WHERE id = 1`,
+    [publish, suggest],
+  );
+}
+
 export async function listAudit(limit = 30): Promise<AuditEntry[]> {
   const rows = await all<{ id: string; uid: string; action: string; detail: string; secs: number }>(
     `SELECT id, user_id AS uid, action, detail, epoch(current_timestamp - created_at) AS secs

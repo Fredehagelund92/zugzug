@@ -32,6 +32,16 @@ const server = Bun.serve({
     if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
 
     try {
+      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold}
+      if (seg[1] === "preferences" && seg.length === 2) {
+        if (method === "GET") return json(await repo.getPreferences());
+        if (method === "PUT") {
+          const p = (await req.json()) as { publishThreshold: number; suggestThreshold: number };
+          await repo.setPreferences(p);
+          return noContent();
+        }
+      }
+
       // GET /api/users → { currentUser, collaborators }
       if (seg[1] === "users" && seg.length === 2 && method === "GET") {
         const users = await repo.listUsers();

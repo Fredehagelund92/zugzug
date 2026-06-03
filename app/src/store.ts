@@ -34,11 +34,14 @@ export const dkey = (dimId: string, raw: string) => `${dimId}::${raw}`;
 export let currentUser: User = { id: "u_ada", name: "Ada Berg", initials: "AB" };
 export let collaborators: User[] = [currentUser];
 
+export interface Preferences { publishThreshold: number; suggestThreshold: number }
+
 /* ---- in-memory cache of server state ---- */
 let dims: MappingDimension[] = [];
 let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
+let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80 };
 
 const listeners = new Set<() => void>();
 const subscribe = (l: () => void) => { listeners.add(l); return () => listeners.delete(l); };
@@ -66,6 +69,7 @@ async function refreshDrafts(): Promise<void> {
 }
 async function refreshAudit(): Promise<void> { audit = await api<AuditEntry[]>("/audit?limit=30"); }
 async function refreshSources(): Promise<void> { sources = await api<SourceInfo[]>("/sources"); }
+async function refreshPreferences(): Promise<void> { preferences = await api<Preferences>("/preferences"); }
 
 /** Preload everything once. Awaited in main.tsx so the first render has data. */
 export async function initStore(): Promise<void> {
@@ -76,6 +80,7 @@ export async function initStore(): Promise<void> {
   await refreshDrafts();
   await refreshSources();
   await refreshAudit();
+  await refreshPreferences();
   emit();
 }
 
@@ -84,6 +89,13 @@ export function useDimensions(): MappingDimension[] { return useSyncExternalStor
 export function useDrafts(): Record<string, Draft> { return useSyncExternalStore(subscribe, () => draftsFlat, () => draftsFlat); }
 export function useAudit(): AuditEntry[] { return useSyncExternalStore(subscribe, () => audit, () => audit); }
 export function useSources(): SourceInfo[] { return useSyncExternalStore(subscribe, () => sources, () => sources); }
+export function usePreferences(): Preferences { return useSyncExternalStore(subscribe, () => preferences, () => preferences); }
+
+export async function setPreferences(p: Preferences): Promise<void> {
+  await api("/preferences", { method: "PUT", body: JSON.stringify(p) });
+  await refreshPreferences();
+  emit();
+}
 
 /* ---- mutations (write through the API, then refetch the affected slice) ---- */
 export async function addDimension(name: string, keyKind?: "slug" | "external_id"): Promise<string> {
