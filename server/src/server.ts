@@ -61,7 +61,8 @@ const server = Bun.serve({
     }
 
     // Session gate — all other /api/* routes require a valid session
-    const sessionUser = await getSessionUser(req);
+    let sessionUser;
+    try { sessionUser = await getSessionUser(req); } catch (e) { return err(e, 503); }
     if (!sessionUser) return json({ error: "Unauthorized" }, 401);
     const me = sessionUser.id;
 
