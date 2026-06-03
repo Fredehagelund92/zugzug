@@ -246,7 +246,7 @@ export function Sources() {
       {derived && <div className="mb-4 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">{derived}</div>}
 
       {/* ─────────── LEDGER SURFACE (paper) ─────────── */}
-      <section className="zz-rise relative overflow-hidden rounded-xl border border-line bg-surface shadow-pop" style={{ animationDelay: "60ms" }}>
+      <section className="zz-rise relative overflow-hidden border border-line bg-surface shadow-pop" style={{ animationDelay: "60ms" }}>
         {/* a thin accent edge at the very top — the 'folder tab' that signals
             this is the working surface and quietly carries the brand */}
         <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" aria-hidden="true" />
