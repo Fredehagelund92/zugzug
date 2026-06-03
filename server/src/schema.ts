@@ -58,6 +58,11 @@ export async function ensureSchema(): Promise<void> {
     created_at TIMESTAMP NOT NULL,
     PRIMARY KEY (dim_id, field)
   )`);
+  // single-select columns store an ordered list of allowed option labels. JSON
+  // (not JSONB — DuckDB only knows JSON; Postgres accepts it). Nullable: text/
+  // number/boolean/date columns keep it null. ADD COLUMN IF NOT EXISTS keeps
+  // it idempotent.
+  await run(`ALTER TABLE ${pg("dimension_field")} ADD COLUMN IF NOT EXISTS options JSON`);
 
   // cached scan stats per source (refreshed by POST /api/sources/scan) so the
   // sources list/queue reads instantly without hitting the warehouse per row —

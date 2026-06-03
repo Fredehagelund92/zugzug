@@ -38,7 +38,7 @@
 
 | File | Change |
 |---|---|
-| `server/src/schema.ts` | ALTER `dimension_field`: add `options JSONB`; CREATE `user_grid_layout` |
+| `server/src/schema.ts` | ALTER `dimension_field`: add `options JSON`; CREATE `user_grid_layout` |
 | `server/src/repo.ts` | `FieldDef.options?`; `addColumnOption`, `renameColumn`, `changeColumnType`, `deleteColumn`; `getGridLayout`, `setGridLayout`; project `options` in `listFields` |
 | `server/src/server.ts` | new routes: `POST /api/dimensions/:id/fields/:field/options`, `PUT/DELETE /api/dimensions/:id/fields/:field`, `GET/PATCH /api/grid-layout/:id` |
 | `server/src/verify-datagrid.ts` | **new** — exercises the new endpoints end-to-end |
@@ -854,10 +854,11 @@ Goal: ship the headline feature. `dim_/map_` columns can be `select`-typed with 
 In `server/src/schema.ts`, locate the block where `dimension_field` is created (it ends with `PRIMARY KEY (dim_id, field)`). Immediately AFTER that `CREATE TABLE IF NOT EXISTS`, add:
 
 ```ts
-  // single-select columns store an ordered list of allowed option labels (JSONB
-  // for queryability; the column is nullable — text/number/boolean/date columns
-  // keep it null). ADD COLUMN IF NOT EXISTS for idempotency.
-  await run(`ALTER TABLE ${pg("dimension_field")} ADD COLUMN IF NOT EXISTS options JSONB`);
+  // single-select columns store an ordered list of allowed option labels. JSON
+  // (not JSONB — DuckDB only knows JSON; Postgres accepts it). Nullable: text/
+  // number/boolean/date columns keep it null. ADD COLUMN IF NOT EXISTS keeps
+  // it idempotent.
+  await run(`ALTER TABLE ${pg("dimension_field")} ADD COLUMN IF NOT EXISTS options JSON`);
 ```
 
 - [ ] **Step 2: Typecheck + apply**
@@ -950,7 +951,7 @@ export async function addColumnOption(dimId: string, field: string, label: strin
   if (existing.includes(label)) return { options: existing };
   const next = [...existing, label];
   await run(
-    `UPDATE ${pg("dimension_field")} SET options = $1::jsonb WHERE dim_id = $2 AND field = $3`,
+    `UPDATE ${pg("dimension_field")} SET options = $1::json WHERE dim_id = $2 AND field = $3`,
     [JSON.stringify(next), dimId, field],
   );
   await appendAudit("Added option", `${label} → ${field}`);
@@ -1679,12 +1680,13 @@ In `server/src/schema.ts`, after the `preferences` block, add:
 
 ```ts
   // per-user-per-dimension UI layout: column widths, order, hidden set. NOT
-  // saved views — those are deferred. config is a single JSONB blob so the
+  // saved views — those are deferred. config is a single JSON blob so the
   // server schema doesn't need to know its shape. PATCH writes the whole blob.
+  // (JSON not JSONB — DuckDB only parses JSON; Postgres accepts both.)
   await run(`CREATE TABLE IF NOT EXISTS ${pg("user_grid_layout")} (
     user_id    VARCHAR NOT NULL,
     dim_id     VARCHAR NOT NULL,
-    config     JSONB   NOT NULL,
+    config     JSON    NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     PRIMARY KEY (user_id, dim_id)
   )`);
@@ -1737,7 +1739,7 @@ export async function getGridLayout(userId: string, dimId: string): Promise<Grid
  *  config; partial merging is the client's job (it knows what changed). */
 export async function setGridLayout(userId: string, dimId: string, config: GridLayoutConfig): Promise<void> {
   await run(
-    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at) VALUES ($1, $2, $3::jsonb, current_timestamp)
+    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at) VALUES ($1, $2, $3::json, current_timestamp)
      ON CONFLICT (user_id, dim_id) DO UPDATE SET config = EXCLUDED.config, updated_at = current_timestamp`,
     [userId, dimId, JSON.stringify(config)],
   );
@@ -1842,7 +1844,7 @@ export async function changeColumnType(
   }
 
   await run(
-    `UPDATE ${pg("dimension_field")} SET type = $1, options = $2::jsonb WHERE dim_id = $3 AND field = $4`,
+    `UPDATE ${pg("dimension_field")} SET type = $1, options = $2::json WHERE dim_id = $3 AND field = $4`,
     [newType, newType === "select" ? JSON.stringify(finalOptions ?? []) : null, dimId, field],
   );
   await appendAudit("Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
