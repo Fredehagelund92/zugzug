@@ -1,22 +1,40 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
-import { EngineerModeToggle } from "./EngineerModeToggle";
 import {
   IconDashboard,
   IconMapping,
   IconTables,
   IconSources,
   IconSettings,
+  IconChevron,
 } from "./Icons";
 import { useDimensions, collaborators } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 
-/* AppShell — the signed-in product chrome: a branded command rail (sidebar) +
-   topbar + routed content. Layout in Tailwind; colour/type via token utilities. */
+/* AppShell — the signed-in product chrome.
+   - The sidebar is a fixed column (doesn't scroll with the page); only the
+     main content area scrolls.
+   - The sidebar collapses to an icon-only rail (~64px) via a chevron toggle.
+     Collapsed state is persisted to localStorage so the user's preference
+     survives reloads.
+   - The engineer-mode toggle lives in Settings → Appearance only. */
 
-/* a little zigzag rule — the ZZ motif as a divider */
+const NAV_COLLAPSED_KEY = "zugzug:nav-collapsed";
+
+function useNavCollapsed(): [boolean, () => void] {
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof localStorage === "undefined") return false;
+    return localStorage.getItem(NAV_COLLAPSED_KEY) === "1";
+  });
+  useEffect(() => {
+    localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? "1" : "0");
+  }, [collapsed]);
+  return [collapsed, () => setCollapsed((c) => !c)];
+}
+
 function ZigRule() {
   return (
     <svg viewBox="0 0 96 8" className="h-2 w-24 text-accent" fill="none" aria-hidden="true">
@@ -29,73 +47,123 @@ function ZigRule() {
 export function AppShell() {
   const dims = useDimensions();
   const { engineer } = useEngineerMode();
+  const [collapsed, toggle] = useNavCollapsed();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
     { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
-    { to: "/app/sources", label: "Sources", Icon: IconSources, count: undefined },
+    { to: "/app/sources", label: "Sources", Icon: IconSources, count: undefined as number | undefined },
     { to: "/app/tables", label: "Master lists", Icon: IconTables, count: dims.length },
     { to: "/app/settings", label: "Settings", Icon: IconSettings },
   ];
+
   return (
-    <div className="grid min-h-screen grid-cols-[var(--ak-nav)_1fr]">
-      {/* command rail */}
-      <aside className="flex flex-col border-r border-line bg-surface">
-        <div className="flex h-[var(--ak-topbar)] items-center gap-2.5 border-b border-line px-5 font-display text-lg font-extrabold tracking-tight text-ink">
+    <div
+      className="grid h-screen overflow-hidden"
+      style={{ gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }}
+    >
+      {/* command rail — fixed; does not scroll with the page */}
+      <aside className="flex flex-col overflow-hidden border-r border-line bg-surface">
+        <div className={cx(
+          "flex h-[var(--ak-topbar)] shrink-0 items-center gap-2.5 border-b border-line font-display text-lg font-extrabold tracking-tight text-ink",
+          collapsed ? "justify-center px-2" : "px-5",
+        )}>
           <Mark className="h-7 w-7" />
-          Zug Zug<span className="text-accent">.</span>
+          {!collapsed && <>Zug Zug<span className="text-accent">.</span></>}
         </div>
 
-        <div className="flex items-center gap-2 px-5 pt-4 pb-1">
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Master data layer</span>
-        </div>
-        <div className="px-5 pb-2"><ZigRule /></div>
+        {!collapsed && (
+          <>
+            <div className="flex items-center gap-2 px-5 pt-4 pb-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Master data layer</span>
+            </div>
+            <div className="px-5 pb-2"><ZigRule /></div>
+          </>
+        )}
+        {collapsed && <div className="h-3 shrink-0" />}
 
-        <nav className="flex flex-1 flex-col gap-0.5 p-3">
+        <nav className={cx("flex flex-1 flex-col gap-0.5", collapsed ? "p-2" : "p-3")}>
           {nav.map(({ to, label, Icon, count, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
+              title={collapsed ? (count != null ? `${label} · ${count}` : label) : undefined}
               className={({ isActive }) =>
                 cx(
-                  "flex items-center gap-3 rounded-sm px-3 py-2 text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
+                  "relative flex items-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
+                  collapsed ? "h-10 justify-center" : "gap-3 rounded-sm px-3 py-2",
                   isActive
-                    ? "bg-accent-wash text-accent shadow-[inset_2px_0_0_var(--accent)]"
+                    ? collapsed
+                      ? "bg-accent-wash text-accent"
+                      : "bg-accent-wash text-accent shadow-[inset_2px_0_0_var(--accent)]"
                     : "text-ink-2 hover:bg-hover hover:text-ink",
                 )
               }
             >
               <Icon />
-              {label}
-              {count != null && (
-                <span className="ml-auto rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-ink-3">
-                  {count}
-                </span>
+              {!collapsed && (
+                <>
+                  {label}
+                  {count != null && (
+                    <span className="ml-auto rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-ink-3">
+                      {count}
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && count != null && count > 0 && (
+                <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
               )}
             </NavLink>
           ))}
         </nav>
 
-        {/* system status footer */}
-        <div className="border-t border-line p-4">
-          <div className="flex items-center gap-2 font-mono text-[11px] text-ink">
-            <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-            {engineer ? "analytics.duckdb" : "Connected to warehouse"}
-          </div>
-          <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-ink-3">
-            <span>{engineer ? "warehouse · live" : "live"}</span>
-            <span>{dims.length} {engineer ? "tables" : `master list${dims.length === 1 ? "" : "s"}`}</span>
-          </div>
+        {/* footer — status + collapse toggle */}
+        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-2" : "p-4")}>
+          {!collapsed ? (
+            <>
+              <div className="flex items-center gap-2 font-mono text-[11px] text-ink">
+                <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
+                {engineer ? "analytics.duckdb" : "Connected to warehouse"}
+              </div>
+              <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                <span>{engineer ? "warehouse · live" : "live"}</span>
+                <span>{dims.length} {engineer ? "tables" : `master list${dims.length === 1 ? "" : "s"}`}</span>
+              </div>
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="mt-3 flex w-full items-center justify-end gap-1 font-mono text-[10px] uppercase tracking-wider text-ink-3 transition-colors hover:text-ink"
+              >
+                <span>collapse</span>
+                <IconChevron className="h-3 w-3 rotate-90" />
+              </button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+                className="grid h-8 w-8 place-items-center text-ink-3 transition-colors hover:text-ink"
+              >
+                <IconChevron className="h-3 w-3 -rotate-90" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
-      {/* main column */}
-      <div className="flex min-w-0 flex-col">
-        <header className="sticky top-0 z-40 flex h-[var(--ak-topbar)] items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-6 backdrop-blur-md">
+      {/* main column — flex column with the inner main as the only scroll area */}
+      <div className="flex h-screen min-w-0 flex-col">
+        <header className="flex h-[var(--ak-topbar)] shrink-0 items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-6 backdrop-blur-md">
           <div className="flex-1" />
           <div className="ml-auto flex items-center gap-3">
-            <EngineerModeToggle />
             <ThemeToggle />
             <div className="flex items-center -space-x-2">
               {collaborators.map((u, i) => (
@@ -108,7 +176,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="zz-canvas flex-1">
+        <main className="zz-canvas flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[var(--wide)] p-8">
             <Outlet />
           </div>
