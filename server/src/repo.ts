@@ -797,8 +797,8 @@ export async function getGridLayout(userId: string, dimId: string): Promise<Grid
  *  config; partial merging is the client's job (it knows what changed). */
 export async function setGridLayout(userId: string, dimId: string, config: GridLayoutConfig): Promise<void> {
   await run(
-    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at) VALUES ($1, $2, $3, current_timestamp)
-     ON CONFLICT (user_id, dim_id) DO UPDATE SET config = EXCLUDED.config, updated_at = current_timestamp`,
+    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, dim_id) DO UPDATE SET config = EXCLUDED.config, updated_at = now()`,
     [userId, dimId, JSON.stringify(config)],
   );
 }
