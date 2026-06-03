@@ -5,4 +5,5 @@ export { useGridCursor } from "./useGridCursor";
 export { bucket, hash32 } from "./bucket";
 export { SelectCell } from "./cells/SelectCell";
 export { ColumnHeaderMenu } from "./ColumnHeaderMenu";
+export { ShortcutsOverlay } from "./ShortcutsOverlay";
 export type { ColumnDef, CellType, Cursor, CellCtx, EditCtx, DataGridProps } from "./types";
