@@ -215,10 +215,26 @@ export async function fetchVariants(dimId: string, key: string): Promise<string[
   return api<string[]>(`/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/variants`);
 }
 
-/** Add an enrichment attribute column to a dimension (text|number|boolean|date). */
-export async function addField(dimId: string, label: string, type = "text"): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, { method: "POST", body: JSON.stringify({ label, type }) });
+/** Add an enrichment attribute column to a dimension (text|number|boolean|date|select).
+ *  For `select`, `options` seeds the allowed list; otherwise omit. */
+export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
+    method: "POST",
+    body: JSON.stringify({ label, type, options }),
+  });
   await refreshDims(); await refreshAudit(); emit();
+}
+
+/** Append a new option to a select column's allowed list. Refetches the
+ *  dimension so subsequent picks see the new option. Returns the new list. */
+export async function addColumnOption(dimId: string, field: string, label: string): Promise<string[]> {
+  const res = await api<{ options: string[] }>(
+    `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}/options`,
+    { method: "POST", body: JSON.stringify({ label }) },
+  );
+  await refreshDims();
+  emit();
+  return res.options;
 }
 /** Set an enrichment field value on a canonical record. */
 export async function setFieldValue(dimId: string, key: string, field: string, value: string | null): Promise<void> {
