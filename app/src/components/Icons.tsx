@@ -1,0 +1,71 @@
+/* Icons — inline line icons on `currentColor`, so they inherit ink/accent from
+   whatever text color the parent sets. 24x24, 1.6 stroke (matches the kit). */
+import type { SVGProps } from "react";
+import { cx } from "../lib/cx";
+
+function Base({ className, children, ...rest }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cx("h-[18px] w-[18px] shrink-0", className)}
+      aria-hidden="true"
+      {...rest}
+    >
+      {children}
+    </svg>
+  );
+}
+
+export const IconDashboard = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></Base>
+);
+export const IconMapping = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><circle cx="5" cy="6" r="2" /><circle cx="5" cy="18" r="2" /><circle cx="19" cy="12" r="2" /><path d="M7 6h4a4 4 0 0 1 4 4v0M7 18h4a4 4 0 0 0 4-4v0" /></Base>
+);
+export const IconTables = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 14h18M9 9v11" /></Base>
+);
+export const IconSources = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" /></Base>
+);
+export const IconSettings = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><circle cx="12" cy="12" r="3" /><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.9 4.9l2.1 2.1m10 10 2.1 2.1m0-14.2-2.1 2.1m-10 10-2.1 2.1" /></Base>
+);
+export const IconSearch = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></Base>
+);
+export const IconPlus = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M12 5v14M5 12h14" /></Base>
+);
+export const IconArrowRight = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M5 12h14M13 6l6 6-6 6" /></Base>
+);
+export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M20 6 9 17l-5-5" /></Base>
+);
+export const IconChevron = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M6 9l6 6 6-6" /></Base>
+);
+export const IconX = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M18 6 6 18M6 6l12 12" /></Base>
+);
+export const IconWand = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M5 21 19 7M14 4l1.5 1.5M19 9l1.5 1.5M9 3l.8 2 2 .8-2 .8L9 9l-.8-2L6.2 6.2 8.2 5z" /></Base>
+);
+export const IconSun = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4m0-14.2-1.4 1.4M6.3 17.7l-1.4 1.4" /></Base>
+);
+export const IconMoon = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" /></Base>
+);
+export const IconMerge = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M7 4v6a5 5 0 0 0 5 5h8M16 11l4 4-4 4" /></Base>
+);
+export const IconEdit = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></Base>
+);
