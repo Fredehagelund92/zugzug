@@ -128,6 +128,19 @@
 @keyframes zz-pulse { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.34; } }
 @keyframes zz-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
+/* SQUARE-MODE: override the brand's rounded-corner tokens to 0 app-wide.
+   The brand defines --r-sm/--r/--r-lg; squaring them flattens every
+   `rounded-sm`/`rounded-md`/`rounded-lg` utility (and the kit components
+   that reference the raw var) to crisp 90° corners. --r-pill stays at
+   999px so inherently-round affordances (status dots, the live pulse)
+   keep their shape. Tightens visual rhythm + competes against
+   eddytor.com's squared editorial feel. */
+:root {
+  --r-sm: 0px;
+  --r: 0px;
+  --r-lg: 0px;
+}
+
 /* dual-range thumb pointer events: the input wrapper has pointer-events:none
    so it doesn't block the colored band underneath; the thumbs re-enable. */
 .zz-range::-webkit-slider-thumb { pointer-events: auto; }
