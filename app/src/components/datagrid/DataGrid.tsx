@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import { TextCell } from "./cells/TextCell";
@@ -6,6 +6,7 @@ import { NumberCell } from "./cells/NumberCell";
 import { BooleanCell } from "./cells/BooleanCell";
 import { DateCell } from "./cells/DateCell";
 import { SelectCell } from "./cells/SelectCell";
+import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
 import type { DataGridProps, CellType } from "./types";
@@ -20,6 +21,24 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const selectionCol = !!selection;
   const undo = useUndoStack();
 
+  // ── Task 19: sort state + sortedRows ────────────────────────────────────────
+  const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+
+  const sortedRows = useMemo(() => {
+    if (!sort) return rows;
+    const sign = sort.dir === "asc" ? 1 : -1;
+    const cmp = (a: Row, b: Row) => {
+      const av = (a as any)[sort.field]; const bv = (b as any)[sort.field];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign;
+      return String(av).localeCompare(String(bv)) * sign;
+    };
+    return [...rows].sort(cmp);
+  }, [rows, sort]);
+
   // template: optional checkbox + each visible column's width
   const gridStyle = useMemo(() => {
     const tracks = visible.map((c) => (c.width ? `${c.width}px` : "minmax(96px, 1fr)"));
@@ -33,9 +52,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   };
 
   const cursor = useGridCursor({
-    rows, rowKey, columns: visible,
+    rows: sortedRows, rowKey, columns: visible,
     onCommit: () => { /* the editor's onBlur handles the actual value commit */ },
-    onSelectAll: () => selection?.onChange(rows.map(rowKey)),
+    onSelectAll: () => selection?.onChange(sortedRows.map(rowKey)),
     onUndo: () => undo.undo(),
     onRedo: () => undo.redo(),
   });
@@ -58,26 +77,61 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       <div className="grid items-center gap-3 border-b border-line px-5 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3" style={gridStyle}>
         {selectionCol && (
           <Checkbox
-            state={selection!.selected.length === rows.length && rows.length > 0
+            state={selection!.selected.length === sortedRows.length && sortedRows.length > 0
               ? "on"
               : selection!.selected.length > 0 ? "mixed" : "off"}
             onClick={() => selection!.onChange(
-              selection!.selected.length === rows.length ? [] : rows.map(rowKey)
+              selection!.selected.length === sortedRows.length ? [] : sortedRows.map(rowKey)
             )}
             aria-label="Select all"
           />
         )}
-        {visible.map((c) => (
-          <span key={c.field}
-            className={cx("truncate", c.align === "right" && "text-right")}
-            data-header={c.field}>{c.label}</span>
-        ))}
+        {visible.map((c) => {
+          const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
+          return (
+            <div key={c.field}
+              className={cx("group relative flex items-center gap-1 truncate", c.align === "right" && "justify-end")}
+              data-header={c.field}
+            >
+              <span className="truncate">{c.label}{sortGlyph}</span>
+              {!c.pinnedLeft && (
+                <button type="button" aria-label="Column menu"
+                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                  onClick={() => setMenuFor((s) => s === c.field ? null : c.field)}
+                >⋯</button>
+              )}
+              {menuFor === c.field && (
+                <ColumnHeaderMenu
+                  column={c}
+                  sortDir={sort?.field === c.field ? sort.dir : null}
+                  onClose={() => setMenuFor(null)}
+                  onRename={(label) => props.onRenameColumn?.(c.field, label)}
+                  onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
+                  onChangeType={async (newType) => {
+                    if (!props.onChangeColumnType) return;
+                    const res = await props.onChangeColumnType(c.field, newType);
+                    if (!res.ok && res.invalidCount) {
+                      if (confirm(`${res.invalidCount} value(s) won't parse as ${newType}. Coerce to empty?`)) {
+                        await props.onChangeColumnType(c.field, newType, { coerceInvalidToNull: true });
+                      }
+                    }
+                  }}
+                  onHide={() => {
+                    const hidden = [...visible.filter((v) => v.hidden).map((v) => v.field), c.field];
+                    props.onLayoutChange?.({ hidden });
+                  }}
+                  onDelete={() => props.onDeleteColumn?.(c.field)}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* body */}
-      {rows.length === 0 ? (
+      {sortedRows.length === 0 ? (
         empty ?? <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">No rows.</div>
-      ) : rows.map((row) => {
+      ) : sortedRows.map((row) => {
         const rk = rowKey(row);
         const selected = isSelected(rk);
         return (
