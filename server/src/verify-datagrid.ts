@@ -68,8 +68,52 @@ async function cleanup() {
     assert(r === null, `expected null for non-select column, got: ${JSON.stringify(r)}`);
   });
 
+  // ---- Phase 3: grid layout + column rename / change-type / delete ----
+
+  const USER = "u_ada";
+
+  await step("setGridLayout writes config", async () => {
+    await repo.setGridLayout(USER, dimId, { widths: { region: 120 }, order: ["region", "capital"], hidden: [] });
+    const r = await repo.getGridLayout(USER, dimId);
+    assert(r.widths?.region === 120, `widths.region: ${r.widths?.region}`);
+    assert(JSON.stringify(r.order) === JSON.stringify(["region", "capital"]), `order: ${JSON.stringify(r.order)}`);
+  });
+
+  await step("renameColumn updates the label", async () => {
+    await repo.renameColumn(dimId, "capital", "Capital city");
+    const fields = await repo.listFields(dimId);
+    const cap = fields.find((f) => f.field === "capital");
+    assert(cap?.label === "Capital city", `label: ${cap?.label}`);
+  });
+
+  await step("changeColumnType text → select seeds options from distinct values", async () => {
+    // first, add a couple of canonical rows and set capital values
+    await repo.addCanonicalOne(dimId, "Denmark", "denmark");
+    await repo.addCanonicalOne(dimId, "Germany", "germany");
+    await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen");
+    await repo.setFieldValue(dimId, "germany", "capital", "Berlin");
+    const res = await repo.changeColumnType(dimId, "capital", "select");
+    assert(res.ok, `changeColumnType failed: ${JSON.stringify(res)}`);
+    const fields = await repo.listFields(dimId);
+    const cap = fields.find((f) => f.field === "capital");
+    assert(cap?.type === "select", `type after change: ${cap?.type}`);
+    assert(cap?.options && cap.options.includes("Copenhagen") && cap.options.includes("Berlin"),
+      `options after change: ${JSON.stringify(cap?.options)}`);
+  });
+
+  await step("deleteColumn drops dim_field + cell values", async () => {
+    const r = await repo.deleteColumn(dimId, "capital");
+    assert(r.ok, "deleteColumn ok");
+    const fields = await repo.listFields(dimId);
+    assert(!fields.some((f) => f.field === "capital"), `capital still present: ${JSON.stringify(fields)}`);
+  });
+
+  await step("cleanup grid layout rows", async () => {
+    await run(`DELETE FROM ${pg("user_grid_layout")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+  });
+
   await step("cleanup", cleanup);
 
-  console.log("\n✓ verify-datagrid (Phase 2): all checks passed");
+  console.log("\n✓ verify-datagrid (Phase 3): all checks passed");
   process.exit(0);
 })().catch((e) => { console.error("\n✗ verify-datagrid:", e?.message ?? e); process.exit(1); });
