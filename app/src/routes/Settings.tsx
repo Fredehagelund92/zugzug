@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
+import { ThresholdRange } from "../components/ThresholdRange";
 import { cx } from "../lib/cx";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { usePreferences, setPreferences } from "../store";
 
 /* Settings — workspace, appearance (theme), the DuckDB connection, and matching
    defaults. Token-driven, squared. UI only. */
@@ -33,8 +35,7 @@ const input = "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 f
 
 export function Settings() {
   const { engineer, setEngineer } = useEngineerMode();
-  const [threshold, setThreshold] = useState(90);
-  const [autoAccept, setAutoAccept] = useState(true);
+  const prefs = usePreferences();
   const [saved, setSaved] = useState(false);
   const save = () => { setSaved(true); setTimeout(() => setSaved(false), 2200); };
 
@@ -133,15 +134,15 @@ export function Settings() {
 
       <div className="zz-rise" style={{ animationDelay: "180ms" }}>
         <Section title="Matching defaults" hint="How aggressively Zug Zug matches new values when a scan finds them.">
-          <Field label={`Auto-match confidence threshold — ${threshold}%`}>
-            <input type="range" min={50} max={100} value={threshold} onChange={(e) => setThreshold(+e.target.value)} className="w-full max-w-sm accent-[var(--accent)]" />
+          <Field label="Confidence bands">
+            <ThresholdRange
+              publish={prefs.publishThreshold}
+              suggest={prefs.suggestThreshold}
+              onChange={({ publish, suggest }) =>
+                setPreferences({ publishThreshold: publish, suggestThreshold: suggest })
+              }
+            />
           </Field>
-          <button type="button" onClick={() => setAutoAccept((v) => !v)} className="flex items-center gap-3 text-left">
-            <span className={cx("relative h-5 w-9 rounded-pill border transition-colors", autoAccept ? "border-accent bg-accent" : "border-line-2 bg-surface-2")}>
-              <span className={cx("absolute top-0.5 h-3.5 w-3.5 rounded-pill bg-surface transition-all", autoAccept ? "left-4" : "left-0.5")} />
-            </span>
-            <span className="text-[13px] text-ink-2">Auto-match suggestions above the threshold when a scan runs</span>
-          </button>
         </Section>
       </div>
     </div>
