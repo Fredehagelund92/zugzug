@@ -161,6 +161,14 @@ export async function addSource(dimId: string, table: string, column: string): P
   emit();
 }
 
+/** Top-N unmapped raw values from a specific warehouse source column. Drives
+ *  the per-row "see what's actually unmapped" reveal on the Sources page. */
+export interface UnmappedSample { raw: string; rows: number }
+export async function fetchUnmappedSample(dimId: string, table: string, column: string, limit = 5): Promise<UnmappedSample[]> {
+  const qs = new URLSearchParams({ dimId, table, column, limit: String(limit) });
+  return api<UnmappedSample[]>(`/sources/unmapped?${qs.toString()}`);
+}
+
 /** Set (or clear) an automatic scan cadence on a wired source. */
 export async function setSourceSchedule(dimId: string, table: string, column: string, schedule: string | null): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/sources/schedule`, {

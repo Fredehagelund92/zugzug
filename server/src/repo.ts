@@ -242,6 +242,36 @@ export async function addSource(dimId: string, table: string, column: string): P
   );
 }
 
+/** Top-N unmapped raw values from a specific warehouse source column, with the
+ *  row count of each. Powers the per-row "what's actually broken here" reveal
+ *  on the Sources page — drill into a column without leaving the list. */
+export interface UnmappedSample { raw: string; rows: number }
+export async function topUnmapped(dimId: string, table: string, column: string, limit = 5): Promise<UnmappedSample[]> {
+  const meta = await get<{ mapTable: string }>(
+    `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
+  if (!meta) return [];
+  if (!env.attachWarehouse) return [];
+  const col = qid(column);
+  try {
+    const rows = await all<{ raw: string; rows: bigint }>(`
+      WITH occ AS (
+        SELECT CAST(${col} AS VARCHAR) AS raw, count(*) AS n
+        FROM ${whTable(table)}
+        WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
+        GROUP BY 1
+      )
+      SELECT o.raw AS raw, o.n AS rows
+      FROM occ o
+      LEFT JOIN ${cq(meta.mapTable)} m ON lower(m.raw) = lower(o.raw)
+      WHERE m.raw IS NULL
+      ORDER BY o.n DESC
+      LIMIT ${Math.max(1, Math.min(50, Math.round(limit)))}`);
+    return rows.map((r) => ({ raw: r.raw, rows: Number(r.rows) }));
+  } catch {
+    return [];
+  }
+}
+
 /** Set (or clear) the automatic scan cadence for a wired source. Valid values:
  *  null (no schedule), '15m', 'hourly', 'daily'. */
 export async function setSourceSchedule(dimId: string, table: string, column: string, schedule: string | null): Promise<void> {
