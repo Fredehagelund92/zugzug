@@ -26,7 +26,7 @@ type Filter = "new" | "all" | "mapped";
 
 const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
 const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
-const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px_64px] items-center gap-3";
+const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
 export function Mapping() {
   const dims = useDimensions();
@@ -252,7 +252,7 @@ function MappingInner() {
 
         {/* column header */}
         <div className={cx(COLS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-          <span /><span>Source value · where it's seen</span><span /><span>Master {seed.dimension.toLowerCase()}</span><span>Confidence</span><span>Status</span><span />
+          <span /><span>Source value · where it's seen</span><span /><span>Master {seed.dimension.toLowerCase()}</span><span>Confidence</span><span>Status</span>
         </div>
 
         {/* rows */}
@@ -288,16 +288,6 @@ function MappingInner() {
                   : row.status === "skipped"
                     ? <Chip label="Skipped" bucket="chip-5" />
                     : <Chip label="New" bucket="chip-2" dot />}</div>
-                <div className="flex items-center justify-end gap-1.5">
-                  {r.suggestion && row.status !== "mapped" && (
-                    <button type="button" aria-label="Accept" title="Accept suggestion" onClick={() => accept(r.value)} className="grid h-7 w-7 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-accent hover:text-accent"><IconCheck className="h-3.5 w-3.5" /></button>
-                  )}
-                  {row.status === "new" ? (
-                    <button type="button" aria-label="Skip" title="Skip" onClick={() => skip(r.value)} className="grid h-7 w-7 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-danger hover:text-danger"><IconX className="h-3.5 w-3.5" /></button>
-                  ) : (
-                    <button type="button" aria-label="Reset" title="Reset" onClick={() => reset(r.value)} className="grid h-7 w-7 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-accent hover:text-accent"><IconArrowRight className="h-3.5 w-3.5 -rotate-90" /></button>
-                  )}
-                </div>
               </div>
 
               {/* expandable provenance + write target */}
