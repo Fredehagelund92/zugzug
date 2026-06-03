@@ -82,6 +82,15 @@ const server = Bun.serve({
           return json(await repo.sourceFacets());
         if (seg[2] === "scan" && seg.length === 3 && method === "POST")
           return json({ scanned: await repo.scanSources() });
+        // GET /api/sources/unmapped?dimId=&table=&column=&limit=
+        if (seg[2] === "unmapped" && seg.length === 3 && method === "GET") {
+          const dimId = url.searchParams.get("dimId") ?? "";
+          const table = url.searchParams.get("table") ?? "";
+          const column = url.searchParams.get("column") ?? "";
+          const limit = Number(url.searchParams.get("limit") ?? 5);
+          if (!dimId || !table || !column) return err("dimId, table, column required", 400);
+          return json(await repo.topUnmapped(dimId, table, column, limit));
+        }
       }
 
       // GET /api/catalog — browse/search the warehouse catalog (the 1000+ tables)
