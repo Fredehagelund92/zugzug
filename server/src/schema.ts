@@ -5,7 +5,7 @@
    Mirrors the three-store split in ARCHITECTURE.md: this is everything in
    `postgres://zugzug` — registry, drafts, audit, users, presence. */
 
-import { run, all } from "./db.ts";
+import { run, all, get } from "./db.ts";
 import { env, pg } from "./env.ts";
 
 const DEFAULT_USERS = [
@@ -58,11 +58,25 @@ export async function ensureSchema(): Promise<void> {
     created_at TIMESTAMP NOT NULL,
     PRIMARY KEY (dim_id, field)
   )`);
-  // single-select columns store an ordered list of allowed option labels. JSON
-  // (not JSONB — DuckDB only knows JSON; Postgres accepts it). Nullable: text/
-  // number/boolean/date columns keep it null. ADD COLUMN IF NOT EXISTS keeps
-  // it idempotent.
-  await run(`ALTER TABLE ${pg("dimension_field")} ADD COLUMN IF NOT EXISTS options JSON`);
+  // single-select columns store an ordered list of allowed option labels as a
+  // JSON string in a VARCHAR column. We don't query inside the JSON, and using
+  // a real JSON/JSONB column would force every write through DuckDB's postgres
+  // extension UPDATE-rewrite, which drops the ::json cast — leaving Postgres
+  // with a VARCHAR expression bound to a JSON column. Storing the serialized
+  // string avoids that entirely. Nullable: text/number/boolean/date columns
+  // keep it null.
+  // If a prior bootstrap created `options` as JSON, drop it. The pre-Phase-2
+  // codebase had no select columns so dropping loses nothing — and the rewrite
+  // mechanic above means no production write would have succeeded against the
+  // JSON column anyway. The subsequent ADD COLUMN IF NOT EXISTS recreates it.
+  const colType = await get<{ data_type: string }>(
+    `SELECT data_type FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND column_name = 'options'`,
+    [env.appSchema, "dimension_field"],
+  );
+  if (colType && colType.data_type !== "character varying") {
+    await run(`ALTER TABLE ${pg("dimension_field")} DROP COLUMN options`);
+  }
+  await run(`ALTER TABLE ${pg("dimension_field")} ADD COLUMN IF NOT EXISTS options VARCHAR`);
 
   // cached scan stats per source (refreshed by POST /api/sources/scan) so the
   // sources list/queue reads instantly without hitting the warehouse per row —

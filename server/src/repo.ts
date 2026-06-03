@@ -669,7 +669,8 @@ export async function addField(dimId: string, label: string, type = "text", opti
 }
 
 /** Append a new option to a select column's options list. No-op if the option
- *  already exists (case-sensitive). Returns the resulting options list. */
+ *  already exists (case-sensitive). Returns the resulting options list.
+ *  Stored as a JSON string in a VARCHAR column — see schema.ts for rationale. */
 export async function addColumnOption(dimId: string, field: string, label: string): Promise<{ options: string[] } | null> {
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f || f.type !== "select") return null;
@@ -677,7 +678,7 @@ export async function addColumnOption(dimId: string, field: string, label: strin
   if (existing.includes(label)) return { options: existing };
   const next = [...existing, label];
   await run(
-    `UPDATE ${pg("dimension_field")} SET options = $1::json WHERE dim_id = $2 AND field = $3`,
+    `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`,
     [JSON.stringify(next), dimId, field],
   );
   await appendAudit("Added option", `${label} → ${field}`);
