@@ -668,6 +668,141 @@ export async function addField(dimId: string, label: string, type = "text", opti
   return { field };
 }
 
+/** Rename a column's display label. The `field` (stable id / DB column name)
+ *  stays put; only `label` changes. */
+export async function renameColumn(dimId: string, field: string, newLabel: string): Promise<void> {
+  const label = newLabel.trim();
+  if (!label) return;
+  await run(`UPDATE ${pg("dimension_field")} SET label = $1 WHERE dim_id = $2 AND field = $3`, [label, dimId, field]);
+  await appendAudit("Renamed column", `${field} → "${label}"`);
+}
+
+/** Change a column's type. Validates that every existing cell value parses to
+ *  the new type; returns { ok: false, invalidCount } when N cells would
+ *  silently null. Caller decides whether to retry with coerceInvalidToNull. */
+export async function changeColumnType(
+  dimId: string,
+  field: string,
+  newType: string,
+  options?: string[],
+  coerceInvalidToNull = false,
+): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
+  const m = await dimMeta(dimId);
+  if (!m) return { ok: false };
+  const f = (await listFields(dimId)).find((x) => x.field === field);
+  if (!f) return { ok: false };
+  const col = qid(field);
+  const keyc = qid(m.keyCol);
+
+  const rows = await all<{ k: string; v: string | null }>(
+    `SELECT ${keyc} AS k, CAST(${col} AS VARCHAR) AS v FROM ${cq(m.dimTable)}`,
+  );
+
+  const parsed: { k: string; v: string | number | boolean | null; bad: boolean }[] = [];
+  for (const r of rows) {
+    if (r.v == null || r.v === "") { parsed.push({ k: r.k, v: null, bad: false }); continue; }
+    if (newType === "text") { parsed.push({ k: r.k, v: r.v, bad: false }); continue; }
+    if (newType === "select") {
+      const collected = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))];
+      const ok = collected.includes(r.v);
+      parsed.push({ k: r.k, v: r.v, bad: !ok });
+      continue;
+    }
+    if (newType === "number") {
+      const n = Number(r.v);
+      const ok = Number.isFinite(n);
+      parsed.push({ k: r.k, v: ok ? n : null, bad: !ok });
+      continue;
+    }
+    if (newType === "boolean") {
+      const b = r.v === "true" ? true : r.v === "false" ? false : null;
+      parsed.push({ k: r.k, v: b, bad: b == null });
+      continue;
+    }
+    if (newType === "date") {
+      const ok = /^\d{4}-\d{2}-\d{2}$/.test(r.v);
+      parsed.push({ k: r.k, v: ok ? r.v : null, bad: !ok });
+      continue;
+    }
+    parsed.push({ k: r.k, v: r.v, bad: true });
+  }
+  const invalidCount = parsed.filter((p) => p.bad).length;
+  if (invalidCount > 0 && !coerceInvalidToNull) return { ok: false, invalidCount };
+
+  const newSql = newType === "select" ? "VARCHAR"
+    : newType === "number" ? "NUMERIC"
+    : newType === "boolean" ? "BOOLEAN"
+    : newType === "date" ? "DATE"
+    : "VARCHAR";
+  const tmp = `${field}__tmp_${Date.now().toString(36)}`;
+  await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN ${qid(tmp)} ${newSql}`);
+  for (const p of parsed) {
+    if (p.bad && !coerceInvalidToNull) continue;
+    await run(`UPDATE ${cq(m.dimTable)} SET ${qid(tmp)} = $1 WHERE ${keyc} = $2`, [p.v, p.k]);
+  }
+  await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN ${col}`);
+  await run(`ALTER TABLE ${cq(m.dimTable)} RENAME COLUMN ${qid(tmp)} TO ${col}`);
+
+  let finalOptions: string[] | undefined;
+  if (newType === "select") {
+    finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))];
+  }
+
+  await run(
+    `UPDATE ${pg("dimension_field")} SET type = $1, options = $2 WHERE dim_id = $3 AND field = $4`,
+    [newType, newType === "select" ? JSON.stringify(finalOptions ?? []) : null, dimId, field],
+  );
+  await appendAudit("Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
+  return { ok: true, options: finalOptions };
+}
+
+/** Drop a column from the dim_ table AND its row in dimension_field, plus null
+ *  the field on every row of the dim. Transactional — all-or-nothing. */
+export async function deleteColumn(dimId: string, field: string): Promise<{ ok: boolean }> {
+  const m = await dimMeta(dimId);
+  if (!m) return { ok: false };
+  const col = qid(field);
+  await run(`BEGIN`);
+  try {
+    await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`, [dimId, field]);
+    await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN IF EXISTS ${col}`);
+    await run(`COMMIT`);
+  } catch (e) {
+    await run(`ROLLBACK`); throw e;
+  }
+  await appendAudit("Deleted column", field);
+  return { ok: true };
+}
+
+/* ---- per-user grid layout (column widths / order / hidden) ---- */
+
+export interface GridLayoutConfig {
+  widths?: Record<string, number>;
+  order?: string[];
+  hidden?: string[];
+}
+
+export async function getGridLayout(userId: string, dimId: string): Promise<GridLayoutConfig> {
+  const row = await get<{ config: unknown }>(
+    `SELECT config FROM ${pg("user_grid_layout")} WHERE user_id = $1 AND dim_id = $2`, [userId, dimId],
+  );
+  if (!row) return {};
+  if (typeof row.config === "string") {
+    try { return JSON.parse(row.config) as GridLayoutConfig; } catch { return {}; }
+  }
+  return typeof row.config === "object" && row.config != null ? (row.config as GridLayoutConfig) : {};
+}
+
+/** Upsert the full layout config for (user, dim). Caller sends a *complete*
+ *  config; partial merging is the client's job (it knows what changed). */
+export async function setGridLayout(userId: string, dimId: string, config: GridLayoutConfig): Promise<void> {
+  await run(
+    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at) VALUES ($1, $2, $3, current_timestamp)
+     ON CONFLICT (user_id, dim_id) DO UPDATE SET config = EXCLUDED.config, updated_at = current_timestamp`,
+    [userId, dimId, JSON.stringify(config)],
+  );
+}
+
 /** Append a new option to a select column's options list. No-op if the option
  *  already exists (case-sensitive). Returns the resulting options list.
  *  Stored as a JSON string in a VARCHAR column — see schema.ts for rationale. */
