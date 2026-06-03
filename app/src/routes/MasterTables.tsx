@@ -16,7 +16,7 @@ import {
   getGridLayout, setGridLayout, type GridLayoutConfig,
 } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
-import { DataGrid } from "../components/datagrid";
+import { DataGrid, useUndoStack } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
 import type { CanonicalValue } from "../data";
 
@@ -74,6 +74,7 @@ export function MasterTables() {
   const external = dim.keyKind === "external_id";
 
   const activeId = dim.id;
+  const undo = useUndoStack();
 
   // hydrate per-user layout (widths/order/hidden) when the dimension changes
   const [layout, setLayout] = useState<GridLayoutConfig>({});
@@ -188,18 +189,51 @@ export function MasterTables() {
     }
   };
 
-  const add = async () => { const label = draft.trim(); if (!label || busy) return; setBusy(true); await addCanonical(activeId, label); setBusy(false); setDraft(""); };
+  const add = async () => {
+    const label = draft.trim(); if (!label || busy) return;
+    setBusy(true);
+    await addCanonical(activeId, label);
+    undo.push({
+      label: `add “${label}”`,
+      apply: () => addCanonical(activeId, label),
+      inverse: () => retireCanonical(activeId, slug(label)).then(() => undefined),
+    });
+    setBusy(false); setDraft("");
+  };
+
   const merge = async (survivorLabel: string) => {
     const survivor = list.find((c) => c.label === survivorLabel)?.key;
     if (!survivor) return;
     const losers = sel.filter((k) => k !== survivor);
     if (!losers.length) return;
-    setBusy(true); const n = await mergeCanonical(activeId, survivor, losers); setBusy(false);
+    // snapshot loser records BEFORE the merge
+    const snapshot = list.filter((c) => losers.includes(c.key))
+      .map((c) => ({ key: c.key, label: c.label, fields: c.fields }));
+
+    setBusy(true);
+    const n = await mergeCanonical(activeId, survivor, losers);
+    undo.push({
+      label: `merge ${losers.length} into “${survivorLabel}”`,
+      apply: () => mergeCanonical(activeId, survivor, losers).then(() => undefined),
+      inverse: async () => {
+        // re-insert losers; variants stay pointing at the survivor (v1 limitation — deferred to v1.1)
+        for (const s of snapshot) await addCanonical(activeId, s.label);
+      },
+    });
+    setBusy(false);
     setSel([]); flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — raw values re-pointed.`);
   };
+
   const retire = async (key: string, label: string) => {
-    setBusy(true); const r = await retireCanonical(activeId, key); setBusy(false);
-    if (!r.ok) flash(`Can’t remove “${label}” — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`);
+    setBusy(true);
+    const r = await retireCanonical(activeId, key);
+    setBusy(false);
+    if (!r.ok) { flash(`Can’t remove “${label}” — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`); return; }
+    undo.push({
+      label: `remove “${label}”`,
+      apply: () => retireCanonical(activeId, key).then(() => undefined),
+      inverse: () => addCanonical(activeId, label),
+    });
   };
   const derive = async (opt: string) => {
     const s = wired.find((w) => `${w.table}.${w.column}` === opt);
@@ -252,6 +286,9 @@ export function MasterTables() {
         <span className="text-ink-3">{fields.length} attribute column{fields.length === 1 ? "" : "s"}</span>
         <div className="ml-auto flex items-center gap-4">
           <span className="text-ink-3">{totalVariants.toLocaleString()} raw value{totalVariants === 1 ? "" : "s"} resolve here</span>
+          <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
+            ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+          </Button>
           <AddColumn onAdd={(label, type) => addField(activeId, label, type)} />
         </div>
       </div>
@@ -295,14 +332,25 @@ export function MasterTables() {
           selection={{ selected: sel, onChange: setSel }}
           onCommit={async (rowKey, field, value) => {
             if (field === "label") {
-              if (typeof value === "string" && value.trim() && value !== list.find((c) => c.key === rowKey)?.label) {
-                await renameCanonical(activeId, rowKey, value);
-              }
+              const prev = list.find((c) => c.key === rowKey)?.label;
+              if (typeof value !== "string" || !value.trim() || value === prev) return;
+              await renameCanonical(activeId, rowKey, value);
+              if (prev) undo.push({
+                label: `rename "${prev}" → "${value}"`,
+                apply: () => renameCanonical(activeId, rowKey, value),
+                inverse: () => renameCanonical(activeId, rowKey, prev),
+              });
               return;
             }
             // attribute field
             const v = value == null ? null : String(value);
+            const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
             await setFieldValue(activeId, rowKey, field, v);
+            if (prev !== v) undo.push({
+              label: `edit ${field} on "${rowKey}"`,
+              apply: () => setFieldValue(activeId, rowKey, field, v),
+              inverse: () => setFieldValue(activeId, rowKey, field, prev),
+            });
           }}
           onAddColumnOption={(field, label) => addColumnOption(activeId, field, label)}
           onRenameColumn={(field, label) => void renameColumn(activeId, field, label)}

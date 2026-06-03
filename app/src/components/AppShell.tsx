@@ -13,6 +13,7 @@ import {
 } from "./Icons";
 import { useDimensions, collaborators } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { ShortcutsOverlay } from "./datagrid";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -48,6 +49,18 @@ export function AppShell() {
   const dims = useDimensions();
   const { engineer } = useEngineerMode();
   const [collapsed, toggle] = useNavCollapsed();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "?" && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
@@ -161,6 +174,7 @@ export function AppShell() {
           </div>
         </main>
       </div>
+      <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
   );
 }
