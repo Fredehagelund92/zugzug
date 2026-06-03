@@ -4,28 +4,37 @@ import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
 import { DimensionPicker } from "../components/DimensionPicker";
+import { NoDimensionsYet } from "../components/NoDimensionsYet";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import { useDimensions, addDimension, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
+import { useEngineerMode } from "../lib/engineer-mode";
 
-/* Value mapping — reconcile messy source values to one canonical value. Each
-   accept / merge / skip lands as a per-user DRAFT (the store's Postgres seam),
-   never a per-keystroke MotherDuck round-trip; the footer reviews the staged
-   drafts and commits them in one batch MERGE to DuckDB (dim_* + map_*). The row
-   status you see = the committed truth overlaid with your pending draft. */
+/* Value mapping — match messy source values to one master record. Each accept /
+   merge / skip lands as a per-user DRAFT (the store's Postgres seam), never a
+   per-keystroke MotherDuck round-trip; the footer reviews the staged drafts and
+   commits them in one batch MERGE to DuckDB (dim_* + map_*). The row status you
+   see = the committed truth overlaid with your pending draft. */
 
 type RStatus = "mapped" | "new" | "skipped";
 type ValueState = Record<string, { target: string | null; status: RStatus }>;
 type Filter = "new" | "all" | "mapped";
 
-const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-line-2");
-const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-ink-3");
+const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
+const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
 const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px_64px] items-center gap-3";
 
 export function Mapping() {
   const dims = useDimensions();
+  if (dims.length === 0) return <NoDimensionsYet from="mapping" />;
+  return <MappingInner />;
+}
+
+function MappingInner() {
+  const dims = useDimensions();
   const allDrafts = useDrafts();
+  const { engineer } = useEngineerMode();
   const [seedId, setSeedId] = useState(dims[0].id);
   const seed = dims.find((s) => s.id === seedId) ?? dims[0];
   const [sel, setSel] = useState<string[]>([]);
@@ -34,6 +43,7 @@ export function Mapping() {
   const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
   const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
+  const [autoFlash, setAutoFlash] = useState<number | null>(null);
 
   const byVal = (v: string) => seed.values.find((r) => r.value === v)!;
   const keyFor = (label: string) => seed.canonical.find((c) => c.label === label)?.key ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
@@ -63,7 +73,10 @@ export function Mapping() {
   const skip = (v: string) => saveDraft(seed.id, v, "skipped", null, null);
   const reset = (v: string) => discardDraft(seed.id, v);
   const automap = () => {
-    for (const r of seed.values) if (r.suggestion && r.confidence >= 90 && state[r.value].status === "new") stageMap(r.value, r.suggestion);
+    let n = 0;
+    for (const r of seed.values) if (r.suggestion && r.confidence >= 90 && state[r.value].status === "new") { stageMap(r.value, r.suggestion); n++; }
+    setAutoFlash(n);
+    setTimeout(() => setAutoFlash(null), 2600);
   };
   const bulkApply = (fn: (v: string) => void) => { sel.forEach(fn); setSel([]); };
 
@@ -85,9 +98,9 @@ export function Mapping() {
     if (!staged.length) return "";
     const created = [...new Set(staged.map((s) => s.label))].filter((l) => !seed.canonical.some((c) => c.label === l));
     const dim = created.length
-      ? `-- new canonical values → ${seed.dimTable}\nINSERT INTO ${seed.dimTable} (${seed.keyCol}, label) VALUES\n${created.map((l) => `  ('${keyFor(l)}', '${l.replace(/'/g, "''")}')`).join(",\n")}\nON CONFLICT (${seed.keyCol}) DO NOTHING;\n\n`
+      ? `-- new master records → ${seed.dimTable}\nINSERT INTO ${seed.dimTable} (${seed.keyCol}, label) VALUES\n${created.map((l) => `  ('${keyFor(l)}', '${l.replace(/'/g, "''")}')`).join(",\n")}\nON CONFLICT (${seed.keyCol}) DO NOTHING;\n\n`
       : "";
-    const merge = `-- value crosswalk → ${seed.mapTable}\nMERGE INTO ${seed.mapTable} AS m\nUSING (VALUES\n${staged.map((s) => `  ('${s.raw.replace(/'/g, "''")}', '${keyFor(s.label)}')`).join(",\n")}\n) AS s(raw, ${seed.keyCol})\nON lower(m.raw) = lower(s.raw)\nWHEN NOT MATCHED THEN INSERT (raw, ${seed.keyCol}) VALUES (s.raw, s.${seed.keyCol});`;
+    const merge = `-- value lookup → ${seed.mapTable}\nMERGE INTO ${seed.mapTable} AS m\nUSING (VALUES\n${staged.map((s) => `  ('${s.raw.replace(/'/g, "''")}', '${keyFor(s.label)}')`).join(",\n")}\n) AS s(raw, ${seed.keyCol})\nON lower(m.raw) = lower(s.raw)\nWHEN NOT MATCHED THEN INSERT (raw, ${seed.keyCol}) VALUES (s.raw, s.${seed.keyCol});`;
     return dim + merge;
   }, [staged, seed]);
 
@@ -99,7 +112,7 @@ export function Mapping() {
   };
 
   const FILTERS: { k: Filter; label: string; n: number }[] = [
-    { k: "new", label: "New", n: counts.new },
+    { k: "new", label: "Needs review", n: counts.new },
     { k: "all", label: "All", n: counts.all },
     { k: "mapped", label: "Mapped", n: counts.mapped },
   ];
@@ -109,30 +122,34 @@ export function Mapping() {
       {/* header */}
       <div className="zz-rise flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">Value mapping</div>
+          <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">Match values</div>
           <h1 className="mt-1.5 font-display text-[clamp(26px,3.6vw,40px)] font-extrabold leading-none tracking-[-0.035em] text-ink">
-            Reconcile {seed.dimension.toLowerCase()} values
+            Match {seed.dimension.toLowerCase()} values
           </h1>
         </div>
-        <Button icon={<IconWand className="h-4 w-4" />} onClick={automap} className="zz-glow-sm">Auto-map ≥90%</Button>
+        <Button icon={<IconWand className="h-4 w-4" />} onClick={automap} className="zz-glow-sm">
+          {autoFlash !== null ? `✓ Auto-matched ${autoFlash}` : "Auto-match new values"}
+        </Button>
       </div>
 
-      {/* dimension picker — choose master data, or create a new dimension */}
+      {/* dimension picker — choose master data, or create a new one */}
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
         <DimensionPicker dims={dims} activeId={seedId} onSelect={selectSeed} onCreate={async (name, keyKind) => selectSeed(await addDimension(name, keyKind))} />
       </div>
 
-      {/* DuckDB targets + coverage */}
+      {/* coverage + (engineer-only) target tables */}
       <div className="zz-rise flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-line bg-surface px-5 py-4" style={{ animationDelay: "100ms" }}>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
-          <span className="text-ink-3">canonical <span className="text-ink">{seed.dimTable}</span></span>
-          <span className="text-ink-3">crosswalk <span className="text-ink">{seed.mapTable}</span></span>
-          <span className="text-ink-3">{seed.rows.toLocaleString()} rows · key <span className="text-ink">{seed.keyCol}</span></span>
-        </div>
-        <div className="ml-auto flex items-center gap-3">
+        {engineer && (
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
+            <span className="text-ink-3">master <span className="text-ink">{seed.dimTable}</span></span>
+            <span className="text-ink-3">lookup <span className="text-ink">{seed.mapTable}</span></span>
+            <span className="text-ink-3">{seed.rows.toLocaleString()} rows · key <span className="text-ink">{seed.keyCol}</span></span>
+          </div>
+        )}
+        <div className={cx("flex items-center gap-3", engineer && "ml-auto")}>
           <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2"><div className="h-full rounded-pill bg-accent transition-[width] duration-300" style={{ width: `${coverage}%` }} /></div>
-          <span className="font-mono text-[11px] text-ink-2 tabular-nums">{coverage}%</span>
-          {counts.new > 0 && <Badge tone="warn" dot>{counts.new} new</Badge>}
+          <span className="font-mono text-[11px] text-ink-2 tabular-nums">{coverage}% mapped</span>
+          {counts.new > 0 && <Badge tone="warn" dot>{counts.new} need review</Badge>}
         </div>
       </div>
 
@@ -168,7 +185,7 @@ export function Mapping() {
 
         {/* column header */}
         <div className={cx(COLS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-          <span /><span>Source value · provenance</span><span /><span>Canonical {seed.dimension.toLowerCase()}</span><span>Confidence</span><span>Status</span><span />
+          <span /><span>Source value · where it's seen</span><span /><span>Master {seed.dimension.toLowerCase()}</span><span>Confidence</span><span>Status</span><span />
         </div>
 
         {/* rows */}
@@ -225,15 +242,19 @@ export function Mapping() {
                   </div>
                   <div className="mt-3 font-mono text-[10.5px] text-ink-3">
                     {row.target
-                      ? <>→ writes <span className="text-accent">('{r.value}', '{keyFor(row.target)}')</span> to {seed.mapTable}</>
-                      : <>⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently <span className="text-danger">LEFT JOIN to NULL</span></>}
+                      ? engineer
+                        ? <>→ writes <span className="text-accent">('{r.value}', '{keyFor(row.target)}')</span> to {seed.mapTable}</>
+                        : <>→ will resolve to <span className="text-accent">{row.target}</span> in {seed.dimension}</>
+                      : engineer
+                        ? <>⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently <span className="text-danger">LEFT JOIN to NULL</span></>
+                        : <>⚠ <span className="text-danger">Unmapped</span> — {valueRows(r).toLocaleString()} downstream rows are missing this value</>}
                   </div>
                   {(() => {
                     const d = allDrafts[dkey(seed.id, r.value)];
                     return d ? (
                       <div className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ink-3">
                         <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">{d.user.initials}</span>
-                        staged {d.status === "skipped" ? "(skipped) " : ""}by {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at} · uncommitted draft
+                        staged {d.status === "skipped" ? "(skipped) " : ""}by {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}{engineer ? " · uncommitted draft" : " · awaiting publish"}
                       </div>
                     ) : null;
                   })()}
@@ -244,7 +265,7 @@ export function Mapping() {
         })}
         {visible.length === 0 && (
           <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-            {filter === "new" ? "🎉 no new values — this dimension is fully reconciled" : "no values in this view"}
+            {filter === "new" ? "🎉 no new values — this one is fully matched" : "no values in this view"}
           </div>
         )}
 
@@ -253,15 +274,25 @@ export function Mapping() {
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <span className="font-mono text-[11px] text-ink-3">
               {flash
-                ? <span className="text-ok">✓ {flash.n} draft{flash.n === 1 ? "" : "s"} merged into {seed.mapTable} · {flash.rows.toLocaleString()} rows recovered</span>
+                ? <span className="text-ok">
+                    ✓ {flash.n} {engineer ? "draft" : "change"}{flash.n === 1 ? "" : "s"}{" "}
+                    {engineer ? <>merged into {seed.mapTable}</> : <>published to {seed.dimension}</>}
+                    {" · "}{flash.rows.toLocaleString()} rows recovered
+                  </span>
                 : staged.length > 0
-                  ? <>{staged.length} staged draft{staged.length === 1 ? "" : "s"} → batch MERGE to <span className="text-ink-2">{seed.dimTable}</span> + <span className="text-ink-2">{seed.mapTable}</span></>
-                  : <>no staged drafts — accept or merge values to stage them</>}
+                  ? engineer
+                    ? <>{staged.length} staged draft{staged.length === 1 ? "" : "s"} → batch MERGE to <span className="text-ink-2">{seed.dimTable}</span> + <span className="text-ink-2">{seed.mapTable}</span></>
+                    : <>{staged.length} change{staged.length === 1 ? "" : "s"} ready to publish to <span className="text-ink-2">{seed.dimension}</span></>
+                  : <>nothing to publish yet — accept or merge values above to stage them</>}
             </span>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" disabled={staged.length === 0} onClick={() => setReview((s) => !s)}>{review ? "Hide review" : `Review ${staged.length}`}</Button>
-              <Button variant="secondary" size="sm" disabled={staged.length === 0} onClick={() => setShowSql((s) => !s)}>{showSql ? "Hide SQL" : "Preview SQL"}</Button>
-              <Button size="sm" disabled={staged.length === 0} onClick={approveAndCommit}>Approve &amp; commit {staged.length}</Button>
+              {engineer && (
+                <Button variant="secondary" size="sm" disabled={staged.length === 0} onClick={() => setShowSql((s) => !s)}>{showSql ? "Hide SQL" : "Preview SQL"}</Button>
+              )}
+              <Button size="sm" disabled={staged.length === 0} onClick={approveAndCommit}>
+                {engineer ? `Approve & commit ${staged.length}` : `Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}
+              </Button>
             </div>
           </div>
           {review && staged.length > 0 && (
