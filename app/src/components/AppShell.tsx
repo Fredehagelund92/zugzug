@@ -119,49 +119,28 @@ export function AppShell() {
           ))}
         </nav>
 
-        {/* footer — status + collapse toggle */}
-        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-2" : "p-4")}>
-          {!collapsed ? (
-            <>
-              <div className="flex items-center gap-2 font-mono text-[11px] text-ink">
-                <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-                {engineer ? "analytics.duckdb" : "Connected to warehouse"}
-              </div>
-              <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                <span>{engineer ? "warehouse · live" : "live"}</span>
-                <span>{dims.length} {engineer ? "tables" : `master list${dims.length === 1 ? "" : "s"}`}</span>
-              </div>
-              <button
-                type="button"
-                onClick={toggle}
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                className="mt-3 flex w-full items-center justify-end gap-1 font-mono text-[10px] uppercase tracking-wider text-ink-3 transition-colors hover:text-ink"
-              >
-                <span>collapse</span>
-                <IconChevron className="h-3 w-3 rotate-90" />
-              </button>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-              <button
-                type="button"
-                onClick={toggle}
-                aria-label="Expand sidebar"
-                title="Expand sidebar"
-                className="grid h-8 w-8 place-items-center text-ink-3 transition-colors hover:text-ink"
-              >
-                <IconChevron className="h-3 w-3 -rotate-90" />
-              </button>
-            </div>
-          )}
+        {/* footer — just a live dot + 'Connected' (single line). The collapse
+            toggle lives in the topbar now. */}
+        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-3")}>
+          <div className={cx("flex items-center gap-2 font-mono text-[11px] text-ink", collapsed && "justify-center")}>
+            <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
+            {!collapsed && <span>{engineer ? "analytics.duckdb" : "Connected"}</span>}
+          </div>
         </div>
       </aside>
 
       {/* main column — flex column with the inner main as the only scroll area */}
       <div className="flex h-screen min-w-0 flex-col">
-        <header className="flex h-[var(--ak-topbar)] shrink-0 items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-6 backdrop-blur-md">
+        <header className="flex h-[var(--ak-topbar)] shrink-0 items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-4 backdrop-blur-md">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink"
+          >
+            <IconChevron className={cx("h-3.5 w-3.5", collapsed ? "-rotate-90" : "rotate-90")} />
+          </button>
           <div className="flex-1" />
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
@@ -176,7 +155,7 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="zz-canvas flex-1 overflow-y-auto">
+        <main className="zz-canvas flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
           <div className="mx-auto w-full max-w-[var(--wide)] p-8">
             <Outlet />
           </div>
