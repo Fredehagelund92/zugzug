@@ -8,8 +8,11 @@ import { NoDimensionsYet } from "../components/NoDimensionsYet";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
+import type { MappingValue } from "../data";
 import { useDimensions, addDimension, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { useGridCursor, useUndoStack } from "../components/datagrid";
+import type { ColumnDef } from "../components/datagrid";
 
 /* Value mapping — match messy source values to one master record. Each accept /
    merge / skip lands as a per-user DRAFT (the store's Postgres seam), never a
@@ -44,6 +47,10 @@ function MappingInner() {
   const [review, setReview] = useState(false);
   const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
   const [autoFlash, setAutoFlash] = useState<number | null>(null);
+  const [_shortcuts, setShortcuts] = useState(false);
+  void _shortcuts; // placeholder — wired to ShortcutsOverlay in Task 29
+
+  const undo = useUndoStack();
 
   const byVal = (v: string) => seed.values.find((r) => r.value === v)!;
   const keyFor = (label: string) => seed.canonical.find((c) => c.label === label)?.key ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
@@ -84,6 +91,23 @@ function MappingInner() {
   const visIds = visible.map((v) => v.value);
   const allSel = visIds.length > 0 && visIds.every((id) => sel.includes(id));
   const headState: "on" | "off" | "mixed" = allSel ? "on" : sel.length ? "mixed" : "off";
+
+  const visibleRows = visible;            // alias for clarity
+  const COLS_FOR_CURSOR: ColumnDef<MappingValue>[] = [
+    { field: "value", label: "Source", type: "text", editable: false },
+    { field: "target", label: "Master", type: "text", editable: true },
+    { field: "status", label: "Status", type: "text", editable: false },
+  ];
+  const cursor = useGridCursor<MappingValue>({
+    rows: visibleRows,
+    rowKey: (r) => r.value,
+    columns: COLS_FOR_CURSOR,
+    onSelectAll: () => setSel(visIds),
+    onUndo: () => void undo.undo(),
+    onRedo: () => void undo.redo(),
+    onShortcuts: () => setShortcuts(true),
+    onFocusFilter: () => {/* filter chips already global */},
+  });
 
   // the staged drafts awaiting commit (incl. teammates' work) — the review set.
   // scoped to still-uncommitted (new) values, matching what commit() actually folds.
@@ -154,7 +178,25 @@ function MappingInner() {
       </div>
 
       {/* workbench */}
-      <div className="zz-rise rounded-lg border border-line bg-surface" style={{ animationDelay: "150ms" }}>
+      <div className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
+        ref={cursor.ref}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          // grid bindings first
+          cursor.onKeyDown(e);
+          if (e.defaultPrevented) return;
+          // Mapping-specific shortcuts (single-key, not editing)
+          if (!cursor.cursor) return;
+          const cur = cursor.cursor;
+          if (cur.editing) return;
+          if (e.key === "a" || e.key === "A") { e.preventDefault(); accept(cur.rowKey); return; }
+          if (e.key === "s" || e.key === "S") { e.preventDefault(); skip(cur.rowKey); return; }
+          if (e.key === "r" || e.key === "R") { e.preventDefault(); reset(cur.rowKey); return; }
+          if (e.key === "m" || e.key === "M") { e.preventDefault(); cursor.startEdit(); return; }
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void approveAndCommit(); return; }
+        }}
+        style={{ animationDelay: "150ms" }}
+      >
         {/* toolbar / bulk bar */}
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
           {sel.length === 0 ? (
@@ -194,9 +236,10 @@ function MappingInner() {
           const checked = sel.includes(r.value);
           const isOpen = open === r.value;
           const primary = r.sources[0];
+          const focused = cursor.cursor?.rowKey === r.value;
           return (
             <Fragment key={r.value}>
-              <div className={cx(COLS, "border-b border-line px-4 py-2.5 transition-colors", checked ? "bg-accent-wash" : "hover:bg-hover", isOpen && "border-b-0")}>
+              <div className={cx(COLS, "border-b border-line px-4 py-2.5 transition-colors", checked ? "bg-accent-wash" : "hover:bg-hover", isOpen && "border-b-0", focused && "ring-1 ring-accent/60 bg-accent-wash/40")} data-row={r.value} onClick={() => cursor.setCursor({ rowKey: r.value, field: "target", editing: false })}>
                 <Checkbox state={checked ? "on" : "off"} onClick={() => setSel((s) => (s.includes(r.value) ? s.filter((x) => x !== r.value) : [...s, r.value]))} aria-label={`Select ${r.value}`} />
                 <div className="min-w-0">
                   <div className="truncate font-mono text-[13px] text-ink">{r.value}</div>
