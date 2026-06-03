@@ -13,26 +13,24 @@ function required(name: string): string {
 }
 
 export const env = {
-  /** Postgres OLTP app-state (drafts / audit / users / presence). */
   databaseUrl: required("DATABASE_URL"),
-  /** MotherDuck token — warehouse (read) + zugzug canonical (read/write). */
   motherduckToken: required("MOTHERDUCK_TOKEN"),
-  /** MotherDuck db holding the existing warehouse source tables (read-only). */
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
-  /** Whether to ATTACH the MotherDuck warehouse (enables the discovery scan).
-   *  Off by default — the canonical/draft/commit machinery is Postgres-only and
-   *  works without it; flip on once the warehouse is wired. */
   attachWarehouse: process.env.ATTACH_WAREHOUSE?.trim() === "true",
-  /** Postgres schema Zug Zug owns and writes the canonical dim_/map_ to.
-   *  (Canonical lives in Postgres, not MotherDuck, per the read-only-MD setup.) */
   canonicalSchema: process.env.ZUGZUG_DB?.trim() || "zugzug",
-  /** Catalog name the attached Postgres is mounted under inside DuckDB. */
   oltpCatalog: "oltp",
-  /** Schema inside Postgres for app state (drafts / audit / users / registry). */
   appSchema: "zugzug_app",
-  /** Local DuckDB engine file (":memory:" is fine — durable state is remote). */
   duckPath: process.env.DUCK_PATH?.trim() || ":memory:",
   port: Number(process.env.PORT?.trim() || 8787),
+
+  // Google OAuth2
+  googleClientId: required("GOOGLE_CLIENT_ID"),
+  googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
+  /** Email domain allowed to log in (e.g. "bettercollective.com"). */
+  allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || "bettercollective.com",
+  /** Public origin of this app — used to build the OAuth redirect_uri.
+   *  In dev: http://localhost:5173 (Vite proxies /api). In prod: https://yourapp.com */
+  origin: process.env.ORIGIN?.trim() || "http://localhost:5173",
 };
 
 /** Fully-qualified Postgres app-state table name, e.g. oltp.zugzug_app.draft */
