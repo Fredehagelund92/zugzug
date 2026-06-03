@@ -74,11 +74,36 @@ function MappingInner() {
     return c;
   }, [seed, state]);
 
-  const stageMap = (v: string, label: string) => saveDraft(seed.id, v, "mapped", label, keyFor(label));
-  const accept = (v: string) => { const r = byVal(v); if (r.suggestion) stageMap(v, r.suggestion); };
+  const stageMap = (v: string, label: string) => {
+    const prev = allDrafts[dkey(seed.id, v)];
+    undo.push({
+      label: `match "${v}" → ${label}`,
+      apply: () => saveDraft(seed.id, v, "mapped", label, keyFor(label)),
+      inverse: () => prev ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey) : discardDraft(seed.id, v),
+    });
+    return saveDraft(seed.id, v, "mapped", label, keyFor(label));
+  };
+  const accept = (v: string) => { const r = byVal(v); if (r.suggestion) void stageMap(v, r.suggestion); };
   const pick = (v: string, t: string) => stageMap(v, t);
-  const skip = (v: string) => saveDraft(seed.id, v, "skipped", null, null);
-  const reset = (v: string) => discardDraft(seed.id, v);
+  const skip = (v: string) => {
+    const prev = allDrafts[dkey(seed.id, v)];
+    undo.push({
+      label: `skip "${v}"`,
+      apply: () => saveDraft(seed.id, v, "skipped", null, null),
+      inverse: () => prev ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey) : discardDraft(seed.id, v),
+    });
+    return saveDraft(seed.id, v, "skipped", null, null);
+  };
+  const reset = (v: string) => {
+    const prev = allDrafts[dkey(seed.id, v)];
+    if (!prev) return;
+    undo.push({
+      label: `reset "${v}"`,
+      apply: () => discardDraft(seed.id, v),
+      inverse: () => saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey),
+    });
+    return discardDraft(seed.id, v);
+  };
   const automap = () => {
     let n = 0;
     for (const r of seed.values) if (r.suggestion && r.confidence >= 90 && state[r.value].status === "new") { stageMap(r.value, r.suggestion); n++; }
