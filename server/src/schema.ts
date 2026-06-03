@@ -138,6 +138,18 @@ export async function ensureSchema(): Promise<void> {
     VALUES (1, 95, 80, current_timestamp)
     ON CONFLICT (id) DO NOTHING`);
 
+  // per-user-per-dimension UI layout: column widths, order, hidden set. NOT
+  // saved views — those are deferred. config is a single JSON-string blob in
+  // a VARCHAR column (same DuckDB-rewrite avoidance as dimension_field.options;
+  // see the comment on that ALTER above). PATCH writes the whole blob.
+  await run(`CREATE TABLE IF NOT EXISTS ${pg("user_grid_layout")} (
+    user_id    VARCHAR NOT NULL,
+    dim_id     VARCHAR NOT NULL,
+    config     VARCHAR NOT NULL,
+    updated_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (user_id, dim_id)
+  )`);
+
   // seed the demo team if the users table is empty
   const existing = await all<{ n: bigint }>(`SELECT count(*) AS n FROM ${pg("users")}`);
   if (Number(existing[0]?.n ?? 0) === 0) {
