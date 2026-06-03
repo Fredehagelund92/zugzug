@@ -236,6 +236,53 @@ export async function addColumnOption(dimId: string, field: string, label: strin
   emit();
   return res.options;
 }
+
+export async function renameColumn(dimId: string, field: string, newLabel: string): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PUT", body: JSON.stringify({ label: newLabel }),
+  });
+  await refreshDims(); emit();
+}
+
+export async function changeColumnType(
+  dimId: string, field: string, newType: string,
+  options?: string[], coerceInvalidToNull = false,
+): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
+  const res = await api<{ ok: boolean; invalidCount?: number; options?: string[] }>(
+    `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
+    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull }) },
+  );
+  if (res.ok) { await refreshDims(); emit(); }
+  return res;
+}
+
+export async function deleteColumn(dimId: string, field: string): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, { method: "DELETE" });
+  await refreshDims(); emit();
+}
+
+export interface GridLayoutConfig { widths?: Record<string, number>; order?: string[]; hidden?: string[] }
+
+export async function getGridLayout(dimId: string): Promise<GridLayoutConfig> {
+  return await api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(dimId)}`);
+}
+
+// debounce key per dimension so concurrent edits to different dims don't
+// collide on a single timer
+const layoutTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingLayouts = new Map<string, GridLayoutConfig>();
+
+export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
+  const merged = { ...(pendingLayouts.get(dimId) ?? {}), ...partial };
+  pendingLayouts.set(dimId, merged);
+  const t = layoutTimers.get(dimId); if (t) clearTimeout(t);
+  layoutTimers.set(dimId, setTimeout(() => {
+    const body = pendingLayouts.get(dimId) ?? {};
+    pendingLayouts.delete(dimId);
+    layoutTimers.delete(dimId);
+    void api(`/grid-layout/${encodeURIComponent(dimId)}`, { method: "PATCH", body: JSON.stringify(body) });
+  }, 400));
+}
 /** Set an enrichment field value on a canonical record. */
 export async function setFieldValue(dimId: string, key: string, field: string, value: string | null): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`, { method: "PUT", body: JSON.stringify({ value }) });
