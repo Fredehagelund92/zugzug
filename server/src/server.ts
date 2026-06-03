@@ -6,6 +6,7 @@ import { connect } from "./db.ts";
 import { env } from "./env.ts";
 import * as repo from "./repo.ts";
 import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout } from "./auth.ts";
+import * as team from "./team.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
@@ -237,6 +238,34 @@ const server = Bun.serve({
         // POST /api/dimensions/:id/commit
         if (seg[3] === "commit" && seg.length === 4 && method === "POST")
           return json(await repo.commit(id, me));
+      }
+
+      // GET /api/team/members ; POST /api/team/members ; DELETE /api/team/members/:email
+      if (seg[1] === "team" && seg[2] === "members") {
+        if (seg.length === 3 && method === "GET") return json(await team.listMembers());
+        if (seg.length === 3 && method === "POST") {
+          const { email } = (await req.json()) as { email: string };
+          try {
+            await team.addMember(email, me);
+            return noContent();
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg === "wrong_domain") return json({ error: `Only @${env.allowedDomain} emails allowed` }, 400);
+            if (msg.includes("unique") || msg.includes("duplicate")) return json({ error: "already_exists" }, 409);
+            throw e;
+          }
+        }
+        if (seg.length === 4 && method === "DELETE") {
+          const email = decodeURIComponent(seg[3]!);
+          try {
+            await team.removeMember(email, me);
+            return noContent();
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg === "cannot_remove_self") return json({ error: "cannot_remove_self" }, 400);
+            throw e;
+          }
+        }
       }
 
       return json({ error: `no route for ${method} ${pathname}` }, 404);
