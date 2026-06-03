@@ -157,10 +157,17 @@ const server = Bun.serve({
           const { table, column, nameColumn } = (await req.json()) as { table: string; column: string; nameColumn?: string };
           return json(await repo.deriveCanonical(id, table, column, nameColumn));
         }
-        // POST /api/dimensions/:id/fields {label, type?} — add an attribute column
+        // POST /api/dimensions/:id/fields {label, type?, options?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const { label, type } = (await req.json()) as { label: string; type?: string };
-          return json(await repo.addField(id, label, type));
+          const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: string[] };
+          return json(await repo.addField(id, label, type, options));
+        }
+        // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
+        if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
+          const field = decodeURIComponent(seg[4]!);
+          const { label } = (await req.json()) as { label: string };
+          const res = await repo.addColumnOption(id, field, label);
+          return res ? json(res) : json({ error: "not a select column" }, 400);
         }
         // canonical record management
         if (seg[3] === "canonical") {
