@@ -348,12 +348,16 @@ function MappingInner() {
                   : <>nothing to publish yet — accept or merge values above to stage them</>}
             </span>
             <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
+                ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+              </Button>
               <Button variant="ghost" size="sm" disabled={staged.length === 0} onClick={() => setReview((s) => !s)}>{review ? "Hide review" : `Review ${staged.length}`}</Button>
               {engineer && (
                 <Button variant="secondary" size="sm" disabled={staged.length === 0} onClick={() => setShowSql((s) => !s)}>{showSql ? "Hide SQL" : "Preview SQL"}</Button>
               )}
               <Button size="sm" disabled={staged.length === 0} onClick={approveAndCommit}>
                 {engineer ? `Approve & commit ${staged.length}` : `Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}
+                <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
               </Button>
             </div>
           </div>
