@@ -69,3 +69,21 @@ export const IconMerge = (p: SVGProps<SVGSVGElement>) => (
 export const IconEdit = (p: SVGProps<SVGSVGElement>) => (
   <Base {...p}><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></Base>
 );
+
+/* Field-type icons — used in column headers, header menus, and the add-field
+   popover so a given type reads as the same glyph everywhere. */
+export const IconFieldText = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M5 19 12 5l7 14M8 14h8" /></Base>
+);
+export const IconFieldNumber = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M9 4l-1 16M16 4l-1 16M4 9h17M3 15h17" /></Base>
+);
+export const IconFieldBoolean = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l3 3 5-6" /></Base>
+);
+export const IconFieldDate = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></Base>
+);
+export const IconFieldSelect = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><rect x="3" y="9" width="8" height="6" rx="3" /><rect x="13" y="9" width="8" height="6" rx="3" /></Base>
+);
