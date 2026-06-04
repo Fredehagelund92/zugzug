@@ -16,12 +16,16 @@ function Editor<Row>({ value, commit, cancel }: EditCtx<Row>) {
   const [v, setV] = useState(value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => { ref.current?.focus(); }, []);
+  const commitNow = () => commit(v.trim() === "" ? null : v);
   return (
     <input
       ref={ref} type="date" value={v}
       onChange={(e) => setV(e.target.value)}
-      onBlur={() => commit(v.trim() === "" ? null : v)}
-      onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); cancel(); } }}
+      onBlur={commitNow}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") { e.preventDefault(); cancel(); return; }
+        if (e.key === "Enter" || e.key === "Tab") commitNow();
+      }}
       className={inputBase}
     />
   );
