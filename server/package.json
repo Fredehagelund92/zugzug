@@ -16,6 +16,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "test:db:down": "docker compose -f docker-compose.test.yml down -v",
+    "test": "DATABASE_URL=postgres://zugzug:zugzug@localhost:55432/zugzug_test ATTACH_WAREHOUSE=false MOTHERDUCK_TOKEN=test-stub GOOGLE_CLIENT_ID=test-stub GOOGLE_CLIENT_SECRET=test-stub bun test",
     "lint": "eslint src",
     "format": "prettier --write src",
     "format:check": "prettier --check src"
