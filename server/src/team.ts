@@ -1,7 +1,7 @@
 /* team.ts — allowed_emails management. Any logged-in user can add/remove members.
    Self-removal is blocked. Domain is validated on add. */
 
-import { run, all, get } from "./db.ts";
+import { pgRun as run, pgAll as all, pgGet as get } from "./pg.ts";
 import { env, pg } from "./env.ts";
 
 export interface Member { email: string; addedBy: string; addedAt: string }
