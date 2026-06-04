@@ -32,6 +32,15 @@
   --maxw: 1180px;
   --wide: 1320px;
   --ease: cubic-bezier(.4,0,.2,1);
+  /* Per-table palette — appended outside the generated block; see palette.ts.
+     Move upstream once the brand guide adds a 'tints' export. */
+  --tint-rose:   #D6336C;
+  --tint-amber:  #F0A323;
+  --tint-mint:   #30A46C;
+  --tint-teal:   #1FA9B8;
+  --tint-indigo: #6E63E0;
+  --tint-violet: #A24EE0;
+  --tint-slate:  #6B7A95;
 }
 [data-theme="light"]{
   --bg: #F4F6FC;
@@ -54,4 +63,13 @@
   --brand-paper: #F5F7FC;
   --brand-graphite: #353D52;
   --brand-mist: #C4CCDC;
+  /* Per-table palette — appended outside the generated block; see palette.ts.
+     Move upstream once the brand guide adds a 'tints' export. */
+  --tint-rose:   #D6336C;
+  --tint-amber:  #C68410;
+  --tint-mint:   #2A8C5E;
+  --tint-teal:   #1B8E9C;
+  --tint-indigo: #5A50C7;
+  --tint-violet: #8A3FBA;
+  --tint-slate:  #57637C;
 }
