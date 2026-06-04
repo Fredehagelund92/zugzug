@@ -142,7 +142,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           return (
             <div key={c.field}
               className={cx(
-                "group relative flex items-center gap-1.5 truncate px-3 py-2",
+                "group relative flex items-center gap-1.5 px-3 py-2",
                 !isLastCol && "border-r border-line",
                 c.align === "right" && "justify-end",
               )}
@@ -156,7 +156,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               )}
 
               {/* Task 21: hold-then-drag label */}
-              <span className={cx("truncate cursor-grab select-none", c.pinnedLeft && "cursor-default")}
+              <span className={cx(
+                "min-w-0 flex-1 truncate cursor-grab select-none",
+                c.pinnedLeft && "cursor-default",
+                c.align === "right" && "text-right",
+              )}
                 onPointerDown={(_e) => {
                   if (c.pinnedLeft) return;
                   let holding = true;
