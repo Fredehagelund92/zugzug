@@ -349,9 +349,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       return;
     }
 
-    // Prevent text-selection during drag-select; otherwise the browser's
-    // selection highlight fights our range visual and can swallow pointermove.
-    e.preventDefault();
+    // (text-selection is suppressed via the cell's `select-none` className,
+    // not preventDefault — preventDefault on pointerdown also cancels the
+    // subsequent click + dblclick, breaking the edit affordance.)
 
     // Start a new range at the clicked cell
     const corner = { rowKey: rk, field };
@@ -591,7 +591,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               };
               const isLastCol = idx === orderedVisible.length - 1;
               const cellCx = cx(
-                "relative flex min-w-0 items-center px-3 py-[7px]",
+                "relative flex min-w-0 select-none items-center px-3 py-[7px]",
                 !isLastCol && "border-r border-line",
                 c.align === "right" && "justify-end text-right",
                 // Range highlighting: range cells get faint wash; focus cell gets strong ring
