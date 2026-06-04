@@ -107,6 +107,30 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label, type, options, createAnother, busy]);
 
+  // Focus trap
+  useEffect(() => {
+    const root = popoverRef.current;
+    if (!root) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusable = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        last.focus();
+        e.preventDefault();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        first.focus();
+        e.preventDefault();
+      }
+    };
+    root.addEventListener("keydown", onKey);
+    return () => root.removeEventListener("keydown", onKey);
+  }, []);
+
   // Close on click-outside
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -157,6 +181,9 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   return createPortal(
     <div
       ref={popoverRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add field"
       className="zz-pop-in fixed z-50 w-80 rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
       style={{ width: 320 }}
     >
