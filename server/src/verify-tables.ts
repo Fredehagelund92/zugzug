@@ -22,9 +22,9 @@ function assert(cond: unknown, msg: string): asserts cond {
 }
 
 async function cleanup(): Promise<void> {
-  try { await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch {}
-  try { await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch {}
-  try { await pgRun(`DELETE FROM ${pg("dimension")} WHERE id LIKE $1`, [`${SCOPE}%`]); } catch {}
+  try { await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch { /* best-effort cleanup */ }
+  try { await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch { /* best-effort cleanup */ }
+  try { await pgRun(`DELETE FROM ${pg("dimension")} WHERE id LIKE $1`, [`${SCOPE}%`]); } catch { /* best-effort cleanup */ }
 }
 
 (async () => {
