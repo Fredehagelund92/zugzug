@@ -797,11 +797,20 @@ export async function mergeCanonical(dimId: string, survivor: string, losers: st
   if (!m) return 0;
   const key  = qid(m.keyCol);
   const real = losers.filter((l) => l && l !== survivor);
-  for (const loser of real) {
-    await pgRun(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = $2`, [survivor, loser]);
-    await pgRun(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = $1`, [loser]);
-  }
-  if (real.length) await appendAudit("Merged canonical", `${real.join(", ")} → ${survivor}`);
+  if (real.length === 0) return 0;
+
+  await pgTx(async (tx) => {
+    await tx.run(
+      `UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`,
+      [survivor, real],
+    );
+    await tx.run(
+      `DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`,
+      [real],
+    );
+  });
+
+  await appendAudit("Merged canonical", `${real.join(", ")} → ${survivor}`);
   return real.length;
 }
 
