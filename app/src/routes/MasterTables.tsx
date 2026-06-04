@@ -232,14 +232,24 @@ export function MasterTables() {
 
   const retire = async (key: string, label: string) => {
     setBusy(true);
-    const r = await retireCanonical(activeId, key);
-    setBusy(false);
-    if (!r.ok) { flash(`Can’t remove “${label}” — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`); return; }
-    undo.push({
-      label: `remove “${label}”`,
-      apply: () => retireCanonical(activeId, key).then(() => undefined),
-      inverse: () => addCanonical(activeId, label),
-    });
+    try {
+      const r = await retireCanonical(activeId, key);
+      if (!r.ok) {
+        flash(`Can’t remove “${label}” — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`);
+        return;
+      }
+      undo.push({
+        label: `remove “${label}”`,
+        apply: () => retireCanonical(activeId, key).then(() => undefined),
+        inverse: () => addCanonical(activeId, label),
+      });
+    } catch (err) {
+      // Network failure: don't push an undo for an action that didn't happen,
+      // but tell the user instead of swallowing the error silently.
+      flash(`Remove failed — ${err instanceof Error ? err.message : "network error"}`);
+    } finally {
+      setBusy(false);
+    }
   };
   const derive = async (opt: string) => {
     const s = wired.find((w) => `${w.table}.${w.column}` === opt);
@@ -344,11 +354,20 @@ export function MasterTables() {
               </div>
               <Button size="sm" variant="secondary" icon={<IconX className="h-3.5 w-3.5" />}
                 onClick={async () => {
-                  for (const k of sel) {
-                    const c = list.find((x) => x.key === k);
-                    if (c) await retire(k, c.label);
-                  }
+                  const targets = sel
+                    .map((k) => list.find((x) => x.key === k))
+                    .filter((c): c is NonNullable<typeof c> => c != null);
+                  if (targets.length === 0) return;
                   setSel([]);
+                  const label = targets.length === 1
+                    ? `remove “${targets[0].label}”`
+                    : `remove ${targets.length} records`;
+                  undo.beginTransaction(label);
+                  try {
+                    await Promise.all(targets.map((c) => retire(c.key, c.label)));
+                  } finally {
+                    undo.endTransaction();
+                  }
                 }}
                 disabled={busy}
               >Remove</Button>
