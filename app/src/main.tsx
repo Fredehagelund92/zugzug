@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
@@ -15,6 +16,16 @@ import { Sources } from "./routes/Sources";
 import { MasterTables } from "./routes/MasterTables";
 import { Settings } from "./routes/Settings";
 import { Showcase } from "./routes/Showcase";
+
+const dsn = import.meta.env.VITE_SENTRY_DSN;
+if (dsn) {
+  Sentry.init({
+    dsn,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0.1,
+    integrations: [Sentry.browserTracingIntegration()],
+  });
+}
 
 declare global {
   interface Window {
