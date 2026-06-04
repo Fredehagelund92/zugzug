@@ -43,28 +43,44 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Position the popover below the anchor's bottom-right corner
+  // Position the popover below the anchor. The popover is `position: fixed`,
+  // so coordinates are viewport-relative — `getBoundingClientRect` already
+  // returns viewport coords. Don't add scrollY. Left-edge aligned to the
+  // anchor (popover grows rightward from the "+ field" button), with both-edge
+  // clamping; if the anchor sits near the bottom of the viewport, flip above.
   useLayoutEffect(() => {
-    const anchor = anchorRef.current;
     const popover = popoverRef.current;
-    if (!anchor || !popover) return;
+    if (!popover) return;
 
-    const rect = anchor.getBoundingClientRect();
     const POPOVER_WIDTH = 320;
     const GAP = 6;
 
-    let left = rect.right - POPOVER_WIDTH;
-    let top = rect.bottom + GAP + window.scrollY;
+    const place = (): void => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const popH = popover.offsetHeight;
 
-    // Prevent going off the left edge
-    if (left < 8) left = 8;
-    // Prevent going off the right edge
-    if (left + POPOVER_WIDTH > window.innerWidth - 8) {
-      left = window.innerWidth - POPOVER_WIDTH - 8;
-    }
+      // align popover's LEFT to the anchor's left (popover grows rightward)
+      let left = rect.left;
+      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      if (left < 8) left = 8;
 
-    popover.style.top = `${top}px`;
-    popover.style.left = `${left}px`;
+      // place below the anchor unless that overflows the viewport bottom — then flip above
+      let top = rect.bottom + GAP;
+      if (top + popH > window.innerHeight - 8) top = Math.max(8, rect.top - GAP - popH);
+
+      popover.style.top = `${top}px`;
+      popover.style.left = `${left}px`;
+    };
+
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
   }, [anchorRef]);
 
   // Focus name input on mount
