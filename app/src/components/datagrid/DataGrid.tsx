@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import { TextCell } from "./cells/TextCell";
@@ -16,7 +16,7 @@ const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }>
 };
 
 export function DataGrid<Row>(props: DataGridProps<Row>) {
-  const { rows, rowKey, columns, selection, onCommit, empty } = props;
+  const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
   const visible = columns.filter((c) => !c.hidden);
   const selectionCol = !!selection;
   const undo = useUndoStack();
@@ -104,8 +104,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       onKeyDown={cursor.onKeyDown}
       className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
     >
-      {/* header row */}
-      <div className="grid items-center gap-3 border-b border-line px-5 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3" style={gridStyle}>
+      {/* header row — flex wrapper so "+ field" button sits outside the grid template */}
+      <div className="flex items-center border-b border-line font-mono text-[10px] uppercase tracking-wider text-ink-3">
+        <div className="grid flex-1 items-center gap-3 px-5 py-2.5" style={gridStyle}>
         {selectionCol && (
           <Checkbox
             state={selection!.selected.length === sortedRows.length && sortedRows.length > 0
@@ -237,6 +238,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             </div>
           );
         })}
+        </div>
+        {onAddFieldClick && (
+          <button
+            ref={addFieldRef as React.RefObject<HTMLButtonElement>}
+            type="button"
+            onClick={onAddFieldClick}
+            className="shrink-0 px-3 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 transition-colors hover:text-accent"
+            aria-label="Add field"
+          >
+            + field
+          </button>
+        )}
       </div>
 
       {/* body */}
