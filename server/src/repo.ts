@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { DuckDBValue } from "@duckdb/node-api";
 import { all, get, run } from "./db.ts";
-import { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
+import { pgAll, pgGet, pgRun } from "./pg.ts";
 import { env, pg } from "./env.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
@@ -104,48 +104,67 @@ function occUnion(sources: SourceDef[]): string {
  *  refreshes them) so this is instant regardless of source count. Supports search
  *  (q), schema filter, and a status filter; ranked by unmapped (rows at risk). */
 export async function listSources(opts: { q?: string; schema?: string; status?: string } = {}): Promise<SourceInfo[]> {
-  const params: DuckDBValue[] = [];
+  const params: unknown[] = [];
   const where: string[] = [];
-  if (opts.q) { params.push(`%${opts.q}%`); const p = `$${params.length}`; where.push(`(s.source_table ILIKE ${p} OR s.source_column ILIKE ${p})`); }
-  if (opts.schema) { params.push(opts.schema); where.push(`split_part(s.source_table, '.', 1) = $${params.length}`); }
-  if (opts.status === "needs") where.push(`COALESCE(st.unmapped, 0) > 0`);
-  else if (opts.status === "clean") where.push(`COALESCE(st.present, false) AND COALESCE(st.unmapped, 0) = 0`);
+  if (opts.q) {
+    params.push(`%${opts.q}%`);
+    const p = `$${params.length}`;
+    where.push(`(s.source_table ILIKE ${p} OR s.source_column ILIKE ${p})`);
+  }
+  if (opts.schema) {
+    params.push(opts.schema);
+    where.push(`split_part(s.source_table, '.', 1) = $${params.length}`);
+  }
+  if (opts.status === "needs")   where.push(`COALESCE(st.unmapped, 0) > 0`);
+  else if (opts.status === "clean")   where.push(`COALESCE(st.present, false) AND COALESCE(st.unmapped, 0) = 0`);
   else if (opts.status === "missing") where.push(`st.scanned_at IS NOT NULL AND NOT st.present`);
 
-  const rows = await all<{ dimId: string; dimension: string; table: string; column: string; present: boolean; rows: bigint; values: bigint; unmapped: bigint; scanned: boolean; schedule: string | null; scannedAt: Date | string | null }>(
+  const rows = await pgAll<{
+    dimId: string; dimension: string; table: string; column: string;
+    present: boolean; rows: number; values: number; unmapped: number;
+    scanned: boolean; schedule: string | null; scannedAt: string | null;
+  }>(
     `SELECT s.dim_id AS "dimId", d.label AS dimension, s.source_table AS "table", s.source_column AS column,
-            COALESCE(st.present, false) AS present, COALESCE(st.rows, 0) AS rows,
-            COALESCE(st.distinct_values, 0) AS values, COALESCE(st.unmapped, 0) AS unmapped,
+            COALESCE(st.present, false) AS present,
+            COALESCE(st.rows, 0)::int AS rows,
+            COALESCE(st.distinct_values, 0)::int AS values,
+            COALESCE(st.unmapped, 0)::int AS unmapped,
             (st.scanned_at IS NOT NULL) AS scanned,
             s.schedule AS schedule,
-            st.scanned_at AS "scannedAt"
+            st.scanned_at::text AS "scannedAt"
      FROM ${pg("dimension_source")} s
      JOIN ${pg("dimension")} d ON d.id = s.dim_id
-     LEFT JOIN ${pg("source_stat")} st ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
+     LEFT JOIN ${pg("source_stat")} st
+       ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
      ${where.length ? "WHERE " + where.join(" AND ") : ""}
      ORDER BY COALESCE(st.unmapped, 0) DESC, s.source_table, s.source_column
-     LIMIT 1000`, params,
+     LIMIT 1000`,
+    params,
   );
   return rows.map((r) => ({
     table: r.table, column: r.column, dimension: r.dimension, dimId: r.dimId,
     present: !!r.present, rows: Number(r.rows), values: Number(r.values),
     unmapped: Number(r.unmapped), scanned: !!r.scanned,
     schedule: r.schedule ?? null,
-    scannedAt: r.scannedAt ? (r.scannedAt instanceof Date ? r.scannedAt.toISOString() : String(r.scannedAt)) : null,
+    scannedAt: r.scannedAt ?? null,
   }));
 }
 
 /** Per-schema rollup for the facet rail — turns N source columns into ~systems. */
 export async function sourceFacets(): Promise<SchemaFacet[]> {
-  const rows = await all<{ schema: string; columns: bigint; unmapped: bigint; missing: bigint }>(
-    `SELECT split_part(s.source_table, '.', 1) AS schema, count(*) AS columns,
-            COALESCE(sum(st.unmapped), 0) AS unmapped,
-            count(*) FILTER (WHERE st.scanned_at IS NOT NULL AND NOT st.present) AS missing
+  const rows = await pgAll<{ schema: string; columns: number; unmapped: number; missing: number }>(
+    `SELECT split_part(s.source_table, '.', 1) AS schema,
+            count(*)::int AS columns,
+            COALESCE(sum(st.unmapped), 0)::int AS unmapped,
+            count(*) FILTER (WHERE st.scanned_at IS NOT NULL AND NOT st.present)::int AS missing
      FROM ${pg("dimension_source")} s
-     LEFT JOIN ${pg("source_stat")} st ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
+     LEFT JOIN ${pg("source_stat")} st
+       ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
      GROUP BY 1 ORDER BY unmapped DESC, schema`,
   );
-  return rows.map((r) => ({ schema: r.schema, columns: Number(r.columns), unmapped: Number(r.unmapped), missing: Number(r.missing) }));
+  return rows.map((r) => ({
+    schema: r.schema, columns: Number(r.columns), unmapped: Number(r.unmapped), missing: Number(r.missing),
+  }));
 }
 
 /** Refresh the cached stats for every registered source (the expensive scan,
@@ -237,9 +256,10 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
 
 /** Register a warehouse column as a source for a dimension (idempotent). */
 export async function addSource(dimId: string, table: string, column: string): Promise<void> {
-  await run(
-    `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column) VALUES ($1,$2,$3)
-     ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`, [dimId, table, column],
+  await pgRun(
+    `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
+     VALUES ($1, $2, $3) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
+    [dimId, table, column],
   );
 }
 
@@ -278,7 +298,7 @@ export async function topUnmapped(dimId: string, table: string, column: string, 
 export async function setSourceSchedule(dimId: string, table: string, column: string, schedule: string | null): Promise<void> {
   const valid = schedule === null || ["15m", "hourly", "daily"].includes(schedule);
   if (!valid) throw new Error(`invalid schedule: ${schedule}`);
-  await run(
+  await pgRun(
     `UPDATE ${pg("dimension_source")} SET schedule = $1
      WHERE dim_id = $2 AND source_table = $3 AND source_column = $4`,
     [schedule, dimId, table, column],
@@ -291,24 +311,24 @@ export async function setSourceSchedule(dimId: string, table: string, column: st
  *  Returns false (silently) if the app-state schema hasn't been provisioned yet —
  *  the scheduler tick should no-op on a fresh DB, not spam the logs. */
 export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
-  let rows: { schedule: string; scanned_at: Date | string | null }[];
+  let rows: { schedule: string; scanned_at: string | null }[];
   try {
-    rows = await all<{ schedule: string; scanned_at: Date | string | null }>(
-      `SELECT s.schedule, st.scanned_at
+    rows = await pgAll<{ schedule: string; scanned_at: string | null }>(
+      `SELECT s.schedule, st.scanned_at::text AS scanned_at
        FROM ${pg("dimension_source")} s
        LEFT JOIN ${pg("source_stat")} st
          ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
        WHERE s.schedule IS NOT NULL`,
     );
   } catch (e) {
-    // schema not yet ensured (fresh DB before bootstrap) — quietly no-op.
     const msg = e instanceof Error ? e.message : String(e);
-    if (/schema "zugzug_app" does not exist|Table with name "zugzug_app\./.test(msg)) return false;
+    if (/relation.*zugzug_app.*does not exist/i.test(msg)) return false;
     throw e;
   }
-  const dueMs = (s: string) => s === "15m" ? 15 * 60_000 : s === "hourly" ? 60 * 60_000 : s === "daily" ? 24 * 60 * 60_000 : Infinity;
-  return rows.some((r) =>
-    !r.scanned_at || (now.getTime() - new Date(r.scanned_at).getTime()) >= dueMs(r.schedule),
+  const dueMs = (s: string) =>
+    s === "15m" ? 15 * 60_000 : s === "hourly" ? 60 * 60_000 : s === "daily" ? 24 * 60 * 60_000 : Infinity;
+  return rows.some(
+    (r) => !r.scanned_at || now.getTime() - new Date(r.scanned_at).getTime() >= dueMs(r.schedule),
   );
 }
 
@@ -421,7 +441,7 @@ export async function searchCatalog(opts: { q?: string; schema?: string; limit?:
 
 /* ---- users & presence (Postgres) ---- */
 export async function listUsers(): Promise<User[]> {
-  return all<User>(`SELECT id, name, initials FROM ${pg("users")} ORDER BY id`);
+  return pgAll<User>(`SELECT id, name, initials FROM ${pg("users")} ORDER BY id`);
 }
 
 /* ---- dimension registry (Postgres) + canonical tables (MotherDuck) ---- */
@@ -793,21 +813,20 @@ export interface GridLayoutConfig {
 }
 
 export async function getGridLayout(userId: string, dimId: string): Promise<GridLayoutConfig> {
-  const row = await get<{ config: unknown }>(
-    `SELECT config FROM ${pg("user_grid_layout")} WHERE user_id = $1 AND dim_id = $2`, [userId, dimId],
+  const row = await pgGet<{ config: string | null }>(
+    `SELECT config FROM ${pg("user_grid_layout")} WHERE user_id = $1 AND dim_id = $2`,
+    [userId, dimId],
   );
-  if (!row) return {};
-  if (typeof row.config === "string") {
-    try { return JSON.parse(row.config) as GridLayoutConfig; } catch { return {}; }
-  }
-  return typeof row.config === "object" && row.config != null ? (row.config as GridLayoutConfig) : {};
+  if (!row?.config) return {};
+  try { return JSON.parse(row.config) as GridLayoutConfig; } catch { return {}; }
 }
 
 /** Upsert the full layout config for (user, dim). Caller sends a *complete*
  *  config; partial merging is the client's job (it knows what changed). */
 export async function setGridLayout(userId: string, dimId: string, config: GridLayoutConfig): Promise<void> {
-  await run(
-    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at) VALUES ($1, $2, $3, now())
+  await pgRun(
+    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at)
+     VALUES ($1, $2, $3, now())
      ON CONFLICT (user_id, dim_id) DO UPDATE SET config = EXCLUDED.config, updated_at = now()`,
     [userId, dimId, JSON.stringify(config)],
   );
@@ -862,32 +881,54 @@ export async function listVariants(dimId: string, key: string): Promise<string[]
 
 /* ---- drafts (Postgres) ---- */
 async function userById(id: string): Promise<User> {
-  return (await get<User>(`SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`, [id]))
-    ?? { id, name: id, initials: id.slice(0, 2).toUpperCase() };
+  return (
+    (await pgGet<User>(`SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`, [id])) ??
+    { id, name: id, initials: id.slice(0, 2).toUpperCase() }
+  );
 }
 
 export async function listDrafts(dimId: string): Promise<Draft[]> {
-  const rows = await all<{ dimId: string; raw: string; status: "mapped" | "skipped"; targetLabel: string | null; targetKey: string | null; uid: string; secs: number }>(
-    `SELECT dim_id AS "dimId", raw, status, target_label AS "targetLabel", target_key AS "targetKey",
-            user_id AS uid, epoch(current_timestamp - created_at) AS secs
-     FROM ${pg("draft")} WHERE dim_id = $1 ORDER BY created_at DESC`, [dimId],
+  const rows = await pgAll<{
+    dimId: string; raw: string; status: "mapped" | "skipped";
+    targetLabel: string | null; targetKey: string | null; uid: string; secs: number;
+  }>(
+    `SELECT dim_id AS "dimId", raw, status,
+            target_label AS "targetLabel", target_key AS "targetKey",
+            user_id AS uid,
+            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
+     FROM ${pg("draft")} WHERE dim_id = $1 ORDER BY created_at DESC`,
+    [dimId],
   );
   const out: Draft[] = [];
-  for (const r of rows) out.push({ dimId: r.dimId, raw: r.raw, status: r.status, targetLabel: r.targetLabel, targetKey: r.targetKey, user: await userById(r.uid), at: rel(Number(r.secs)) });
+  for (const r of rows) {
+    out.push({
+      dimId: r.dimId, raw: r.raw, status: r.status,
+      targetLabel: r.targetLabel, targetKey: r.targetKey,
+      user: await userById(r.uid), at: rel(Number(r.secs)),
+    });
+  }
   return out;
 }
 
-export async function saveDraft(dimId: string, raw: string, status: "mapped" | "skipped", targetLabel: string | null, targetKey: string | null, userId: string): Promise<void> {
-  await run(
+export async function saveDraft(
+  dimId: string, raw: string, status: "mapped" | "skipped",
+  targetLabel: string | null, targetKey: string | null, userId: string,
+): Promise<void> {
+  await pgRun(
     `INSERT INTO ${pg("draft")} (dim_id, raw, status, target_label, target_key, user_id, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6, current_timestamp)
-     ON CONFLICT (dim_id, raw, user_id) DO UPDATE SET status = excluded.status, target_label = excluded.target_label, target_key = excluded.target_key, created_at = excluded.created_at`,
+     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp)
+     ON CONFLICT (dim_id, raw, user_id) DO UPDATE
+       SET status = EXCLUDED.status, target_label = EXCLUDED.target_label,
+           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at`,
     [dimId, raw, status, targetLabel, targetKey, userId],
   );
 }
 
 export async function discardDraft(dimId: string, raw: string, userId: string): Promise<void> {
-  await run(`DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3`, [dimId, raw, userId]);
+  await pgRun(
+    `DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3`,
+    [dimId, raw, userId],
+  );
 }
 
 /** Approve & commit: fold the dimension's `mapped` drafts into MotherDuck in one
@@ -949,8 +990,9 @@ async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<n
 
 /* ---- audit (Postgres, append-only) ---- */
 export async function appendAuditAs(userId: string, action: string, detail: string): Promise<void> {
-  await run(
-    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail) VALUES ($1, current_timestamp, $2, $3, $4)`,
+  await pgRun(
+    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail)
+     VALUES ($1, current_timestamp, $2, $3, $4)`,
     [randomUUID(), userId, action, detail],
   );
 }
@@ -963,7 +1005,7 @@ export async function appendAudit(action: string, detail: string): Promise<void>
 export interface Preferences { publishThreshold: number; suggestThreshold: number }
 
 export async function getPreferences(): Promise<Preferences> {
-  const row = (await all<{ publish_threshold: number; suggest_threshold: number }>(
+  const row = (await pgAll<{ publish_threshold: number; suggest_threshold: number }>(
     `SELECT publish_threshold, suggest_threshold FROM ${pg("preferences")} WHERE id = 1`,
   ))[0];
   return row
@@ -974,18 +1016,22 @@ export async function getPreferences(): Promise<Preferences> {
 export async function setPreferences(p: Preferences): Promise<void> {
   const publish = Math.max(0, Math.min(100, Math.round(p.publishThreshold)));
   const suggest = Math.max(0, Math.min(publish, Math.round(p.suggestThreshold)));
-  await run(
+  await pgRun(
     `UPDATE ${pg("preferences")} SET publish_threshold = $1, suggest_threshold = $2, updated_at = current_timestamp WHERE id = 1`,
     [publish, suggest],
   );
 }
 
 export async function listAudit(limit = 30): Promise<AuditEntry[]> {
-  const rows = await all<{ id: string; uid: string; action: string; detail: string; secs: number }>(
-    `SELECT id, user_id AS uid, action, detail, epoch(current_timestamp - created_at) AS secs
-     FROM ${pg("audit_log")} ORDER BY created_at DESC LIMIT ${Math.max(1, Math.min(200, limit))}`,
+  const rows = await pgAll<{ id: string; uid: string; action: string; detail: string; secs: number }>(
+    `SELECT id, user_id AS uid, action, detail,
+            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
+     FROM ${pg("audit_log")} ORDER BY created_at DESC
+     LIMIT ${Math.max(1, Math.min(200, limit))}`,
   );
   const out: AuditEntry[] = [];
-  for (const r of rows) out.push({ id: r.id, user: await userById(r.uid), action: r.action, detail: r.detail, at: rel(Number(r.secs)) });
+  for (const r of rows) {
+    out.push({ id: r.id, user: await userById(r.uid), action: r.action, detail: r.detail, at: rel(Number(r.secs)) });
+  }
   return out;
 }
