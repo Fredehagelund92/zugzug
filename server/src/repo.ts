@@ -928,7 +928,7 @@ export async function setGridLayout(userId: string, dimId: string, config: GridL
 
 /** Append a new option to a select column's options list. No-op if the option
  *  already exists (case-sensitive). Returns the resulting options list.
- *  Stored as a JSON string in a VARCHAR column — see schema.ts for rationale. */
+ *  Stored as a JSON string in a VARCHAR column — see drizzle/migrations/0000_baseline.sql for rationale. */
 export async function addColumnOption(dimId: string, field: string, label: string): Promise<{ options: string[] } | null> {
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f || f.type !== "select") return null;
