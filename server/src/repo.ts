@@ -10,6 +10,7 @@ import type { DuckDBValue } from "@duckdb/node-api";
 import { all, get, run } from "./db.ts";
 import { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
 import { env, pg } from "./env.ts";
+import { log } from "./log.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
 
@@ -206,13 +207,23 @@ export async function scanSources(): Promise<number> {
     `SELECT s.dim_id AS "dimId", s.source_table AS "table", s.source_column AS column, d.map_table AS "mapTable"
      FROM ${pg("dimension_source")} s JOIN ${pg("dimension")} d ON d.id = s.dim_id`,
   );
+  const SCAN_TIMEOUT_MS = 30_000;
   for (const r of regs) {
     const col = qid(r.column);
     let present = false, rows = 0, distinct = 0, unmapped = 0;
+    const t0 = performance.now();
     try {
-      const agg = await get<{ rows: bigint; d: bigint }>(
-        `SELECT count(${col}) AS rows, count(DISTINCT ${col}) AS d FROM ${whTable(r.table)}
-         WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`);
+      const { agg } = await Promise.race([
+        (async () => {
+          const agg = await get<{ rows: bigint; d: bigint }>(
+            `SELECT count(${col}) AS rows, count(DISTINCT ${col}) AS d FROM ${whTable(r.table)}
+             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`);
+          return { agg };
+        })(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("scan timeout")), SCAN_TIMEOUT_MS),
+        ),
+      ]);
       present = true; rows = Number(agg?.rows ?? 0); distinct = Number(agg?.d ?? 0);
       if (distinct > 0) {
         // Cross-store unmapped count: was a single LEFT JOIN that hit warehouse
@@ -233,7 +244,31 @@ export async function scanSources(): Promise<number> {
           // present / rows / distinct stats already captured above.
         }
       }
-    } catch { present = false; }
+      const ms = Math.round(performance.now() - t0);
+      log({
+        level: ms > 5000 ? "warn" : "info",
+        msg: "scan-source",
+        table: r.table,
+        column: r.column,
+        ms,
+        rows,
+        distinct,
+        unmapped,
+      });
+    } catch (e) {
+      const ms = Math.round(performance.now() - t0);
+      const timedOut = e instanceof Error && e.message === "scan timeout";
+      log({
+        level: "error",
+        msg: "scan-source",
+        table: r.table,
+        column: r.column,
+        ms,
+        err: e instanceof Error ? e.message : String(e),
+        timedOut,
+      });
+      present = false;
+    }
     await pgRun(
       `INSERT INTO ${pg("source_stat")}
          (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at)
