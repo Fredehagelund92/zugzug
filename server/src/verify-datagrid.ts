@@ -35,17 +35,17 @@ async function cleanup() {
   await step("clean prior scope rows", cleanup);
 
   const dimId = await step("create test dimension", async () => {
-    return await repo.addDimension(`${SCOPE} country`, []);
+    return await repo.addDimension(`${SCOPE} country`, [], {}, "u_verify");
   });
   assert(dimId.startsWith(SCOPE), "dimId should start with scope");
 
   await step("addField(text)", async () => {
-    const r = await repo.addField(dimId, "Capital");
+    const r = await repo.addField(dimId, "Capital", "text", undefined, {}, "u_verify");
     assert(r?.field === "capital", `expected field 'capital', got ${r?.field}`);
   });
 
   await step("addField(select, options=[EMEA,AMER])", async () => {
-    const r = await repo.addField(dimId, "Region", "select", [{ label: "EMEA", color: null }, { label: "AMER", color: null }]);
+    const r = await repo.addField(dimId, "Region", "select", [{ label: "EMEA", color: null }, { label: "AMER", color: null }], {}, "u_verify");
     assert(r?.field === "region", `expected field 'region', got ${r?.field}`);
     const fields = await repo.listFields(dimId);
     const region = fields.find((f) => f.field === "region");
@@ -55,19 +55,19 @@ async function cleanup() {
   });
 
   await step("addColumnOption appends a new option", async () => {
-    const r = await repo.addColumnOption(dimId, "region", "APAC");
+    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify");
     const labels = r?.options?.map((o) => o.label);
     assert(JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]), `options after add: ${JSON.stringify(r?.options)}`);
   });
 
   await step("addColumnOption is idempotent on duplicate label", async () => {
-    const r = await repo.addColumnOption(dimId, "region", "APAC");
+    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify");
     const labels = r?.options?.map((o) => o.label);
     assert(JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]), `idempotent expected, got: ${JSON.stringify(r?.options)}`);
   });
 
   await step("addColumnOption refuses non-select column", async () => {
-    const r = await repo.addColumnOption(dimId, "capital", "Berlin");
+    const r = await repo.addColumnOption(dimId, "capital", "Berlin", null, {}, "u_verify");
     assert(r === null, `expected null for non-select column, got: ${JSON.stringify(r)}`);
   });
 
@@ -83,7 +83,7 @@ async function cleanup() {
   });
 
   await step("renameColumn updates the label", async () => {
-    await repo.renameColumn(dimId, "capital", "Capital city");
+    await repo.renameColumn(dimId, "capital", "Capital city", "u_verify");
     const fields = await repo.listFields(dimId);
     const cap = fields.find((f) => f.field === "capital");
     assert(cap?.label === "Capital city", `label: ${cap?.label}`);
@@ -91,11 +91,11 @@ async function cleanup() {
 
   await step("changeColumnType text → select seeds options from distinct values", async () => {
     // first, add a couple of canonical rows and set capital values
-    await repo.addCanonicalOne(dimId, "Denmark", "denmark");
-    await repo.addCanonicalOne(dimId, "Germany", "germany");
+    await repo.addCanonicalOne(dimId, "Denmark", "denmark", "u_verify");
+    await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify");
     await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen");
     await repo.setFieldValue(dimId, "germany", "capital", "Berlin");
-    const res = await repo.changeColumnType(dimId, "capital", "select");
+    const res = await repo.changeColumnType(dimId, "capital", "select", undefined, false, "u_verify");
     assert(res.ok, `changeColumnType failed: ${JSON.stringify(res)}`);
     const fields = await repo.listFields(dimId);
     const cap = fields.find((f) => f.field === "capital");
@@ -106,7 +106,7 @@ async function cleanup() {
   });
 
   await step("deleteColumn drops dim_field + cell values", async () => {
-    const r = await repo.deleteColumn(dimId, "capital");
+    const r = await repo.deleteColumn(dimId, "capital", "u_verify");
     assert(r.ok, "deleteColumn ok");
     const fields = await repo.listFields(dimId);
     assert(!fields.some((f) => f.field === "capital"), `capital still present: ${JSON.stringify(fields)}`);

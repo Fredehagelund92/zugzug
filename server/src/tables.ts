@@ -71,7 +71,7 @@ function validate(input: CreateTableInput): void {
   }
 }
 
-export async function createTable(input: CreateTableInput, userId = "u_ada"): Promise<{ id: string }> {
+export async function createTable(input: CreateTableInput, userId: string): Promise<{ id: string }> {
   validate(input);
   const name = input.name.trim();
   const id = slug(name);
@@ -85,7 +85,7 @@ export async function createTable(input: CreateTableInput, userId = "u_ada"): Pr
   // primitive uses pgRun freely. We still drive every subsequent write through
   // pgTx for atomicity of the description/source/field/audit fold.
   const keyKind = input.mode === "external_id" ? "external_id" : "slug";
-  await repo.addDimension(name, [], { keyKind, silent: true });
+  await repo.addDimension(name, [], { keyKind, silent: true }, userId);
 
   let fieldCount = 0;
   let derivedCount = 0;
@@ -122,18 +122,18 @@ export async function createTable(input: CreateTableInput, userId = "u_ada"): Pr
   // 4. Fields (blank mode) — addField issues DDL + INSERT, outside tx
   if (input.mode === "blank" && input.columns) {
     for (const c of input.columns) {
-      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true });
+      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true }, userId);
       fieldCount++;
     }
   }
 
   // 5. Seeding (source / external_id modes)
   if (input.mode === "source" && input.source) {
-    const r = await repo.deriveCanonical(id, input.source.table, input.source.column, undefined, { silent: true });
+    const r = await repo.deriveCanonical(id, input.source.table, input.source.column, undefined, { silent: true }, userId);
     derivedCount = r.derived;
   }
   if (input.mode === "external_id" && input.external) {
-    const r = await repo.deriveCanonical(id, input.external.table, input.external.idColumn, input.external.nameColumn, { silent: true });
+    const r = await repo.deriveCanonical(id, input.external.table, input.external.idColumn, input.external.nameColumn, { silent: true }, userId);
     derivedCount = r.derived;
   }
 

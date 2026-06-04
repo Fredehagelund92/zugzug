@@ -427,7 +427,7 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *  the ID column: each distinct ID seeds a canonical keyed by the raw ID (no slug),
  *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
  *  the name resolves live on read. Returns how many canonical records resulted. */
-export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string, opts: { silent?: boolean } = {}, userId = "u_ada"): Promise<{ derived: number }> {
+export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn: string | undefined, opts: { silent?: boolean } = {}, userId: string): Promise<{ derived: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
@@ -711,7 +711,7 @@ export async function addDimension(
   name: string,
   sources: SourceDef[] = [],
   opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
-  userId = "u_ada",
+  userId: string,
 ): Promise<string> {
   const id = slug(name);
   if (!id) return id;
@@ -771,7 +771,7 @@ async function dimMeta(dimId: string): Promise<DimMeta | null> {
 }
 
 /** Add one canonical record (key derived from the label if not given). */
-export async function addCanonicalOne(dimId: string, label: string, key?: string, userId = "u_ada"): Promise<void> {
+export async function addCanonicalOne(dimId: string, label: string, key: string | undefined, userId: string): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   const k = (key && slug(key)) || slug(label);
@@ -785,7 +785,7 @@ export async function addCanonicalOne(dimId: string, label: string, key?: string
 }
 
 /** Rename a canonical's display label (the key is stable). */
-export async function renameCanonical(dimId: string, key: string, label: string, userId = "u_ada"): Promise<void> {
+export async function renameCanonical(dimId: string, key: string, label: string, userId: string): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
@@ -794,7 +794,7 @@ export async function renameCanonical(dimId: string, key: string, label: string,
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
  *  losers' golden records, audit. The core MDM consolidation step. */
-export async function mergeCanonical(dimId: string, survivor: string, losers: string[], userId = "u_ada"): Promise<number> {
+export async function mergeCanonical(dimId: string, survivor: string, losers: string[], userId: string): Promise<number> {
   const m = await dimMeta(dimId);
   if (!m) return 0;
   const key  = qid(m.keyCol);
@@ -817,7 +817,7 @@ export async function mergeCanonical(dimId: string, survivor: string, losers: st
 }
 
 /** Retire a canonical — governed: refused while raw variants still map to it. */
-export async function retireCanonical(dimId: string, key: string, userId = "u_ada"): Promise<{ ok: boolean; variants: number }> {
+export async function retireCanonical(dimId: string, key: string, userId: string): Promise<{ ok: boolean; variants: number }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
   const v = await pgGet<{ n: number }>(
@@ -855,10 +855,10 @@ const SQL_TYPE: Record<string, string> = { text: "VARCHAR", number: "NUMERIC", b
 export async function addField(
   dimId: string,
   label: string,
-  type = "text",
-  options?: OptionDef[],
+  type: string = "text",
+  options: OptionDef[] | undefined,
   opts: { silent?: boolean } = {},
-  userId = "u_ada",
+  userId: string,
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
@@ -881,7 +881,7 @@ export async function addField(
 
 /** Rename a column's display label. The `field` (stable id / DB column name)
  *  stays put; only `label` changes. */
-export async function renameColumn(dimId: string, field: string, newLabel: string, userId = "u_ada"): Promise<void> {
+export async function renameColumn(dimId: string, field: string, newLabel: string, userId: string): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
   await pgRun(
@@ -898,9 +898,9 @@ export async function changeColumnType(
   dimId: string,
   field: string,
   newType: string,
-  options?: OptionDef[],
-  coerceInvalidToNull = false,
-  userId = "u_ada",
+  options: OptionDef[] | undefined,
+  coerceInvalidToNull: boolean = false,
+  userId: string,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
@@ -975,7 +975,7 @@ export async function changeColumnType(
 
 /** Drop a column from the dim_ table AND its row in dimension_field, plus null
  *  the field on every row of the dim. Transactional — all-or-nothing. */
-export async function deleteColumn(dimId: string, field: string, userId = "u_ada"): Promise<{ ok: boolean }> {
+export async function deleteColumn(dimId: string, field: string, userId: string): Promise<{ ok: boolean }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const col = qid(field);
@@ -1024,7 +1024,7 @@ export async function addColumnOption(
   label: string,
   color: PaletteName | null = null,
   opts: { silent?: boolean } = {},
-  userId = "u_ada",
+  userId: string,
 ): Promise<{ options: OptionDef[] } | null> {
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f || f.type !== "select") return null;

@@ -46,7 +46,7 @@ check("schema: key_kind + name binding columns present",
   ["key_kind", "name_table", "name_id_col", "name_col"].filter((c) => have.has(c)).join(", "));
 
 // 2. create an external-ID dimension → key_kind persisted + nullable-label dim_
-await repo.addDimension(NAME, [], { keyKind: "external_id" });
+await repo.addDimension(NAME, [], { keyKind: "external_id" }, "u_verify");
 const dims = await repo.listDimensions();
 const d = dims.find((x) => x.id === DIM_ID);
 check("addDimension: external-ID dimension registered with key_kind", d?.keyKind === "external_id", d?.keyKind ?? "missing");
@@ -58,7 +58,7 @@ check("addDimension: dim_ label is nullable for external-ID", labelNullable?.is_
 // 3 + 4. derive + live resolution — only with a real warehouse master table
 const T = process.env.EID_TABLE?.trim(), IDC = process.env.EID_ID_COL?.trim(), NMC = process.env.EID_NAME_COL?.trim();
 if (env.attachWarehouse && T && IDC && NMC) {
-  const res = await repo.deriveCanonical(DIM_ID, T, IDC, NMC);
+  const res = await repo.deriveCanonical(DIM_ID, T, IDC, NMC, {}, "u_verify");
   check("derive: external-ID keys seeded from master table", res.derived > 0, `${res.derived} ids from ${T}.${IDC}`);
   const bind = await get<{ name_table: string; name_col: string }>(
     `SELECT name_table, name_col FROM ${pg("dimension")} WHERE id = '${DIM_ID}'`);
