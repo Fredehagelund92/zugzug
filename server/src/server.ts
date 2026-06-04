@@ -9,7 +9,7 @@ import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, h
 import * as team from "./team.ts";
 import * as tables from "./tables.ts";
 import { CreateTableError } from "./tables.ts";
-import { pgEnd } from "./pg.ts";
+import { pgAll, pgEnd } from "./pg.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
@@ -52,6 +52,19 @@ const server = Bun.serve({
 
     if (method === "OPTIONS")
       return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS", "access-control-allow-headers": "content-type" } });
+
+    if (pathname === "/health" || pathname === "/api/health") {
+      try {
+        await pgAll(`SELECT 1`);
+        return new Response(JSON.stringify({ ok: true, ts: Date.now() }), {
+          status: 200, headers: { "content-type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+          status: 503, headers: { "content-type": "application/json" },
+        });
+      }
+    }
 
     if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
 
