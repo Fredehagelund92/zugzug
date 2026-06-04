@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
@@ -8,6 +8,7 @@ import { CreateTableModal } from "../components/CreateTableModal";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { IconPlus, IconX, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
+import { AddFieldPopover } from "../components/AddFieldPopover";
 import { slug } from "../store";
 import {
   useDimensions, useSources,
@@ -19,8 +20,7 @@ import {
 import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid, useUndoStack } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
-import type { CanonicalValue, OptionDef } from "../data";
-import { OptionBuilder } from "../components/OptionBuilder";
+import type { CanonicalValue } from "../data";
 
 /* Tables (pillar 2) — the master-record workbench, live against Postgres
    dim_/map_. Import from a source column, MERGE near-duplicates into one survivor
@@ -28,77 +28,6 @@ import { OptionBuilder } from "../components/OptionBuilder";
    (currency, locale, …) editable inline. Expand a record for the raw values that
    resolve to it (the lineage receipt). Every mutation is persisted + audited. */
 
-const FIELD_TYPES = ["text", "number", "boolean", "date", "select"] as const;
-
-/** "＋ field" affordance → name + type (+ options for select), adds an attribute column. */
-function AddColumn({ onAdd }: { onAdd: (label: string, type: string, options?: OptionDef[]) => Promise<void> }) {
-  const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState("");
-  const [type, setType] = useState<string>("text");
-  const [options, setOptions] = useState<OptionDef[]>([]);
-
-  const reset = (): void => { setLabel(""); setType("text"); setOptions([]); setEditing(false); };
-
-  if (!editing) {
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="flex items-center gap-1 font-mono text-[11px] text-ink-3 transition-colors hover:text-accent"
-      >
-        <IconPlus className="h-3 w-3" /> field
-      </button>
-    );
-  }
-
-  const commit = async (): Promise<void> => {
-    if (!label.trim()) return;
-    await onAdd(label.trim(), type, type === "select" ? options : undefined);
-    reset();
-  };
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <input
-          autoFocus
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && type !== "select") void commit();
-            if (e.key === "Escape") reset();
-          }}
-          placeholder="field name…"
-          className="w-32 rounded-sm border border-accent bg-bg px-2 py-0.5 font-mono text-[11px] text-ink outline-none"
-        />
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[11px] text-ink-2 outline-none"
-        >
-          {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <button
-          type="button"
-          onMouseDown={(e) => { e.preventDefault(); void commit(); }}
-          className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-accent transition-colors hover:border-accent"
-        >
-          add
-        </button>
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-ink-3 hover:text-ink"
-        >
-          cancel
-        </button>
-      </div>
-      {type === "select" && (
-        <OptionBuilder options={options} onChange={setOptions} />
-      )}
-    </div>
-  );
-}
 
 export function MasterTables() {
   const dims = useDimensions();
@@ -117,6 +46,10 @@ export function MasterTables() {
   const wired = useMemo(() => sources.filter((s) => s.dimId === dimId), [sources, dimId]);
   const [idOpt, setIdOpt] = useState<string | null>(null);
   const [nameOpt, setNameOpt] = useState<string | null>(null);
+
+  // "+ field" popover state
+  const [addOpen, setAddOpen] = useState(false);
+  const addFieldRef = useRef<HTMLButtonElement | null>(null);
 
   if (!dim) return <NoTablesYet from="tables" />;
 
@@ -350,7 +283,6 @@ export function MasterTables() {
           <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
             ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
-          <AddColumn onAdd={(label, type, options) => addField(activeId, label, type, options)} />
         </div>
       </div>
 
@@ -430,7 +362,19 @@ export function MasterTables() {
             });
           }}
           empty={<div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">no records yet — import from a source above, or add one below</div>}
+          onAddFieldClick={() => setAddOpen((v) => !v)}
+          addFieldRef={addFieldRef as React.MutableRefObject<HTMLElement | null>}
         />
+
+        {addOpen && (
+          <AddFieldPopover
+            anchorRef={addFieldRef as React.RefObject<HTMLElement | null>}
+            onClose={() => setAddOpen(false)}
+            onSubmit={async (input) => {
+              await addField(activeId, input.label, input.type, input.options);
+            }}
+          />
+        )}
 
         {/* per-row expandable variants drawer — kept under the grid as a separate slice */}
         {open && (() => {
