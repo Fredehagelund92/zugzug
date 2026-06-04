@@ -1,10 +1,15 @@
 import postgres from "postgres";
 import { env } from "./env.ts";
 
-const pool = postgres(env.databaseUrl);
+const pool = postgres(env.databaseUrl, {
+  max: Number(process.env.PG_POOL_MAX) || 5,
+  idle_timeout: 30,
+  connect_timeout: 10,
+  prepare: false, // postgres.js prepared-stmt cache fights pgbouncer transaction mode
+});
 
 export async function pgEnd(): Promise<void> {
-  await pool.end();
+  await pool.end({ timeout: 5 });
 }
 
 export async function pgAll<T = Record<string, unknown>>(

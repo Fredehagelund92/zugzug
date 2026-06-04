@@ -13,3 +13,8 @@ export async function runMigrations(): Promise<void> {
   await client.end();
   console.log("· Postgres migrations applied");
 }
+
+// Allow direct execution: `bun run drizzle/migrate.ts`
+if (import.meta.main) {
+  await runMigrations();
+}
