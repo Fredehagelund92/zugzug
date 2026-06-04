@@ -22,7 +22,9 @@ export async function connect(): Promise<DuckDBConnection> {
     if (env.attachWarehouse) {
       await attachMotherDuck(conn);
     } else {
-      console.warn("⚠ warehouse (MotherDuck) attach deferred — set ATTACH_WAREHOUSE=true to enable the scan");
+      console.warn(
+        "⚠ warehouse (MotherDuck) attach deferred — set ATTACH_WAREHOUSE=true to enable the scan",
+      );
     }
     _conn = conn;
     return conn;
@@ -32,13 +34,19 @@ export async function connect(): Promise<DuckDBConnection> {
 
 /* ---- query helpers (positional $1 params; Unicode/quote-safe via binding) ---- */
 
-export async function all<T = Record<string, unknown>>(sql: string, params: DuckDBValue[] = []): Promise<T[]> {
+export async function all<T = Record<string, unknown>>(
+  sql: string,
+  params: DuckDBValue[] = [],
+): Promise<T[]> {
   const conn = await connect();
   const reader = await conn.runAndReadAll(sql, params);
   return reader.getRowObjects() as T[];
 }
 
-export async function get<T = Record<string, unknown>>(sql: string, params: DuckDBValue[] = []): Promise<T | null> {
+export async function get<T = Record<string, unknown>>(
+  sql: string,
+  params: DuckDBValue[] = [],
+): Promise<T | null> {
   const rows = await all<T>(sql, params);
   return rows[0] ?? null;
 }

@@ -5,7 +5,15 @@
 import { connect } from "./db.ts";
 import { env } from "./env.ts";
 import * as repo from "./repo.ts";
-import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout, handleAuthConfig, handleDevLogin } from "./auth.ts";
+import {
+  getSessionUser,
+  handleGoogleRedirect,
+  handleGoogleCallback,
+  handleMe,
+  handleLogout,
+  handleAuthConfig,
+  handleDevLogin,
+} from "./auth.ts";
 import * as team from "./team.ts";
 import * as tables from "./tables.ts";
 import { CreateTableError } from "./tables.ts";
@@ -15,7 +23,7 @@ import { log } from "./log.ts";
 const corsHeaders = {
   "access-control-allow-origin": env.origin,
   "access-control-allow-credentials": "true",
-  "vary": "Origin",
+  vary: "Origin",
 };
 
 const json = (data: unknown, status = 200) =>
@@ -24,10 +32,9 @@ const json = (data: unknown, status = 200) =>
     headers: { "content-type": "application/json", ...corsHeaders },
   });
 
-const noContent = () =>
-  new Response(null, { status: 204, headers: corsHeaders });
-const err = (e: unknown, status = 500) => json({ error: e instanceof Error ? e.message : String(e) }, status);
-
+const noContent = () => new Response(null, { status: 204, headers: corsHeaders });
+const err = (e: unknown, status = 500) =>
+  json({ error: e instanceof Error ? e.message : String(e) }, status);
 
 await connect();
 console.log("· connected (MotherDuck + Postgres attached)");
@@ -50,7 +57,9 @@ async function scheduleTick(): Promise<void> {
     scanInFlight = false;
   }
 }
-setInterval(() => { void scheduleTick(); }, 60_000);
+setInterval(() => {
+  void scheduleTick();
+}, 60_000);
 console.log("· scheduler started (1m tick)");
 
 async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
@@ -74,11 +83,13 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     try {
       await pgAll(`SELECT 1`);
       return new Response(JSON.stringify({ ok: true, ts: Date.now() }), {
-        status: 200, headers: { "content-type": "application/json" },
+        status: 200,
+        headers: { "content-type": "application/json" },
       });
     } catch (e) {
       return new Response(JSON.stringify({ ok: false, error: String(e) }), {
-        status: 503, headers: { "content-type": "application/json" },
+        status: 503,
+        headers: { "content-type": "application/json" },
       });
     }
   }
@@ -101,7 +112,11 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
 
   // Session gate — all other /api/* routes require a valid session
   let sessionUser;
-  try { sessionUser = await getSessionUser(req); } catch (e) { return err(e, 503); }
+  try {
+    sessionUser = await getSessionUser(req);
+  } catch (e) {
+    return err(e, 503);
+  }
   if (!sessionUser) return json({ error: "Unauthorized" }, 401);
   const me = sessionUser.id;
   setUid(me);
@@ -120,17 +135,22 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     // GET /api/users → { currentUser, collaborators }
     if (seg[1] === "users" && seg.length === 2 && method === "GET") {
       const users = await repo.listUsers();
-      return json({ currentUser: users.find((u) => u.id === me) ?? users[0], collaborators: users });
+      return json({
+        currentUser: users.find((u) => u.id === me) ?? users[0],
+        collaborators: users,
+      });
     }
 
     // /api/sources — registered source columns (cached); /facets; /scan
     if (seg[1] === "sources") {
       if (seg.length === 2 && method === "GET")
-        return json(await repo.listSources({
-          q: url.searchParams.get("q") ?? undefined,
-          schema: url.searchParams.get("schema") ?? undefined,
-          status: url.searchParams.get("status") ?? undefined,
-        }));
+        return json(
+          await repo.listSources({
+            q: url.searchParams.get("q") ?? undefined,
+            schema: url.searchParams.get("schema") ?? undefined,
+            status: url.searchParams.get("status") ?? undefined,
+          }),
+        );
       if (seg[2] === "facets" && seg.length === 3 && method === "GET")
         return json(await repo.sourceFacets());
       if (seg[2] === "scan" && seg.length === 3 && method === "POST")
@@ -148,16 +168,19 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
 
     // GET /api/catalog — browse/search the warehouse catalog (the 1000+ tables)
     if (seg[1] === "catalog" && seg.length === 2 && method === "GET")
-      return json(await repo.searchCatalog({
-        q: url.searchParams.get("q") ?? undefined,
-        schema: url.searchParams.get("schema") ?? undefined,
-        limit: Number(url.searchParams.get("limit") ?? 50),
-        offset: Number(url.searchParams.get("offset") ?? 0),
-      }));
+      return json(
+        await repo.searchCatalog({
+          q: url.searchParams.get("q") ?? undefined,
+          schema: url.searchParams.get("schema") ?? undefined,
+          limit: Number(url.searchParams.get("limit") ?? 50),
+          offset: Number(url.searchParams.get("offset") ?? 0),
+        }),
+      );
 
     // GET /api/audit ; POST /api/audit {action, detail}
     if (seg[1] === "audit" && seg.length === 2) {
-      if (method === "GET") return json(await repo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
+      if (method === "GET")
+        return json(await repo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
       if (method === "POST") {
         const { action, detail } = (await req.json()) as { action: string; detail: string };
         await repo.appendAuditAs(me, action, detail);
@@ -207,7 +230,10 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return json(await repo.listDimensions());
         }
         if (method === "POST") {
-          const { name, keyKind } = (await req.json()) as { name: string; keyKind?: "slug" | "external_id" };
+          const { name, keyKind } = (await req.json()) as {
+            name: string;
+            keyKind?: "slug" | "external_id";
+          };
           return json({ id: await repo.addDimension(name, [], { keyKind }, me) }, 201);
         }
       }
@@ -221,7 +247,12 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
         if (seg.length === 4 && method === "GET") return json(await repo.listDrafts(id));
         if (seg.length === 4 && method === "PUT") {
-          const b = (await req.json()) as { raw: string; status: "mapped" | "skipped"; targetLabel: string | null; targetKey: string | null };
+          const b = (await req.json()) as {
+            raw: string;
+            status: "mapped" | "skipped";
+            targetLabel: string | null;
+            targetKey: string | null;
+          };
           await repo.saveDraft(id, b.raw, b.status, b.targetLabel ?? null, b.targetKey ?? null, me);
           return noContent();
         }
@@ -238,37 +269,70 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
       // PUT /api/dimensions/:id/sources/schedule {table, column, schedule}
       if (seg[3] === "sources" && seg[4] === "schedule" && seg.length === 5 && method === "PUT") {
-        const { table, column, schedule } = (await req.json()) as { table: string; column: string; schedule: string | null };
+        const { table, column, schedule } = (await req.json()) as {
+          table: string;
+          column: string;
+          schedule: string | null;
+        };
         await repo.setSourceSchedule(id, table, column, schedule);
         return noContent();
       }
       // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
       if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
-        const { table, column, nameColumn } = (await req.json()) as { table: string; column: string; nameColumn?: string };
+        const { table, column, nameColumn } = (await req.json()) as {
+          table: string;
+          column: string;
+          nameColumn?: string;
+        };
         return json(await repo.deriveCanonical(id, table, column, nameColumn, {}, me));
       }
       // POST /api/dimensions/:id/fields {label, type?, options?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-        const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: { label: string; color: string | null }[] };
-        return json(await repo.addField(id, label, type, options as repo.OptionDef[] | undefined, {}, me));
+        const { label, type, options } = (await req.json()) as {
+          label: string;
+          type?: string;
+          options?: { label: string; color: string | null }[];
+        };
+        return json(
+          await repo.addField(id, label, type, options as repo.OptionDef[] | undefined, {}, me),
+        );
       }
       // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
       if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
         const field = decodeURIComponent(seg[4]!);
         const { label, color } = (await req.json()) as { label: string; color?: string | null };
-        const res = await repo.addColumnOption(id, field, label, (color ?? null) as repo.PaletteName | null, {}, me);
+        const res = await repo.addColumnOption(
+          id,
+          field,
+          label,
+          (color ?? null) as repo.PaletteName | null,
+          {},
+          me,
+        );
         return res ? json(res) : json({ error: "not a select column" }, 400);
       }
       // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
       if (seg[3] === "fields" && seg.length === 5) {
         const field = decodeURIComponent(seg[4]!);
         if (method === "PUT") {
-          const body = (await req.json()) as { label?: string; type?: string; options?: { label: string; color: string | null }[]; coerceInvalidToNull?: boolean };
+          const body = (await req.json()) as {
+            label?: string;
+            type?: string;
+            options?: { label: string; color: string | null }[];
+            coerceInvalidToNull?: boolean;
+          };
           if (body.label != null) {
             await repo.renameColumn(id, field, body.label, me);
           }
           if (body.type != null) {
-            const res = await repo.changeColumnType(id, field, body.type, body.options as repo.OptionDef[] | undefined, body.coerceInvalidToNull ?? false, me);
+            const res = await repo.changeColumnType(
+              id,
+              field,
+              body.type,
+              body.options as repo.OptionDef[] | undefined,
+              body.coerceInvalidToNull ?? false,
+              me,
+            );
             return json(res);
           }
           return noContent();
@@ -296,7 +360,11 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return noContent();
         }
         if (seg.length === 5 && ck) {
-          if (method === "PUT") { const { label } = (await req.json()) as { label: string }; await repo.renameCanonical(id, ck, label, me); return noContent(); }
+          if (method === "PUT") {
+            const { label } = (await req.json()) as { label: string };
+            await repo.renameCanonical(id, ck, label, me);
+            return noContent();
+          }
           if (method === "DELETE") return json(await repo.retireCanonical(id, ck, me));
         }
       }
@@ -315,8 +383,10 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return noContent();
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          if (msg === "wrong_domain") return json({ error: `Only @${env.allowedDomain} emails allowed` }, 400);
-          if (msg.includes("unique") || msg.includes("duplicate")) return json({ error: "already_exists" }, 409);
+          if (msg === "wrong_domain")
+            return json({ error: `Only @${env.allowedDomain} emails allowed` }, 400);
+          if (msg.includes("unique") || msg.includes("duplicate"))
+            return json({ error: "already_exists" }, 409);
           throw e;
         }
       }
@@ -350,7 +420,9 @@ const server = Bun.serve({
     let userId: string | undefined;
     let status = 500;
     try {
-      const res = await handle(req, (uid) => { userId = uid; });
+      const res = await handle(req, (uid) => {
+        userId = uid;
+      });
       status = res.status;
       const headers = new Headers(res.headers);
       headers.set("x-request-id", reqId);
