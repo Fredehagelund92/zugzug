@@ -265,7 +265,8 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
 }
 
 /** Register a warehouse column as a source for a dimension (idempotent). */
-export async function addSource(dimId: string, table: string, column: string, _opts: { silent?: boolean } = {}): Promise<void> {
+export async function addSource(dimId: string, table: string, column: string, opts: { silent?: boolean } = {}): Promise<void> {
+  void opts;
   await run(
     `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column) VALUES ($1,$2,$3)
      ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`, [dimId, table, column],
