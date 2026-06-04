@@ -18,7 +18,7 @@ import { env, pg } from "./env.ts";
 
 const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 let pass = 0, fail = 0, skipped = 0;
-const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); ok ? pass++ : fail++; };
+const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); if (ok) pass++; else fail++; };
 const note = (name: string, detail: string) => { console.log(`  ⊘ ${name} — ${detail}`); skipped++; };
 
 const WH = env.warehouseDb;
