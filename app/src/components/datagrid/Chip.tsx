@@ -1,28 +1,28 @@
-import { cx } from "../../lib/cx";
-import { bucket as bucketFor, type Bucket } from "./bucket";
+import type { PaletteName } from "../../lib/palette";
+import { PALETTE } from "../../lib/palette";
 
-/* Chip — single-select rendering. Pass `bucket` explicitly to override the
-   default label-hash (Mapping uses this for semantic status chips: mapped=ok,
-   skipped=neutral, new=warn). When omitted, derived from the label. */
+interface ChipProps {
+  label: string;
+  /** Curated palette tint. `null` / undefined renders the neutral chip. */
+  color?: PaletteName | null;
+}
 
-const STYLES: Record<Bucket, string> = {
-  "chip-1": "bg-ok-soft text-ok",
-  "chip-2": "bg-warn-soft text-warn",
-  "chip-3": "bg-accent-soft text-accent",
-  "chip-4": "bg-accent-2/16 border-accent-2/30 text-[#B8780F]",
-  "chip-5": "border-line-2 bg-surface-2 text-ink-2",
-};
-
-export function Chip({
-  label, bucket, className, dot,
-}: { label: string; bucket?: Bucket; className?: string; dot?: boolean }) {
-  const b = bucket ?? bucketFor(label);
+export function Chip({ label, color }: ChipProps) {
+  if (!color) {
+    // Neutral chip — today's appearance (surface-3 background, ink-2 text)
+    return (
+      <span className="inline-flex items-center rounded-pill border border-line bg-surface-3 px-2.5 py-0.5 font-mono text-[10.5px] text-ink-2">
+        {label}
+      </span>
+    );
+  }
+  const tint = PALETTE[color];
   return (
-    <span className={cx(
-      "inline-flex items-center gap-1.5 rounded-sm border border-transparent px-2 py-0.5 font-mono text-[11px] font-medium",
-      STYLES[b], className,
-    )}>
-      {dot && <span className="h-1.5 w-1.5 rounded-pill bg-current" />}
+    <span
+      className="inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 font-mono text-[10.5px]"
+      style={{ background: tint.wash, color: tint.fg, borderColor: tint.border }}
+    >
+      <span className="h-1.5 w-1.5 rounded-pill" style={{ background: tint.bg }} />
       {label}
     </span>
   );
