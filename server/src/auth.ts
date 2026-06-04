@@ -4,7 +4,7 @@
 
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { env, pg } from "./env.ts";
-import { run, all, get } from "./db.ts";
+import { pgRun as run, pgAll as all, pgGet as get } from "./pg.ts";
 
 export interface SessionUser { id: string; name: string; email: string; initials: string }
 
@@ -137,8 +137,8 @@ export async function handleGoogleCallback(req: Request): Promise<Response> {
   // makes the INSERT idempotent and closes the race where two simultaneous
   // first-logins both see n=0 — the second insert is a no-op, and both users
   // end up in the allowlist (both get in), which is the safe failure mode.
-  const [{ n }] = await all<{ n: bigint }>(`SELECT count(*) AS n FROM ${pg("allowed_emails")}`);
-  if (Number(n) === 0) {
+  const [{ n }] = await all<{ n: number }>(`SELECT count(*)::int AS n FROM ${pg("allowed_emails")}`);
+  if (n === 0) {
     await run(
       `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at) VALUES ($1, 'bootstrap', current_timestamp) ON CONFLICT (email) DO NOTHING`,
       [email],
