@@ -18,7 +18,177 @@ import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
-import type { DataGridProps, CellType } from "./types";
+import type { DataGridProps, CellType, ColumnDef } from "./types";
+import type { PaletteName } from "../../lib/palette";
+import type { OptionDef } from "../../data";
+
+// ── GridRow — memoized per-row component ────────────────────────────────────
+interface GridRowProps<Row> {
+  row: Row;
+  rowKey: string;
+  rowIndex: number;
+  columns: ColumnDef<Row>[];
+  /** Which field on this row has the cursor (null = cursor is elsewhere). */
+  focusedField: string | null;
+  /** Which field on this row is actively being edited (null = none). */
+  editingField: string | null;
+  /** Passed through to editors for type-to-edit seeding. */
+  cursorInitial: string | undefined;
+  /** Returns true when (this row, field) is inside the current range selection. */
+  cellInRange: (field: string) => boolean;
+  selected: boolean;
+  selectionCol: boolean;
+  gridStyle: React.CSSProperties;
+  onAddFieldClick: (() => void) | undefined;
+  hiddenFieldCount: number;
+  getValue: (row: Row, field: string) => unknown;
+  onCellPointerDown: (e: React.PointerEvent, rk: string, field: string) => void;
+  onCellDoubleClick: (rk: string, field: string) => void;
+  onToggleSelect: (rk: string) => void;
+  onCommitCell: (rk: string, field: string, value: unknown) => void;
+  onStopEdit: () => void;
+  onAddColumnOption:
+    | ((field: string, label: string, color?: PaletteName | null) => Promise<OptionDef[]>)
+    | undefined;
+}
+
+function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
+  const {
+    row,
+    rowKey: rk,
+    rowIndex,
+    columns,
+    focusedField,
+    editingField,
+    cursorInitial,
+    cellInRange,
+    selected,
+    selectionCol,
+    gridStyle,
+    onAddFieldClick,
+    hiddenFieldCount,
+    getValue,
+    onCellPointerDown,
+    onCellDoubleClick,
+    onToggleSelect,
+    onCommitCell,
+    onStopEdit,
+    onAddColumnOption,
+  } = props;
+  return (
+    <div
+      role="row"
+      aria-rowindex={rowIndex + 2}
+      className={cx(
+        "grid items-stretch border-b border-line transition-colors",
+        selected ? "bg-surface-2" : "hover:bg-hover",
+      )}
+      style={gridStyle}
+      data-row={rk}
+    >
+      {selectionCol && (
+        <div className="flex items-center justify-center border-r border-line py-[7px]">
+          <Checkbox
+            state={selected ? "on" : "off"}
+            onClick={() => onToggleSelect(rk)}
+            aria-label={`Select row ${rk}`}
+          />
+        </div>
+      )}
+      {columns.map((c, idx) => {
+        const focused = focusedField === c.field;
+        const editing = editingField === c.field;
+        const inRangeCell = cellInRange(c.field);
+        const value = getValue(row, c.field);
+        const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
+        const isLastCol = idx === columns.length - 1;
+        const cellCx = cx(
+          "relative flex min-w-0 select-none items-center px-3 py-[7px]",
+          !isLastCol && "border-r border-line",
+          c.align === "right" && "justify-end text-right",
+          inRangeCell && !focused && "bg-accent-wash/25",
+          focused && "ring-1 ring-accent bg-accent-wash/40",
+        );
+        const data = `${rk}::${c.field}`;
+        return (
+          <div
+            key={c.field}
+            role="gridcell"
+            aria-colindex={idx + 1}
+            aria-selected={focused ? true : undefined}
+            data-cell={data}
+            onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
+            onDoubleClick={() => onCellDoubleClick(rk, c.field)}
+            className={cellCx}
+          >
+            {editing && c.editable !== false ? (
+              c.edit ? (
+                c.edit(row, {
+                  ...ctx,
+                  initial: cursorInitial,
+                  commit: (v: unknown) => {
+                    onStopEdit();
+                    onCommitCell(rk, c.field, v);
+                  },
+                  cancel: () => onStopEdit(),
+                })
+              ) : c.type === "select" ? (
+                <SelectCell.Editor
+                  row={row}
+                  rowKey={rk}
+                  field={c.field}
+                  value={value}
+                  focused
+                  column={c}
+                  commit={(v: unknown) => {
+                    onStopEdit();
+                    onCommitCell(rk, c.field, v);
+                  }}
+                  cancel={() => onStopEdit()}
+                  options={c.options ?? []}
+                  onCreate={async (label: string, color) => {
+                    if (!onAddColumnOption) return c.options ?? [];
+                    return await onAddColumnOption(c.field, label, color);
+                  }}
+                />
+              ) : (
+                <CellEditor
+                  type={c.type}
+                  ctx={{
+                    ...ctx,
+                    initial: cursorInitial,
+                    commit: (v: unknown) => {
+                      onStopEdit();
+                      onCommitCell(rk, c.field, v);
+                    },
+                    cancel: () => onStopEdit(),
+                  }}
+                />
+              )
+            ) : c.render ? (
+              c.render(row, ctx)
+            ) : c.type === "select" ? (
+              <SelectCell.Renderer {...ctx} />
+            ) : (
+              <CellRenderer type={c.type} ctx={ctx} />
+            )}
+          </div>
+        );
+      })}
+      {onAddFieldClick && (
+        <div aria-hidden className="invisible flex items-center">
+          {hiddenFieldCount > 0 && (
+            <span className="px-2 py-2 text-[12px] font-medium">👁 {hiddenFieldCount} hidden</span>
+          )}
+          <span className="px-3 py-2 text-[12px] font-medium">+ Field</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// React.memo erases generics — re-cast to preserve them at the call site.
+const GridRow = React.memo(GridRowInner) as <Row>(props: GridRowProps<Row>) => React.ReactElement;
 
 const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: string }>> = {
   text: IconFieldText,
@@ -148,9 +318,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   }, [orderedVisible, selectionCol, widths, onAddFieldClick]);
 
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
-  const commitValue = async (rk: string, field: string, value: unknown) => {
-    await onCommit(rk, field, value);
-  };
+  const commitValue = useCallback(
+    async (rk: string, field: string, value: unknown) => {
+      await onCommit(rk, field, value);
+    },
+    [onCommit],
+  );
 
   // ── Range selection state ───────────────────────────────────────────────────
   // anchor stays fixed while shift-extending; focus tracks the moving corner.
@@ -514,13 +687,30 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   const isSelected = (rk: string) => selection?.selected.includes(rk) ?? false;
-  const toggle = (rk: string) => {
-    if (!selection) return;
-    const next = isSelected(rk)
-      ? selection.selected.filter((x) => x !== rk)
-      : [...selection.selected, rk];
-    selection.onChange(next);
-  };
+
+  const onToggleSelect = useCallback(
+    (rk: string) => {
+      if (!selection) return;
+      const next = selection.selected.includes(rk)
+        ? selection.selected.filter((x) => x !== rk)
+        : [...selection.selected, rk];
+      selection.onChange(next);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selection?.selected, selection?.onChange],
+  );
+
+  const onCellDoubleClick = useCallback(
+    (rk: string, field: string) => {
+      const col = orderedVisible.find((c) => c.field === field);
+      if (col?.editable === false) return;
+      cursor.setCursor({ rowKey: rk, field, editing: true });
+      setRange(null);
+    },
+    [orderedVisible, cursor],
+  );
+
+  const onStopEdit = useCallback(() => cursor.stopEdit(), [cursor]);
 
   // ── Pointer handlers for drag-select ───────────────────────────────────────
   const onCellPointerDown = useCallback(
@@ -832,125 +1022,31 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           ))
         : sortedRows.map((row, rowIdx) => {
             const rk = rowKey(row);
-            const selected = isSelected(rk);
+            const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
             return (
-              <div
+              <GridRow
                 key={rk}
-                role="row"
-                aria-rowindex={rowIdx + 2}
-                className={cx(
-                  "grid items-stretch border-b border-line transition-colors",
-                  selected ? "bg-surface-2" : "hover:bg-hover",
-                )}
-                style={gridStyle}
-                data-row={rk}
-              >
-                {selectionCol && (
-                  <div className="flex items-center justify-center border-r border-line py-[7px]">
-                    <Checkbox
-                      state={selected ? "on" : "off"}
-                      onClick={() => toggle(rk)}
-                      aria-label={`Select row ${rk}`}
-                    />
-                  </div>
-                )}
-                {orderedVisible.map((c, idx) => {
-                  const focused = cursor.cursor?.rowKey === rk && cursor.cursor?.field === c.field;
-                  const editing = focused && cursor.cursor?.editing;
-                  const cellInRange = inRange(rk, c.field);
-                  const value = getValue(row, c.field);
-                  const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
-                  const onDoubleClick = () => {
-                    if (c.editable === false) return;
-                    cursor.setCursor({ rowKey: rk, field: c.field, editing: true });
-                    setRange(null);
-                  };
-                  const isLastCol = idx === orderedVisible.length - 1;
-                  const cellCx = cx(
-                    "relative flex min-w-0 select-none items-center px-3 py-[7px]",
-                    !isLastCol && "border-r border-line",
-                    c.align === "right" && "justify-end text-right",
-                    // Range highlighting: range cells get faint wash; focus cell gets strong ring
-                    cellInRange && !focused && "bg-accent-wash/25",
-                    focused && "ring-1 ring-accent bg-accent-wash/40",
-                  );
-                  const data = `${rk}::${c.field}`;
-                  return (
-                    <div
-                      key={c.field}
-                      role="gridcell"
-                      aria-colindex={idx + 1}
-                      aria-selected={focused ? true : undefined}
-                      data-cell={data}
-                      onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
-                      onDoubleClick={onDoubleClick}
-                      className={cellCx}
-                    >
-                      {editing && c.editable !== false ? (
-                        c.edit ? (
-                          c.edit(row, {
-                            ...ctx,
-                            initial: cursor.cursor?.initial,
-                            commit: (v: unknown) => {
-                              cursor.stopEdit();
-                              void commitValue(rk, c.field, v);
-                            },
-                            cancel: () => cursor.stopEdit(),
-                          })
-                        ) : c.type === "select" ? (
-                          <SelectCell.Editor
-                            row={row}
-                            rowKey={rk}
-                            field={c.field}
-                            value={value}
-                            focused
-                            column={c}
-                            commit={(v: unknown) => {
-                              cursor.stopEdit();
-                              void commitValue(rk, c.field, v);
-                            }}
-                            cancel={() => cursor.stopEdit()}
-                            options={c.options ?? []}
-                            onCreate={async (label: string, color) => {
-                              if (!props.onAddColumnOption) return c.options ?? [];
-                              return await props.onAddColumnOption(c.field, label, color);
-                            }}
-                          />
-                        ) : (
-                          <CellEditor
-                            type={c.type}
-                            ctx={{
-                              ...ctx,
-                              initial: cursor.cursor?.initial,
-                              commit: (v: unknown) => {
-                                cursor.stopEdit();
-                                void commitValue(rk, c.field, v);
-                              },
-                              cancel: () => cursor.stopEdit(),
-                            }}
-                          />
-                        )
-                      ) : c.render ? (
-                        c.render(row, ctx)
-                      ) : c.type === "select" ? (
-                        <SelectCell.Renderer {...ctx} />
-                      ) : (
-                        <CellRenderer type={c.type} ctx={ctx} />
-                      )}
-                    </div>
-                  );
-                })}
-                {onAddFieldClick && (
-                  <div aria-hidden className="invisible flex items-center">
-                    {hiddenList.length > 0 && (
-                      <span className="px-2 py-2 text-[12px] font-medium">
-                        👁 {hiddenList.length} hidden
-                      </span>
-                    )}
-                    <span className="px-3 py-2 text-[12px] font-medium">+ Field</span>
-                  </div>
-                )}
-              </div>
+                row={row}
+                rowKey={rk}
+                rowIndex={rowIdx}
+                columns={orderedVisible}
+                focusedField={cursorOnThisRow?.field ?? null}
+                editingField={cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null}
+                cursorInitial={cursorOnThisRow?.initial}
+                cellInRange={(field) => inRange(rk, field)}
+                selected={isSelected(rk)}
+                selectionCol={selectionCol}
+                gridStyle={gridStyle}
+                onAddFieldClick={onAddFieldClick}
+                hiddenFieldCount={hiddenList.length}
+                getValue={getValue}
+                onCellPointerDown={onCellPointerDown}
+                onCellDoubleClick={onCellDoubleClick}
+                onToggleSelect={onToggleSelect}
+                onCommitCell={commitValue}
+                onStopEdit={onStopEdit}
+                onAddColumnOption={props.onAddColumnOption}
+              />
             );
           })}
     </div>
