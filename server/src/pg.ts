@@ -3,6 +3,10 @@ import { env } from "./env.ts";
 
 const pool = postgres(env.databaseUrl);
 
+export async function pgEnd(): Promise<void> {
+  await pool.end();
+}
+
 export async function pgAll<T = Record<string, unknown>>(
   query: string,
   params: unknown[] = [],
