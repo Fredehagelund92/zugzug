@@ -265,7 +265,7 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
 }
 
 /** Register a warehouse column as a source for a dimension (idempotent). */
-export async function addSource(dimId: string, table: string, column: string): Promise<void> {
+export async function addSource(dimId: string, table: string, column: string, _opts: { silent?: boolean } = {}): Promise<void> {
   await run(
     `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column) VALUES ($1,$2,$3)
      ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`, [dimId, table, column],
@@ -367,7 +367,7 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *  the ID column: each distinct ID seeds a canonical keyed by the raw ID (no slug),
  *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
  *  the name resolves live on read. Returns how many canonical records resulted. */
-export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string): Promise<{ derived: number }> {
+export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string, opts: { silent?: boolean } = {}): Promise<{ derived: number }> {
   const meta = await get<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
@@ -396,7 +396,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
       await run(`UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
         [table, column, nameColumn, dimId]);
     }
-    await appendAudit("Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
+    if (!opts.silent) await appendAudit("Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
     return { derived: ids.length };
   }
 
@@ -409,7 +409,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
   }
   await bulkInsert(`INSERT INTO ${cq(meta.dimTable)} (${key}, label)`, [...dimByKey.entries()], `ON CONFLICT (${key}) DO NOTHING`);
   await bulkInsert(`INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`, mapPairs, `ON CONFLICT (raw) DO NOTHING`);
-  await appendAudit("Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
+  if (!opts.silent) await appendAudit("Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
   return { derived: dimByKey.size };
 }
 
@@ -565,7 +565,7 @@ async function scanValues(
 export async function addDimension(
   name: string,
   sources: SourceDef[] = [],
-  opts: { keyKind?: "slug" | "external_id" } = {},
+  opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
 ): Promise<string> {
   const id = slug(name);
   if (!id) return id;
@@ -582,7 +582,7 @@ export async function addDimension(
       `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at) VALUES ($1,$2,$3,$4,$5,$6, current_timestamp)`,
       [id, name.trim(), dimTable, mapTable, keyCol, keyKind],
     );
-    await appendAudit("Created dimension", `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`);
+    if (!opts.silent) await appendAudit("Created dimension", `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`);
   }
   for (const s of sources) {
     await run(
