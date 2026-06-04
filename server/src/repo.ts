@@ -69,6 +69,8 @@ export interface SourceInfo {
 export interface SchemaFacet { schema: string; columns: number; unmapped: number; missing: number }
 export interface CatalogTable { schema: string; table: string; columns: string[] }
 export interface MappingDimension extends DimensionMeta {
+  description: string | null;
+  color: PaletteName | null;
   canonical: CanonicalValue[];
   values: MappingValue[];
   fields: FieldDef[];
@@ -470,10 +472,19 @@ export async function listDimensions(): Promise<DimensionMeta[]> {
 }
 
 export async function getDimension(id: string): Promise<MappingDimension | null> {
-  const meta = await get<Omit<DimensionMeta, "rows"> & { nameTable: string | null; nameIdCol: string | null; nameCol: string | null }>(
+  const meta = await get<
+    Omit<DimensionMeta, "rows"> & {
+      nameTable: string | null;
+      nameIdCol: string | null;
+      nameCol: string | null;
+      description: string | null;
+      color: string | null;
+    }
+  >(
     `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
             COALESCE(key_kind, 'slug') AS "keyKind",
-            name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol"
+            name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol",
+            description, color
      FROM ${pg("dimension")} WHERE id = $1`, [id],
   );
   if (!meta) return null;
@@ -508,8 +519,19 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
   })));
   const rowsRow = await get<{ n: bigint }>(`SELECT count(*) AS n FROM ${cq(meta.mapTable)}`).catch(() => null);
   const values = await scanValues(id, meta);
-  const { nameTable, nameIdCol, nameCol, ...metaOut } = meta;
-  return { ...metaOut, rows: Number(rowsRow?.n ?? 0), canonical, values, fields };
+  const { nameTable, nameIdCol, nameCol, description, color, ...metaOut } = meta;
+  const safeColor = typeof color === "string" && (PALETTE_NAMES as readonly string[]).includes(color)
+    ? color as PaletteName
+    : null;
+  return {
+    ...metaOut,
+    description: description ?? null,
+    color: safeColor,
+    rows: Number(rowsRow?.n ?? 0),
+    canonical,
+    values,
+    fields,
+  };
 }
 
 /** Distinct warehouse values for a dimension WITH provenance, tagged mapped/new
