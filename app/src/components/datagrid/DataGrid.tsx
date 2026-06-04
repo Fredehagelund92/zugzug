@@ -68,6 +68,17 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const selectionCol = !!selection;
   const undo = useUndoStack();
 
+  // Typed cell-value accessor: uses the prop if provided, otherwise falls back
+  // to a plain property lookup via Record<string, unknown> — no more `as any`.
+  const propGetValue = props.getValue;
+  const getValue = useCallback(
+    (row: Row, field: string): unknown => {
+      if (propGetValue) return propGetValue(row, field);
+      return (row as Record<string, unknown>)[field];
+    },
+    [propGetValue],
+  );
+
   // ── Task 19: sort state + sortedRows ────────────────────────────────────────
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -80,16 +91,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if (!sort) return rows;
     const sign = sort.dir === "asc" ? 1 : -1;
     const cmp = (a: Row, b: Row) => {
-      const av = (a as any)[sort.field];
-      const bv = (b as any)[sort.field];
+      const av = getValue(a, sort.field);
+      const bv = getValue(b, sort.field);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign;
-      return String(av).localeCompare(String(bv)) * sign;
+      return String(av ?? "").localeCompare(String(bv ?? "")) * sign;
     };
     return [...rows].sort(cmp);
-  }, [rows, sort]);
+  }, [rows, sort, getValue]);
 
   // ── Task 20: per-column widths ──────────────────────────────────────────────
   const [widths, setWidths] = useState<Record<string, number>>(() =>
@@ -236,7 +247,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const { rowKey: rk, field } = cursor.cursor;
       const row = sortedRows.find((r) => rowKey(r) === rk);
       if (!row) return;
-      const val = (row as any)[field];
+      const val = getValue(row, field);
       const text = val == null ? "" : String(val);
       await navigator.clipboard.writeText(text);
       return;
@@ -250,13 +261,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       for (let ci = minCol; ci <= maxCol; ci++) {
         const col = orderedVisible[ci];
         if (!col) continue;
-        const val = (row as any)[col.field];
+        const val = getValue(row, col.field);
         cells.push(val == null ? "" : String(val));
       }
       lines.push(cells.join("\t"));
     }
     await navigator.clipboard.writeText(lines.join("\n"));
-  }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds]);
+  }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds, getValue]);
 
   // Coerce a raw clipboard string into the column's expected type. Returns
   // `undefined` to mean "skip this cell" (unparseable / not a valid option).
@@ -835,7 +846,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   const focused = cursor.cursor?.rowKey === rk && cursor.cursor?.field === c.field;
                   const editing = focused && cursor.cursor?.editing;
                   const cellInRange = inRange(rk, c.field);
-                  const value = (row as any)[c.field];
+                  const value = getValue(row, c.field);
                   const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
                   const onDoubleClick = () => {
                     if (c.editable === false) return;
