@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { DuckDBValue } from "@duckdb/node-api";
 import { all, get, run } from "./db.ts";
-import { pgAll, pgGet, pgRun } from "./pg.ts";
+import { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
 import { env, pg } from "./env.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
@@ -338,7 +338,7 @@ async function bulkInsert(prefix: string, rows: [string, string][], conflict: st
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
     const placeholders = chunk.map((_, j) => `($${j * 2 + 1}, $${j * 2 + 2})`).join(", ");
-    await run(`${prefix} VALUES ${placeholders} ${conflict}`, chunk.flat() as DuckDBValue[]);
+    await pgRun(`${prefix} VALUES ${placeholders} ${conflict}`, chunk.flat());
   }
 }
 
@@ -348,7 +348,7 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
   for (let i = 0; i < values.length; i += CHUNK) {
     const chunk = values.slice(i, i + CHUNK);
     const placeholders = chunk.map((_, j) => `($${j + 1})`).join(", ");
-    await run(`${prefix} VALUES ${placeholders} ${conflict}`, chunk as DuckDBValue[]);
+    await pgRun(`${prefix} VALUES ${placeholders} ${conflict}`, chunk);
   }
 }
 
@@ -446,14 +446,16 @@ export async function listUsers(): Promise<User[]> {
 
 /* ---- dimension registry (Postgres) + canonical tables (MotherDuck) ---- */
 export async function listDimensions(): Promise<DimensionMeta[]> {
-  const metas = await all<Omit<DimensionMeta, "rows">>(
-    `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
-            COALESCE(key_kind, 'slug') AS "keyKind"
+  const metas = await pgAll<Omit<DimensionMeta, "rows">>(
+    `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable",
+            key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} ORDER BY label`,
   );
   const out: DimensionMeta[] = [];
   for (const m of metas) {
-    const r = await get<{ n: bigint }>(`SELECT count(*) AS n FROM ${cq(m.mapTable)}`).catch(() => null);
+    const r = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`,
+    ).catch(() => null);
     out.push({ ...m, rows: Number(r?.n ?? 0) });
   }
   return out;
@@ -560,25 +562,29 @@ export async function addDimension(
 ): Promise<string> {
   const id = slug(name);
   if (!id) return id;
-  const keyKind = opts.keyKind === "external_id" ? "external_id" : "slug";
-  const dimTable = `${env.canonicalSchema}.dim_${id}`;
-  const mapTable = `${env.canonicalSchema}.map_${id}`;
-  const keyCol = `${id}_code`;
-  const existing = await get(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
+  const keyKind    = opts.keyKind === "external_id" ? "external_id" : "slug";
+  const dimTable   = `${env.canonicalSchema}.dim_${id}`;
+  const mapTable   = `${env.canonicalSchema}.map_${id}`;
+  const keyCol     = `${id}_code`;
+  const existing   = await pgGet(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
   if (!existing) {
     const labelDdl = keyKind === "external_id" ? "label VARCHAR" : "label VARCHAR NOT NULL";
-    await run(`CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (${qid(keyCol)} VARCHAR PRIMARY KEY, ${labelDdl})`);
-    await run(`CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (raw VARCHAR PRIMARY KEY, ${qid(keyCol)} VARCHAR NOT NULL)`);
-    await run(
-      `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at) VALUES ($1,$2,$3,$4,$5,$6, current_timestamp)`,
+    await pgRun(`CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (${qid(keyCol)} VARCHAR PRIMARY KEY, ${labelDdl})`);
+    await pgRun(`CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (raw VARCHAR PRIMARY KEY, ${qid(keyCol)} VARCHAR NOT NULL)`);
+    await pgRun(
+      `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, current_timestamp)`,
       [id, name.trim(), dimTable, mapTable, keyCol, keyKind],
     );
-    await appendAudit("Created dimension", `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`);
+    await appendAudit(
+      "Created dimension",
+      `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`,
+    );
   }
   for (const s of sources) {
-    await run(
-      `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column) VALUES ($1,$2,$3)
-       ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
+    await pgRun(
+      `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
+       VALUES ($1, $2, $3) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
       [id, s.table, s.column],
     );
   }
@@ -587,13 +593,14 @@ export async function addDimension(
 
 /** Seed canonical values into a dimension's dim_ table (idempotent). */
 export async function addCanonical(dimId: string, values: CanonicalValue[]): Promise<void> {
-  const meta = await get<{ dimTable: string; keyCol: string }>(
+  const meta = await pgGet<{ dimTable: string; keyCol: string }>(
     `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM ${pg("dimension")} WHERE id = $1`, [dimId],
   );
   if (!meta) return;
   for (const v of values) {
-    await run(
-      `INSERT INTO ${cq(meta.dimTable)} (${qid(meta.keyCol)}, label) VALUES ($1,$2) ON CONFLICT (${qid(meta.keyCol)}) DO NOTHING`,
+    await pgRun(
+      `INSERT INTO ${cq(meta.dimTable)} (${qid(meta.keyCol)}, label) VALUES ($1, $2)
+       ON CONFLICT (${qid(meta.keyCol)}) DO NOTHING`,
       [v.key, v.label],
     );
   }
@@ -601,7 +608,10 @@ export async function addCanonical(dimId: string, values: CanonicalValue[]): Pro
 
 interface DimMeta { dimTable: string; mapTable: string; keyCol: string }
 async function dimMeta(dimId: string): Promise<DimMeta | null> {
-  return get<DimMeta>(`SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol" FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
+  return pgGet<DimMeta>(
+    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol"
+     FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+  );
 }
 
 /** Add one canonical record (key derived from the label if not given). */
@@ -610,7 +620,11 @@ export async function addCanonicalOne(dimId: string, label: string, key?: string
   if (!m) return;
   const k = (key && slug(key)) || slug(label);
   if (!k) return;
-  await run(`INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1,$2) ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`, [k, label]);
+  await pgRun(
+    `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
+     ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+    [k, label],
+  );
   await appendAudit("Added canonical", `${label} (${k})`);
 }
 
@@ -618,8 +632,8 @@ export async function addCanonicalOne(dimId: string, label: string, key?: string
 export async function renameCanonical(dimId: string, key: string, label: string): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
-  await run(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
-  await appendAudit("Renamed canonical", `${key} → “${label}”`);
+  await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
+  await appendAudit("Renamed canonical", `${key} → "${label}"`);
 }
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
@@ -627,11 +641,11 @@ export async function renameCanonical(dimId: string, key: string, label: string)
 export async function mergeCanonical(dimId: string, survivor: string, losers: string[]): Promise<number> {
   const m = await dimMeta(dimId);
   if (!m) return 0;
-  const key = qid(m.keyCol);
+  const key  = qid(m.keyCol);
   const real = losers.filter((l) => l && l !== survivor);
   for (const loser of real) {
-    await run(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = $2`, [survivor, loser]);
-    await run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = $1`, [loser]);
+    await pgRun(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = $2`, [survivor, loser]);
+    await pgRun(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = $1`, [loser]);
   }
   if (real.length) await appendAudit("Merged canonical", `${real.join(", ")} → ${survivor}`);
   return real.length;
@@ -641,25 +655,26 @@ export async function mergeCanonical(dimId: string, survivor: string, losers: st
 export async function retireCanonical(dimId: string, key: string): Promise<{ ok: boolean; variants: number }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
-  const v = await get<{ n: bigint }>(`SELECT count(*) AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
+  const v = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`, [key],
+  );
   const variants = Number(v?.n ?? 0);
   if (variants > 0) return { ok: false, variants };
-  await run(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
+  await pgRun(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
   await appendAudit("Retired canonical", key);
   return { ok: true, variants: 0 };
 }
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
 export async function listFields(dimId: string): Promise<FieldDef[]> {
-  const rows = await all<{ field: string; label: string; type: string; options: unknown }>(
+  const rows = await pgAll<{ field: string; label: string; type: string; options: string | null }>(
     `SELECT field, label, type, options FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
   return rows.map((r) => {
     let opts: string[] | undefined;
-    if (Array.isArray(r.options)) opts = r.options as string[];
-    else if (typeof r.options === "string" && r.options.length > 0) {
-      try { const parsed = JSON.parse(r.options); if (Array.isArray(parsed)) opts = parsed as string[]; } catch {}
+    if (typeof r.options === "string" && r.options.length > 0) {
+      try { const p = JSON.parse(r.options); if (Array.isArray(p)) opts = p as string[]; } catch {}
     }
     return { field: r.field, label: r.label, type: r.type, options: opts };
   });
@@ -676,15 +691,17 @@ const SQL_TYPE: Record<string, string> = { text: "VARCHAR", number: "NUMERIC", b
 export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const t = SQL_TYPE[type] ? type : (type === "select" ? "select" : "text");
-  const field = slug(label);
-  if (!field || field === "label" || field === slug(m.keyCol)) return null; // reserved
+  const t       = SQL_TYPE[type] ? type : (type === "select" ? "select" : "text");
+  const field   = slug(label);
+  if (!field || field === "label" || field === slug(m.keyCol)) return null;
   const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
-  await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
+  await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
   const opts = t === "select" ? JSON.stringify(options ?? []) : null;
-  await run(
-    `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at) VALUES ($1,$2,$3,$4,$5, current_timestamp)
-     ON CONFLICT (dim_id, field) DO NOTHING`, [dimId, field, label.trim(), t, opts]);
+  await pgRun(
+    `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at)
+     VALUES ($1, $2, $3, $4, $5, current_timestamp) ON CONFLICT (dim_id, field) DO NOTHING`,
+    [dimId, field, label.trim(), t, opts],
+  );
   await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
   return { field };
 }
@@ -694,7 +711,10 @@ export async function addField(dimId: string, label: string, type = "text", opti
 export async function renameColumn(dimId: string, field: string, newLabel: string): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
-  await run(`UPDATE ${pg("dimension_field")} SET label = $1 WHERE dim_id = $2 AND field = $3`, [label, dimId, field]);
+  await pgRun(
+    `UPDATE ${pg("dimension_field")} SET label = $1 WHERE dim_id = $2 AND field = $3`,
+    [label, dimId, field],
+  );
   await appendAudit("Renamed column", `${field} → "${label}"`);
 }
 
@@ -702,37 +722,32 @@ export async function renameColumn(dimId: string, field: string, newLabel: strin
  *  the new type; returns { ok: false, invalidCount } when N cells would
  *  silently null. Caller decides whether to retry with coerceInvalidToNull. */
 export async function changeColumnType(
-  dimId: string,
-  field: string,
-  newType: string,
-  options?: string[],
-  coerceInvalidToNull = false,
+  dimId: string, field: string, newType: string,
+  options?: string[], coerceInvalidToNull = false,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f) return { ok: false };
-  const col = qid(field);
+  const col  = qid(field);
   const keyc = qid(m.keyCol);
 
-  const rows = await all<{ k: string; v: string | null }>(
+  const rows = await pgAll<{ k: string; v: string | null }>(
     `SELECT ${keyc} AS k, CAST(${col} AS VARCHAR) AS v FROM ${cq(m.dimTable)}`,
   );
 
   const parsed: { k: string; v: string | number | boolean | null; bad: boolean }[] = [];
   for (const r of rows) {
     if (r.v == null || r.v === "") { parsed.push({ k: r.k, v: null, bad: false }); continue; }
-    if (newType === "text") { parsed.push({ k: r.k, v: r.v, bad: false }); continue; }
+    if (newType === "text")   { parsed.push({ k: r.k, v: r.v, bad: false }); continue; }
     if (newType === "select") {
       const collected = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))];
-      const ok = collected.includes(r.v);
-      parsed.push({ k: r.k, v: r.v, bad: !ok });
+      parsed.push({ k: r.k, v: r.v, bad: !collected.includes(r.v) });
       continue;
     }
     if (newType === "number") {
       const n = Number(r.v);
-      const ok = Number.isFinite(n);
-      parsed.push({ k: r.k, v: ok ? n : null, bad: !ok });
+      parsed.push({ k: r.k, v: Number.isFinite(n) ? n : null, bad: !Number.isFinite(n) });
       continue;
     }
     if (newType === "boolean") {
@@ -747,26 +762,21 @@ export async function changeColumnType(
     }
     parsed.push({ k: r.k, v: r.v, bad: true });
   }
+
   const invalidCount = parsed.filter((p) => p.bad).length;
   if (invalidCount > 0 && !coerceInvalidToNull) return { ok: false, invalidCount };
 
   const newSql = newType === "select" ? "VARCHAR"
-    : newType === "number" ? "NUMERIC"
+    : newType === "number"  ? "NUMERIC"
     : newType === "boolean" ? "BOOLEAN"
-    : newType === "date" ? "DATE"
+    : newType === "date"    ? "DATE"
     : "VARCHAR";
-  const tmp = `${field}__tmp_${Date.now().toString(36)}`;
+  const tmp          = `${field}__tmp_${Date.now().toString(36)}`;
+  const finalOptions = newType === "select"
+    ? (options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))])
+    : undefined;
 
-  // Atomic ADD → UPDATE → DROP → RENAME: a crash between DROP and RENAME
-  // would lose the original column irreversibly. Mirror deleteColumn's
-  // BEGIN/COMMIT/ROLLBACK pattern.
-  let finalOptions: string[] | undefined;
-  if (newType === "select") {
-    finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))];
-  }
-
-  await run(`BEGIN`);
-  try {
+  await pgTx(async ({ run }) => {
     await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN ${qid(tmp)} ${newSql}`);
     for (const p of parsed) {
       if (p.bad && !coerceInvalidToNull) continue;
@@ -778,10 +788,8 @@ export async function changeColumnType(
       `UPDATE ${pg("dimension_field")} SET type = $1, options = $2 WHERE dim_id = $3 AND field = $4`,
       [newType, newType === "select" ? JSON.stringify(finalOptions ?? []) : null, dimId, field],
     );
-    await run(`COMMIT`);
-  } catch (e) {
-    await run(`ROLLBACK`); throw e;
-  }
+  });
+
   await appendAudit("Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
   return { ok: true, options: finalOptions };
 }
@@ -792,14 +800,10 @@ export async function deleteColumn(dimId: string, field: string): Promise<{ ok: 
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const col = qid(field);
-  await run(`BEGIN`);
-  try {
+  await pgTx(async ({ run }) => {
     await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`, [dimId, field]);
     await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN IF EXISTS ${col}`);
-    await run(`COMMIT`);
-  } catch (e) {
-    await run(`ROLLBACK`); throw e;
-  }
+  });
   await appendAudit("Deleted column", field);
   return { ok: true };
 }
@@ -841,7 +845,7 @@ export async function addColumnOption(dimId: string, field: string, label: strin
   const existing = f.options ?? [];
   if (existing.includes(label)) return { options: existing };
   const next = [...existing, label];
-  await run(
+  await pgRun(
     `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`,
     [JSON.stringify(next), dimId, field],
   );
@@ -856,18 +860,28 @@ export async function setFieldValue(dimId: string, key: string, field: string, v
   if (!m) return;
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f) return;
-  const col = qid(field), keyc = qid(m.keyCol);
+  const col  = qid(field);
+  const keyc = qid(m.keyCol);
   const empty = value == null || value.trim() === "";
   if (f.type === "number") {
     const n = empty ? null : Number(value);
-    await run(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [Number.isFinite(n as number) ? (n as number) : null, key]);
+    await pgRun(
+      `UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`,
+      [Number.isFinite(n as number) ? n : null, key],
+    );
   } else if (f.type === "boolean") {
     const b = value === "true" ? true : value === "false" ? false : null;
-    await run(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [b, key]);
+    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [b, key]);
   } else if (f.type === "date") {
-    await run(`UPDATE ${cq(m.dimTable)} SET ${col} = CAST($1 AS DATE) WHERE ${keyc} = $2`, [empty ? null : value!.trim(), key]);
+    await pgRun(
+      `UPDATE ${cq(m.dimTable)} SET ${col} = $1::date WHERE ${keyc} = $2`,
+      [empty ? null : value!.trim(), key],
+    );
   } else {
-    await run(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [empty ? null : value, key]);
+    await pgRun(
+      `UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`,
+      [empty ? null : value, key],
+    );
   }
 }
 
@@ -875,7 +889,9 @@ export async function setFieldValue(dimId: string, key: string, field: string, v
 export async function listVariants(dimId: string, key: string): Promise<string[]> {
   const m = await dimMeta(dimId);
   if (!m) return [];
-  const rows = await all<{ raw: string }>(`SELECT raw FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1 ORDER BY raw LIMIT 300`, [key]);
+  const rows = await pgAll<{ raw: string }>(
+    `SELECT raw FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1 ORDER BY raw LIMIT 300`, [key],
+  );
   return rows.map((r) => r.raw);
 }
 
@@ -931,47 +947,52 @@ export async function discardDraft(dimId: string, raw: string, userId: string): 
   );
 }
 
-/** Approve & commit: fold the dimension's `mapped` drafts into MotherDuck in one
- *  batch (cross-store: read Postgres drafts, write MotherDuck dim_/map_), then
- *  clear them + audit. Idempotent writes (NOT EXISTS) so a partial failure retries. */
+/** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
+ *  in one atomic transaction, then clear them + audit. */
 export async function commit(dimId: string, userId: string): Promise<{ committed: number; rowsRecovered: number }> {
-  const meta = await get<{ dimTable: string; mapTable: string; keyCol: string; label: string }>(
-    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+  const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string }>(
+    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label
+     FROM ${pg("dimension")} WHERE id = $1`, [dimId],
   );
   if (!meta) return { committed: 0, rowsRecovered: 0 };
-  const key = qid(meta.keyCol);
+  const key   = qid(meta.keyCol);
   const DRAFT = pg("draft");
-  const DIMT = cq(meta.dimTable);
-  const MAPT = cq(meta.mapTable);
+  const DIMT  = cq(meta.dimTable);
+  const MAPT  = cq(meta.mapTable);
 
-  const approved = await get<{ n: bigint }>(
-    `SELECT count(*) AS n FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`, [dimId],
+  const approved = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${DRAFT}
+     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`, [dimId],
   );
   const committed = Number(approved?.n ?? 0);
   if (!committed) return { committed: 0, rowsRecovered: 0 };
 
-  // rows recovered = warehouse rows whose raw is about to become resolved
   const rowsRecovered = await rowsForUnmappedDrafts(dimId, meta.mapTable);
 
-  // NOT a single transaction: DuckDB forbids writing two attached catalogs
-  // (MotherDuck + Postgres) in one txn, and there's no 2PC across them anyway.
-  // Each write is idempotent (NOT EXISTS) and the DELETE runs last, so a partial
-  // failure leaves drafts intact and re-committing is a safe no-op.
-  await run(
-    `INSERT INTO ${DIMT} (${key}, label)
-     SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
-     WHERE d.dim_id = $1 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)`, [dimId],
-  );
-  await run(
-    `INSERT INTO ${MAPT} (raw, ${key})
-     SELECT d.raw, d.target_key FROM ${DRAFT} d
-     WHERE d.dim_id = $1 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-       AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`, [dimId],
-  );
-  await run(`DELETE FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped'`, [dimId]);
+  await pgTx(async ({ run }) => {
+    await run(
+      `INSERT INTO ${DIMT} (${key}, label)
+       SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
+       WHERE d.dim_id = $1 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)`,
+      [dimId],
+    );
+    await run(
+      `INSERT INTO ${MAPT} (raw, ${key})
+       SELECT d.raw, d.target_key FROM ${DRAFT} d
+       WHERE d.dim_id = $1 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`,
+      [dimId],
+    );
+    await run(
+      `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped'`, [dimId],
+    );
+  });
 
-  await appendAuditAs(userId, "Committed", `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`);
+  await appendAuditAs(
+    userId, "Committed",
+    `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
+  );
   return { committed, rowsRecovered };
 }
 
