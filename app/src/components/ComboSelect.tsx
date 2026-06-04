@@ -125,6 +125,10 @@ export function ComboSelect({
                 } else if (e.key === "Enter") {
                   e.preventDefault();
                   pickHighlighted();
+                } else if (e.key === "Tab") {
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                  // intentional: don't preventDefault — let the natural Tab move to next focusable
                 }
               }}
               placeholder="Search or create…"
