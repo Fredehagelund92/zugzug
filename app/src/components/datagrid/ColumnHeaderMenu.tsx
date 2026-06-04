@@ -29,7 +29,17 @@ const TYPES: CellType[] = ["text", "number", "boolean", "date", "select"];
 const MENU_WIDTH = 192; // matches w-48
 const GAP = 4;
 
-export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onRename, onSort, onChangeType, onHide, onDelete }: Props<Row>) {
+export function ColumnHeaderMenu<Row>({
+  column,
+  anchorRef,
+  sortDir,
+  onClose,
+  onRename,
+  onSort,
+  onChangeType,
+  onHide,
+  onDelete,
+}: Props<Row>) {
   const [mode, setMode] = useState<"menu" | "rename" | "type" | "confirm-delete">("menu");
   const [draft, setDraft] = useState(column.label);
   const ref = useRef<HTMLDivElement>(null);
@@ -77,7 +87,8 @@ export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onR
     return () => document.removeEventListener("mousedown", onDoc);
   }, [onClose, anchorRef]);
 
-  const item = "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
+  const item =
+    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
   const iconCls = "h-3.5 w-3.5 shrink-0 text-ink-3";
 
   return createPortal(
@@ -88,54 +99,143 @@ export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onR
     >
       {mode === "menu" && (
         <>
-          <button type="button" className={item} onClick={() => setMode("rename")}><IconEdit className={iconCls} /> rename column</button>
-          <button type="button" className={item} onClick={() => setMode("type")}><IconType className={iconCls} /> change type</button>
+          <button type="button" className={item} onClick={() => setMode("rename")}>
+            <IconEdit className={iconCls} /> rename column
+          </button>
+          <button type="button" className={item} onClick={() => setMode("type")}>
+            <IconType className={iconCls} /> change type
+          </button>
           <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => { onSort("asc"); onClose(); }}><IconSortAsc className={iconCls} /> sort A→Z</button>
-          <button type="button" className={item} onClick={() => { onSort("desc"); onClose(); }}><IconSortDesc className={iconCls} /> sort Z→A</button>
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onSort("asc");
+              onClose();
+            }}
+          >
+            <IconSortAsc className={iconCls} /> sort A→Z
+          </button>
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onSort("desc");
+              onClose();
+            }}
+          >
+            <IconSortDesc className={iconCls} /> sort Z→A
+          </button>
           {sortDir != null && (
-            <button type="button" className={item} onClick={() => { onSort(null); onClose(); }}><IconX className={iconCls} /> clear sort</button>
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onSort(null);
+                onClose();
+              }}
+            >
+              <IconX className={iconCls} /> clear sort
+            </button>
           )}
           <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => { onHide(); onClose(); }}><IconEyeOff className={iconCls} /> hide column</button>
-          <button type="button" className={cx(item, "text-danger")} onClick={() => setMode("confirm-delete")}><IconTrash className="h-3.5 w-3.5 shrink-0" /> delete column</button>
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onHide();
+              onClose();
+            }}
+          >
+            <IconEyeOff className={iconCls} /> hide column
+          </button>
+          <button
+            type="button"
+            className={cx(item, "text-danger")}
+            onClick={() => setMode("confirm-delete")}
+          >
+            <IconTrash className="h-3.5 w-3.5 shrink-0" /> delete column
+          </button>
         </>
       )}
       {mode === "rename" && (
         <div className="p-1">
-          <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
+          <input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); onRename(draft.trim()); onClose(); }
-              if (e.key === "Escape") { e.preventDefault(); onClose(); }
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onRename(draft.trim());
+                onClose();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onClose();
+              }
             }}
             className="w-full rounded-sm border border-accent bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none"
           />
           <div className="mt-1.5 flex gap-1">
-            <button type="button" className={cx(item, "justify-center bg-accent text-accent-ink hover:brightness-110")} onClick={() => { onRename(draft.trim()); onClose(); }}>save</button>
-            <button type="button" className={item + " justify-center"} onClick={onClose}>cancel</button>
+            <button
+              type="button"
+              className={cx(item, "justify-center bg-accent text-accent-ink hover:brightness-110")}
+              onClick={() => {
+                onRename(draft.trim());
+                onClose();
+              }}
+            >
+              save
+            </button>
+            <button type="button" className={item + " justify-center"} onClick={onClose}>
+              cancel
+            </button>
           </div>
         </div>
       )}
       {mode === "type" && (
         <div>
           {TYPES.map((t) => (
-            <button key={t} type="button"
+            <button
+              key={t}
+              type="button"
               className={cx(item, column.type === t && "bg-accent-wash text-accent")}
-              onClick={() => { if (t !== column.type) onChangeType(t); onClose(); }}
+              onClick={() => {
+                if (t !== column.type) onChangeType(t);
+                onClose();
+              }}
             >
-              {t}{column.type === t ? " · current" : ""}
+              {t}
+              {column.type === t ? " · current" : ""}
             </button>
           ))}
           <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => setMode("menu")}><IconChevronLeft className={iconCls} /> back</button>
+          <button type="button" className={item} onClick={() => setMode("menu")}>
+            <IconChevronLeft className={iconCls} /> back
+          </button>
         </div>
       )}
       {mode === "confirm-delete" && (
         <div className="p-2 text-[11.5px] text-ink-2">
-          <div className="font-mono">Delete <span className="text-ink">{column.label}</span>? This drops the column on every row.</div>
+          <div className="font-mono">
+            Delete <span className="text-ink">{column.label}</span>? This drops the column on every
+            row.
+          </div>
           <div className="mt-2 flex gap-1">
-            <button type="button" className={cx(item, "justify-center bg-danger text-accent-ink hover:brightness-110")} onClick={() => { onDelete(); onClose(); }}>delete</button>
-            <button type="button" className={item + " justify-center"} onClick={onClose}>cancel</button>
+            <button
+              type="button"
+              className={cx(item, "justify-center bg-danger text-accent-ink hover:brightness-110")}
+              onClick={() => {
+                onDelete();
+                onClose();
+              }}
+            >
+              delete
+            </button>
+            <button type="button" className={item + " justify-center"} onClick={onClose}>
+              cancel
+            </button>
           </div>
         </div>
       )}

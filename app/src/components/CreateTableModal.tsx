@@ -25,7 +25,11 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   const [color, setColor] = useState<PaletteName>(() => defaultTintFor(String(Date.now())));
   const [mode, setMode] = useState<CreateTableMode>(defaultMode);
   const [source, setSource] = useState<{ table: string; column: string } | null>(null);
-  const [external, setExternal] = useState<{ table: string; idColumn: string; nameColumn: string } | null>(null);
+  const [external, setExternal] = useState<{
+    table: string;
+    idColumn: string;
+    nameColumn: string;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
@@ -41,10 +45,14 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   // reset on open
   useEffect(() => {
     if (!open) return;
-    setName(""); setDescription(""); setMode(defaultMode);
+    setName("");
+    setDescription("");
+    setMode(defaultMode);
     setColor(defaultTintFor(String(Date.now())));
-    setSource(null); setExternal(null);
-    setError(null); setConfirmingDiscard(false);
+    setSource(null);
+    setExternal(null);
+    setError(null);
+    setConfirmingDiscard(false);
   }, [open, defaultMode]);
 
   // Esc to close (or cancel the discard prompt if it's already showing)
@@ -69,7 +77,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   const canSubmit = (): boolean => {
     if (!name.trim()) return false;
     if (mode === "source") return !!(source?.table && source?.column);
-    if (mode === "external_id") return !!(external?.table && external?.idColumn && external?.nameColumn);
+    if (mode === "external_id")
+      return !!(external?.table && external?.idColumn && external?.nameColumn);
     return true; // blank: name is enough
   };
 
@@ -77,8 +86,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   // Considered "dirty" when the user has typed a name, picked a source, or
   // bound an external id. The optional description/colour aren't counted —
   // a casual mode flip shouldn't trigger a guard.
-  const isDirty = (): boolean =>
-    name.trim().length > 0 || source !== null || external !== null;
+  const isDirty = (): boolean => name.trim().length > 0 || source !== null || external !== null;
   const requestClose = (): void => {
     if (isDirty()) setConfirmingDiscard(true);
     else onClose();
@@ -109,7 +117,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-6 backdrop-blur-sm" onClick={requestClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-6 backdrop-blur-sm"
+      onClick={requestClose}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
         className="mt-[10vh] w-[520px] max-w-full overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
@@ -119,8 +130,17 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
 
         <div className="space-y-3 px-6 pb-5 pt-6">
           <div className="flex items-start justify-between">
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">New table</div>
-            <button type="button" onClick={requestClose} aria-label="close" className="text-ink-3 hover:text-ink"><IconX className="h-3.5 w-3.5" /></button>
+            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+              New table
+            </div>
+            <button
+              type="button"
+              onClick={requestClose}
+              aria-label="close"
+              className="text-ink-3 hover:text-ink"
+            >
+              <IconX className="h-3.5 w-3.5" />
+            </button>
           </div>
 
           {/* identity */}
@@ -166,7 +186,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
 
         {/* mode segment */}
         <div className="space-y-2 px-6 pb-2">
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">Start from</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
+            Start from
+          </div>
           <div className="flex gap-0.5 rounded-sm border border-line bg-bg p-0.5">
             {(["blank", "source", "external_id"] as const).map((m) => (
               <button
@@ -192,7 +214,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
 
         {/* swappable region */}
         <div className="px-6 pb-4 pt-2">
-
           {/* ─── blank: just the intent + a note. Fields are added later from
               the table view via AddFieldPopover, which already handles the type
               picker + per-type options. Deferring keeps this modal focused on
@@ -200,52 +221,62 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {mode === "blank" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
               <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                Start with an empty list. You name each record; Zug Zug generates a stable ID from the name.
+                Start with an empty list. You name each record; Zug Zug generates a stable ID from
+                the name.
               </p>
               <p className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                Add fields from the table view once it&apos;s created — the schema doesn&apos;t have to be decided here.
+                Add fields from the table view once it&apos;s created — the schema doesn&apos;t have
+                to be decided here.
               </p>
             </div>
           )}
 
           {/* ─── source: 1 picker ───────────────────────────────────────────────── */}
-          {mode === "source" && (() => {
-            const info = source ? sources.find((s) => s.table === source.table && s.column === source.column) : null;
-            const helper = !source
-              ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
-              : !info
+          {mode === "source" &&
+            (() => {
+              const info = source
+                ? sources.find((s) => s.table === source.table && s.column === source.column)
+                : null;
+              const helper = !source
                 ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
-                : !info.scanned
-                  ? "Scan pending — count will appear after first sync."
-                  : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one canonical record. Already-mapped values are skipped.`;
-            return (
-              <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
-                <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                  Seed records from a warehouse column. Each distinct value becomes one record, with a slug ID.
-                </p>
-                <ComboSelect
-                  options={sourceOpts}
-                  value={source ? `${source.table}.${source.column}` : null}
-                  placeholder="pick a warehouse column…"
-                  onPick={(opt) => {
-                    const dot = opt.lastIndexOf(".");
-                    if (dot > 0) setSource({ table: opt.slice(0, dot), column: opt.slice(dot + 1) });
-                  }}
-                />
-                <div className="font-mono text-[11px] leading-[1.5] text-ink-3">{helper}</div>
-              </div>
-            );
-          })()}
+                : !info
+                  ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
+                  : !info.scanned
+                    ? "Scan pending — count will appear after first sync."
+                    : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one canonical record. Already-mapped values are skipped.`;
+              return (
+                <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
+                  <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
+                    Seed records from a warehouse column. Each distinct value becomes one record,
+                    with a slug ID.
+                  </p>
+                  <ComboSelect
+                    options={sourceOpts}
+                    value={source ? `${source.table}.${source.column}` : null}
+                    placeholder="pick a warehouse column…"
+                    onPick={(opt) => {
+                      const dot = opt.lastIndexOf(".");
+                      if (dot > 0)
+                        setSource({ table: opt.slice(0, dot), column: opt.slice(dot + 1) });
+                    }}
+                  />
+                  <div className="font-mono text-[11px] leading-[1.5] text-ink-3">{helper}</div>
+                </div>
+              );
+            })()}
 
           {/* ─── external_id: 2 pickers ─────────────────────────────────────────── */}
           {mode === "external_id" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
               <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                For foreign keys. The warehouse ID becomes the stable key. A second column provides the human name.
+                For foreign keys. The warehouse ID becomes the stable key. A second column provides
+                the human name.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">id column</div>
+                  <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
+                    id column
+                  </div>
                   <ComboSelect
                     options={sourceOpts}
                     value={external ? `${external.table}.${external.idColumn}` : null}
@@ -265,17 +296,28 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                   />
                 </div>
                 <div>
-                  <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">name column</div>
+                  <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
+                    name column
+                  </div>
                   <ComboSelect
-                    options={external?.table ? columnsOfTable(external.table).filter((c) => c !== external.idColumn) : []}
+                    options={
+                      external?.table
+                        ? columnsOfTable(external.table).filter((c) => c !== external.idColumn)
+                        : []
+                    }
                     value={external?.nameColumn || null}
-                    placeholder={external?.table ? "pick the name column…" : "pick an id column first"}
-                    onPick={(opt) => setExternal((prev) => prev ? { ...prev, nameColumn: opt } : prev)}
+                    placeholder={
+                      external?.table ? "pick the name column…" : "pick an id column first"
+                    }
+                    onPick={(opt) =>
+                      setExternal((prev) => (prev ? { ...prev, nameColumn: opt } : prev))
+                    }
                   />
                 </div>
               </div>
               <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
-                ⚠ The key column is fixed at creation and cannot be changed. Records display the ID and the resolved name side by side.
+                ⚠ The key column is fixed at creation and cannot be changed. Records display the ID
+                and the resolved name side by side.
               </div>
             </div>
           )}
@@ -289,16 +331,26 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
             <>
               <span className="font-mono text-[12px] text-ink-2">Discard this table?</span>
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setConfirmingDiscard(false)}>Keep editing</Button>
-                <Button size="sm" onClick={onClose}>Discard</Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingDiscard(false)}>
+                  Keep editing
+                </Button>
+                <Button size="sm" onClick={onClose}>
+                  Discard
+                </Button>
               </div>
             </>
           ) : (
             <>
               <span />
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={requestClose}>Cancel</Button>
-                <Button size="sm" onClick={() => void submit()} disabled={!canSubmit() || submitting}>
+                <Button variant="ghost" size="sm" onClick={requestClose}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void submit()}
+                  disabled={!canSubmit() || submitting}
+                >
                   {submitting ? "Creating…" : "Create table"}
                 </Button>
               </div>

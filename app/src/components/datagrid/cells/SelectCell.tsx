@@ -31,7 +31,9 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
   const [hl, setHl] = useState(0);
   const [pickedColor, setPickedColor] = useState<PaletteName | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -51,15 +53,34 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
   };
 
   return (
-    <div className="absolute left-0 top-0 z-30 w-[240px] rounded-sm border border-line-2 bg-surface p-1 shadow-lg" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="absolute left-0 top-0 z-30 w-[240px] rounded-sm border border-line-2 bg-surface p-1 shadow-lg"
+      onClick={(e) => e.stopPropagation()}
+    >
       <input
-        ref={inputRef} value={q}
+        ref={inputRef}
+        value={q}
         placeholder="search or create…"
-        onChange={(e) => { setQ(e.target.value); setHl(0); }}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setHl(0);
+        }}
         onKeyDown={(e) => {
-          if (e.key === "Escape") { e.preventDefault(); cancel(); return; }
-          if (e.key === "ArrowDown") { e.preventDefault(); setHl((h) => Math.min(filtered.length, h + 1)); return; }
-          if (e.key === "ArrowUp")   { e.preventDefault(); setHl((h) => Math.max(0, h - 1)); return; }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            cancel();
+            return;
+          }
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHl((h) => Math.min(filtered.length, h + 1));
+            return;
+          }
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHl((h) => Math.max(0, h - 1));
+            return;
+          }
           if (e.key === "Enter") {
             e.preventDefault();
             if (hl < filtered.length) choose(filtered[hl].label);
@@ -72,25 +93,37 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
       <div className="max-h-48 overflow-y-auto">
         {filtered.map((o, i) => (
           <button
-            key={o.label} type="button"
+            key={o.label}
+            type="button"
             onMouseEnter={() => setHl(i)}
-            onMouseDown={(e) => { e.preventDefault(); choose(o.label); }}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              choose(o.label);
+            }}
             className={`flex w-full items-center gap-2 rounded-sm px-2 py-1 text-left ${i === hl ? "bg-accent-wash" : "hover:bg-hover"}`}
           >
-            {o.color && <span className="h-2 w-2 rounded-pill" style={{ background: PALETTE[o.color].bg }} />}
+            {o.color && (
+              <span className="h-2 w-2 rounded-pill" style={{ background: PALETTE[o.color].bg }} />
+            )}
             <span className="font-mono text-[11.5px] text-ink">{o.label}</span>
           </button>
         ))}
         {value != null && value !== "" && !filtered.some((o) => o.label === String(value)) && (
-          <div className="px-2 py-1 font-mono text-[10.5px] text-ink-3">current: {String(value)}</div>
+          <div className="px-2 py-1 font-mono text-[10.5px] text-ink-3">
+            current: {String(value)}
+          </div>
         )}
         {canCreate && (
           <div className="mt-1 border-t border-line pt-1">
             <div className="flex items-center gap-1 px-2 py-1">
               {PALETTE_NAMES.map((c) => (
                 <button
-                  key={c} type="button"
-                  onMouseDown={(e) => { e.preventDefault(); setPickedColor(c); }}
+                  key={c}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setPickedColor(c);
+                  }}
                   title={c}
                   className={`h-3.5 w-3.5 rounded-sm ${pickedColor === c ? "ring-1 ring-ink" : ""}`}
                   style={{ background: PALETTE[c].bg }}
@@ -98,14 +131,20 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
               ))}
               <button
                 type="button"
-                onMouseDown={(e) => { e.preventDefault(); setPickedColor(null); }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setPickedColor(null);
+                }}
                 title="no color"
                 className={`h-3.5 w-3.5 rounded-sm border border-line-2 ${pickedColor === null ? "ring-1 ring-ink" : ""}`}
               />
             </div>
             <button
               type="button"
-              onMouseDown={(e) => { e.preventDefault(); void create(); }}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                void create();
+              }}
               className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left font-mono text-[11px] text-accent hover:bg-accent-wash"
             >
               + create option &ldquo;{q.trim()}&rdquo;{pickedColor ? ` · ${pickedColor}` : ""}

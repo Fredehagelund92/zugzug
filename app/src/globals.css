@@ -89,12 +89,19 @@
     radial-gradient(circle at center, var(--node-line) 1.2px, transparent 1.5px),
     linear-gradient(var(--node-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--node-line) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px, 64px 64px;
+  background-size:
+    100% 100%,
+    100% 100%,
+    64px 64px,
+    64px 64px,
+    64px 64px;
   background-attachment: fixed, fixed, fixed, fixed, fixed;
 }
 
 /* an accent "connector tab" on the top edge of a card — the junction motif */
-.zz-tab { position: relative; }
+.zz-tab {
+  position: relative;
+}
 .zz-tab::before {
   content: "";
   position: absolute;
@@ -107,48 +114,137 @@
 }
 
 /* a flowing dashed connector — dashes travel toward the canonical node */
-.zz-flow { stroke-dasharray: 3 7; animation: zz-flow 1.1s linear infinite; }
-.zz-pulse { animation: zz-pulse 2.4s ease-in-out infinite; }
+.zz-flow {
+  stroke-dasharray: 3 7;
+  animation: zz-flow 1.1s linear infinite;
+}
+.zz-pulse {
+  animation: zz-pulse 2.4s ease-in-out infinite;
+}
 
 /* accent glow for hero elements (the canonical node, the primary action) */
-.zz-glow { box-shadow: 0 0 0 1px var(--accent-soft), 0 10px 34px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
-.zz-glow-sm { box-shadow: 0 6px 22px -10px color-mix(in srgb, var(--accent) 65%, transparent); }
+.zz-glow {
+  box-shadow:
+    0 0 0 1px var(--accent-soft),
+    0 10px 34px -10px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.zz-glow-sm {
+  box-shadow: 0 6px 22px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+}
 
 /* a live status dot that breathes */
-.zz-live { position: relative; }
-.zz-live::before {
-  content: ""; position: absolute; inset: -4px; border-radius: var(--r-pill);
-  background: var(--accent); opacity: 0.35; animation: zz-ring 1.8s ease-out infinite;
+.zz-live {
+  position: relative;
 }
-@keyframes zz-ring { 0% { transform: scale(0.6); opacity: 0.5; } 100% { transform: scale(1.8); opacity: 0; } }
+.zz-live::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  opacity: 0.35;
+  animation: zz-ring 1.8s ease-out infinite;
+}
+@keyframes zz-ring {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
 
 /* orchestrated page-load: rise + fade. Stagger with inline animationDelay. */
-.zz-rise { opacity: 0; animation: zz-rise 0.62s var(--ease) both; }
+.zz-rise {
+  opacity: 0;
+  animation: zz-rise 0.62s var(--ease) both;
+}
 
 /* slide-over drawer (value mapper) */
-.zz-overlay { animation: zz-fade 0.2s ease both; }
-.zz-drawer { animation: zz-slide 0.28s var(--ease) both; }
-@keyframes zz-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes zz-slide { from { transform: translateX(100%); } to { transform: none; } }
+.zz-overlay {
+  animation: zz-fade 0.2s ease both;
+}
+.zz-drawer {
+  animation: zz-slide 0.28s var(--ease) both;
+}
+@keyframes zz-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes zz-slide {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
 
 /* pop-in: short, springy entrance for dropdowns/popovers (ComboSelect,
    TablePicker, menus). Honoured by prefers-reduced-motion below. */
-.zz-pop-in { animation: zz-pop-in var(--dur-fast) var(--ease-spring) both; transform-origin: top; }
-@keyframes zz-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+.zz-pop-in {
+  animation: zz-pop-in var(--dur-fast) var(--ease-spring) both;
+  transform-origin: top;
+}
+@keyframes zz-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
 /* row-flash: brief accent wash on a row the user was just navigated to
    (Cmd-K palette → "focus a record"). Decays so the row settles back into
    its normal hover/selected styling. */
-.zz-row-flash { animation: zz-row-flash 1.6s var(--ease) both; }
+.zz-row-flash {
+  animation: zz-row-flash 1.6s var(--ease) both;
+}
 @keyframes zz-row-flash {
-  0%   { background-color: color-mix(in srgb, var(--accent) 28%, transparent); }
-  35%  { background-color: color-mix(in srgb, var(--accent) 22%, transparent); }
-  100% { background-color: transparent; }
+  0% {
+    background-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  35% {
+    background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
-@keyframes zz-flow { to { stroke-dashoffset: -20; } }
-@keyframes zz-pulse { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.34; } }
-@keyframes zz-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes zz-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+@keyframes zz-pulse {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 0.34;
+  }
+}
+@keyframes zz-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 
 /* SQUARE-MODE: override the brand's rounded-corner tokens to 0 app-wide.
    The brand defines --r-sm/--r/--r-lg; squaring them flattens every
@@ -165,8 +261,12 @@
 
 /* dual-range thumb pointer events: the input wrapper has pointer-events:none
    so it doesn't block the colored band underneath; the thumbs re-enable. */
-.zz-range::-webkit-slider-thumb { pointer-events: auto; }
-.zz-range::-moz-range-thumb { pointer-events: auto; }
+.zz-range::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.zz-range::-moz-range-thumb {
+  pointer-events: auto;
+}
 
 /* a single, consistent focus indicator across every focusable element.
    Token-driven, so it follows the live accent + light/dark. */
@@ -179,9 +279,25 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .zz-canvas { background-attachment: scroll; }
-  .zz-flow, .zz-pulse { animation: none; }
-  .zz-live::before { animation: none; opacity: 0; }
-  .zz-rise { animation: none; opacity: 1; }
-  .zz-overlay, .zz-drawer, .zz-pop-in, .zz-row-flash { animation: none; }
+  .zz-canvas {
+    background-attachment: scroll;
+  }
+  .zz-flow,
+  .zz-pulse {
+    animation: none;
+  }
+  .zz-live::before {
+    animation: none;
+    opacity: 0;
+  }
+  .zz-rise {
+    animation: none;
+    opacity: 1;
+  }
+  .zz-overlay,
+  .zz-drawer,
+  .zz-pop-in,
+  .zz-row-flash {
+    animation: none;
+  }
 }
