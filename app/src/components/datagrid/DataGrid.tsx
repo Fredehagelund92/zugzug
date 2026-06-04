@@ -423,7 +423,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               className={cx(
                 "group relative flex items-center gap-1.5 px-3 py-2",
                 !isLastCol && "border-r border-line",
-                c.align === "right" && "justify-end",
               )}
               data-header={c.field}
             >
@@ -434,11 +433,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" aria-hidden />
               )}
 
-              {/* Task 21: hold-then-drag label */}
+              {/* Task 21: hold-then-drag label — always left-aligned, even on
+                  right-aligned (numeric) columns. Spreadsheet convention:
+                  headers read uniformly left-to-right while the body cells
+                  themselves right-align their numbers for tabular comparison. */}
               <span className={cx(
                 "min-w-0 flex-1 truncate cursor-grab select-none",
                 c.pinnedLeft && "cursor-default",
-                c.align === "right" && "text-right",
               )}
                 onPointerDown={(_e) => {
                   if (c.pinnedLeft) return;
@@ -479,15 +480,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 }}
               >{c.label}{sortGlyph}</span>
 
-              {/* Task 19: ⋯ menu button — push to far end via ml-auto on left-aligned
-                  columns; on right-aligned columns the parent's justify-end already
-                  packs everything to the right, so ml-auto would fight that. */}
+              {/* Task 19: ⋯ menu button — always pushed to the far right edge of
+                  the header cell via ml-auto, regardless of column alignment. */}
               {!c.pinnedLeft && (
                 <button type="button" aria-label="Column menu"
-                  className={cx(
-                    "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100",
-                    c.align !== "right" && "ml-auto",
-                  )}
+                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
                   onClick={(e) => {
                     menuAnchorRef.current = e.currentTarget;
                     setMenuFor((s) => s === c.field ? null : c.field);
