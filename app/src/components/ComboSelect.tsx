@@ -30,7 +30,8 @@ export function ComboSelect({
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    const onDown = (e: MouseEvent) =>
+      ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
@@ -46,8 +47,12 @@ export function ComboSelect({
   }, [open]);
 
   const norm = q.trim();
-  const list = useMemo(() => options.filter((o) => o.toLowerCase().includes(norm.toLowerCase())), [options, norm]);
-  const canCreate = allowCreate && norm.length > 0 && !options.some((o) => o.toLowerCase() === norm.toLowerCase());
+  const list = useMemo(
+    () => options.filter((o) => o.toLowerCase().includes(norm.toLowerCase())),
+    [options, norm],
+  );
+  const canCreate =
+    allowCreate && norm.length > 0 && !options.some((o) => o.toLowerCase() === norm.toLowerCase());
   const total = list.length + (canCreate ? 1 : 0);
 
   // When the options narrow under us, keep the highlight in bounds. When the
@@ -89,7 +94,9 @@ export function ComboSelect({
         aria-expanded={open}
         className={cx(
           "flex w-full items-center justify-between gap-2 rounded-sm border px-2.5 py-1.5 text-[12.5px] transition-colors",
-          value ? "border-line-2 font-medium text-accent hover:border-accent" : "border-dashed border-line-2 font-mono text-ink-3 hover:border-accent hover:text-ink-2",
+          value
+            ? "border-line-2 font-medium text-accent hover:border-accent"
+            : "border-dashed border-line-2 font-mono text-ink-3 hover:border-accent hover:text-ink-2",
         )}
       >
         <span className="truncate">{value ?? (suggestion ? `${suggestion}?` : placeholder)}</span>
@@ -118,6 +125,10 @@ export function ComboSelect({
                 } else if (e.key === "Enter") {
                   e.preventDefault();
                   pickHighlighted();
+                } else if (e.key === "Tab") {
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                  // intentional: don't preventDefault — let the natural Tab move to next focusable
                 }
               }}
               placeholder="Search or create…"
@@ -165,7 +176,9 @@ export function ComboSelect({
                 </button>
               </li>
             )}
-            {list.length === 0 && !canCreate && <li className="px-2.5 py-2 font-mono text-[12px] text-ink-2">no match</li>}
+            {list.length === 0 && !canCreate && (
+              <li className="px-2.5 py-2 font-mono text-[12px] text-ink-2">no match</li>
+            )}
           </ul>
         </div>
       )}

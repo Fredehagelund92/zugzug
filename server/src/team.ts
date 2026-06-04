@@ -4,7 +4,11 @@
 import { pgRun as run, pgAll as all, pgGet as get } from "./pg.ts";
 import { env, pg } from "./env.ts";
 
-export interface Member { email: string; addedBy: string; addedAt: string }
+export interface Member {
+  email: string;
+  addedBy: string;
+  addedAt: string;
+}
 
 export async function listMembers(): Promise<Member[]> {
   const rows = await all<{ email: string; added_by_name: string; added_at: string }>(
@@ -26,7 +30,10 @@ export async function addMember(email: string, addedById: string): Promise<void>
 }
 
 export async function removeMember(email: string, requesterId: string): Promise<void> {
-  const requester = await get<{ email: string }>(`SELECT email FROM ${pg("users")} WHERE id = $1`, [requesterId]);
-  if (requester?.email === email) throw Object.assign(new Error("cannot_remove_self"), { status: 400 });
+  const requester = await get<{ email: string }>(`SELECT email FROM ${pg("users")} WHERE id = $1`, [
+    requesterId,
+  ]);
+  if (requester?.email === email)
+    throw Object.assign(new Error("cannot_remove_self"), { status: 400 });
   await run(`DELETE FROM ${pg("allowed_emails")} WHERE email = $1`, [email]);
 }

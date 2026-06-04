@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
@@ -7,6 +8,7 @@ import { EngineerModeProvider } from "./lib/engineer-mode";
 import { UndoStackProvider } from "./components/datagrid";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
 import { Dashboard } from "./routes/Dashboard";
 import { Mapping } from "./routes/Mapping";
@@ -15,12 +17,28 @@ import { MasterTables } from "./routes/MasterTables";
 import { Settings } from "./routes/Settings";
 import { Showcase } from "./routes/Showcase";
 
+const dsn = import.meta.env.VITE_SENTRY_DSN;
+if (dsn) {
+  Sentry.init({
+    dsn,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0.1,
+    integrations: [Sentry.browserTracingIntegration()],
+  });
+}
+
 declare global {
   interface Window {
-    BrandApp: { setAccent: typeof setAccent; setTheme: typeof setTheme; toggleTheme: typeof toggleTheme };
+    BrandApp?: {
+      setAccent: typeof setAccent;
+      setTheme: typeof setTheme;
+      toggleTheme: typeof toggleTheme;
+    };
   }
 }
-window.BrandApp = { setAccent, setTheme, toggleTheme };
+if (import.meta.env.DEV) {
+  window.BrandApp = { setAccent, setTheme, toggleTheme };
+}
 
 const root = document.getElementById("root")!;
 
@@ -36,23 +54,25 @@ createRoot(root).render(
         <Route
           path="*"
           element={
-            <UndoStackProvider>
-              <EngineerModeProvider>
-                <BootGate>
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/app" replace />} />
-                    <Route element={<AppShell />}>
-                      <Route path="/app" element={<Dashboard />} />
-                      <Route path="/app/mapping" element={<Mapping />} />
-                      <Route path="/app/sources" element={<Sources />} />
-                      <Route path="/app/tables" element={<MasterTables />} />
-                      <Route path="/app/settings" element={<Settings />} />
-                    </Route>
-                    <Route path="*" element={<Navigate to="/app" replace />} />
-                  </Routes>
-                </BootGate>
-              </EngineerModeProvider>
-            </UndoStackProvider>
+            <RouteErrorBoundary>
+              <UndoStackProvider>
+                <EngineerModeProvider>
+                  <BootGate>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/app" replace />} />
+                      <Route element={<AppShell />}>
+                        <Route path="/app" element={<Dashboard />} />
+                        <Route path="/app/mapping" element={<Mapping />} />
+                        <Route path="/app/sources" element={<Sources />} />
+                        <Route path="/app/tables" element={<MasterTables />} />
+                        <Route path="/app/settings" element={<Settings />} />
+                      </Route>
+                      <Route path="*" element={<Navigate to="/app" replace />} />
+                    </Routes>
+                  </BootGate>
+                </EngineerModeProvider>
+              </UndoStackProvider>
+            </RouteErrorBoundary>
           }
         />
       </Routes>

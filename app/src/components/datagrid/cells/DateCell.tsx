@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { CellCtx, EditCtx } from "../types";
 
-const inputBase = "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 font-mono text-[12px] text-ink outline-none";
+const inputBase =
+  "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 font-mono text-[12px] text-ink outline-none";
 
 function Renderer<Row>({ value }: CellCtx<Row>) {
   const s = value == null || value === "" ? null : String(value);
@@ -15,15 +16,23 @@ function Renderer<Row>({ value }: CellCtx<Row>) {
 function Editor<Row>({ value, commit, cancel }: EditCtx<Row>) {
   const [v, setV] = useState(value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => {
+    ref.current?.focus();
+  }, []);
   const commitNow = () => commit(v.trim() === "" ? null : v);
   return (
     <input
-      ref={ref} type="date" value={v}
+      ref={ref}
+      type="date"
+      value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
       onKeyDown={(e) => {
-        if (e.key === "Escape") { e.preventDefault(); cancel(); return; }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          cancel();
+          return;
+        }
         if (e.key === "Enter" || e.key === "Tab") commitNow();
       }}
       className={inputBase}

@@ -19,13 +19,17 @@ export function Kpi({
   featured?: boolean;
 }) {
   return (
-    <div className={cx(
-      "group rounded-lg border border-line bg-surface p-6 shadow-pop transition-[transform,border-color] duration-[var(--ak-dur)] hover:-translate-y-0.5 hover:border-line-2",
-      featured && "border-l-2 border-l-accent",
-    )}>
+    <div
+      className={cx(
+        "group rounded-lg border border-line bg-surface p-6 shadow-pop transition-[transform,border-color] duration-[var(--ak-dur)] hover:-translate-y-0.5 hover:border-line-2",
+        featured && "border-l-2 border-l-accent",
+      )}
+    >
       <div className="font-mono text-[11px] uppercase tracking-wider text-ink-3">{label}</div>
       <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="font-display text-3xl font-bold tracking-tight text-ink tabular-nums">{value}</div>
+        <div className="font-display text-3xl font-bold tracking-tight text-ink tabular-nums">
+          {value}
+        </div>
         {spark && (
           <div className="flex h-8 items-end gap-[3px]">
             {spark.map((v, i) => (
