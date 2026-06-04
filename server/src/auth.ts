@@ -200,6 +200,33 @@ export async function handleMe(req: Request): Promise<Response> {
   });
 }
 
+/** GET /api/auth/config — public config for the login page. */
+export function handleAuthConfig(): Response {
+  return new Response(JSON.stringify({ devBypass: env.devBypassAuth }), {
+    headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
+  });
+}
+
+/** GET /api/auth/dev — one-click dev login; only works when devBypassAuth is true. */
+export async function handleDevLogin(): Promise<Response> {
+  const userId = "u_dev";
+  await run(
+    `INSERT INTO ${pg("users")} (id, name, email, initials)
+     VALUES ($1, 'Dev User', 'dev@localhost', 'DV')
+     ON CONFLICT (id) DO NOTHING`,
+    [userId],
+  );
+  const sessionId = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
+  await run(
+    `INSERT INTO ${pg("sessions")} (id, user_id, expires_at) VALUES ($1, $2, $3)`,
+    [sessionId, userId, expiresAt.toISOString()],
+  );
+  const headers = new Headers({ Location: "/app" });
+  headers.append("Set-Cookie", cookie(SID, sessionId, SESSION_SECONDS));
+  return new Response(null, { status: 302, headers });
+}
+
 // ---- internal helpers ------------------------------------------------------
 
 function loginError(error: string, clearStateCookie: string): Response {
