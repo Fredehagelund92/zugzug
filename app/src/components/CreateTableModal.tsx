@@ -209,23 +209,33 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           )}
 
           {/* ─── source: 1 picker ───────────────────────────────────────────────── */}
-          {mode === "source" && (
-            <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
-              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                Seed records from a warehouse column. Each distinct value becomes one record, with a slug ID.
-              </p>
-              <ComboSelect
-                options={sourceOpts}
-                value={source ? `${source.table}.${source.column}` : null}
-                placeholder="pick a warehouse column…"
-                onPick={(opt) => {
-                  const dot = opt.lastIndexOf(".");
-                  if (dot > 0) setSource({ table: opt.slice(0, dot), column: opt.slice(dot + 1) });
-                }}
-              />
-              <div className="font-mono text-[11px] text-ink-3">distinct values from the chosen column become records · already-mapped values are skipped</div>
-            </div>
-          )}
+          {mode === "source" && (() => {
+            const info = source ? sources.find((s) => s.table === source.table && s.column === source.column) : null;
+            const helper = !source
+              ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
+              : !info
+                ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
+                : !info.scanned
+                  ? "Scan pending — count will appear after first sync."
+                  : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one canonical record. Already-mapped values are skipped.`;
+            return (
+              <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
+                <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
+                  Seed records from a warehouse column. Each distinct value becomes one record, with a slug ID.
+                </p>
+                <ComboSelect
+                  options={sourceOpts}
+                  value={source ? `${source.table}.${source.column}` : null}
+                  placeholder="pick a warehouse column…"
+                  onPick={(opt) => {
+                    const dot = opt.lastIndexOf(".");
+                    if (dot > 0) setSource({ table: opt.slice(0, dot), column: opt.slice(dot + 1) });
+                  }}
+                />
+                <div className="font-mono text-[11px] leading-[1.5] text-ink-3">{helper}</div>
+              </div>
+            );
+          })()}
 
           {/* ─── external_id: 2 pickers ─────────────────────────────────────────── */}
           {mode === "external_id" && (
