@@ -590,11 +590,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     <div
       ref={cursor.ref}
       tabIndex={0}
+      role="grid"
+      aria-rowcount={sortedRows.length + 1}
+      aria-colcount={orderedVisible.length}
       onKeyDown={handleKeyDown}
       className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
     >
       {/* header row */}
       <div
+        role="row"
+        aria-rowindex={1}
         className="grid items-stretch border-b border-line text-[12px] font-medium text-ink-2"
         style={gridStyle}
       >
@@ -624,6 +629,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           return (
             <div
               key={c.field}
+              role="columnheader"
+              aria-colindex={idx + 1}
+              aria-sort={
+                sort?.field === c.field
+                  ? sort.dir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
               className={cx(
                 "group relative flex items-center gap-1.5 px-3 py-2",
                 !isLastCol && "border-r border-line",
@@ -820,12 +834,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         ? (empty ?? (
             <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">No rows.</div>
           ))
-        : sortedRows.map((row) => {
+        : sortedRows.map((row, rowIdx) => {
             const rk = rowKey(row);
             const selected = isSelected(rk);
             return (
               <div
                 key={rk}
+                role="row"
+                aria-rowindex={rowIdx + 2}
                 className={cx(
                   "grid items-stretch border-b border-line transition-colors",
                   selected ? "bg-surface-2" : "hover:bg-hover",
@@ -866,6 +882,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   return (
                     <div
                       key={c.field}
+                      role="gridcell"
+                      aria-colindex={idx + 1}
+                      aria-selected={focused ? true : undefined}
                       data-cell={data}
                       onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
                       onDoubleClick={onDoubleClick}
