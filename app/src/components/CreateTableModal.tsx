@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconX } from "./Icons";
@@ -55,45 +55,26 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     setConfirmingDiscard(false);
   }, [open, defaultMode]);
 
-  // Esc to close (or cancel the discard prompt if it's already showing)
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (confirmingDiscard) setConfirmingDiscard(false);
-        else requestClose();
-      }
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit()) void submit();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, name, mode, source, external, confirmingDiscard]);
-
-  if (!open) return null;
-  const monogram = (name.trim().charAt(0) || "?").toUpperCase();
-  const tint = PALETTE[color];
-
-  const canSubmit = (): boolean => {
+  const canSubmit = useMemo((): boolean => {
     if (!name.trim()) return false;
     if (mode === "source") return !!(source?.table && source?.column);
     if (mode === "external_id")
       return !!(external?.table && external?.idColumn && external?.nameColumn);
     return true; // blank: name is enough
-  };
+  }, [name, mode, source, external]);
 
   // Close request — checks dirty state and prompts to discard if so.
   // Considered "dirty" when the user has typed a name, picked a source, or
   // bound an external id. The optional description/colour aren't counted —
   // a casual mode flip shouldn't trigger a guard.
-  const isDirty = (): boolean => name.trim().length > 0 || source !== null || external !== null;
-  const requestClose = (): void => {
-    if (isDirty()) setConfirmingDiscard(true);
+  const requestClose = useCallback((): void => {
+    const isDirty = name.trim().length > 0 || source !== null || external !== null;
+    if (isDirty) setConfirmingDiscard(true);
     else onClose();
-  };
+  }, [name, source, external, onClose]);
 
-  const submit = async (): Promise<void> => {
-    if (submitting || !canSubmit()) return;
+  const submit = useCallback(async (): Promise<void> => {
+    if (submitting || !canSubmit) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -114,7 +95,25 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [submitting, canSubmit, name, description, color, mode, source, external, onCreated, onClose]);
+
+  // Esc to close (or cancel the discard prompt if it's already showing)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (confirmingDiscard) setConfirmingDiscard(false);
+        else requestClose();
+      }
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit) void submit();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, canSubmit, requestClose, submit, confirmingDiscard]);
+
+  if (!open) return null;
+  const monogram = (name.trim().charAt(0) || "?").toUpperCase();
+  const tint = PALETTE[color];
 
   return createPortal(
     <div
@@ -349,7 +348,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 <Button
                   size="sm"
                   onClick={() => void submit()}
-                  disabled={!canSubmit() || submitting}
+                  disabled={!canSubmit || submitting}
                 >
                   {submitting ? "Creating…" : "Create table"}
                 </Button>
