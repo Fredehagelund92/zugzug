@@ -207,7 +207,7 @@ export async function handleMe(req: Request): Promise<Response> {
 
 /** GET /api/auth/config — public config for the login page. */
 export function handleAuthConfig(): Response {
-  return new Response(JSON.stringify({ devBypass: env.devBypassAuth }), {
+  return new Response(JSON.stringify({}), {
     headers: { "content-type": "application/json", ...cors },
   });
 }
