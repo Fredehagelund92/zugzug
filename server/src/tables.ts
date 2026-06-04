@@ -9,6 +9,7 @@ import type { OptionDef, PaletteName } from "./repo.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
+import { AppError } from "./errors.ts";
 
 const PALETTE_NAMES: PaletteName[] = ["rose", "amber", "mint", "teal", "indigo", "violet", "slate"];
 
@@ -30,54 +31,40 @@ export interface CreateTableInput {
   external?: { table: string; idColumn: string; nameColumn: string }; // mode === 'external_id'
 }
 
-export type CreateTableErrorCode =
-  | "NAME_TAKEN"
-  | "WAREHOUSE_OFFLINE"
-  | "MISSING_PICKER"
-  | "INVALID";
-
-export class CreateTableError extends Error {
-  code: CreateTableErrorCode;
-  constructor(code: CreateTableErrorCode, message: string) {
-    super(message);
-    this.code = code;
-  }
-}
+/** @deprecated — use AppError directly */
+export const CreateTableError = AppError;
 
 function validate(input: CreateTableInput): void {
   const name = (input.name ?? "").trim();
-  if (!name) throw new CreateTableError("INVALID", "name is required");
+  if (!name) throw new AppError("VALIDATION_FAILED", "name is required");
   if (input.color != null && !PALETTE_NAMES.includes(input.color)) {
-    throw new CreateTableError("INVALID", `unknown color: ${input.color}`);
+    throw new AppError("VALIDATION_FAILED", `unknown color: ${input.color}`);
   }
   if (input.mode === "source") {
     if (!input.source?.table || !input.source?.column) {
-      throw new CreateTableError("MISSING_PICKER", "source requires table + column");
+      throw new AppError("VALIDATION_FAILED", "source requires table + column");
     }
   } else if (input.mode === "external_id") {
     const e = input.external;
     if (!e?.table || !e?.idColumn || !e?.nameColumn) {
-      throw new CreateTableError(
-        "MISSING_PICKER",
-        "external_id requires table + idColumn + nameColumn",
-      );
+      throw new AppError("VALIDATION_FAILED", "external_id requires table + idColumn + nameColumn");
     }
     if (e.idColumn === e.nameColumn) {
-      throw new CreateTableError("INVALID", "idColumn and nameColumn must differ");
+      throw new AppError("VALIDATION_FAILED", "idColumn and nameColumn must differ");
     }
   } else if (input.mode === "blank") {
     for (const c of input.columns ?? []) {
-      if (!c.label?.trim()) throw new CreateTableError("INVALID", "field label is required");
+      if (!c.label?.trim()) throw new AppError("VALIDATION_FAILED", "field label is required");
       if (c.type === "select" && c.options) {
         const labels = c.options.map((o) => o.label);
         if (new Set(labels).size !== labels.length) {
-          throw new CreateTableError("INVALID", `duplicate option labels in field "${c.label}"`);
+          throw new AppError("VALIDATION_FAILED", `duplicate option labels in field "${c.label}"`);
         }
       }
     }
   }
   if ((input.mode === "source" || input.mode === "external_id") && !env.attachWarehouse) {
-    throw new CreateTableError("WAREHOUSE_OFFLINE", "warehouse is not attached");
+    throw new AppError("INTERNAL", "warehouse is not attached");
   }
 }
 
@@ -91,7 +78,7 @@ export async function createTable(
 
   // Pre-flight existence check (also enforced by PK)
   const existing = await pgGet(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
-  if (existing) throw new CreateTableError("NAME_TAKEN", `a table called "${name}" already exists`);
+  if (existing) throw new AppError("NAME_TAKEN", `a table called "${name}" already exists`, 409);
 
   // Step 1 (addDimension) issues its own DDL — keep it outside the transaction
   // since postgres.js wraps `pool.begin` in a single connection and the
