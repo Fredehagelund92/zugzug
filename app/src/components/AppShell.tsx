@@ -130,38 +130,38 @@ export function AppShell() {
   // is rare; the search is fast enough at thousand-record scale).
   const commands = useMemo<Command[]>(() => {
     const out: Command[] = [];
-    // Section 1: routes
+    // Section 1: routes — flagged priority so the empty palette stays compact
     out.push({
       id: "nav:dashboard", group: "Navigate", label: "Dashboard",
       icon: <IconDashboard className="h-4 w-4" />, action: () => navigate("/app"),
-      keywords: "home overview",
+      keywords: "home overview", priority: true,
     });
     out.push({
       id: "nav:mapping", group: "Navigate", label: "Match values",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />, action: () => navigate("/app/mapping"),
-      keywords: "reconcile mapping",
+      keywords: "reconcile mapping", priority: true,
     });
     out.push({
       id: "nav:mapping:all", group: "Navigate", label: "Match values — all dimensions",
       icon: <IconMapping className="h-4 w-4" />, action: () => navigate("/app/mapping?view=all"),
-      keywords: "cross dim inbox",
+      keywords: "cross dim inbox", priority: true,
     });
     out.push({
       id: "nav:sources", group: "Navigate", label: "Sources",
       icon: <IconSources className="h-4 w-4" />, action: () => navigate("/app/sources"),
-      keywords: "warehouse catalog",
+      keywords: "warehouse catalog", priority: true,
     });
     out.push({
       id: "nav:tables", group: "Navigate", label: "Tables",
       secondary: `${dims.length}`,
       icon: <IconTables className="h-4 w-4" />, action: () => navigate("/app/tables"),
-      keywords: "master records",
+      keywords: "master records", priority: true,
     });
     out.push({
       id: "nav:settings", group: "Navigate", label: "Settings",
       icon: <IconSettings className="h-4 w-4" />, action: () => navigate("/app/settings"),
-      keywords: "workspace preferences team",
+      keywords: "workspace preferences team", priority: true,
     });
 
     // Section 2: jump to a dimension's mapping inbox

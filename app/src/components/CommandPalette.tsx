@@ -17,6 +17,10 @@ export interface Command {
   secondary?: string;         // dim caption (path, count, type)
   icon?: ReactNode;           // leading 14×14 icon
   keywords?: string;          // extra match text (e.g. dim id, slug, key)
+  /** Show on initial open (empty search). Non-priority items appear only after
+   *  the user starts typing — keeps the resting palette short instead of
+   *  dumping every dim + canonical record at once. */
+  priority?: boolean;
   action: () => void;         // executed on selection; close happens before
 }
 
@@ -37,13 +41,28 @@ export function CommandPalette({ open, onClose, commands, placeholder = "Jump to
 
   // Filter commands by substring across label/secondary/keywords. Group
   // ordering preserved from the caller — within a group, original order wins.
+  // Empty query collapses to priority items only so the palette doesn't dump
+  // its full corpus on the user before they type anything.
   const filtered = useMemo<Command[]>(() => {
     const norm = q.trim().toLowerCase();
-    if (!norm) return commands;
+    if (!norm) return commands.filter((c) => c.priority);
     return commands.filter((c) => {
       const hay = `${c.label} ${c.secondary ?? ""} ${c.keywords ?? ""} ${c.group}`.toLowerCase();
       return hay.includes(norm);
     });
+  }, [commands, q]);
+
+  // Counts for the empty-state hint — "type to search 12 dimensions, 87 records"
+  const hiddenSummary = useMemo(() => {
+    const norm = q.trim();
+    if (norm) return null;
+    const groups = new Map<string, number>();
+    for (const c of commands) {
+      if (c.priority) continue;
+      groups.set(c.group, (groups.get(c.group) ?? 0) + 1);
+    }
+    if (groups.size === 0) return null;
+    return [...groups].map(([g, n]) => `${n.toLocaleString()} ${g.toLowerCase()}`).join(" · ");
   }, [commands, q]);
 
   // Group while preserving order of first appearance.
@@ -109,11 +128,11 @@ export function CommandPalette({ open, onClose, commands, placeholder = "Jump to
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-start bg-ink/40 p-4 pt-[12vh] backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex justify-center bg-ink/40 p-4 pt-[12vh] backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="zz-pop-in w-full max-w-[640px] overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
+        className="zz-pop-in h-fit w-full max-w-[640px] overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 text-ink-3">
@@ -175,6 +194,12 @@ export function CommandPalette({ open, onClose, commands, placeholder = "Jump to
             </li>
           ))}
         </ul>
+        {hiddenSummary && (
+          <div className="border-t border-line bg-surface px-3.5 py-1.5 font-mono text-[10.5px] text-ink-3">
+            <span>Type to search </span>
+            <span className="text-ink-2 tabular-nums">{hiddenSummary}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between border-t border-line bg-surface px-3.5 py-1.5 font-mono text-[10px] text-ink-3">
           <span><kbd className="rounded border border-line-2 bg-surface-2 px-1">↑</kbd> <kbd className="rounded border border-line-2 bg-surface-2 px-1">↓</kbd> navigate</span>
           <span><kbd className="rounded border border-line-2 bg-surface-2 px-1">↵</kbd> select</span>
