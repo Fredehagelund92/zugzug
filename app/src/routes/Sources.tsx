@@ -7,8 +7,14 @@ import { ScanScheduleMenu } from "../components/ScanScheduleMenu";
 import { IconSearch, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import {
-  useDimensions, useSources, scanSources, deriveCanonical, setSourceSchedule,
-  fetchUnmappedSample, type SourceInfo, type UnmappedSample,
+  useDimensions,
+  useSources,
+  scanSources,
+  deriveCanonical,
+  setSourceSchedule,
+  fetchUnmappedSample,
+  type SourceInfo,
+  type UnmappedSample,
 } from "../store";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
@@ -28,7 +34,11 @@ import {
    Accent appears on exactly two surfaces: the Standing callout (chrome) and
    the unmapped count on a column row (data). Everything else lives in ink. */
 
-const SCHED_LABEL: Record<string, string> = { "15m": "auto 15m", hourly: "auto hourly", daily: "auto daily" };
+const SCHED_LABEL: Record<string, string> = {
+  "15m": "auto 15m",
+  hourly: "auto hourly",
+  daily: "auto daily",
+};
 const STALE_DAYS = 7;
 const PAGE = 60;
 /* schemas auto-expand when there are this many or fewer wired; beyond that,
@@ -85,7 +95,11 @@ export function Sources() {
 
   /* ---- aggregates ---- */
   const agg = useMemo(() => {
-    let columns = 0, scannedCols = 0, valuesSum = 0, unmapped = 0, atRisk = 0;
+    let columns = 0,
+      scannedCols = 0,
+      valuesSum = 0,
+      unmapped = 0,
+      atRisk = 0;
     let worst: SourceInfo | null = null;
     let worstScore = 0;
     let lastScanned: string | null = null;
@@ -95,13 +109,27 @@ export function Sources() {
       valuesSum += s.values;
       unmapped += s.unmapped;
       if (s.unmapped > 0) atRisk += s.rows;
-      if (s.scannedAt && (!lastScanned || new Date(s.scannedAt) > new Date(lastScanned))) lastScanned = s.scannedAt;
+      if (s.scannedAt && (!lastScanned || new Date(s.scannedAt) > new Date(lastScanned)))
+        lastScanned = s.scannedAt;
       const score = s.unmapped > 0 ? s.unmapped * Math.log10(Math.max(10, s.rows)) : 0;
-      if (score > worstScore) { worstScore = score; worst = s; }
+      if (score > worstScore) {
+        worstScore = score;
+        worst = s;
+      }
     }
     const systems = new Set(sources.map((s) => s.table.split(".")[0])).size;
     const totalRowsWatched = sources.reduce((n, s) => n + s.rows, 0);
-    return { columns, scannedCols, valuesSum, unmapped, atRisk, worst, systems, totalRowsWatched, lastScanned };
+    return {
+      columns,
+      scannedCols,
+      valuesSum,
+      unmapped,
+      atRisk,
+      worst,
+      systems,
+      totalRowsWatched,
+      lastScanned,
+    };
   }, [sources]);
 
   /* ---- counts for the status pills ---- */
@@ -114,25 +142,38 @@ export function Sources() {
   /* ---- group + sort + filter ---- */
   const groups = useMemo<SchemaGroup[]>(() => {
     const needle = q.trim().toLowerCase();
-    const filtered = sources.filter((s) =>
-      (status === "all" || statusOf(s) === status) &&
-      (!needle || `${s.table}.${s.column} ${s.dimension}`.toLowerCase().includes(needle)),
+    const filtered = sources.filter(
+      (s) =>
+        (status === "all" || statusOf(s) === status) &&
+        (!needle || `${s.table}.${s.column} ${s.dimension}`.toLowerCase().includes(needle)),
     );
     const map = new Map<string, SchemaGroup>();
     for (const s of filtered) {
       const k = s.table.split(".")[0];
-      const g = map.get(k) ?? { schema: k, columns: [], totalCols: 0, unmapped: 0, values: 0, rows: 0, coverage: 0, lastScanned: null, worstScore: 0 };
+      const g = map.get(k) ?? {
+        schema: k,
+        columns: [],
+        totalCols: 0,
+        unmapped: 0,
+        values: 0,
+        rows: 0,
+        coverage: 0,
+        lastScanned: null,
+        worstScore: 0,
+      };
       g.columns.push(s);
       g.totalCols++;
       g.unmapped += s.unmapped;
       g.values += s.values;
       g.rows += s.rows;
-      if (s.scannedAt && (!g.lastScanned || new Date(s.scannedAt) > new Date(g.lastScanned))) g.lastScanned = s.scannedAt;
+      if (s.scannedAt && (!g.lastScanned || new Date(s.scannedAt) > new Date(g.lastScanned)))
+        g.lastScanned = s.scannedAt;
       const sc = s.unmapped > 0 ? s.unmapped * Math.log10(Math.max(10, s.rows)) : 0;
       if (sc > g.worstScore) g.worstScore = sc;
       map.set(k, g);
     }
-    for (const g of map.values()) g.coverage = g.values > 0 ? ((g.values - g.unmapped) / g.values) * 100 : 100;
+    for (const g of map.values())
+      g.coverage = g.values > 0 ? ((g.values - g.unmapped) / g.values) * 100 : 100;
     const list = [...map.values()];
 
     const colCmp = (a: SourceInfo, b: SourceInfo): number => {
@@ -141,14 +182,22 @@ export function Sources() {
         const sb = b.unmapped > 0 ? b.unmapped * Math.log10(Math.max(10, b.rows)) : -1;
         return sb - sa;
       }
-      if (sort === "recent") return (b.scannedAt ? new Date(b.scannedAt).getTime() : 0) - (a.scannedAt ? new Date(a.scannedAt).getTime() : 0);
+      if (sort === "recent")
+        return (
+          (b.scannedAt ? new Date(b.scannedAt).getTime() : 0) -
+          (a.scannedAt ? new Date(a.scannedAt).getTime() : 0)
+        );
       return a.table.localeCompare(b.table) || a.column.localeCompare(b.column);
     };
     for (const g of list) g.columns.sort(colCmp);
 
     const grpCmp = (a: SchemaGroup, b: SchemaGroup): number => {
       if (sort === "impact") return b.worstScore - a.worstScore || a.schema.localeCompare(b.schema);
-      if (sort === "recent") return (b.lastScanned ? new Date(b.lastScanned).getTime() : 0) - (a.lastScanned ? new Date(a.lastScanned).getTime() : 0);
+      if (sort === "recent")
+        return (
+          (b.lastScanned ? new Date(b.lastScanned).getTime() : 0) -
+          (a.lastScanned ? new Date(a.lastScanned).getTime() : 0)
+        );
       return a.schema.localeCompare(b.schema);
     };
     list.sort(grpCmp);
@@ -158,7 +207,10 @@ export function Sources() {
   /* ---- initial open-schemas: auto-expand small workspaces, fold large ones ---- */
   useEffect(() => {
     if (openInit) return;
-    if (sources.length === 0) { setOpenInit(true); return; }
+    if (sources.length === 0) {
+      setOpenInit(true);
+      return;
+    }
     const allSchemas = new Set(sources.map((s) => s.table.split(".")[0]));
     if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
       setOpenSchemas(allSchemas);
@@ -177,16 +229,27 @@ export function Sources() {
   }, [q, openSchemas, matchingSchemas]);
 
   /* ---- actions ---- */
-  const scan = async () => { setScanning(true); const n = await scanSources(); setScanning(false); setFlash(n); setTimeout(() => setFlash(null), 2600); };
+  const scan = async () => {
+    setScanning(true);
+    const n = await scanSources();
+    setScanning(false);
+    setFlash(n);
+    setTimeout(() => setFlash(null), 2600);
+  };
   const derive = async (s: SourceInfo) => {
     const n = await deriveCanonical(s.dimId, s.table, s.column);
-    setDerived(n > 0 ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}` : `${s.table}.${s.column} has no rows to import`);
+    setDerived(
+      n > 0
+        ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}`
+        : `${s.table}.${s.column} has no rows to import`,
+    );
     setTimeout(() => setDerived(null), 3200);
   };
   const toggleSchema = (k: string) => {
     setOpenSchemas((s) => {
       const next = new Set(s);
-      if (next.has(k)) next.delete(k); else next.add(k);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
       return next;
     });
   };
@@ -206,11 +269,13 @@ export function Sources() {
     const cols = agg.columns;
     const sys = agg.systems;
     const um = agg.unmapped;
-    if (cols === 0) return "No sources wired yet. Connect your first warehouse column to start watching.";
+    if (cols === 0)
+      return "No sources wired yet. Connect your first warehouse column to start watching.";
     const head = `${cols.toLocaleString()} column${cols === 1 ? "" : "s"} watched across ${sys} system${sys === 1 ? "" : "s"}`;
-    const tail = um > 0
-      ? ` · ${um.toLocaleString()} value${um === 1 ? "" : "s"} await${um === 1 ? "s" : ""} a decision.`
-      : ` · everything resolved.`;
+    const tail =
+      um > 0
+        ? ` · ${um.toLocaleString()} value${um === 1 ? "" : "s"} await${um === 1 ? "s" : ""} a decision.`
+        : ` · everything resolved.`;
     return head + tail;
   })();
 
@@ -230,27 +295,52 @@ export function Sources() {
           action={
             <div className="flex items-center gap-1">
               <Button
-                variant="ghost" size="sm"
-                icon={scanning
-                  ? <span aria-hidden className="block h-3.5 w-3.5 animate-spin rounded-pill border-2 border-line-2 border-t-accent" />
-                  : <IconWand className="h-3.5 w-3.5" />}
-                onClick={scan} disabled={scanning}
+                variant="ghost"
+                size="sm"
+                icon={
+                  scanning ? (
+                    <span
+                      aria-hidden
+                      className="block h-3.5 w-3.5 animate-spin rounded-pill border-2 border-line-2 border-t-accent"
+                    />
+                  ) : (
+                    <IconWand className="h-3.5 w-3.5" />
+                  )
+                }
+                onClick={scan}
+                disabled={scanning}
               >
                 {scanning ? "Scanning…" : flash !== null ? `✓ scanned ${flash}` : "Scan all"}
               </Button>
-              <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={() => setCatalog(true)}>Browse warehouse</Button>
+              <Button
+                size="sm"
+                icon={<IconArrowRight className="h-3.5 w-3.5" />}
+                onClick={() => setCatalog(true)}
+              >
+                Browse warehouse
+              </Button>
             </div>
           }
         />
       </div>
 
-      {derived && <div className="mb-4 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">{derived}</div>}
+      {derived && (
+        <div className="mb-4 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">
+          {derived}
+        </div>
+      )}
 
       {/* ─────────── LEDGER SURFACE (paper) ─────────── */}
-      <section className="zz-rise relative overflow-hidden border border-line bg-surface shadow-pop" style={{ animationDelay: "60ms" }}>
+      <section
+        className="zz-rise relative overflow-hidden border border-line bg-surface shadow-pop"
+        style={{ animationDelay: "60ms" }}
+      >
         {/* a thin accent edge at the very top — the 'folder tab' that signals
             this is the working surface and quietly carries the brand */}
-        <span className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" aria-hidden="true" />
+        <span
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent"
+          aria-hidden="true"
+        />
 
         {/* ─── STANDING CALLOUT (the moment) ─── */}
         {agg.worst && agg.worst.unmapped > 0 ? (
@@ -267,18 +357,27 @@ export function Sources() {
                   <span className="font-mono text-[18px] text-ink">{agg.worst.column}</span>
                 </div>
                 <p className="mt-1.5 text-[13.5px] text-ink-2">
-                  <span className="font-semibold text-ink">{agg.worst.unmapped.toLocaleString()}</span> unmapped value{agg.worst.unmapped === 1 ? "" : "s"} across{" "}
-                  <span className="font-semibold text-ink">{agg.worst.rows.toLocaleString()}</span> downstream rows in <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
+                  <span className="font-semibold text-ink">
+                    {agg.worst.unmapped.toLocaleString()}
+                  </span>{" "}
+                  unmapped value{agg.worst.unmapped === 1 ? "" : "s"} across{" "}
+                  <span className="font-semibold text-ink">{agg.worst.rows.toLocaleString()}</span>{" "}
+                  downstream rows in{" "}
+                  <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
               <Link to={`/app/mapping?dimId=${agg.worst.dimId}`} className="shrink-0">
-                <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>Resolve</Button>
+                <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
+                  Resolve
+                </Button>
               </Link>
             </div>
           </div>
         ) : agg.columns > 0 ? (
           <div className="border-b border-line px-7 py-5">
-            <p className="font-display text-[18px] italic text-ink-2">Nothing requires a decision today.</p>
+            <p className="font-display text-[18px] italic text-ink-2">
+              Nothing requires a decision today.
+            </p>
           </div>
         ) : null}
 
@@ -288,30 +387,54 @@ export function Sources() {
             <IconSearch className="h-3.5 w-3.5" />
             <input
               value={q}
-              onChange={(e) => { setQ(e.target.value); setShown(PAGE); }}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setShown(PAGE);
+              }}
               placeholder={`Search ${agg.columns.toLocaleString()} column${agg.columns === 1 ? "" : "s"} across ${agg.systems} system${agg.systems === 1 ? "" : "s"}…`}
               className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3"
             />
             {q.trim() && (
-              <button type="button" onClick={() => setQ("")} aria-label="Clear search" className="text-ink-3 hover:text-ink">×</button>
+              <button
+                type="button"
+                onClick={() => setQ("")}
+                aria-label="Clear search"
+                className="text-ink-3 hover:text-ink"
+              >
+                ×
+              </button>
             )}
           </label>
 
           <div className="flex items-center gap-0.5 rounded-sm border border-line bg-bg p-0.5">
             {CHIPS.map((c) => (
-              <button key={c.k} type="button" onClick={() => { setStatus(c.k); setShown(PAGE); }}
+              <button
+                key={c.k}
+                type="button"
+                onClick={() => {
+                  setStatus(c.k);
+                  setShown(PAGE);
+                }}
                 className={cx(
                   "rounded-sm px-2.5 py-1 text-[12px] transition-colors",
                   status === c.k ? "bg-surface-3 text-ink" : "text-ink-3 hover:text-ink-2",
-                )}>
+                )}
+              >
                 {c.label} <span className="font-mono text-[10.5px] text-ink-3">{c.n}</span>
               </button>
             ))}
           </div>
 
-          <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}
-            className="border-0 bg-transparent text-[12.5px] text-ink-2 outline-none hover:text-ink">
-            {SORTS.map((s) => <option key={s.k} value={s.k}>{s.label}</option>)}
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as Sort)}
+            className="border-0 bg-transparent text-[12.5px] text-ink-2 outline-none hover:text-ink"
+          >
+            {SORTS.map((s) => (
+              <option key={s.k} value={s.k}>
+                {s.label}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -325,7 +448,9 @@ export function Sources() {
               onToggle={() => toggleSchema(g.schema)}
               expanded={expanded}
               setExpanded={setExpanded}
-              onScheduleChange={(r, next) => { void setSourceSchedule(r.dimId, r.table, r.column, next); }}
+              onScheduleChange={(r, next) => {
+                void setSourceSchedule(r.dimId, r.table, r.column, next);
+              }}
               onDerive={derive}
             />
           ))}
@@ -341,9 +466,16 @@ export function Sources() {
 
           {groups.length > shown && (
             <div className="flex items-center justify-between border-t border-line px-7 py-3">
-              <span className="font-mono text-[10.5px] text-ink-3">{shown} of {groups.length} systems</span>
-              <button type="button" onClick={() => setShown((n) => n + PAGE)}
-                className="font-mono text-[11px] text-ink-2 hover:text-ink">Load {Math.min(PAGE, groups.length - shown)} more →</button>
+              <span className="font-mono text-[10.5px] text-ink-3">
+                {shown} of {groups.length} systems
+              </span>
+              <button
+                type="button"
+                onClick={() => setShown((n) => n + PAGE)}
+                className="font-mono text-[11px] text-ink-2 hover:text-ink"
+              >
+                Load {Math.min(PAGE, groups.length - shown)} more →
+              </button>
             </div>
           )}
         </div>
@@ -352,7 +484,9 @@ export function Sources() {
         {sources.length > 0 && (
           <div className="flex items-center justify-between border-t border-line px-7 py-3 font-mono text-[10.5px] text-ink-3">
             <span>
-              {q.trim() || status !== "all" ? `${totalFilteredCols} of ${agg.columns} columns shown` : `${agg.columns} columns watched`}
+              {q.trim() || status !== "all"
+                ? `${totalFilteredCols} of ${agg.columns} columns shown`
+                : `${agg.columns} columns watched`}
               {(q.trim() || status !== "all") && totalFilteredUnmapped !== agg.unmapped && (
                 <> · {totalFilteredUnmapped.toLocaleString()} unmapped here</>
               )}
@@ -372,7 +506,15 @@ export function Sources() {
 /*                         Sub-components                                  */
 /* ===================================================================== */
 
-function SchemaSection({ group, open, onToggle, expanded, setExpanded, onScheduleChange, onDerive }: {
+function SchemaSection({
+  group,
+  open,
+  onToggle,
+  expanded,
+  setExpanded,
+  onScheduleChange,
+  onDerive,
+}: {
   group: SchemaGroup;
   open: boolean;
   onToggle: () => void;
@@ -390,9 +532,13 @@ function SchemaSection({ group, open, onToggle, expanded, setExpanded, onSchedul
         aria-expanded={open}
         className="group grid w-full grid-cols-[20px_minmax(0,1fr)_auto_auto] items-center gap-4 bg-surface-2/60 px-7 py-2.5 text-left transition-colors hover:bg-surface-2"
       >
-        <IconChevron className={cx("h-3 w-3 shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
+        <IconChevron
+          className={cx("h-3 w-3 shrink-0 text-ink-3 transition-transform", open && "rotate-180")}
+        />
         <div className="flex min-w-0 items-baseline gap-3">
-          <span className="truncate font-display text-[15px] font-semibold capitalize text-ink">{group.schema}</span>
+          <span className="truncate font-display text-[15px] font-semibold capitalize text-ink">
+            {group.schema}
+          </span>
           <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">
             {group.totalCols} column{group.totalCols === 1 ? "" : "s"}
             {group.lastScanned ? ` · ${ago(group.lastScanned)} ago` : ""}
@@ -403,7 +549,9 @@ function SchemaSection({ group, open, onToggle, expanded, setExpanded, onSchedul
         </div>
         <div className="flex w-[72px] justify-end">
           {group.unmapped > 0 ? (
-            <span className="font-display text-[13px] font-semibold tabular-nums text-accent">{group.unmapped.toLocaleString()}</span>
+            <span className="font-display text-[13px] font-semibold tabular-nums text-accent">
+              {group.unmapped.toLocaleString()}
+            </span>
           ) : (
             <span className="font-mono text-[11px] text-ink-3">—</span>
           )}
@@ -432,7 +580,13 @@ function SchemaSection({ group, open, onToggle, expanded, setExpanded, onSchedul
   );
 }
 
-function LedgerRow({ row, expanded, onToggle, onScheduleChange, onDerive }: {
+function LedgerRow({
+  row,
+  expanded,
+  onToggle,
+  onScheduleChange,
+  onDerive,
+}: {
   row: SourceInfo;
   expanded: boolean;
   onToggle: () => void;
@@ -440,68 +594,99 @@ function LedgerRow({ row, expanded, onToggle, onScheduleChange, onDerive }: {
   onDerive: () => void;
 }) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
-  const coverage = row.values > 0 ? ((row.values - row.unmapped) / row.values) * 100 : (row.scanned ? 100 : 0);
+  const coverage =
+    row.values > 0 ? ((row.values - row.unmapped) / row.values) * 100 : row.scanned ? 100 : 0;
   const stale = daysAgo(row.scannedAt) > STALE_DAYS;
-  const standing = !row.scanned && !row.scannedAt
-    ? "unscanned"
-    : !row.present && row.scanned
-      ? "not found"
-      : row.unmapped > 0
-        ? stale ? "stale drift" : "drift"
-        : stale ? "stale" : "clean";
-  const standingTone = standing === "clean"
-    ? "text-ok"
-    : standing === "unscanned" || standing === "not found"
-      ? "text-ink-3"
-      : "text-warn";
+  const standing =
+    !row.scanned && !row.scannedAt
+      ? "unscanned"
+      : !row.present && row.scanned
+        ? "not found"
+        : row.unmapped > 0
+          ? stale
+            ? "stale drift"
+            : "drift"
+          : stale
+            ? "stale"
+            : "clean";
+  const standingTone =
+    standing === "clean"
+      ? "text-ok"
+      : standing === "unscanned" || standing === "not found"
+        ? "text-ink-3"
+        : "text-warn";
   const standingBarTone = coverage >= 95 ? "bg-ok" : coverage >= 70 ? "bg-ink-3/40" : "bg-accent";
 
   return (
-    <div className={cx("relative transition-colors", expanded ? "bg-surface-2/40" : "hover:bg-hover")}>
+    <div
+      className={cx("relative transition-colors", expanded ? "bg-surface-2/40" : "hover:bg-hover")}
+    >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
         className="grid w-full grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 px-7 py-2.5 text-left"
       >
-        <IconChevron className={cx("h-3 w-3 shrink-0 text-ink-3 transition-transform", expanded && "rotate-180")} />
+        <IconChevron
+          className={cx(
+            "h-3 w-3 shrink-0 text-ink-3 transition-transform",
+            expanded && "rotate-180",
+          )}
+        />
         <div className="min-w-0">
           <div className="truncate font-mono text-[12.5px] text-ink">
             {tableName}
             <span className="text-ink-3">.{row.column}</span>
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10.5px] text-ink-3">
-            <span>→ <span className="text-ink-2">{row.dimension}</span></span>
+            <span>
+              → <span className="text-ink-2">{row.dimension}</span>
+            </span>
             {row.schedule && <span>· {SCHED_LABEL[row.schedule] ?? row.schedule}</span>}
             {row.scannedAt && <span>· {ago(row.scannedAt)} ago</span>}
           </div>
         </div>
         <div className="min-w-0">
           <div className={cx("text-[12px] font-medium", standingTone)}>{standing}</div>
-          <div className="mt-0.5 font-mono text-[10px] text-ink-3 tabular-nums">{Math.round(coverage)}% mapped</div>
+          <div className="mt-0.5 font-mono text-[10px] text-ink-3 tabular-nums">
+            {Math.round(coverage)}% mapped
+          </div>
         </div>
-        <div className="text-right text-[12.5px] tabular-nums text-ink-2">{row.rows.toLocaleString()}</div>
+        <div className="text-right text-[12.5px] tabular-nums text-ink-2">
+          {row.rows.toLocaleString()}
+        </div>
         <div className="text-right">
           {row.unmapped > 0 ? (
-            <span className="font-display text-[14px] font-semibold tabular-nums text-accent">{row.unmapped.toLocaleString()}</span>
+            <span className="font-display text-[14px] font-semibold tabular-nums text-accent">
+              {row.unmapped.toLocaleString()}
+            </span>
           ) : (
             <span className="font-mono text-[11.5px] text-ink-3 tabular-nums">0</span>
           )}
         </div>
         <div className="flex items-center justify-end gap-1.5">
           <ScanScheduleMenu value={row.schedule ?? null} onChange={onScheduleChange} />
-          <button type="button"
+          <button
+            type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDerive(); }}
-            className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink">
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDerive();
+            }}
+            className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
+          >
             <IconWand className="h-3 w-3" />
           </button>
         </div>
       </button>
       {/* standing bar — 1px hairline that fills from the left in the row's tone */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line">
-        <div className={cx("h-full transition-[width] duration-500", standingBarTone)} style={{ width: `${Math.max(0, Math.min(100, coverage))}%` }} />
+        <div
+          className={cx("h-full transition-[width] duration-500", standingBarTone)}
+          style={{ width: `${Math.max(0, Math.min(100, coverage))}%` }}
+        />
       </div>
       {expanded && <ExpandedDrill row={row} />}
     </div>
@@ -521,21 +706,28 @@ function ExpandedDrill({ row }: { row: SourceInfo }) {
         if (alive) setSample("error");
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, [row.dimId, row.table, row.column]);
 
   return (
     <div className="border-t border-line/60 bg-bg/30 px-7 py-4 pl-[68px]">
       <div className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-ink-3">
-        Top unmapped values{row.unmapped > 0 ? ` — showing up to 8 of ${row.unmapped.toLocaleString()}` : ""}
+        Top unmapped values
+        {row.unmapped > 0 ? ` — showing up to 8 of ${row.unmapped.toLocaleString()}` : ""}
       </div>
       {sample === "loading" ? (
         <div className="mt-2 text-[12px] text-ink-3">loading…</div>
       ) : sample === "error" ? (
-        <div className="mt-2 text-[12px] text-danger">couldn&apos;t load — is the warehouse attached?</div>
+        <div className="mt-2 text-[12px] text-danger">
+          couldn&apos;t load — is the warehouse attached?
+        </div>
       ) : sample.length === 0 ? (
         row.unmapped > 0 ? (
-          <div className="mt-2 text-[12px] text-ink-3">Run a scan — the unmapped count is cached; the sample needs a live read.</div>
+          <div className="mt-2 text-[12px] text-ink-3">
+            Run a scan — the unmapped count is cached; the sample needs a live read.
+          </div>
         ) : (
           <div className="mt-2 text-[12px] text-ok">No unmapped values here.</div>
         )
@@ -544,36 +736,65 @@ function ExpandedDrill({ row }: { row: SourceInfo }) {
           {sample.map((s, i) => (
             <li key={i} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
               <span className="truncate font-mono text-[12.5px] text-ink">{s.raw}</span>
-              <span className="shrink-0 text-[11.5px] tabular-nums text-ink-3">{s.rows.toLocaleString()} rows</span>
+              <span className="shrink-0 text-[11.5px] tabular-nums text-ink-3">
+                {s.rows.toLocaleString()} rows
+              </span>
             </li>
           ))}
         </ul>
       )}
       <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link to={`/app/mapping?dimId=${row.dimId}`} className="text-accent hover:underline">Resolve in Match values →</Link>
+        <Link to={`/app/mapping?dimId=${row.dimId}`} className="text-accent hover:underline">
+          Resolve in Match values →
+        </Link>
         <span>→ {row.dimension}</span>
       </div>
     </div>
   );
 }
 
-function EmptyState({ wired, filteredByStatus, status, onBrowse }: { wired: number; filteredByStatus: boolean; status: Status; onBrowse: () => void }) {
+function EmptyState({
+  wired,
+  filteredByStatus,
+  status,
+  onBrowse,
+}: {
+  wired: number;
+  filteredByStatus: boolean;
+  status: Status;
+  onBrowse: () => void;
+}) {
   if (wired === 0) {
     return (
       <div className="py-16 text-center">
         <div className="font-display text-[20px] italic text-ink-2">No sources wired yet.</div>
-        <p className="mx-auto mt-2 max-w-[48ch] text-[13px] text-ink-3">A source is a warehouse column Zug Zug watches for new values. Browse your warehouse to wire the first one.</p>
+        <p className="mx-auto mt-2 max-w-[48ch] text-[13px] text-ink-3">
+          A source is a warehouse column Zug Zug watches for new values. Browse your warehouse to
+          wire the first one.
+        </p>
         <div className="mt-5 flex justify-center">
-          <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={onBrowse}>Browse warehouse</Button>
+          <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={onBrowse}>
+            Browse warehouse
+          </Button>
         </div>
       </div>
     );
   }
   if (filteredByStatus && status === "clean") {
-    return <div className="py-12 text-center"><div className="font-display text-[18px] italic text-ok">Everything here is clean.</div></div>;
+    return (
+      <div className="py-12 text-center">
+        <div className="font-display text-[18px] italic text-ok">Everything here is clean.</div>
+      </div>
+    );
   }
   if (filteredByStatus && status === "needs") {
-    return <div className="py-12 text-center"><div className="font-display text-[18px] italic text-ok">Nothing needs your attention.</div></div>;
+    return (
+      <div className="py-12 text-center">
+        <div className="font-display text-[18px] italic text-ok">Nothing needs your attention.</div>
+      </div>
+    );
   }
-  return <div className="py-12 text-center text-[12.5px] text-ink-3">nothing matches this filter</div>;
+  return (
+    <div className="py-12 text-center text-[12.5px] text-ink-3">nothing matches this filter</div>
+  );
 }

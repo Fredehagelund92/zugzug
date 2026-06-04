@@ -1,4 +1,12 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
@@ -13,7 +21,16 @@ import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../comp
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import type { MappingValue } from "../data";
-import { useDimensions, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
+import {
+  useDimensions,
+  useDrafts,
+  saveDraft,
+  discardDraft,
+  listDrafts,
+  commit,
+  dkey,
+  currentUser,
+} from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useGridCursor, useUndoStack, Chip } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
@@ -41,7 +58,8 @@ type CrossRow = {
 
 const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
 const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
-const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
+const COLS =
+  "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
 // Escape a string for use inside a double-quoted CSS attribute selector.
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -62,12 +80,19 @@ function flashRow(selector: string): void {
 
 function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
   const [v, setV] = useState<T>(() => {
-    try { return (window.sessionStorage.getItem(key) as T) ?? fallback; }
-    catch { return fallback; }
+    try {
+      return (window.sessionStorage.getItem(key) as T) ?? fallback;
+    } catch {
+      return fallback;
+    }
   });
   const set = (next: T) => {
     setV(next);
-    try { window.sessionStorage.setItem(key, next); } catch { /* ignore quota / disabled storage */ }
+    try {
+      window.sessionStorage.setItem(key, next);
+    } catch {
+      /* ignore quota / disabled storage */
+    }
   };
   return [v, set];
 }
@@ -75,16 +100,17 @@ function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T)
 export function Mapping() {
   const dims = useDimensions();
   const [createOpen, setCreateOpen] = useState(false);
-  if (dims.length === 0) return (
-    <>
-      <NoTablesYet from="mapping" onCreateRequested={() => setCreateOpen(true)} />
-      <CreateTableModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={() => setCreateOpen(false)}
-      />
-    </>
-  );
+  if (dims.length === 0)
+    return (
+      <>
+        <NoTablesYet from="mapping" onCreateRequested={() => setCreateOpen(true)} />
+        <CreateTableModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => setCreateOpen(false)}
+        />
+      </>
+    );
   return <MappingInner />;
 }
 
@@ -99,12 +125,18 @@ function MappingInner() {
     try {
       const fromSession = window.sessionStorage.getItem("zz:mapping:seedId");
       if (fromSession && dims.some((d) => d.id === fromSession)) return fromSession;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return dims[0].id;
   });
   const setSeedId = (id: string) => {
     setSeedIdRaw(id);
-    try { window.sessionStorage.setItem("zz:mapping:seedId", id); } catch { /* ignore */ }
+    try {
+      window.sessionStorage.setItem("zz:mapping:seedId", id);
+    } catch {
+      /* ignore */
+    }
   };
   const seedId = seedIdRaw;
   const seed = dims.find((s) => s.id === seedId) ?? dims[0];
@@ -116,18 +148,28 @@ function MappingInner() {
   const [viewMode, setViewModeBase] = useState<ViewMode>(() => {
     const urlView = searchParams.get("view");
     if (urlView === "all" || urlView === "single") return urlView;
-    try { return (window.sessionStorage.getItem("zz:mapping:viewMode") as ViewMode) ?? "single"; }
-    catch { return "single"; }
+    try {
+      return (window.sessionStorage.getItem("zz:mapping:viewMode") as ViewMode) ?? "single";
+    } catch {
+      return "single";
+    }
   });
   const setViewMode = useCallback((v: ViewMode) => {
     setViewModeBase(v);
-    try { window.sessionStorage.setItem("zz:mapping:viewMode", v); } catch { /* ignore */ }
+    try {
+      window.sessionStorage.setItem("zz:mapping:viewMode", v);
+    } catch {
+      /* ignore */
+    }
   }, []);
   const [crossCursor, setCrossCursor] = useState<{ dimId: string; raw: string } | null>(null);
   // refs for the view-mode segmented control's sliding indicator
   const singleBtnRef = useRef<HTMLButtonElement>(null);
   const allBtnRef = useRef<HTMLButtonElement>(null);
-  const [tabMarker, setTabMarker] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
+  const [tabMarker, setTabMarker] = useState<{ left: number; width: number }>({
+    left: 0,
+    width: 0,
+  });
   const [open, setOpen] = useState<string | null>(null);
   const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
@@ -140,23 +182,43 @@ function MappingInner() {
   const undo = useUndoStack();
 
   const byVal = (v: string) => seed.values.find((r) => r.value === v)!;
-  const keyFor = (label: string) => seed.canonical.find((c) => c.label === label)?.key ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  const keyFor = (label: string) =>
+    seed.canonical.find((c) => c.label === label)?.key ??
+    label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   const options = seed.canonical.map((c) => c.label);
   const external = seed.keyKind === "external_id";
 
   // committed truth (dims) overlaid with each value's pending draft, if any
   const state: ValueState = useMemo(
-    () => Object.fromEntries(seed.values.map((v) => {
-      const d = allDrafts[dkey(seed.id, v.value)];
-      return [v.value, d ? { target: d.targetLabel, status: d.status } : { target: v.current, status: v.current ? "mapped" : "new" }];
-    })),
+    () =>
+      Object.fromEntries(
+        seed.values.map((v) => {
+          const d = allDrafts[dkey(seed.id, v.value)];
+          return [
+            v.value,
+            d
+              ? { target: d.targetLabel, status: d.status }
+              : { target: v.current, status: v.current ? "mapped" : "new" },
+          ];
+        }),
+      ),
     [seed, allDrafts],
   );
 
   const selectSeed = (id: string) => {
     setSeedId(id);
-    setSearchParams((prev) => { prev.set("dimId", id); return prev; }, { replace: true });
-    setSel([]); setOpen(null); setShowSql(false); setReview(false); setFlash(null);
+    setSearchParams(
+      (prev) => {
+        prev.set("dimId", id);
+        return prev;
+      },
+      { replace: true },
+    );
+    setSel([]);
+    setOpen(null);
+    setShowSql(false);
+    setReview(false);
+    setFlash(null);
   };
 
   const counts = useMemo(() => {
@@ -175,7 +237,7 @@ function MappingInner() {
       let unmapped = 0;
       for (const v of d.values) {
         const draft = allDrafts[dkey(d.id, v.value)];
-        const status = draft ? draft.status : (v.current ? "mapped" : "new");
+        const status = draft ? draft.status : v.current ? "mapped" : "new";
         if (status === "new") unmapped++;
       }
       dimScore.set(d.id, unmapped * Math.log10(Math.max(10, d.rows)));
@@ -184,12 +246,16 @@ function MappingInner() {
     for (const d of dims) {
       for (const v of d.values) {
         const draft = allDrafts[dkey(d.id, v.value)];
-        const status: RStatus = draft ? draft.status : (v.current ? "mapped" : "new");
+        const status: RStatus = draft ? draft.status : v.current ? "mapped" : "new";
         out.push({
-          dimId: d.id, dimName: d.dimension, dimRows: d.rows,
-          raw: v.value, suggestion: v.suggestion ?? null,
+          dimId: d.id,
+          dimName: d.dimension,
+          dimRows: d.rows,
+          raw: v.value,
+          suggestion: v.suggestion ?? null,
           confidence: v.confidence ?? 0,
-          status, target: draft ? draft.targetLabel : v.current,
+          status,
+          target: draft ? draft.targetLabel : v.current,
         });
       }
     }
@@ -220,7 +286,7 @@ function MappingInner() {
       let n = 0;
       for (const v of d.values) {
         const draft = allDrafts[dkey(d.id, v.value)];
-        const status = draft ? draft.status : (v.current ? "mapped" : "new");
+        const status = draft ? draft.status : v.current ? "mapped" : "new";
         if (status === "new") n++;
       }
       if (n > 0) out.push({ id: d.id, name: d.dimension, count: n });
@@ -234,7 +300,10 @@ function MappingInner() {
     undo.push({
       label: `match "${v}" → ${label}`,
       apply: () => saveDraft(seed.id, v, "mapped", label, keyFor(label)),
-      inverse: () => prev ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey) : discardDraft(seed.id, v),
+      inverse: () =>
+        prev
+          ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(seed.id, v),
     });
     return saveDraft(seed.id, v, "mapped", label, keyFor(label));
   };
@@ -258,7 +327,10 @@ function MappingInner() {
     undo.push({
       label: `skip "${v}"`,
       apply: () => saveDraft(seed.id, v, "skipped", null, null),
-      inverse: () => prev ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey) : discardDraft(seed.id, v),
+      inverse: () =>
+        prev
+          ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(seed.id, v),
     });
     return saveDraft(seed.id, v, "skipped", null, null);
   };
@@ -310,17 +382,20 @@ function MappingInner() {
   // ── cross-dimension inbox handlers ─────────────────────────────────────────
   const keyForLabelIn = (dimId: string, label: string) => {
     const d = dimById.get(dimId);
-    return d?.canonical.find((c) => c.label === label)?.key
-      ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    return (
+      d?.canonical.find((c) => c.label === label)?.key ??
+      label.toLowerCase().replace(/[^a-z0-9]+/g, "_")
+    );
   };
   const stageMapCross = (dimId: string, raw: string, label: string) => {
     const prev = allDrafts[dkey(dimId, raw)];
     undo.push({
       label: `match "${raw}" → ${label}`,
       apply: () => saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label)),
-      inverse: () => prev
-        ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
-        : discardDraft(dimId, raw),
+      inverse: () =>
+        prev
+          ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(dimId, raw),
     });
     return saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label));
   };
@@ -337,9 +412,10 @@ function MappingInner() {
     undo.push({
       label: `skip "${raw}"`,
       apply: () => saveDraft(dimId, raw, "skipped", null, null),
-      inverse: () => prev
-        ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
-        : discardDraft(dimId, raw),
+      inverse: () =>
+        prev
+          ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(dimId, raw),
     });
     void saveDraft(dimId, raw, "skipped", null, null);
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
@@ -379,12 +455,13 @@ function MappingInner() {
 
   // staged drafts across ALL dimensions — drives the commit footer in all-mode
   const stagedAllDrafts = useMemo(
-    () => Object.values(allDrafts).filter((d) => {
-      if (d.status !== "mapped") return false;
-      const dim = dimById.get(d.dimId);
-      const v = dim?.values.find((x) => x.value === d.raw);
-      return !!(v && !v.current);
-    }),
+    () =>
+      Object.values(allDrafts).filter((d) => {
+        if (d.status !== "mapped") return false;
+        const dim = dimById.get(d.dimId);
+        const v = dim?.values.find((x) => x.value === d.raw);
+        return !!(v && !v.current);
+      }),
     [allDrafts, dimById],
   );
   const approveAndCommitAll = async () => {
@@ -397,19 +474,29 @@ function MappingInner() {
       return n + (v ? valueRows(v) : 0);
     }, 0);
     setFlash({ n: stagedAllDrafts.length, rows: predictedRows });
-    setShowSql(false); setReview(false);
+    setShowSql(false);
+    setReview(false);
     try {
-      let total = 0, totalRows = 0;
+      let total = 0,
+        totalRows = 0;
       for (const id of dimIds) {
         const res = await commit(id);
-        total += res.committed; totalRows += res.rowsRecovered;
+        total += res.committed;
+        totalRows += res.rowsRecovered;
       }
-      if (total === 0) { setFlash(null); return; }
+      if (total === 0) {
+        setFlash(null);
+        return;
+      }
       setFlash({ n: total, rows: totalRows });
       setTimeout(() => setFlash(null), 2800);
     } catch (err) {
       setFlash(null);
-      setCommitError(err instanceof Error ? err.message : "Commit failed across dimensions — check your connection and try again.");
+      setCommitError(
+        err instanceof Error
+          ? err.message
+          : "Commit failed across dimensions — check your connection and try again.",
+      );
     }
   };
 
@@ -427,7 +514,7 @@ function MappingInner() {
   const allSel = visIds.length > 0 && visIds.every((id) => sel.includes(id));
   const headState: "on" | "off" | "mixed" = allSel ? "on" : sel.length ? "mixed" : "off";
 
-  const visibleRows = visible;            // alias for clarity
+  const visibleRows = visible; // alias for clarity
   const COLS_FOR_CURSOR: ColumnDef<MappingValue>[] = [
     { field: "value", label: "Source", type: "text", editable: false },
     { field: "target", label: "Record", type: "text", editable: true },
@@ -441,7 +528,9 @@ function MappingInner() {
     onUndo: () => void undo.undo(),
     onRedo: () => void undo.redo(),
     onShortcuts: () => setShortcuts(true),
-    onFocusFilter: () => {/* filter chips already global */},
+    onFocusFilter: () => {
+      /* filter chips already global */
+    },
   });
 
   // advance the cursor to the next visible row whose status is "new",
@@ -487,28 +576,34 @@ function MappingInner() {
   // uses crossCursor (which carries dimId too) — that one's a separate feature.
   useEffect(() => {
     const want = viewMode === "single" ? (cursor.cursor?.rowKey ?? null) : null;
-    setSearchParams((prev) => {
-      const have = prev.get("value");
-      if (want == null && have == null) return prev;
-      if (want === have) return prev;
-      if (want == null) prev.delete("value");
-      else prev.set("value", want);
-      return prev;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const have = prev.get("value");
+        if (want == null && have == null) return prev;
+        if (want === have) return prev;
+        if (want == null) prev.delete("value");
+        else prev.set("value", want);
+        return prev;
+      },
+      { replace: true },
+    );
   }, [viewMode, cursor.cursor?.rowKey, setSearchParams]);
 
   // Mirror viewMode to URL ?view=… so Dashboard can deep-link to all-dim view.
   // We only write "all" (omit "single" to keep URLs clean for the default).
   useEffect(() => {
-    setSearchParams((prev) => {
-      const have = prev.get("view");
-      const want = viewMode === "all" ? "all" : null;
-      if (want == null && have == null) return prev;
-      if (want === have) return prev;
-      if (want == null) prev.delete("view");
-      else prev.set("view", want);
-      return prev;
-    }, { replace: true });
+    setSearchParams(
+      (prev) => {
+        const have = prev.get("view");
+        const want = viewMode === "all" ? "all" : null;
+        if (want == null && have == null) return prev;
+        if (want === have) return prev;
+        if (want == null) prev.delete("view");
+        else prev.set("view", want);
+        return prev;
+      },
+      { replace: true },
+    );
   }, [viewMode, setSearchParams]);
 
   // Reverse sync: if the URL ?view= changes underneath us (e.g. Cmd+K
@@ -525,7 +620,11 @@ function MappingInner() {
   // the staged drafts awaiting commit (incl. teammates' work) — the review set.
   // scoped to still-uncommitted (new) values, matching what commit() actually folds.
   const stagedDrafts = useMemo(
-    () => listDrafts(seed.id).filter((d) => d.status === "mapped" && seed.values.find((v) => v.value === d.raw)?.status === "new"),
+    () =>
+      listDrafts(seed.id).filter(
+        (d) =>
+          d.status === "mapped" && seed.values.find((v) => v.value === d.raw)?.status === "new",
+      ),
     [seed, allDrafts],
   );
   const staged = stagedDrafts.map((d) => ({ raw: d.raw, label: d.targetLabel! }));
@@ -533,7 +632,9 @@ function MappingInner() {
 
   const sql = useMemo(() => {
     if (!staged.length) return "";
-    const created = [...new Set(staged.map((s) => s.label))].filter((l) => !seed.canonical.some((c) => c.label === l));
+    const created = [...new Set(staged.map((s) => s.label))].filter(
+      (l) => !seed.canonical.some((c) => c.label === l),
+    );
     const dim = created.length
       ? `-- new master records → ${seed.dimTable}\nINSERT INTO ${seed.dimTable} (${seed.keyCol}, label) VALUES\n${created.map((l) => `  ('${keyFor(l)}', '${l.replace(/'/g, "''")}')`).join(",\n")}\nON CONFLICT (${seed.keyCol}) DO NOTHING;\n\n`
       : "";
@@ -551,15 +652,21 @@ function MappingInner() {
       return n + (v ? valueRows(v) : 0);
     }, 0);
     setFlash({ n: staged.length, rows: predictedRows });
-    setShowSql(false); setReview(false);
+    setShowSql(false);
+    setReview(false);
     try {
-      const res = await commit(seed.id);      // server folds drafts + returns rows recovered
-      if (!res.committed) { setFlash(null); return; }
+      const res = await commit(seed.id); // server folds drafts + returns rows recovered
+      if (!res.committed) {
+        setFlash(null);
+        return;
+      }
       setFlash({ n: res.committed, rows: res.rowsRecovered });
       setTimeout(() => setFlash(null), 2800);
     } catch (err) {
       setFlash(null);
-      setCommitError(err instanceof Error ? err.message : "Commit failed — check your connection and try again.");
+      setCommitError(
+        err instanceof Error ? err.message : "Commit failed — check your connection and try again.",
+      );
     }
   };
 
@@ -619,11 +726,15 @@ function MappingInner() {
             viewMode === "single" ? "text-ink" : "text-ink-3 hover:text-ink-2",
           )}
         >
-          <span className="font-display text-[14px] font-semibold leading-none tracking-[-0.01em]">Single dim</span>
-          <span className={cx(
-            "font-mono text-[10px] uppercase leading-none tracking-[0.18em] transition-colors",
-            viewMode === "single" ? "text-accent" : "text-ink-3",
-          )}>
+          <span className="font-display text-[14px] font-semibold leading-none tracking-[-0.01em]">
+            Single dim
+          </span>
+          <span
+            className={cx(
+              "font-mono text-[10px] uppercase leading-none tracking-[0.18em] transition-colors",
+              viewMode === "single" ? "text-accent" : "text-ink-3",
+            )}
+          >
             {seed.dimension}
           </span>
         </button>
@@ -636,14 +747,16 @@ function MappingInner() {
             viewMode === "all" ? "text-ink" : "text-ink-3 hover:text-ink-2",
           )}
         >
-          <span className="font-display text-[14px] font-semibold leading-none tracking-[-0.01em]">All dimensions</span>
+          <span className="font-display text-[14px] font-semibold leading-none tracking-[-0.01em]">
+            All dimensions
+          </span>
           {crossCounts.new > 0 && (
-            <span className={cx(
-              "inline-flex h-5 min-w-[20px] items-center justify-center rounded-pill px-1.5 font-mono text-[10px] font-semibold leading-none tabular-nums transition-colors",
-              viewMode === "all"
-                ? "bg-accent text-accent-ink"
-                : "bg-surface-3 text-ink-2",
-            )}>
+            <span
+              className={cx(
+                "inline-flex h-5 min-w-[20px] items-center justify-center rounded-pill px-1.5 font-mono text-[10px] font-semibold leading-none tabular-nums transition-colors",
+                viewMode === "all" ? "bg-accent text-accent-ink" : "bg-surface-3 text-ink-2",
+              )}
+            >
               {crossCounts.new}
             </span>
           )}
@@ -663,7 +776,9 @@ function MappingInner() {
             <CreateTableModal
               open={createOpen}
               onClose={() => setCreateOpen(false)}
-              onCreated={(id) => { selectSeed(id); }}
+              onCreated={(id) => {
+                selectSeed(id);
+              }}
             />
           </div>
 
@@ -671,308 +786,604 @@ function MappingInner() {
           <StatsBar animationDelay="100ms">
             {engineer && (
               <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
-                <span className="text-ink-3">master <span className="text-ink">{seed.dimTable}</span></span>
-                <span className="text-ink-3">lookup <span className="text-ink">{seed.mapTable}</span></span>
-                <span className="text-ink-3">{seed.rows.toLocaleString()} rows · key <span className="text-ink">{seed.keyCol}</span></span>
+                <span className="text-ink-3">
+                  master <span className="text-ink">{seed.dimTable}</span>
+                </span>
+                <span className="text-ink-3">
+                  lookup <span className="text-ink">{seed.mapTable}</span>
+                </span>
+                <span className="text-ink-3">
+                  {seed.rows.toLocaleString()} rows · key{" "}
+                  <span className="text-ink">{seed.keyCol}</span>
+                </span>
               </div>
             )}
             <div className={cx("flex items-center gap-3", engineer && "ml-auto")}>
-              <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2"><div className="h-full rounded-pill bg-accent transition-[width] duration-[var(--dur-slide)] ease-[var(--ease-spring)]" style={{ width: `${coverage}%` }} /></div>
-              <span className="font-mono text-[11px] text-ink-2 tabular-nums">{coverage}% mapped</span>
-              {counts.new > 0 && <Badge tone="warn" dot>{counts.new} need review</Badge>}
+              <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2">
+                <div
+                  className="h-full rounded-pill bg-accent transition-[width] duration-[var(--dur-slide)] ease-[var(--ease-spring)]"
+                  style={{ width: `${coverage}%` }}
+                />
+              </div>
+              <span className="font-mono text-[11px] text-ink-2 tabular-nums">
+                {coverage}% mapped
+              </span>
+              {counts.new > 0 && (
+                <Badge tone="warn" dot>
+                  {counts.new} need review
+                </Badge>
+              )}
             </div>
           </StatsBar>
         </>
       )}
 
       {viewMode === "single" && (
-      /* workbench — single-dim mode */
-      <div className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
-        ref={cursor.ref}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          // grid bindings first
-          cursor.onKeyDown(e);
-          if (e.defaultPrevented) return;
-          // Mapping-specific shortcuts (single-key, not editing)
-          if (!cursor.cursor) return;
-          const cur = cursor.cursor;
-          if (cur.editing) return;
-          if (e.key === "a" || e.key === "A") { e.preventDefault(); accept(cur.rowKey); return; }
-          if (e.key === "s" || e.key === "S") { e.preventDefault(); skip(cur.rowKey); return; }
-          if (e.key === "r" || e.key === "R") { e.preventDefault(); reset(cur.rowKey); return; }
-          if (e.key === "m" || e.key === "M") { e.preventDefault(); cursor.startEdit(); return; }
-          if (e.key === "n" || e.key === "N") { e.preventDefault(); advanceToNextNew(cur.rowKey); return; }
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void approveAndCommit(); return; }
-        }}
-        style={{ animationDelay: "150ms" }}
-      >
-        {/* toolbar / bulk bar */}
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
-          {sel.length === 0 ? (
-            <>
-              <Checkbox state={headState} onClick={() => setSel(allSel ? [] : visIds)} aria-label="Select all" />
-              <div className="flex flex-wrap items-center gap-1.5">
-                {FILTERS.map((f) => (
-                  <button key={f.k} type="button" onClick={() => setFilter(f.k)}
-                    className={cx("rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors", filter === f.k ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}>
-                    {f.label} <span className="opacity-60">{f.n}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <>
-              <Checkbox state={headState} onClick={() => setSel([])} aria-label="Clear selection" />
-              <span className="font-mono text-[12px] text-ink">{sel.length} selected</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" icon={<IconCheck className="h-3.5 w-3.5" />} onClick={() => void bulkApply(
-                  `accept ${sel.length} match${sel.length === 1 ? "" : "es"}`,
-                  (v) => { const r = byVal(v); return r.suggestion ? stageMap(v, r.suggestion) : undefined; },
-                )}>Accept</Button>
-                <div className="w-48"><ComboSelect options={options} value={null} allowCreate={!external} placeholder="Merge all to…" onPick={(t) => void bulkApply(
-                  `merge ${sel.length} value${sel.length === 1 ? "" : "s"} → ${t}`,
-                  (v) => stageMap(v, t),
-                )} /></div>
-                <Button variant="secondary" size="sm" icon={<IconX className="h-3.5 w-3.5" />} onClick={() => void bulkApply(
-                  `skip ${sel.length} value${sel.length === 1 ? "" : "s"}`,
-                  (v) => skipPersist(v),
-                )}>Skip</Button>
-              </div>
-              <button type="button" onClick={() => setSel([])} className="ml-auto font-mono text-[11px] text-ink-3 hover:text-ink">clear</button>
-            </>
-          )}
-        </div>
-
-        {/* column header */}
-        <div className={cx(COLS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-          <span /><span>Source value · where it&apos;s seen</span><span /><span>{seed.dimension.toLowerCase()} record</span><span>Confidence</span><span>Status</span>
-        </div>
-
-        {/* rows */}
-        {visible.map((r) => {
-          const row = state[r.value];
-          const checked = sel.includes(r.value);
-          const isOpen = open === r.value;
-          const primary = r.sources[0];
-          const focused = cursor.cursor?.rowKey === r.value;
-          return (
-            <Fragment key={r.value}>
-              <div className={cx(COLS, "border-b border-line px-4 py-2.5 transition-colors", checked ? "bg-accent-wash" : "hover:bg-hover", isOpen && "border-b-0", focused && "ring-1 ring-accent/60 bg-accent-wash/40")} data-row={r.value} onClick={() => cursor.setCursor({ rowKey: r.value, field: "target", editing: false })}>
-                <Checkbox state={checked ? "on" : "off"} onClick={() => setSel((s) => (s.includes(r.value) ? s.filter((x) => x !== r.value) : [...s, r.value]))} aria-label={`Select ${r.value}`} />
-                <div className="min-w-0">
-                  <div className="truncate font-mono text-[13px] text-ink">{r.value}</div>
-                  <button type="button" onClick={() => setOpen(isOpen ? null : r.value)} className="flex items-center gap-1 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink-2">
-                    <IconChevron className={cx("h-3 w-3 transition-transform", isOpen && "rotate-180")} />
-                    {primary.table}.{primary.column}{r.sources.length > 1 ? ` +${r.sources.length - 1}` : ""} · {valueRows(r).toLocaleString()} rows
-                  </button>
-                </div>
-                <IconArrowRight className="h-4 w-4 text-ink-3" />
-                <ComboSelect options={options} value={row.target} suggestion={r.suggestion} allowCreate={!external} onPick={(t) => pick(r.value, t)} />
-                <div>
-                  {r.confidence > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2"><div className={cx("h-full rounded-pill", confBar(r.confidence))} style={{ width: `${r.confidence}%` }} /></div>
-                      <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>{r.confidence}</span>
-                    </div>
-                  ) : <span className="font-mono text-[11px] text-ink-2">—</span>}
-                </div>
-                <div>{row.status === "mapped"
-                  ? <Chip label="Mapped" bucket="chip-1" dot />
-                  : row.status === "skipped"
-                    ? <Chip label="Skipped" bucket="chip-5" />
-                    : <Chip label="New" bucket="chip-2" dot />}</div>
-              </div>
-
-              {/* expandable provenance + write target */}
-              {isOpen && (
-                <div className="border-b border-line bg-surface-2/40 px-4 py-3 pl-[52px]">
-                  <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">appears in</div>
-                  <div className="mt-2 grid gap-1.5">
-                    {r.sources.map((o, i) => (
-                      <div key={i} className="flex items-center justify-between gap-4 font-mono text-[11.5px]">
-                        <span className="text-ink-2">{o.table}<span className="text-ink-3">.{o.column}</span></span>
-                        <span className="text-ink-3 tabular-nums">{o.rows.toLocaleString()} rows{r.firstSeen ? ` · seen ${r.firstSeen}` : ""}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 font-mono text-[10.5px] text-ink-3">
-                    {row.target
-                      ? engineer
-                        ? <>→ writes <span className="text-accent">(&***REMOVED***39;{r.value}&***REMOVED***39;, &***REMOVED***39;{keyFor(row.target)}&***REMOVED***39;)</span> to {seed.mapTable}</>
-                        : <>→ will resolve to <span className="text-accent">{row.target}</span> in {seed.dimension}</>
-                      : engineer
-                        ? <>⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently <span className="text-danger">LEFT JOIN to NULL</span></>
-                        : <>⚠ <span className="text-danger">Unmapped</span> — {valueRows(r).toLocaleString()} downstream rows are missing this value</>}
-                  </div>
-                  {(() => {
-                    const d = allDrafts[dkey(seed.id, r.value)];
-                    return d ? (
-                      <div className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ink-3">
-                        <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">{d.user.initials}</span>
-                        staged {d.status === "skipped" ? "(skipped) " : ""}by {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}{engineer ? " · uncommitted draft" : " · awaiting publish"}
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
-              )}
-              {focused && !isOpen && (
-                <div className="border-b border-line bg-surface-2/40 px-4 py-1.5 pl-[52px] font-mono text-[10.5px] text-ink-3">
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">A</kbd> accept</span>
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">M</kbd> record</span>
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">S</kbd> skip</span>
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">R</kbd> reset</span>
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">?</kbd> all shortcuts</span>
-                </div>
-              )}
-            </Fragment>
-          );
-        })}
-        {visible.length === 0 && (filter === "new" ? (
-          <div className="px-4 py-10 text-center">
-            <div className="font-display text-[18px] font-semibold text-ink">{seed.dimension} is fully matched 🎉</div>
-            {nextDims.filter((x) => x.id !== seedId).length > 0 ? (
+        /* workbench — single-dim mode */
+        <div
+          className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
+          ref={cursor.ref}
+          tabIndex={0}
+          onKeyDown={(e) => {
+            // grid bindings first
+            cursor.onKeyDown(e);
+            if (e.defaultPrevented) return;
+            // Mapping-specific shortcuts (single-key, not editing)
+            if (!cursor.cursor) return;
+            const cur = cursor.cursor;
+            if (cur.editing) return;
+            if (e.key === "a" || e.key === "A") {
+              e.preventDefault();
+              accept(cur.rowKey);
+              return;
+            }
+            if (e.key === "s" || e.key === "S") {
+              e.preventDefault();
+              skip(cur.rowKey);
+              return;
+            }
+            if (e.key === "r" || e.key === "R") {
+              e.preventDefault();
+              reset(cur.rowKey);
+              return;
+            }
+            if (e.key === "m" || e.key === "M") {
+              e.preventDefault();
+              cursor.startEdit();
+              return;
+            }
+            if (e.key === "n" || e.key === "N") {
+              e.preventDefault();
+              advanceToNextNew(cur.rowKey);
+              return;
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              void approveAndCommit();
+              return;
+            }
+          }}
+          style={{ animationDelay: "150ms" }}
+        >
+          {/* toolbar / bulk bar */}
+          <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
+            {sel.length === 0 ? (
               <>
-                <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">Pick the next dimension with work</div>
-                <div className="mx-auto mt-4 grid max-w-md gap-1.5">
-                  {nextDims.filter((x) => x.id !== seedId).slice(0, 6).map((x) => (
+                <Checkbox
+                  state={headState}
+                  onClick={() => setSel(allSel ? [] : visIds)}
+                  aria-label="Select all"
+                />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {FILTERS.map((f) => (
                     <button
-                      key={x.id}
+                      key={f.k}
                       type="button"
-                      onClick={() => selectSeed(x.id)}
-                      className="flex items-center justify-between gap-3 rounded-sm border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-2 hover:bg-hover"
+                      onClick={() => setFilter(f.k)}
+                      className={cx(
+                        "rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors",
+                        filter === f.k
+                          ? "bg-accent-wash text-accent"
+                          : "text-ink-3 hover:bg-hover hover:text-ink-2",
+                      )}
                     >
-                      <span className="font-display text-[13px] text-ink">{x.name}</span>
-                      <span className="font-mono text-[11px] text-ink-2 tabular-nums">{x.count} need{x.count === 1 ? "s" : ""} review</span>
+                      {f.label} <span className="opacity-60">{f.n}</span>
                     </button>
                   ))}
                 </div>
               </>
             ) : (
-              <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">Nothing left to reconcile across all dimensions.</div>
+              <>
+                <Checkbox
+                  state={headState}
+                  onClick={() => setSel([])}
+                  aria-label="Clear selection"
+                />
+                <span className="font-mono text-[12px] text-ink">{sel.length} selected</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    icon={<IconCheck className="h-3.5 w-3.5" />}
+                    onClick={() =>
+                      void bulkApply(
+                        `accept ${sel.length} match${sel.length === 1 ? "" : "es"}`,
+                        (v) => {
+                          const r = byVal(v);
+                          return r.suggestion ? stageMap(v, r.suggestion) : undefined;
+                        },
+                      )
+                    }
+                  >
+                    Accept
+                  </Button>
+                  <div className="w-48">
+                    <ComboSelect
+                      options={options}
+                      value={null}
+                      allowCreate={!external}
+                      placeholder="Merge all to…"
+                      onPick={(t) =>
+                        void bulkApply(
+                          `merge ${sel.length} value${sel.length === 1 ? "" : "s"} → ${t}`,
+                          (v) => stageMap(v, t),
+                        )
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<IconX className="h-3.5 w-3.5" />}
+                    onClick={() =>
+                      void bulkApply(
+                        `skip ${sel.length} value${sel.length === 1 ? "" : "s"}`,
+                        (v) => skipPersist(v),
+                      )
+                    }
+                  >
+                    Skip
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSel([])}
+                  className="ml-auto font-mono text-[11px] text-ink-3 hover:text-ink"
+                >
+                  clear
+                </button>
+              </>
             )}
           </div>
-        ) : (
-          <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">no values in this view</div>
-        ))}
 
-        {/* review & commit footer — drafts stage in Postgres, commit batch-MERGEs to DuckDB */}
-        <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
-          {commitError && (
-            <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
-              <span>Commit failed — {commitError}</span>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setCommitError(null)}>Dismiss</Button>
-                <Button size="sm" onClick={() => void approveAndCommit()}>Retry</Button>
-              </div>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <span className="font-mono text-[11px] text-ink-2">
-              {flash
-                ? <span className="zz-rise text-committed" style={{ animationDuration: "var(--dur-slide)" }}>
-                    ✓ {flash.n} {engineer ? "draft" : "change"}{flash.n === 1 ? "" : "s"}{" "}
-                    {engineer ? <>merged into {seed.mapTable}</> : <>published to {seed.dimension}</>}
-                    {" · "}{flash.rows.toLocaleString()} rows recovered
-                  </span>
-                : staged.length > 0
-                  ? engineer
-                    ? <>{staged.length} staged draft{staged.length === 1 ? "" : "s"} → batch MERGE to <span className="text-ink-2">{seed.dimTable}</span> + <span className="text-ink-2">{seed.mapTable}</span></>
-                    : <>{staged.length} change{staged.length === 1 ? "" : "s"} ready to publish to <span className="text-ink-2">{seed.dimension}</span></>
-                  : <>nothing to publish yet — accept or merge values above to stage them</>}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()} title={undo.topLabel ?? undefined}>
-                ↶ Undo
-                {undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{undo.topLabel}</span>}
-                <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
-              </Button>
-              <Button variant="ghost" size="sm" disabled={staged.length === 0} onClick={() => setReview((s) => !s)}>{review ? "Hide review" : `Review ${staged.length}`}</Button>
-              {engineer && (
-                <Button variant="secondary" size="sm" disabled={staged.length === 0} onClick={() => setShowSql((s) => !s)}>{showSql ? "Hide SQL" : "Preview SQL"}</Button>
-              )}
-              <Button size="sm" disabled={staged.length === 0} onClick={approveAndCommit}>
-                {engineer ? `Approve & commit ${staged.length}` : `Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}
-                <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
-              </Button>
-            </div>
+          {/* column header */}
+          <div
+            className={cx(
+              COLS,
+              "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3",
+            )}
+          >
+            <span />
+            <span>Source value · where it&apos;s seen</span>
+            <span />
+            <span>{seed.dimension.toLowerCase()} record</span>
+            <span>Confidence</span>
+            <span>Status</span>
           </div>
-          {review && staged.length > 0 && (
-            <div className="border-t border-line">
-              <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                Staged for review · {stagedDrafts.length}
-              </div>
-              {/* Grouped by target canonical record so duplicates collapse into
-                  "→ X (N)" and the reviewer can scan what's about to land. */}
-              <div className="mt-1 max-h-64 overflow-y-auto px-5 pb-2">
-                {(() => {
-                  const byTarget = new Map<string, typeof stagedDrafts>();
-                  for (const d of stagedDrafts) {
-                    const t = d.targetLabel ?? "—";
-                    const arr = byTarget.get(t) ?? [];
-                    arr.push(d);
-                    byTarget.set(t, arr);
+
+          {/* rows */}
+          {visible.map((r) => {
+            const row = state[r.value];
+            const checked = sel.includes(r.value);
+            const isOpen = open === r.value;
+            const primary = r.sources[0];
+            const focused = cursor.cursor?.rowKey === r.value;
+            return (
+              <Fragment key={r.value}>
+                <div
+                  className={cx(
+                    COLS,
+                    "border-b border-line px-4 py-2.5 transition-colors",
+                    checked ? "bg-accent-wash" : "hover:bg-hover",
+                    isOpen && "border-b-0",
+                    focused && "ring-1 ring-accent/60 bg-accent-wash/40",
+                  )}
+                  data-row={r.value}
+                  onClick={() =>
+                    cursor.setCursor({ rowKey: r.value, field: "target", editing: false })
                   }
-                  return [...byTarget.entries()]
-                    .sort((a, b) => b[1].length - a[1].length)
-                    .map(([target, drafts]) => (
-                      <div key={target} className="pb-1.5">
-                        <div className="flex items-center gap-2 pt-1.5 font-mono text-[11px]">
-                          <IconArrowRight className="h-3 w-3 shrink-0 text-ink-3" />
-                          <span className="truncate text-accent">{target}</span>
-                          <span className="text-ink-3 tabular-nums">({drafts.length})</span>
+                >
+                  <Checkbox
+                    state={checked ? "on" : "off"}
+                    onClick={() =>
+                      setSel((s) =>
+                        s.includes(r.value) ? s.filter((x) => x !== r.value) : [...s, r.value],
+                      )
+                    }
+                    aria-label={`Select ${r.value}`}
+                  />
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-[13px] text-ink">{r.value}</div>
+                    <button
+                      type="button"
+                      onClick={() => setOpen(isOpen ? null : r.value)}
+                      className="flex items-center gap-1 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink-2"
+                    >
+                      <IconChevron
+                        className={cx("h-3 w-3 transition-transform", isOpen && "rotate-180")}
+                      />
+                      {primary.table}.{primary.column}
+                      {r.sources.length > 1 ? ` +${r.sources.length - 1}` : ""} ·{" "}
+                      {valueRows(r).toLocaleString()} rows
+                    </button>
+                  </div>
+                  <IconArrowRight className="h-4 w-4 text-ink-3" />
+                  <ComboSelect
+                    options={options}
+                    value={row.target}
+                    suggestion={r.suggestion}
+                    allowCreate={!external}
+                    onPick={(t) => pick(r.value, t)}
+                  />
+                  <div>
+                    {r.confidence > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+                          <div
+                            className={cx("h-full rounded-pill", confBar(r.confidence))}
+                            style={{ width: `${r.confidence}%` }}
+                          />
                         </div>
-                        <ul className="mt-1 divide-y divide-line">
-                          {drafts.map((d) => (
-                            <li key={d.raw} className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]" style={{ animationDuration: "var(--dur-slide)" }}>
-                              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
-                              <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
-                              <span className="shrink-0 text-ink-2 tabular-nums">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
-                              <button
-                                type="button"
-                                onClick={() => discardCross(seed.id, d.raw)}
-                                title="Discard this draft"
-                                aria-label="Discard draft"
-                                className="shrink-0 text-ink-3 transition-colors hover:text-danger"
-                              >
-                                <IconX className="h-3.5 w-3.5" />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
+                        <span
+                          className={cx(
+                            "font-mono text-[11px] tabular-nums",
+                            confText(r.confidence),
+                          )}
+                        >
+                          {r.confidence}
+                        </span>
                       </div>
-                    ));
-                })()}
+                    ) : (
+                      <span className="font-mono text-[11px] text-ink-2">—</span>
+                    )}
+                  </div>
+                  <div>
+                    {row.status === "mapped" ? (
+                      <Chip label="Mapped" bucket="chip-1" dot />
+                    ) : row.status === "skipped" ? (
+                      <Chip label="Skipped" bucket="chip-5" />
+                    ) : (
+                      <Chip label="New" bucket="chip-2" dot />
+                    )}
+                  </div>
+                </div>
+
+                {/* expandable provenance + write target */}
+                {isOpen && (
+                  <div className="border-b border-line bg-surface-2/40 px-4 py-3 pl-[52px]">
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                      appears in
+                    </div>
+                    <div className="mt-2 grid gap-1.5">
+                      {r.sources.map((o, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between gap-4 font-mono text-[11.5px]"
+                        >
+                          <span className="text-ink-2">
+                            {o.table}
+                            <span className="text-ink-3">.{o.column}</span>
+                          </span>
+                          <span className="text-ink-3 tabular-nums">
+                            {o.rows.toLocaleString()} rows
+                            {r.firstSeen ? ` · seen ${r.firstSeen}` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 font-mono text-[10.5px] text-ink-3">
+                      {row.target ? (
+                        engineer ? (
+                          <>
+                            → writes{" "}
+                            <span className="text-accent">
+                              (&***REMOVED***39;{r.value}&***REMOVED***39;, &***REMOVED***39;{keyFor(row.target)}&***REMOVED***39;)
+                            </span>{" "}
+                            to {seed.mapTable}
+                          </>
+                        ) : (
+                          <>
+                            → will resolve to <span className="text-accent">{row.target}</span> in{" "}
+                            {seed.dimension}
+                          </>
+                        )
+                      ) : engineer ? (
+                        <>
+                          ⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently{" "}
+                          <span className="text-danger">LEFT JOIN to NULL</span>
+                        </>
+                      ) : (
+                        <>
+                          ⚠ <span className="text-danger">Unmapped</span> —{" "}
+                          {valueRows(r).toLocaleString()} downstream rows are missing this value
+                        </>
+                      )}
+                    </div>
+                    {(() => {
+                      const d = allDrafts[dkey(seed.id, r.value)];
+                      return d ? (
+                        <div className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ink-3">
+                          <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">
+                            {d.user.initials}
+                          </span>
+                          staged {d.status === "skipped" ? "(skipped) " : ""}by{" "}
+                          {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
+                          {engineer ? " · uncommitted draft" : " · awaiting publish"}
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                )}
+                {focused && !isOpen && (
+                  <div className="border-b border-line bg-surface-2/40 px-4 py-1.5 pl-[52px] font-mono text-[10.5px] text-ink-3">
+                    <span className="mr-3">
+                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
+                        A
+                      </kbd>{" "}
+                      accept
+                    </span>
+                    <span className="mr-3">
+                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
+                        M
+                      </kbd>{" "}
+                      record
+                    </span>
+                    <span className="mr-3">
+                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
+                        S
+                      </kbd>{" "}
+                      skip
+                    </span>
+                    <span className="mr-3">
+                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
+                        R
+                      </kbd>{" "}
+                      reset
+                    </span>
+                    <span className="mr-3">
+                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
+                        ?
+                      </kbd>{" "}
+                      all shortcuts
+                    </span>
+                  </div>
+                )}
+              </Fragment>
+            );
+          })}
+          {visible.length === 0 &&
+            (filter === "new" ? (
+              <div className="px-4 py-10 text-center">
+                <div className="font-display text-[18px] font-semibold text-ink">
+                  {seed.dimension} is fully matched 🎉
+                </div>
+                {nextDims.filter((x) => x.id !== seedId).length > 0 ? (
+                  <>
+                    <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">
+                      Pick the next dimension with work
+                    </div>
+                    <div className="mx-auto mt-4 grid max-w-md gap-1.5">
+                      {nextDims
+                        .filter((x) => x.id !== seedId)
+                        .slice(0, 6)
+                        .map((x) => (
+                          <button
+                            key={x.id}
+                            type="button"
+                            onClick={() => selectSeed(x.id)}
+                            className="flex items-center justify-between gap-3 rounded-sm border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-2 hover:bg-hover"
+                          >
+                            <span className="font-display text-[13px] text-ink">{x.name}</span>
+                            <span className="font-mono text-[11px] text-ink-2 tabular-nums">
+                              {x.count} need{x.count === 1 ? "s" : ""} review
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">
+                    Nothing left to reconcile across all dimensions.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+                no values in this view
+              </div>
+            ))}
+
+          {/* review & commit footer — drafts stage in Postgres, commit batch-MERGEs to DuckDB */}
+          <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
+            {commitError && (
+              <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
+                <span>Commit failed — {commitError}</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setCommitError(null)}>
+                    Dismiss
+                  </Button>
+                  <Button size="sm" onClick={() => void approveAndCommit()}>
+                    Retry
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <span className="font-mono text-[11px] text-ink-2">
+                {flash ? (
+                  <span
+                    className="zz-rise text-committed"
+                    style={{ animationDuration: "var(--dur-slide)" }}
+                  >
+                    ✓ {flash.n} {engineer ? "draft" : "change"}
+                    {flash.n === 1 ? "" : "s"}{" "}
+                    {engineer ? (
+                      <>merged into {seed.mapTable}</>
+                    ) : (
+                      <>published to {seed.dimension}</>
+                    )}
+                    {" · "}
+                    {flash.rows.toLocaleString()} rows recovered
+                  </span>
+                ) : staged.length > 0 ? (
+                  engineer ? (
+                    <>
+                      {staged.length} staged draft{staged.length === 1 ? "" : "s"} → batch MERGE to{" "}
+                      <span className="text-ink-2">{seed.dimTable}</span> +{" "}
+                      <span className="text-ink-2">{seed.mapTable}</span>
+                    </>
+                  ) : (
+                    <>
+                      {staged.length} change{staged.length === 1 ? "" : "s"} ready to publish to{" "}
+                      <span className="text-ink-2">{seed.dimension}</span>
+                    </>
+                  )
+                ) : (
+                  <>nothing to publish yet — accept or merge values above to stage them</>
+                )}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!undo.canUndo}
+                  onClick={() => void undo.undo()}
+                  title={undo.topLabel ?? undefined}
+                >
+                  ↶ Undo
+                  {undo.topLabel && (
+                    <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">
+                      {undo.topLabel}
+                    </span>
+                  )}
+                  <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={staged.length === 0}
+                  onClick={() => setReview((s) => !s)}
+                >
+                  {review ? "Hide review" : `Review ${staged.length}`}
+                </Button>
+                {engineer && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={staged.length === 0}
+                    onClick={() => setShowSql((s) => !s)}
+                  >
+                    {showSql ? "Hide SQL" : "Preview SQL"}
+                  </Button>
+                )}
+                <Button size="sm" disabled={staged.length === 0} onClick={approveAndCommit}>
+                  {engineer
+                    ? `Approve & commit ${staged.length}`
+                    : `Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}
+                  <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
+                </Button>
               </div>
             </div>
-          )}
-          {showSql && staged.length > 0 && (
-            <pre className="overflow-x-auto border-t border-line bg-bg px-5 py-4 font-mono text-[11.5px] leading-relaxed text-ink-2">{sql}</pre>
-          )}
+            {review && staged.length > 0 && (
+              <div className="border-t border-line">
+                <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                  Staged for review · {stagedDrafts.length}
+                </div>
+                {/* Grouped by target canonical record so duplicates collapse into
+                  "→ X (N)" and the reviewer can scan what's about to land. */}
+                <div className="mt-1 max-h-64 overflow-y-auto px-5 pb-2">
+                  {(() => {
+                    const byTarget = new Map<string, typeof stagedDrafts>();
+                    for (const d of stagedDrafts) {
+                      const t = d.targetLabel ?? "—";
+                      const arr = byTarget.get(t) ?? [];
+                      arr.push(d);
+                      byTarget.set(t, arr);
+                    }
+                    return [...byTarget.entries()]
+                      .sort((a, b) => b[1].length - a[1].length)
+                      .map(([target, drafts]) => (
+                        <div key={target} className="pb-1.5">
+                          <div className="flex items-center gap-2 pt-1.5 font-mono text-[11px]">
+                            <IconArrowRight className="h-3 w-3 shrink-0 text-ink-3" />
+                            <span className="truncate text-accent">{target}</span>
+                            <span className="text-ink-3 tabular-nums">({drafts.length})</span>
+                          </div>
+                          <ul className="mt-1 divide-y divide-line">
+                            {drafts.map((d) => (
+                              <li
+                                key={d.raw}
+                                className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]"
+                                style={{ animationDuration: "var(--dur-slide)" }}
+                              >
+                                <span
+                                  className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2"
+                                  title={d.user.name}
+                                >
+                                  {d.user.initials}
+                                </span>
+                                <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
+                                <span className="shrink-0 text-ink-2 tabular-nums">
+                                  {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => discardCross(seed.id, d.raw)}
+                                  title="Discard this draft"
+                                  aria-label="Discard draft"
+                                  className="shrink-0 text-ink-3 transition-colors hover:text-danger"
+                                >
+                                  <IconX className="h-3.5 w-3.5" />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ));
+                  })()}
+                </div>
+              </div>
+            )}
+            {showSql && staged.length > 0 && (
+              <pre className="overflow-x-auto border-t border-line bg-bg px-5 py-4 font-mono text-[11.5px] leading-relaxed text-ink-2">
+                {sql}
+              </pre>
+            )}
+          </div>
         </div>
-      </div>
       )}
 
-      {viewMode === "all" && <CrossDimInbox
-        rows={visibleCross}
-        counts={crossCounts}
-        filter={filter}
-        setFilter={setFilter}
-        cursor={crossCursor}
-        setCursor={setCrossCursor}
-        accept={acceptCross}
-        skip={skipCross}
-        pick={pickCross}
-        advanceNext={advanceCrossNext}
-        dimById={dimById}
-        stagedDrafts={stagedAllDrafts}
-        discard={discardCross}
-        commitAll={approveAndCommitAll}
-        commitError={commitError}
-        setCommitError={setCommitError}
-        flash={flash}
-        undo={undo}
-      />}
+      {viewMode === "all" && (
+        <CrossDimInbox
+          rows={visibleCross}
+          counts={crossCounts}
+          filter={filter}
+          setFilter={setFilter}
+          cursor={crossCursor}
+          setCursor={setCrossCursor}
+          accept={acceptCross}
+          skip={skipCross}
+          pick={pickCross}
+          advanceNext={advanceCrossNext}
+          dimById={dimById}
+          stagedDrafts={stagedAllDrafts}
+          discard={discardCross}
+          commitAll={approveAndCommitAll}
+          commitError={commitError}
+          setCommitError={setCommitError}
+          flash={flash}
+          undo={undo}
+        />
+      )}
     </div>
   );
 }
@@ -998,7 +1409,8 @@ interface CrossDimInboxProps {
   undo: ReturnType<typeof useUndoStack>;
 }
 
-const COLS_CROSS = "grid grid-cols-[120px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
+const COLS_CROSS =
+  "grid grid-cols-[120px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
 function CrossDimInbox(p: CrossDimInboxProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1023,22 +1435,48 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       tabIndex={0}
       className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
       onKeyDown={(e) => {
-        if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); move(1); return; }
-        if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); move(-1); return; }
+        if (e.key === "ArrowDown" || e.key === "j") {
+          e.preventDefault();
+          move(1);
+          return;
+        }
+        if (e.key === "ArrowUp" || e.key === "k") {
+          e.preventDefault();
+          move(-1);
+          return;
+        }
         if (!p.cursor) return;
-        if (e.key === "a" || e.key === "A") { e.preventDefault(); p.accept(p.cursor.dimId, p.cursor.raw); return; }
-        if (e.key === "s" || e.key === "S") { e.preventDefault(); p.skip(p.cursor.dimId, p.cursor.raw); return; }
-        if (e.key === "n" || e.key === "N") { e.preventDefault(); p.advanceNext(p.cursor.dimId, p.cursor.raw); return; }
+        if (e.key === "a" || e.key === "A") {
+          e.preventDefault();
+          p.accept(p.cursor.dimId, p.cursor.raw);
+          return;
+        }
+        if (e.key === "s" || e.key === "S") {
+          e.preventDefault();
+          p.skip(p.cursor.dimId, p.cursor.raw);
+          return;
+        }
+        if (e.key === "n" || e.key === "N") {
+          e.preventDefault();
+          p.advanceNext(p.cursor.dimId, p.cursor.raw);
+          return;
+        }
         // M opens the focused row's ComboSelect for manual pick — matches the
         // single-dim workbench's M binding. We find the row via data-row-key
         // and click its picker trigger (the one with aria-haspopup="listbox").
         if (e.key === "m" || e.key === "M") {
           e.preventDefault();
-          const rowEl = containerRef.current?.querySelector<HTMLElement>(`[data-row-key="${curKey}"]`);
+          const rowEl = containerRef.current?.querySelector<HTMLElement>(
+            `[data-row-key="${curKey}"]`,
+          );
           rowEl?.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')?.click();
           return;
         }
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); p.commitAll(); return; }
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          e.preventDefault();
+          p.commitAll();
+          return;
+        }
       }}
       style={{ animationDelay: "150ms" }}
     >
@@ -1046,8 +1484,17 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => (
-            <button key={f.k} type="button" onClick={() => p.setFilter(f.k)}
-              className={cx("rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors", p.filter === f.k ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}>
+            <button
+              key={f.k}
+              type="button"
+              onClick={() => p.setFilter(f.k)}
+              className={cx(
+                "rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors",
+                p.filter === f.k
+                  ? "bg-accent-wash text-accent"
+                  : "text-ink-3 hover:bg-hover hover:text-ink-2",
+              )}
+            >
               {f.label} <span className="opacity-60">{f.n}</span>
             </button>
           ))}
@@ -1058,56 +1505,94 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       </div>
 
       {/* column header */}
-      <div className={cx(COLS_CROSS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-        <span>Dimension</span><span>Source value</span><span /><span>Record</span><span>Confidence</span><span>Status</span>
+      <div
+        className={cx(
+          COLS_CROSS,
+          "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3",
+        )}
+      >
+        <span>Dimension</span>
+        <span>Source value</span>
+        <span />
+        <span>Record</span>
+        <span>Confidence</span>
+        <span>Status</span>
       </div>
 
       {/* rows */}
       {p.rows.length === 0 ? (
         <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-          {p.filter === "new" ? "🎉 nothing left to reconcile across all dimensions" : "no values in this view"}
+          {p.filter === "new"
+            ? "🎉 nothing left to reconcile across all dimensions"
+            : "no values in this view"}
         </div>
-      ) : p.rows.slice(0, 500).map((r) => {
-        const key = `${r.dimId}::${r.raw}`;
-        const focused = curKey === key;
-        const dim = p.dimById.get(r.dimId);
-        const options = dim?.canonical.map((c) => c.label) ?? [];
-        const external = dim?.keyKind === "external_id";
-        return (
-          <div
-            key={key}
-            data-row-key={key}
-            className={cx(COLS_CROSS, "border-b border-line px-4 py-2.5 transition-colors hover:bg-hover", focused && "ring-1 ring-accent/60 bg-accent-wash/40")}
-            onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
-          >
-            <span><Chip label={r.dimName} bucket="chip-3" /></span>
-            <div className="min-w-0">
-              <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
-              <div className="font-mono text-[10px] text-ink-2 tabular-nums">{r.dimRows.toLocaleString()} rows in warehouse</div>
-            </div>
-            <IconArrowRight className="h-4 w-4 text-ink-3" />
-            <ComboSelect
-              options={options} value={r.target}
-              suggestion={r.suggestion ?? undefined}
-              allowCreate={!external}
-              onPick={(t) => p.pick(r.dimId, r.raw, t)}
-            />
-            <div>
-              {r.confidence > 0 ? (
-                <div className="flex items-center gap-2">
-                  <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2"><div className={cx("h-full rounded-pill", confBar(r.confidence))} style={{ width: `${r.confidence}%` }} /></div>
-                  <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>{r.confidence}</span>
+      ) : (
+        p.rows.slice(0, 500).map((r) => {
+          const key = `${r.dimId}::${r.raw}`;
+          const focused = curKey === key;
+          const dim = p.dimById.get(r.dimId);
+          const options = dim?.canonical.map((c) => c.label) ?? [];
+          const external = dim?.keyKind === "external_id";
+          return (
+            <div
+              key={key}
+              data-row-key={key}
+              className={cx(
+                COLS_CROSS,
+                "border-b border-line px-4 py-2.5 transition-colors hover:bg-hover",
+                focused && "ring-1 ring-accent/60 bg-accent-wash/40",
+              )}
+              onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
+            >
+              <span>
+                <Chip label={r.dimName} bucket="chip-3" />
+              </span>
+              <div className="min-w-0">
+                <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
+                <div className="font-mono text-[10px] text-ink-2 tabular-nums">
+                  {r.dimRows.toLocaleString()} rows in warehouse
                 </div>
-              ) : <span className="font-mono text-[11px] text-ink-2">—</span>}
+              </div>
+              <IconArrowRight className="h-4 w-4 text-ink-3" />
+              <ComboSelect
+                options={options}
+                value={r.target}
+                suggestion={r.suggestion ?? undefined}
+                allowCreate={!external}
+                onPick={(t) => p.pick(r.dimId, r.raw, t)}
+              />
+              <div>
+                {r.confidence > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+                      <div
+                        className={cx("h-full rounded-pill", confBar(r.confidence))}
+                        style={{ width: `${r.confidence}%` }}
+                      />
+                    </div>
+                    <span
+                      className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}
+                    >
+                      {r.confidence}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="font-mono text-[11px] text-ink-2">—</span>
+                )}
+              </div>
+              <div>
+                {r.status === "mapped" ? (
+                  <Chip label="Mapped" bucket="chip-1" dot />
+                ) : r.status === "skipped" ? (
+                  <Chip label="Skipped" bucket="chip-5" />
+                ) : (
+                  <Chip label="New" bucket="chip-2" dot />
+                )}
+              </div>
             </div>
-            <div>{r.status === "mapped"
-              ? <Chip label="Mapped" bucket="chip-1" dot />
-              : r.status === "skipped"
-                ? <Chip label="Skipped" bucket="chip-5" />
-                : <Chip label="New" bucket="chip-2" dot />}</div>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
 
       {/* footer — multi-dim commit */}
       <CrossDimFooter p={p} />
@@ -1166,22 +1651,29 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
         <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
           <span>Commit failed — {p.commitError}</span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>Dismiss</Button>
-            <Button size="sm" onClick={() => p.commitAll()}>Retry</Button>
+            <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>
+              Dismiss
+            </Button>
+            <Button size="sm" onClick={() => p.commitAll()}>
+              Retry
+            </Button>
           </div>
         </div>
       )}
       {review && stagedCount > 0 && (
         <div className="border-b border-line">
           <div className="px-4 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
-            Staged for review · {stagedCount} across {grouped.length} dim{grouped.length === 1 ? "" : "s"}
+            Staged for review · {stagedCount} across {grouped.length} dim
+            {grouped.length === 1 ? "" : "s"}
           </div>
           <div className="mt-1 max-h-72 overflow-y-auto">
             {grouped.map((g) => (
               <div key={g.dimId} className="border-t border-line first:border-t-0">
                 <div className="flex items-center gap-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-2">
                   <Chip label={g.dimName} bucket="chip-3" />
-                  <span className="tabular-nums">{g.groups.reduce((n, x) => n + x.drafts.length, 0)} staged</span>
+                  <span className="tabular-nums">
+                    {g.groups.reduce((n, x) => n + x.drafts.length, 0)} staged
+                  </span>
                 </div>
                 {g.groups.map((tg) => (
                   <div key={tg.target} className="px-4 pb-1.5">
@@ -1192,8 +1684,17 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
                     </div>
                     <ul className="mt-1 divide-y divide-line">
                       {tg.drafts.map((d) => (
-                        <li key={`${d.dimId}::${d.raw}`} className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]" style={{ animationDuration: "var(--dur-slide)" }}>
-                          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
+                        <li
+                          key={`${d.dimId}::${d.raw}`}
+                          className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]"
+                          style={{ animationDuration: "var(--dur-slide)" }}
+                        >
+                          <span
+                            className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2"
+                            title={d.user.name}
+                          >
+                            {d.user.initials}
+                          </span>
                           <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
                           <span className="shrink-0 text-ink-2 tabular-nums">{d.at}</span>
                           <button
@@ -1218,20 +1719,44 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <span className="font-mono text-[11px] text-ink-2">
           {p.flash ? (
-            <span className="zz-rise text-committed" style={{ animationDuration: "var(--dur-slide)" }}>✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published · {p.flash.rows.toLocaleString()} rows recovered</span>
+            <span
+              className="zz-rise text-committed"
+              style={{ animationDuration: "var(--dur-slide)" }}
+            >
+              ✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published ·{" "}
+              {p.flash.rows.toLocaleString()} rows recovered
+            </span>
           ) : stagedCount > 0 ? (
-            <>{stagedCount} change{stagedCount === 1 ? "" : "s"} staged across {grouped.length} dim{grouped.length === 1 ? "" : "s"}, ready to publish</>
+            <>
+              {stagedCount} change{stagedCount === 1 ? "" : "s"} staged across {grouped.length} dim
+              {grouped.length === 1 ? "" : "s"}, ready to publish
+            </>
           ) : (
             <>nothing to publish yet — accept or merge values above to stage them</>
           )}
         </span>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" disabled={!p.undo.canUndo} onClick={() => void p.undo.undo()} title={p.undo.topLabel ?? undefined}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!p.undo.canUndo}
+            onClick={() => void p.undo.undo()}
+            title={p.undo.topLabel ?? undefined}
+          >
             ↶ Undo
-            {p.undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{p.undo.topLabel}</span>}
+            {p.undo.topLabel && (
+              <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">
+                {p.undo.topLabel}
+              </span>
+            )}
             <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
-          <Button variant="ghost" size="sm" disabled={stagedCount === 0} onClick={() => setReview((s) => !s)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={stagedCount === 0}
+            onClick={() => setReview((s) => !s)}
+          >
             {review ? "Hide review" : `Review ${stagedCount}`}
           </Button>
           <Button size="sm" disabled={stagedCount === 0} onClick={() => p.commitAll()}>

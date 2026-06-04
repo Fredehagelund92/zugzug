@@ -26,11 +26,11 @@ interface TypeTile {
 }
 
 const TYPE_TILES: TypeTile[] = [
-  { type: "text",    icon: "A",  label: "Text"    },
-  { type: "number",  icon: "***REMOVED***",  label: "Number"  },
+  { type: "text", icon: "A", label: "Text" },
+  { type: "number", icon: "***REMOVED***", label: "Number" },
   { type: "boolean", icon: "☑", label: "Boolean" },
-  { type: "date",    icon: "⊞",  label: "Date"    },
-  { type: "select",  icon: "◉", label: "Select"  },
+  { type: "date", icon: "⊞", label: "Date" },
+  { type: "select", icon: "◉", label: "Select" },
 ];
 
 export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopoverProps) {
@@ -71,7 +71,8 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
       // right-edge of popover aligns with right-edge of "+ field" button
       let left = rect.right - POPOVER_WIDTH;
       if (left < 8) left = 8; // clamp to viewport left if needed
-      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      if (left + POPOVER_WIDTH > window.innerWidth - 8)
+        left = window.innerWidth - POPOVER_WIDTH - 8;
 
       // place below the button; flip above if it would overflow the viewport
       let top = rect.bottom + GAP;
@@ -103,7 +104,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label, type, options, createAnother, busy]);
 
   // Close on click-outside
@@ -215,7 +216,10 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
             className="relative flex items-center gap-2 rounded-sm border border-line p-2 opacity-40 cursor-not-allowed"
             aria-disabled="true"
           >
-            <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm bg-surface-2 font-mono text-[11px] text-ink-2" aria-hidden>
+            <span
+              className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm bg-surface-2 font-mono text-[11px] text-ink-2"
+              aria-hidden
+            >
               ↗
             </span>
             <span className="font-mono text-[11px] text-ink">Linked record</span>

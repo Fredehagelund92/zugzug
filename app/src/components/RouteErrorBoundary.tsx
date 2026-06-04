@@ -2,10 +2,7 @@ import React from "react";
 
 type State = { error: Error | null };
 
-export class RouteErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  State
-> {
+export class RouteErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
   state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
@@ -27,9 +24,7 @@ export class RouteErrorBoundary extends React.Component<
           <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
             Something went wrong
           </div>
-          <div className="font-display text-2xl font-semibold">
-            The app hit an unexpected error
-          </div>
+          <div className="font-display text-2xl font-semibold">The app hit an unexpected error</div>
           <p className="text-sm text-ink-2">
             {this.state.error.message || "An unknown error occurred."}
           </p>
