@@ -179,7 +179,7 @@ export function Sources() {
   const scan = async () => { setScanning(true); const n = await scanSources(); setScanning(false); setFlash(n); setTimeout(() => setFlash(null), 2600); };
   const derive = async (s: SourceInfo) => {
     const n = await deriveCanonical(s.dimId, s.table, s.column);
-    setDerived(n > 0 ? `Imported ${n} master record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}` : `${s.table}.${s.column} has no rows to import`);
+    setDerived(n > 0 ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}` : `${s.table}.${s.column} has no rows to import`);
     setTimeout(() => setDerived(null), 3200);
   };
   const toggleSchema = (k: string) => {
@@ -487,8 +487,8 @@ function LedgerRow({ row, expanded, onToggle, onScheduleChange, onDerive }: {
         <div className="flex items-center justify-end gap-1.5">
           <ScanScheduleMenu value={row.schedule ?? null} onChange={onScheduleChange} />
           <button type="button"
-            aria-label={`Import master records from ${row.table}.${row.column}`}
-            title="Import master records from this column"
+            aria-label={`Import records from ${row.table}.${row.column}`}
+            title="Import records from this column"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDerive(); }}
             className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink">
             <IconWand className="h-3 w-3" />

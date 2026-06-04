@@ -122,7 +122,7 @@ function MappingInner() {
   const visibleRows = visible;            // alias for clarity
   const COLS_FOR_CURSOR: ColumnDef<MappingValue>[] = [
     { field: "value", label: "Source", type: "text", editable: false },
-    { field: "target", label: "Master", type: "text", editable: true },
+    { field: "target", label: "Record", type: "text", editable: true },
     { field: "status", label: "Status", type: "text", editable: false },
   ];
   const cursor = useGridCursor<MappingValue>({
@@ -264,7 +264,7 @@ function MappingInner() {
 
         {/* column header */}
         <div className={cx(COLS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-          <span /><span>Source value · where it's seen</span><span /><span>Master {seed.dimension.toLowerCase()}</span><span>Confidence</span><span>Status</span>
+          <span /><span>Source value · where it's seen</span><span /><span>{seed.dimension.toLowerCase()} record</span><span>Confidence</span><span>Status</span>
         </div>
 
         {/* rows */}
@@ -337,7 +337,7 @@ function MappingInner() {
               {focused && !isOpen && (
                 <div className="border-b border-line bg-surface-2/40 px-4 py-1.5 pl-[52px] font-mono text-[10.5px] text-ink-3">
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">A</kbd> accept</span>
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">M</kbd> master</span>
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">M</kbd> record</span>
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">S</kbd> skip</span>
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">R</kbd> reset</span>
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">?</kbd> all shortcuts</span>

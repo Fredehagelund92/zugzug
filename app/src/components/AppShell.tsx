@@ -109,7 +109,7 @@ export function AppShell() {
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
     { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
     { to: "/app/sources", label: "Sources", Icon: IconSources, count: undefined as number | undefined },
-    { to: "/app/tables", label: "Master lists", Icon: IconTables, count: dims.length },
+    { to: "/app/tables", label: "Tables", Icon: IconTables, count: dims.length },
     { to: "/app/settings", label: "Settings", Icon: IconSettings },
   ];
 
