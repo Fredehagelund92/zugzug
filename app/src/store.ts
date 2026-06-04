@@ -100,6 +100,10 @@ async function refreshDims(): Promise<void> {
   // list call + N detail fetches (N+1) on every mutation that refreshed dims.
   dims = await api<MappingDimension[]>("/dimensions?full=true");
 }
+async function refreshDim(dimId: string): Promise<void> {
+  const dim = await api<MappingDimension>(`/dimensions/${encodeURIComponent(dimId)}`);
+  dims = dims.map((d) => (d.id === dim.id ? dim : d));
+}
 async function refreshDrafts(dimId?: string): Promise<void> {
   if (dimId) {
     const list = await api<Draft[]>(`/dimensions/${encodeURIComponent(dimId)}/drafts`);
@@ -281,7 +285,7 @@ export async function commit(dimId: string): Promise<{ committed: number; rowsRe
     `/dimensions/${encodeURIComponent(dimId)}/commit`,
     { method: "POST" },
   );
-  await refreshDims();
+  await refreshDim(dimId);
   await refreshDrafts(dimId);
   await refreshSources();
   await refreshAudit();
@@ -358,7 +362,7 @@ export async function deriveCanonical(
     `/dimensions/${encodeURIComponent(dimId)}/derive`,
     { method: "POST", body: JSON.stringify({ table, column, nameColumn }) },
   );
-  await refreshDims();
+  await refreshDim(dimId);
   await refreshSources();
   await refreshAudit();
   emit();
@@ -371,7 +375,7 @@ export async function addCanonical(dimId: string, label: string, key?: string): 
     method: "POST",
     body: JSON.stringify({ label, key }),
   });
-  await refreshDims();
+  await refreshDim(dimId);
   await refreshAudit();
   emit();
 }
@@ -380,7 +384,7 @@ export async function renameCanonical(dimId: string, key: string, label: string)
     method: "PUT",
     body: JSON.stringify({ label }),
   });
-  await refreshDims();
+  await refreshDim(dimId);
   await refreshAudit();
   emit();
 }
@@ -393,7 +397,7 @@ export async function mergeCanonical(
     `/dimensions/${encodeURIComponent(dimId)}/canonical/merge`,
     { method: "POST", body: JSON.stringify({ survivor, losers }) },
   );
-  await refreshDims();
+  await refreshDim(dimId);
   await refreshSources();
   await refreshAudit();
   emit();
@@ -409,7 +413,7 @@ export async function retireCanonical(
     { method: "DELETE" },
   );
   if (res.ok) {
-    await refreshDims();
+    await refreshDim(dimId);
     await refreshAudit();
     emit();
   }
@@ -434,7 +438,7 @@ export async function addField(
     method: "POST",
     body: JSON.stringify({ label, type, options }),
   });
-  await refreshDims();
+  await refreshDim(dimId);
   await refreshAudit();
   emit();
 }
@@ -451,7 +455,7 @@ export async function addColumnOption(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}/options`,
     { method: "POST", body: JSON.stringify({ label, color }) },
   );
-  await refreshDims();
+  await refreshDim(dimId);
   emit();
   return res.options;
 }
@@ -461,7 +465,7 @@ export async function renameColumn(dimId: string, field: string, newLabel: strin
     method: "PUT",
     body: JSON.stringify({ label: newLabel }),
   });
-  await refreshDims();
+  await refreshDim(dimId);
   emit();
 }
 
@@ -477,7 +481,7 @@ export async function changeColumnType(
     { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull }) },
   );
   if (res.ok) {
-    await refreshDims();
+    await refreshDim(dimId);
     emit();
   }
   return res;
@@ -487,7 +491,7 @@ export async function deleteColumn(dimId: string, field: string): Promise<void> 
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
     method: "DELETE",
   });
-  await refreshDims();
+  await refreshDim(dimId);
   emit();
 }
 
@@ -535,7 +539,7 @@ export async function setFieldValue(
     `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
     { method: "PUT", body: JSON.stringify({ value }) },
   );
-  await refreshDims();
+  await refreshDim(dimId);
   emit();
 }
 
