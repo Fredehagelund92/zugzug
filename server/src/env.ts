@@ -31,6 +31,8 @@ export const env = {
   /** Public origin of this app — used to build the OAuth redirect_uri.
    *  In dev: http://localhost:5173 (Vite proxies /api). In prod: https://yourapp.com */
   origin: (process.env.ORIGIN?.trim() || "http://localhost:5173").replace(/\/$/, ""),
+  /** Skip Google OAuth in dev — shows a one-click login button. Never use in prod. */
+  devBypassAuth: process.env.DEV_BYPASS_AUTH?.trim() === "true",
 };
 
 /** Fully-qualified Postgres app-state table name, e.g. oltp.zugzug_app.draft */
