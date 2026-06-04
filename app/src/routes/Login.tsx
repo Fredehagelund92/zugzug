@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Mark } from "../components/Mark";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -10,6 +11,14 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export function Login() {
   const error = new URLSearchParams(window.location.search).get("error");
+  const [devBypass, setDevBypass] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/config")
+      .then((r) => r.json())
+      .then((d: { devBypass: boolean }) => { if (d.devBypass) setDevBypass(true); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div
@@ -45,6 +54,15 @@ export function Login() {
           <GoogleIcon />
           Sign in with Google
         </a>
+
+        {devBypass && (
+          <a
+            href="/api/auth/dev"
+            className="flex w-full items-center justify-center rounded-sm border border-dashed border-[var(--line-2)] px-4 py-2 text-[12px] text-[var(--ink-3)] transition-colors hover:border-[var(--accent)] hover:text-[var(--ink)]"
+          >
+            Dev mode login
+          </a>
+        )}
       </div>
     </div>
   );

@@ -5,7 +5,7 @@
 import { connect } from "./db.ts";
 import { env } from "./env.ts";
 import * as repo from "./repo.ts";
-import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout } from "./auth.ts";
+import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout, handleAuthConfig, handleDevLogin } from "./auth.ts";
 import * as team from "./team.ts";
 
 const json = (data: unknown, status = 200) =>
@@ -58,6 +58,11 @@ const server = Bun.serve({
       if (seg[2] === "callback" && method === "GET") return handleGoogleCallback(req);
       if (seg[2] === "me" && method === "GET") return handleMe(req);
       if (seg[2] === "logout" && method === "POST") return handleLogout(req);
+      if (seg[2] === "config" && method === "GET") return handleAuthConfig();
+      if (seg[2] === "dev" && method === "GET") {
+        if (!env.devBypassAuth) return json({ error: "not found" }, 404);
+        return handleDevLogin();
+      }
       return json({ error: "not found" }, 404);
     }
 
