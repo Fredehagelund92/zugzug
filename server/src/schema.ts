@@ -33,7 +33,7 @@ export async function ensureSchema(): Promise<void> {
   // partner_id) instead of a name-derived slug. key_kind drives that; the name
   // binding says where to resolve the human name from, live, on read.
   // ADD COLUMN IF NOT EXISTS keeps this idempotent on an existing dimension table.
-  for (const col of ["key_kind VARCHAR", "name_table VARCHAR", "name_id_col VARCHAR", "name_col VARCHAR"]) {
+  for (const col of ["key_kind VARCHAR", "name_table VARCHAR", "name_id_col VARCHAR", "name_col VARCHAR", "description VARCHAR", "color VARCHAR"]) {
     await run(`ALTER TABLE ${pg("dimension")} ADD COLUMN IF NOT EXISTS ${col}`);
   }
   await run(`UPDATE ${pg("dimension")} SET key_kind = 'slug' WHERE key_kind IS NULL`);
