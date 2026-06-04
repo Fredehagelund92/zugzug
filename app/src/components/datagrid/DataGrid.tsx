@@ -36,6 +36,23 @@ const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }>
 interface RangeCorner { rowKey: string; field: string }
 interface RangeState { anchor: RangeCorner; focus: RangeCorner }
 
+// Escape a string for use inside a double-quoted CSS attribute selector.
+const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+// Brief accent-wash on a cell after a bulk action (paste-fill / clear-range)
+// so the user sees what the keystroke just did. Deferred to the next frame
+// so React has rendered the new value first.
+function flashCell(rk: string, field: string): void {
+  requestAnimationFrame(() => {
+    const sel = `[data-cell="${attrEsc(`${rk}::${field}`)}"]`;
+    const el = document.querySelector<HTMLElement>(sel);
+    if (!el) return;
+    el.classList.remove("zz-row-flash");
+    void el.offsetWidth;
+    el.classList.add("zz-row-flash");
+    window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
+  });
+}
+
 export function DataGrid<Row>(props: DataGridProps<Row>) {
   const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
   const visible = columns.filter((c) => !c.hidden);
@@ -299,7 +316,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         : `paste ${writes.length} cell${writes.length === 1 ? "" : "s"}`;
     undo.beginTransaction(label);
     void Promise.all(writes.map((w) => commitValue(w.rk, w.field, w.value)))
-      .finally(() => undo.endTransaction());
+      .finally(() => {
+        undo.endTransaction();
+        for (const w of writes) flashCell(w.rk, w.field);
+      });
   }, [cursor.cursor, range, sortedRows, rowKey, orderedVisible, rowIndexMap, colIndexMap, commitValue, computeRangeBounds, coerceForColumn, undo]);
 
   // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
@@ -355,7 +375,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const label = targets.length === 1 ? "clear cell" : `clear ${targets.length} cells`;
       undo.beginTransaction(label);
       void Promise.all(targets.map((t) => commitValue(t.rk, t.field, null)))
-        .finally(() => undo.endTransaction());
+        .finally(() => {
+          undo.endTransaction();
+          for (const t of targets) flashCell(t.rk, t.field);
+        });
       return;
     }
 

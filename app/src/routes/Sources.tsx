@@ -229,7 +229,13 @@ export function Sources() {
           lede={dashboardSentence}
           action={
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="sm" icon={<IconWand className="h-3.5 w-3.5" />} onClick={scan} disabled={scanning}>
+              <Button
+                variant="ghost" size="sm"
+                icon={scanning
+                  ? <span aria-hidden className="block h-3.5 w-3.5 animate-spin rounded-pill border-2 border-line-2 border-t-accent" />
+                  : <IconWand className="h-3.5 w-3.5" />}
+                onClick={scan} disabled={scanning}
+              >
                 {scanning ? "Scanning…" : flash !== null ? `✓ scanned ${flash}` : "Scan all"}
               </Button>
               <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={() => setCatalog(true)}>Browse warehouse</Button>
