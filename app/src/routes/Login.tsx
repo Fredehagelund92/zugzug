@@ -15,8 +15,13 @@ export function Login() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    fetch("/api/auth/dev", { method: "HEAD" })
-      .then((r) => setDevBypass(r.status !== 404))
+    fetch("/api/auth/dev", { method: "GET", redirect: "manual" })
+      .then((r) => {
+        // 302 / "opaqueredirect" (Bun returns 302 with status "manual") indicates the route is live.
+        // 404 means dev bypass is off.
+        const live = r.status === 0 /* opaqueredirect */ || (r.status >= 300 && r.status < 400);
+        setDevBypass(live);
+      })
       .catch(() => {});
   }, []);
 
