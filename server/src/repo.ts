@@ -103,7 +103,7 @@ interface SourceDef { table: string; column: string }
 const esc = (s: string) => s.replace(/'/g, "''");
 
 async function sourcesOf(dimId: string): Promise<SourceDef[]> {
-  return all<SourceDef>(
+  return pgAll<SourceDef>(
     `SELECT source_table AS "table", source_column AS column FROM ${pg("dimension_source")} WHERE dim_id = $1 ORDER BY 1,2`,
     [dimId],
   );
@@ -202,7 +202,7 @@ export async function sourceFacets(): Promise<SchemaFacet[]> {
 /** Refresh the cached stats for every registered source (the expensive scan,
  *  run explicitly). Returns how many sources were scanned. */
 export async function scanSources(): Promise<number> {
-  const regs = await all<{ dimId: string; table: string; column: string; mapTable: string }>(
+  const regs = await pgAll<{ dimId: string; table: string; column: string; mapTable: string }>(
     `SELECT s.dim_id AS "dimId", s.source_table AS "table", s.source_column AS column, d.map_table AS "mapTable"
      FROM ${pg("dimension_source")} s JOIN ${pg("dimension")} d ON d.id = s.dim_id`,
   );
@@ -215,12 +215,23 @@ export async function scanSources(): Promise<number> {
          WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`);
       present = true; rows = Number(agg?.rows ?? 0); distinct = Number(agg?.d ?? 0);
       if (distinct > 0) {
-        const u = await get<{ n: bigint }>(
-          `SELECT count(*) AS n FROM (
-             SELECT DISTINCT CAST(${col} AS VARCHAR) AS raw FROM ${whTable(r.table)}
-             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
-           ) o LEFT JOIN ${cq(r.mapTable)} m ON lower(m.raw) = lower(o.raw) WHERE m.raw IS NULL`);
-        unmapped = Number(u?.n ?? 0);
+        // Cross-store unmapped count: was a single LEFT JOIN that hit warehouse
+        // (DuckDB) + canonical map_* (Postgres). DuckDB can no longer reach
+        // Postgres, so fetch each side independently and subtract in JS.
+        try {
+          const whRaws = await all<{ raw: string }>(
+            `SELECT DISTINCT CAST(${col} AS VARCHAR) AS raw FROM ${whTable(r.table)}
+             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
+          );
+          const mappedRows = await pgAll<{ raw: string }>(
+            `SELECT raw FROM ${cq(r.mapTable)}`,
+          );
+          const mappedSet = new Set(mappedRows.map((m) => m.raw.toLowerCase()));
+          unmapped = whRaws.filter((w) => !mappedSet.has(w.raw.toLowerCase())).length;
+        } catch {
+          // Either side missing — leave unmapped at 0 instead of poisoning the
+          // present / rows / distinct stats already captured above.
+        }
       }
     } catch { present = false; }
     await pgRun(
@@ -417,7 +428,7 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
  *  the name resolves live on read. Returns how many canonical records resulted. */
 export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string, opts: { silent?: boolean } = {}): Promise<{ derived: number }> {
-  const meta = await get<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
+  const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
   if (!meta) return { derived: 0 };
@@ -442,7 +453,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
     await bulkInsert1(`INSERT INTO ${cq(meta.dimTable)} (${key})`, ids, `ON CONFLICT (${key}) DO NOTHING`);
     await bulkInsert(`INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`, ids.map((v) => [v, v] as [string, string]), `ON CONFLICT (raw) DO NOTHING`);
     if (nameColumn) {
-      await run(`UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
+      await pgRun(`UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
         [table, column, nameColumn, dimId]);
     }
     if (!opts.silent) await appendAudit("Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
