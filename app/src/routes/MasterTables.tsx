@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
@@ -42,6 +43,8 @@ export function MasterTables() {
   const [createOpen, setCreateOpen] = useState(false);
   const [variantsCache, setVariantsCache] = useState<Record<string, string[] | "loading">>({});
   const [notice, setNotice] = useState<string | null>(null);
+  const [renameFlash, setRenameFlash] = useState<{ prev: string; next: string; variants: number } | null>(null);
+  const renameFlashTimer = useRef<number | null>(null);
   const [busy, setBusy] = useState(false);
   const wired = useMemo(() => sources.filter((s) => s.dimId === dimId), [sources, dimId]);
   const [idOpt, setIdOpt] = useState<string | null>(null);
@@ -287,6 +290,22 @@ export function MasterTables() {
       </div>
 
       {notice && <div className="rounded-lg border border-line bg-accent-wash px-4 py-2.5 font-mono text-[12px] text-accent">{notice}</div>}
+      {renameFlash && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-accent-wash px-4 py-2.5 font-mono text-[12px] text-accent">
+          <span>
+            Renamed “{renameFlash.prev}” → “{renameFlash.next}”. {renameFlash.variants.toLocaleString()} raw value{renameFlash.variants === 1 ? "" : "s"} re-pointed.
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!undo.canUndo}
+              onClick={() => { void undo.undo(); setRenameFlash(null); }}
+            >Undo</Button>
+            <Button variant="ghost" size="sm" onClick={() => setRenameFlash(null)}>Dismiss</Button>
+          </div>
+        </div>
+      )}
 
       <div className="zz-rise space-y-0" style={{ animationDelay: "150ms" }}>
         {/* selection / action bar */}
@@ -328,11 +347,18 @@ export function MasterTables() {
               const prev = list.find((c) => c.key === rowKey)?.label;
               if (typeof value !== "string" || !value.trim() || value === prev) return;
               await renameCanonical(activeId, rowKey, value);
-              if (prev) undo.push({
-                label: `rename "${prev}" → "${value}"`,
-                apply: () => renameCanonical(activeId, rowKey, value),
-                inverse: () => renameCanonical(activeId, rowKey, prev),
-              });
+              if (prev) {
+                undo.push({
+                  label: `rename "${prev}" → "${value}"`,
+                  apply: () => renameCanonical(activeId, rowKey, value),
+                  inverse: () => renameCanonical(activeId, rowKey, prev),
+                });
+                void fetchVariants(activeId, rowKey).then((vs) => {
+                  setRenameFlash({ prev, next: value, variants: vs.length });
+                  if (renameFlashTimer.current) window.clearTimeout(renameFlashTimer.current);
+                  renameFlashTimer.current = window.setTimeout(() => setRenameFlash(null), 8000);
+                });
+              }
               return;
             }
             // attribute field
@@ -392,7 +418,12 @@ export function MasterTables() {
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {cached.map((raw) => <span key={raw} className="rounded-sm border border-line-2 bg-surface px-2 py-1 font-mono text-[11.5px] text-ink-2">{raw}</span>)}
                 </div>
-              ) : <div className="mt-2 font-mono text-[11px] text-ink-3">no source values map here yet — match them on Value mapping</div>}
+              ) : (
+                <div className="mt-2 font-mono text-[11px] text-ink-3">
+                  no source values map here yet —{" "}
+                  <Link to={`/app/mapping?dimId=${activeId}`} className="text-accent hover:underline">match them on Value mapping</Link>
+                </div>
+              )}
             </div>
           );
         })()}
