@@ -4,6 +4,14 @@ import { env } from "./env.ts";
 let _conn: DuckDBConnection | null = null;
 let _connecting: Promise<DuckDBConnection> | null = null;
 
+let queue: Promise<unknown> = Promise.resolve();
+function serialized<T>(fn: () => Promise<T>): Promise<T> {
+  // Don't let a previous rejection poison the queue — chain off a settled tail.
+  const next = queue.then(fn, fn);
+  queue = next.catch(() => undefined);
+  return next as Promise<T>;
+}
+
 async function attachMotherDuck(conn: DuckDBConnection): Promise<void> {
   await conn.run(`INSTALL motherduck`);
   await conn.run(`LOAD motherduck`);
@@ -38,36 +46,52 @@ export async function all<T = Record<string, unknown>>(
   sql: string,
   params: DuckDBValue[] = [],
 ): Promise<T[]> {
-  const conn = await connect();
-  const reader = await conn.runAndReadAll(sql, params);
-  return reader.getRowObjects() as T[];
+  return serialized(async () => {
+    const conn = await connect();
+    const reader = await conn.runAndReadAll(sql, params);
+    return reader.getRowObjects() as T[];
+  });
 }
 
 export async function get<T = Record<string, unknown>>(
   sql: string,
   params: DuckDBValue[] = [],
 ): Promise<T | null> {
-  const rows = await all<T>(sql, params);
-  return rows[0] ?? null;
+  return serialized(async () => {
+    const conn = await connect();
+    const reader = await conn.runAndReadAll(sql, params);
+    const rows = reader.getRowObjects() as T[];
+    return rows[0] ?? null;
+  });
 }
 
 export async function run(sql: string, params: DuckDBValue[] = []): Promise<void> {
-  const conn = await connect();
-  await conn.run(sql, params);
+  return serialized(async () => {
+    const conn = await connect();
+    await conn.run(sql, params);
+  });
 }
 
-/** Run fn inside a DuckDB transaction (rolls back on throw). Note: a transaction
- *  spanning two ATTACHed remotes is not 2-phase-committed — keep the MotherDuck
- *  writes idempotent (NOT EXISTS) so a partial failure is safe to retry. */
+/** Run fn inside a DuckDB transaction (rolls back on throw). The entire
+ *  transaction occupies one queue slot so no other DuckDB statement can
+ *  interleave between BEGIN and COMMIT/ROLLBACK. The callback MUST use the
+ *  provided conn directly — do NOT call all/get/run inside fn, as those also
+ *  serialize and will deadlock.
+ *
+ *  Note: a transaction spanning two ATTACHed remotes is not 2-phase-committed
+ *  — keep MotherDuck writes idempotent (NOT EXISTS) so a partial failure is
+ *  safe to retry. */
 export async function tx<T>(fn: (conn: DuckDBConnection) => Promise<T>): Promise<T> {
-  const conn = await connect();
-  await conn.run("BEGIN");
-  try {
-    const out = await fn(conn);
-    await conn.run("COMMIT");
-    return out;
-  } catch (e) {
-    await conn.run("ROLLBACK").catch(() => {});
-    throw e;
-  }
+  return serialized(async () => {
+    const conn = await connect();
+    await conn.run("BEGIN");
+    try {
+      const out = await fn(conn);
+      await conn.run("COMMIT");
+      return out;
+    } catch (e) {
+      await conn.run("ROLLBACK").catch(() => {});
+      throw e;
+    }
+  });
 }
