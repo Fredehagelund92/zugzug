@@ -1,24 +1,30 @@
+import { useLayoutEffect } from "react";
+import { IconCheck } from "../../Icons";
 import type { CellCtx, EditCtx } from "../types";
 
 function Renderer<Row>({ value }: CellCtx<Row>) {
-  if (value === true)  return <span className="font-mono text-[12px] text-ok">true</span>;
-  if (value === false) return <span className="font-mono text-[12px] text-ink-2">false</span>;
-  return <span className="font-mono text-[12px] text-ink-3">—</span>;
+  if (value == null) {
+    return <span className="text-[12px] text-ink-3">—</span>;
+  }
+  return value ? (
+    <span
+      aria-label="true"
+      className="grid h-4 w-4 place-items-center rounded-sm border border-accent bg-accent text-accent-ink"
+    >
+      <IconCheck className="h-3 w-3" strokeWidth={3} />
+    </span>
+  ) : (
+    <span aria-label="false" className="grid h-4 w-4 place-items-center rounded-sm border border-line-2" />
+  );
 }
 
 function Editor<Row>({ value, commit }: EditCtx<Row>) {
-  const v = value === true ? "true" : value === false ? "false" : "";
-  return (
-    <select
-      autoFocus value={v}
-      onChange={(e) => commit(e.target.value === "" ? null : e.target.value === "true")}
-      className="w-full cursor-pointer rounded-sm border border-accent bg-bg px-1.5 py-0.5 font-mono text-[12px] text-ink outline-none"
-    >
-      <option value="">—</option>
-      <option value="true">true</option>
-      <option value="false">false</option>
-    </select>
-  );
+  // Enter / double-click toggles. Commit synchronously before paint to avoid
+  // a one-frame flicker where the Editor briefly renders nothing.
+  useLayoutEffect(() => {
+    commit(value === true ? false : true);
+  }, []);
+  return null;
 }
 
 export const BooleanCell = { Renderer, Editor };

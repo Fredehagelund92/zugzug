@@ -1,6 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
+import {
+  IconFieldBoolean,
+  IconFieldDate,
+  IconFieldNumber,
+  IconFieldSelect,
+  IconFieldText,
+} from "../Icons";
 import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
 import { BooleanCell } from "./cells/BooleanCell";
@@ -10,6 +17,14 @@ import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
 import type { DataGridProps, CellType } from "./types";
+
+const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: string }>> = {
+  text: IconFieldText,
+  number: IconFieldNumber,
+  boolean: IconFieldBoolean,
+  date: IconFieldDate,
+  select: IconFieldSelect,
+};
 
 const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }> = {
   text: TextCell, number: NumberCell, boolean: BooleanCell, date: DateCell,
@@ -73,9 +88,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       return w ? `${w}px` : "minmax(96px, 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
+    if (onAddFieldClick) tracks.push("auto");
     return { gridTemplateColumns: tracks.join(" ") };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedVisible, selectionCol, widths]);
+  }, [orderedVisible, selectionCol, widths, onAddFieldClick]);
 
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = async (rk: string, field: string, value: unknown) => {
@@ -104,27 +120,35 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       onKeyDown={cursor.onKeyDown}
       className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
     >
-      {/* header row — flex wrapper so "+ field" button sits outside the grid template */}
-      <div className="flex items-center border-b border-line font-mono text-[10px] uppercase tracking-wider text-ink-3">
-        <div className="grid flex-1 items-center gap-3 px-5 py-2.5" style={gridStyle}>
+      {/* header row */}
+      <div className="grid items-stretch border-b border-line text-[12px] font-medium text-ink-2" style={gridStyle}>
         {selectionCol && (
-          <Checkbox
-            state={selection!.selected.length === sortedRows.length && sortedRows.length > 0
-              ? "on"
-              : selection!.selected.length > 0 ? "mixed" : "off"}
-            onClick={() => selection!.onChange(
-              selection!.selected.length === sortedRows.length ? [] : sortedRows.map(rowKey)
-            )}
-            aria-label="Select all"
-          />
+          <div className="flex items-center justify-center border-r border-line py-2">
+            <Checkbox
+              state={selection!.selected.length === sortedRows.length && sortedRows.length > 0
+                ? "on"
+                : selection!.selected.length > 0 ? "mixed" : "off"}
+              onClick={() => selection!.onChange(
+                selection!.selected.length === sortedRows.length ? [] : sortedRows.map(rowKey)
+              )}
+              aria-label="Select all"
+            />
+          </div>
         )}
-        {orderedVisible.map((c) => {
+        {orderedVisible.map((c, idx) => {
           const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
+          const TypeIcon = FIELD_TYPE_ICONS[c.type];
+          const isLastCol = idx === orderedVisible.length - 1;
           return (
             <div key={c.field}
-              className={cx("group relative flex items-center gap-1 truncate", c.align === "right" && "justify-end")}
+              className={cx(
+                "group relative flex items-center gap-1.5 truncate px-3 py-2",
+                !isLastCol && "border-r border-line",
+                c.align === "right" && "justify-end",
+              )}
               data-header={c.field}
             >
+              {TypeIcon && <TypeIcon className="h-3.5 w-3.5 shrink-0 text-ink-3" />}
               {/* Task 21: dragged-column wash + drop-target line */}
               {drag?.field === c.field && <span className="absolute inset-0 bg-accent-wash" aria-hidden />}
               {drag?.overIndex != null && orderedVisible[drag.overIndex]?.field === c.field && (
@@ -172,10 +196,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 }}
               >{c.label}{sortGlyph}</span>
 
-              {/* Task 19: ⋯ menu button */}
+              {/* Task 19: ⋯ menu button — push to far end via ml-auto on left-aligned
+                  columns; on right-aligned columns the parent's justify-end already
+                  packs everything to the right, so ml-auto would fight that. */}
               {!c.pinnedLeft && (
                 <button type="button" aria-label="Column menu"
-                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                  className={cx(
+                    "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100",
+                    c.align !== "right" && "ml-auto",
+                  )}
                   onClick={() => setMenuFor((s) => s === c.field ? null : c.field)}
                 >⋯</button>
               )}
@@ -238,16 +267,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             </div>
           );
         })}
-        </div>
         {onAddFieldClick && (
           <button
             ref={addFieldRef as React.RefObject<HTMLButtonElement>}
             type="button"
             onClick={onAddFieldClick}
-            className="shrink-0 px-3 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 transition-colors hover:text-accent"
+            className="px-3 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
             aria-label="Add field"
           >
-            + field
+            + Field
           </button>
         )}
       </div>
@@ -261,16 +289,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return (
           <div key={rk}
             className={cx(
-              "grid items-center gap-3 border-b border-line px-5 py-3 transition-colors",
-              selected ? "bg-accent-wash" : "hover:bg-hover",
+              "grid items-stretch border-b border-line transition-colors",
+              selected ? "bg-surface-2" : "hover:bg-hover",
             )}
             style={gridStyle}
             data-row={rk}
           >
             {selectionCol && (
-              <Checkbox state={selected ? "on" : "off"} onClick={() => toggle(rk)} aria-label={`Select row ${rk}`} />
+              <div className="flex items-center justify-center border-r border-line py-[7px]">
+                <Checkbox state={selected ? "on" : "off"} onClick={() => toggle(rk)} aria-label={`Select row ${rk}`} />
+              </div>
             )}
-            {orderedVisible.map((c) => {
+            {orderedVisible.map((c, idx) => {
               const focused = cursor.cursor?.rowKey === rk && cursor.cursor?.field === c.field;
               const editing = focused && cursor.cursor?.editing;
               const value = (row as any)[c.field];
@@ -282,10 +312,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 if (c.editable === false) return;
                 cursor.setCursor({ rowKey: rk, field: c.field, editing: true });
               };
+              const isLastCol = idx === orderedVisible.length - 1;
               const cellCx = cx(
-                "relative min-w-0 px-1",
-                c.align === "right" && "justify-self-end text-right",
-                focused && "ring-1 ring-accent bg-accent-wash/40 rounded-sm",
+                "relative flex min-w-0 items-center px-3 py-[7px]",
+                !isLastCol && "border-r border-line",
+                c.align === "right" && "justify-end text-right",
+                focused && "ring-1 ring-accent bg-accent-wash/40",
               );
               const data = `${rk}::${c.field}`;
               return (
@@ -326,6 +358,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 </div>
               );
             })}
+            {onAddFieldClick && (
+              <div aria-hidden className="invisible px-3 py-2 text-[12px] font-medium">+ Field</div>
+            )}
           </div>
         );
       })}
