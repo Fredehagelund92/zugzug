@@ -1,4 +1,5 @@
 import React from "react";
+import * as Sentry from "@sentry/react";
 
 type State = { error: Error | null };
 
@@ -10,8 +11,12 @@ export class RouteErrorBoundary extends React.Component<{ children: React.ReactN
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
-    // Sentry wiring is added by Task 4.3 — for now, surface to the console.
     console.error("Route error:", error, info.componentStack);
+    if (import.meta.env.VITE_SENTRY_DSN) {
+      Sentry.captureException(error, {
+        contexts: { react: { componentStack: info.componentStack } },
+      });
+    }
   }
 
   reset = (): void => this.setState({ error: null });
