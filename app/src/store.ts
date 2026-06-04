@@ -63,7 +63,15 @@ async function refreshDims(): Promise<void> {
   const metas = await api<{ id: string }[]>("/dimensions");
   dims = await Promise.all(metas.map((m) => api<MappingDimension>(`/dimensions/${encodeURIComponent(m.id)}`)));
 }
-async function refreshDrafts(): Promise<void> {
+async function refreshDrafts(dimId?: string): Promise<void> {
+  if (dimId) {
+    const list = await api<Draft[]>(`/dimensions/${encodeURIComponent(dimId)}/drafts`);
+    const next: Record<string, Draft> = {};
+    for (const [k, d] of Object.entries(draftsFlat)) if (d.dimId !== dimId) next[k] = d;
+    for (const d of list) next[dkey(d.dimId, d.raw)] = d;
+    draftsFlat = next;
+    return;
+  }
   const lists = await Promise.all(dims.map((d) => api<Draft[]>(`/dimensions/${encodeURIComponent(d.id)}/drafts`)));
   const flat: Record<string, Draft> = {};
   for (const list of lists) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
@@ -157,13 +165,13 @@ export async function createTable(input: CreateTableInput): Promise<string> {
 
 export async function saveDraft(dimId: string, raw: string, status: "mapped" | "skipped", targetLabel: string | null, targetKey: string | null): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/drafts`, { method: "PUT", body: JSON.stringify({ raw, status, targetLabel, targetKey }) });
-  await refreshDrafts();
+  await refreshDrafts(dimId);
   emit();
 }
 
 export async function discardDraft(dimId: string, raw: string): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/${encodeURIComponent(raw)}`, { method: "DELETE" });
-  await refreshDrafts();
+  await refreshDrafts(dimId);
   emit();
 }
 
@@ -177,7 +185,7 @@ export function listDrafts(dimId: string): Draft[] {
 export async function commit(dimId: string): Promise<{ committed: number; rowsRecovered: number }> {
   const res = await api<{ committed: number; rowsRecovered: number }>(`/dimensions/${encodeURIComponent(dimId)}/commit`, { method: "POST" });
   await refreshDims();
-  await refreshDrafts();
+  await refreshDrafts(dimId);
   await refreshSources();
   await refreshAudit();
   emit();
