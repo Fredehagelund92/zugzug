@@ -5,7 +5,7 @@ import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
 import { CreateTableModal } from "../components/CreateTableModal";
-import { NoDimensionsYet } from "../components/NoDimensionsYet";
+import { NoTablesYet } from "../components/NoTablesYet";
 import { IconPlus, IconX, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { slug } from "../store";
@@ -118,7 +118,7 @@ export function MasterTables() {
   const [idOpt, setIdOpt] = useState<string | null>(null);
   const [nameOpt, setNameOpt] = useState<string | null>(null);
 
-  if (!dim) return <NoDimensionsYet from="tables" />;
+  if (!dim) return <NoTablesYet from="tables" />;
 
   const list = dim.canonical;
   const fields = dim.fields ?? [];
