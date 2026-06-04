@@ -5,7 +5,7 @@
    Run: `bun run verify-datagrid`. */
 
 import * as repo from "./repo.ts";
-import { run } from "./db.ts";
+import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
 
@@ -24,9 +24,9 @@ function assert(cond: unknown, msg: string): asserts cond {
 
 async function cleanup() {
   // remove anything we created (best-effort)
-  try { await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch {}
-  try { await run(`DELETE FROM ${pg("dimension_source")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch {}
-  try { await run(`DELETE FROM ${pg("dimension")} WHERE id LIKE $1`, [`${SCOPE}%`]); } catch {}
+  try { await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch {}
+  try { await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]); } catch {}
+  try { await pgRun(`DELETE FROM ${pg("dimension")} WHERE id LIKE $1`, [`${SCOPE}%`]); } catch {}
 }
 
 (async () => {
@@ -45,22 +45,25 @@ async function cleanup() {
   });
 
   await step("addField(select, options=[EMEA,AMER])", async () => {
-    const r = await repo.addField(dimId, "Region", "select", ["EMEA", "AMER"]);
+    const r = await repo.addField(dimId, "Region", "select", [{ label: "EMEA", color: null }, { label: "AMER", color: null }]);
     assert(r?.field === "region", `expected field 'region', got ${r?.field}`);
     const fields = await repo.listFields(dimId);
     const region = fields.find((f) => f.field === "region");
     assert(region?.type === "select", "region type is select");
-    assert(JSON.stringify(region?.options) === JSON.stringify(["EMEA", "AMER"]), `options mismatch: ${JSON.stringify(region?.options)}`);
+    const labels = region?.options?.map((o) => o.label);
+    assert(JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER"]), `options mismatch: ${JSON.stringify(region?.options)}`);
   });
 
   await step("addColumnOption appends a new option", async () => {
     const r = await repo.addColumnOption(dimId, "region", "APAC");
-    assert(JSON.stringify(r?.options) === JSON.stringify(["EMEA", "AMER", "APAC"]), `options after add: ${JSON.stringify(r?.options)}`);
+    const labels = r?.options?.map((o) => o.label);
+    assert(JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]), `options after add: ${JSON.stringify(r?.options)}`);
   });
 
   await step("addColumnOption is idempotent on duplicate label", async () => {
     const r = await repo.addColumnOption(dimId, "region", "APAC");
-    assert(JSON.stringify(r?.options) === JSON.stringify(["EMEA", "AMER", "APAC"]), `idempotent expected, got: ${JSON.stringify(r?.options)}`);
+    const labels = r?.options?.map((o) => o.label);
+    assert(JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]), `idempotent expected, got: ${JSON.stringify(r?.options)}`);
   });
 
   await step("addColumnOption refuses non-select column", async () => {
@@ -97,7 +100,8 @@ async function cleanup() {
     const fields = await repo.listFields(dimId);
     const cap = fields.find((f) => f.field === "capital");
     assert(cap?.type === "select", `type after change: ${cap?.type}`);
-    assert(cap?.options && cap.options.includes("Copenhagen") && cap.options.includes("Berlin"),
+    const capLabels = cap?.options?.map((o) => o.label);
+    assert(capLabels && capLabels.includes("Copenhagen") && capLabels.includes("Berlin"),
       `options after change: ${JSON.stringify(cap?.options)}`);
   });
 
@@ -109,7 +113,7 @@ async function cleanup() {
   });
 
   await step("cleanup grid layout rows", async () => {
-    await run(`DELETE FROM ${pg("user_grid_layout")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("user_grid_layout")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
   });
 
   await step("cleanup", cleanup);
