@@ -335,6 +335,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if (e.button !== 0 || drag) return;
     if (cursor.cursor?.editing) return;
 
+    // Focus the workbench so ⌘C / ⌘V / ⌘A / arrow keys reach handleKeyDown.
+    // tabIndex={0} makes the div focusable but click-on-child doesn't auto-focus.
+    cursor.ref.current?.focus();
+
     if (e.shiftKey && cursor.cursor) {
       // Shift+click: extend range from existing anchor
       const currentAnchor = range?.anchor ?? { rowKey: cursor.cursor.rowKey, field: cursor.cursor.field };
@@ -344,6 +348,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       e.preventDefault();
       return;
     }
+
+    // Prevent text-selection during drag-select; otherwise the browser's
+    // selection highlight fights our range visual and can swallow pointermove.
+    e.preventDefault();
 
     // Start a new range at the clicked cell
     const corner = { rowKey: rk, field };
