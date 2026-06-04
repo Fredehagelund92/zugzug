@@ -189,26 +189,26 @@ const server = Bun.serve({
         }
         // POST /api/dimensions/:id/fields {label, type?, options?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: string[] };
-          return json(await repo.addField(id, label, type, options));
+          const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: { label: string; color: string | null }[] };
+          return json(await repo.addField(id, label, type, options as repo.OptionDef[] | undefined));
         }
         // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
           const field = decodeURIComponent(seg[4]!);
-          const { label } = (await req.json()) as { label: string };
-          const res = await repo.addColumnOption(id, field, label);
+          const { label, color } = (await req.json()) as { label: string; color?: string | null };
+          const res = await repo.addColumnOption(id, field, label, (color ?? null) as repo.PaletteName | null);
           return res ? json(res) : json({ error: "not a select column" }, 400);
         }
         // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
-            const body = (await req.json()) as { label?: string; type?: string; options?: string[]; coerceInvalidToNull?: boolean };
+            const body = (await req.json()) as { label?: string; type?: string; options?: { label: string; color: string | null }[]; coerceInvalidToNull?: boolean };
             if (body.label != null) {
               await repo.renameColumn(id, field, body.label);
             }
             if (body.type != null) {
-              const res = await repo.changeColumnType(id, field, body.type, body.options, body.coerceInvalidToNull ?? false);
+              const res = await repo.changeColumnType(id, field, body.type, body.options as repo.OptionDef[] | undefined, body.coerceInvalidToNull ?? false);
               return json(res);
             }
             return noContent();
