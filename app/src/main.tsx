@@ -18,10 +18,12 @@ import { Showcase } from "./routes/Showcase";
 
 declare global {
   interface Window {
-    BrandApp: { setAccent: typeof setAccent; setTheme: typeof setTheme; toggleTheme: typeof toggleTheme };
+    BrandApp?: { setAccent: typeof setAccent; setTheme: typeof setTheme; toggleTheme: typeof toggleTheme };
   }
 }
-window.BrandApp = { setAccent, setTheme, toggleTheme };
+if (import.meta.env.DEV) {
+  window.BrandApp = { setAccent, setTheme, toggleTheme };
+}
 
 const root = document.getElementById("root")!;
 
