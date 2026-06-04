@@ -173,7 +173,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`flex-1 rounded-sm px-2.5 py-1.5 font-mono text-[11.5px] transition-colors ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
+                className={`flex-1 rounded-sm px-2.5 py-1.5 font-body text-[12.5px] transition-colors ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
               >
                 {m === "blank" ? "blank" : m === "source" ? "from a column" : "from warehouse IDs"}
               </button>
