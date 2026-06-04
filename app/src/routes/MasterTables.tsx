@@ -4,12 +4,13 @@ import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
+import { CreateTableModal } from "../components/CreateTableModal";
 import { NoDimensionsYet } from "../components/NoDimensionsYet";
 import { IconPlus, IconX, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { slug } from "../store";
 import {
-  useDimensions, useSources, addDimension,
+  useDimensions, useSources,
   addCanonical, renameCanonical, mergeCanonical, retireCanonical, fetchVariants, deriveCanonical,
   addField, setFieldValue, addColumnOption,
   renameColumn, changeColumnType, deleteColumn,
@@ -58,6 +59,7 @@ export function MasterTables() {
   const [sel, setSel] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [variantsCache, setVariantsCache] = useState<Record<string, string[] | "loading">>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -270,9 +272,17 @@ export function MasterTables() {
       </div>
 
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
-        <TablePicker dims={dims} activeId={activeId}
+        <TablePicker
+          dims={dims}
+          activeId={activeId}
           onSelect={(id) => { setDimId(id); reset(); setDraft(""); }}
-          onCreate={async (name, keyKind) => { const id = await addDimension(name, keyKind); setDimId(id); reset(); setDraft(""); }} />
+          onCreateRequested={() => setCreateOpen(true)}
+        />
+        <CreateTableModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(id) => { setDimId(id); reset(); setDraft(""); }}
+        />
       </div>
 
       <div className="zz-rise flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-line bg-surface px-5 py-4 font-mono text-[11px]" style={{ animationDelay: "100ms" }}>

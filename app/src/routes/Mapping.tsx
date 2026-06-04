@@ -4,12 +4,13 @@ import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
+import { CreateTableModal } from "../components/CreateTableModal";
 import { NoDimensionsYet } from "../components/NoDimensionsYet";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import type { MappingValue } from "../data";
-import { useDimensions, addDimension, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
+import { useDimensions, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useGridCursor, useUndoStack, Chip } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
@@ -40,6 +41,7 @@ function MappingInner() {
   const { engineer } = useEngineerMode();
   const [seedId, setSeedId] = useState(dims[0].id);
   const seed = dims.find((s) => s.id === seedId) ?? dims[0];
+  const [createOpen, setCreateOpen] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
   const [filter, setFilter] = useState<Filter>("new");
   const [open, setOpen] = useState<string | null>(null);
@@ -183,7 +185,17 @@ function MappingInner() {
 
       {/* dimension picker — choose master data, or create a new one */}
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
-        <TablePicker dims={dims} activeId={seedId} onSelect={selectSeed} onCreate={async (name, keyKind) => selectSeed(await addDimension(name, keyKind))} />
+        <TablePicker
+          dims={dims}
+          activeId={seedId}
+          onSelect={selectSeed}
+          onCreateRequested={() => setCreateOpen(true)}
+        />
+        <CreateTableModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(id) => { selectSeed(id); }}
+        />
       </div>
 
       {/* coverage + (engineer-only) target tables */}
