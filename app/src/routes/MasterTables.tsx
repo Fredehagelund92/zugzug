@@ -41,6 +41,11 @@ export function MasterTables() {
 
   const [sel, setSel] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
+  // Ref mirror of `open` so the columns memo can read the current expanded key
+  // without listing `open` in its deps. Recomputing the whole column defs (and
+  // the downstream DataGrid layout chain) on every row expand was visible jank.
+  const openRef = useRef(open);
+  useEffect(() => { openRef.current = open; }, [open]);
   const [draft, setDraft] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [variantsCache, setVariantsCache] = useState<Record<string, string[] | "loading">>({});
@@ -96,7 +101,7 @@ export function MasterTables() {
             onClick={() => toggleOpen(c.key)}
             className="flex min-w-0 items-center gap-2 text-left"
           >
-            <IconChevron className={cx("h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform", open === c.key && "rotate-180")} />
+            <IconChevron className={cx("h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform", openRef.current === c.key && "rotate-180")} />
             {c.unresolved ? (
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate font-mono text-[13px] text-ink-2">{c.key}</span>
@@ -165,7 +170,8 @@ export function MasterTables() {
         return ai - bi;
       });
     return ordered;
-  }, [fields, engineer, dim.keyCol, external, open, layout]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields, engineer, dim.keyCol, external, layout]);
 
   // <DataGrid> reads (row as any)[c.field]. The MasterTables CanonicalValue
   // shape stores attribute values in c.fields[field]; flatten before passing
