@@ -203,7 +203,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 Start with an empty list. You name each record; Zug Zug generates a stable ID from the name.
               </p>
               <p className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                Add fields from the table view once it's created — the schema doesn't have to be decided here.
+                Add fields from the table view once it&apos;s created — the schema doesn&apos;t have to be decided here.
               </p>
             </div>
           )}
