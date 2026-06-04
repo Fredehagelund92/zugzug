@@ -43,6 +43,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // ── Task 19: sort state + sortedRows ────────────────────────────────────────
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const menuAnchorRef = useRef<HTMLElement | null>(null);
 
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
@@ -483,7 +484,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100",
                     c.align !== "right" && "ml-auto",
                   )}
-                  onClick={() => setMenuFor((s) => s === c.field ? null : c.field)}
+                  onClick={(e) => {
+                    menuAnchorRef.current = e.currentTarget;
+                    setMenuFor((s) => s === c.field ? null : c.field);
+                  }}
                 >⋯</button>
               )}
 
@@ -491,6 +495,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               {menuFor === c.field && (
                 <ColumnHeaderMenu
                   column={c}
+                  anchorRef={menuAnchorRef}
                   sortDir={sort?.field === c.field ? sort.dir : null}
                   onClose={() => setMenuFor(null)}
                   onRename={(label) => props.onRenameColumn?.(c.field, label)}
