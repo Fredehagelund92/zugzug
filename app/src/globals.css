@@ -136,6 +136,16 @@
 .zz-pop-in { animation: zz-pop-in var(--dur-fast) var(--ease-spring) both; transform-origin: top; }
 @keyframes zz-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
 
+/* row-flash: brief accent wash on a row the user was just navigated to
+   (Cmd-K palette → "focus a record"). Decays so the row settles back into
+   its normal hover/selected styling. */
+.zz-row-flash { animation: zz-row-flash 1.6s var(--ease) both; }
+@keyframes zz-row-flash {
+  0%   { background-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+  35%  { background-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+  100% { background-color: transparent; }
+}
+
 @keyframes zz-flow { to { stroke-dashoffset: -20; } }
 @keyframes zz-pulse { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.34; } }
 @keyframes zz-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
@@ -173,5 +183,5 @@
   .zz-flow, .zz-pulse { animation: none; }
   .zz-live::before { animation: none; opacity: 0; }
   .zz-rise { animation: none; opacity: 1; }
-  .zz-overlay, .zz-drawer, .zz-pop-in { animation: none; }
+  .zz-overlay, .zz-drawer, .zz-pop-in, .zz-row-flash { animation: none; }
 }
