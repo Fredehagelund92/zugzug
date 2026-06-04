@@ -5,9 +5,9 @@
    Run: `bun run verify-datagrid`. */
 
 import * as repo from "./repo.ts";
-import { ensureSchema } from "./schema.ts";
 import { run } from "./db.ts";
 import { pg } from "./env.ts";
+import { runMigrations } from "../drizzle/migrate.ts";
 
 const SCOPE = "dg_verify_" + Math.random().toString(36).slice(2, 8);
 
@@ -30,7 +30,7 @@ async function cleanup() {
 }
 
 (async () => {
-  await ensureSchema();
+  await runMigrations();
 
   await step("clean prior scope rows", cleanup);
 
