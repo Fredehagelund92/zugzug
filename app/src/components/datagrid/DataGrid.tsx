@@ -14,6 +14,7 @@ import { BooleanCell } from "./cells/BooleanCell";
 import { DateCell } from "./cells/DateCell";
 import { SelectCell } from "./cells/SelectCell";
 import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
+import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
 import type { DataGridProps, CellType } from "./types";
@@ -44,6 +45,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const hiddenList = useMemo(() => columns.filter((c) => c.hidden), [columns]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return rows;
@@ -509,15 +513,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       }
                     }
                   }}
-                  hiddenColumns={columns.filter((v) => v.hidden)}
                   onHide={() => {
                     // include any already-hidden columns from the full prop list — `visible`
                     // is the post-filter set and never contains them
                     const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), c.field];
-                    props.onLayoutChange?.({ hidden });
-                  }}
-                  onUnhide={(field) => {
-                    const hidden = columns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
                     props.onLayoutChange?.({ hidden });
                   }}
                   onDelete={() => props.onDeleteColumn?.(c.field)}
@@ -556,17 +555,41 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           );
         })}
         {onAddFieldClick && (
-          <button
-            ref={addFieldRef as React.RefObject<HTMLButtonElement>}
-            type="button"
-            onClick={onAddFieldClick}
-            className="px-3 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
-            aria-label="Add field"
-          >
-            + Field
-          </button>
+          <div className="flex items-center">
+            {hiddenList.length > 0 && (
+              <button
+                ref={hiddenAnchorRef}
+                type="button"
+                onClick={() => setHiddenOpen((s) => !s)}
+                className="px-2 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
+                aria-label="Show hidden fields"
+              >
+                👁 {hiddenList.length} hidden
+              </button>
+            )}
+            <button
+              ref={addFieldRef as React.RefObject<HTMLButtonElement>}
+              type="button"
+              onClick={onAddFieldClick}
+              className="px-3 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
+              aria-label="Add field"
+            >
+              + Field
+            </button>
+          </div>
         )}
       </div>
+      {hiddenOpen && hiddenList.length > 0 && (
+        <HiddenFieldsPopover
+          hidden={hiddenList}
+          anchorRef={hiddenAnchorRef}
+          onUnhide={(field) => {
+            const next = columns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
+            props.onLayoutChange?.({ hidden: next });
+          }}
+          onClose={() => setHiddenOpen(false)}
+        />
+      )}
 
       {/* body */}
       {sortedRows.length === 0 ? (
@@ -648,7 +671,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               );
             })}
             {onAddFieldClick && (
-              <div aria-hidden className="invisible px-3 py-2 text-[12px] font-medium">+ Field</div>
+              <div aria-hidden className="invisible flex items-center">
+                {hiddenList.length > 0 && (
+                  <span className="px-2 py-2 text-[12px] font-medium">👁 {hiddenList.length} hidden</span>
+                )}
+                <span className="px-3 py-2 text-[12px] font-medium">+ Field</span>
+              </div>
             )}
           </div>
         );

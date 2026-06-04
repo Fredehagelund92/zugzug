@@ -7,13 +7,11 @@ interface Props<Row> {
   column: ColumnDef<Row>;
   anchorRef: React.RefObject<HTMLElement | null>;
   sortDir: "asc" | "desc" | null;
-  hiddenColumns: ColumnDef<Row>[];
   onClose: () => void;
   onRename: (newLabel: string) => void;
   onSort: (dir: "asc" | "desc" | null) => void;
   onChangeType: (newType: CellType) => void;
   onHide: () => void;
-  onUnhide: (field: string) => void;
   onDelete: () => void;
 }
 
@@ -21,8 +19,8 @@ const TYPES: CellType[] = ["text", "number", "boolean", "date", "select"];
 const MENU_WIDTH = 192; // matches w-48
 const GAP = 4;
 
-export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, hiddenColumns, onClose, onRename, onSort, onChangeType, onHide, onUnhide, onDelete }: Props<Row>) {
-  const [mode, setMode] = useState<"menu" | "rename" | "type" | "confirm-delete" | "show-hidden">("menu");
+export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onRename, onSort, onChangeType, onHide, onDelete }: Props<Row>) {
+  const [mode, setMode] = useState<"menu" | "rename" | "type" | "confirm-delete">("menu");
   const [draft, setDraft] = useState(column.label);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -89,27 +87,8 @@ export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, hiddenColumn
           )}
           <div className="my-1 h-px bg-line" />
           <button type="button" className={item} onClick={() => { onHide(); onClose(); }}>⊘ hide column</button>
-          {hiddenColumns.length > 0 && (
-            <button type="button" className={item} onClick={() => setMode("show-hidden")}>
-              👁 show hidden ({hiddenColumns.length}) ▸
-            </button>
-          )}
           <button type="button" className={cx(item, "text-danger")} onClick={() => setMode("confirm-delete")}>🗑 delete column</button>
         </>
-      )}
-      {mode === "show-hidden" && (
-        <div>
-          <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-ink-3">Hidden fields</div>
-          {hiddenColumns.map((h) => (
-            <button key={h.field} type="button" className={item}
-              onClick={() => { onUnhide(h.field); onClose(); }}
-            >
-              ↶ {h.label}
-            </button>
-          ))}
-          <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => setMode("menu")}>← back</button>
-        </div>
       )}
       {mode === "rename" && (
         <div className="p-1">
