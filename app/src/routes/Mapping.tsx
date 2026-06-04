@@ -1,4 +1,5 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
@@ -29,6 +30,18 @@ const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-da
 const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
 const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
+function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
+  const [v, setV] = useState<T>(() => {
+    try { return (window.sessionStorage.getItem(key) as T) ?? fallback; }
+    catch { return fallback; }
+  });
+  const set = (next: T) => {
+    setV(next);
+    try { window.sessionStorage.setItem(key, next); } catch { /* ignore quota / disabled storage */ }
+  };
+  return [v, set];
+}
+
 export function Mapping() {
   const dims = useDimensions();
   if (dims.length === 0) return <NoTablesYet from="mapping" />;
@@ -39,15 +52,30 @@ function MappingInner() {
   const dims = useDimensions();
   const allDrafts = useDrafts();
   const { engineer } = useEngineerMode();
-  const [seedId, setSeedId] = useState(dims[0].id);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [seedIdRaw, setSeedIdRaw] = useState(() => {
+    const fromUrl = searchParams.get("dimId");
+    if (fromUrl && dims.some((d) => d.id === fromUrl)) return fromUrl;
+    try {
+      const fromSession = window.sessionStorage.getItem("zz:mapping:seedId");
+      if (fromSession && dims.some((d) => d.id === fromSession)) return fromSession;
+    } catch { /* ignore */ }
+    return dims[0].id;
+  });
+  const setSeedId = (id: string) => {
+    setSeedIdRaw(id);
+    try { window.sessionStorage.setItem("zz:mapping:seedId", id); } catch { /* ignore */ }
+  };
+  const seedId = seedIdRaw;
   const seed = dims.find((s) => s.id === seedId) ?? dims[0];
   const [createOpen, setCreateOpen] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
-  const [filter, setFilter] = useState<Filter>("new");
+  const [filter, setFilter] = useSessionState<Filter>("zz:mapping:filter", "new");
   const [open, setOpen] = useState<string | null>(null);
   const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
   const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
+  const [commitError, setCommitError] = useState<string | null>(null);
   const [autoFlash, setAutoFlash] = useState<number | null>(null);
   const [_shortcuts, setShortcuts] = useState(false);
   void _shortcuts; // placeholder — wired to ShortcutsOverlay in Task 29
@@ -68,13 +96,34 @@ function MappingInner() {
     [seed, allDrafts],
   );
 
-  const selectSeed = (id: string) => { setSeedId(id); setSel([]); setOpen(null); setShowSql(false); setReview(false); setFlash(null); };
+  const selectSeed = (id: string) => {
+    setSeedId(id);
+    setSearchParams((prev) => { prev.set("dimId", id); return prev; }, { replace: true });
+    setSel([]); setOpen(null); setShowSql(false); setReview(false); setFlash(null);
+  };
 
   const counts = useMemo(() => {
     const c = { all: seed.values.length, new: 0, mapped: 0, skipped: 0 };
     for (const v of seed.values) c[state[v.value]?.status ?? "new"]++;
     return c;
   }, [seed, state]);
+
+  // unmapped count per dimension, sorted desc — drives the "next dimension with
+  // work" handoff when the current dim's inbox is empty.
+  const nextDims = useMemo(() => {
+    const out: { id: string; name: string; count: number }[] = [];
+    for (const d of dims) {
+      let n = 0;
+      for (const v of d.values) {
+        const draft = allDrafts[dkey(d.id, v.value)];
+        const status = draft ? draft.status : (v.current ? "mapped" : "new");
+        if (status === "new") n++;
+      }
+      if (n > 0) out.push({ id: d.id, name: d.dimension, count: n });
+    }
+    out.sort((a, b) => b.count - a.count);
+    return out;
+  }, [dims, allDrafts]);
 
   const stageMap = (v: string, label: string) => {
     const prev = allDrafts[dkey(seed.id, v)];
@@ -85,8 +134,16 @@ function MappingInner() {
     });
     return saveDraft(seed.id, v, "mapped", label, keyFor(label));
   };
-  const accept = (v: string) => { const r = byVal(v); if (r.suggestion) void stageMap(v, r.suggestion); };
-  const pick = (v: string, t: string) => stageMap(v, t);
+  const accept = (v: string) => {
+    const r = byVal(v);
+    if (!r.suggestion) return;
+    void stageMap(v, r.suggestion);
+    advanceToNextNew(v);
+  };
+  const pick = (v: string, t: string) => {
+    void stageMap(v, t);
+    advanceToNextNew(v);
+  };
   const skip = (v: string) => {
     const prev = allDrafts[dkey(seed.id, v)];
     undo.push({
@@ -94,7 +151,8 @@ function MappingInner() {
       apply: () => saveDraft(seed.id, v, "skipped", null, null),
       inverse: () => prev ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey) : discardDraft(seed.id, v),
     });
-    return saveDraft(seed.id, v, "skipped", null, null);
+    void saveDraft(seed.id, v, "skipped", null, null);
+    advanceToNextNew(v);
   };
   const reset = (v: string) => {
     const prev = allDrafts[dkey(seed.id, v)];
@@ -136,6 +194,33 @@ function MappingInner() {
     onFocusFilter: () => {/* filter chips already global */},
   });
 
+  // advance the cursor to the next visible row whose status is "new",
+  // wrapping around once. used by accept/skip/pick/N to keep the user
+  // moving through the inbox without reaching for the mouse.
+  function advanceToNextNew(fromRowKey: string | null) {
+    const rows = visibleRows;
+    if (rows.length === 0) return;
+    const idx = fromRowKey ? rows.findIndex((r) => r.value === fromRowKey) : -1;
+    for (let i = 1; i <= rows.length; i++) {
+      const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
+      if (state[rows[j].value]?.status === "new") {
+        cursor.setCursor({ rowKey: rows[j].value, field: "value", editing: false });
+        return;
+      }
+    }
+  }
+
+  // on mount and every dimension change, drop the cursor on the first
+  // unmapped row. lets a user open Mapping and start pressing A/M/S
+  // without first clicking a row.
+  const focusedSeedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusedSeedRef.current === seedId) return;
+    focusedSeedRef.current = seedId;
+    advanceToNextNew(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedId]);
+
   // the staged drafts awaiting commit (incl. teammates' work) — the review set.
   // scoped to still-uncommitted (new) values, matching what commit() actually folds.
   const stagedDrafts = useMemo(
@@ -156,10 +241,15 @@ function MappingInner() {
   }, [staged, seed]);
 
   const approveAndCommit = async () => {
-    const res = await commit(seed.id);      // server folds drafts + returns rows recovered
-    if (!res.committed) return;
-    setFlash({ n: res.committed, rows: res.rowsRecovered }); setShowSql(false); setReview(false);
-    setTimeout(() => setFlash(null), 2800);
+    setCommitError(null);
+    try {
+      const res = await commit(seed.id);      // server folds drafts + returns rows recovered
+      if (!res.committed) return;
+      setFlash({ n: res.committed, rows: res.rowsRecovered }); setShowSql(false); setReview(false);
+      setTimeout(() => setFlash(null), 2800);
+    } catch (err) {
+      setCommitError(err instanceof Error ? err.message : "Commit failed — check your connection and try again.");
+    }
   };
 
   const FILTERS: { k: Filter; label: string; n: number }[] = [
@@ -230,12 +320,13 @@ function MappingInner() {
           if (e.key === "s" || e.key === "S") { e.preventDefault(); skip(cur.rowKey); return; }
           if (e.key === "r" || e.key === "R") { e.preventDefault(); reset(cur.rowKey); return; }
           if (e.key === "m" || e.key === "M") { e.preventDefault(); cursor.startEdit(); return; }
+          if (e.key === "n" || e.key === "N") { e.preventDefault(); advanceToNextNew(cur.rowKey); return; }
           if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void approveAndCommit(); return; }
         }}
         style={{ animationDelay: "150ms" }}
       >
         {/* toolbar / bulk bar */}
-        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
           {sel.length === 0 ? (
             <>
               <Checkbox state={headState} onClick={() => setSel(allSel ? [] : visIds)} aria-label="Select all" />
@@ -346,14 +437,45 @@ function MappingInner() {
             </Fragment>
           );
         })}
-        {visible.length === 0 && (
-          <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-            {filter === "new" ? "🎉 no new values — this one is fully matched" : "no values in this view"}
+        {visible.length === 0 && (filter === "new" ? (
+          <div className="px-4 py-10 text-center">
+            <div className="font-display text-[18px] font-semibold text-ink">{seed.dimension} is fully matched 🎉</div>
+            {nextDims.filter((x) => x.id !== seedId).length > 0 ? (
+              <>
+                <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">Pick the next dimension with work</div>
+                <div className="mx-auto mt-4 grid max-w-md gap-1.5">
+                  {nextDims.filter((x) => x.id !== seedId).slice(0, 6).map((x) => (
+                    <button
+                      key={x.id}
+                      type="button"
+                      onClick={() => selectSeed(x.id)}
+                      className="flex items-center justify-between gap-3 rounded-sm border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-2 hover:bg-hover"
+                    >
+                      <span className="font-display text-[13px] text-ink">{x.name}</span>
+                      <span className="font-mono text-[11px] text-ink-3 tabular-nums">{x.count} need{x.count === 1 ? "s" : ""} review</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">Nothing left to reconcile across all dimensions.</div>
+            )}
           </div>
-        )}
+        ) : (
+          <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">no values in this view</div>
+        ))}
 
         {/* review & commit footer — drafts stage in Postgres, commit batch-MERGEs to DuckDB */}
-        <div className="border-t border-line">
+        <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
+          {commitError && (
+            <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
+              <span>Commit failed — {commitError}</span>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setCommitError(null)}>Dismiss</Button>
+                <Button size="sm" onClick={() => void approveAndCommit()}>Retry</Button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
             <span className="font-mono text-[11px] text-ink-3">
               {flash

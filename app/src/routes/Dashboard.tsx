@@ -99,7 +99,7 @@ export function Dashboard() {
                 const pct = Math.round((mapped / total) * 100);
                 const n = newCount(s.id);
                 return (
-                  <Link key={s.id} to="/app/mapping" className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-hover">
+                  <Link key={s.id} to={`/app/mapping?dimId=${s.id}`} className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-hover">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-display text-[14px] font-semibold text-ink">{s.dimension}</span>
