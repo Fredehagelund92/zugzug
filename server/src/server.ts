@@ -7,6 +7,8 @@ import { env } from "./env.ts";
 import * as repo from "./repo.ts";
 import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout, handleAuthConfig, handleDevLogin } from "./auth.ts";
 import * as team from "./team.ts";
+import * as tables from "./tables.ts";
+import { CreateTableError } from "./tables.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
@@ -140,6 +142,22 @@ const server = Bun.serve({
           await repo.setGridLayout(me, dimId, body);
           return noContent();
         }
+      }
+
+      if (seg[1] === "tables") {
+        if (seg.length === 2 && method === "POST") {
+          try {
+            const input = (await req.json()) as tables.CreateTableInput;
+            const result = await tables.createTable(input);
+            return json(result, 201);
+          } catch (e) {
+            if (e instanceof CreateTableError) {
+              return json({ error: e.message, code: e.code }, 400);
+            }
+            throw e;
+          }
+        }
+        return json({ error: "not found" }, 404);
       }
 
       if (seg[1] === "dimensions") {
