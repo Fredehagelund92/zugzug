@@ -9,6 +9,7 @@ import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, h
 import * as team from "./team.ts";
 import * as tables from "./tables.ts";
 import { CreateTableError } from "./tables.ts";
+import { pgEnd } from "./pg.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
@@ -300,3 +301,17 @@ const server = Bun.serve({
 });
 
 console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
+
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`· ${signal} received — draining…`);
+  server.stop(false); // stop accepting new requests; let in-flight finish
+  await new Promise<void>((resolve) => setTimeout(resolve, 250));
+  await pgEnd().catch((e) => console.error("pgEnd failed:", e));
+  console.log("· shutdown complete");
+  process.exit(0);
+}
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
