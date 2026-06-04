@@ -220,14 +220,20 @@ function MappingInner() {
     void stageMap(v, t);
     advanceToNextNew(v);
   };
-  const skip = (v: string) => {
+  // Skip without advancing the cursor — bulkApply uses this so the cursor
+  // doesn't bounce when skipping a selection. The single-action `skip` below
+  // composes this + advanceToNextNew.
+  const skipPersist = (v: string) => {
     const prev = allDrafts[dkey(seed.id, v)];
     undo.push({
       label: `skip "${v}"`,
       apply: () => saveDraft(seed.id, v, "skipped", null, null),
       inverse: () => prev ? saveDraft(seed.id, v, prev.status, prev.targetLabel, prev.targetKey) : discardDraft(seed.id, v),
     });
-    void saveDraft(seed.id, v, "skipped", null, null);
+    return saveDraft(seed.id, v, "skipped", null, null);
+  };
+  const skip = (v: string) => {
+    void skipPersist(v);
     advanceToNextNew(v);
   };
   const reset = (v: string) => {
@@ -240,13 +246,35 @@ function MappingInner() {
     });
     return discardDraft(seed.id, v);
   };
-  const automap = () => {
-    let n = 0;
-    for (const r of seed.values) if (r.suggestion && r.confidence >= 90 && state[r.value].status === "new") { stageMap(r.value, r.suggestion); n++; }
-    setAutoFlash(n);
-    setTimeout(() => setAutoFlash(null), 2600);
+  // Bulk operations: collect saveDraft promises, fire in parallel, wrap every
+  // per-value undo entry in one compound entry. One Cmd+Z restores the whole
+  // batch and N values commit as 1 network round-trip instead of N sequential.
+  const automap = async () => {
+    const matches = seed.values.filter(
+      (r) => r.suggestion && r.confidence >= 90 && state[r.value].status === "new",
+    );
+    if (matches.length === 0) return;
+    const label = `auto-match ${matches.length} value${matches.length === 1 ? "" : "s"}`;
+    undo.beginTransaction(label);
+    try {
+      await Promise.all(matches.map((r) => stageMap(r.value, r.suggestion!)));
+    } finally {
+      undo.endTransaction();
+      setAutoFlash(matches.length);
+      setTimeout(() => setAutoFlash(null), 2600);
+    }
   };
-  const bulkApply = (fn: (v: string) => void) => { sel.forEach(fn); setSel([]); };
+  const bulkApply = async (label: string, fn: (v: string) => unknown) => {
+    if (sel.length === 0) return;
+    const values = [...sel];
+    setSel([]);
+    undo.beginTransaction(label);
+    try {
+      await Promise.all(values.map((v) => Promise.resolve(fn(v))));
+    } finally {
+      undo.endTransaction();
+    }
+  };
 
   // ── cross-dimension inbox handlers ─────────────────────────────────────────
   const keyForLabelIn = (dimId: string, label: string) => {
@@ -600,9 +628,18 @@ function MappingInner() {
               <Checkbox state={headState} onClick={() => setSel([])} aria-label="Clear selection" />
               <span className="font-mono text-[12px] text-ink">{sel.length} selected</span>
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" icon={<IconCheck className="h-3.5 w-3.5" />} onClick={() => bulkApply((v) => { const r = byVal(v); if (r.suggestion) stageMap(v, r.suggestion); })}>Accept</Button>
-                <div className="w-48"><ComboSelect options={options} value={null} allowCreate={!external} placeholder="Merge all to…" onPick={(t) => bulkApply((v) => stageMap(v, t))} /></div>
-                <Button variant="secondary" size="sm" icon={<IconX className="h-3.5 w-3.5" />} onClick={() => bulkApply((v) => saveDraft(seed.id, v, "skipped", null, null))}>Skip</Button>
+                <Button size="sm" icon={<IconCheck className="h-3.5 w-3.5" />} onClick={() => void bulkApply(
+                  `accept ${sel.length} match${sel.length === 1 ? "" : "es"}`,
+                  (v) => { const r = byVal(v); return r.suggestion ? stageMap(v, r.suggestion) : undefined; },
+                )}>Accept</Button>
+                <div className="w-48"><ComboSelect options={options} value={null} allowCreate={!external} placeholder="Merge all to…" onPick={(t) => void bulkApply(
+                  `merge ${sel.length} value${sel.length === 1 ? "" : "s"} → ${t}`,
+                  (v) => stageMap(v, t),
+                )} /></div>
+                <Button variant="secondary" size="sm" icon={<IconX className="h-3.5 w-3.5" />} onClick={() => void bulkApply(
+                  `skip ${sel.length} value${sel.length === 1 ? "" : "s"}`,
+                  (v) => skipPersist(v),
+                )}>Skip</Button>
               </div>
               <button type="button" onClick={() => setSel([])} className="ml-auto font-mono text-[11px] text-ink-3 hover:text-ink">clear</button>
             </>

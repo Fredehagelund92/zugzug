@@ -60,8 +60,9 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 async function refreshDims(): Promise<void> {
-  const metas = await api<{ id: string }[]>("/dimensions");
-  dims = await Promise.all(metas.map((m) => api<MappingDimension>(`/dimensions/${encodeURIComponent(m.id)}`)));
+  // Single HTTP request returns every dim's full shape — the old code did 1
+  // list call + N detail fetches (N+1) on every mutation that refreshed dims.
+  dims = await api<MappingDimension[]>("/dimensions?full=true");
 }
 async function refreshDrafts(dimId?: string): Promise<void> {
   if (dimId) {
@@ -81,16 +82,21 @@ async function refreshAudit(): Promise<void> { audit = await api<AuditEntry[]>("
 async function refreshSources(): Promise<void> { sources = await api<SourceInfo[]>("/sources"); }
 async function refreshPreferences(): Promise<void> { preferences = await api<Preferences>("/preferences"); }
 
-/** Preload everything once. Awaited in main.tsx so the first render has data. */
+/** Preload everything once. Awaited in main.tsx so the first render has data.
+ *  Independent slices run in parallel; refreshDrafts is sequential because it
+ *  iterates the dims it just fetched. Cold boot drops from 6 sequential RTTs
+ *  to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
   const u = await api<{ currentUser: User; collaborators: User[] }>("/users");
   currentUser = u.currentUser;
   collaborators = u.collaborators;
-  await refreshDims();
+  await Promise.all([
+    refreshDims(),
+    refreshSources(),
+    refreshAudit(),
+    refreshPreferences(),
+  ]);
   await refreshDrafts();
-  await refreshSources();
-  await refreshAudit();
-  await refreshPreferences();
   emit();
 }
 
