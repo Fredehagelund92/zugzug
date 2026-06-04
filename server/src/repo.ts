@@ -1252,9 +1252,21 @@ export async function listAudit(limit = 30): Promise<AuditEntry[]> {
      FROM ${pg("audit_log")} ORDER BY created_at DESC
      LIMIT ${Math.max(1, Math.min(200, limit))}`,
   );
-  const out: AuditEntry[] = [];
-  for (const r of rows) {
-    out.push({ id: r.id, user: await userById(r.uid), action: r.action, detail: r.detail, at: rel(Number(r.secs)) });
-  }
-  return out;
+  if (rows.length === 0) return [];
+
+  const uids = Array.from(new Set(rows.map((r) => r.uid)));
+  const users = await pgAll<User>(
+    `SELECT id, name, initials FROM ${pg("users")} WHERE id = ANY($1::text[])`,
+    [uids],
+  );
+  const byId = new Map(users.map((u) => [u.id, u]));
+  const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
+
+  return rows.map((r) => ({
+    id: r.id,
+    user: byId.get(r.uid) ?? unknownUser,
+    action: r.action,
+    detail: r.detail,
+    at: rel(Number(r.secs)),
+  }));
 }
