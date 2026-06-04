@@ -8,7 +8,7 @@ function Renderer<Row>({ value }: CellCtx<Row>) {
   return s ? (
     <span className="font-mono text-[12px] text-ink">{s}</span>
   ) : (
-    <span className="font-mono text-[12px] text-ink-3">—</span>
+    <span className="font-mono text-[12px] text-ink-2">—</span>
   );
 }
 

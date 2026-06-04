@@ -12,10 +12,21 @@ function Renderer<Row>({ value }: CellCtx<Row>) {
   );
 }
 
-function Editor<Row>({ value, commit, cancel }: EditCtx<Row>) {
-  const [v, setV] = useState(value == null ? "" : String(value));
+function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
+  // When type-to-edit triggered us, the typed character replaces the value;
+  // place the cursor at the end so the user can keep typing.
+  const seeded = initial != null;
+  const [v, setV] = useState(seeded ? initial : value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  useEffect(() => {
+    ref.current?.focus();
+    if (seeded) {
+      const el = ref.current;
+      if (el) el.setSelectionRange(el.value.length, el.value.length);
+    } else {
+      ref.current?.select();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const commitNow = () => commit(v.trim() === "" ? null : v);
   return (
     <input

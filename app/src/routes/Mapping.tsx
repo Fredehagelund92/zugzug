@@ -7,6 +7,8 @@ import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
 import { CreateTableModal } from "../components/CreateTableModal";
 import { NoTablesYet } from "../components/NoTablesYet";
+import { PageHeader } from "../components/PageHeader";
+import { StatsBar } from "../components/StatsBar";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
@@ -314,16 +316,24 @@ function MappingInner() {
     setCommitError(null);
     const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
     if (dimIds.length === 0) return;
+    // Optimistic flash — see approveAndCommit above.
+    const predictedRows = stagedAllDrafts.reduce((n, d) => {
+      const v = dimById.get(d.dimId)?.values.find((x) => x.value === d.raw);
+      return n + (v ? valueRows(v) : 0);
+    }, 0);
+    setFlash({ n: stagedAllDrafts.length, rows: predictedRows });
+    setShowSql(false); setReview(false);
     try {
       let total = 0, totalRows = 0;
       for (const id of dimIds) {
         const res = await commit(id);
         total += res.committed; totalRows += res.rowsRecovered;
       }
-      if (total === 0) return;
-      setFlash({ n: total, rows: totalRows }); setShowSql(false); setReview(false);
+      if (total === 0) { setFlash(null); return; }
+      setFlash({ n: total, rows: totalRows });
       setTimeout(() => setFlash(null), 2800);
     } catch (err) {
+      setFlash(null);
       setCommitError(err instanceof Error ? err.message : "Commit failed across dimensions — check your connection and try again.");
     }
   };
@@ -407,12 +417,22 @@ function MappingInner() {
 
   const approveAndCommit = async () => {
     setCommitError(null);
+    if (staged.length === 0) return;
+    // Optimistic flash — predict count + warehouse rows before the server roundtrip
+    // so the success moment lands on click, not 50ms later. Reverted on failure.
+    const predictedRows = stagedDrafts.reduce((n, d) => {
+      const v = seed.values.find((x) => x.value === d.raw);
+      return n + (v ? valueRows(v) : 0);
+    }, 0);
+    setFlash({ n: staged.length, rows: predictedRows });
+    setShowSql(false); setReview(false);
     try {
       const res = await commit(seed.id);      // server folds drafts + returns rows recovered
-      if (!res.committed) return;
-      setFlash({ n: res.committed, rows: res.rowsRecovered }); setShowSql(false); setReview(false);
+      if (!res.committed) { setFlash(null); return; }
+      setFlash({ n: res.committed, rows: res.rowsRecovered });
       setTimeout(() => setFlash(null), 2800);
     } catch (err) {
+      setFlash(null);
       setCommitError(err instanceof Error ? err.message : "Commit failed — check your connection and try again.");
     }
   };
@@ -441,18 +461,15 @@ function MappingInner() {
 
   return (
     <div className="space-y-6">
-      {/* header */}
-      <div className="zz-rise flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">Match values</div>
-          <h1 className="mt-1.5 font-display text-[clamp(26px,3.6vw,40px)] font-extrabold leading-none tracking-[-0.035em] text-ink">
-            Match {seed.dimension.toLowerCase()} values
-          </h1>
-        </div>
-        <Button icon={<IconWand className="h-4 w-4" />} onClick={automap} className="zz-glow-sm">
-          {autoFlash !== null ? `✓ Auto-matched ${autoFlash}` : "Auto-match new values"}
-        </Button>
-      </div>
+      <PageHeader
+        kicker="Match values"
+        title={`Match ${seed.dimension.toLowerCase()} values`}
+        action={
+          <Button icon={<IconWand className="h-4 w-4" />} onClick={automap} className="zz-glow-sm">
+            {autoFlash !== null ? `✓ Auto-matched ${autoFlash}` : "Auto-match new values"}
+          </Button>
+        }
+      />
 
       {/* view-mode segmented control — compact, sliding indicator, real type
           hierarchy. Sits left rather than spanning the page; primary modes
@@ -464,7 +481,7 @@ function MappingInner() {
       >
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-1 rounded-pill bg-surface shadow-sm ring-1 ring-line transition-[left,width] duration-300 ease-[cubic-bezier(.32,.72,0,1)]"
+          className="pointer-events-none absolute inset-y-1 rounded-pill bg-surface-elevated shadow-pop-sm ring-1 ring-line transition-[left,width] duration-[var(--dur-slide)] ease-[var(--ease-spring)]"
           style={{ left: tabMarker.left, width: tabMarker.width }}
         />
         <button
@@ -525,7 +542,7 @@ function MappingInner() {
           </div>
 
           {/* coverage + (engineer-only) target tables */}
-          <div className="zz-rise flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-line bg-surface px-5 py-4" style={{ animationDelay: "100ms" }}>
+          <StatsBar animationDelay="100ms">
             {engineer && (
               <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
                 <span className="text-ink-3">master <span className="text-ink">{seed.dimTable}</span></span>
@@ -534,11 +551,11 @@ function MappingInner() {
               </div>
             )}
             <div className={cx("flex items-center gap-3", engineer && "ml-auto")}>
-              <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2"><div className="h-full rounded-pill bg-accent transition-[width] duration-300" style={{ width: `${coverage}%` }} /></div>
+              <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2"><div className="h-full rounded-pill bg-accent transition-[width] duration-[var(--dur-slide)] ease-[var(--ease-spring)]" style={{ width: `${coverage}%` }} /></div>
               <span className="font-mono text-[11px] text-ink-2 tabular-nums">{coverage}% mapped</span>
               {counts.new > 0 && <Badge tone="warn" dot>{counts.new} need review</Badge>}
             </div>
-          </div>
+          </StatsBar>
         </>
       )}
 
@@ -623,7 +640,7 @@ function MappingInner() {
                       <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2"><div className={cx("h-full rounded-pill", confBar(r.confidence))} style={{ width: `${r.confidence}%` }} /></div>
                       <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>{r.confidence}</span>
                     </div>
-                  ) : <span className="font-mono text-[11px] text-ink-3">—</span>}
+                  ) : <span className="font-mono text-[11px] text-ink-2">—</span>}
                 </div>
                 <div>{row.status === "mapped"
                   ? <Chip label="Mapped" bucket="chip-1" dot />
@@ -691,7 +708,7 @@ function MappingInner() {
                       className="flex items-center justify-between gap-3 rounded-sm border border-line bg-surface px-3 py-2 text-left transition-colors hover:border-line-2 hover:bg-hover"
                     >
                       <span className="font-display text-[13px] text-ink">{x.name}</span>
-                      <span className="font-mono text-[11px] text-ink-3 tabular-nums">{x.count} need{x.count === 1 ? "s" : ""} review</span>
+                      <span className="font-mono text-[11px] text-ink-2 tabular-nums">{x.count} need{x.count === 1 ? "s" : ""} review</span>
                     </button>
                   ))}
                 </div>
@@ -716,9 +733,9 @@ function MappingInner() {
             </div>
           )}
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-            <span className="font-mono text-[11px] text-ink-3">
+            <span className="font-mono text-[11px] text-ink-2">
               {flash
-                ? <span className="text-ok">
+                ? <span className="zz-rise text-committed" style={{ animationDuration: "var(--dur-slide)" }}>
                     ✓ {flash.n} {engineer ? "draft" : "change"}{flash.n === 1 ? "" : "s"}{" "}
                     {engineer ? <>merged into {seed.mapTable}</> : <>published to {seed.dimension}</>}
                     {" · "}{flash.rows.toLocaleString()} rows recovered
@@ -746,14 +763,14 @@ function MappingInner() {
           {review && staged.length > 0 && (
             <div className="border-t border-line">
               <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">Staged for review · {stagedDrafts.length}</div>
-              <ul className="mt-1 divide-y divide-line">
+              <ul className="mt-1 max-h-64 divide-y divide-line overflow-y-auto">
                 {stagedDrafts.map((d) => (
                   <li key={d.raw} className="flex items-center gap-3 px-5 py-2.5 font-mono text-[11.5px]">
                     <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
                     <span className="min-w-0 max-w-[40%] truncate text-ink">{d.raw}</span>
                     <IconArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />
                     <span className="min-w-0 truncate text-accent">{d.targetLabel}</span>
-                    <span className="ml-auto shrink-0 text-ink-3">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
+                    <span className="ml-auto shrink-0 text-ink-2 tabular-nums">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
                   </li>
                 ))}
               </ul>
@@ -884,7 +901,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
             <span><Chip label={r.dimName} bucket="chip-3" /></span>
             <div className="min-w-0">
               <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
-              <div className="font-mono text-[10px] text-ink-3">{r.dimRows.toLocaleString()} rows in warehouse</div>
+              <div className="font-mono text-[10px] text-ink-2 tabular-nums">{r.dimRows.toLocaleString()} rows in warehouse</div>
             </div>
             <IconArrowRight className="h-4 w-4 text-ink-3" />
             <ComboSelect
@@ -899,7 +916,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                   <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2"><div className={cx("h-full rounded-pill", confBar(r.confidence))} style={{ width: `${r.confidence}%` }} /></div>
                   <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>{r.confidence}</span>
                 </div>
-              ) : <span className="font-mono text-[11px] text-ink-3">—</span>}
+              ) : <span className="font-mono text-[11px] text-ink-2">—</span>}
             </div>
             <div>{r.status === "mapped"
               ? <Chip label="Mapped" bucket="chip-1" dot />
@@ -922,9 +939,9 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           </div>
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <span className="font-mono text-[11px] text-ink-3">
+          <span className="font-mono text-[11px] text-ink-2">
             {p.flash ? (
-              <span className="text-ok">✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published · {p.flash.rows.toLocaleString()} rows recovered</span>
+              <span className="zz-rise text-committed" style={{ animationDuration: "var(--dur-slide)" }}>✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published · {p.flash.rows.toLocaleString()} rows recovered</span>
             ) : p.stagedAllCount > 0 ? (
               <>{p.stagedAllCount} change{p.stagedAllCount === 1 ? "" : "s"} staged across dimensions, ready to publish</>
             ) : (

@@ -44,19 +44,32 @@ export function UndoStackProvider({ children, scopeKey }: { children: ReactNode;
     bump();
   }, []);
 
+  // Peek-then-pop: keep the entry on the stack until the inverse succeeds so a
+  // failed network round-trip leaves the user with an undo they can retry,
+  // rather than silently consuming the entry and stranding the UI.
   const undo = useCallback(async () => {
-    const e = undoStack.current.pop();
+    const e = undoStack.current.at(-1);
     if (!e) return;
-    try { await e.inverse(); redoStack.current.push(e); }
-    catch (err) { console.warn("undo inverse failed:", err); /* silently no-op */ }
+    try {
+      await e.inverse();
+      undoStack.current.pop();
+      redoStack.current.push(e);
+    } catch (err) {
+      console.error("undo inverse failed:", err);
+    }
     bump();
   }, []);
 
   const redo = useCallback(async () => {
-    const e = redoStack.current.pop();
+    const e = redoStack.current.at(-1);
     if (!e) return;
-    try { await e.apply(); undoStack.current.push(e); }
-    catch (err) { console.warn("redo apply failed:", err); }
+    try {
+      await e.apply();
+      redoStack.current.pop();
+      undoStack.current.push(e);
+    } catch (err) {
+      console.error("redo apply failed:", err);
+    }
     bump();
   }, []);
 

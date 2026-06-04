@@ -12,10 +12,22 @@ function Renderer<Row>({ value }: CellCtx<Row>) {
   );
 }
 
-function Editor<Row>({ value, commit, cancel }: EditCtx<Row>) {
-  const [v, setV] = useState(value == null ? "" : String(value));
+function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
+  const seeded = initial != null;
+  // Type-to-edit with a non-numeric character is ignored — leave the cell
+  // alone so the keystroke doesn't accidentally clear a numeric value.
+  const usable = seeded && /^[0-9.\-]$/.test(initial);
+  const [v, setV] = useState(usable ? initial : value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  useEffect(() => {
+    ref.current?.focus();
+    if (usable) {
+      const el = ref.current;
+      if (el) el.setSelectionRange(el.value.length, el.value.length);
+    } else {
+      ref.current?.select();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const commitNow = () => {
     const t = v.trim();
     if (t === "") { commit(null); return; }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import {
+  IconEye,
   IconFieldBoolean,
   IconFieldDate,
   IconFieldNumber,
@@ -208,12 +209,61 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     await navigator.clipboard.writeText(lines.join("\n"));
   }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds]);
 
+  // Coerce a raw clipboard string into the column's expected type. Returns
+  // `undefined` to mean "skip this cell" (unparseable / not a valid option).
+  const coerceForColumn = useCallback((rawVal: string, col: typeof orderedVisible[number]): unknown => {
+    if (col.type === "number") {
+      const n = Number(rawVal);
+      return isNaN(n) ? null : n;
+    }
+    if (col.type === "boolean") return rawVal.toLowerCase() === "true";
+    if (col.type === "select") {
+      const match = col.options?.find((o) => o.label === rawVal);
+      if (!match) return undefined;
+      return rawVal;
+    }
+    return rawVal;
+  }, []);
+
   // ── Paste (Cmd+V) ──────────────────────────────────────────────────────────
+  // Two modes:
+  //   1. Single-value clipboard + multi-cell range selected → fill the range
+  //      with that value (spreadsheet fill behavior).
+  //   2. Tabular clipboard → paste the source TSV grid starting at the anchor.
   const handlePaste = useCallback(async () => {
     if (!cursor.cursor) return;
     const text = await navigator.clipboard.readText();
     if (!text) return;
-    const pasteRows = text.split("\n").map((line) => line.split("\t"));
+    // Trim trailing newline so single-value paste from a copy of one cell
+    // doesn't look like two rows.
+    const trimmed = text.replace(/\n$/, "");
+    const pasteRows = trimmed.split("\n").map((line) => line.split("\t"));
+    const isSingleValue = pasteRows.length === 1 && (pasteRows[0]?.length ?? 0) === 1;
+    const rangeBig = range && (
+      range.anchor.rowKey !== range.focus.rowKey ||
+      range.anchor.field !== range.focus.field
+    );
+
+    if (isSingleValue && rangeBig && range) {
+      // Mode 1: fill the selected range with the single clipboard value.
+      const rawVal = pasteRows[0][0] ?? "";
+      const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
+      for (let ri = minRow; ri <= maxRow; ri++) {
+        const row = sortedRows[ri];
+        if (!row) continue;
+        const rk = rowKey(row);
+        for (let ci = minCol; ci <= maxCol; ci++) {
+          const col = orderedVisible[ci];
+          if (!col || col.editable === false) continue;
+          const coerced = coerceForColumn(rawVal, col);
+          if (coerced === undefined) continue;
+          void commitValue(rk, col.field, coerced);
+        }
+      }
+      return;
+    }
+
+    // Mode 2: tabular paste from anchor (default spreadsheet behavior).
     const anchorRk = range?.anchor.rowKey ?? cursor.cursor.rowKey;
     const anchorField = range?.anchor.field ?? cursor.cursor.field;
     const startRowIdx = rowIndexMap.get(anchorRk) ?? 0;
@@ -232,29 +282,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         const targetColIdx = startColIdx + pc;
         if (targetColIdx >= orderedVisible.length) break;
         const col = orderedVisible[targetColIdx];
-        if (!col) continue;
-        if (col.editable === false) continue;
-
-        const rawVal = pasteRow[pc] ?? "";
-        let coerced: unknown = rawVal;
-
-        if (col.type === "number") {
-          const n = Number(rawVal);
-          coerced = isNaN(n) ? null : n;
-        } else if (col.type === "boolean") {
-          coerced = rawVal.toLowerCase() === "true";
-        } else if (col.type === "select") {
-          // Only commit if the value matches an existing option label
-          const match = col.options?.find((o) => o.label === rawVal);
-          if (!match) continue;
-          coerced = rawVal;
-        }
-        // text and date: raw string
-
+        if (!col || col.editable === false) continue;
+        const coerced = coerceForColumn(pasteRow[pc] ?? "", col);
+        if (coerced === undefined) continue;
         void commitValue(targetRk, col.field, coerced);
       }
     }
-  }, [cursor.cursor, range, sortedRows, rowKey, orderedVisible, rowIndexMap, colIndexMap, commitValue]);
+  }, [cursor.cursor, range, sortedRows, rowKey, orderedVisible, rowIndexMap, colIndexMap, commitValue, computeRangeBounds, coerceForColumn]);
 
   // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -277,6 +311,31 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
       e.preventDefault();
       void handlePaste();
+      return;
+    }
+
+    // Delete / Backspace (without Cmd): clear focused cell or range to null.
+    // Cmd+Backspace falls through to the cursor handler for bulk row delete.
+    if ((e.key === "Delete" || e.key === "Backspace") && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      if (range) {
+        const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
+        for (let ri = minRow; ri <= maxRow; ri++) {
+          const row = sortedRows[ri];
+          if (!row) continue;
+          const rk = rowKey(row);
+          for (let ci = minCol; ci <= maxCol; ci++) {
+            const col = orderedVisible[ci];
+            if (!col || col.editable === false) continue;
+            void commitValue(rk, col.field, null);
+          }
+        }
+      } else if (cur) {
+        const col = orderedVisible.find((c) => c.field === cur.field);
+        if (col && col.editable !== false) {
+          void commitValue(cur.rowKey, cur.field, null);
+        }
+      }
       return;
     }
 
@@ -558,17 +617,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 ref={hiddenAnchorRef}
                 type="button"
                 onClick={() => setHiddenOpen((s) => !s)}
-                className="px-2 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
+                className="flex items-center gap-1.5 px-2 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
                 aria-label="Show hidden fields"
               >
-                👁 {hiddenList.length} hidden
+                <IconEye className="h-3.5 w-3.5" />
+                <span className="tabular-nums">{hiddenList.length} hidden</span>
               </button>
             )}
             <button
               ref={addFieldRef as React.RefObject<HTMLButtonElement>}
               type="button"
               onClick={onAddFieldClick}
-              className="px-3 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
+              className="px-3 py-2 text-[12px] font-medium text-accent transition-colors hover:brightness-110"
               aria-label="Add field"
             >
               + Field
@@ -590,7 +650,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
       {/* body */}
       {sortedRows.length === 0 ? (
-        empty ?? <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">No rows.</div>
+        empty ?? <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">No rows.</div>
       ) : sortedRows.map((row) => {
         const rk = rowKey(row);
         const selected = isSelected(rk);
@@ -640,6 +700,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     ? (c.edit
                         ? c.edit(row, {
                             ...ctx,
+                            initial: cursor.cursor?.initial,
                             commit: (v: unknown) => { cursor.stopEdit(); void commitValue(rk, c.field, v); },
                             cancel: () => cursor.stopEdit(),
                           })
@@ -656,6 +717,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                             />
                           : <CellEditor type={c.type} ctx={{
                               ...ctx,
+                              initial: cursor.cursor?.initial,
                               commit: (v: unknown) => { cursor.stopEdit(); void commitValue(rk, c.field, v); },
                               cancel: () => cursor.stopEdit(),
                             }} />)

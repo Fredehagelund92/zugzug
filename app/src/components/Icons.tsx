@@ -51,6 +51,30 @@ export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
 export const IconChevron = (p: SVGProps<SVGSVGElement>) => (
   <Base {...p}><path d="M6 9l6 6 6-6" /></Base>
 );
+export const IconChevronLeft = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M15 6l-6 6 6 6" /></Base>
+);
+export const IconChevronRight = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M9 6l6 6-6 6" /></Base>
+);
+export const IconSortAsc = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M7 4v16M7 4l-3 4M7 4l3 4M13 6h8M13 12h6M13 18h4" /></Base>
+);
+export const IconSortDesc = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M7 20V4M7 20l-3-4M7 20l3-4M13 6h4M13 12h6M13 18h8" /></Base>
+);
+export const IconEye = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></Base>
+);
+export const IconEyeOff = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M3 3l18 18M10.6 6.1A10.5 10.5 0 0 1 12 6c6.5 0 10 7 10 7a17.7 17.7 0 0 1-3.6 4.3M6.6 6.6A17.6 17.6 0 0 0 2 12s3.5 7 10 7a9.9 9.9 0 0 0 4.5-1M9.9 9.9a3 3 0 0 0 4.2 4.2" /></Base>
+);
+export const IconTrash = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14M10 11v6M14 11v6" /></Base>
+);
+export const IconType = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}><path d="M6 9V6h12v3M9 6v12M15 18h-6M13 6v12M16 14v2h6v-2M19 16v-6" /></Base>
+);
 export const IconX = (p: SVGProps<SVGSVGElement>) => (
   <Base {...p}><path d="M18 6 6 18M6 6l12 12" /></Base>
 );

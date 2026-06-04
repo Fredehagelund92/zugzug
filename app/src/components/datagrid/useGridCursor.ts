@@ -43,8 +43,10 @@ export function useGridCursor<Row>({
     });
   }, [rows, navCols, rowKey]);
 
-  const startEdit = useCallback(() => setCursor((c) => (c ? { ...c, editing: true } : c)), []);
-  const stopEdit = useCallback(() => setCursor((c) => (c ? { ...c, editing: false } : c)), []);
+  const startEdit = useCallback((initial?: string) =>
+    setCursor((c) => (c ? { ...c, editing: true, initial } : c)), []);
+  const stopEdit = useCallback(() =>
+    setCursor((c) => (c ? { ...c, editing: false, initial: undefined } : c)), []);
 
   // auto-scroll the focused cell into view
   useEffect(() => {
@@ -66,9 +68,16 @@ export function useGridCursor<Row>({
     }
 
     if (editing) {
-      // Enter / Tab commit + move; Esc cancels; everything else falls through to the editor
+      // Enter / Tab commit + move; Esc cancels; everything else falls through to the editor.
+      // Tab also re-enters edit mode on the destination so the user can keep typing
+      // (Excel / Sheets / Airtable convention — one Tab per cell, not two).
       if (e.key === "Enter") { e.preventDefault(); onCommit?.(); stopEdit(); move(0, 1); return; }
-      if (e.key === "Tab") { e.preventDefault(); onCommit?.(); stopEdit(); move(e.shiftKey ? -1 : 1, 0); return; }
+      if (e.key === "Tab") {
+        e.preventDefault(); onCommit?.(); stopEdit();
+        move(e.shiftKey ? -1 : 1, 0);
+        startEdit();
+        return;
+      }
       if (e.key === "Escape") { e.preventDefault(); stopEdit(); return; }
       return;
     }
@@ -86,6 +95,16 @@ export function useGridCursor<Row>({
     }
     if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
       e.preventDefault(); onBulkDelete?.(); return;
+    }
+    // Type-to-edit: any printable single character (no modifier) enters edit
+    // mode with that character as the seed value. Standard spreadsheet feel.
+    if (
+      e.key.length === 1 &&
+      !e.metaKey && !e.ctrlKey && !e.altKey
+    ) {
+      e.preventDefault();
+      startEdit(e.key);
+      return;
     }
   }, [cursor, move, startEdit, stopEdit, onCommit, onSelectAll, onBulkDelete, onUndo, onRedo, onShortcuts, onFocusFilter]);
 

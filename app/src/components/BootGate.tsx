@@ -41,7 +41,7 @@ export function BootGate({ children }: { children: ReactNode }) {
           <h1 className="font-display text-2xl font-bold text-ink">Can&apos;t reach the API.</h1>
           <p className="text-ink-2">The server isn&apos;t responding. Start it with:</p>
           <pre className="overflow-x-auto rounded-sm border border-line bg-bg px-3 py-2 font-mono text-[12px] text-ink-2">cd server &amp;&amp; bun run start</pre>
-          <details className="text-[12px] text-ink-3">
+          <details className="text-[12px] text-ink-2">
             <summary className="cursor-pointer">Technical detail</summary>
             <pre className="mt-2 whitespace-pre-wrap font-mono">{state.detail}</pre>
           </details>

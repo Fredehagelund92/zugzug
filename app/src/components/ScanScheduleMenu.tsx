@@ -50,7 +50,7 @@ export function ScanScheduleMenu({ value, onChange }: { value: string | null; on
         </svg>
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 z-50 mt-1 w-40 overflow-hidden rounded-sm border border-line-2 bg-surface shadow-pop">
+        <div role="menu" className="zz-pop-in absolute right-0 z-50 mt-1 w-40 overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop">
           <ul className="py-1">
             {OPTIONS.map((o) => (
               <li key={o.value ?? "off"}>
