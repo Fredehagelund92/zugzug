@@ -54,7 +54,16 @@ export function MasterTables() {
   const [addOpen, setAddOpen] = useState(false);
   const addFieldRef = useRef<HTMLButtonElement | null>(null);
 
-  if (!dim) return <NoTablesYet from="tables" />;
+  if (!dim) return (
+    <>
+      <NoTablesYet from="tables" onCreateRequested={() => setCreateOpen(true)} />
+      <CreateTableModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(id) => { setDimId(id); }}
+      />
+    </>
+  );
 
   const list = dim.canonical;
   const fields = dim.fields ?? [];
