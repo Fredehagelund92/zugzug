@@ -29,7 +29,7 @@ export function ColumnHeaderMenu<Row>({ column, sortDir, onClose, onRename, onSo
   const item = "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
 
   return (
-    <div ref={ref} className="absolute right-0 top-full z-30 mt-1 w-48 rounded-sm border border-line-2 bg-surface p-1 shadow-lg">
+    <div ref={ref} className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-line-2 bg-surface p-1 shadow-lg">
       {mode === "menu" && (
         <>
           <button type="button" className={item} onClick={() => setMode("rename")}>✎ rename column</button>
