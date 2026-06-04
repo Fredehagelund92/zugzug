@@ -11,14 +11,20 @@
     "verify-polish": "bun run src/verify-polish.ts",
     "verify-datagrid": "bun run src/verify-datagrid.ts",
     "bootstrap": "bun run src/bootstrap.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.3-r.3",
-    "jose": "^6.2.3"
+    "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.3",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
+    "drizzle-kit": "^0.31.10",
     "typescript": "^6.0.3"
   }
 }
