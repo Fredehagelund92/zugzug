@@ -17,12 +17,23 @@ const COUNTRY_SOURCES = [
 ];
 
 const COUNTRY_CANONICAL = [
-  { key: "US", label: "United States" }, { key: "GB", label: "United Kingdom" },
-  { key: "DE", label: "Germany" }, { key: "FR", label: "France" }, { key: "ES", label: "Spain" },
-  { key: "IT", label: "Italy" }, { key: "NL", label: "Netherlands" }, { key: "SE", label: "Sweden" },
-  { key: "NO", label: "Norway" }, { key: "DK", label: "Denmark" }, { key: "FI", label: "Finland" },
-  { key: "PL", label: "Poland" }, { key: "BR", label: "Brazil" }, { key: "IN", label: "India" },
-  { key: "JP", label: "Japan" }, { key: "AU", label: "Australia" }, { key: "CA", label: "Canada" },
+  { key: "US", label: "United States" },
+  { key: "GB", label: "United Kingdom" },
+  { key: "DE", label: "Germany" },
+  { key: "FR", label: "France" },
+  { key: "ES", label: "Spain" },
+  { key: "IT", label: "Italy" },
+  { key: "NL", label: "Netherlands" },
+  { key: "SE", label: "Sweden" },
+  { key: "NO", label: "Norway" },
+  { key: "DK", label: "Denmark" },
+  { key: "FI", label: "Finland" },
+  { key: "PL", label: "Poland" },
+  { key: "BR", label: "Brazil" },
+  { key: "IN", label: "India" },
+  { key: "JP", label: "Japan" },
+  { key: "AU", label: "Australia" },
+  { key: "CA", label: "Canada" },
 ];
 
 const CHANNEL_SOURCES = [
@@ -32,9 +43,13 @@ const CHANNEL_SOURCES = [
 ];
 
 const CHANNEL_CANONICAL = [
-  { key: "paid_search", label: "Paid Search" }, { key: "paid_social", label: "Paid Social" },
-  { key: "organic", label: "Organic" }, { key: "display", label: "Display" },
-  { key: "affiliate", label: "Affiliate" }, { key: "email", label: "Email" }, { key: "direct", label: "Direct" },
+  { key: "paid_search", label: "Paid Search" },
+  { key: "paid_social", label: "Paid Social" },
+  { key: "organic", label: "Organic" },
+  { key: "display", label: "Display" },
+  { key: "affiliate", label: "Affiliate" },
+  { key: "email", label: "Email" },
+  { key: "direct", label: "Direct" },
 ];
 
 export async function seedDemo(): Promise<void> {

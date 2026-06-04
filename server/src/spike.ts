@@ -17,15 +17,26 @@ import { connect, all, run, get } from "./db.ts";
 import { env, pg } from "./env.ts";
 
 const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
-let pass = 0, fail = 0, skipped = 0;
-const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); if (ok) pass++; else fail++; };
-const note = (name: string, detail: string) => { console.log(`  ⊘ ${name} — ${detail}`); skipped++; };
+let pass = 0,
+  fail = 0,
+  skipped = 0;
+const check = (name: string, ok: boolean, detail = "") => {
+  console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`);
+  if (ok) pass++;
+  else fail++;
+};
+const note = (name: string, detail: string) => {
+  console.log(`  ⊘ ${name} — ${detail}`);
+  skipped++;
+};
 
 const WH = env.warehouseDb;
 const DIM = pg("spike_dim");
 const MAP = pg("spike_map");
 const DRAFT = pg("spike_draft");
-const cleanup = async () => { for (const t of [DIM, MAP, DRAFT]) await run(`DROP TABLE IF EXISTS ${t}`).catch(() => {}); };
+const cleanup = async () => {
+  for (const t of [DIM, MAP, DRAFT]) await run(`DROP TABLE IF EXISTS ${t}`).catch(() => {});
+};
 
 console.log("\nZug Zug — bridge spike (canonical in Postgres)\n");
 await connect();
@@ -36,10 +47,18 @@ const cats = await all<{ database_name: string; type: string }>(
 );
 console.log("Attached catalogs:");
 for (const c of cats) console.log(`  · ${c.database_name} (${c.type})`);
-check("attach: Postgres catalog present", cats.some((c) => c.type === "postgres"), env.oltpCatalog);
+check(
+  "attach: Postgres catalog present",
+  cats.some((c) => c.type === "postgres"),
+  env.oltpCatalog,
+);
 if (env.attachWarehouse) {
   const haveWh = cats.some((c) => c.database_name === WH);
-  check(`attach: warehouse db '${WH}' present in MotherDuck`, haveWh, haveWh ? "" : `available: ${cats.map((c) => c.database_name).join(", ")}`);
+  check(
+    `attach: warehouse db '${WH}' present in MotherDuck`,
+    haveWh,
+    haveWh ? "" : `available: ${cats.map((c) => c.database_name).join(", ")}`,
+  );
 } else {
   note(`attach: warehouse '${WH}' (MotherDuck)`, "deferred — ATTACH_WAREHOUSE=false");
 }
@@ -57,31 +76,46 @@ await run(`CREATE TABLE ${DRAFT} (raw VARCHAR, k VARCHAR)`);
 console.log("\nPostgres canonical writes:");
 await run(`INSERT INTO ${MAP} VALUES ('DK','DK')`);
 let dup = false;
-try { await run(`INSERT INTO ${MAP} VALUES ('DK','XX')`); } catch { dup = true; }
+try {
+  await run(`INSERT INTO ${MAP} VALUES ('DK','XX')`);
+} catch {
+  dup = true;
+}
 check("postgres: duplicate PK rejected", dup);
 
 // 3. upsert
-let ups = false, upsMsg = "";
+let ups = false,
+  upsMsg = "";
 try {
   await run(`INSERT INTO ${DIM} (k,label) VALUES ('US','x')`);
-  await run(`INSERT INTO ${DIM} (k,label) VALUES ('US','United States') ON CONFLICT (k) DO UPDATE SET label = excluded.label`);
+  await run(
+    `INSERT INTO ${DIM} (k,label) VALUES ('US','United States') ON CONFLICT (k) DO UPDATE SET label = excluded.label`,
+  );
   const g = await get<{ label: string }>(`SELECT label FROM ${DIM} WHERE k='US'`);
   ups = g?.label === "United States";
-} catch (e) { upsMsg = String(e).split("\n")[0]; }
+} catch (e) {
+  upsMsg = String(e).split("\n")[0];
+}
 check("postgres: ON CONFLICT DO UPDATE works (saveDraft/addCanonical rely on it)", ups, upsMsg);
 
 // 4. single-catalog multi-write transaction (the commit() pattern)
 const conn = await connect();
-let txnOk = false, txnMsg = "";
+let txnOk = false,
+  txnMsg = "";
 try {
   await conn.run("BEGIN");
-  await conn.run(`INSERT INTO ${DIM} (k,label) VALUES ('GB','United Kingdom') ON CONFLICT (k) DO NOTHING`);
+  await conn.run(
+    `INSERT INTO ${DIM} (k,label) VALUES ('GB','United Kingdom') ON CONFLICT (k) DO NOTHING`,
+  );
   await conn.run(`INSERT INTO ${MAP} VALUES ('GB','GB')`);
   await conn.run(`DELETE FROM ${DRAFT} WHERE raw='GB'`);
   await conn.run("COMMIT");
   const g = await get<{ n: bigint }>(`SELECT count(*) AS n FROM ${MAP} WHERE raw='GB'`);
   txnOk = Number(g?.n) === 1;
-} catch (e) { txnMsg = String(e).split("\n")[0]; await conn.run("ROLLBACK").catch(() => {}); }
+} catch (e) {
+  txnMsg = String(e).split("\n")[0];
+  await conn.run("ROLLBACK").catch(() => {});
+}
 check("postgres: multi-write transaction commits (commit() is single-catalog)", txnOk, txnMsg);
 
 // 5. rollback
@@ -92,7 +126,9 @@ try {
   await conn.run("ROLLBACK");
   const g = await get<{ n: bigint }>(`SELECT count(*) AS n FROM ${MAP} WHERE raw='SE'`);
   rb = Number(g?.n) === 0;
-} catch { await conn.run("ROLLBACK").catch(() => {}); }
+} catch {
+  await conn.run("ROLLBACK").catch(() => {});
+}
 check("postgres: rolled-back write discarded", rb);
 
 // 6/7. cross-store join + real warehouse scan — only when the warehouse is attached
@@ -103,9 +139,13 @@ if (env.attachWarehouse) {
       `SELECT count(*) AS n FROM (SELECT 1 FROM ${qid(WH)}.information_schema.tables LIMIT 5) t CROSS JOIN ${MAP} m`,
     );
     check("cross-store: one query spans MotherDuck ⋈ Postgres", Number(r?.n) >= 0, `${r?.n} rows`);
-  } catch (e) { check("cross-store: one query spans MotherDuck ⋈ Postgres", false, String(e).split("\n")[0]); }
+  } catch (e) {
+    check("cross-store: one query spans MotherDuck ⋈ Postgres", false, String(e).split("\n")[0]);
+  }
 
-  const SCHEMA = "active_revenue", TABLE = "r_statistics", COL = "country";
+  const SCHEMA = "active_revenue",
+    TABLE = "r_statistics",
+    COL = "country";
   try {
     const r = await all<{ raw: string; rows: bigint }>(
       `SELECT CAST(${qid(COL)} AS VARCHAR) AS raw, count(*) AS rows
@@ -116,18 +156,30 @@ if (env.attachWarehouse) {
     if (r.length) {
       console.log(`\nReal scan — top ${WH}.${SCHEMA}.${TABLE}.${COL} values:`);
       for (const x of r) console.log(`    · '${x.raw}' (${Number(x.rows)} rows)`);
-      check(`scan: read real warehouse column ${SCHEMA}.${TABLE}.${COL}`, true, `${r.length} distinct sampled`);
+      check(
+        `scan: read real warehouse column ${SCHEMA}.${TABLE}.${COL}`,
+        true,
+        `${r.length} distinct sampled`,
+      );
     } else {
       note(`scan: ${WH}.${SCHEMA}.${TABLE}.${COL}`, "table reachable but empty here");
     }
   } catch (e) {
-    note(`scan: ${WH}.${SCHEMA}.${TABLE}.${COL}`, `not in ${WH} (${String(e).split("\n")[0]}) — fine, scan skips missing sources`);
+    note(
+      `scan: ${WH}.${SCHEMA}.${TABLE}.${COL}`,
+      `not in ${WH} (${String(e).split("\n")[0]}) — fine, scan skips missing sources`,
+    );
   }
 } else {
-  note("cross-store bridge + real scan", "deferred — ATTACH_WAREHOUSE=false (warehouse not attached)");
+  note(
+    "cross-store bridge + real scan",
+    "deferred — ATTACH_WAREHOUSE=false (warehouse not attached)",
+  );
 }
 
 console.log("\nCleaning up…");
 await cleanup();
-console.log(`\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed, ${skipped} skipped.\n`);
+console.log(
+  `\n${fail === 0 ? "PASS" : "FAIL"} — ${pass} passed, ${fail} failed, ${skipped} skipped.\n`,
+);
 process.exit(fail === 0 ? 0 : 1);

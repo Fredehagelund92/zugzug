@@ -25,16 +25,23 @@ export interface CreateTableInput {
   description?: string | null;
   color?: PaletteName | null;
   mode: CreateTableMode;
-  columns?: ColumnDraft[];                                        // mode === 'blank'
-  source?: { table: string; column: string };                     // mode === 'source'
+  columns?: ColumnDraft[]; // mode === 'blank'
+  source?: { table: string; column: string }; // mode === 'source'
   external?: { table: string; idColumn: string; nameColumn: string }; // mode === 'external_id'
 }
 
-export type CreateTableErrorCode = "NAME_TAKEN" | "WAREHOUSE_OFFLINE" | "MISSING_PICKER" | "INVALID";
+export type CreateTableErrorCode =
+  | "NAME_TAKEN"
+  | "WAREHOUSE_OFFLINE"
+  | "MISSING_PICKER"
+  | "INVALID";
 
 export class CreateTableError extends Error {
   code: CreateTableErrorCode;
-  constructor(code: CreateTableErrorCode, message: string) { super(message); this.code = code; }
+  constructor(code: CreateTableErrorCode, message: string) {
+    super(message);
+    this.code = code;
+  }
 }
 
 function validate(input: CreateTableInput): void {
@@ -50,7 +57,10 @@ function validate(input: CreateTableInput): void {
   } else if (input.mode === "external_id") {
     const e = input.external;
     if (!e?.table || !e?.idColumn || !e?.nameColumn) {
-      throw new CreateTableError("MISSING_PICKER", "external_id requires table + idColumn + nameColumn");
+      throw new CreateTableError(
+        "MISSING_PICKER",
+        "external_id requires table + idColumn + nameColumn",
+      );
     }
     if (e.idColumn === e.nameColumn) {
       throw new CreateTableError("INVALID", "idColumn and nameColumn must differ");
@@ -71,7 +81,10 @@ function validate(input: CreateTableInput): void {
   }
 }
 
-export async function createTable(input: CreateTableInput, userId: string): Promise<{ id: string }> {
+export async function createTable(
+  input: CreateTableInput,
+  userId: string,
+): Promise<{ id: string }> {
   validate(input);
   const name = input.name.trim();
   const id = slug(name);
@@ -92,10 +105,11 @@ export async function createTable(input: CreateTableInput, userId: string): Prom
 
   await pgTx(async ({ run }) => {
     // 2. Identity extras (description, color)
-    await run(
-      `UPDATE ${pg("dimension")} SET description = $1, color = $2 WHERE id = $3`,
-      [input.description?.trim() || null, input.color ?? null, id],
-    );
+    await run(`UPDATE ${pg("dimension")} SET description = $1, color = $2 WHERE id = $3`, [
+      input.description?.trim() || null,
+      input.color ?? null,
+      id,
+    ]);
 
     // 3. Source binding(s) — write directly so we stay in the pgTx connection
     if (input.mode === "source" && input.source) {
@@ -129,19 +143,35 @@ export async function createTable(input: CreateTableInput, userId: string): Prom
 
   // 5. Seeding (source / external_id modes)
   if (input.mode === "source" && input.source) {
-    const r = await repo.deriveCanonical(id, input.source.table, input.source.column, undefined, { silent: true }, userId);
+    const r = await repo.deriveCanonical(
+      id,
+      input.source.table,
+      input.source.column,
+      undefined,
+      { silent: true },
+      userId,
+    );
     derivedCount = r.derived;
   }
   if (input.mode === "external_id" && input.external) {
-    const r = await repo.deriveCanonical(id, input.external.table, input.external.idColumn, input.external.nameColumn, { silent: true }, userId);
+    const r = await repo.deriveCanonical(
+      id,
+      input.external.table,
+      input.external.idColumn,
+      input.external.nameColumn,
+      { silent: true },
+      userId,
+    );
     derivedCount = r.derived;
   }
 
   // 6. Consolidated audit
   const detail =
-    input.mode === "blank" ? `${name} · blank · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
-    : input.mode === "source" ? `${name} · from ${input.source!.table}.${input.source!.column} · derived ${derivedCount}`
-    : `${name} · from IDs ${input.external!.table}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
+    input.mode === "blank"
+      ? `${name} · blank · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
+      : input.mode === "source"
+        ? `${name} · from ${input.source!.table}.${input.source!.column} · derived ${derivedCount}`
+        : `${name} · from IDs ${input.external!.table}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
   await repo.appendAuditAs(userId, "Created table", detail);
 
   return { id };

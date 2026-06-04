@@ -6,7 +6,12 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { env, pg } from "./env.ts";
 import { pgRun as run, pgAll as all, pgGet as get } from "./pg.ts";
 
-export interface SessionUser { id: string; name: string; email: string; initials: string }
+export interface SessionUser {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+}
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 const SID = "zz_sid";
@@ -17,7 +22,7 @@ const isSecure = env.origin.startsWith("https://");
 const cors = {
   "access-control-allow-origin": env.origin,
   "access-control-allow-credentials": "true",
-  "vary": "Origin",
+  vary: "Origin",
 };
 
 // ---- cookie helpers --------------------------------------------------------
@@ -66,10 +71,9 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     await run(`DELETE FROM ${pg("sessions")} WHERE id = $1`, [sid]);
     return null;
   }
-  return get<SessionUser>(
-    `SELECT id, name, email, initials FROM ${pg("users")} WHERE id = $1`,
-    [session.user_id],
-  );
+  return get<SessionUser>(`SELECT id, name, email, initials FROM ${pg("users")} WHERE id = $1`, [
+    session.user_id,
+  ]);
 }
 
 // ---- route handlers --------------------------------------------------------
@@ -121,7 +125,11 @@ export async function handleGoogleCallback(req: Request): Promise<Response> {
   const { id_token } = (await tokenRes.json()) as { id_token: string };
 
   // Verify ID token signature + claims
-  let sub: string, email: string, name: string, givenName: string | undefined, familyName: string | undefined;
+  let sub: string,
+    email: string,
+    name: string,
+    givenName: string | undefined,
+    familyName: string | undefined;
   try {
     const { payload } = await jwtVerify(id_token, GOOGLE_JWKS, {
       audience: env.googleClientId,
@@ -143,21 +151,31 @@ export async function handleGoogleCallback(req: Request): Promise<Response> {
   // makes the INSERT idempotent and closes the race where two simultaneous
   // first-logins both see n=0 — the second insert is a no-op, and both users
   // end up in the allowlist (both get in), which is the safe failure mode.
-  const [{ n }] = await all<{ n: number }>(`SELECT count(*)::int AS n FROM ${pg("allowed_emails")}`);
+  const [{ n }] = await all<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${pg("allowed_emails")}`,
+  );
   if (n === 0) {
     await run(
       `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at) VALUES ($1, 'bootstrap', current_timestamp) ON CONFLICT (email) DO NOTHING`,
       [email],
     );
   } else {
-    const allowed = await get(`SELECT email FROM ${pg("allowed_emails")} WHERE email = $1`, [email]);
+    const allowed = await get(`SELECT email FROM ${pg("allowed_emails")} WHERE email = $1`, [
+      email,
+    ]);
     if (!allowed) return loginError("not_allowed", clearState);
   }
 
   // Build initials from given/family name, fall back to splitting display name
-  const initials = givenName && familyName
-    ? `${givenName[0]}${familyName[0]}`.toUpperCase()
-    : name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "??";
+  const initials =
+    givenName && familyName
+      ? `${givenName[0]}${familyName[0]}`.toUpperCase()
+      : name
+          .split(" ")
+          .map((w) => w[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase() || "??";
 
   // Upsert user
   const userId = `u_${sub}`;
@@ -171,10 +189,11 @@ export async function handleGoogleCallback(req: Request): Promise<Response> {
   // Create session
   const sessionId = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
   const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
-  await run(
-    `INSERT INTO ${pg("sessions")} (id, user_id, expires_at) VALUES ($1, $2, $3)`,
-    [sessionId, userId, expiresAt.toISOString()],
-  );
+  await run(`INSERT INTO ${pg("sessions")} (id, user_id, expires_at) VALUES ($1, $2, $3)`, [
+    sessionId,
+    userId,
+    expiresAt.toISOString(),
+  ]);
 
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", clearState);
@@ -195,10 +214,11 @@ export async function handleLogout(req: Request): Promise<Response> {
 /** GET /api/auth/me — return session user or 401. Used by BootGate. */
 export async function handleMe(req: Request): Promise<Response> {
   const user = await getSessionUser(req);
-  if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), {
-    status: 401,
-    headers: { "content-type": "application/json", ...cors },
-  });
+  if (!user)
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json", ...cors },
+    });
   return new Response(JSON.stringify(user), {
     status: 200,
     headers: { "content-type": "application/json", ...cors },
@@ -223,10 +243,11 @@ export async function handleDevLogin(): Promise<Response> {
   );
   const sessionId = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
   const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
-  await run(
-    `INSERT INTO ${pg("sessions")} (id, user_id, expires_at) VALUES ($1, $2, $3)`,
-    [sessionId, userId, expiresAt.toISOString()],
-  );
+  await run(`INSERT INTO ${pg("sessions")} (id, user_id, expires_at) VALUES ($1, $2, $3)`, [
+    sessionId,
+    userId,
+    expiresAt.toISOString(),
+  ]);
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", cookie(SID, sessionId, SESSION_SECONDS));
   return new Response(null, { status: 302, headers });

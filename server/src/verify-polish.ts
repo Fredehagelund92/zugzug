@@ -9,9 +9,18 @@ import { pg } from "./env.ts";
 import * as repo from "./repo.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
 
-let pass = 0, fail = 0, skipped = 0;
-const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); if (ok) pass++; else fail++; };
-const note = (name: string, detail: string) => { console.log(`  ⊘ ${name} — ${detail}`); skipped++; };
+let pass = 0,
+  fail = 0,
+  skipped = 0;
+const check = (name: string, ok: boolean, detail = "") => {
+  console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`);
+  if (ok) pass++;
+  else fail++;
+};
+const note = (name: string, detail: string) => {
+  console.log(`  ⊘ ${name} — ${detail}`);
+  skipped++;
+};
 
 console.log("\nZug Zug — polish verification\n");
 await connect();
@@ -19,41 +28,60 @@ await runMigrations();
 
 // 1. preferences round-trip
 const before = await repo.getPreferences();
-check("getPreferences returns numeric thresholds",
+check(
+  "getPreferences returns numeric thresholds",
   Number.isFinite(before.publishThreshold) && Number.isFinite(before.suggestThreshold),
-  `publish=${before.publishThreshold}, suggest=${before.suggestThreshold}`);
+  `publish=${before.publishThreshold}, suggest=${before.suggestThreshold}`,
+);
 
 await repo.setPreferences({ publishThreshold: 88, suggestThreshold: 60 });
 const after = await repo.getPreferences();
-check("setPreferences round-trips",
+check(
+  "setPreferences round-trips",
   after.publishThreshold === 88 && after.suggestThreshold === 60,
-  `got publish=${after.publishThreshold}, suggest=${after.suggestThreshold}`);
+  `got publish=${after.publishThreshold}, suggest=${after.suggestThreshold}`,
+);
 
 // clamp invariant: suggest <= publish
 await repo.setPreferences({ publishThreshold: 70, suggestThreshold: 90 });
 const clamped = await repo.getPreferences();
-check("setPreferences clamps suggest <= publish",
+check(
+  "setPreferences clamps suggest <= publish",
   clamped.suggestThreshold <= clamped.publishThreshold,
-  `publish=${clamped.publishThreshold}, suggest=${clamped.suggestThreshold}`);
+  `publish=${clamped.publishThreshold}, suggest=${clamped.suggestThreshold}`,
+);
 
 // reset to defaults
-await repo.setPreferences({ publishThreshold: before.publishThreshold, suggestThreshold: before.suggestThreshold });
+await repo.setPreferences({
+  publishThreshold: before.publishThreshold,
+  suggestThreshold: before.suggestThreshold,
+});
 
 // 2. u_system user exists (idempotent insert on schema bootstrap)
 const sys = await all<{ id: string }>(`SELECT id FROM ${pg("users")} WHERE id = 'u_system'`);
-check("u_system user provisioned by migration", sys.length === 1, "expected one row, got " + sys.length);
+check(
+  "u_system user provisioned by migration",
+  sys.length === 1,
+  "expected one row, got " + sys.length,
+);
 
 // 3. autoStageExactMatches — only meaningful with a real warehouse + a seeded dim
 if (process.env.POLISH_AUTOSTAGE === "1") {
   const dimId = process.env.POLISH_DIM_ID;
   if (!dimId) {
-    note("autoStageExactMatches", "POLISH_AUTOSTAGE=1 set but POLISH_DIM_ID missing — set it to the dim to exercise");
+    note(
+      "autoStageExactMatches",
+      "POLISH_AUTOSTAGE=1 set but POLISH_DIM_ID missing — set it to the dim to exercise",
+    );
   } else {
     const n = await repo.autoStageExactMatches(dimId);
     check(`autoStageExactMatches('${dimId}') returns a count`, Number.isFinite(n), `staged ${n}`);
   }
 } else {
-  note("autoStageExactMatches", "POLISH_AUTOSTAGE=1 not set — needs a real warehouse + seeded dim; skipping");
+  note(
+    "autoStageExactMatches",
+    "POLISH_AUTOSTAGE=1 not set — needs a real warehouse + seeded dim; skipping",
+  );
 }
 
 console.log(`\n  ${pass} passed · ${fail} failed · ${skipped} skipped\n`);
