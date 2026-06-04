@@ -16,11 +16,17 @@ reconcile messy source values to canonical values, writes results to its own sto
 ***REMOVED******REMOVED*** Three stores (see ARCHITECTURE.md)
 - Warehouse = MotherDuck, **read-only**, scanned for distinct values.
 - Canonical `dim_/map_` + app state (registry, drafts, audit, users) = **Postgres**.
-- Bridge: DuckDB `ATTACH (TYPE postgres)` joins live drafts ⋈ canonical ⋈ warehouse.
+- DuckDB = warehouse-only interface (MotherDuck ATTACH). Does NOT attach Postgres.
+
+***REMOVED******REMOVED*** Data access — hard rules (follow for every feature)
+- **OLTP → `postgres.js`** (`server/src/pg.ts`). Every pure-Postgres query (drafts, audit, users, sessions, preferences, dimension registry, canonical tables) uses the native `postgres.js` client. Never use DuckDB to query Postgres.
+- **Warehouse → DuckDB** (`server/src/db.ts`). DuckDB only talks to MotherDuck. Use it for `DISTINCT` scans, catalog browsing, and anything that reads warehouse tables.
+- **Cross-store joins → application code**. When a query needs warehouse data AND Postgres data (e.g. "which warehouse values are unmapped?"), do two fetches and join in TypeScript. Do not re-introduce a DuckDB Postgres ATTACH.
+- **Schema changes → Drizzle migration**. All DDL for the 12 static app-state tables lives in `server/drizzle/schema.ts`. Run `bun run db:generate` after schema edits; commit the generated migration. Dynamic `dim_*/map_*` tables (created per-dimension in `addDimension`) stay as imperative DDL.
 
 ***REMOVED******REMOVED*** Gotchas
-- MotherDuck token is read-only (`read_scaling`) → canonical moved to Postgres; `commit()` is single-catalog/atomic. Re-joining on MotherDuck needs a r/w token + sync (future).
-- Warehouse scan gated by `ATTACH_WAREHOUSE` (off by default). Off → `scanUnmapped` returns nothing; Postgres-only machinery still runs. See `server/.env.example`.
+- MotherDuck token is read-only (`read_scaling`) → canonical `dim_/map_` live in Postgres; `commit()` is single-catalog/atomic.
+- Warehouse scan gated by `ATTACH_WAREHOUSE` (off by default). Off → scan functions return nothing; Postgres-only machinery still runs. See `server/.env.example`.
 - `app/src/store.ts` annotates each export with the SQL it represents — read it before changing data flow.
 
 ***REMOVED******REMOVED*** Master-table convention
