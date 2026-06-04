@@ -8,6 +8,7 @@
 import { randomUUID } from "node:crypto";
 import type { DuckDBValue } from "@duckdb/node-api";
 import { all, get, run } from "./db.ts";
+import { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
 import { env, pg } from "./env.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
@@ -57,8 +58,8 @@ const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 /** 'schema.table' (or 'table') → fully-qualified warehouse identifier (MotherDuck). */
 const whTable = (sourceTable: string) =>
   `${qid(env.warehouseDb)}.` + sourceTable.split(".").map(qid).join(".");
-/** canonical table: display 'zugzug.dim_country' → 'oltp."zugzug"."dim_country"' (Postgres). */
-const cq = (display: string) => `${env.oltpCatalog}.` + display.split(".").map(qid).join(".");
+/** canonical table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
+const cq = (display: string) => display.split(".").map(qid).join(".");
 const rel = (secs: number): string => {
   if (secs < 45) return "just now";
   const m = Math.round(secs / 60); if (m < 60) return `${m}m ago`;
