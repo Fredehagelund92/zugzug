@@ -1079,13 +1079,6 @@ export async function listVariants(dimId: string, key: string): Promise<string[]
 }
 
 /* ---- drafts (Postgres) ---- */
-async function userById(id: string): Promise<User> {
-  return (
-    (await pgGet<User>(`SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`, [id])) ??
-    { id, name: id, initials: id.slice(0, 2).toUpperCase() }
-  );
-}
-
 export async function listDrafts(dimId: string): Promise<Draft[]> {
   const rows = await pgAll<{
     dimId: string; raw: string; status: "mapped" | "skipped";
@@ -1098,15 +1091,22 @@ export async function listDrafts(dimId: string): Promise<Draft[]> {
      FROM ${pg("draft")} WHERE dim_id = $1 ORDER BY created_at DESC`,
     [dimId],
   );
-  const out: Draft[] = [];
-  for (const r of rows) {
-    out.push({
-      dimId: r.dimId, raw: r.raw, status: r.status,
-      targetLabel: r.targetLabel, targetKey: r.targetKey,
-      user: await userById(r.uid), at: rel(Number(r.secs)),
-    });
-  }
-  return out;
+  if (rows.length === 0) return [];
+
+  const uids = Array.from(new Set(rows.map((r) => r.uid)));
+  const users = await pgAll<User>(
+    `SELECT id, name, initials FROM ${pg("users")} WHERE id = ANY($1::text[])`,
+    [uids],
+  );
+  const byId = new Map(users.map((u) => [u.id, u]));
+  const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
+
+  return rows.map((r) => ({
+    dimId: r.dimId, raw: r.raw, status: r.status,
+    targetLabel: r.targetLabel, targetKey: r.targetKey,
+    user: byId.get(r.uid) ?? unknownUser,
+    at: rel(Number(r.secs)),
+  }));
 }
 
 export async function saveDraft(
