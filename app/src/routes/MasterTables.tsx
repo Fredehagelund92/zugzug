@@ -19,7 +19,8 @@ import {
 import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid, useUndoStack } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
-import type { CanonicalValue } from "../data";
+import type { CanonicalValue, OptionDef } from "../data";
+import { OptionBuilder } from "../components/OptionBuilder";
 
 /* Master tables (pillar 2) — the master-record workbench, live against Postgres
    dim_/map_. Import from a source column, MERGE near-duplicates into one survivor
@@ -27,24 +28,74 @@ import type { CanonicalValue } from "../data";
    (currency, locale, …) editable inline. Expand a record for the raw values that
    resolve to it (the lineage receipt). Every mutation is persisted + audited. */
 
-const FIELD_TYPES = ["text", "number", "boolean", "date"] as const;
+const FIELD_TYPES = ["text", "number", "boolean", "date", "select"] as const;
 
-/** "＋ column" affordance → name + type, adds an attribute column. */
-function AddColumn({ onAdd }: { onAdd: (label: string, type: string) => void }) {
+/** "＋ field" affordance → name + type (+ options for select), adds an attribute column. */
+function AddColumn({ onAdd }: { onAdd: (label: string, type: string, options?: OptionDef[]) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
   const [label, setLabel] = useState("");
   const [type, setType] = useState<string>("text");
-  if (!editing) return <button type="button" onClick={() => setEditing(true)} className="flex items-center gap-1 font-mono text-[11px] text-ink-3 transition-colors hover:text-accent"><IconPlus className="h-3 w-3" /> column</button>;
-  const commit = () => { if (label.trim()) onAdd(label.trim(), type); setLabel(""); setType("text"); setEditing(false); };
+  const [options, setOptions] = useState<OptionDef[]>([]);
+
+  const reset = (): void => { setLabel(""); setType("text"); setOptions([]); setEditing(false); };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="flex items-center gap-1 font-mono text-[11px] text-ink-3 transition-colors hover:text-accent"
+      >
+        <IconPlus className="h-3 w-3" /> field
+      </button>
+    );
+  }
+
+  const commit = async (): Promise<void> => {
+    if (!label.trim()) return;
+    await onAdd(label.trim(), type, type === "select" ? options : undefined);
+    reset();
+  };
+
   return (
-    <div className="flex items-center gap-1.5">
-      <input autoFocus value={label} onChange={(e) => setLabel(e.target.value)}
-        onKeyDown={(e) => (e.key === "Enter" ? commit() : e.key === "Escape" && setEditing(false))}
-        placeholder="column name…" className="w-32 rounded-sm border border-accent bg-bg px-2 py-0.5 font-mono text-[11px] text-ink outline-none" />
-      <select value={type} onChange={(e) => setType(e.target.value)} className="rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[11px] text-ink-2 outline-none">
-        {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-      </select>
-      <button type="button" onMouseDown={(e) => { e.preventDefault(); commit(); }} className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-accent transition-colors hover:border-accent">add</button>
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <input
+          autoFocus
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && type !== "select") void commit();
+            if (e.key === "Escape") reset();
+          }}
+          placeholder="field name…"
+          className="w-32 rounded-sm border border-accent bg-bg px-2 py-0.5 font-mono text-[11px] text-ink outline-none"
+        />
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          className="rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[11px] text-ink-2 outline-none"
+        >
+          {FIELD_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); void commit(); }}
+          className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-accent transition-colors hover:border-accent"
+        >
+          add
+        </button>
+        <button
+          type="button"
+          onClick={reset}
+          className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-ink-3 hover:text-ink"
+        >
+          cancel
+        </button>
+      </div>
+      {type === "select" && (
+        <OptionBuilder options={options} onChange={setOptions} />
+      )}
     </div>
   );
 }
@@ -299,7 +350,7 @@ export function MasterTables() {
           <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
             ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
-          <AddColumn onAdd={(label, type) => addField(activeId, label, type)} />
+          <AddColumn onAdd={(label, type, options) => addField(activeId, label, type, options)} />
         </div>
       </div>
 
@@ -362,7 +413,7 @@ export function MasterTables() {
               inverse: () => setFieldValue(activeId, rowKey, field, prev),
             });
           }}
-          onAddColumnOption={(field, label) => addColumnOption(activeId, field, label)}
+          onAddColumnOption={(field, label, color) => addColumnOption(activeId, field, label, color ?? null)}
           onRenameColumn={(field, label) => void renameColumn(activeId, field, label)}
           onChangeColumnType={(field, newType, opts) =>
             changeColumnType(activeId, field, newType, opts?.options, opts?.coerceInvalidToNull ?? false)
