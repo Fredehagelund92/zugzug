@@ -223,34 +223,54 @@ export async function scanSources(): Promise<number> {
  *  the dimension's lookup table. The match is deterministic — no AI, no fuzzy
  *  — so it always lands above any reasonable publish threshold. */
 export async function autoStageExactMatches(dimId: string): Promise<number> {
-  const meta = await get<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
-    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
+  const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
+    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
+            COALESCE(key_kind, 'slug') AS "keyKind"
+     FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+  );
   if (!meta) return 0;
-  // External-ID dims have nullable labels (names come live from the warehouse) —
-  // exact-label matching against an empty/null label table is meaningless. Skip.
   if (meta.keyKind === "external_id") return 0;
 
   const sources = await liveSources(dimId);
   if (!sources.length) return 0;
-  const keyc = qid(meta.keyCol);
 
-  // For every distinct warehouse value, find a canonical row whose label
-  // matches case-insensitively, and whose raw is not yet in map_*.
-  const matches = await all<{ raw: string; key: string; label: string }>(`
-    WITH occ AS (${occUnion(sources)})
-    SELECT DISTINCT o.raw AS raw, c.${keyc} AS key, c.label AS label
-    FROM occ o
-    JOIN ${cq(meta.dimTable)} c ON lower(c.label) = lower(o.raw)
-    LEFT JOIN ${cq(meta.mapTable)} m ON lower(m.raw) = lower(o.raw)
-    WHERE m.raw IS NULL AND c.label IS NOT NULL
-  `).catch(() => [] as { raw: string; key: string; label: string }[]);
+  // Warehouse: distinct raw values
+  const occRows = await all<{ raw: string }>(
+    occUnion(sources),
+  ).catch(() => [] as { raw: string }[]);
+  if (!occRows.length) return 0;
+  const warehouseRaws = [...new Set(occRows.map((r) => r.raw))];
+
+  // Postgres: canonical labels
+  const canonRows = await pgAll<{ key: string; label: string }>(
+    `SELECT ${qid(meta.keyCol)} AS key, label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
+  ).catch(() => [] as { key: string; label: string }[]);
+  const labelToCanon = new Map<string, { key: string; label: string }>();
+  for (const r of canonRows) labelToCanon.set(r.label.toLowerCase(), r);
+
+  // Postgres: already-mapped raws
+  const mappedRows = await pgAll<{ raw: string }>(
+    `SELECT raw FROM ${cq(meta.mapTable)}`,
+  ).catch(() => [] as { raw: string }[]);
+  const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
+
+  // JS: find exact case-insensitive matches not yet mapped
+  const matches: { raw: string; key: string; label: string }[] = [];
+  for (const raw of warehouseRaws) {
+    const lower = raw.toLowerCase();
+    if (mappedSet.has(lower)) continue;
+    const canon = labelToCanon.get(lower);
+    if (canon) matches.push({ raw, key: canon.key, label: canon.label });
+  }
 
   if (!matches.length) return 0;
   for (const m of matches) {
     await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system");
   }
-  await appendAuditAs("u_system", "Auto-matched", `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`);
+  await appendAuditAs(
+    "u_system", "Auto-matched",
+    `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`,
+  );
   return matches.length;
 }
 
@@ -505,51 +525,87 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
 }
 
 /** Distinct warehouse values for a dimension WITH provenance, tagged mapped/new
- *  by LEFT JOIN to the crosswalk. This is the core scan from ARCHITECTURE.md. */
+ *  by cross-referencing the Postgres crosswalk. Two-fetch + JS pattern. */
 async function scanValues(
   dimId: string,
   meta: Omit<DimensionMeta, "rows"> & { nameTable?: string | null; nameIdCol?: string | null; nameCol?: string | null },
 ): Promise<MappingValue[]> {
   let sources = await liveSources(dimId);
-  // the bound name column is wired as a source so the derive picker can see it,
-  // but it is the name binding — not a value to reconcile. Exclude it from the scan.
   if (meta.keyKind === "external_id" && meta.nameTable && meta.nameCol) {
     sources = sources.filter((s) => !(s.table === meta.nameTable && s.column === meta.nameCol));
   }
   if (!sources.length) return [];
-  const liveName = meta.keyKind === "external_id" && env.attachWarehouse && !!meta.nameTable && !!meta.nameIdCol && !!meta.nameCol;
-  const keyc = qid(meta.keyCol);
 
-  const currentExpr = liveName ? "any_value(w.nm)" : "any_value(c.label)";
-  const nameJoin = liveName
-    ? `LEFT JOIN (SELECT CAST(${qid(meta.nameIdCol!)} AS VARCHAR) AS id, CAST(${qid(meta.nameCol!)} AS VARCHAR) AS nm FROM ${whTable(meta.nameTable!)}) w ON w.id = m.${keyc}`
-    : `LEFT JOIN ${cq(meta.dimTable)} c ON c.${keyc} = m.${keyc}`;
+  // 1. Warehouse: distinct raw values with provenance + row counts
+  const occRows = await all<{ raw: string; tbl: string; col: string; rows: bigint }>(
+    occUnion(sources),
+  ).catch(() => [] as { raw: string; tbl: string; col: string; rows: bigint }[]);
+  if (!occRows.length) return [];
 
-  const sql = `
-    WITH occ AS (${occUnion(sources)})
-    SELECT o.raw AS value,
-           CASE WHEN m.raw IS NOT NULL THEN 'mapped' ELSE 'new' END AS status,
-           ${currentExpr} AS current,
-           to_json(list({'table': o.tbl, 'column': o.col, 'rows': o.rows})) AS sources
-    FROM occ o
-    LEFT JOIN ${cq(meta.mapTable)} m ON lower(m.raw) = lower(o.raw)
-    ${nameJoin}
-    GROUP BY o.raw, (m.raw IS NOT NULL)
-    ORDER BY status ASC, sum(o.rows) DESC
-    LIMIT 500`;
+  // Collapse to one row per raw value (UNION ALL → aggregate in JS)
+  const occMap = new Map<string, { tbl: string; col: string; rows: number }[]>();
+  for (const r of occRows) {
+    const key = r.raw.toLowerCase();
+    const entry = occMap.get(key) ?? [];
+    entry.push({ tbl: r.tbl, col: r.col, rows: Number(r.rows) });
+    occMap.set(key, entry);
+  }
+  // Keep insertion order (first raw string wins as the display value)
+  const raws = new Map<string, string>(); // lowercase → original case
+  for (const r of occRows) {
+    if (!raws.has(r.raw.toLowerCase())) raws.set(r.raw.toLowerCase(), r.raw);
+  }
 
-  const rows = await all<{ value: string; status: "mapped" | "new"; current: string | null; sources: string }>(sql);
-  const parseSources = (c: string): SourceOccurrence[] => {
-    try { return (JSON.parse(c) as SourceOccurrence[]).map((s) => ({ table: s.table, column: s.column, rows: Number(s.rows) })); } catch { return []; }
-  };
-  return rows.map((r) => ({
-    value: r.value,
-    status: r.status,
-    current: r.current ?? null,
-    suggestion: null,        // AI suggestion is a fast-follow; manual reconcile for now
-    confidence: 0,
-    sources: parseSources(r.sources),
-  }));
+  // 2. Postgres: all mapped raws for this dimension
+  const mappedRows = await pgAll<{ raw: string; key: string }>(
+    `SELECT raw, ${qid(meta.keyCol)} AS key FROM ${cq(meta.mapTable)}`,
+  ).catch(() => [] as { raw: string; key: string }[]);
+  const mappedSet = new Map<string, string>(); // lowercase raw → canonical key
+  for (const r of mappedRows) mappedSet.set(r.raw.toLowerCase(), r.key);
+
+  // 3. Optionally fetch live canonical names (external_id + warehouse attached)
+  const liveName =
+    meta.keyKind === "external_id" && env.attachWarehouse &&
+    !!meta.nameTable && !!meta.nameIdCol && !!meta.nameCol;
+  const nameMap = new Map<string, string>(); // canonical key → display name
+  if (liveName) {
+    const nameRows = await all<{ id: string; nm: string }>(
+      `SELECT CAST(${qid(meta.nameIdCol!)} AS VARCHAR) AS id,
+              CAST(${qid(meta.nameCol!)} AS VARCHAR) AS nm
+       FROM ${whTable(meta.nameTable!)}`,
+    ).catch(() => [] as { id: string; nm: string }[]);
+    for (const r of nameRows) nameMap.set(r.id, r.nm);
+  }
+
+  // 4. Postgres: all canonical labels (slug dims)
+  const labelMap = new Map<string, string>(); // canonical key → label
+  if (!liveName && meta.keyKind !== "external_id") {
+    const dimRows = await pgAll<{ key: string; label: string }>(
+      `SELECT ${qid(meta.keyCol)} AS key, label FROM ${cq(meta.dimTable)}`,
+    ).catch(() => [] as { key: string; label: string }[]);
+    for (const r of dimRows) labelMap.set(r.key, r.label);
+  }
+
+  // 5. Build result (unmapped first, then mapped; sorted by row count desc within each group)
+  const results: MappingValue[] = [];
+  for (const [lowerRaw, raw] of raws) {
+    const srcs: SourceOccurrence[] = (occMap.get(lowerRaw) ?? []).map((o) => ({
+      table: o.tbl, column: o.col, rows: o.rows,
+    }));
+    const canonKey = mappedSet.get(lowerRaw) ?? null;
+    const status: "mapped" | "new" = canonKey ? "mapped" : "new";
+    const current = canonKey
+      ? (liveName ? (nameMap.get(canonKey) ?? null) : (labelMap.get(canonKey) ?? null))
+      : null;
+    results.push({ value: raw, status, current, suggestion: null, confidence: 0, sources: srcs });
+  }
+  results.sort((a, b) => {
+    if (a.status !== b.status) return a.status === "new" ? -1 : 1;
+    const aRows = a.sources.reduce((s, x) => s + x.rows, 0);
+    const bRows = b.sources.reduce((s, x) => s + x.rows, 0);
+    return bRows - aRows;
+  });
+  return results.slice(0, 500);
 }
 
 /** Create a dimension: register it + provision dim_/map_ (Postgres) + register
@@ -1000,13 +1056,32 @@ export async function commit(dimId: string, userId: string): Promise<{ committed
 async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<number> {
   const sources = await liveSources(dimId);
   if (!sources.length) return 0;
-  const r = await get<{ n: bigint }>(
-    `WITH occ AS (${occUnion(sources)})
-     SELECT COALESCE(sum(o.rows), 0) AS n FROM occ o
-     JOIN ${pg("draft")} d ON lower(d.raw) = lower(o.raw) AND d.dim_id = $1 AND d.status = 'mapped'
-     WHERE NOT EXISTS (SELECT 1 FROM ${cq(mapTable)} m WHERE lower(m.raw) = lower(o.raw))`, [dimId],
-  ).catch(() => null);
-  return Number(r?.n ?? 0);
+
+  // Warehouse: distinct raw values with total row counts
+  const occRows = await all<{ raw: string; rows: bigint }>(
+    occUnion(sources),
+  ).catch(() => [] as { raw: string; rows: bigint }[]);
+  if (!occRows.length) return 0;
+
+  // Postgres: draft raws for this dimension with status=mapped
+  const draftRows = await pgAll<{ raw: string }>(
+    `SELECT raw FROM ${pg("draft")} WHERE dim_id = $1 AND status = 'mapped'`, [dimId],
+  );
+  const draftSet = new Set(draftRows.map((r) => r.raw.toLowerCase()));
+
+  // Postgres: already-mapped raws
+  const mappedRows = await pgAll<{ raw: string }>(
+    `SELECT raw FROM ${cq(mapTable)}`,
+  ).catch(() => [] as { raw: string }[]);
+  const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
+
+  // Sum rows for warehouse values that are in a draft but not yet mapped
+  let total = 0;
+  for (const r of occRows) {
+    const lower = r.raw.toLowerCase();
+    if (draftSet.has(lower) && !mappedSet.has(lower)) total += Number(r.rows);
+  }
+  return total;
 }
 
 /* ---- audit (Postgres, append-only) ---- */
