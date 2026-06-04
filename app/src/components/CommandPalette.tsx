@@ -28,11 +28,19 @@ interface Props {
   open: boolean;
   onClose: () => void;
   commands: Command[];
+  /** Ordered command ids (most-recent first) shown in a "Recent" group above
+   *  Navigate when the search is empty. Recent items are hidden from their
+   *  original group to avoid duplicates. Stale ids (no matching command) are
+   *  silently skipped. */
+  recents?: string[];
+  /** Called with the command id just before its action runs, so the caller
+   *  can update its recents list. */
+  onRun?: (id: string) => void;
   /** Optional placeholder for the search input. */
   placeholder?: string;
 }
 
-export function CommandPalette({ open, onClose, commands, placeholder = "Jump to anything…" }: Props) {
+export function CommandPalette({ open, onClose, commands, recents = [], onRun, placeholder = "Jump to anything…" }: Props) {
   const [q, setQ] = useState("");
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,12 +53,29 @@ export function CommandPalette({ open, onClose, commands, placeholder = "Jump to
   // its full corpus on the user before they type anything.
   const filtered = useMemo<Command[]>(() => {
     const norm = q.trim().toLowerCase();
-    if (!norm) return commands.filter((c) => c.priority);
+    if (!norm) {
+      // Empty: prepend Recent commands (in order), then priority commands
+      // not already in recents. Stale recent ids skipped silently.
+      const byId = new Map(commands.map((c) => [c.id, c]));
+      const seen = new Set<string>();
+      const out: Command[] = [];
+      for (const id of recents) {
+        const c = byId.get(id);
+        if (!c || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ ...c, group: "Recent" });
+      }
+      for (const c of commands) {
+        if (!c.priority || seen.has(c.id)) continue;
+        out.push(c);
+      }
+      return out;
+    }
     return commands.filter((c) => {
       const hay = `${c.label} ${c.secondary ?? ""} ${c.keywords ?? ""} ${c.group}`.toLowerCase();
       return hay.includes(norm);
     });
-  }, [commands, q]);
+  }, [commands, q, recents]);
 
   // Counts for the empty-state hint — "type to search 12 dimensions, 87 records"
   const hiddenSummary = useMemo(() => {
@@ -103,6 +128,7 @@ export function CommandPalette({ open, onClose, commands, placeholder = "Jump to
   const runAt = (i: number) => {
     const c = filtered[i];
     if (!c) return;
+    onRun?.(c.id);
     onClose();
     // Defer the action a tick so the close transition starts first and any
     // navigation that follows isn't fighting the modal's unmount.
