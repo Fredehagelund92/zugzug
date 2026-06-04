@@ -210,7 +210,7 @@ export async function scanSources(): Promise<number> {
   const SCAN_TIMEOUT_MS = 30_000;
   for (const r of regs) {
     const col = qid(r.column);
-    let present = false, rows = 0, distinct = 0, unmapped = 0;
+    let present: boolean, rows = 0, distinct = 0, unmapped = 0;
     const t0 = performance.now();
     try {
       const { agg } = await Promise.race([

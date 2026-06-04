@@ -10,7 +10,7 @@ import * as repo from "./repo.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
 
 let pass = 0, fail = 0, skipped = 0;
-const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); ok ? pass++ : fail++; };
+const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); if (ok) pass++; else fail++; };
 const note = (name: string, detail: string) => { console.log(`  ⊘ ${name} — ${detail}`); skipped++; };
 
 console.log("\nZug Zug — polish verification\n");
