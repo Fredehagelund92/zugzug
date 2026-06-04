@@ -28,6 +28,7 @@ import { ShortcutsOverlay } from "./datagrid";
    - The engineer-mode toggle lives in Settings → Appearance only. */
 
 const NAV_COLLAPSED_KEY = "zugzug:nav-collapsed";
+const PALETTE_RECENTS_KEY = "zugzug:palette-recents";
 
 function useNavCollapsed(): [boolean, () => void] {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -98,6 +99,19 @@ export function AppShell() {
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Last 5 invoked palette command ids — surfaced in a "Recent" section on
+  // empty search so the user's most-used jumps are one keystroke away.
+  const [recents, setRecents] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(PALETTE_RECENTS_KEY) ?? "[]"); }
+    catch { return []; }
+  });
+  const onPaletteRun = (id: string) => {
+    setRecents((prev) => {
+      const next = [id, ...prev.filter((x) => x !== id)].slice(0, 5);
+      try { localStorage.setItem(PALETTE_RECENTS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -301,7 +315,13 @@ export function AppShell() {
         </main>
       </div>
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        commands={commands}
+        recents={recents}
+        onRun={onPaletteRun}
+      />
     </div>
   );
 }
