@@ -23,10 +23,10 @@ test("mergeCanonical re-points crosswalk rows and deletes losers", async () => {
   await repo.addCanonicalOne(dimId, "Acme", undefined, userId);
   await repo.addCanonicalOne(dimId, "Acme Corp", undefined, userId);
 
-  await repo.saveDraft(dimId, "acme corp variant", "mapped", "Acme Corp", "acme-corp", userId);
+  await repo.saveDraft(dimId, "acme corp variant", "mapped", "Acme Corp", "acme_corp", userId);
   await repo.commit(dimId, userId);
 
-  const merged = await repo.mergeCanonical(dimId, "acme", ["acme-corp"], userId);
+  const merged = await repo.mergeCanonical(dimId, "acme", ["acme_corp"], userId);
   expect(merged).toBe(1);
 
   const dim = await repo.getDimension(dimId);
