@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type React from "react";
 import type { OptionDef } from "../../data";
 
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
@@ -73,4 +74,8 @@ export interface DataGridProps<Row> {
   onLayoutChange?: (next: { widths?: Record<string, number>; order?: string[]; hidden?: string[] }) => void;
   /** Optional: empty-state slot. */
   empty?: ReactNode;
+  /** When set, renders a "+ field" button at the rightmost edge of the header row. */
+  onAddFieldClick?: () => void;
+  /** Ref forwarded to the "+ field" button so the host can anchor a popover. */
+  addFieldRef?: React.MutableRefObject<HTMLElement | null>;
 }
