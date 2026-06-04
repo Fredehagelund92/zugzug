@@ -11,7 +11,37 @@ import { all, get, run } from "./db.ts";
 import { env, pg } from "./env.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
-export interface FieldDef { field: string; label: string; type: string; options?: string[] }
+
+/** Curated palette token. Mirror of app/src/lib/palette.ts so the server can
+ *  validate inbound values without a shared module. */
+export type PaletteName = "rose" | "amber" | "mint" | "teal" | "indigo" | "violet" | "slate";
+const PALETTE_NAMES: PaletteName[] = ["rose", "amber", "mint", "teal", "indigo", "violet", "slate"];
+
+export interface OptionDef { label: string; color: PaletteName | null }
+
+/** Read on-disk option JSON in both shapes. Legacy `string[]` lifts to
+ *  `[{ label, color: null }]`; the new `{ label, color }` shape passes through.
+ *  Non-array / malformed JSON returns `undefined`. */
+export function parseOptions(raw: unknown): OptionDef[] | undefined {
+  let arr: unknown = raw;
+  if (typeof arr === "string" && arr.length > 0) {
+    try { arr = JSON.parse(arr); } catch { return undefined; }
+  }
+  if (!Array.isArray(arr)) return undefined;
+  return arr.map((o) => {
+    if (typeof o === "string") return { label: o, color: null };
+    if (o && typeof o === "object" && typeof (o as { label?: unknown }).label === "string") {
+      const color = (o as { color?: unknown }).color;
+      return {
+        label: (o as { label: string }).label,
+        color: typeof color === "string" && PALETTE_NAMES.includes(color as PaletteName) ? color as PaletteName : null,
+      };
+    }
+    return { label: String(o), color: null };
+  });
+}
+
+export interface FieldDef { field: string; label: string; type: string; options?: OptionDef[] }
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
 export interface SourceOccurrence { table: string; column: string; rows: number }
 export interface MappingValue {
@@ -634,14 +664,12 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
     `SELECT field, label, type, options FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
-  return rows.map((r) => {
-    let opts: string[] | undefined;
-    if (Array.isArray(r.options)) opts = r.options as string[];
-    else if (typeof r.options === "string" && r.options.length > 0) {
-      try { const parsed = JSON.parse(r.options); if (Array.isArray(parsed)) opts = parsed as string[]; } catch {}
-    }
-    return { field: r.field, label: r.label, type: r.type, options: opts };
-  });
+  return rows.map((r) => ({
+    field: r.field,
+    label: r.label,
+    type: r.type,
+    options: parseOptions(r.options),
+  }));
 }
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
