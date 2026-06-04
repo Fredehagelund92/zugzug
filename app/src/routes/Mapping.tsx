@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
@@ -94,6 +94,10 @@ function MappingInner() {
   const [filter, setFilter] = useSessionState<Filter>("zz:mapping:filter", "new");
   const [viewMode, setViewMode] = useSessionState<ViewMode>("zz:mapping:viewMode", "single");
   const [crossCursor, setCrossCursor] = useState<{ dimId: string; raw: string } | null>(null);
+  // refs for the view-mode segmented control's sliding indicator
+  const singleBtnRef = useRef<HTMLButtonElement>(null);
+  const allBtnRef = useRef<HTMLButtonElement>(null);
+  const [tabMarker, setTabMarker] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
   const [open, setOpen] = useState<string | null>(null);
   const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
@@ -419,6 +423,22 @@ function MappingInner() {
     { k: "mapped", label: "Mapped", n: counts.mapped },
   ];
 
+  // Slide the view-mode marker behind the active tab. Recomputes whenever the
+  // selection changes OR the buttons themselves resize (dim name, count chip).
+  useLayoutEffect(() => {
+    const recalc = (): void => {
+      const btn = viewMode === "single" ? singleBtnRef.current : allBtnRef.current;
+      const parent = btn?.parentElement;
+      if (!btn || !parent) return;
+      const pBox = parent.getBoundingClientRect();
+      const bBox = btn.getBoundingClientRect();
+      setTabMarker({ left: bBox.left - pBox.left, width: bBox.width });
+    };
+    recalc();
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, [viewMode, seed.dimension, crossCounts.new]);
+
   return (
     <div className="space-y-6">
       {/* header */}
@@ -434,18 +454,57 @@ function MappingInner() {
         </Button>
       </div>
 
-      {/* view-mode toggle: focus one dimension, or work the cross-dim inbox */}
-      <div className="zz-rise flex items-center gap-1.5 rounded-lg border border-line bg-surface p-1 text-[12px] font-medium" style={{ animationDelay: "50ms" }}>
+      {/* view-mode segmented control — compact, sliding indicator, real type
+          hierarchy. Sits left rather than spanning the page; primary modes
+          read in display weight while their metadata (dim name / count chip)
+          carries the accent splash. */}
+      <div
+        className="zz-rise relative inline-flex items-stretch self-start rounded-pill border border-line bg-surface-2 p-1"
+        style={{ animationDelay: "50ms" }}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1 rounded-pill bg-surface shadow-sm ring-1 ring-line transition-[left,width] duration-300 ease-[cubic-bezier(.32,.72,0,1)]"
+          style={{ left: tabMarker.left, width: tabMarker.width }}
+        />
         <button
+          ref={singleBtnRef}
           type="button"
           onClick={() => setViewMode("single")}
-          className={cx("flex-1 rounded-sm px-3 py-1.5 transition-colors", viewMode === "single" ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}
-        >Single dim · {seed.dimension}</button>
+          className={cx(
+            "relative z-10 inline-flex items-center gap-2.5 rounded-pill px-4 py-2 transition-colors",
+            viewMode === "single" ? "text-ink" : "text-ink-3 hover:text-ink-2",
+          )}
+        >
+          <span className="font-display text-[14px] font-semibold leading-none tracking-[-0.01em]">Single dim</span>
+          <span className={cx(
+            "font-mono text-[10px] uppercase leading-none tracking-[0.18em] transition-colors",
+            viewMode === "single" ? "text-accent" : "text-ink-3",
+          )}>
+            {seed.dimension}
+          </span>
+        </button>
         <button
+          ref={allBtnRef}
           type="button"
           onClick={() => setViewMode("all")}
-          className={cx("flex-1 rounded-sm px-3 py-1.5 transition-colors", viewMode === "all" ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}
-        >All dimensions · {crossCounts.new} to resolve</button>
+          className={cx(
+            "relative z-10 inline-flex items-center gap-2.5 rounded-pill px-4 py-2 transition-colors",
+            viewMode === "all" ? "text-ink" : "text-ink-3 hover:text-ink-2",
+          )}
+        >
+          <span className="font-display text-[14px] font-semibold leading-none tracking-[-0.01em]">All dimensions</span>
+          {crossCounts.new > 0 && (
+            <span className={cx(
+              "inline-flex h-5 min-w-[20px] items-center justify-center rounded-pill px-1.5 font-mono text-[10px] font-semibold leading-none tabular-nums transition-colors",
+              viewMode === "all"
+                ? "bg-accent text-accent-ink"
+                : "bg-surface-3 text-ink-2",
+            )}>
+              {crossCounts.new}
+            </span>
+          )}
+        </button>
       </div>
 
       {viewMode === "single" && (
