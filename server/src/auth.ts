@@ -14,6 +14,12 @@ const STATE = "zz_state";
 const SESSION_SECONDS = 30 * 86_400;
 const isSecure = env.origin.startsWith("https://");
 
+const cors = {
+  "access-control-allow-origin": env.origin,
+  "access-control-allow-credentials": "true",
+  "vary": "Origin",
+};
+
 // ---- cookie helpers --------------------------------------------------------
 
 function parseCookies(header: string | null): Record<string, string> {
@@ -189,7 +195,6 @@ export async function handleLogout(req: Request): Promise<Response> {
 /** GET /api/auth/me — return session user or 401. Used by BootGate. */
 export async function handleMe(req: Request): Promise<Response> {
   const user = await getSessionUser(req);
-  const cors = { "access-control-allow-origin": "*" };
   if (!user) return new Response(JSON.stringify({ error: "Unauthorized" }), {
     status: 401,
     headers: { "content-type": "application/json", ...cors },
@@ -203,7 +208,7 @@ export async function handleMe(req: Request): Promise<Response> {
 /** GET /api/auth/config — public config for the login page. */
 export function handleAuthConfig(): Response {
   return new Response(JSON.stringify({ devBypass: env.devBypassAuth }), {
-    headers: { "content-type": "application/json", "access-control-allow-origin": "*" },
+    headers: { "content-type": "application/json", ...cors },
   });
 }
 

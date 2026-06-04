@@ -11,9 +11,20 @@ import * as tables from "./tables.ts";
 import { CreateTableError } from "./tables.ts";
 import { pgAll, pgEnd } from "./pg.ts";
 
+const corsHeaders = {
+  "access-control-allow-origin": env.origin,
+  "access-control-allow-credentials": "true",
+  "vary": "Origin",
+};
+
 const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
-const noContent = () => new Response(null, { status: 204, headers: { "access-control-allow-origin": "*" } });
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json", ...corsHeaders },
+  });
+
+const noContent = () =>
+  new Response(null, { status: 204, headers: corsHeaders });
 const err = (e: unknown, status = 500) => json({ error: e instanceof Error ? e.message : String(e) }, status);
 
 
@@ -51,7 +62,15 @@ const server = Bun.serve({
     const method = req.method;
 
     if (method === "OPTIONS")
-      return new Response(null, { status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS", "access-control-allow-headers": "content-type" } });
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...corsHeaders,
+          "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+          "access-control-allow-headers": "content-type",
+          "access-control-max-age": "86400",
+        },
+      });
 
     if (pathname === "/health" || pathname === "/api/health") {
       try {
