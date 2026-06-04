@@ -55,7 +55,17 @@ function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T)
 
 export function Mapping() {
   const dims = useDimensions();
-  if (dims.length === 0) return <NoTablesYet from="mapping" />;
+  const [createOpen, setCreateOpen] = useState(false);
+  if (dims.length === 0) return (
+    <>
+      <NoTablesYet from="mapping" onCreateRequested={() => setCreateOpen(true)} />
+      <CreateTableModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => setCreateOpen(false)}
+      />
+    </>
+  );
   return <MappingInner />;
 }
 
