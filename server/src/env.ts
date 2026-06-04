@@ -35,5 +35,5 @@ export const env = {
   devBypassAuth: process.env.DEV_BYPASS_AUTH?.trim() === "true",
 };
 
-/** Fully-qualified Postgres app-state table name, e.g. oltp.zugzug_app.draft */
-export const pg = (table: string) => `${env.oltpCatalog}.${env.appSchema}.${table}`;
+/** Qualified Postgres app-state table name: "zugzug_app"."table" */
+export const pg = (table: string) => `"${env.appSchema}"."${table}"`;
