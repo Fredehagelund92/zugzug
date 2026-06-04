@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
+import { CommandPalette, type Command } from "./CommandPalette";
 import {
   IconDashboard,
   IconMapping,
@@ -11,6 +12,8 @@ import {
   IconSettings,
   IconChevronLeft,
   IconChevronRight,
+  IconSearch,
+  IconArrowRight,
 } from "./Icons";
 import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
@@ -94,12 +97,20 @@ export function AppShell() {
   const { engineer } = useEngineerMode();
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "?" && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+      const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      if (e.key === "?" && !inField) {
         e.preventDefault();
         setShortcutsOpen(true);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        // Cmd+K (Ctrl+K on Linux/Windows): open the quick-switcher palette.
+        // Fires even inside inputs so the user can always reach it.
+        e.preventDefault();
+        setPaletteOpen(true);
       }
     };
     document.addEventListener("keydown", onKey);
@@ -113,6 +124,75 @@ export function AppShell() {
     { to: "/app/tables", label: "Tables", Icon: IconTables, count: dims.length },
     { to: "/app/settings", label: "Settings", Icon: IconSettings },
   ];
+
+  // Quick-switcher command list — navigation + every dim + every canonical
+  // record across dims. Rebuilt only when dims change (canonical churn here
+  // is rare; the search is fast enough at thousand-record scale).
+  const commands = useMemo<Command[]>(() => {
+    const out: Command[] = [];
+    // Section 1: routes
+    out.push({
+      id: "nav:dashboard", group: "Navigate", label: "Dashboard",
+      icon: <IconDashboard className="h-4 w-4" />, action: () => navigate("/app"),
+      keywords: "home overview",
+    });
+    out.push({
+      id: "nav:mapping", group: "Navigate", label: "Match values",
+      secondary: totalNew > 0 ? `${totalNew} new` : undefined,
+      icon: <IconMapping className="h-4 w-4" />, action: () => navigate("/app/mapping"),
+      keywords: "reconcile mapping",
+    });
+    out.push({
+      id: "nav:mapping:all", group: "Navigate", label: "Match values — all dimensions",
+      icon: <IconMapping className="h-4 w-4" />, action: () => navigate("/app/mapping?view=all"),
+      keywords: "cross dim inbox",
+    });
+    out.push({
+      id: "nav:sources", group: "Navigate", label: "Sources",
+      icon: <IconSources className="h-4 w-4" />, action: () => navigate("/app/sources"),
+      keywords: "warehouse catalog",
+    });
+    out.push({
+      id: "nav:tables", group: "Navigate", label: "Tables",
+      secondary: `${dims.length}`,
+      icon: <IconTables className="h-4 w-4" />, action: () => navigate("/app/tables"),
+      keywords: "master records",
+    });
+    out.push({
+      id: "nav:settings", group: "Navigate", label: "Settings",
+      icon: <IconSettings className="h-4 w-4" />, action: () => navigate("/app/settings"),
+      keywords: "workspace preferences team",
+    });
+
+    // Section 2: jump to a dimension's mapping inbox
+    for (const d of dims) {
+      const newCount = d.values.filter((v) => v.status === "new").length;
+      out.push({
+        id: `dim:${d.id}`,
+        group: "Dimensions",
+        label: d.dimension,
+        secondary: newCount > 0 ? `${newCount} new` : "clean",
+        icon: <IconArrowRight className="h-4 w-4" />,
+        keywords: `${d.id} ${d.mapTable} ${d.dimTable} ${d.keyCol}`,
+        action: () => navigate(`/app/mapping?dimId=${encodeURIComponent(d.id)}`),
+      });
+    }
+
+    // Section 3: every canonical record — jumps to Tables with focus
+    for (const d of dims) {
+      for (const c of d.canonical) {
+        out.push({
+          id: `rec:${d.id}:${c.key}`,
+          group: "Records",
+          label: c.label ?? c.key,
+          secondary: `${d.dimension} · ${c.key}`,
+          keywords: `${d.dimension} ${c.key} ${d.id}`,
+          action: () => navigate(`/app/tables?dimId=${encodeURIComponent(d.id)}&focus=${encodeURIComponent(c.key)}`),
+        });
+      }
+    }
+    return out;
+  }, [dims, totalNew, navigate]);
 
   return (
     <div
@@ -198,7 +278,16 @@ export function AppShell() {
           >
             {collapsed ? <IconChevronRight className="h-3.5 w-3.5" /> : <IconChevronLeft className="h-3.5 w-3.5" />}
           </button>
-          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            className="flex h-8 min-w-[260px] max-w-[420px] flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 text-left text-[12.5px] text-ink-3 transition-colors hover:border-accent hover:text-ink-2"
+            aria-label="Open command palette"
+          >
+            <IconSearch className="h-3.5 w-3.5" />
+            <span className="flex-1 truncate">Jump to anything…</span>
+            <kbd className="rounded border border-line-2 bg-surface-2 px-1 font-mono text-[10px] text-ink-2">⌘K</kbd>
+          </button>
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
             <UserMenu />
@@ -212,6 +301,7 @@ export function AppShell() {
         </main>
       </div>
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
     </div>
   );
 }

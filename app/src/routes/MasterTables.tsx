@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
@@ -36,8 +36,33 @@ export function MasterTables() {
   const dims = useDimensions();
   const sources = useSources();
   const { engineer } = useEngineerMode();
-  const [dimId, setDimId] = useState<string | null>(dims[0]?.id ?? null);
+  const [searchParams] = useSearchParams();
+  // dimId honors ?dimId= so the Cmd-K palette (and any future deep-link) can
+  // jump straight to a specific table; falls back to the first dim otherwise.
+  const [dimId, setDimId] = useState<string | null>(() => {
+    const fromUrl = searchParams.get("dimId");
+    if (fromUrl && dims.some((d) => d.id === fromUrl)) return fromUrl;
+    return dims[0]?.id ?? null;
+  });
   const dim = dims.find((d) => d.id === dimId) ?? dims[0] ?? null;
+
+  // ?focus=<key> — scroll the focused record into view and briefly tint it so
+  // the user lands oriented on the right row. Consumed once on mount of the
+  // matching dim; subsequent dim switches don't re-trigger.
+  const initialFocusRef = useRef(searchParams.get("focus"));
+  useEffect(() => {
+    const key = initialFocusRef.current;
+    if (!key || !dim) return;
+    initialFocusRef.current = null;
+    // Defer to next frame so the DataGrid body has had a chance to render.
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`[data-row="${CSS.escape(key)}"]`);
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.classList.add("zz-row-flash");
+      window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
+    });
+  }, [dim?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [sel, setSel] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);

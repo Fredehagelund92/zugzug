@@ -34,6 +34,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
   {
     title: "Global",
     rows: [
+      ["⌘K", "jump to anything"],
       ["⌘Z", "undo"],
       ["⌘⇧Z", "redo"],
       ["?", "this overlay"],
