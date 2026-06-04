@@ -114,7 +114,7 @@ export function Dashboard() {
                 <h2 className="font-display text-lg font-semibold text-ink">Staged for review</h2>
                 <Badge tone="staged" dot>{staged.length} pending commit</Badge>
               </div>
-              <Link to="/app/mapping"><Button variant="secondary" size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>Review &amp; commit</Button></Link>
+              <Link to="/app/mapping?view=all"><Button variant="secondary" size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>Review &amp; commit</Button></Link>
             </div>
             <ul className="divide-y divide-line">
               {staged.slice(0, 5).map((d) => (
