@@ -5,7 +5,7 @@ import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
 import { CreateTableModal } from "../components/CreateTableModal";
-import { NoDimensionsYet } from "../components/NoDimensionsYet";
+import { NoTablesYet } from "../components/NoTablesYet";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
@@ -31,7 +31,7 @@ const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_
 
 export function Mapping() {
   const dims = useDimensions();
-  if (dims.length === 0) return <NoDimensionsYet from="mapping" />;
+  if (dims.length === 0) return <NoTablesYet from="mapping" />;
   return <MappingInner />;
 }
 
