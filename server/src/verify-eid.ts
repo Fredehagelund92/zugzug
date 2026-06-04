@@ -8,9 +8,9 @@
    master table is provided via EID_TABLE / EID_ID_COL / EID_NAME_COL — else skipped. */
 
 import { connect, run, all, get } from "./db.ts";
-import { ensureSchema } from "./schema.ts";
 import { env, pg } from "./env.ts";
 import * as repo from "./repo.ts";
+import { runMigrations } from "../drizzle/migrate.ts";
 
 let pass = 0, fail = 0, skipped = 0;
 const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); ok ? pass++ : fail++; };
@@ -33,7 +33,7 @@ async function cleanup(): Promise<void> {
 
 console.log("\nZug Zug — external-ID keys verification\n");
 await connect();
-await ensureSchema();
+await runMigrations();
 await cleanup();
 
 // 1. migration columns exist on the dimension registry

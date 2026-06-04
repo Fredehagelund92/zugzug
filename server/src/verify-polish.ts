@@ -5,9 +5,9 @@
    have seeded a fixture). Run: `bun run verify-polish`. */
 
 import { connect, all } from "./db.ts";
-import { ensureSchema } from "./schema.ts";
 import { pg } from "./env.ts";
 import * as repo from "./repo.ts";
+import { runMigrations } from "../drizzle/migrate.ts";
 
 let pass = 0, fail = 0, skipped = 0;
 const check = (name: string, ok: boolean, detail = "") => { console.log(`  ${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); ok ? pass++ : fail++; };
@@ -15,7 +15,7 @@ const note = (name: string, detail: string) => { console.log(`  ⊘ ${name} — 
 
 console.log("\nZug Zug — polish verification\n");
 await connect();
-await ensureSchema();
+await runMigrations();
 
 // 1. preferences round-trip
 const before = await repo.getPreferences();
