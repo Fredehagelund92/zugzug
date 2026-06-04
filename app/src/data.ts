@@ -5,6 +5,9 @@
    `map_*` lookup table. The hard part is the constant stream of NEW values that
    would otherwise silently resolve to NULL downstream. */
 
+import type { PaletteName } from "./lib/palette";
+export type { PaletteName } from "./lib/palette";
+
 export interface Metric {
   label: string;
   value: string;
@@ -23,8 +26,10 @@ export const metrics: Metric[] = [
 /* a master record: the human label + the key written to the dim/map tables, how
    many raw values resolve to it, and any enrichment attribute values */
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
+/** A predetermined option on a single-select field, with optional color. */
+export interface OptionDef { label: string; color: PaletteName | null }
 /* an enrichment attribute column on a dimension (e.g. currency, locale) */
-export interface FieldDef { field: string; label: string; type: string; options?: string[] }
+export interface FieldDef { field: string; label: string; type: string; options?: OptionDef[] }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence { table: string; column: string; rows: number }
 
@@ -45,6 +50,10 @@ export interface MappingDimension {
   mapTable: string;      // DuckDB lookup table, e.g. zugzug.map_country
   keyCol: string;        // master key column written to both
   keyKind?: "slug" | "external_id"; // 'external_id' → key is a warehouse ID, name resolved live
+  /** Optional human description shown under the name in TablePicker. */
+  description?: string | null;
+  /** Curated palette token for the monogram. null = fall back to --accent. */
+  color?: PaletteName | null;
   rows: number;          // rows already in the map table
   canonical: CanonicalValue[];
   values: MappingValue[];
