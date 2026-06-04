@@ -439,19 +439,22 @@ function MappingInner() {
     });
     void discardDraft(dimId, raw);
   };
-  function advanceCrossNext(fromDimId: string | null, fromRaw: string | null) {
-    const rows = visibleCross;
-    if (rows.length === 0) return;
-    const fromKey = fromDimId && fromRaw ? `${fromDimId}::${fromRaw}` : null;
-    const idx = fromKey ? rows.findIndex((r) => `${r.dimId}::${r.raw}` === fromKey) : -1;
-    for (let i = 1; i <= rows.length; i++) {
-      const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
-      if (rows[j].status === "new") {
-        setCrossCursor({ dimId: rows[j].dimId, raw: rows[j].raw });
-        return;
+  const advanceCrossNext = useCallback(
+    (fromDimId: string | null, fromRaw: string | null) => {
+      const rows = visibleCross;
+      if (rows.length === 0) return;
+      const fromKey = fromDimId && fromRaw ? `${fromDimId}::${fromRaw}` : null;
+      const idx = fromKey ? rows.findIndex((r) => `${r.dimId}::${r.raw}` === fromKey) : -1;
+      for (let i = 1; i <= rows.length; i++) {
+        const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
+        if (rows[j].status === "new") {
+          setCrossCursor({ dimId: rows[j].dimId, raw: rows[j].raw });
+          return;
+        }
       }
-    }
-  }
+    },
+    [visibleCross, setCrossCursor],
+  );
 
   // staged drafts across ALL dimensions — drives the commit footer in all-mode
   const stagedAllDrafts = useMemo(
@@ -506,8 +509,7 @@ function MappingInner() {
     if (focusedModeRef.current === viewMode) return;
     focusedModeRef.current = viewMode;
     if (viewMode === "all" && !crossCursor) advanceCrossNext(null, null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode]);
+  }, [viewMode, crossCursor, advanceCrossNext]);
 
   const visible = seed.values.filter((v) => filter === "all" || state[v.value]?.status === filter);
   const visIds = visible.map((v) => v.value);
@@ -536,18 +538,21 @@ function MappingInner() {
   // advance the cursor to the next visible row whose status is "new",
   // wrapping around once. used by accept/skip/pick/N to keep the user
   // moving through the inbox without reaching for the mouse.
-  function advanceToNextNew(fromRowKey: string | null) {
-    const rows = visibleRows;
-    if (rows.length === 0) return;
-    const idx = fromRowKey ? rows.findIndex((r) => r.value === fromRowKey) : -1;
-    for (let i = 1; i <= rows.length; i++) {
-      const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
-      if (state[rows[j].value]?.status === "new") {
-        cursor.setCursor({ rowKey: rows[j].value, field: "value", editing: false });
-        return;
+  const advanceToNextNew = useCallback(
+    (fromRowKey: string | null) => {
+      const rows = visibleRows;
+      if (rows.length === 0) return;
+      const idx = fromRowKey ? rows.findIndex((r) => r.value === fromRowKey) : -1;
+      for (let i = 1; i <= rows.length; i++) {
+        const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
+        if (state[rows[j].value]?.status === "new") {
+          cursor.setCursor({ rowKey: rows[j].value, field: "value", editing: false });
+          return;
+        }
       }
-    }
-  }
+    },
+    [visibleRows, state, cursor],
+  );
 
   // ── Deep-linking ─────────────────────────────────────────────────────────
   // URL ?value=… pins the focused row so a teammate can Slack a link to a
@@ -569,8 +574,7 @@ function MappingInner() {
       return;
     }
     advanceToNextNew(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedId]);
+  }, [seedId, seed.values, cursor, advanceToNextNew]);
 
   // Mirror the focused row to URL ?value=… while in single-dim view. All-dim
   // uses crossCursor (which carries dimId too) — that one's a separate feature.
