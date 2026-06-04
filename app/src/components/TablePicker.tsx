@@ -5,7 +5,7 @@ import { slug } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import type { MappingDimension } from "../data";
 
-/* DimensionPicker — a searchable switcher for the master-data dimension you're
+/* TablePicker — a searchable switcher for the master-data table you're
    working in (+ create a new dim_* / map_* pair). Compact + type-to-find, so it
    scales from 3 to 300 dimensions without wrapping or blind scrolling. */
 
@@ -24,7 +24,7 @@ function Mono({ label, active }: { label: string; active?: boolean }) {
   );
 }
 
-export function DimensionPicker({
+export function TablePicker({
   dims,
   activeId,
   onSelect,
