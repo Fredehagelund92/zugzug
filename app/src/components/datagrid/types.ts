@@ -8,16 +8,16 @@ import type { OptionDef } from "../../data";
 export type CellType = "text" | "number" | "boolean" | "date" | "select";
 
 export interface ColumnDef<Row> {
-  field: string;                      // stable id
-  label: string;                      // header text
+  field: string; // stable id
+  label: string; // header text
   type: CellType;
-  width?: number;                     // px; persisted via user_grid_layout
-  hidden?: boolean;                   // persisted
-  sortable?: boolean;                 // default true
-  editable?: boolean;                 // default true
-  pinnedLeft?: boolean;               // pinned columns can't be reordered or moved past
-  align?: "left" | "right";           // default left
-  options?: OptionDef[];              // only set when type === "select"
+  width?: number; // px; persisted via user_grid_layout
+  hidden?: boolean; // persisted
+  sortable?: boolean; // default true
+  editable?: boolean; // default true
+  pinnedLeft?: boolean; // pinned columns can't be reordered or moved past
+  align?: "left" | "right"; // default left
+  options?: OptionDef[]; // only set when type === "select"
   // Render hook for custom cell content (e.g. Mapping's source-value+provenance cell)
   render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
   // Editor hook for custom editing (e.g. Mapping's target-master ComboSelect)
@@ -35,8 +35,8 @@ export interface CellCtx<Row> {
 }
 
 export interface EditCtx<Row> extends CellCtx<Row> {
-  commit: (next: unknown) => void;    // commit + advance cursor (Tab/Enter handled by grid)
-  cancel: () => void;                 // Esc behavior
+  commit: (next: unknown) => void; // commit + advance cursor (Tab/Enter handled by grid)
+  cancel: () => void; // Esc behavior
   /** When edit was triggered by type-to-edit, the typed character. Editors
    *  should seed their input with this so the user's first keystroke counts. */
   initial?: string;
@@ -77,7 +77,11 @@ export interface DataGridProps<Row> {
     color?: import("../../lib/palette").PaletteName | null,
   ) => Promise<OptionDef[]>;
   /** Layout changes (width / order / hidden) the grid asks the host to persist. */
-  onLayoutChange?: (next: { widths?: Record<string, number>; order?: string[]; hidden?: string[] }) => void;
+  onLayoutChange?: (next: {
+    widths?: Record<string, number>;
+    order?: string[];
+    hidden?: string[];
+  }) => void;
   /** Optional: empty-state slot. */
   empty?: ReactNode;
   /** When set, renders a "+ field" button at the rightmost edge of the header row. */

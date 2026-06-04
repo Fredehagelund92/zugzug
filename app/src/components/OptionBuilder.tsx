@@ -45,13 +45,20 @@ export function OptionBuilder({ options, onChange, defaultColor = null }: Option
           </button>
         ))}
         {options.length === 0 && (
-          <span className="font-mono text-[10.5px] text-ink-3">no options yet · add some below</span>
+          <span className="font-mono text-[10.5px] text-ink-3">
+            no options yet · add some below
+          </span>
         )}
       </div>
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        }}
         placeholder="option label…"
         className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
       />
@@ -59,7 +66,8 @@ export function OptionBuilder({ options, onChange, defaultColor = null }: Option
         <div className="flex items-center gap-1">
           {PALETTE_NAMES.map((c) => (
             <button
-              key={c} type="button"
+              key={c}
+              type="button"
               onClick={() => setColor(c)}
               title={c}
               className={`h-3.5 w-3.5 shrink-0 rounded-sm ${color === c ? "ring-1 ring-ink" : ""}`}

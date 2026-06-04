@@ -21,7 +21,10 @@ function Renderer<Row>({ value }: CellCtx<Row>) {
       <IconCheck className="h-3 w-3" strokeWidth={3} />
     </span>
   ) : (
-    <span aria-label="false" className="grid h-4 w-4 place-items-center rounded-sm border border-line-2" />
+    <span
+      aria-label="false"
+      className="grid h-4 w-4 place-items-center rounded-sm border border-line-2"
+    />
   );
 }
 

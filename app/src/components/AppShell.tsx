@@ -44,8 +44,13 @@ function useNavCollapsed(): [boolean, () => void] {
 function ZigRule() {
   return (
     <svg viewBox="0 0 96 8" className="h-2 w-24 text-accent" fill="none" aria-hidden="true">
-      <path d="M0 4 L8 1 L16 7 L24 1 L32 7 L40 1 L48 7 L56 1 L64 7 L72 1 L80 7 L88 1 L96 4"
-        stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M0 4 L8 1 L16 7 L24 1 L32 7 L40 1 L48 7 L56 1 L64 7 L72 1 L80 7 L88 1 L96 4"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -55,8 +60,12 @@ function UserMenu() {
 
   const signOut = () => {
     fetch("/api/auth/logout", { method: "POST" })
-      .then(() => { window.location.href = "/login"; })
-      .catch(() => { window.location.href = "/login"; });
+      .then(() => {
+        window.location.href = "/login";
+      })
+      .catch(() => {
+        window.location.href = "/login";
+      });
   };
 
   return (
@@ -75,9 +84,7 @@ function UserMenu() {
           <div className="zz-pop-in absolute right-0 top-10 z-20 min-w-[160px] rounded-sm border border-line bg-surface-elevated shadow-pop">
             <div className="border-b border-line px-3 py-2">
               <p className="text-[13px] font-medium text-ink">{currentUser.name}</p>
-              {currentUser.email && (
-                <p className="text-[11px] text-ink-2">{currentUser.email}</p>
-              )}
+              {currentUser.email && <p className="text-[11px] text-ink-2">{currentUser.email}</p>}
             </div>
             <button
               type="button"
@@ -102,13 +109,20 @@ export function AppShell() {
   // Last 5 invoked palette command ids — surfaced in a "Recent" section on
   // empty search so the user's most-used jumps are one keystroke away.
   const [recents, setRecents] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(PALETTE_RECENTS_KEY) ?? "[]"); }
-    catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem(PALETTE_RECENTS_KEY) ?? "[]");
+    } catch {
+      return [];
+    }
   });
   const onPaletteRun = (id: string) => {
     setRecents((prev) => {
       const next = [id, ...prev.filter((x) => x !== id)].slice(0, 5);
-      try { localStorage.setItem(PALETTE_RECENTS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      try {
+        localStorage.setItem(PALETTE_RECENTS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
       return next;
     });
   };
@@ -116,7 +130,8 @@ export function AppShell() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      const inField =
+        e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
       if (e.key === "?" && !inField) {
         e.preventDefault();
         setShortcutsOpen(true);
@@ -134,7 +149,12 @@ export function AppShell() {
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
     { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
-    { to: "/app/sources", label: "Sources", Icon: IconSources, count: undefined as number | undefined },
+    {
+      to: "/app/sources",
+      label: "Sources",
+      Icon: IconSources,
+      count: undefined as number | undefined,
+    },
     { to: "/app/tables", label: "Tables", Icon: IconTables, count: dims.length },
     { to: "/app/settings", label: "Settings", Icon: IconSettings },
   ];
@@ -146,36 +166,60 @@ export function AppShell() {
     const out: Command[] = [];
     // Section 1: routes — flagged priority so the empty palette stays compact
     out.push({
-      id: "nav:dashboard", group: "Navigate", label: "Dashboard",
-      icon: <IconDashboard className="h-4 w-4" />, action: () => navigate("/app"),
-      keywords: "home overview", priority: true,
+      id: "nav:dashboard",
+      group: "Navigate",
+      label: "Dashboard",
+      icon: <IconDashboard className="h-4 w-4" />,
+      action: () => navigate("/app"),
+      keywords: "home overview",
+      priority: true,
     });
     out.push({
-      id: "nav:mapping", group: "Navigate", label: "Match values",
+      id: "nav:mapping",
+      group: "Navigate",
+      label: "Match values",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
-      icon: <IconMapping className="h-4 w-4" />, action: () => navigate("/app/mapping"),
-      keywords: "reconcile mapping", priority: true,
+      icon: <IconMapping className="h-4 w-4" />,
+      action: () => navigate("/app/mapping"),
+      keywords: "reconcile mapping",
+      priority: true,
     });
     out.push({
-      id: "nav:mapping:all", group: "Navigate", label: "Match values — all dimensions",
-      icon: <IconMapping className="h-4 w-4" />, action: () => navigate("/app/mapping?view=all"),
-      keywords: "cross dim inbox", priority: true,
+      id: "nav:mapping:all",
+      group: "Navigate",
+      label: "Match values — all dimensions",
+      icon: <IconMapping className="h-4 w-4" />,
+      action: () => navigate("/app/mapping?view=all"),
+      keywords: "cross dim inbox",
+      priority: true,
     });
     out.push({
-      id: "nav:sources", group: "Navigate", label: "Sources",
-      icon: <IconSources className="h-4 w-4" />, action: () => navigate("/app/sources"),
-      keywords: "warehouse catalog", priority: true,
+      id: "nav:sources",
+      group: "Navigate",
+      label: "Sources",
+      icon: <IconSources className="h-4 w-4" />,
+      action: () => navigate("/app/sources"),
+      keywords: "warehouse catalog",
+      priority: true,
     });
     out.push({
-      id: "nav:tables", group: "Navigate", label: "Tables",
+      id: "nav:tables",
+      group: "Navigate",
+      label: "Tables",
       secondary: `${dims.length}`,
-      icon: <IconTables className="h-4 w-4" />, action: () => navigate("/app/tables"),
-      keywords: "master records", priority: true,
+      icon: <IconTables className="h-4 w-4" />,
+      action: () => navigate("/app/tables"),
+      keywords: "master records",
+      priority: true,
     });
     out.push({
-      id: "nav:settings", group: "Navigate", label: "Settings",
-      icon: <IconSettings className="h-4 w-4" />, action: () => navigate("/app/settings"),
-      keywords: "workspace preferences team", priority: true,
+      id: "nav:settings",
+      group: "Navigate",
+      label: "Settings",
+      icon: <IconSettings className="h-4 w-4" />,
+      action: () => navigate("/app/settings"),
+      keywords: "workspace preferences team",
+      priority: true,
     });
 
     // Section 2: jump to a dimension's mapping inbox
@@ -201,7 +245,10 @@ export function AppShell() {
           label: c.label ?? c.key,
           secondary: `${d.dimension} · ${c.key}`,
           keywords: `${d.dimension} ${c.key} ${d.id}`,
-          action: () => navigate(`/app/tables?dimId=${encodeURIComponent(d.id)}&focus=${encodeURIComponent(c.key)}`),
+          action: () =>
+            navigate(
+              `/app/tables?dimId=${encodeURIComponent(d.id)}&focus=${encodeURIComponent(c.key)}`,
+            ),
         });
       }
     }
@@ -215,20 +262,30 @@ export function AppShell() {
     >
       {/* command rail — fixed; does not scroll with the page */}
       <aside className="flex flex-col overflow-hidden border-r border-line bg-surface">
-        <div className={cx(
-          "flex h-[var(--ak-topbar)] shrink-0 items-center gap-2.5 border-b border-line font-display text-lg font-extrabold tracking-tight text-ink",
-          collapsed ? "justify-center px-2" : "px-5",
-        )}>
+        <div
+          className={cx(
+            "flex h-[var(--ak-topbar)] shrink-0 items-center gap-2.5 border-b border-line font-display text-lg font-extrabold tracking-tight text-ink",
+            collapsed ? "justify-center px-2" : "px-5",
+          )}
+        >
           <Mark className="h-7 w-7" />
-          {!collapsed && <>Zug Zug<span className="text-accent">.</span></>}
+          {!collapsed && (
+            <>
+              Zug Zug<span className="text-accent">.</span>
+            </>
+          )}
         </div>
 
         {!collapsed && (
           <>
             <div className="flex items-center gap-2 px-5 pt-4 pb-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">Master data layer</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                Master data layer
+              </span>
             </div>
-            <div className="px-5 pb-2"><ZigRule /></div>
+            <div className="px-5 pb-2">
+              <ZigRule />
+            </div>
           </>
         )}
         {collapsed && <div className="h-3 shrink-0" />}
@@ -273,7 +330,12 @@ export function AppShell() {
         {/* footer — just a live dot + 'Connected' (single line). The collapse
             toggle lives in the topbar now. */}
         <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-3")}>
-          <div className={cx("flex items-center gap-2 font-mono text-[11px] text-ink", collapsed && "justify-center")}>
+          <div
+            className={cx(
+              "flex items-center gap-2 font-mono text-[11px] text-ink",
+              collapsed && "justify-center",
+            )}
+          >
             <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
             {!collapsed && <span>{engineer ? "analytics.duckdb" : "Connected"}</span>}
           </div>
@@ -290,7 +352,11 @@ export function AppShell() {
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink"
           >
-            {collapsed ? <IconChevronRight className="h-3.5 w-3.5" /> : <IconChevronLeft className="h-3.5 w-3.5" />}
+            {collapsed ? (
+              <IconChevronRight className="h-3.5 w-3.5" />
+            ) : (
+              <IconChevronLeft className="h-3.5 w-3.5" />
+            )}
           </button>
           <button
             type="button"
@@ -300,7 +366,9 @@ export function AppShell() {
           >
             <IconSearch className="h-3.5 w-3.5" />
             <span className="flex-1 truncate">Jump to anything…</span>
-            <kbd className="rounded border border-line-2 bg-surface-2 px-1 font-mono text-[10px] text-ink-2">⌘K</kbd>
+            <kbd className="rounded border border-line-2 bg-surface-2 px-1 font-mono text-[10px] text-ink-2">
+              ⌘K
+            </kbd>
           </button>
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />

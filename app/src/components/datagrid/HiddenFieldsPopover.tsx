@@ -24,7 +24,8 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
       const popH = pop.offsetHeight;
       let left = a.right - POPOVER_WIDTH;
       if (left < 8) left = 8;
-      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      if (left + POPOVER_WIDTH > window.innerWidth - 8)
+        left = window.innerWidth - POPOVER_WIDTH - 8;
       let top = a.bottom + GAP;
       if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - GAP - popH);
       pop.style.top = `${top}px`;
@@ -52,7 +53,8 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
     return () => document.removeEventListener("mousedown", onDoc);
   }, [onClose, anchorRef]);
 
-  const item = "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
+  const item =
+    "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
 
   return createPortal(
     <div
@@ -65,13 +67,13 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
       </div>
       {hidden.length === 0 ? (
         <div className="px-2 py-1 font-mono text-[11px] text-ink-3">Nothing hidden.</div>
-      ) : hidden.map((h) => (
-        <button key={h.field} type="button" className={item}
-          onClick={() => onUnhide(h.field)}
-        >
-          ↶ <span className="truncate">{h.label}</span>
-        </button>
-      ))}
+      ) : (
+        hidden.map((h) => (
+          <button key={h.field} type="button" className={item} onClick={() => onUnhide(h.field)}>
+            ↶ <span className="truncate">{h.label}</span>
+          </button>
+        ))
+      )}
     </div>,
     document.body,
   );

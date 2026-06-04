@@ -11,7 +11,9 @@ export function EngineerModeToggle() {
       onClick={() => setEngineer(!engineer)}
       aria-label="Toggle engineer details"
       aria-pressed={engineer}
-      title={engineer ? "Engineer details on — click to hide" : "Engineer details off — click to show"}
+      title={
+        engineer ? "Engineer details on — click to hide" : "Engineer details off — click to show"
+      }
       className={cx(
         "grid h-8 w-8 place-items-center rounded-sm border font-mono text-[11px] transition-colors",
         engineer
