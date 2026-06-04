@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { Button } from "./Button";
 import { OptionBuilder } from "./OptionBuilder";
@@ -43,11 +44,17 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Position the popover below the anchor. The popover is `position: fixed`,
-  // so coordinates are viewport-relative — `getBoundingClientRect` already
-  // returns viewport coords. Don't add scrollY. Left-edge aligned to the
-  // anchor (popover grows rightward from the "+ field" button), with both-edge
-  // clamping; if the anchor sits near the bottom of the viewport, flip above.
+  // Airtable-style positioning: the popover's RIGHT edge aligns with the
+  // "+ field" button's right edge, so the popover drops below the button and
+  // extends LEFTWARD into the grid (where there's room — the button sits at
+  // the right edge of the column headers, so growing rightward would clamp
+  // against the viewport and read as "stuck in the corner").
+  //
+  // The popover is rendered in a portal on document.body and positioned with
+  // `position: fixed`, so coordinates are viewport-relative — getBoundingClientRect
+  // already returns viewport coords. NO scrollY math; the portal escapes any
+  // ancestor `transform`/`contain` style that would otherwise create a
+  // containing block for the fixed element.
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     if (!popover) return;
@@ -61,12 +68,12 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
       const rect = anchor.getBoundingClientRect();
       const popH = popover.offsetHeight;
 
-      // align popover's LEFT to the anchor's left (popover grows rightward)
-      let left = rect.left;
+      // right-edge of popover aligns with right-edge of "+ field" button
+      let left = rect.right - POPOVER_WIDTH;
+      if (left < 8) left = 8; // clamp to viewport left if needed
       if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
-      if (left < 8) left = 8;
 
-      // place below the anchor unless that overflows the viewport bottom — then flip above
+      // place below the button; flip above if it would overflow the viewport
       let top = rect.bottom + GAP;
       if (top + popH > window.innerHeight - 8) top = Math.max(8, rect.top - GAP - popH);
 
@@ -146,7 +153,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
 
   const canSubmit = label.trim().length > 0 && !busy;
 
-  return (
+  return createPortal(
     <div
       ref={popoverRef}
       className="fixed z-50 w-80 rounded-sm border border-line-2 bg-surface shadow-lg"
@@ -262,6 +269,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
