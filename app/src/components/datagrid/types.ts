@@ -88,4 +88,8 @@ export interface DataGridProps<Row> {
   onAddFieldClick?: () => void;
   /** Ref forwarded to the "+ field" button so the host can anchor a popover. */
   addFieldRef?: React.MutableRefObject<HTMLElement | null>;
+  /** Cell-value accessor. Defaults to `(row as Record<string, unknown>)[field]`.
+   *  Pass a typed reader when the row type's fields don't match column `field`
+   *  names directly (e.g. flattened nested objects). */
+  getValue?: (row: Row, field: string) => unknown;
 }

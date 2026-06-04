@@ -184,7 +184,7 @@ export function MasterTables() {
         options: f.options,
         editable: true,
         // value extraction: <DataGrid> reads row[field]; map from c.fields[field]
-        render: undefined, // built-in renderer (uses (row as any)[c.field])
+        render: undefined, // built-in renderer (uses getValue(row, field))
       })),
       {
         field: "variants",
@@ -220,10 +220,13 @@ export function MasterTables() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields, engineer, dim?.keyCol, external, layout]);
 
-  // <DataGrid> reads (row as any)[c.field]. The MasterTables CanonicalValue
-  // shape stores attribute values in c.fields[field]; flatten before passing
-  // so cell renderers see row.region etc.
-  const rowsForGrid = useMemo(() => list.map((c) => ({ ...c, ...(c.fields ?? {}) })), [list]);
+  // <DataGrid> reads the row via getValue. The MasterTables CanonicalValue shape
+  // stores attribute values in c.fields[field]; flatten before passing so the
+  // default (row as Record<string,unknown>)[field] accessor finds row.region etc.
+  const rowsForGrid = useMemo(
+    () => list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
+    [list],
+  );
 
   const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
   const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
@@ -550,7 +553,7 @@ export function MasterTables() {
         </div>
 
         <DataGrid<CanonicalValue>
-          rows={rowsForGrid as CanonicalValue[]}
+          rows={rowsForGrid}
           rowKey={(c) => c.key}
           columns={columns}
           selection={{ selected: sel, onChange: setSel }}
