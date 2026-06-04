@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
@@ -94,7 +94,18 @@ function MappingInner() {
   const [createOpen, setCreateOpen] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
   const [filter, setFilter] = useSessionState<Filter>("zz:mapping:filter", "new");
-  const [viewMode, setViewMode] = useSessionState<ViewMode>("zz:mapping:viewMode", "single");
+  // viewMode honors ?view=all|single first, then session, then "single". URL
+  // wins so Dashboard's "Review & commit" link can land in all-dim view.
+  const [viewMode, setViewModeBase] = useState<ViewMode>(() => {
+    const urlView = searchParams.get("view");
+    if (urlView === "all" || urlView === "single") return urlView;
+    try { return (window.sessionStorage.getItem("zz:mapping:viewMode") as ViewMode) ?? "single"; }
+    catch { return "single"; }
+  });
+  const setViewMode = useCallback((v: ViewMode) => {
+    setViewModeBase(v);
+    try { window.sessionStorage.setItem("zz:mapping:viewMode", v); } catch { /* ignore */ }
+  }, []);
   const [crossCursor, setCrossCursor] = useState<{ dimId: string; raw: string } | null>(null);
   // refs for the view-mode segmented control's sliding indicator
   const singleBtnRef = useRef<HTMLButtonElement>(null);
@@ -316,6 +327,19 @@ function MappingInner() {
     void stageMapCross(dimId, raw, label);
     advanceCrossNext(dimId, raw);
   };
+  // Drop a single staged draft from the review panel — used per-row in both
+  // the single-dim and all-dim review lists. Undo-able so reviewers can take
+  // a value back.
+  const discardCross = (dimId: string, raw: string) => {
+    const prev = allDrafts[dkey(dimId, raw)];
+    if (!prev) return;
+    undo.push({
+      label: `discard "${raw}"`,
+      apply: () => discardDraft(dimId, raw),
+      inverse: () => saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey),
+    });
+    void discardDraft(dimId, raw);
+  };
   function advanceCrossNext(fromDimId: string | null, fromRaw: string | null) {
     const rows = visibleCross;
     if (rows.length === 0) return;
@@ -449,6 +473,20 @@ function MappingInner() {
       return prev;
     }, { replace: true });
   }, [viewMode, cursor.cursor?.rowKey, setSearchParams]);
+
+  // Mirror viewMode to URL ?view=… so Dashboard can deep-link to all-dim view.
+  // We only write "all" (omit "single" to keep URLs clean for the default).
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const have = prev.get("view");
+      const want = viewMode === "all" ? "all" : null;
+      if (want == null && have == null) return prev;
+      if (want === have) return prev;
+      if (want == null) prev.delete("view");
+      else prev.set("view", want);
+      return prev;
+    }, { replace: true });
+  }, [viewMode, setSearchParams]);
 
   // the staged drafts awaiting commit (incl. teammates' work) — the review set.
   // scoped to still-uncommitted (new) values, matching what commit() actually folds.
@@ -827,18 +865,51 @@ function MappingInner() {
           </div>
           {review && staged.length > 0 && (
             <div className="border-t border-line">
-              <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">Staged for review · {stagedDrafts.length}</div>
-              <ul className="mt-1 max-h-64 divide-y divide-line overflow-y-auto">
-                {stagedDrafts.map((d) => (
-                  <li key={d.raw} className="flex items-center gap-3 px-5 py-2.5 font-mono text-[11.5px]">
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
-                    <span className="min-w-0 max-w-[40%] truncate text-ink">{d.raw}</span>
-                    <IconArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />
-                    <span className="min-w-0 truncate text-accent">{d.targetLabel}</span>
-                    <span className="ml-auto shrink-0 text-ink-2 tabular-nums">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                Staged for review · {stagedDrafts.length}
+              </div>
+              {/* Grouped by target canonical record so duplicates collapse into
+                  "→ X (N)" and the reviewer can scan what's about to land. */}
+              <div className="mt-1 max-h-64 overflow-y-auto px-5 pb-2">
+                {(() => {
+                  const byTarget = new Map<string, typeof stagedDrafts>();
+                  for (const d of stagedDrafts) {
+                    const t = d.targetLabel ?? "—";
+                    const arr = byTarget.get(t) ?? [];
+                    arr.push(d);
+                    byTarget.set(t, arr);
+                  }
+                  return [...byTarget.entries()]
+                    .sort((a, b) => b[1].length - a[1].length)
+                    .map(([target, drafts]) => (
+                      <div key={target} className="pb-1.5">
+                        <div className="flex items-center gap-2 pt-1.5 font-mono text-[11px]">
+                          <IconArrowRight className="h-3 w-3 shrink-0 text-ink-3" />
+                          <span className="truncate text-accent">{target}</span>
+                          <span className="text-ink-3 tabular-nums">({drafts.length})</span>
+                        </div>
+                        <ul className="mt-1 divide-y divide-line">
+                          {drafts.map((d) => (
+                            <li key={d.raw} className="flex items-center gap-3 py-1 pl-5 font-mono text-[11px]">
+                              <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
+                              <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
+                              <span className="shrink-0 text-ink-2 tabular-nums">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
+                              <button
+                                type="button"
+                                onClick={() => discardCross(seed.id, d.raw)}
+                                title="Discard this draft"
+                                aria-label="Discard draft"
+                                className="shrink-0 text-ink-3 transition-colors hover:text-danger"
+                              >
+                                <IconX className="h-3.5 w-3.5" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ));
+                })()}
+              </div>
             </div>
           )}
           {showSql && staged.length > 0 && (
@@ -860,7 +931,8 @@ function MappingInner() {
         pick={pickCross}
         advanceNext={advanceCrossNext}
         dimById={dimById}
-        stagedAllCount={stagedAllDrafts.length}
+        stagedDrafts={stagedAllDrafts}
+        discard={discardCross}
         commitAll={approveAndCommitAll}
         commitError={commitError}
         setCommitError={setCommitError}
@@ -883,7 +955,8 @@ interface CrossDimInboxProps {
   pick: (dimId: string, raw: string, label: string) => void;
   advanceNext: (fromDimId: string | null, fromRaw: string | null) => void;
   dimById: Map<string, import("../data").MappingDimension>;
-  stagedAllCount: number;
+  stagedDrafts: import("../store").Draft[];
+  discard: (dimId: string, raw: string) => void;
   commitAll: () => void;
   commitError: string | null;
   setCommitError: (e: string | null) => void;
@@ -922,6 +995,15 @@ function CrossDimInbox(p: CrossDimInboxProps) {
         if (e.key === "a" || e.key === "A") { e.preventDefault(); p.accept(p.cursor.dimId, p.cursor.raw); return; }
         if (e.key === "s" || e.key === "S") { e.preventDefault(); p.skip(p.cursor.dimId, p.cursor.raw); return; }
         if (e.key === "n" || e.key === "N") { e.preventDefault(); p.advanceNext(p.cursor.dimId, p.cursor.raw); return; }
+        // M opens the focused row's ComboSelect for manual pick — matches the
+        // single-dim workbench's M binding. We find the row via data-row-key
+        // and click its picker trigger (the one with aria-haspopup="listbox").
+        if (e.key === "m" || e.key === "M") {
+          e.preventDefault();
+          const rowEl = containerRef.current?.querySelector<HTMLElement>(`[data-row-key="${curKey}"]`);
+          rowEl?.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')?.click();
+          return;
+        }
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); p.commitAll(); return; }
       }}
       style={{ animationDelay: "150ms" }}
@@ -937,7 +1019,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           ))}
         </div>
         <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
-          ranked by impact · J/K navigate · A accept · S skip · N next · ⌘↵ publish
+          ranked by impact · J/K navigate · A accept · M pick · S skip · N next · ⌘↵ publish
         </span>
       </div>
 
@@ -960,6 +1042,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
         return (
           <div
             key={key}
+            data-row-key={key}
             className={cx(COLS_CROSS, "border-b border-line px-4 py-2.5 transition-colors hover:bg-hover", focused && "ring-1 ring-accent/60 bg-accent-wash/40")}
             onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
           >
@@ -993,37 +1076,134 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       })}
 
       {/* footer — multi-dim commit */}
-      <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
-        {p.commitError && (
-          <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
-            <span>Commit failed — {p.commitError}</span>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>Dismiss</Button>
-              <Button size="sm" onClick={() => p.commitAll()}>Retry</Button>
-            </div>
-          </div>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <span className="font-mono text-[11px] text-ink-2">
-            {p.flash ? (
-              <span className="zz-rise text-committed" style={{ animationDuration: "var(--dur-slide)" }}>✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published · {p.flash.rows.toLocaleString()} rows recovered</span>
-            ) : p.stagedAllCount > 0 ? (
-              <>{p.stagedAllCount} change{p.stagedAllCount === 1 ? "" : "s"} staged across dimensions, ready to publish</>
-            ) : (
-              <>nothing to publish yet — accept or merge values above to stage them</>
-            )}
-          </span>
+      <CrossDimFooter p={p} />
+    </div>
+  );
+}
+
+// Footer + expandable review panel. Split out so the review panel state is
+// scoped tightly and the cross-dim grid body stays readable. Mirrors the
+// single-dim Review affordance.
+function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
+  const [review, setReview] = useState(false);
+  const stagedCount = p.stagedDrafts.length;
+  // Group staged drafts by dim → target so the reviewer can scan what's about
+  // to land, sorted by dim with most-staged first. Within a dim, group by the
+  // canonical target so duplicates collapse into a single "→ X (N)" line.
+  const grouped = useMemo(() => {
+    const byDim = new Map<string, import("../store").Draft[]>();
+    for (const d of p.stagedDrafts) {
+      const arr = byDim.get(d.dimId) ?? [];
+      arr.push(d);
+      byDim.set(d.dimId, arr);
+    }
+    const out: Array<{
+      dimId: string;
+      dimName: string;
+      groups: Array<{ target: string; drafts: import("../store").Draft[] }>;
+    }> = [];
+    for (const [dimId, drafts] of byDim) {
+      const dim = p.dimById.get(dimId);
+      const byTarget = new Map<string, import("../store").Draft[]>();
+      for (const d of drafts) {
+        const t = d.targetLabel ?? "—";
+        const arr = byTarget.get(t) ?? [];
+        arr.push(d);
+        byTarget.set(t, arr);
+      }
+      out.push({
+        dimId,
+        dimName: dim?.dimension ?? dimId,
+        groups: [...byTarget.entries()]
+          .sort((a, b) => b[1].length - a[1].length)
+          .map(([target, drafts]) => ({ target, drafts })),
+      });
+    }
+    return out.sort((a, b) => {
+      const aN = a.groups.reduce((n, g) => n + g.drafts.length, 0);
+      const bN = b.groups.reduce((n, g) => n + g.drafts.length, 0);
+      return bN - aN;
+    });
+  }, [p.stagedDrafts, p.dimById]);
+
+  return (
+    <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
+      {p.commitError && (
+        <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
+          <span>Commit failed — {p.commitError}</span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" disabled={!p.undo.canUndo} onClick={() => void p.undo.undo()} title={p.undo.topLabel ?? undefined}>
-              ↶ Undo
-              {p.undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{p.undo.topLabel}</span>}
-              <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
-            </Button>
-            <Button size="sm" disabled={p.stagedAllCount === 0} onClick={() => p.commitAll()}>
-              Publish {p.stagedAllCount} change{p.stagedAllCount === 1 ? "" : "s"}
-              <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>Dismiss</Button>
+            <Button size="sm" onClick={() => p.commitAll()}>Retry</Button>
           </div>
+        </div>
+      )}
+      {review && stagedCount > 0 && (
+        <div className="border-b border-line">
+          <div className="px-4 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
+            Staged for review · {stagedCount} across {grouped.length} dim{grouped.length === 1 ? "" : "s"}
+          </div>
+          <div className="mt-1 max-h-72 overflow-y-auto">
+            {grouped.map((g) => (
+              <div key={g.dimId} className="border-t border-line first:border-t-0">
+                <div className="flex items-center gap-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-2">
+                  <Chip label={g.dimName} bucket="chip-3" />
+                  <span className="tabular-nums">{g.groups.reduce((n, x) => n + x.drafts.length, 0)} staged</span>
+                </div>
+                {g.groups.map((tg) => (
+                  <div key={tg.target} className="px-4 pb-1.5">
+                    <div className="flex items-center gap-2 font-mono text-[11px]">
+                      <IconArrowRight className="h-3 w-3 shrink-0 text-ink-3" />
+                      <span className="truncate text-accent">{tg.target}</span>
+                      <span className="text-ink-3 tabular-nums">({tg.drafts.length})</span>
+                    </div>
+                    <ul className="mt-1 divide-y divide-line">
+                      {tg.drafts.map((d) => (
+                        <li key={`${d.dimId}::${d.raw}`} className="flex items-center gap-3 py-1 pl-5 font-mono text-[11px]">
+                          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
+                          <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
+                          <span className="shrink-0 text-ink-2 tabular-nums">{d.at}</span>
+                          <button
+                            type="button"
+                            onClick={() => p.discard(d.dimId, d.raw)}
+                            title="Discard this draft"
+                            aria-label="Discard draft"
+                            className="shrink-0 text-ink-3 transition-colors hover:text-danger"
+                          >
+                            <IconX className="h-3.5 w-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <span className="font-mono text-[11px] text-ink-2">
+          {p.flash ? (
+            <span className="zz-rise text-committed" style={{ animationDuration: "var(--dur-slide)" }}>✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published · {p.flash.rows.toLocaleString()} rows recovered</span>
+          ) : stagedCount > 0 ? (
+            <>{stagedCount} change{stagedCount === 1 ? "" : "s"} staged across {grouped.length} dim{grouped.length === 1 ? "" : "s"}, ready to publish</>
+          ) : (
+            <>nothing to publish yet — accept or merge values above to stage them</>
+          )}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" disabled={!p.undo.canUndo} onClick={() => void p.undo.undo()} title={p.undo.topLabel ?? undefined}>
+            ↶ Undo
+            {p.undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{p.undo.topLabel}</span>}
+            <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+          </Button>
+          <Button variant="ghost" size="sm" disabled={stagedCount === 0} onClick={() => setReview((s) => !s)}>
+            {review ? "Hide review" : `Review ${stagedCount}`}
+          </Button>
+          <Button size="sm" disabled={stagedCount === 0} onClick={() => p.commitAll()}>
+            Publish {stagedCount} change{stagedCount === 1 ? "" : "s"}
+            <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
+          </Button>
         </div>
       </div>
     </div>
