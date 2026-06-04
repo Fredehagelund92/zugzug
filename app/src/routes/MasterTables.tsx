@@ -86,29 +86,19 @@ export function MasterTables() {
   const [addOpen, setAddOpen] = useState(false);
   const addFieldRef = useRef<HTMLButtonElement | null>(null);
 
-  if (!dim) return (
-    <>
-      <NoTablesYet from="tables" onCreateRequested={() => setCreateOpen(true)} />
-      <CreateTableModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(id) => { setDimId(id); }}
-      />
-    </>
-  );
-
-  const list = dim.canonical;
-  const fields = dim.fields ?? [];
-  const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
-  const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
-  const external = dim.keyKind === "external_id";
-
-  const activeId = dim.id;
+  const activeId = dim?.id ?? null;
   const undo = useUndoStack();
 
   // hydrate per-user layout (widths/order/hidden) when the dimension changes
   const [layout, setLayout] = useState<GridLayoutConfig>({});
-  useEffect(() => { void getGridLayout(activeId).then(setLayout); }, [activeId]);
+  useEffect(() => {
+    if (!activeId) return;
+    void getGridLayout(activeId).then(setLayout);
+  }, [activeId]);
+
+  const list = dim?.canonical ?? [];
+  const fields = dim?.fields ?? [];
+  const external = dim?.keyKind === "external_id";
 
   // column defs for <DataGrid>. The first three are pinned (checkbox is
   // managed by the grid itself; "Master record" and "Key" are pinned-left
@@ -150,7 +140,7 @@ export function MasterTables() {
       },
       {
         field: "key",
-        label: engineer ? dim.keyCol : "Key",
+        label: engineer ? (dim?.keyCol ?? "Key") : "Key",
         type: "text",
         pinnedLeft: true,
         editable: false,
@@ -196,7 +186,7 @@ export function MasterTables() {
       });
     return ordered;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields, engineer, dim.keyCol, external, layout]);
+  }, [fields, engineer, dim?.keyCol, external, layout]);
 
   // <DataGrid> reads (row as any)[c.field]. The MasterTables CanonicalValue
   // shape stores attribute values in c.fields[field]; flatten before passing
@@ -204,6 +194,20 @@ export function MasterTables() {
   const rowsForGrid = useMemo(
     () => list.map((c) => ({ ...c, ...(c.fields ?? {}) })),
     [list],
+  );
+
+  const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
+  const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
+
+  if (!dim) return (
+    <>
+      <NoTablesYet from="tables" onCreateRequested={() => setCreateOpen(true)} />
+      <CreateTableModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(id) => { setDimId(id); }}
+      />
+    </>
   );
 
   const reset = () => { setSel([]); setOpen(null); setNotice(null); };

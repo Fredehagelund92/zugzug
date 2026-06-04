@@ -108,7 +108,7 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
               onMouseDown={(e) => { e.preventDefault(); void create(); }}
               className="flex w-full items-center gap-1.5 px-2 py-1.5 text-left font-mono text-[11px] text-accent hover:bg-accent-wash"
             >
-              + create option "{q.trim()}"{pickedColor ? ` · ${pickedColor}` : ""}
+              + create option &ldquo;{q.trim()}&rdquo;{pickedColor ? ` · ${pickedColor}` : ""}
             </button>
           </div>
         )}

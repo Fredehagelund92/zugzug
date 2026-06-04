@@ -746,7 +746,7 @@ function MappingInner() {
 
         {/* column header */}
         <div className={cx(COLS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-          <span /><span>Source value · where it's seen</span><span /><span>{seed.dimension.toLowerCase()} record</span><span>Confidence</span><span>Status</span>
+          <span /><span>Source value · where it&apos;s seen</span><span /><span>{seed.dimension.toLowerCase()} record</span><span>Confidence</span><span>Status</span>
         </div>
 
         {/* rows */}
@@ -799,7 +799,7 @@ function MappingInner() {
                   <div className="mt-3 font-mono text-[10.5px] text-ink-3">
                     {row.target
                       ? engineer
-                        ? <>→ writes <span className="text-accent">('{r.value}', '{keyFor(row.target)}')</span> to {seed.mapTable}</>
+                        ? <>→ writes <span className="text-accent">(&***REMOVED***39;{r.value}&***REMOVED***39;, &***REMOVED***39;{keyFor(row.target)}&***REMOVED***39;)</span> to {seed.mapTable}</>
                         : <>→ will resolve to <span className="text-accent">{row.target}</span> in {seed.dimension}</>
                       : engineer
                         ? <>⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently <span className="text-danger">LEFT JOIN to NULL</span></>
