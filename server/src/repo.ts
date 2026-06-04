@@ -680,7 +680,13 @@ const SQL_TYPE: Record<string, string> = { text: "VARCHAR", number: "NUMERIC", b
  *  text | number | boolean | date | select. Select columns store an ordered
  *  option list in `dimension_field.options` (JSON); the dim_ column is VARCHAR
  *  (the value IS the option label). */
-export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<{ field: string } | null> {
+export async function addField(
+  dimId: string,
+  label: string,
+  type = "text",
+  options?: OptionDef[],
+  opts: { silent?: boolean } = {},
+): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
   const t = SQL_TYPE[type] ? type : (type === "select" ? "select" : "text");
@@ -688,11 +694,13 @@ export async function addField(dimId: string, label: string, type = "text", opti
   if (!field || field === "label" || field === slug(m.keyCol)) return null; // reserved
   const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
   await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
-  const opts = t === "select" ? JSON.stringify(options ?? []) : null;
+  const optsJson = t === "select" ? JSON.stringify(options ?? []) : null;
   await run(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at) VALUES ($1,$2,$3,$4,$5, current_timestamp)
-     ON CONFLICT (dim_id, field) DO NOTHING`, [dimId, field, label.trim(), t, opts]);
-  await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
+     ON CONFLICT (dim_id, field) DO NOTHING`, [dimId, field, label.trim(), t, optsJson]);
+  if (!opts.silent) {
+    await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
+  }
   return { field };
 }
 
@@ -712,9 +720,9 @@ export async function changeColumnType(
   dimId: string,
   field: string,
   newType: string,
-  options?: string[],
+  options?: OptionDef[],
   coerceInvalidToNull = false,
-): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
+): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const f = (await listFields(dimId)).find((x) => x.field === field);
@@ -731,8 +739,8 @@ export async function changeColumnType(
     if (r.v == null || r.v === "") { parsed.push({ k: r.k, v: null, bad: false }); continue; }
     if (newType === "text") { parsed.push({ k: r.k, v: r.v, bad: false }); continue; }
     if (newType === "select") {
-      const collected = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))];
-      const ok = collected.includes(r.v);
+      const collected: OptionDef[] = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))].map((label) => ({ label, color: null }));
+      const ok = collected.some((o) => o.label === r.v);
       parsed.push({ k: r.k, v: r.v, bad: !ok });
       continue;
     }
@@ -767,9 +775,9 @@ export async function changeColumnType(
   // Atomic ADD → UPDATE → DROP → RENAME: a crash between DROP and RENAME
   // would lose the original column irreversibly. Mirror deleteColumn's
   // BEGIN/COMMIT/ROLLBACK pattern.
-  let finalOptions: string[] | undefined;
+  let finalOptions: OptionDef[] | undefined;
   if (newType === "select") {
-    finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))];
+    finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))].map((label) => ({ label, color: null }));
   }
 
   await run(`BEGIN`);
@@ -843,17 +851,25 @@ export async function setGridLayout(userId: string, dimId: string, config: GridL
 /** Append a new option to a select column's options list. No-op if the option
  *  already exists (case-sensitive). Returns the resulting options list.
  *  Stored as a JSON string in a VARCHAR column — see schema.ts for rationale. */
-export async function addColumnOption(dimId: string, field: string, label: string): Promise<{ options: string[] } | null> {
+export async function addColumnOption(
+  dimId: string,
+  field: string,
+  label: string,
+  color: PaletteName | null = null,
+  opts: { silent?: boolean } = {},
+): Promise<{ options: OptionDef[] } | null> {
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f || f.type !== "select") return null;
   const existing = f.options ?? [];
-  if (existing.includes(label)) return { options: existing };
-  const next = [...existing, label];
+  if (existing.some((o) => o.label === label)) return { options: existing };
+  const next: OptionDef[] = [...existing, { label, color }];
   await run(
     `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`,
     [JSON.stringify(next), dimId, field],
   );
-  await appendAudit("Added option", `${label} → ${field}`);
+  if (!opts.silent) {
+    await appendAudit("Added field option", `${field} += "${label}"${color ? ` (${color})` : ""}`);
+  }
   return { options: next };
 }
 
