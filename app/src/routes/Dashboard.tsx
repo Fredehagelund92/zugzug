@@ -37,7 +37,7 @@ export function Dashboard() {
             </h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-ink-3">
               <span className="flex items-center gap-1.5 text-ink-2"><span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" /> live</span>
-              <span className="text-line-2">/</span><span>{dims.length} dimensions</span>
+              <span className="text-line-2">/</span><span>{dims.length} tables</span>
               <span className="text-line-2">/</span><span>48.6k values mapped</span>
               <span className="text-line-2">/</span><span className="text-accent">98.2% coverage</span>
               <span className="text-line-2">/</span><span className="text-warn">{totalNew} new to resolve</span>
@@ -90,7 +90,7 @@ export function Dashboard() {
           <Card className="p-0">
             <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <h2 className="font-display text-lg font-semibold text-ink">Mapping seeds</h2>
-              <span className="font-mono text-xs text-ink-3">{dims.length} dimensions</span>
+              <span className="font-mono text-xs text-ink-3">{dims.length} tables</span>
             </div>
             <div className="divide-y divide-line">
               {dims.map((s) => {

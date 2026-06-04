@@ -7,6 +7,8 @@ import { env } from "./env.ts";
 import * as repo from "./repo.ts";
 import { getSessionUser, handleGoogleRedirect, handleGoogleCallback, handleMe, handleLogout, handleAuthConfig, handleDevLogin } from "./auth.ts";
 import * as team from "./team.ts";
+import * as tables from "./tables.ts";
+import { CreateTableError } from "./tables.ts";
 
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
@@ -142,6 +144,22 @@ const server = Bun.serve({
         }
       }
 
+      if (seg[1] === "tables") {
+        if (seg.length === 2 && method === "POST") {
+          try {
+            const input = (await req.json()) as tables.CreateTableInput;
+            const result = await tables.createTable(input);
+            return json(result, 201);
+          } catch (e) {
+            if (e instanceof CreateTableError) {
+              return json({ error: e.message, code: e.code }, 400);
+            }
+            throw e;
+          }
+        }
+        return json({ error: "not found" }, 404);
+      }
+
       if (seg[1] === "dimensions") {
         // GET /api/dimensions ; POST /api/dimensions {name}
         if (seg.length === 2) {
@@ -189,26 +207,26 @@ const server = Bun.serve({
         }
         // POST /api/dimensions/:id/fields {label, type?, options?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: string[] };
-          return json(await repo.addField(id, label, type, options));
+          const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: { label: string; color: string | null }[] };
+          return json(await repo.addField(id, label, type, options as repo.OptionDef[] | undefined));
         }
         // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
           const field = decodeURIComponent(seg[4]!);
-          const { label } = (await req.json()) as { label: string };
-          const res = await repo.addColumnOption(id, field, label);
+          const { label, color } = (await req.json()) as { label: string; color?: string | null };
+          const res = await repo.addColumnOption(id, field, label, (color ?? null) as repo.PaletteName | null);
           return res ? json(res) : json({ error: "not a select column" }, 400);
         }
         // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
-            const body = (await req.json()) as { label?: string; type?: string; options?: string[]; coerceInvalidToNull?: boolean };
+            const body = (await req.json()) as { label?: string; type?: string; options?: { label: string; color: string | null }[]; coerceInvalidToNull?: boolean };
             if (body.label != null) {
               await repo.renameColumn(id, field, body.label);
             }
             if (body.type != null) {
-              const res = await repo.changeColumnType(id, field, body.type, body.options, body.coerceInvalidToNull ?? false);
+              const res = await repo.changeColumnType(id, field, body.type, body.options as repo.OptionDef[] | undefined, body.coerceInvalidToNull ?? false);
               return json(res);
             }
             return noContent();

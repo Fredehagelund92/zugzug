@@ -24,6 +24,8 @@ export const dimension = app.table("dimension", {
   name_table:  varchar("name_table"),
   name_id_col: varchar("name_id_col"),
   name_col:    varchar("name_col"),
+  description: varchar("description"),
+  color:       varchar("color"),
 });
 
 export const dimensionSource = app.table(

@@ -261,7 +261,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               const focused = cursor.cursor?.rowKey === rk && cursor.cursor?.field === c.field;
               const editing = focused && cursor.cursor?.editing;
               const value = (row as any)[c.field];
-              const ctx = { row, rowKey: rk, field: c.field, value, focused };
+              const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
               const onClick = () => {
                 cursor.setCursor({ rowKey: rk, field: c.field, editing: false });
               };
@@ -291,13 +291,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                           })
                         : c.type === "select"
                           ? <SelectCell.Editor
-                              row={row} rowKey={rk} field={c.field} value={value} focused
+                              row={row} rowKey={rk} field={c.field} value={value} focused column={c}
                               commit={(v: unknown) => { cursor.stopEdit(); void commitValue(rk, c.field, v); }}
                               cancel={() => cursor.stopEdit()}
                               options={c.options ?? []}
-                              onCreate={async (label: string) => {
+                              onCreate={async (label: string, color) => {
                                 if (!props.onAddColumnOption) return c.options ?? [];
-                                return await props.onAddColumnOption(c.field, label);
+                                return await props.onAddColumnOption(c.field, label, color);
                               }}
                             />
                           : <CellEditor type={c.type} ctx={{

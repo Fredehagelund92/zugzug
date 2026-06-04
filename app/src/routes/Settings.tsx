@@ -163,7 +163,7 @@ export function Settings() {
       </div>
 
       <div className="zz-rise" style={{ animationDelay: "140ms" }}>
-        <Section title="Connections" hint={engineer ? "Reads your warehouse (MotherDuck), writes master records to its own MotherDuck database, and keeps multi-user app state in Postgres." : "Where Zug Zug is connected."}>
+        <Section title="Connections" hint={engineer ? "Reads your warehouse (MotherDuck), writes records to its own MotherDuck database, and keeps multi-user app state in Postgres." : "Where Zug Zug is connected."}>
           {engineer ? (
             <>
               <div className="rounded-sm border border-line bg-bg p-4">
@@ -209,7 +209,7 @@ export function Settings() {
                   <span className="font-display text-[14px] font-semibold text-ink">Master store</span>
                   <Badge tone="ok" dot>connected</Badge>
                 </div>
-                <div className="mt-1 text-[12.5px] text-ink-3">Stores every master list — this is what downstream models pick up.</div>
+                <div className="mt-1 text-[12.5px] text-ink-3">Stores every table — this is what downstream models pick up.</div>
               </div>
               <div className="rounded-sm border border-line bg-bg p-4">
                 <div className="flex items-center justify-between gap-3">
