@@ -488,6 +488,17 @@ function MappingInner() {
     }, { replace: true });
   }, [viewMode, setSearchParams]);
 
+  // Reverse sync: if the URL ?view= changes underneath us (e.g. Cmd+K
+  // navigated to /app/mapping?view=all while the component is already
+  // mounted), pull that into local state — otherwise the mirror effect
+  // above writes the stale state back and the navigation looks broken.
+  const urlView = searchParams.get("view");
+  useEffect(() => {
+    const wantAll = urlView === "all";
+    if (wantAll && viewMode !== "all") setViewMode("all");
+    else if (!wantAll && viewMode !== "single") setViewMode("single");
+  }, [urlView]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // the staged drafts awaiting commit (incl. teammates' work) — the review set.
   // scoped to still-uncommitted (new) values, matching what commit() actually folds.
   const stagedDrafts = useMemo(
