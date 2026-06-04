@@ -55,6 +55,7 @@ console.log("· scheduler started (1m tick)");
 const server = Bun.serve({
   port: env.port,
   idleTimeout: 120,
+  maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
   async fetch(req) {
     const url = new URL(req.url);
     const { pathname } = url;
