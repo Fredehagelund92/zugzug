@@ -41,7 +41,7 @@ await repo.setPreferences({ publishThreshold: before.publishThreshold, suggestTh
 
 // 2. u_system user exists (idempotent insert on schema bootstrap)
 const sys = await all<{ id: string }>(`SELECT id FROM ${pg("users")} WHERE id = 'u_system'`);
-check("u_system user provisioned by ensureSchema()", sys.length === 1, "expected one row, got " + sys.length);
+check("u_system user provisioned by migration", sys.length === 1, "expected one row, got " + sys.length);
 
 // 3. autoStageExactMatches — only meaningful with a real warehouse + a seeded dim
 if (process.env.POLISH_AUTOSTAGE === "1") {
