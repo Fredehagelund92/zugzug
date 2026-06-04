@@ -17,7 +17,7 @@ export interface Metric {
 }
 
 export const metrics: Metric[] = [
-  { label: "Dimensions", value: "12", delta: "+1", dir: "up", spark: [8, 9, 9, 10, 11, 11, 12] },
+  { label: "Tables", value: "12", delta: "+1", dir: "up", spark: [8, 9, 9, 10, 11, 11, 12] },
   { label: "Values mapped", value: "48.6k", delta: "+3.4%", dir: "up", spark: [62, 65, 70, 68, 76, 84, 93] },
   { label: "New to resolve", value: "23", delta: "-12", dir: "down", spark: [40, 44, 38, 35, 30, 28, 23] },
   { label: "Rows at risk", value: "11.4k", delta: "-2.1k", dir: "down", spark: [60, 55, 48, 44, 38, 30, 24] },
