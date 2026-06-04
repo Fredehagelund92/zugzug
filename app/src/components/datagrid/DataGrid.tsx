@@ -509,10 +509,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       }
                     }
                   }}
+                  hiddenColumns={columns.filter((v) => v.hidden)}
                   onHide={() => {
                     // include any already-hidden columns from the full prop list — `visible`
                     // is the post-filter set and never contains them
                     const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), c.field];
+                    props.onLayoutChange?.({ hidden });
+                  }}
+                  onUnhide={(field) => {
+                    const hidden = columns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
                     props.onLayoutChange?.({ hidden });
                   }}
                   onDelete={() => props.onDeleteColumn?.(c.field)}
