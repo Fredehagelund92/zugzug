@@ -288,29 +288,32 @@ export async function addSource(dimId: string, table: string, column: string): P
  *  on the Sources page — drill into a column without leaving the list. */
 export interface UnmappedSample { raw: string; rows: number }
 export async function topUnmapped(dimId: string, table: string, column: string, limit = 5): Promise<UnmappedSample[]> {
-  const meta = await get<{ mapTable: string }>(
+  const meta = await pgGet<{ mapTable: string }>(
     `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
   const col = qid(column);
-  try {
-    const rows = await all<{ raw: string; rows: bigint }>(`
-      WITH occ AS (
-        SELECT CAST(${col} AS VARCHAR) AS raw, count(*) AS n
-        FROM ${whTable(table)}
-        WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
-        GROUP BY 1
-      )
-      SELECT o.raw AS raw, o.n AS rows
-      FROM occ o
-      LEFT JOIN ${cq(meta.mapTable)} m ON lower(m.raw) = lower(o.raw)
-      WHERE m.raw IS NULL
-      ORDER BY o.n DESC
-      LIMIT ${Math.max(1, Math.min(50, Math.round(limit)))}`);
-    return rows.map((r) => ({ raw: r.raw, rows: Number(r.rows) }));
-  } catch {
-    return [];
-  }
+  const n = Math.max(1, Math.min(50, Math.round(limit)));
+
+  // Warehouse: raw values + counts (DuckDB)
+  const occRows = await all<{ raw: string; cnt: bigint }>(`
+    SELECT CAST(${col} AS VARCHAR) AS raw, count(*) AS cnt
+    FROM ${whTable(table)}
+    WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
+    GROUP BY 1`).catch(() => [] as { raw: string; cnt: bigint }[]);
+
+  // Postgres: already-mapped raws
+  const mappedRows = await pgAll<{ raw: string }>(
+    `SELECT raw FROM ${cq(meta.mapTable)}`,
+  ).catch(() => [] as { raw: string }[]);
+  const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
+
+  // JS: filter unmapped, sort by count desc, take top N
+  return occRows
+    .filter((r) => !mappedSet.has(r.raw.toLowerCase()))
+    .sort((a, b) => (b.cnt > a.cnt ? 1 : b.cnt < a.cnt ? -1 : 0))
+    .slice(0, n)
+    .map((r) => ({ raw: r.raw, rows: Number(r.cnt) }));
 }
 
 /** Set (or clear) the automatic scan cadence for a wired source. Valid values:
