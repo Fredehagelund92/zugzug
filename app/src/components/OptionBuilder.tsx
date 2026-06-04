@@ -48,21 +48,21 @@ export function OptionBuilder({ options, onChange, defaultColor = null }: Option
           <span className="font-mono text-[10.5px] text-ink-3">no options yet · add some below</span>
         )}
       </div>
-      <div className="flex items-center gap-2">
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          placeholder="option label…"
-          className="flex-1 rounded-sm border border-line-2 bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
-        />
+      <input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        placeholder="option label…"
+        className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+      />
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           {PALETTE_NAMES.map((c) => (
             <button
               key={c} type="button"
               onClick={() => setColor(c)}
               title={c}
-              className={`h-3.5 w-3.5 rounded-sm ${color === c ? "ring-1 ring-ink" : ""}`}
+              className={`h-3.5 w-3.5 shrink-0 rounded-sm ${color === c ? "ring-1 ring-ink" : ""}`}
               style={{ background: PALETTE[c].bg }}
             />
           ))}
@@ -70,14 +70,14 @@ export function OptionBuilder({ options, onChange, defaultColor = null }: Option
             type="button"
             onClick={() => setColor(null)}
             title="no color"
-            className={`h-3.5 w-3.5 rounded-sm border border-line-2 ${color === null ? "ring-1 ring-ink" : ""}`}
+            className={`h-3.5 w-3.5 shrink-0 rounded-sm border border-line-2 ${color === null ? "ring-1 ring-ink" : ""}`}
           />
         </div>
         <button
           type="button"
           onClick={add}
           disabled={!label.trim()}
-          className="rounded-sm border border-line-2 px-2 py-1 font-mono text-[11px] text-accent transition-colors hover:border-accent disabled:opacity-40"
+          className="shrink-0 rounded-sm border border-line-2 px-2 py-1 font-mono text-[11px] text-accent transition-colors hover:border-accent disabled:opacity-40"
         >
           add
         </button>
