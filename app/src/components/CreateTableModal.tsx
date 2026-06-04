@@ -169,26 +169,30 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 onClick={() => setMode(m)}
                 className={`flex-1 rounded-sm px-2.5 py-1.5 font-mono text-[11.5px] transition-colors ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
               >
-                {m === "blank" ? "blank" : m === "source" ? "from a source column" : "from IDs"}
+                {m === "blank" ? "blank" : m === "source" ? "from a column" : "from warehouse IDs"}
               </button>
             ))}
           </div>
-          <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-            {mode === "blank" && "start with empty rows · design fields now or add them later"}
-            {mode === "source" && "seed records from distinct values in a warehouse column"}
-            {mode === "external_id" && "records keyed by a warehouse id · names resolved live"}
-          </div>
         </div>
+
+        {/* error banner — sits between the mode segment and the swap region so
+            it lands close to the input that caused the error, not next to the
+            footer where the user just pressed Create */}
+        {error && (
+          <div className="mx-6 mt-2 rounded-sm border border-danger/40 bg-danger-soft px-3 py-2 font-mono text-[12px] text-danger">
+            {error}
+          </div>
+        )}
 
         {/* swappable region */}
         <div className="px-6 pb-4 pt-2">
-          <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
-            {mode === "blank" ? "Fields" : mode === "source" ? "Source column" : "Source columns"}
-          </div>
 
           {/* ─── blank: scaffold ────────────────────────────────────────────────── */}
           {mode === "blank" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
+              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
+                Start with an empty list. You name each record; Zug Zug generates a stable ID from the name.
+              </p>
               {/* locked primary row */}
               <div className="grid grid-cols-[14px_1fr_110px_18px] items-center gap-2 border-b border-dashed border-line pb-2">
                 <span className="text-center font-mono text-[10px] text-ink-3">⋮⋮</span>
@@ -252,6 +256,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {/* ─── source: 1 picker ───────────────────────────────────────────────── */}
           {mode === "source" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
+              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
+                Seed records from a warehouse column. Each distinct value becomes one record, with a slug ID.
+              </p>
               <ComboSelect
                 options={sourceOpts}
                 value={source ? `${source.table}.${source.column}` : null}
@@ -268,6 +275,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {/* ─── external_id: 2 pickers ─────────────────────────────────────────── */}
           {mode === "external_id" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
+              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
+                For foreign keys. The warehouse ID becomes the stable key. A second column provides the human name.
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">id column</div>
@@ -299,15 +309,12 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                   />
                 </div>
               </div>
-              <div className="font-mono text-[11px] text-ink-3">keys come from the id column · the human name is resolved live from the name column · no slug</div>
+              <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
+                ⚠ The key column is fixed at creation and cannot be changed. Records display the ID and the resolved name side by side.
+              </div>
             </div>
           )}
         </div>
-
-        {/* error banner */}
-        {error && (
-          <div className="border-t border-line bg-accent-wash px-6 py-2 font-mono text-[12px] text-accent">{error}</div>
-        )}
 
         {/* footer */}
         <div className="flex items-center justify-end gap-2 border-t border-line bg-bg/40 px-6 py-3">
