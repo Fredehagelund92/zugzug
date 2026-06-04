@@ -267,7 +267,7 @@ export function Sources() {
                   <span className="font-semibold text-ink">{agg.worst.rows.toLocaleString()}</span> downstream rows in <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link to="/app/mapping" className="shrink-0">
+              <Link to={`/app/mapping?dimId=${agg.worst.dimId}`} className="shrink-0">
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>Resolve</Button>
               </Link>
             </div>
@@ -546,7 +546,7 @@ function ExpandedDrill({ row }: { row: SourceInfo }) {
         </ul>
       )}
       <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link to="/app/mapping" className="text-accent hover:underline">Resolve in Match values →</Link>
+        <Link to={`/app/mapping?dimId=${row.dimId}`} className="text-accent hover:underline">Resolve in Match values →</Link>
         <span>→ {row.dimension}</span>
       </div>
     </div>
