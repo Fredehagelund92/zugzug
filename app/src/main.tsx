@@ -7,6 +7,7 @@ import { EngineerModeProvider } from "./lib/engineer-mode";
 import { UndoStackProvider } from "./components/datagrid";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
 import { Dashboard } from "./routes/Dashboard";
 import { Mapping } from "./routes/Mapping";
@@ -36,23 +37,25 @@ createRoot(root).render(
         <Route
           path="*"
           element={
-            <UndoStackProvider>
-              <EngineerModeProvider>
-                <BootGate>
-                  <Routes>
-                    <Route path="/" element={<Navigate to="/app" replace />} />
-                    <Route element={<AppShell />}>
-                      <Route path="/app" element={<Dashboard />} />
-                      <Route path="/app/mapping" element={<Mapping />} />
-                      <Route path="/app/sources" element={<Sources />} />
-                      <Route path="/app/tables" element={<MasterTables />} />
-                      <Route path="/app/settings" element={<Settings />} />
-                    </Route>
-                    <Route path="*" element={<Navigate to="/app" replace />} />
-                  </Routes>
-                </BootGate>
-              </EngineerModeProvider>
-            </UndoStackProvider>
+            <RouteErrorBoundary>
+              <UndoStackProvider>
+                <EngineerModeProvider>
+                  <BootGate>
+                    <Routes>
+                      <Route path="/" element={<Navigate to="/app" replace />} />
+                      <Route element={<AppShell />}>
+                        <Route path="/app" element={<Dashboard />} />
+                        <Route path="/app/mapping" element={<Mapping />} />
+                        <Route path="/app/sources" element={<Sources />} />
+                        <Route path="/app/tables" element={<MasterTables />} />
+                        <Route path="/app/settings" element={<Settings />} />
+                      </Route>
+                      <Route path="*" element={<Navigate to="/app" replace />} />
+                    </Routes>
+                  </BootGate>
+                </EngineerModeProvider>
+              </UndoStackProvider>
+            </RouteErrorBoundary>
           }
         />
       </Routes>
