@@ -1,49 +1,30 @@
-/* db.ts — the bridge. ONE in-process DuckDB connection that ATTACHes:
-     • MotherDuck (md:)         → warehouse (read) + zugzug canonical (read/write)
-     • Postgres (TYPE postgres) → the OLTP app state (oltp.<schema>.*)
-   so a single statement can join live drafts (Postgres) ⋈ canonical (MotherDuck)
-   ⋈ warehouse. Single connection on purpose (DuckDB is single-writer); the server
-   serialises through it. */
-
 import { DuckDBInstance, type DuckDBConnection, type DuckDBValue } from "@duckdb/node-api";
 import { env } from "./env.ts";
 
 let _conn: DuckDBConnection | null = null;
 let _connecting: Promise<DuckDBConnection> | null = null;
 
-async function tryRun(conn: DuckDBConnection, sql: string): Promise<boolean> {
-  try { await conn.run(sql); return true; } catch { return false; }
-}
-
 async function attachMotherDuck(conn: DuckDBConnection): Promise<void> {
-  // The motherduck extension must be loaded before `motherduck_token` is a known
-  // setting (the probe failed precisely because it wasn't). Needs network to
-  // INSTALL the first time.
   await conn.run(`INSTALL motherduck`);
   await conn.run(`LOAD motherduck`);
   process.env.motherduck_token = env.motherduckToken;
-  await tryRun(conn, `SET motherduck_token='${env.motherduckToken}'`);
+  await conn.run(`SET motherduck_token='${env.motherduckToken}'`).catch(() => {});
   await conn.run(`ATTACH IF NOT EXISTS 'md:'`);
 }
 
-async function attachPostgres(conn: DuckDBConnection): Promise<void> {
-  await conn.run(`INSTALL postgres`);
-  await conn.run(`LOAD postgres`);
-  await conn.run(`ATTACH IF NOT EXISTS '${env.databaseUrl}' AS ${env.oltpCatalog} (TYPE postgres)`);
-}
-
-/** Idempotent: returns the one live, fully-attached connection.
- *  MotherDuck is attached read-only (warehouse scan); Postgres holds the
- *  read/write canonical + app state. */
+/** Returns the one live DuckDB connection (warehouse-only — no Postgres ATTACH).
+ *  Call only when a warehouse query is about to run. */
 export async function connect(): Promise<DuckDBConnection> {
   if (_conn) return _conn;
   if (_connecting) return _connecting;
   _connecting = (async () => {
     const inst = await DuckDBInstance.create(env.duckPath);
     const conn = await inst.connect();
-    if (env.attachWarehouse) await attachMotherDuck(conn);
-    else console.warn("⚠ warehouse (MotherDuck) attach deferred — set ATTACH_WAREHOUSE=true to enable the scan");
-    await attachPostgres(conn);
+    if (env.attachWarehouse) {
+      await attachMotherDuck(conn);
+    } else {
+      console.warn("⚠ warehouse (MotherDuck) attach deferred — set ATTACH_WAREHOUSE=true to enable the scan");
+    }
     _conn = conn;
     return conn;
   })();
