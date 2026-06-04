@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { OptionDef } from "../../data";
 
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
    grid through these types; new cell types slot in via the union. */
@@ -15,7 +16,7 @@ export interface ColumnDef<Row> {
   editable?: boolean;                 // default true
   pinnedLeft?: boolean;               // pinned columns can't be reordered or moved past
   align?: "left" | "right";           // default left
-  options?: string[];                 // only set when type === "select"
+  options?: OptionDef[];              // only set when type === "select"
   // Render hook for custom cell content (e.g. Mapping's source-value+provenance cell)
   render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
   // Editor hook for custom editing (e.g. Mapping's target-master ComboSelect)
@@ -28,6 +29,8 @@ export interface CellCtx<Row> {
   field: string;
   value: unknown;
   focused: boolean;
+  /** The column definition for this cell — used by SelectCell to look up option colors. */
+  column: ColumnDef<Row>;
 }
 
 export interface EditCtx<Row> extends CellCtx<Row> {
@@ -55,9 +58,17 @@ export interface DataGridProps<Row> {
   /** Header menu: change type (with the new type + new options if select). Set
    *  coerceInvalidToNull when re-trying after the host has confirmed N values
    *  would coerce to empty. */
-  onChangeColumnType?: (field: string, newType: CellType, opts?: { options?: string[]; coerceInvalidToNull?: boolean }) => Promise<{ ok: boolean; invalidCount?: number }>;
+  onChangeColumnType?: (
+    field: string,
+    newType: CellType,
+    opts?: { options?: OptionDef[]; coerceInvalidToNull?: boolean },
+  ) => Promise<{ ok: boolean; invalidCount?: number }>;
   /** Header menu: add a new option to a select column. Returns the new option list. */
-  onAddColumnOption?: (field: string, label: string) => Promise<string[]>;
+  onAddColumnOption?: (
+    field: string,
+    label: string,
+    color?: import("../../lib/palette").PaletteName | null,
+  ) => Promise<OptionDef[]>;
   /** Layout changes (width / order / hidden) the grid asks the host to persist. */
   onLayoutChange?: (next: { widths?: Record<string, number>; order?: string[]; hidden?: string[] }) => void;
   /** Optional: empty-state slot. */
