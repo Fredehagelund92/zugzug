@@ -413,16 +413,42 @@ function MappingInner() {
     }
   }
 
+  // ── Deep-linking ─────────────────────────────────────────────────────────
+  // URL ?value=… pins the focused row so a teammate can Slack a link to a
+  // specific mapping decision. Consumed once on the first dim where it matches,
+  // then cleared from the ref so subsequent dim switches auto-advance normally.
+  const initialUrlValueRef = useRef<string | null>(searchParams.get("value"));
+
   // on mount and every dimension change, drop the cursor on the first
-  // unmapped row. lets a user open Mapping and start pressing A/M/S
-  // without first clicking a row.
+  // unmapped row — unless the URL pinned a value present in this seed.
+  // lets a user open Mapping and start pressing A/M/S without clicking.
   const focusedSeedRef = useRef<string | null>(null);
   useEffect(() => {
     if (focusedSeedRef.current === seedId) return;
     focusedSeedRef.current = seedId;
+    const pinned = initialUrlValueRef.current;
+    if (pinned && seed.values.some((r) => r.value === pinned)) {
+      cursor.setCursor({ rowKey: pinned, field: "target", editing: false });
+      initialUrlValueRef.current = null;
+      return;
+    }
     advanceToNextNew(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seedId]);
+
+  // Mirror the focused row to URL ?value=… while in single-dim view. All-dim
+  // uses crossCursor (which carries dimId too) — that one's a separate feature.
+  useEffect(() => {
+    const want = viewMode === "single" ? (cursor.cursor?.rowKey ?? null) : null;
+    setSearchParams((prev) => {
+      const have = prev.get("value");
+      if (want == null && have == null) return prev;
+      if (want === have) return prev;
+      if (want == null) prev.delete("value");
+      else prev.set("value", want);
+      return prev;
+    }, { replace: true });
+  }, [viewMode, cursor.cursor?.rowKey, setSearchParams]);
 
   // the staged drafts awaiting commit (incl. teammates' work) — the review set.
   // scoped to still-uncommitted (new) values, matching what commit() actually folds.
@@ -490,8 +516,8 @@ function MappingInner() {
   return (
     <div className="space-y-6">
       <PageHeader
-        kicker="Match values"
-        title={`Match ${seed.dimension.toLowerCase()} values`}
+        kicker="Master data"
+        title="Match values"
         action={
           <Button icon={<IconWand className="h-4 w-4" />} onClick={automap} className="zz-glow-sm">
             {autoFlash !== null ? `✓ Auto-matched ${autoFlash}` : "Auto-match new values"}
