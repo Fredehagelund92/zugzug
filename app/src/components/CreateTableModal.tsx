@@ -158,7 +158,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
 
         <div className="space-y-3 px-6 pb-5 pt-6">
           <div className="flex items-start justify-between">
-            <div id="create-table-title" className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+            <div
+              id="create-table-title"
+              className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3"
+            >
               New table
             </div>
             <button
@@ -374,11 +377,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 <Button variant="ghost" size="sm" onClick={requestClose}>
                   Cancel
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => void submit()}
-                  disabled={!canSubmit || submitting}
-                >
+                <Button size="sm" onClick={() => void submit()} disabled={!canSubmit || submitting}>
                   {submitting ? "Creating…" : "Create table"}
                 </Button>
               </div>
