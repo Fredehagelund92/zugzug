@@ -10,6 +10,7 @@
     "verify-eid": "bun run src/verify-eid.ts",
     "verify-polish": "bun run src/verify-polish.ts",
     "verify-datagrid": "bun run src/verify-datagrid.ts",
+    "verify-tables": "bun run src/verify-tables.ts",
     "bootstrap": "bun run src/bootstrap.ts",
     "typecheck": "tsc --noEmit"
   },
