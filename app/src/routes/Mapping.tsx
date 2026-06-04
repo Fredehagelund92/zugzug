@@ -747,8 +747,10 @@ function MappingInner() {
                   : <>nothing to publish yet — accept or merge values above to stage them</>}
             </span>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
-                ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+              <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()} title={undo.topLabel ?? undefined}>
+                ↶ Undo
+                {undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{undo.topLabel}</span>}
+                <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
               </Button>
               <Button variant="ghost" size="sm" disabled={staged.length === 0} onClick={() => setReview((s) => !s)}>{review ? "Hide review" : `Review ${staged.length}`}</Button>
               {engineer && (
@@ -949,8 +951,10 @@ function CrossDimInbox(p: CrossDimInboxProps) {
             )}
           </span>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" disabled={!p.undo.canUndo} onClick={() => void p.undo.undo()}>
-              ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+            <Button variant="ghost" size="sm" disabled={!p.undo.canUndo} onClick={() => void p.undo.undo()} title={p.undo.topLabel ?? undefined}>
+              ↶ Undo
+              {p.undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{p.undo.topLabel}</span>}
+              <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
             </Button>
             <Button size="sm" disabled={p.stagedAllCount === 0} onClick={() => p.commitAll()}>
               Publish {p.stagedAllCount} change{p.stagedAllCount === 1 ? "" : "s"}

@@ -244,6 +244,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       range.anchor.field !== range.focus.field
     );
 
+    // Collect target cells; commit them inside a single undo transaction so
+    // the whole paste is one Cmd+Z step, not one per cell.
+    const writes: Array<{ rk: string; field: string; value: unknown }> = [];
+
     if (isSingleValue && rangeBig && range) {
       // Mode 1: fill the selected range with the single clipboard value.
       const rawVal = pasteRows[0][0] ?? "";
@@ -257,38 +261,46 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           if (!col || col.editable === false) continue;
           const coerced = coerceForColumn(rawVal, col);
           if (coerced === undefined) continue;
-          void commitValue(rk, col.field, coerced);
+          writes.push({ rk, field: col.field, value: coerced });
         }
       }
-      return;
-    }
+    } else {
+      // Mode 2: tabular paste from anchor (default spreadsheet behavior).
+      const anchorRk = range?.anchor.rowKey ?? cursor.cursor.rowKey;
+      const anchorField = range?.anchor.field ?? cursor.cursor.field;
+      const startRowIdx = rowIndexMap.get(anchorRk) ?? 0;
+      const startColIdx = colIndexMap.get(anchorField) ?? 0;
 
-    // Mode 2: tabular paste from anchor (default spreadsheet behavior).
-    const anchorRk = range?.anchor.rowKey ?? cursor.cursor.rowKey;
-    const anchorField = range?.anchor.field ?? cursor.cursor.field;
-    const startRowIdx = rowIndexMap.get(anchorRk) ?? 0;
-    const startColIdx = colIndexMap.get(anchorField) ?? 0;
+      for (let pr = 0; pr < pasteRows.length; pr++) {
+        const targetRowIdx = startRowIdx + pr;
+        if (targetRowIdx >= sortedRows.length) break;
+        const targetRow = sortedRows[targetRowIdx];
+        if (!targetRow) continue;
+        const targetRk = rowKey(targetRow);
+        const pasteRow = pasteRows[pr];
+        if (!pasteRow) continue;
 
-    for (let pr = 0; pr < pasteRows.length; pr++) {
-      const targetRowIdx = startRowIdx + pr;
-      if (targetRowIdx >= sortedRows.length) break;
-      const targetRow = sortedRows[targetRowIdx];
-      if (!targetRow) continue;
-      const targetRk = rowKey(targetRow);
-      const pasteRow = pasteRows[pr];
-      if (!pasteRow) continue;
-
-      for (let pc = 0; pc < pasteRow.length; pc++) {
-        const targetColIdx = startColIdx + pc;
-        if (targetColIdx >= orderedVisible.length) break;
-        const col = orderedVisible[targetColIdx];
-        if (!col || col.editable === false) continue;
-        const coerced = coerceForColumn(pasteRow[pc] ?? "", col);
-        if (coerced === undefined) continue;
-        void commitValue(targetRk, col.field, coerced);
+        for (let pc = 0; pc < pasteRow.length; pc++) {
+          const targetColIdx = startColIdx + pc;
+          if (targetColIdx >= orderedVisible.length) break;
+          const col = orderedVisible[targetColIdx];
+          if (!col || col.editable === false) continue;
+          const coerced = coerceForColumn(pasteRow[pc] ?? "", col);
+          if (coerced === undefined) continue;
+          writes.push({ rk: targetRk, field: col.field, value: coerced });
+        }
       }
     }
-  }, [cursor.cursor, range, sortedRows, rowKey, orderedVisible, rowIndexMap, colIndexMap, commitValue, computeRangeBounds, coerceForColumn]);
+
+    if (writes.length === 0) return;
+    const label =
+      isSingleValue && rangeBig
+        ? `fill ${writes.length} cell${writes.length === 1 ? "" : "s"}`
+        : `paste ${writes.length} cell${writes.length === 1 ? "" : "s"}`;
+    undo.beginTransaction(label);
+    void Promise.all(writes.map((w) => commitValue(w.rk, w.field, w.value)))
+      .finally(() => undo.endTransaction());
+  }, [cursor.cursor, range, sortedRows, rowKey, orderedVisible, rowIndexMap, colIndexMap, commitValue, computeRangeBounds, coerceForColumn, undo]);
 
   // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -318,6 +330,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     // Cmd+Backspace falls through to the cursor handler for bulk row delete.
     if ((e.key === "Delete" || e.key === "Backspace") && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
+      const targets: Array<{ rk: string; field: string }> = [];
       if (range) {
         const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
         for (let ri = minRow; ri <= maxRow; ri++) {
@@ -327,15 +340,22 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           for (let ci = minCol; ci <= maxCol; ci++) {
             const col = orderedVisible[ci];
             if (!col || col.editable === false) continue;
-            void commitValue(rk, col.field, null);
+            targets.push({ rk, field: col.field });
           }
         }
       } else if (cur) {
         const col = orderedVisible.find((c) => c.field === cur.field);
         if (col && col.editable !== false) {
-          void commitValue(cur.rowKey, cur.field, null);
+          targets.push({ rk: cur.rowKey, field: cur.field });
         }
       }
+      if (targets.length === 0) return;
+      // Coalesce all host undo.push() calls into a single compound entry so
+      // one Cmd+Z restores the whole range, not cell-by-cell.
+      const label = targets.length === 1 ? "clear cell" : `clear ${targets.length} cells`;
+      undo.beginTransaction(label);
+      void Promise.all(targets.map((t) => commitValue(t.rk, t.field, null)))
+        .finally(() => undo.endTransaction());
       return;
     }
 
@@ -384,7 +404,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     }
 
     cursor.onKeyDown(e);
-  }, [cursor, range, handleCopy, handlePaste, rowIndexMap, colIndexMap, sortedRows, orderedVisible, rowKey]);
+  }, [cursor, range, handleCopy, handlePaste, rowIndexMap, colIndexMap, sortedRows, orderedVisible, rowKey, undo, commitValue, computeRangeBounds]);
 
   const isSelected = (rk: string) => selection?.selected.includes(rk) ?? false;
   const toggle = (rk: string) => {

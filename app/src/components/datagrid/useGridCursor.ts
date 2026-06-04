@@ -68,10 +68,15 @@ export function useGridCursor<Row>({
     }
 
     if (editing) {
-      // Enter / Tab commit + move; Esc cancels; everything else falls through to the editor.
-      // Tab also re-enters edit mode on the destination so the user can keep typing
-      // (Excel / Sheets / Airtable convention — one Tab per cell, not two).
-      if (e.key === "Enter") { e.preventDefault(); onCommit?.(); stopEdit(); move(0, 1); return; }
+      // Enter / Tab commit + advance + re-enter edit on the destination so the
+      // user can keep typing (Airtable convention; user-requested).
+      // Esc cancels; everything else falls through to the editor.
+      if (e.key === "Enter") {
+        e.preventDefault(); onCommit?.(); stopEdit();
+        move(0, e.shiftKey ? -1 : 1);
+        startEdit();
+        return;
+      }
       if (e.key === "Tab") {
         e.preventDefault(); onCommit?.(); stopEdit();
         move(e.shiftKey ? -1 : 1, 0);

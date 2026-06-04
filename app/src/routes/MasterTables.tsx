@@ -295,8 +295,10 @@ export function MasterTables() {
         <span className="text-ink-2 tabular-nums">{fields.length} field{fields.length === 1 ? "" : "s"}</span>
         <div className="ml-auto flex items-center gap-4">
           <span className="text-ink-2 tabular-nums">{totalVariants.toLocaleString()} raw value{totalVariants === 1 ? "" : "s"} resolve here</span>
-          <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
-            ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+          <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()} title={undo.topLabel ?? undefined}>
+            ↶ Undo
+            {undo.topLabel && <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">{undo.topLabel}</span>}
+            <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
         </div>
       </StatsBar>
