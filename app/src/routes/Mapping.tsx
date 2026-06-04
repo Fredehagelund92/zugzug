@@ -43,6 +43,23 @@ const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-da
 const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
 const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
+// Escape a string for use inside a double-quoted CSS attribute selector.
+const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+// Brief accent-wash on a row after the user acted on it (Accept/Skip/Pick).
+// Defers to next frame so React has rendered any state-driven className
+// change before we layer the animation on top; the force-reflow lets a
+// rapid second action on the same row retrigger the animation.
+function flashRow(selector: string): void {
+  requestAnimationFrame(() => {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el) return;
+    el.classList.remove("zz-row-flash");
+    void el.offsetWidth;
+    el.classList.add("zz-row-flash");
+    window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
+  });
+}
+
 function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T) => void] {
   const [v, setV] = useState<T>(() => {
     try { return (window.sessionStorage.getItem(key) as T) ?? fallback; }
@@ -225,10 +242,12 @@ function MappingInner() {
     const r = byVal(v);
     if (!r.suggestion) return;
     void stageMap(v, r.suggestion);
+    flashRow(`[data-row="${attrEsc(v)}"]`);
     advanceToNextNew(v);
   };
   const pick = (v: string, t: string) => {
     void stageMap(v, t);
+    flashRow(`[data-row="${attrEsc(v)}"]`);
     advanceToNextNew(v);
   };
   // Skip without advancing the cursor — bulkApply uses this so the cursor
@@ -245,6 +264,7 @@ function MappingInner() {
   };
   const skip = (v: string) => {
     void skipPersist(v);
+    flashRow(`[data-row="${attrEsc(v)}"]`);
     advanceToNextNew(v);
   };
   const reset = (v: string) => {
@@ -309,6 +329,7 @@ function MappingInner() {
     const r = d?.values.find((v) => v.value === raw);
     if (!r || !r.suggestion) return;
     void stageMapCross(dimId, raw, r.suggestion);
+    flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
   const skipCross = (dimId: string, raw: string) => {
@@ -321,10 +342,12 @@ function MappingInner() {
         : discardDraft(dimId, raw),
     });
     void saveDraft(dimId, raw, "skipped", null, null);
+    flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
   const pickCross = (dimId: string, raw: string, label: string) => {
     void stageMapCross(dimId, raw, label);
+    flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
   // Drop a single staged draft from the review panel — used per-row in both
@@ -901,7 +924,7 @@ function MappingInner() {
                         </div>
                         <ul className="mt-1 divide-y divide-line">
                           {drafts.map((d) => (
-                            <li key={d.raw} className="flex items-center gap-3 py-1 pl-5 font-mono text-[11px]">
+                            <li key={d.raw} className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]" style={{ animationDuration: "var(--dur-slide)" }}>
                               <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
                               <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
                               <span className="shrink-0 text-ink-2 tabular-nums">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
@@ -1169,7 +1192,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
                     </div>
                     <ul className="mt-1 divide-y divide-line">
                       {tg.drafts.map((d) => (
-                        <li key={`${d.dimId}::${d.raw}`} className="flex items-center gap-3 py-1 pl-5 font-mono text-[11px]">
+                        <li key={`${d.dimId}::${d.raw}`} className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]" style={{ animationDuration: "var(--dur-slide)" }}>
                           <span className="grid h-5 w-5 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2" title={d.user.name}>{d.user.initials}</span>
                           <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
                           <span className="shrink-0 text-ink-2 tabular-nums">{d.at}</span>
