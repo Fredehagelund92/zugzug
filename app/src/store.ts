@@ -263,7 +263,7 @@ export async function fetchVariants(dimId: string, key: string): Promise<string[
 
 /** Add an enrichment attribute column to a dimension (text|number|boolean|date|select).
  *  For `select`, `options` seeds the allowed list; otherwise omit. */
-export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<void> {
+export async function addField(dimId: string, label: string, type = "text", options?: OptionDef[]): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
     method: "POST",
     body: JSON.stringify({ label, type, options }),
@@ -273,10 +273,10 @@ export async function addField(dimId: string, label: string, type = "text", opti
 
 /** Append a new option to a select column's allowed list. Refetches the
  *  dimension so subsequent picks see the new option. Returns the new list. */
-export async function addColumnOption(dimId: string, field: string, label: string): Promise<string[]> {
-  const res = await api<{ options: string[] }>(
+export async function addColumnOption(dimId: string, field: string, label: string, color: PaletteName | null = null): Promise<OptionDef[]> {
+  const res = await api<{ options: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}/options`,
-    { method: "POST", body: JSON.stringify({ label }) },
+    { method: "POST", body: JSON.stringify({ label, color }) },
   );
   await refreshDims();
   emit();
@@ -292,9 +292,9 @@ export async function renameColumn(dimId: string, field: string, newLabel: strin
 
 export async function changeColumnType(
   dimId: string, field: string, newType: string,
-  options?: string[], coerceInvalidToNull = false,
-): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
-  const res = await api<{ ok: boolean; invalidCount?: number; options?: string[] }>(
+  options?: OptionDef[], coerceInvalidToNull = false,
+): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
+  const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
     { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull }) },
   );
