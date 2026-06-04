@@ -38,9 +38,9 @@ const CHANNEL_CANONICAL = [
 ];
 
 export async function seedDemo(): Promise<void> {
-  await addDimension("Country", COUNTRY_SOURCES);
+  await addDimension("Country", COUNTRY_SOURCES, {}, "u_verify");
   await addCanonical("country", COUNTRY_CANONICAL);
 
-  await addDimension("Channel", CHANNEL_SOURCES);
+  await addDimension("Channel", CHANNEL_SOURCES, {}, "u_verify");
   await addCanonical("channel", CHANNEL_CANONICAL);
 }
