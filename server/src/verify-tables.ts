@@ -126,8 +126,8 @@ async function cleanup(): Promise<void> {
       throw new Error("expected INVALID");
     } catch (e) {
       assert(
-        e instanceof CreateTableError && e.code === "INVALID",
-        `expected INVALID, got ${(e as Error).message}`,
+        e instanceof CreateTableError && e.code === "VALIDATION_FAILED",
+        `expected VALIDATION_FAILED, got ${(e as Error).message}`,
       );
     }
   });
