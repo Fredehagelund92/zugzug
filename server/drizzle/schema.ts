@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgSchema,
   varchar,
@@ -96,8 +97,8 @@ export const users = app.table(
     google_sub: varchar("google_sub"),
   },
   (t) => [
-    uniqueIndex("users_email_unique").on(t.email).where(`email IS NOT NULL`),
-    uniqueIndex("users_google_sub_unique").on(t.google_sub).where(`google_sub IS NOT NULL`),
+    uniqueIndex("users_email_unique").on(t.email).where(sql`email IS NOT NULL`),
+    uniqueIndex("users_google_sub_unique").on(t.google_sub).where(sql`google_sub IS NOT NULL`),
   ],
 );
 
