@@ -8,21 +8,6 @@
 import type { PaletteName } from "./lib/palette";
 export type { PaletteName } from "./lib/palette";
 
-export interface Metric {
-  label: string;
-  value: string;
-  delta: string;
-  dir: "up" | "down";
-  spark: number[];
-}
-
-export const metrics: Metric[] = [
-  { label: "Tables", value: "12", delta: "+1", dir: "up", spark: [8, 9, 9, 10, 11, 11, 12] },
-  { label: "Values mapped", value: "48.6k", delta: "+3.4%", dir: "up", spark: [62, 65, 70, 68, 76, 84, 93] },
-  { label: "New to resolve", value: "23", delta: "-12", dir: "down", spark: [40, 44, 38, 35, 30, 28, 23] },
-  { label: "Rows at risk", value: "11.4k", delta: "-2.1k", dir: "down", spark: [60, 55, 48, 44, 38, 30, 24] },
-];
-
 /* a master record: the human label + the key written to the dim/map tables, how
    many raw values resolve to it, and any enrichment attribute values */
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }

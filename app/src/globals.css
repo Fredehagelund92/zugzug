@@ -25,6 +25,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
+  --color-surface-elevated: var(--surface-elevated);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
@@ -51,6 +52,10 @@
   --color-danger: var(--ak-danger);
   --color-danger-soft: var(--ak-danger-soft);
   --color-info: var(--ak-info);
+  --color-committed: var(--ak-committed);
+  --color-committed-soft: var(--ak-committed-soft);
+  --color-staged: var(--ak-staged);
+  --color-staged-soft: var(--ak-staged-soft);
   /* type */
   --font-display: var(--font-display);
   --font-body: var(--font-body);
@@ -63,7 +68,9 @@
   /* motion */
   --ease-brand: var(--ease);
   /* elevation */
+  --shadow-pop-sm: var(--shadow-sm);
   --shadow-pop: var(--shadow);
+  --shadow-pop-lg: var(--shadow-lg);
 }
 
 /* ===========================================================================
@@ -124,6 +131,11 @@
 @keyframes zz-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes zz-slide { from { transform: translateX(100%); } to { transform: none; } }
 
+/* pop-in: short, springy entrance for dropdowns/popovers (ComboSelect,
+   TablePicker, menus). Honoured by prefers-reduced-motion below. */
+.zz-pop-in { animation: zz-pop-in var(--dur-fast) var(--ease-spring) both; transform-origin: top; }
+@keyframes zz-pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }
+
 @keyframes zz-flow { to { stroke-dashoffset: -20; } }
 @keyframes zz-pulse { 0%, 100% { opacity: 0.12; } 50% { opacity: 0.34; } }
 @keyframes zz-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
@@ -161,5 +173,5 @@
   .zz-flow, .zz-pulse { animation: none; }
   .zz-live::before { animation: none; opacity: 0; }
   .zz-rise { animation: none; opacity: 1; }
-  .zz-overlay, .zz-drawer { animation: none; }
+  .zz-overlay, .zz-drawer, .zz-pop-in { animation: none; }
 }

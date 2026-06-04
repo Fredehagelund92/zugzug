@@ -18,7 +18,7 @@
 :root{
   --ak-space-1:4px; --ak-space-2:8px; --ak-space-3:12px; --ak-space-4:16px;
   --ak-space-5:24px; --ak-space-6:32px; --ak-space-7:48px; --ak-space-8:64px;
-  --ak-fs-xs:12px; --ak-fs-sm:13px; --ak-fs-md:15px; --ak-fs-lg:18px;
+  --ak-fs-xs:12px; --ak-fs-sm:13px; --ak-fs-base:14px; --ak-fs-md:15px; --ak-fs-lg:18px;
   --ak-fs-xl:24px; --ak-fs-2xl:32px; --ak-fs-3xl:46px; --ak-fs-4xl:64px;
   --ak-sidebar:264px; --ak-nav:248px; --ak-topbar:60px;
   --ak-dur:.18s;
@@ -27,6 +27,12 @@
   --ak-ok-soft:color-mix(in srgb,var(--ak-ok) 14%,transparent);
   --ak-warn-soft:color-mix(in srgb,var(--ak-warn) 16%,transparent);
   --ak-danger-soft:color-mix(in srgb,var(--ak-danger) 14%,transparent);
+  /* workflow states — distinct from generic ok/warn:
+     committed = published to the master store (cooler teal vs the warmer ok green).
+     staged    = in-flight draft awaiting commit (saturated ochre vs the alerting warn). */
+  --ak-committed:#0E9F8A; --ak-staged:#C47C18;
+  --ak-committed-soft:color-mix(in srgb,var(--ak-committed) 14%,transparent);
+  --ak-staged-soft:color-mix(in srgb,var(--ak-staged) 16%,transparent);
   /* derived brand surfaces (still 100% from --accent / --ink) */
   --ak-hover:color-mix(in srgb,var(--ink) 7%,transparent);
   --ak-active:color-mix(in srgb,var(--ink) 12%,transparent);

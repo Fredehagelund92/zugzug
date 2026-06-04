@@ -156,7 +156,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-50 w-80 rounded-sm border border-line-2 bg-surface shadow-lg"
+      className="zz-pop-in fixed z-50 w-80 rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
       style={{ width: 320 }}
     >
       {/* Accent top edge */}

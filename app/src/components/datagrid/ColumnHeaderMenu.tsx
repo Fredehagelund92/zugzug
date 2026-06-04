@@ -1,6 +1,16 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
+import {
+  IconEdit,
+  IconType,
+  IconSortAsc,
+  IconSortDesc,
+  IconX,
+  IconEyeOff,
+  IconTrash,
+  IconChevronLeft,
+} from "../Icons";
 import type { CellType, ColumnDef } from "./types";
 
 interface Props<Row> {
@@ -68,26 +78,27 @@ export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onR
   }, [onClose, anchorRef]);
 
   const item = "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
+  const iconCls = "h-3.5 w-3.5 shrink-0 text-ink-3";
 
   return createPortal(
     <div
       ref={ref}
       style={{ position: "fixed", top: 0, left: 0, width: MENU_WIDTH }}
-      className="z-50 rounded-sm border border-line-2 bg-surface p-1 shadow-lg"
+      className="zz-pop-in z-50 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
     >
       {mode === "menu" && (
         <>
-          <button type="button" className={item} onClick={() => setMode("rename")}>✎ rename column</button>
-          <button type="button" className={item} onClick={() => setMode("type")}>⇅ change type</button>
+          <button type="button" className={item} onClick={() => setMode("rename")}><IconEdit className={iconCls} /> rename column</button>
+          <button type="button" className={item} onClick={() => setMode("type")}><IconType className={iconCls} /> change type</button>
           <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => { onSort("asc"); onClose(); }}>↑ sort A→Z</button>
-          <button type="button" className={item} onClick={() => { onSort("desc"); onClose(); }}>↓ sort Z→A</button>
+          <button type="button" className={item} onClick={() => { onSort("asc"); onClose(); }}><IconSortAsc className={iconCls} /> sort A→Z</button>
+          <button type="button" className={item} onClick={() => { onSort("desc"); onClose(); }}><IconSortDesc className={iconCls} /> sort Z→A</button>
           {sortDir != null && (
-            <button type="button" className={item} onClick={() => { onSort(null); onClose(); }}>✕ clear sort</button>
+            <button type="button" className={item} onClick={() => { onSort(null); onClose(); }}><IconX className={iconCls} /> clear sort</button>
           )}
           <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => { onHide(); onClose(); }}>⊘ hide column</button>
-          <button type="button" className={cx(item, "text-danger")} onClick={() => setMode("confirm-delete")}>🗑 delete column</button>
+          <button type="button" className={item} onClick={() => { onHide(); onClose(); }}><IconEyeOff className={iconCls} /> hide column</button>
+          <button type="button" className={cx(item, "text-danger")} onClick={() => setMode("confirm-delete")}><IconTrash className="h-3.5 w-3.5 shrink-0" /> delete column</button>
         </>
       )}
       {mode === "rename" && (
@@ -100,7 +111,7 @@ export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onR
             className="w-full rounded-sm border border-accent bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none"
           />
           <div className="mt-1.5 flex gap-1">
-            <button type="button" className={cx(item, "justify-center bg-accent text-accent-ink hover:bg-accent")} onClick={() => { onRename(draft.trim()); onClose(); }}>save</button>
+            <button type="button" className={cx(item, "justify-center bg-accent text-accent-ink hover:brightness-110")} onClick={() => { onRename(draft.trim()); onClose(); }}>save</button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>cancel</button>
           </div>
         </div>
@@ -116,14 +127,14 @@ export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onR
             </button>
           ))}
           <div className="my-1 h-px bg-line" />
-          <button type="button" className={item} onClick={() => setMode("menu")}>← back</button>
+          <button type="button" className={item} onClick={() => setMode("menu")}><IconChevronLeft className={iconCls} /> back</button>
         </div>
       )}
       {mode === "confirm-delete" && (
         <div className="p-2 text-[11.5px] text-ink-2">
           <div className="font-mono">Delete <span className="text-ink">{column.label}</span>? This drops the column on every row.</div>
           <div className="mt-2 flex gap-1">
-            <button type="button" className={cx(item, "justify-center bg-danger text-white")} onClick={() => { onDelete(); onClose(); }}>delete</button>
+            <button type="button" className={cx(item, "justify-center bg-danger text-accent-ink hover:brightness-110")} onClick={() => { onDelete(); onClose(); }}>delete</button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>cancel</button>
           </div>
         </div>

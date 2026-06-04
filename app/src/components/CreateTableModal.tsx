@@ -112,7 +112,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-6 backdrop-blur-sm" onClick={requestClose}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="mt-[10vh] w-[520px] max-w-full overflow-hidden rounded-lg border border-line-2 bg-surface shadow-pop"
+        className="mt-[10vh] w-[520px] max-w-full overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
       >
         {/* accent edge */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
