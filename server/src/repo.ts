@@ -19,7 +19,10 @@ import { log } from "./log.ts";
 export type PaletteName = "rose" | "amber" | "mint" | "teal" | "indigo" | "violet" | "slate";
 const PALETTE_NAMES: PaletteName[] = ["rose", "amber", "mint", "teal", "indigo", "violet", "slate"];
 
-export interface OptionDef { label: string; color: PaletteName | null }
+export interface OptionDef {
+  label: string;
+  color: PaletteName | null;
+}
 
 /** Read on-disk option JSON in both shapes. Legacy `string[]` lifts to
  *  `[{ label, color: null }]`; the new `{ label, color }` shape passes through.
@@ -27,7 +30,11 @@ export interface OptionDef { label: string; color: PaletteName | null }
 export function parseOptions(raw: unknown): OptionDef[] | undefined {
   let arr: unknown = raw;
   if (typeof arr === "string" && arr.length > 0) {
-    try { arr = JSON.parse(arr); } catch { return undefined; }
+    try {
+      arr = JSON.parse(arr);
+    } catch {
+      return undefined;
+    }
   }
   if (!Array.isArray(arr)) return undefined;
   return arr.map((o) => {
@@ -36,16 +43,34 @@ export function parseOptions(raw: unknown): OptionDef[] | undefined {
       const color = (o as { color?: unknown }).color;
       return {
         label: (o as { label: string }).label,
-        color: typeof color === "string" && PALETTE_NAMES.includes(color as PaletteName) ? color as PaletteName : null,
+        color:
+          typeof color === "string" && PALETTE_NAMES.includes(color as PaletteName)
+            ? (color as PaletteName)
+            : null,
       };
     }
     return { label: String(o), color: null };
   });
 }
 
-export interface FieldDef { field: string; label: string; type: string; options?: OptionDef[] }
-export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
-export interface SourceOccurrence { table: string; column: string; rows: number }
+export interface FieldDef {
+  field: string;
+  label: string;
+  type: string;
+  options?: OptionDef[];
+}
+export interface CanonicalValue {
+  key: string;
+  label: string;
+  variants?: number;
+  fields?: Record<string, string | null>;
+  unresolved?: boolean;
+}
+export interface SourceOccurrence {
+  table: string;
+  column: string;
+  rows: number;
+}
 export interface MappingValue {
   value: string;
   status: "mapped" | "new";
@@ -55,7 +80,12 @@ export interface MappingValue {
   sources: SourceOccurrence[];
 }
 export interface DimensionMeta {
-  id: string; dimension: string; dimTable: string; mapTable: string; keyCol: string; rows: number;
+  id: string;
+  dimension: string;
+  dimTable: string;
+  mapTable: string;
+  keyCol: string;
+  rows: number;
   keyKind: "slug" | "external_id";
 }
 /** A registered warehouse source column for a dimension, with best-effort counts.
@@ -63,13 +93,29 @@ export interface DimensionMeta {
  *  warehouse isn't attached); counts are 0 when empty/unreachable. Always returned
  *  so the UI can show the wiring even before any data lands. */
 export interface SourceInfo {
-  table: string; column: string; dimension: string; dimId: string;
-  present: boolean; rows: number; values: number; unmapped: number; scanned: boolean;
-  schedule?: string | null;     // null | '15m' | 'hourly' | 'daily'
-  scannedAt?: string | null;    // ISO timestamp of last scan
+  table: string;
+  column: string;
+  dimension: string;
+  dimId: string;
+  present: boolean;
+  rows: number;
+  values: number;
+  unmapped: number;
+  scanned: boolean;
+  schedule?: string | null; // null | '15m' | 'hourly' | 'daily'
+  scannedAt?: string | null; // ISO timestamp of last scan
 }
-export interface SchemaFacet { schema: string; columns: number; unmapped: number; missing: number }
-export interface CatalogTable { schema: string; table: string; columns: string[] }
+export interface SchemaFacet {
+  schema: string;
+  columns: number;
+  unmapped: number;
+  missing: number;
+}
+export interface CatalogTable {
+  schema: string;
+  table: string;
+  columns: string[];
+}
 export interface MappingDimension extends DimensionMeta {
   description: string | null;
   color: PaletteName | null;
@@ -78,15 +124,33 @@ export interface MappingDimension extends DimensionMeta {
   fields: FieldDef[];
 }
 export interface Draft {
-  dimId: string; raw: string; status: "mapped" | "skipped";
-  targetLabel: string | null; targetKey: string | null;
-  user: User; at: string;
+  dimId: string;
+  raw: string;
+  status: "mapped" | "skipped";
+  targetLabel: string | null;
+  targetKey: string | null;
+  user: User;
+  at: string;
 }
-export interface User { id: string; name: string; initials: string }
-export interface AuditEntry { id: string; at: string; user: User; action: string; detail: string }
+export interface User {
+  id: string;
+  name: string;
+  initials: string;
+}
+export interface AuditEntry {
+  id: string;
+  at: string;
+  user: User;
+  action: string;
+  detail: string;
+}
 
 /* ---- helpers ---- */
-export const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+export const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 /** 'schema.table' (or 'table') → fully-qualified warehouse identifier (MotherDuck). */
 const whTable = (sourceTable: string) =>
@@ -95,12 +159,18 @@ const whTable = (sourceTable: string) =>
 const cq = (display: string) => display.split(".").map(qid).join(".");
 const rel = (secs: number): string => {
   if (secs < 45) return "just now";
-  const m = Math.round(secs / 60); if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60); if (h < 24) return `${h}h ago`;
-  const d = Math.round(h / 24); return d === 1 ? "yesterday" : `${d}d ago`;
+  const m = Math.round(secs / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "yesterday" : `${d}d ago`;
 };
 
-interface SourceDef { table: string; column: string }
+interface SourceDef {
+  table: string;
+  column: string;
+}
 const esc = (s: string) => s.replace(/'/g, "''");
 
 async function sourcesOf(dimId: string): Promise<SourceDef[]> {
@@ -116,27 +186,35 @@ async function sourcesOf(dimId: string): Promise<SourceDef[]> {
 async function liveSources(dimId: string): Promise<SourceDef[]> {
   const out: SourceDef[] = [];
   for (const s of await sourcesOf(dimId)) {
-    try { await run(`SELECT 1 FROM ${whTable(s.table)} LIMIT 0`); out.push(s); }
-    catch { console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`); }
+    try {
+      await run(`SELECT 1 FROM ${whTable(s.table)} LIMIT 0`);
+      out.push(s);
+    } catch {
+      console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
+    }
   }
   return out;
 }
 
 /** One UNION-ALL branch per source: distinct raw value + provenance + row count. */
 function occUnion(sources: SourceDef[]): string {
-  return sources.map((s) => {
-    const col = qid(s.column);
-    return `SELECT CAST(${col} AS VARCHAR) AS raw, '${esc(s.table)}' AS tbl, '${esc(s.column)}' AS col, count(*) AS rows
+  return sources
+    .map((s) => {
+      const col = qid(s.column);
+      return `SELECT CAST(${col} AS VARCHAR) AS raw, '${esc(s.table)}' AS tbl, '${esc(s.column)}' AS col, count(*) AS rows
             FROM ${whTable(s.table)}
             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
             GROUP BY 1`;
-  }).join("\nUNION ALL\n");
+    })
+    .join("\nUNION ALL\n");
 }
 
 /** Registered source columns, read from the cached stats (POST /api/sources/scan
  *  refreshes them) so this is instant regardless of source count. Supports search
  *  (q), schema filter, and a status filter; ranked by unmapped (rows at risk). */
-export async function listSources(opts: { q?: string; schema?: string; status?: string } = {}): Promise<SourceInfo[]> {
+export async function listSources(
+  opts: { q?: string; schema?: string; status?: string } = {},
+): Promise<SourceInfo[]> {
   const params: unknown[] = [];
   const where: string[] = [];
   if (opts.q) {
@@ -148,14 +226,23 @@ export async function listSources(opts: { q?: string; schema?: string; status?: 
     params.push(opts.schema);
     where.push(`split_part(s.source_table, '.', 1) = $${params.length}`);
   }
-  if (opts.status === "needs")   where.push(`COALESCE(st.unmapped, 0) > 0`);
-  else if (opts.status === "clean")   where.push(`COALESCE(st.present, false) AND COALESCE(st.unmapped, 0) = 0`);
+  if (opts.status === "needs") where.push(`COALESCE(st.unmapped, 0) > 0`);
+  else if (opts.status === "clean")
+    where.push(`COALESCE(st.present, false) AND COALESCE(st.unmapped, 0) = 0`);
   else if (opts.status === "missing") where.push(`st.scanned_at IS NOT NULL AND NOT st.present`);
 
   const rows = await pgAll<{
-    dimId: string; dimension: string; table: string; column: string;
-    present: boolean; rows: number; values: number; unmapped: number;
-    scanned: boolean; schedule: string | null; scannedAt: string | null;
+    dimId: string;
+    dimension: string;
+    table: string;
+    column: string;
+    present: boolean;
+    rows: number;
+    values: number;
+    unmapped: number;
+    scanned: boolean;
+    schedule: string | null;
+    scannedAt: string | null;
   }>(
     `SELECT s.dim_id AS "dimId", d.label AS dimension, s.source_table AS "table", s.source_column AS column,
             COALESCE(st.present, false) AS present,
@@ -175,9 +262,15 @@ export async function listSources(opts: { q?: string; schema?: string; status?: 
     params,
   );
   return rows.map((r) => ({
-    table: r.table, column: r.column, dimension: r.dimension, dimId: r.dimId,
-    present: !!r.present, rows: Number(r.rows), values: Number(r.values),
-    unmapped: Number(r.unmapped), scanned: !!r.scanned,
+    table: r.table,
+    column: r.column,
+    dimension: r.dimension,
+    dimId: r.dimId,
+    present: !!r.present,
+    rows: Number(r.rows),
+    values: Number(r.values),
+    unmapped: Number(r.unmapped),
+    scanned: !!r.scanned,
     schedule: r.schedule ?? null,
     scannedAt: r.scannedAt ?? null,
   }));
@@ -196,7 +289,10 @@ export async function sourceFacets(): Promise<SchemaFacet[]> {
      GROUP BY 1 ORDER BY unmapped DESC, schema`,
   );
   return rows.map((r) => ({
-    schema: r.schema, columns: Number(r.columns), unmapped: Number(r.unmapped), missing: Number(r.missing),
+    schema: r.schema,
+    columns: Number(r.columns),
+    unmapped: Number(r.unmapped),
+    missing: Number(r.missing),
   }));
 }
 
@@ -210,21 +306,27 @@ export async function scanSources(): Promise<number> {
   const SCAN_TIMEOUT_MS = 30_000;
   for (const r of regs) {
     const col = qid(r.column);
-    let present: boolean, rows = 0, distinct = 0, unmapped = 0;
+    let present: boolean,
+      rows = 0,
+      distinct = 0,
+      unmapped = 0;
     const t0 = performance.now();
     try {
       const { agg } = await Promise.race([
         (async () => {
           const agg = await get<{ rows: bigint; d: bigint }>(
             `SELECT count(${col}) AS rows, count(DISTINCT ${col}) AS d FROM ${whTable(r.table)}
-             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`);
+             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
+          );
           return { agg };
         })(),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("scan timeout")), SCAN_TIMEOUT_MS),
         ),
       ]);
-      present = true; rows = Number(agg?.rows ?? 0); distinct = Number(agg?.d ?? 0);
+      present = true;
+      rows = Number(agg?.rows ?? 0);
+      distinct = Number(agg?.d ?? 0);
       if (distinct > 0) {
         // Cross-store unmapped count: was a single LEFT JOIN that hit warehouse
         // (DuckDB) + canonical map_* (Postgres). DuckDB can no longer reach
@@ -234,9 +336,7 @@ export async function scanSources(): Promise<number> {
             `SELECT DISTINCT CAST(${col} AS VARCHAR) AS raw FROM ${whTable(r.table)}
              WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
           );
-          const mappedRows = await pgAll<{ raw: string }>(
-            `SELECT raw FROM ${cq(r.mapTable)}`,
-          );
+          const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(r.mapTable)}`);
           const mappedSet = new Set(mappedRows.map((m) => m.raw.toLowerCase()));
           unmapped = whRaws.filter((w) => !mappedSet.has(w.raw.toLowerCase())).length;
         } catch {
@@ -306,7 +406,8 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
             COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+     FROM ${pg("dimension")} WHERE id = $1`,
+    [dimId],
   );
   if (!meta) return 0;
   if (meta.keyKind === "external_id") return 0;
@@ -315,9 +416,9 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values
-  const occRows = await all<{ raw: string }>(
-    occUnion(sources),
-  ).catch(() => [] as { raw: string }[]);
+  const occRows = await all<{ raw: string }>(occUnion(sources)).catch(
+    () => [] as { raw: string }[],
+  );
   if (!occRows.length) return 0;
   const warehouseRaws = [...new Set(occRows.map((r) => r.raw))];
 
@@ -329,9 +430,9 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
   for (const r of canonRows) labelToCanon.set(r.label.toLowerCase(), r);
 
   // Postgres: already-mapped raws
-  const mappedRows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${cq(meta.mapTable)}`,
-  ).catch(() => [] as { raw: string }[]);
+  const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(meta.mapTable)}`).catch(
+    () => [] as { raw: string }[],
+  );
   const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
 
   // JS: find exact case-insensitive matches not yet mapped
@@ -348,14 +449,20 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
     await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system");
   }
   await appendAuditAs(
-    "u_system", "Auto-matched",
+    "u_system",
+    "Auto-matched",
     `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`,
   );
   return matches.length;
 }
 
 /** Register a warehouse column as a source for a dimension (idempotent). */
-export async function addSource(dimId: string, table: string, column: string, opts: { silent?: boolean } = {}): Promise<void> {
+export async function addSource(
+  dimId: string,
+  table: string,
+  column: string,
+  opts: { silent?: boolean } = {},
+): Promise<void> {
   void opts;
   await pgRun(
     `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
@@ -367,10 +474,20 @@ export async function addSource(dimId: string, table: string, column: string, op
 /** Top-N unmapped raw values from a specific warehouse source column, with the
  *  row count of each. Powers the per-row "what's actually broken here" reveal
  *  on the Sources page — drill into a column without leaving the list. */
-export interface UnmappedSample { raw: string; rows: number }
-export async function topUnmapped(dimId: string, table: string, column: string, limit = 5): Promise<UnmappedSample[]> {
+export interface UnmappedSample {
+  raw: string;
+  rows: number;
+}
+export async function topUnmapped(
+  dimId: string,
+  table: string,
+  column: string,
+  limit = 5,
+): Promise<UnmappedSample[]> {
   const meta = await pgGet<{ mapTable: string }>(
-    `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
+    `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1`,
+    [dimId],
+  );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
   const col = qid(column);
@@ -384,9 +501,9 @@ export async function topUnmapped(dimId: string, table: string, column: string, 
     GROUP BY 1`).catch(() => [] as { raw: string; cnt: bigint }[]);
 
   // Postgres: already-mapped raws
-  const mappedRows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${cq(meta.mapTable)}`,
-  ).catch(() => [] as { raw: string }[]);
+  const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(meta.mapTable)}`).catch(
+    () => [] as { raw: string }[],
+  );
   const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
 
   // JS: filter unmapped, sort by count desc, take top N
@@ -399,7 +516,12 @@ export async function topUnmapped(dimId: string, table: string, column: string, 
 
 /** Set (or clear) the automatic scan cadence for a wired source. Valid values:
  *  null (no schedule), '15m', 'hourly', 'daily'. */
-export async function setSourceSchedule(dimId: string, table: string, column: string, schedule: string | null): Promise<void> {
+export async function setSourceSchedule(
+  dimId: string,
+  table: string,
+  column: string,
+  schedule: string | null,
+): Promise<void> {
   const valid = schedule === null || ["15m", "hourly", "daily"].includes(schedule);
   if (!valid) throw new Error(`invalid schedule: ${schedule}`);
   await pgRun(
@@ -430,14 +552,24 @@ export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
     throw e;
   }
   const dueMs = (s: string) =>
-    s === "15m" ? 15 * 60_000 : s === "hourly" ? 60 * 60_000 : s === "daily" ? 24 * 60 * 60_000 : Infinity;
+    s === "15m"
+      ? 15 * 60_000
+      : s === "hourly"
+        ? 60 * 60_000
+        : s === "daily"
+          ? 24 * 60 * 60_000
+          : Infinity;
   return rows.some(
     (r) => !r.scanned_at || now.getTime() - new Date(r.scanned_at).getTime() >= dueMs(r.schedule),
   );
 }
 
 /** Bulk upsert (raw, key)-style rows into a Postgres table in chunks. */
-async function bulkInsert(prefix: string, rows: [string, string][], conflict: string): Promise<void> {
+async function bulkInsert(
+  prefix: string,
+  rows: [string, string][],
+  conflict: string,
+): Promise<void> {
   const CHUNK = 500;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const chunk = rows.slice(i, i + CHUNK);
@@ -462,10 +594,19 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *  the ID column: each distinct ID seeds a canonical keyed by the raw ID (no slug),
  *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
  *  the name resolves live on read. Returns how many canonical records resulted. */
-export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn: string | undefined, opts: { silent?: boolean } = {}, userId: string): Promise<{ derived: number }> {
+export async function deriveCanonical(
+  dimId: string,
+  table: string,
+  column: string,
+  nameColumn: string | undefined,
+  opts: { silent?: boolean } = {},
+  userId: string,
+): Promise<{ derived: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
+     FROM ${pg("dimension")} WHERE id = $1`,
+    [dimId],
+  );
   if (!meta) return { derived: 0 };
   await addSource(dimId, table, column);
   const external = meta.keyKind === "external_id";
@@ -476,52 +617,94 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
   try {
     const rows = await all<{ v: string }>(
       `SELECT DISTINCT CAST(${col} AS VARCHAR) AS v FROM ${whTable(table)}
-       WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0 ORDER BY 1 LIMIT 5000`);
+       WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0 ORDER BY 1 LIMIT 5000`,
+    );
     vals = rows.map((r) => r.v);
-  } catch { return { derived: 0 }; } // warehouse not attached / table missing
+  } catch {
+    return { derived: 0 };
+  } // warehouse not attached / table missing
   if (!vals.length) return { derived: 0 };
 
   const key = qid(meta.keyCol);
 
   if (external) {
     const ids = [...new Set(vals)];
-    await bulkInsert1(`INSERT INTO ${cq(meta.dimTable)} (${key})`, ids, `ON CONFLICT (${key}) DO NOTHING`);
-    await bulkInsert(`INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`, ids.map((v) => [v, v] as [string, string]), `ON CONFLICT (raw) DO NOTHING`);
+    await bulkInsert1(
+      `INSERT INTO ${cq(meta.dimTable)} (${key})`,
+      ids,
+      `ON CONFLICT (${key}) DO NOTHING`,
+    );
+    await bulkInsert(
+      `INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`,
+      ids.map((v) => [v, v] as [string, string]),
+      `ON CONFLICT (raw) DO NOTHING`,
+    );
     if (nameColumn) {
-      await pgRun(`UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
-        [table, column, nameColumn, dimId]);
+      await pgRun(
+        `UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
+        [table, column, nameColumn, dimId],
+      );
     }
-    if (!opts.silent) await appendAuditAs(userId, "Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
+    if (!opts.silent)
+      await appendAuditAs(
+        userId,
+        "Derived canonical",
+        `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`,
+      );
     return { derived: ids.length };
   }
 
   const dimByKey = new Map<string, string>(); // key → label (first wins)
-  const mapPairs: [string, string][] = [];     // raw → key
+  const mapPairs: [string, string][] = []; // raw → key
   for (const v of vals) {
     const k = slug(v) || v.toLowerCase().slice(0, 60) || "_";
     if (!dimByKey.has(k)) dimByKey.set(k, v);
     mapPairs.push([v, k]);
   }
-  await bulkInsert(`INSERT INTO ${cq(meta.dimTable)} (${key}, label)`, [...dimByKey.entries()], `ON CONFLICT (${key}) DO NOTHING`);
-  await bulkInsert(`INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`, mapPairs, `ON CONFLICT (raw) DO NOTHING`);
-  if (!opts.silent) await appendAuditAs(userId, "Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
+  await bulkInsert(
+    `INSERT INTO ${cq(meta.dimTable)} (${key}, label)`,
+    [...dimByKey.entries()],
+    `ON CONFLICT (${key}) DO NOTHING`,
+  );
+  await bulkInsert(
+    `INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`,
+    mapPairs,
+    `ON CONFLICT (raw) DO NOTHING`,
+  );
+  if (!opts.silent)
+    await appendAuditAs(
+      userId,
+      "Derived canonical",
+      `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
+    );
   return { derived: dimByKey.size };
 }
 
 /** Browse/search the warehouse catalog (the 1000+ tables) — server-side search +
  *  schema facets + pagination, metadata only (no row counts). The scale surface. */
-export async function searchCatalog(opts: { q?: string; schema?: string; limit?: number; offset?: number } = {}): Promise<{ rows: CatalogTable[]; total: number; schemas: { schema: string; tables: number }[] }> {
+export async function searchCatalog(
+  opts: { q?: string; schema?: string; limit?: number; offset?: number } = {},
+): Promise<{ rows: CatalogTable[]; total: number; schemas: { schema: string; tables: number }[] }> {
   if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
   const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
   const offset = Math.max(0, opts.offset ?? 0);
   const params: DuckDBValue[] = [env.warehouseDb];
   const cat = `SELECT schema, name AS tbl, column_names AS cols FROM (SHOW ALL TABLES) WHERE database = $1 AND name NOT LIKE '\\_dlt%' ESCAPE '\\'`;
   const filters: string[] = [];
-  if (opts.q) { params.push(`%${opts.q}%`); const p = `$${params.length}`; filters.push(`(schema ILIKE ${p} OR tbl ILIKE ${p} OR len(list_filter(cols, c -> c ILIKE ${p})) > 0)`); }
+  if (opts.q) {
+    params.push(`%${opts.q}%`);
+    const p = `$${params.length}`;
+    filters.push(
+      `(schema ILIKE ${p} OR tbl ILIKE ${p} OR len(list_filter(cols, c -> c ILIKE ${p})) > 0)`,
+    );
+  }
   const qWhere = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
   const schemaParams = [...params];
   let schemaWhere = qWhere;
-  if (opts.schema) { schemaParams.push(opts.schema); schemaWhere = `${qWhere ? qWhere + " AND" : "WHERE"} schema = $${schemaParams.length}`; }
+  if (opts.schema) {
+    schemaParams.push(opts.schema);
+    schemaWhere = `${qWhere ? qWhere + " AND" : "WHERE"} schema = $${schemaParams.length}`;
+  }
 
   const rows = await all<{ schema: string; tbl: string; cols: string }>(
     `WITH cat AS (${cat}), q AS (SELECT * FROM cat ${qWhere}) SELECT schema, tbl, to_json(cols) AS cols FROM q ${opts.schema ? `WHERE schema = $${schemaParams.length}` : ""} ORDER BY schema, tbl LIMIT ${limit} OFFSET ${offset}`,
@@ -535,9 +718,19 @@ export async function searchCatalog(opts: { q?: string; schema?: string; limit?:
     `WITH cat AS (${cat}), q AS (SELECT * FROM cat ${qWhere}) SELECT schema, count(*) AS tables FROM q GROUP BY 1 ORDER BY tables DESC, schema LIMIT 100`,
     params,
   ).catch(() => []);
-  const parseCols = (c: string): string[] => { try { return (JSON.parse(c) as unknown[]).map(String); } catch { return []; } };
+  const parseCols = (c: string): string[] => {
+    try {
+      return (JSON.parse(c) as unknown[]).map(String);
+    } catch {
+      return [];
+    }
+  };
   return {
-    rows: rows.map((r) => ({ schema: r.schema, table: `${r.schema}.${r.tbl}`, columns: parseCols(r.cols) })),
+    rows: rows.map((r) => ({
+      schema: r.schema,
+      table: `${r.schema}.${r.tbl}`,
+      columns: parseCols(r.cols),
+    })),
     total: Number(totalRow?.n ?? 0),
     schemas: schemas.map((s) => ({ schema: s.schema, tables: Number(s.tables) })),
   };
@@ -557,8 +750,7 @@ export async function listDimensions(): Promise<DimensionMeta[]> {
   );
   const counts = await Promise.all(
     metas.map((m) =>
-      pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`)
-        .catch(() => null),
+      pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`).catch(() => null),
     ),
   );
 
@@ -579,17 +771,23 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
             key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind",
             name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol",
             description, color
-     FROM ${pg("dimension")} WHERE id = $1`, [id],
+     FROM ${pg("dimension")} WHERE id = $1`,
+    [id],
   );
   if (!meta) return null;
 
-  const k      = qid(meta.keyCol);
+  const k = qid(meta.keyCol);
   const fields = await listFields(id);
-  const fieldCols = fields.map((f) => `CAST(d.${qid(f.field)} AS VARCHAR) AS ${qid(f.field)}`).join(", ");
+  const fieldCols = fields
+    .map((f) => `CAST(d.${qid(f.field)} AS VARCHAR) AS ${qid(f.field)}`)
+    .join(", ");
 
   const liveName =
-    meta.keyKind === "external_id" && env.attachWarehouse &&
-    !!meta.nameTable && !!meta.nameIdCol && !!meta.nameCol;
+    meta.keyKind === "external_id" &&
+    env.attachWarehouse &&
+    !!meta.nameTable &&
+    !!meta.nameIdCol &&
+    !!meta.nameCol;
 
   // Fetch canonical rows from Postgres
   let canonRows: Record<string, unknown>[];
@@ -621,17 +819,17 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     const nameMap = new Map(nameRows.map((r) => [r.id, r.nm]));
     for (const r of canonRows) {
       const key = String(r.key);
-      r.label      = nameMap.get(key) ?? null;
+      r.label = nameMap.get(key) ?? null;
       r.unresolved = !nameMap.has(key);
     }
   }
 
   const canonical = canonRows.map((r) => ({
-    key:        String(r.key),
-    label:      r.label == null ? String(r.key) : String(r.label),
+    key: String(r.key),
+    label: r.label == null ? String(r.key) : String(r.label),
     unresolved: !!r.unresolved,
-    variants:   Number(r.variants),
-    fields:     Object.fromEntries(
+    variants: Number(r.variants),
+    fields: Object.fromEntries(
       fields.map((f) => [f.field, r[f.field] == null ? null : String(r[f.field])]),
     ),
   }));
@@ -641,9 +839,10 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
   ).catch(() => null);
   const values = await scanValues(id, meta);
   const { nameTable, nameIdCol, nameCol, description, color, ...metaOut } = meta;
-  const safeColor = typeof color === "string" && (PALETTE_NAMES as readonly string[]).includes(color)
-    ? color as PaletteName
-    : null;
+  const safeColor =
+    typeof color === "string" && (PALETTE_NAMES as readonly string[]).includes(color)
+      ? (color as PaletteName)
+      : null;
   return {
     ...metaOut,
     description: description ?? null,
@@ -659,7 +858,11 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
  *  by cross-referencing the Postgres crosswalk. Two-fetch + JS pattern. */
 async function scanValues(
   dimId: string,
-  meta: Omit<DimensionMeta, "rows"> & { nameTable?: string | null; nameIdCol?: string | null; nameCol?: string | null },
+  meta: Omit<DimensionMeta, "rows"> & {
+    nameTable?: string | null;
+    nameIdCol?: string | null;
+    nameCol?: string | null;
+  },
 ): Promise<MappingValue[]> {
   let sources = await liveSources(dimId);
   if (meta.keyKind === "external_id" && meta.nameTable && meta.nameCol) {
@@ -696,8 +899,11 @@ async function scanValues(
 
   // 3. Optionally fetch live canonical names (external_id + warehouse attached)
   const liveName =
-    meta.keyKind === "external_id" && env.attachWarehouse &&
-    !!meta.nameTable && !!meta.nameIdCol && !!meta.nameCol;
+    meta.keyKind === "external_id" &&
+    env.attachWarehouse &&
+    !!meta.nameTable &&
+    !!meta.nameIdCol &&
+    !!meta.nameCol;
   const nameMap = new Map<string, string>(); // canonical key → display name
   if (liveName) {
     const nameRows = await all<{ id: string; nm: string }>(
@@ -721,12 +927,16 @@ async function scanValues(
   const results: MappingValue[] = [];
   for (const [lowerRaw, raw] of raws) {
     const srcs: SourceOccurrence[] = (occMap.get(lowerRaw) ?? []).map((o) => ({
-      table: o.tbl, column: o.col, rows: o.rows,
+      table: o.tbl,
+      column: o.col,
+      rows: o.rows,
     }));
     const canonKey = mappedSet.get(lowerRaw) ?? null;
     const status: "mapped" | "new" = canonKey ? "mapped" : "new";
     const current = canonKey
-      ? (liveName ? (nameMap.get(canonKey) ?? null) : (labelMap.get(canonKey) ?? null))
+      ? liveName
+        ? (nameMap.get(canonKey) ?? null)
+        : (labelMap.get(canonKey) ?? null)
       : null;
     results.push({ value: raw, status, current, suggestion: null, confidence: 0, sources: srcs });
   }
@@ -750,15 +960,19 @@ export async function addDimension(
 ): Promise<string> {
   const id = slug(name);
   if (!id) return id;
-  const keyKind    = opts.keyKind === "external_id" ? "external_id" : "slug";
-  const dimTable   = `${env.canonicalSchema}.dim_${id}`;
-  const mapTable   = `${env.canonicalSchema}.map_${id}`;
-  const keyCol     = `${id}_code`;
-  const existing   = await pgGet(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
+  const keyKind = opts.keyKind === "external_id" ? "external_id" : "slug";
+  const dimTable = `${env.canonicalSchema}.dim_${id}`;
+  const mapTable = `${env.canonicalSchema}.map_${id}`;
+  const keyCol = `${id}_code`;
+  const existing = await pgGet(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
   if (!existing) {
     const labelDdl = keyKind === "external_id" ? "label VARCHAR" : "label VARCHAR NOT NULL";
-    await pgRun(`CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (${qid(keyCol)} VARCHAR PRIMARY KEY, ${labelDdl})`);
-    await pgRun(`CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (raw VARCHAR PRIMARY KEY, ${qid(keyCol)} VARCHAR NOT NULL)`);
+    await pgRun(
+      `CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (${qid(keyCol)} VARCHAR PRIMARY KEY, ${labelDdl})`,
+    );
+    await pgRun(
+      `CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (raw VARCHAR PRIMARY KEY, ${qid(keyCol)} VARCHAR NOT NULL)`,
+    );
     await pgRun(
       `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, current_timestamp)`,
@@ -785,7 +999,8 @@ export async function addDimension(
 /** Seed canonical values into a dimension's dim_ table (idempotent). */
 export async function addCanonical(dimId: string, values: CanonicalValue[]): Promise<void> {
   const meta = await pgGet<{ dimTable: string; keyCol: string }>(
-    `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+    `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM ${pg("dimension")} WHERE id = $1`,
+    [dimId],
   );
   if (!meta) return;
   for (const v of values) {
@@ -797,16 +1012,26 @@ export async function addCanonical(dimId: string, values: CanonicalValue[]): Pro
   }
 }
 
-interface DimMeta { dimTable: string; mapTable: string; keyCol: string }
+interface DimMeta {
+  dimTable: string;
+  mapTable: string;
+  keyCol: string;
+}
 async function dimMeta(dimId: string): Promise<DimMeta | null> {
   return pgGet<DimMeta>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol"
-     FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+     FROM ${pg("dimension")} WHERE id = $1`,
+    [dimId],
   );
 }
 
 /** Add one canonical record (key derived from the label if not given). */
-export async function addCanonicalOne(dimId: string, label: string, key: string | undefined, userId: string): Promise<void> {
+export async function addCanonicalOne(
+  dimId: string,
+  label: string,
+  key: string | undefined,
+  userId: string,
+): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   const k = (key && slug(key)) || slug(label);
@@ -820,7 +1045,12 @@ export async function addCanonicalOne(dimId: string, label: string, key: string 
 }
 
 /** Rename a canonical's display label (the key is stable). */
-export async function renameCanonical(dimId: string, key: string, label: string, userId: string): Promise<void> {
+export async function renameCanonical(
+  dimId: string,
+  key: string,
+  label: string,
+  userId: string,
+): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
@@ -829,22 +1059,24 @@ export async function renameCanonical(dimId: string, key: string, label: string,
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
  *  losers' golden records, audit. The core MDM consolidation step. */
-export async function mergeCanonical(dimId: string, survivor: string, losers: string[], userId: string): Promise<number> {
+export async function mergeCanonical(
+  dimId: string,
+  survivor: string,
+  losers: string[],
+  userId: string,
+): Promise<number> {
   const m = await dimMeta(dimId);
   if (!m) return 0;
-  const key  = qid(m.keyCol);
+  const key = qid(m.keyCol);
   const real = losers.filter((l) => l && l !== survivor);
   if (real.length === 0) return 0;
 
   await pgTx(async (tx) => {
-    await tx.run(
-      `UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`,
-      [survivor, real],
-    );
-    await tx.run(
-      `DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`,
-      [real],
-    );
+    await tx.run(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`, [
+      survivor,
+      real,
+    ]);
+    await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`, [real]);
   });
 
   await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`);
@@ -852,11 +1084,16 @@ export async function mergeCanonical(dimId: string, survivor: string, losers: st
 }
 
 /** Retire a canonical — governed: refused while raw variants still map to it. */
-export async function retireCanonical(dimId: string, key: string, userId: string): Promise<{ ok: boolean; variants: number }> {
+export async function retireCanonical(
+  dimId: string,
+  key: string,
+  userId: string,
+): Promise<{ ok: boolean; variants: number }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
   const v = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`, [key],
+    `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`,
+    [key],
   );
   const variants = Number(v?.n ?? 0);
   if (variants > 0) return { ok: false, variants };
@@ -881,7 +1118,12 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
 // to PG): Postgres has no DOUBLE, so number → NUMERIC.
-const SQL_TYPE: Record<string, string> = { text: "VARCHAR", number: "NUMERIC", boolean: "BOOLEAN", date: "DATE" };
+const SQL_TYPE: Record<string, string> = {
+  text: "VARCHAR",
+  number: "NUMERIC",
+  boolean: "BOOLEAN",
+  date: "DATE",
+};
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈
  *  text | number | boolean | date | select. Select columns store an ordered
@@ -897,8 +1139,8 @@ export async function addField(
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const t       = SQL_TYPE[type] ? type : (type === "select" ? "select" : "text");
-  const field   = slug(label);
+  const t = SQL_TYPE[type] ? type : type === "select" ? "select" : "text";
+  const field = slug(label);
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
   const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
@@ -916,13 +1158,19 @@ export async function addField(
 
 /** Rename a column's display label. The `field` (stable id / DB column name)
  *  stays put; only `label` changes. */
-export async function renameColumn(dimId: string, field: string, newLabel: string, userId: string): Promise<void> {
+export async function renameColumn(
+  dimId: string,
+  field: string,
+  newLabel: string,
+  userId: string,
+): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
-  await pgRun(
-    `UPDATE ${pg("dimension_field")} SET label = $1 WHERE dim_id = $2 AND field = $3`,
-    [label, dimId, field],
-  );
+  await pgRun(`UPDATE ${pg("dimension_field")} SET label = $1 WHERE dim_id = $2 AND field = $3`, [
+    label,
+    dimId,
+    field,
+  ]);
   await appendAuditAs(userId, "Renamed column", `${field} → "${label}"`);
 }
 
@@ -941,7 +1189,7 @@ export async function changeColumnType(
   if (!m) return { ok: false };
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f) return { ok: false };
-  const col  = qid(field);
+  const col = qid(field);
   const keyc = qid(m.keyCol);
 
   const rows = await pgAll<{ k: string; v: string | null }>(
@@ -950,10 +1198,21 @@ export async function changeColumnType(
 
   const parsed: { k: string; v: string | number | boolean | null; bad: boolean }[] = [];
   for (const r of rows) {
-    if (r.v == null || r.v === "") { parsed.push({ k: r.k, v: null, bad: false }); continue; }
-    if (newType === "text")   { parsed.push({ k: r.k, v: r.v, bad: false }); continue; }
+    if (r.v == null || r.v === "") {
+      parsed.push({ k: r.k, v: null, bad: false });
+      continue;
+    }
+    if (newType === "text") {
+      parsed.push({ k: r.k, v: r.v, bad: false });
+      continue;
+    }
     if (newType === "select") {
-      const collected: OptionDef[] = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))].map((label) => ({ label, color: null }));
+      const collected: OptionDef[] =
+        options ??
+        [...new Set(rows.filter((x) => x.v).map((x) => x.v!))].map((label) => ({
+          label,
+          color: null,
+        }));
       const ok = collected.some((o) => o.label === r.v);
       parsed.push({ k: r.k, v: r.v, bad: !ok });
       continue;
@@ -979,15 +1238,25 @@ export async function changeColumnType(
   const invalidCount = parsed.filter((p) => p.bad).length;
   if (invalidCount > 0 && !coerceInvalidToNull) return { ok: false, invalidCount };
 
-  const newSql = newType === "select" ? "VARCHAR"
-    : newType === "number"  ? "NUMERIC"
-    : newType === "boolean" ? "BOOLEAN"
-    : newType === "date"    ? "DATE"
-    : "VARCHAR";
+  const newSql =
+    newType === "select"
+      ? "VARCHAR"
+      : newType === "number"
+        ? "NUMERIC"
+        : newType === "boolean"
+          ? "BOOLEAN"
+          : newType === "date"
+            ? "DATE"
+            : "VARCHAR";
   const tmp = `${field}__tmp_${Date.now().toString(36)}`;
   let finalOptions: OptionDef[] | undefined;
   if (newType === "select") {
-    finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))].map((label) => ({ label, color: null }));
+    finalOptions =
+      options ??
+      [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))].map((label) => ({
+        label,
+        color: null,
+      }));
   }
 
   await pgTx(async ({ run }) => {
@@ -1004,18 +1273,29 @@ export async function changeColumnType(
     );
   });
 
-  await appendAuditAs(userId, "Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
+  await appendAuditAs(
+    userId,
+    "Changed column type",
+    `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`,
+  );
   return { ok: true, options: finalOptions };
 }
 
 /** Drop a column from the dim_ table AND its row in dimension_field, plus null
  *  the field on every row of the dim. Transactional — all-or-nothing. */
-export async function deleteColumn(dimId: string, field: string, userId: string): Promise<{ ok: boolean }> {
+export async function deleteColumn(
+  dimId: string,
+  field: string,
+  userId: string,
+): Promise<{ ok: boolean }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const col = qid(field);
   await pgTx(async ({ run }) => {
-    await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`, [dimId, field]);
+    await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`, [
+      dimId,
+      field,
+    ]);
     await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN IF EXISTS ${col}`);
   });
   await appendAuditAs(userId, "Deleted column", field);
@@ -1036,12 +1316,20 @@ export async function getGridLayout(userId: string, dimId: string): Promise<Grid
     [userId, dimId],
   );
   if (!row?.config) return {};
-  try { return JSON.parse(row.config) as GridLayoutConfig; } catch { return {}; }
+  try {
+    return JSON.parse(row.config) as GridLayoutConfig;
+  } catch {
+    return {};
+  }
 }
 
 /** Upsert the full layout config for (user, dim). Caller sends a *complete*
  *  config; partial merging is the client's job (it knows what changed). */
-export async function setGridLayout(userId: string, dimId: string, config: GridLayoutConfig): Promise<void> {
+export async function setGridLayout(
+  userId: string,
+  dimId: string,
+  config: GridLayoutConfig,
+): Promise<void> {
   await pgRun(
     `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at)
      VALUES ($1, $2, $3, now())
@@ -1066,45 +1354,55 @@ export async function addColumnOption(
   const existing = f.options ?? [];
   if (existing.some((o) => o.label === label)) return { options: existing };
   const next: OptionDef[] = [...existing, { label, color }];
-  await pgRun(
-    `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`,
-    [JSON.stringify(next), dimId, field],
-  );
+  await pgRun(`UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`, [
+    JSON.stringify(next),
+    dimId,
+    field,
+  ]);
   if (!opts.silent) {
-    await appendAuditAs(userId, "Added field option", `${field} += "${label}"${color ? ` (${color})` : ""}`);
+    await appendAuditAs(
+      userId,
+      "Added field option",
+      `${field} += "${label}"${color ? ` (${color})` : ""}`,
+    );
   }
   return { options: next };
 }
 
 /** Set one enrichment field on a canonical record (only registered fields),
  *  cast to the field's declared type. */
-export async function setFieldValue(dimId: string, key: string, field: string, value: string | null): Promise<void> {
+export async function setFieldValue(
+  dimId: string,
+  key: string,
+  field: string,
+  value: string | null,
+): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f) return;
-  const col  = qid(field);
+  const col = qid(field);
   const keyc = qid(m.keyCol);
   const empty = value == null || value.trim() === "";
   if (f.type === "number") {
     const n = empty ? null : Number(value);
-    await pgRun(
-      `UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`,
-      [Number.isFinite(n as number) ? n : null, key],
-    );
+    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [
+      Number.isFinite(n as number) ? n : null,
+      key,
+    ]);
   } else if (f.type === "boolean") {
     const b = value === "true" ? true : value === "false" ? false : null;
     await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [b, key]);
   } else if (f.type === "date") {
-    await pgRun(
-      `UPDATE ${cq(m.dimTable)} SET ${col} = $1::date WHERE ${keyc} = $2`,
-      [empty ? null : value!.trim(), key],
-    );
+    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1::date WHERE ${keyc} = $2`, [
+      empty ? null : value!.trim(),
+      key,
+    ]);
   } else {
-    await pgRun(
-      `UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`,
-      [empty ? null : value, key],
-    );
+    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [
+      empty ? null : value,
+      key,
+    ]);
   }
 }
 
@@ -1113,7 +1411,8 @@ export async function listVariants(dimId: string, key: string): Promise<string[]
   const m = await dimMeta(dimId);
   if (!m) return [];
   const rows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1 ORDER BY raw LIMIT 300`, [key],
+    `SELECT raw FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1 ORDER BY raw LIMIT 300`,
+    [key],
   );
   return rows.map((r) => r.raw);
 }
@@ -1121,8 +1420,13 @@ export async function listVariants(dimId: string, key: string): Promise<string[]
 /* ---- drafts (Postgres) ---- */
 export async function listDrafts(dimId: string): Promise<Draft[]> {
   const rows = await pgAll<{
-    dimId: string; raw: string; status: "mapped" | "skipped";
-    targetLabel: string | null; targetKey: string | null; uid: string; secs: number;
+    dimId: string;
+    raw: string;
+    status: "mapped" | "skipped";
+    targetLabel: string | null;
+    targetKey: string | null;
+    uid: string;
+    secs: number;
   }>(
     `SELECT dim_id AS "dimId", raw, status,
             target_label AS "targetLabel", target_key AS "targetKey",
@@ -1142,16 +1446,23 @@ export async function listDrafts(dimId: string): Promise<Draft[]> {
   const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
 
   return rows.map((r) => ({
-    dimId: r.dimId, raw: r.raw, status: r.status,
-    targetLabel: r.targetLabel, targetKey: r.targetKey,
+    dimId: r.dimId,
+    raw: r.raw,
+    status: r.status,
+    targetLabel: r.targetLabel,
+    targetKey: r.targetKey,
     user: byId.get(r.uid) ?? unknownUser,
     at: rel(Number(r.secs)),
   }));
 }
 
 export async function saveDraft(
-  dimId: string, raw: string, status: "mapped" | "skipped",
-  targetLabel: string | null, targetKey: string | null, userId: string,
+  dimId: string,
+  raw: string,
+  status: "mapped" | "skipped",
+  targetLabel: string | null,
+  targetKey: string | null,
+  userId: string,
 ): Promise<void> {
   await pgRun(
     `INSERT INTO ${pg("draft")} (dim_id, raw, status, target_label, target_key, user_id, created_at)
@@ -1164,28 +1475,34 @@ export async function saveDraft(
 }
 
 export async function discardDraft(dimId: string, raw: string, userId: string): Promise<void> {
-  await pgRun(
-    `DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3`,
-    [dimId, raw, userId],
-  );
+  await pgRun(`DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3`, [
+    dimId,
+    raw,
+    userId,
+  ]);
 }
 
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
-export async function commit(dimId: string, userId: string): Promise<{ committed: number; rowsRecovered: number }> {
+export async function commit(
+  dimId: string,
+  userId: string,
+): Promise<{ committed: number; rowsRecovered: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label
-     FROM ${pg("dimension")} WHERE id = $1`, [dimId],
+     FROM ${pg("dimension")} WHERE id = $1`,
+    [dimId],
   );
   if (!meta) return { committed: 0, rowsRecovered: 0 };
-  const key   = qid(meta.keyCol);
+  const key = qid(meta.keyCol);
   const DRAFT = pg("draft");
-  const DIMT  = cq(meta.dimTable);
-  const MAPT  = cq(meta.mapTable);
+  const DIMT = cq(meta.dimTable);
+  const MAPT = cq(meta.mapTable);
 
   const approved = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${DRAFT}
-     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`, [dimId],
+     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId],
   );
   const committed = Number(approved?.n ?? 0);
   if (!committed) return { committed: 0, rowsRecovered: 0 };
@@ -1207,13 +1524,12 @@ export async function commit(dimId: string, userId: string): Promise<{ committed
          AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`,
       [dimId],
     );
-    await run(
-      `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped'`, [dimId],
-    );
+    await run(`DELETE FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped'`, [dimId]);
   });
 
   await appendAuditAs(
-    userId, "Committed",
+    userId,
+    "Committed",
     `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
   );
   return { committed, rowsRecovered };
@@ -1225,21 +1541,22 @@ async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<n
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values with total row counts
-  const occRows = await all<{ raw: string; rows: bigint }>(
-    occUnion(sources),
-  ).catch(() => [] as { raw: string; rows: bigint }[]);
+  const occRows = await all<{ raw: string; rows: bigint }>(occUnion(sources)).catch(
+    () => [] as { raw: string; rows: bigint }[],
+  );
   if (!occRows.length) return 0;
 
   // Postgres: draft raws for this dimension with status=mapped
   const draftRows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${pg("draft")} WHERE dim_id = $1 AND status = 'mapped'`, [dimId],
+    `SELECT raw FROM ${pg("draft")} WHERE dim_id = $1 AND status = 'mapped'`,
+    [dimId],
   );
   const draftSet = new Set(draftRows.map((r) => r.raw.toLowerCase()));
 
   // Postgres: already-mapped raws
-  const mappedRows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${cq(mapTable)}`,
-  ).catch(() => [] as { raw: string }[]);
+  const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(mapTable)}`).catch(
+    () => [] as { raw: string }[],
+  );
   const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
 
   // Sum rows for warehouse values that are in a draft but not yet mapped
@@ -1261,14 +1578,22 @@ export async function appendAuditAs(userId: string, action: string, detail: stri
 }
 
 /* --- workspace-global preferences (single row, id=1) --- */
-export interface Preferences { publishThreshold: number; suggestThreshold: number }
+export interface Preferences {
+  publishThreshold: number;
+  suggestThreshold: number;
+}
 
 export async function getPreferences(): Promise<Preferences> {
-  const row = (await pgAll<{ publish_threshold: number; suggest_threshold: number }>(
-    `SELECT publish_threshold, suggest_threshold FROM ${pg("preferences")} WHERE id = 1`,
-  ))[0];
+  const row = (
+    await pgAll<{ publish_threshold: number; suggest_threshold: number }>(
+      `SELECT publish_threshold, suggest_threshold FROM ${pg("preferences")} WHERE id = 1`,
+    )
+  )[0];
   return row
-    ? { publishThreshold: Number(row.publish_threshold), suggestThreshold: Number(row.suggest_threshold) }
+    ? {
+        publishThreshold: Number(row.publish_threshold),
+        suggestThreshold: Number(row.suggest_threshold),
+      }
     : { publishThreshold: 95, suggestThreshold: 80 };
 }
 
@@ -1282,7 +1607,13 @@ export async function setPreferences(p: Preferences): Promise<void> {
 }
 
 export async function listAudit(limit = 30): Promise<AuditEntry[]> {
-  const rows = await pgAll<{ id: string; uid: string; action: string; detail: string; secs: number }>(
+  const rows = await pgAll<{
+    id: string;
+    uid: string;
+    action: string;
+    detail: string;
+    secs: number;
+  }>(
     `SELECT id, user_id AS uid, action, detail,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
      FROM ${pg("audit_log")} ORDER BY created_at DESC
