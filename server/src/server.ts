@@ -182,7 +182,7 @@ const server = Bun.serve({
         if (seg.length === 2 && method === "POST") {
           try {
             const input = (await req.json()) as tables.CreateTableInput;
-            const result = await tables.createTable(input);
+            const result = await tables.createTable(input, me);
             return json(result, 201);
           } catch (e) {
             if (e instanceof CreateTableError) {
@@ -210,7 +210,7 @@ const server = Bun.serve({
           }
           if (method === "POST") {
             const { name, keyKind } = (await req.json()) as { name: string; keyKind?: "slug" | "external_id" };
-            return json({ id: await repo.addDimension(name, [], { keyKind }) }, 201);
+            return json({ id: await repo.addDimension(name, [], { keyKind }, me) }, 201);
           }
         }
         const id = seg[2] ? decodeURIComponent(seg[2]) : "";
@@ -247,18 +247,18 @@ const server = Bun.serve({
         // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const { table, column, nameColumn } = (await req.json()) as { table: string; column: string; nameColumn?: string };
-          return json(await repo.deriveCanonical(id, table, column, nameColumn));
+          return json(await repo.deriveCanonical(id, table, column, nameColumn, {}, me));
         }
         // POST /api/dimensions/:id/fields {label, type?, options?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
           const { label, type, options } = (await req.json()) as { label: string; type?: string; options?: { label: string; color: string | null }[] };
-          return json(await repo.addField(id, label, type, options as repo.OptionDef[] | undefined));
+          return json(await repo.addField(id, label, type, options as repo.OptionDef[] | undefined, {}, me));
         }
         // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
           const field = decodeURIComponent(seg[4]!);
           const { label, color } = (await req.json()) as { label: string; color?: string | null };
-          const res = await repo.addColumnOption(id, field, label, (color ?? null) as repo.PaletteName | null);
+          const res = await repo.addColumnOption(id, field, label, (color ?? null) as repo.PaletteName | null, {}, me);
           return res ? json(res) : json({ error: "not a select column" }, 400);
         }
         // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
@@ -267,26 +267,26 @@ const server = Bun.serve({
           if (method === "PUT") {
             const body = (await req.json()) as { label?: string; type?: string; options?: { label: string; color: string | null }[]; coerceInvalidToNull?: boolean };
             if (body.label != null) {
-              await repo.renameColumn(id, field, body.label);
+              await repo.renameColumn(id, field, body.label, me);
             }
             if (body.type != null) {
-              const res = await repo.changeColumnType(id, field, body.type, body.options as repo.OptionDef[] | undefined, body.coerceInvalidToNull ?? false);
+              const res = await repo.changeColumnType(id, field, body.type, body.options as repo.OptionDef[] | undefined, body.coerceInvalidToNull ?? false, me);
               return json(res);
             }
             return noContent();
           }
-          if (method === "DELETE") return json(await repo.deleteColumn(id, field));
+          if (method === "DELETE") return json(await repo.deleteColumn(id, field, me));
         }
         // canonical record management
         if (seg[3] === "canonical") {
           if (seg.length === 4 && method === "POST") {
             const { label, key } = (await req.json()) as { label: string; key?: string };
-            await repo.addCanonicalOne(id, label, key);
+            await repo.addCanonicalOne(id, label, key, me);
             return noContent();
           }
           if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
             const { survivor, losers } = (await req.json()) as { survivor: string; losers: string[] };
-            return json({ merged: await repo.mergeCanonical(id, survivor, losers) });
+            return json({ merged: await repo.mergeCanonical(id, survivor, losers, me) });
           }
           const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
           if (seg[5] === "variants" && seg.length === 6 && method === "GET")
@@ -298,8 +298,8 @@ const server = Bun.serve({
             return noContent();
           }
           if (seg.length === 5 && ck) {
-            if (method === "PUT") { const { label } = (await req.json()) as { label: string }; await repo.renameCanonical(id, ck, label); return noContent(); }
-            if (method === "DELETE") return json(await repo.retireCanonical(id, ck));
+            if (method === "PUT") { const { label } = (await req.json()) as { label: string }; await repo.renameCanonical(id, ck, label, me); return noContent(); }
+            if (method === "DELETE") return json(await repo.retireCanonical(id, ck, me));
           }
         }
         // POST /api/dimensions/:id/commit

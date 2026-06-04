@@ -71,7 +71,7 @@ function validate(input: CreateTableInput): void {
   }
 }
 
-export async function createTable(input: CreateTableInput): Promise<{ id: string }> {
+export async function createTable(input: CreateTableInput, userId = "u_ada"): Promise<{ id: string }> {
   validate(input);
   const name = input.name.trim();
   const id = slug(name);
@@ -142,7 +142,7 @@ export async function createTable(input: CreateTableInput): Promise<{ id: string
     input.mode === "blank" ? `${name} · blank · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
     : input.mode === "source" ? `${name} · from ${input.source!.table}.${input.source!.column} · derived ${derivedCount}`
     : `${name} · from IDs ${input.external!.table}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
-  await repo.appendAudit("Created table", detail);
+  await repo.appendAuditAs(userId, "Created table", detail);
 
   return { id };
 }

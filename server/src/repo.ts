@@ -1,6 +1,6 @@
 /* repo.ts — the data-access layer over the bridge. Implements the shapes the UI
    already calls (ARCHITECTURE.md): scanUnmapped, save/list/discardDraft, commit
-   (the cross-store fold), appendAudit, plus the dimension registry + users.
+   (the cross-store fold), appendAuditAs, plus the dimension registry + users.
 
    The scan is REGISTRY-DRIVEN: `dimension_source` rows say which warehouse
    table.column feed a dimension, so adding a source is data, not code. */
@@ -427,7 +427,7 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *  the ID column: each distinct ID seeds a canonical keyed by the raw ID (no slug),
  *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
  *  the name resolves live on read. Returns how many canonical records resulted. */
-export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string, opts: { silent?: boolean } = {}): Promise<{ derived: number }> {
+export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string, opts: { silent?: boolean } = {}, userId = "u_ada"): Promise<{ derived: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
@@ -456,7 +456,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
       await pgRun(`UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
         [table, column, nameColumn, dimId]);
     }
-    if (!opts.silent) await appendAudit("Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
+    if (!opts.silent) await appendAuditAs(userId, "Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
     return { derived: ids.length };
   }
 
@@ -469,7 +469,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
   }
   await bulkInsert(`INSERT INTO ${cq(meta.dimTable)} (${key}, label)`, [...dimByKey.entries()], `ON CONFLICT (${key}) DO NOTHING`);
   await bulkInsert(`INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`, mapPairs, `ON CONFLICT (raw) DO NOTHING`);
-  if (!opts.silent) await appendAudit("Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
+  if (!opts.silent) await appendAuditAs(userId, "Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
   return { derived: dimByKey.size };
 }
 
@@ -711,6 +711,7 @@ export async function addDimension(
   name: string,
   sources: SourceDef[] = [],
   opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
+  userId = "u_ada",
 ): Promise<string> {
   const id = slug(name);
   if (!id) return id;
@@ -729,7 +730,8 @@ export async function addDimension(
       [id, name.trim(), dimTable, mapTable, keyCol, keyKind],
     );
     if (!opts.silent) {
-      await appendAudit(
+      await appendAuditAs(
+        userId,
         "Created dimension",
         `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`,
       );
@@ -769,7 +771,7 @@ async function dimMeta(dimId: string): Promise<DimMeta | null> {
 }
 
 /** Add one canonical record (key derived from the label if not given). */
-export async function addCanonicalOne(dimId: string, label: string, key?: string): Promise<void> {
+export async function addCanonicalOne(dimId: string, label: string, key?: string, userId = "u_ada"): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   const k = (key && slug(key)) || slug(label);
@@ -779,20 +781,20 @@ export async function addCanonicalOne(dimId: string, label: string, key?: string
      ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
     [k, label],
   );
-  await appendAudit("Added canonical", `${label} (${k})`);
+  await appendAuditAs(userId, "Added canonical", `${label} (${k})`);
 }
 
 /** Rename a canonical's display label (the key is stable). */
-export async function renameCanonical(dimId: string, key: string, label: string): Promise<void> {
+export async function renameCanonical(dimId: string, key: string, label: string, userId = "u_ada"): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
   await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
-  await appendAudit("Renamed canonical", `${key} → "${label}"`);
+  await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`);
 }
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
  *  losers' golden records, audit. The core MDM consolidation step. */
-export async function mergeCanonical(dimId: string, survivor: string, losers: string[]): Promise<number> {
+export async function mergeCanonical(dimId: string, survivor: string, losers: string[], userId = "u_ada"): Promise<number> {
   const m = await dimMeta(dimId);
   if (!m) return 0;
   const key  = qid(m.keyCol);
@@ -810,12 +812,12 @@ export async function mergeCanonical(dimId: string, survivor: string, losers: st
     );
   });
 
-  await appendAudit("Merged canonical", `${real.join(", ")} → ${survivor}`);
+  await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`);
   return real.length;
 }
 
 /** Retire a canonical — governed: refused while raw variants still map to it. */
-export async function retireCanonical(dimId: string, key: string): Promise<{ ok: boolean; variants: number }> {
+export async function retireCanonical(dimId: string, key: string, userId = "u_ada"): Promise<{ ok: boolean; variants: number }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
   const v = await pgGet<{ n: number }>(
@@ -824,7 +826,7 @@ export async function retireCanonical(dimId: string, key: string): Promise<{ ok:
   const variants = Number(v?.n ?? 0);
   if (variants > 0) return { ok: false, variants };
   await pgRun(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
-  await appendAudit("Retired canonical", key);
+  await appendAuditAs(userId, "Retired canonical", key);
   return { ok: true, variants: 0 };
 }
 
@@ -856,6 +858,7 @@ export async function addField(
   type = "text",
   options?: OptionDef[],
   opts: { silent?: boolean } = {},
+  userId = "u_ada",
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
@@ -871,21 +874,21 @@ export async function addField(
     [dimId, field, label.trim(), t, optsJson],
   );
   if (!opts.silent) {
-    await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
+    await appendAuditAs(userId, "Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
   }
   return { field };
 }
 
 /** Rename a column's display label. The `field` (stable id / DB column name)
  *  stays put; only `label` changes. */
-export async function renameColumn(dimId: string, field: string, newLabel: string): Promise<void> {
+export async function renameColumn(dimId: string, field: string, newLabel: string, userId = "u_ada"): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
   await pgRun(
     `UPDATE ${pg("dimension_field")} SET label = $1 WHERE dim_id = $2 AND field = $3`,
     [label, dimId, field],
   );
-  await appendAudit("Renamed column", `${field} → "${label}"`);
+  await appendAuditAs(userId, "Renamed column", `${field} → "${label}"`);
 }
 
 /** Change a column's type. Validates that every existing cell value parses to
@@ -897,6 +900,7 @@ export async function changeColumnType(
   newType: string,
   options?: OptionDef[],
   coerceInvalidToNull = false,
+  userId = "u_ada",
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
@@ -965,13 +969,13 @@ export async function changeColumnType(
     );
   });
 
-  await appendAudit("Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
+  await appendAuditAs(userId, "Changed column type", `${field} → ${newType}${finalOptions ? ` (${finalOptions.length} options)` : ""}`);
   return { ok: true, options: finalOptions };
 }
 
 /** Drop a column from the dim_ table AND its row in dimension_field, plus null
  *  the field on every row of the dim. Transactional — all-or-nothing. */
-export async function deleteColumn(dimId: string, field: string): Promise<{ ok: boolean }> {
+export async function deleteColumn(dimId: string, field: string, userId = "u_ada"): Promise<{ ok: boolean }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const col = qid(field);
@@ -979,7 +983,7 @@ export async function deleteColumn(dimId: string, field: string): Promise<{ ok: 
     await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`, [dimId, field]);
     await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN IF EXISTS ${col}`);
   });
-  await appendAudit("Deleted column", field);
+  await appendAuditAs(userId, "Deleted column", field);
   return { ok: true };
 }
 
@@ -1020,6 +1024,7 @@ export async function addColumnOption(
   label: string,
   color: PaletteName | null = null,
   opts: { silent?: boolean } = {},
+  userId = "u_ada",
 ): Promise<{ options: OptionDef[] } | null> {
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f || f.type !== "select") return null;
@@ -1031,7 +1036,7 @@ export async function addColumnOption(
     [JSON.stringify(next), dimId, field],
   );
   if (!opts.silent) {
-    await appendAudit("Added field option", `${field} += "${label}"${color ? ` (${color})` : ""}`);
+    await appendAuditAs(userId, "Added field option", `${field} += "${label}"${color ? ` (${color})` : ""}`);
   }
   return { options: next };
 }
@@ -1218,10 +1223,6 @@ export async function appendAuditAs(userId: string, action: string, detail: stri
      VALUES ($1, current_timestamp, $2, $3, $4)`,
     [randomUUID(), userId, action, detail],
   );
-}
-/** Convenience: audit as the demo's default actor (used by system actions). */
-export async function appendAudit(action: string, detail: string): Promise<void> {
-  await appendAuditAs("u_ada", action, detail);
 }
 
 /* --- workspace-global preferences (single row, id=1) --- */
