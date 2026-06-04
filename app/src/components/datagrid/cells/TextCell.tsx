@@ -16,14 +16,18 @@ function Editor<Row>({ value, commit, cancel }: EditCtx<Row>) {
   const [v, setV] = useState(value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
+  const commitNow = () => commit(v.trim() === "" ? null : v);
   return (
     <input
       ref={ref} value={v}
       onChange={(e) => setV(e.target.value)}
-      onBlur={() => commit(v.trim() === "" ? null : v)}
+      onBlur={commitNow}
+      // Enter / Tab commit synchronously: useGridCursor's stopEdit unmounts
+      // the editor before the browser blur event reaches React, so onBlur
+      // alone would silently drop the typed value.
       onKeyDown={(e) => {
-        if (e.key === "Escape") { e.preventDefault(); cancel(); }
-        // Enter / Tab handled by useGridCursor (it calls commit via the host)
+        if (e.key === "Escape") { e.preventDefault(); cancel(); return; }
+        if (e.key === "Enter" || e.key === "Tab") commitNow();
       }}
       className={inputBase}
     />
