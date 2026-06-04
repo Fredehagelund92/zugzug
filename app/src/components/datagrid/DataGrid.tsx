@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import {
@@ -29,6 +29,10 @@ const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: strin
 const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }> = {
   text: TextCell, number: NumberCell, boolean: BooleanCell, date: DateCell,
 };
+
+// ── Range selection types ───────────────────────────────────────────────────
+interface RangeCorner { rowKey: string; field: string }
+interface RangeState { anchor: RangeCorner; focus: RangeCorner }
 
 export function DataGrid<Row>(props: DataGridProps<Row>) {
   const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
@@ -98,13 +102,225 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     await onCommit(rk, field, value);
   };
 
+  // ── Range selection state ───────────────────────────────────────────────────
+  // anchor stays fixed while shift-extending; focus tracks the moving corner.
+  const [range, setRange] = useState<RangeState | null>(null);
+  // ref mirror so pointer-move handlers can read live state without stale closures
+  const rangeRef = useRef(range);
+  useEffect(() => { rangeRef.current = range; }, [range]);
+  // whether we are currently drag-selecting
+  const draggingRange = useRef(false);
+
+  // Build index maps for O(1) position lookups
+  const rowIndexMap = useMemo(() => {
+    const m = new Map<string, number>();
+    sortedRows.forEach((r, i) => m.set(rowKey(r), i));
+    return m;
+  }, [sortedRows, rowKey]);
+
+  const colIndexMap = useMemo(() => {
+    const m = new Map<string, number>();
+    orderedVisible.forEach((c, i) => m.set(c.field, i));
+    return m;
+  }, [orderedVisible]);
+
+  // Given anchor + focus corners, compute the row/col index bounding box
+  const computeRangeBounds = useCallback((r: RangeState) => {
+    const ar = rowIndexMap.get(r.anchor.rowKey) ?? 0;
+    const fr = rowIndexMap.get(r.focus.rowKey) ?? 0;
+    const ac = colIndexMap.get(r.anchor.field) ?? 0;
+    const fc = colIndexMap.get(r.focus.field) ?? 0;
+    return {
+      minRow: Math.min(ar, fr),
+      maxRow: Math.max(ar, fr),
+      minCol: Math.min(ac, fc),
+      maxCol: Math.max(ac, fc),
+    };
+  }, [rowIndexMap, colIndexMap]);
+
+  // Returns true if (rowKey, field) falls inside the current range
+  const inRange = useCallback((rk: string, field: string): boolean => {
+    if (!range) return false;
+    const ri = rowIndexMap.get(rk);
+    const ci = colIndexMap.get(field);
+    if (ri == null || ci == null) return false;
+    const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
+    return ri >= minRow && ri <= maxRow && ci >= minCol && ci <= maxCol;
+  }, [range, rowIndexMap, colIndexMap, computeRangeBounds]);
+
+  // ── Cursor ─────────────────────────────────────────────────────────────────
   const cursor = useGridCursor({
     rows: sortedRows, rowKey, columns: orderedVisible,
     onCommit: () => { /* the editor's onBlur handles the actual value commit */ },
-    onSelectAll: () => selection?.onChange(sortedRows.map(rowKey)),
+    onSelectAll: () => {
+      // Cmd+A: select entire grid as range
+      const firstRow = sortedRows[0];
+      const lastRow = sortedRows[sortedRows.length - 1];
+      const firstCol = orderedVisible[0];
+      const lastCol = orderedVisible[orderedVisible.length - 1];
+      if (firstRow && lastRow && firstCol && lastCol) {
+        const anchorCorner = { rowKey: rowKey(firstRow), field: firstCol.field };
+        const focusCorner = { rowKey: rowKey(lastRow), field: lastCol.field };
+        setRange({ anchor: anchorCorner, focus: focusCorner });
+        cursor.setCursor({ rowKey: anchorCorner.rowKey, field: anchorCorner.field, editing: false });
+      }
+    },
     onUndo: () => undo.undo(),
     onRedo: () => undo.redo(),
   });
+
+  // Keep range anchor in sync when cursor moves without shift (range collapses)
+  // We handle this explicitly in the key handler below, not via useEffect, to
+  // avoid fighting with the cursor state.
+
+  // ── Copy (Cmd+C) ───────────────────────────────────────────────────────────
+  const handleCopy = useCallback(async () => {
+    if (!range) {
+      // single-cell copy: use cursor
+      if (!cursor.cursor) return;
+      const { rowKey: rk, field } = cursor.cursor;
+      const row = sortedRows.find((r) => rowKey(r) === rk);
+      if (!row) return;
+      const val = (row as any)[field];
+      const text = val == null ? "" : String(val);
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
+    const lines: string[] = [];
+    for (let ri = minRow; ri <= maxRow; ri++) {
+      const row = sortedRows[ri];
+      if (!row) continue;
+      const cells: string[] = [];
+      for (let ci = minCol; ci <= maxCol; ci++) {
+        const col = orderedVisible[ci];
+        if (!col) continue;
+        const val = (row as any)[col.field];
+        cells.push(val == null ? "" : String(val));
+      }
+      lines.push(cells.join("\t"));
+    }
+    await navigator.clipboard.writeText(lines.join("\n"));
+  }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds]);
+
+  // ── Paste (Cmd+V) ──────────────────────────────────────────────────────────
+  const handlePaste = useCallback(async () => {
+    if (!cursor.cursor) return;
+    const text = await navigator.clipboard.readText();
+    if (!text) return;
+    const pasteRows = text.split("\n").map((line) => line.split("\t"));
+    const anchorRk = range?.anchor.rowKey ?? cursor.cursor.rowKey;
+    const anchorField = range?.anchor.field ?? cursor.cursor.field;
+    const startRowIdx = rowIndexMap.get(anchorRk) ?? 0;
+    const startColIdx = colIndexMap.get(anchorField) ?? 0;
+
+    for (let pr = 0; pr < pasteRows.length; pr++) {
+      const targetRowIdx = startRowIdx + pr;
+      if (targetRowIdx >= sortedRows.length) break;
+      const targetRow = sortedRows[targetRowIdx];
+      if (!targetRow) continue;
+      const targetRk = rowKey(targetRow);
+      const pasteRow = pasteRows[pr];
+      if (!pasteRow) continue;
+
+      for (let pc = 0; pc < pasteRow.length; pc++) {
+        const targetColIdx = startColIdx + pc;
+        if (targetColIdx >= orderedVisible.length) break;
+        const col = orderedVisible[targetColIdx];
+        if (!col) continue;
+        if (col.editable === false) continue;
+
+        const rawVal = pasteRow[pc] ?? "";
+        let coerced: unknown = rawVal;
+
+        if (col.type === "number") {
+          const n = Number(rawVal);
+          coerced = isNaN(n) ? null : n;
+        } else if (col.type === "boolean") {
+          coerced = rawVal.toLowerCase() === "true";
+        } else if (col.type === "select") {
+          // Only commit if the value matches an existing option label
+          const match = col.options?.find((o) => o.label === rawVal);
+          if (!match) continue;
+          coerced = rawVal;
+        }
+        // text and date: raw string
+
+        void commitValue(targetRk, col.field, coerced);
+      }
+    }
+  }, [cursor.cursor, range, sortedRows, rowKey, orderedVisible, rowIndexMap, colIndexMap, commitValue]);
+
+  // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const cur = cursor.cursor;
+
+    // While editing, let the cursor handler own everything
+    if (cur?.editing) {
+      cursor.onKeyDown(e);
+      return;
+    }
+
+    // Cmd+C
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      void handleCopy();
+      return;
+    }
+
+    // Cmd+V
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
+      e.preventDefault();
+      void handlePaste();
+      return;
+    }
+
+    // Shift+Arrow: extend range, keep anchor
+    const isShiftArrow =
+      e.shiftKey &&
+      (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight");
+
+    if (isShiftArrow && cur) {
+      e.preventDefault();
+      const dx = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+      const dy = e.key === "ArrowUp" ? -1 : e.key === "ArrowDown" ? 1 : 0;
+
+      // Current focus position (use range focus if range is active, else cursor)
+      const focusRk = range?.focus.rowKey ?? cur.rowKey;
+      const focusField = range?.focus.field ?? cur.field;
+
+      const ri = rowIndexMap.get(focusRk) ?? 0;
+      const ci = colIndexMap.get(focusField) ?? 0;
+      const nr = Math.max(0, Math.min(sortedRows.length - 1, ri + dy));
+      const nc = Math.max(0, Math.min(orderedVisible.length - 1, ci + dx));
+      const newFocusRow = sortedRows[nr];
+      const newFocusCol = orderedVisible[nc];
+      if (!newFocusRow || !newFocusCol) return;
+
+      const newFocus = { rowKey: rowKey(newFocusRow), field: newFocusCol.field };
+      // Establish anchor if range not yet active
+      const currentAnchor = range?.anchor ?? { rowKey: cur.rowKey, field: cur.field };
+      setRange({ anchor: currentAnchor, focus: newFocus });
+      // Move the cursor focus cell too (visual feedback)
+      cursor.setCursor({ rowKey: newFocus.rowKey, field: newFocus.field, editing: false });
+      return;
+    }
+
+    // Escape: collapse range to anchor
+    if (e.key === "Escape" && range) {
+      e.preventDefault();
+      cursor.setCursor({ rowKey: range.anchor.rowKey, field: range.anchor.field, editing: false });
+      setRange(null);
+      return;
+    }
+
+    // Non-shift arrow / all other keys: collapse range and let cursor handle
+    if (!e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      setRange(null);
+    }
+
+    cursor.onKeyDown(e);
+  }, [cursor, range, handleCopy, handlePaste, rowIndexMap, colIndexMap, sortedRows, orderedVisible, rowKey]);
 
   const isSelected = (rk: string) => selection?.selected.includes(rk) ?? false;
   const toggle = (rk: string) => {
@@ -113,11 +329,61 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     selection.onChange(next);
   };
 
+  // ── Pointer handlers for drag-select ───────────────────────────────────────
+  const onCellPointerDown = useCallback((e: React.PointerEvent, rk: string, field: string) => {
+    // Only primary button; ignore while column-drag is active
+    if (e.button !== 0 || drag) return;
+    if (cursor.cursor?.editing) return;
+
+    if (e.shiftKey && cursor.cursor) {
+      // Shift+click: extend range from existing anchor
+      const currentAnchor = range?.anchor ?? { rowKey: cursor.cursor.rowKey, field: cursor.cursor.field };
+      const newFocus = { rowKey: rk, field };
+      setRange({ anchor: currentAnchor, focus: newFocus });
+      cursor.setCursor({ rowKey: rk, field, editing: false });
+      e.preventDefault();
+      return;
+    }
+
+    // Start a new range at the clicked cell
+    const corner = { rowKey: rk, field };
+    setRange({ anchor: corner, focus: corner });
+    cursor.setCursor({ rowKey: rk, field, editing: false });
+    draggingRange.current = true;
+
+    const onMove = (ev: PointerEvent) => {
+      if (!draggingRange.current) return;
+      const target = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+      const cellEl = target?.closest<HTMLElement>("[data-cell]");
+      if (!cellEl) return;
+      const data = cellEl.dataset.cell;
+      if (!data) return;
+      const sep = data.indexOf("::");
+      if (sep < 0) return;
+      const focusRk = data.slice(0, sep);
+      const focusField = data.slice(sep + 2);
+      setRange((prev) => {
+        if (!prev) return prev;
+        return { anchor: prev.anchor, focus: { rowKey: focusRk, field: focusField } };
+      });
+      cursor.setCursor({ rowKey: focusRk, field: focusField, editing: false });
+    };
+
+    const onUp = () => {
+      draggingRange.current = false;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, [cursor, range, drag]);
+
   return (
     <div
       ref={cursor.ref}
       tabIndex={0}
-      onKeyDown={cursor.onKeyDown}
+      onKeyDown={handleKeyDown}
       className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
     >
       {/* header row */}
@@ -307,27 +573,28 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             {orderedVisible.map((c, idx) => {
               const focused = cursor.cursor?.rowKey === rk && cursor.cursor?.field === c.field;
               const editing = focused && cursor.cursor?.editing;
+              const cellInRange = inRange(rk, c.field);
               const value = (row as any)[c.field];
               const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
-              const onClick = () => {
-                cursor.setCursor({ rowKey: rk, field: c.field, editing: false });
-              };
               const onDoubleClick = () => {
                 if (c.editable === false) return;
                 cursor.setCursor({ rowKey: rk, field: c.field, editing: true });
+                setRange(null);
               };
               const isLastCol = idx === orderedVisible.length - 1;
               const cellCx = cx(
                 "relative flex min-w-0 items-center px-3 py-[7px]",
                 !isLastCol && "border-r border-line",
                 c.align === "right" && "justify-end text-right",
+                // Range highlighting: range cells get faint wash; focus cell gets strong ring
+                cellInRange && !focused && "bg-accent-wash/25",
                 focused && "ring-1 ring-accent bg-accent-wash/40",
               );
               const data = `${rk}::${c.field}`;
               return (
                 <div key={c.field}
                   data-cell={data}
-                  onClick={onClick}
+                  onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
                   onDoubleClick={onDoubleClick}
                   className={cellCx}
                 >
