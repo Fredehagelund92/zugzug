@@ -325,8 +325,8 @@ export function MasterTables() {
           )}
         </div>
 
-        <DataGrid<CanonicalValue & Record<string, unknown>>
-          rows={rowsForGrid}
+        <DataGrid<CanonicalValue>
+          rows={rowsForGrid as CanonicalValue[]}
           rowKey={(c) => c.key}
           columns={columns}
           selection={{ selected: sel, onChange: setSel }}
