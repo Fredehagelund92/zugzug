@@ -175,9 +175,19 @@ const server = Bun.serve({
       }
 
       if (seg[1] === "dimensions") {
-        // GET /api/dimensions ; POST /api/dimensions {name}
+        // GET /api/dimensions[?full=true] ; POST /api/dimensions {name}
+        // ?full=true returns the full MappingDimension shapes (canonical rows,
+        // values, fields, …) in one response — kills the N+1 the client used to
+        // make at boot (1 list + N detail fetches).
         if (seg.length === 2) {
-          if (method === "GET") return json(await repo.listDimensions());
+          if (method === "GET") {
+            if (url.searchParams.get("full") === "true") {
+              const metas = await repo.listDimensions();
+              const fulls = await Promise.all(metas.map((m) => repo.getDimension(m.id)));
+              return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
+            }
+            return json(await repo.listDimensions());
+          }
           if (method === "POST") {
             const { name, keyKind } = (await req.json()) as { name: string; keyKind?: "slug" | "external_id" };
             return json({ id: await repo.addDimension(name, [], { keyKind }) }, 201);
@@ -320,9 +330,12 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`· ${signal} received — draining…`);
-  server.stop(false); // stop accepting new requests; let in-flight finish
-  await new Promise<void>((resolve) => setTimeout(resolve, 250));
-  await pgEnd().catch((e) => console.error("pgEnd failed:", e));
+  server.stop(false); // stop accepting new connections (Bun has no await-drain API)
+  await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
+  await Promise.race([
+    pgEnd(),
+    new Promise<void>((_, reject) => setTimeout(() => reject(new Error("pgEnd timeout")), 5000)),
+  ]).catch((e) => console.error("pgEnd failed:", e));
   console.log("· shutdown complete");
   process.exit(0);
 }
