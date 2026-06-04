@@ -347,6 +347,9 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return noContent();
         }
         if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
+          if (url.searchParams.get("confirm") !== "true") {
+            throw new AppError("CONFIRMATION_REQUIRED", "merge requires ?confirm=true", 400);
+          }
           const { survivor, losers } = (await req.json()) as { survivor: string; losers: string[] };
           return json({ merged: await repo.mergeCanonical(id, survivor, losers, me) });
         }

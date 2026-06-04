@@ -394,7 +394,7 @@ export async function mergeCanonical(
   losers: string[],
 ): Promise<number> {
   const { merged } = await api<{ merged: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/merge`,
+    `/dimensions/${encodeURIComponent(dimId)}/canonical/merge?confirm=true`,
     { method: "POST", body: JSON.stringify({ survivor, losers }) },
   );
   await refreshDim(dimId);
