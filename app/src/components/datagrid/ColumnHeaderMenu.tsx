@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
 import type { CellType, ColumnDef } from "./types";
 
 interface Props<Row> {
   column: ColumnDef<Row>;
+  anchorRef: React.RefObject<HTMLElement | null>;
   sortDir: "asc" | "desc" | null;
   onClose: () => void;
   onRename: (newLabel: string) => void;
@@ -14,22 +16,65 @@ interface Props<Row> {
 }
 
 const TYPES: CellType[] = ["text", "number", "boolean", "date", "select"];
+const MENU_WIDTH = 192; // matches w-48
+const GAP = 4;
 
-export function ColumnHeaderMenu<Row>({ column, sortDir, onClose, onRename, onSort, onChangeType, onHide, onDelete }: Props<Row>) {
+export function ColumnHeaderMenu<Row>({ column, anchorRef, sortDir, onClose, onRename, onSort, onChangeType, onHide, onDelete }: Props<Row>) {
   const [mode, setMode] = useState<"menu" | "rename" | "type" | "confirm-delete">("menu");
   const [draft, setDraft] = useState(column.label);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
+  // in a portal on document.body so the menu escapes the grid's stacking
+  // context entirely — sticky bars and other contexts can no longer cover it.
+  useLayoutEffect(() => {
+    const popover = ref.current;
+    const anchor = anchorRef.current;
+    if (!popover || !anchor) return;
+    const place = (): void => {
+      const a = anchor.getBoundingClientRect();
+      const popH = popover.offsetHeight;
+      // align right edges, drop below the button; flip above on viewport overflow
+      let left = a.right - MENU_WIDTH;
+      if (left < 8) left = 8;
+      if (left + MENU_WIDTH > window.innerWidth - 8) left = window.innerWidth - MENU_WIDTH - 8;
+      let top = a.bottom + GAP;
+      if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - GAP - popH);
+      popover.style.top = `${top}px`;
+      popover.style.left = `${left}px`;
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [anchorRef, mode]);
+
+  // Close on outside click. Skip clicks on the anchor button itself so the
+  // user can toggle the menu off via the same ⋯ button.
   useEffect(() => {
-    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    const onDoc = (e: MouseEvent) => {
+      const popover = ref.current;
+      const anchor = anchorRef.current;
+      const target = e.target as Node;
+      if (popover && popover.contains(target)) return;
+      if (anchor && anchor.contains(target)) return;
+      onClose();
+    };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const item = "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
 
-  return (
-    <div ref={ref} className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-line-2 bg-surface p-1 shadow-lg">
+  return createPortal(
+    <div
+      ref={ref}
+      style={{ position: "fixed", top: 0, left: 0, width: MENU_WIDTH }}
+      className="z-50 rounded-sm border border-line-2 bg-surface p-1 shadow-lg"
+    >
       {mode === "menu" && (
         <>
           <button type="button" className={item} onClick={() => setMode("rename")}>✎ rename column</button>
@@ -83,6 +128,7 @@ export function ColumnHeaderMenu<Row>({ column, sortDir, onClose, onRename, onSo
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
