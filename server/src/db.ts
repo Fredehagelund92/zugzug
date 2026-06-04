@@ -8,7 +8,6 @@ async function attachMotherDuck(conn: DuckDBConnection): Promise<void> {
   await conn.run(`INSTALL motherduck`);
   await conn.run(`LOAD motherduck`);
   process.env.motherduck_token = env.motherduckToken;
-  await conn.run(`SET motherduck_token='${env.motherduckToken}'`).catch(() => {});
   await conn.run(`ATTACH IF NOT EXISTS 'md:'`);
 }
 
