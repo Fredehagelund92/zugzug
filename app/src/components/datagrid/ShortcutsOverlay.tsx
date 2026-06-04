@@ -9,12 +9,15 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     title: "Grid",
     rows: [
       ["↑ ↓ ← →", "move cursor"],
-      ["Enter", "edit / commit"],
-      ["Tab / Shift+Tab", "commit + move →/←"],
+      ["any char", "type to edit"],
+      ["Enter", "edit / commit + down"],
+      ["Tab / Shift+Tab", "commit + edit →/←"],
       ["Esc", "cancel edit"],
-      ["Space", "toggle row selection"],
+      ["⌫ / Del", "clear cell or range"],
+      ["⇧+arrows", "extend range"],
       ["⌘A", "select all visible"],
-      ["⌘⌫", "remove selected"],
+      ["⌘C / ⌘V", "copy / paste (fills range)"],
+      ["⌘⌫", "remove selected row(s)"],
       ["/", "focus filter"],
     ],
   },
@@ -49,11 +52,11 @@ export function ShortcutsOverlay({ open, onClose }: { open: boolean; onClose: ()
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-6" onClick={onClose}>
-      <div className="w-[560px] max-w-full rounded-lg border border-line-2 bg-surface p-5 shadow-xl"
+      <div className="w-[560px] max-w-full rounded-lg border border-line-2 bg-surface-elevated p-5 shadow-pop"
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h2 className="font-display text-[18px] font-semibold text-ink">Keyboard shortcuts</h2>
-          <button type="button" className="font-mono text-[11px] text-ink-3 hover:text-ink" onClick={onClose}>esc</button>
+          <button type="button" className="font-mono text-[11px] text-ink-2 hover:text-ink" onClick={onClose}>esc</button>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           {GROUPS.map((g) => (

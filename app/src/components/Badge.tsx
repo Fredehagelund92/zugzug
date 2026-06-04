@@ -2,7 +2,7 @@ import { cx } from "../lib/cx";
 
 /* Badge — Tailwind conversion of `.ak-badge`. Tone maps to the functional
    semantic tokens (ok/warn/danger) or the accent; neutral uses surface + line. */
-type Tone = "neutral" | "ok" | "warn" | "danger" | "accent";
+type Tone = "neutral" | "ok" | "warn" | "danger" | "accent" | "committed" | "staged";
 
 const tones: Record<Tone, string> = {
   neutral: "bg-surface-2 text-ink-2 border-line-2",
@@ -10,6 +10,8 @@ const tones: Record<Tone, string> = {
   warn: "bg-warn-soft text-warn border-transparent",
   danger: "bg-danger-soft text-danger border-transparent",
   accent: "bg-accent text-accent-ink border-transparent",
+  committed: "bg-committed-soft text-committed border-transparent",
+  staged: "bg-staged-soft text-staged border-transparent",
 };
 
 export function Badge({

@@ -3,16 +3,23 @@
    Import this once; reference var(--token) everywhere. Never hardcode brand color. */
 :root{
   --bg: ***REMOVED***080B14;
-  --surface: ***REMOVED***0E1422;
-  --surface-2: ***REMOVED***161E30;
-  --surface-3: ***REMOVED***202B44;
+  --surface: ***REMOVED***0F1526;
+  --surface-2: ***REMOVED***182240;
+  --surface-3: ***REMOVED***243056;
+  --surface-elevated: ***REMOVED***2B3863;
   --ink: ***REMOVED***EAEEF7;
   --ink-2: ***REMOVED***9BA7BF;
   --ink-3: ***REMOVED***5B6884;
   --line: rgba(255,255,255,.09);
   --line-2: rgba(255,255,255,.17);
   --node-line: rgba(255,255,255,.05);
-  --shadow: 0 30px 70px -42px rgba(0,0,0,.72);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.30), 0 0 0 1px rgba(255,255,255,.04);
+  --shadow: 0 8px 24px -8px rgba(0,0,0,.45);
+  --shadow-lg: 0 24px 60px -20px rgba(0,0,0,.60);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slide: 300ms;
+  --ease-spring: cubic-bezier(.32,.72,0,1);
   --accent: ***REMOVED***D6336C;
   --accent-ink: ***REMOVED***FFFFFF;
   --accent-soft: color-mix(in srgb,var(--accent) 18%,transparent);
@@ -47,13 +54,16 @@
   --surface: ***REMOVED***FFFFFF;
   --surface-2: ***REMOVED***EAEEF7;
   --surface-3: ***REMOVED***DFE5F2;
+  --surface-elevated: ***REMOVED***FFFFFF;
   --ink: ***REMOVED***0C1020;
   --ink-2: ***REMOVED***48526A;
   --ink-3: ***REMOVED***8893A8;
   --line: rgba(12,16,32,.11);
   --line-2: rgba(12,16,32,.20);
   --node-line: rgba(12,16,32,.06);
-  --shadow: 0 26px 60px -44px rgba(20,30,60,.26);
+  --shadow-sm: 0 1px 2px rgba(20,30,60,.08), 0 0 0 1px rgba(20,30,60,.04);
+  --shadow: 0 8px 22px -10px rgba(20,30,60,.18);
+  --shadow-lg: 0 24px 50px -20px rgba(20,30,60,.22);
   --accent: ***REMOVED***D6336C;
   --accent-ink: ***REMOVED***FFFFFF;
   --accent-soft: color-mix(in srgb,var(--accent) 14%,transparent);

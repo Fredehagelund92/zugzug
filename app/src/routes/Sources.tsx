@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
+import { PageHeader } from "../components/PageHeader";
 import { ScanScheduleMenu } from "../components/ScanScheduleMenu";
 import { IconSearch, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
@@ -221,24 +222,21 @@ export function Sources() {
       {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
-      <header className="zz-rise mb-6">
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[clamp(40px,5.6vw,56px)] font-bold leading-[0.95] tracking-[-0.035em] text-ink">
-              Sources
-            </h1>
-            <p className="mt-3 max-w-[60ch] text-[14px] leading-relaxed text-ink-2">
-              {dashboardSentence}
-            </p>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" icon={<IconWand className="h-3.5 w-3.5" />} onClick={scan} disabled={scanning}>
-              {scanning ? "Scanning…" : flash !== null ? `✓ scanned ${flash}` : "Scan all"}
-            </Button>
-            <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={() => setCatalog(true)}>Browse warehouse</Button>
-          </div>
-        </div>
-      </header>
+      <div className="mb-6">
+        <PageHeader
+          kicker="Warehouse"
+          title="Sources"
+          lede={dashboardSentence}
+          action={
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" icon={<IconWand className="h-3.5 w-3.5" />} onClick={scan} disabled={scanning}>
+                {scanning ? "Scanning…" : flash !== null ? `✓ scanned ${flash}` : "Scan all"}
+              </Button>
+              <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={() => setCatalog(true)}>Browse warehouse</Button>
+            </div>
+          }
+        />
+      </div>
 
       {derived && <div className="mb-4 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">{derived}</div>}
 

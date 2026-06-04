@@ -92,7 +92,7 @@ export function TablePicker({
       </button>
 
       {open && (
-        <div className="absolute left-0 z-50 mt-1.5 w-[320px] overflow-hidden rounded-md border border-line-2 bg-surface shadow-pop">
+        <div className="zz-pop-in absolute left-0 z-50 mt-1.5 w-[320px] overflow-hidden rounded-md border border-line-2 bg-surface-elevated shadow-pop">
           <div className="flex items-center gap-2 border-b border-line px-3 py-2.5 text-ink-3">
             <IconSearch className="h-3.5 w-3.5" />
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="find a table…"

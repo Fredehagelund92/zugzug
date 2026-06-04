@@ -37,12 +37,18 @@ export interface CellCtx<Row> {
 export interface EditCtx<Row> extends CellCtx<Row> {
   commit: (next: unknown) => void;    // commit + advance cursor (Tab/Enter handled by grid)
   cancel: () => void;                 // Esc behavior
+  /** When edit was triggered by type-to-edit, the typed character. Editors
+   *  should seed their input with this so the user's first keystroke counts. */
+  initial?: string;
 }
 
 export interface Cursor {
   rowKey: string;
   field: string;
   editing: boolean;
+  /** Set when edit was triggered by typing a printable character. Passed
+   *  through to the editor's EditCtx.initial; cleared on next move/stopEdit. */
+  initial?: string;
 }
 
 export interface DataGridProps<Row> {

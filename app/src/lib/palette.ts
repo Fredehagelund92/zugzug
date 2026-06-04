@@ -18,13 +18,13 @@ interface TintEntry {
 }
 
 export const PALETTE: Record<PaletteName, TintEntry> = {
-  rose:   { bg: "var(--tint-rose)",   border: "color-mix(in srgb,var(--tint-rose) 35%,transparent)",   wash: "color-mix(in srgb,var(--tint-rose) 18%,transparent)",   fg: "***REMOVED***FF8FB1" },
-  amber:  { bg: "var(--tint-amber)",  border: "color-mix(in srgb,var(--tint-amber) 35%,transparent)",  wash: "color-mix(in srgb,var(--tint-amber) 18%,transparent)",  fg: "***REMOVED***F7C76A" },
-  mint:   { bg: "var(--tint-mint)",   border: "color-mix(in srgb,var(--tint-mint) 35%,transparent)",   wash: "color-mix(in srgb,var(--tint-mint) 18%,transparent)",   fg: "***REMOVED***7DDEAA" },
-  teal:   { bg: "var(--tint-teal)",   border: "color-mix(in srgb,var(--tint-teal) 35%,transparent)",   wash: "color-mix(in srgb,var(--tint-teal) 18%,transparent)",   fg: "***REMOVED***74E0EA" },
-  indigo: { bg: "var(--tint-indigo)", border: "color-mix(in srgb,var(--tint-indigo) 35%,transparent)", wash: "color-mix(in srgb,var(--tint-indigo) 18%,transparent)", fg: "***REMOVED***A89FF0" },
-  violet: { bg: "var(--tint-violet)", border: "color-mix(in srgb,var(--tint-violet) 35%,transparent)", wash: "color-mix(in srgb,var(--tint-violet) 18%,transparent)", fg: "***REMOVED***C68DF0" },
-  slate:  { bg: "var(--tint-slate)",  border: "color-mix(in srgb,var(--tint-slate) 35%,transparent)",  wash: "color-mix(in srgb,var(--tint-slate) 18%,transparent)",  fg: "***REMOVED***A4B0C8" },
+  rose:   { bg: "var(--tint-rose)",   border: "color-mix(in srgb,var(--tint-rose) 35%,transparent)",   wash: "color-mix(in srgb,var(--tint-rose) 18%,transparent)",   fg: "var(--tint-rose)"   },
+  amber:  { bg: "var(--tint-amber)",  border: "color-mix(in srgb,var(--tint-amber) 35%,transparent)",  wash: "color-mix(in srgb,var(--tint-amber) 18%,transparent)",  fg: "var(--tint-amber)"  },
+  mint:   { bg: "var(--tint-mint)",   border: "color-mix(in srgb,var(--tint-mint) 35%,transparent)",   wash: "color-mix(in srgb,var(--tint-mint) 18%,transparent)",   fg: "var(--tint-mint)"   },
+  teal:   { bg: "var(--tint-teal)",   border: "color-mix(in srgb,var(--tint-teal) 35%,transparent)",   wash: "color-mix(in srgb,var(--tint-teal) 18%,transparent)",   fg: "var(--tint-teal)"   },
+  indigo: { bg: "var(--tint-indigo)", border: "color-mix(in srgb,var(--tint-indigo) 35%,transparent)", wash: "color-mix(in srgb,var(--tint-indigo) 18%,transparent)", fg: "var(--tint-indigo)" },
+  violet: { bg: "var(--tint-violet)", border: "color-mix(in srgb,var(--tint-violet) 35%,transparent)", wash: "color-mix(in srgb,var(--tint-violet) 18%,transparent)", fg: "var(--tint-violet)" },
+  slate:  { bg: "var(--tint-slate)",  border: "color-mix(in srgb,var(--tint-slate) 35%,transparent)",  wash: "color-mix(in srgb,var(--tint-slate) 18%,transparent)",  fg: "var(--tint-slate)"  },
 };
 
 /** Round-robin a tint based on a stable string (e.g. table id). Used to pick a

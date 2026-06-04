@@ -55,7 +55,7 @@ export function CatalogExplorer({ dims, onClose }: { dims: MappingDimension[]; o
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-4 backdrop-blur-sm sm:p-8" onClick={onClose}>
-      <div className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-line bg-bg shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-pop" onClick={(e) => e.stopPropagation()}>
         {/* header + search */}
         <div className="flex items-center gap-3 border-b border-line px-5 py-4">
           <div>

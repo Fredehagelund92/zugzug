@@ -4,55 +4,103 @@ import { Kpi } from "../components/Kpi";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Mark } from "../components/Mark";
-import { IconWand, IconArrowRight } from "../components/Icons";
-import { metrics } from "../data";
+import { PageHeader } from "../components/PageHeader";
+import { IconWand, IconArrowRight, IconPlus } from "../components/Icons";
+import { valueRows } from "../data";
 import { useDimensions, useAudit, useDrafts, currentUser } from "../store";
+
+const MarkBackdrop = () => (
+  <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
+);
 
 function rise(i: number) {
   return { className: "zz-rise", style: { animationDelay: `${i * 70}ms` } };
+}
+
+// "4541" → "4.5k", "964123" → "964k", "12" → "12"
+function fmtK(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 10_000) return `${(n / 1000).toFixed(1)}k`;
+  return `${Math.round(n / 1000)}k`;
 }
 
 export function Dashboard() {
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();
-  const newCount = (id: string) => dims.find((s) => s.id === id)!.values.filter((v) => v.status === "new").length;
+  const newCount = (id: string) => dims.find((s) => s.id === id)?.values.filter((v) => v.status === "new").length ?? 0;
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const dimName = (id: string) => dims.find((s) => s.id === id)?.dimension ?? id;
   const staged = Object.values(draftsMap).filter(
     (d) => d.status === "mapped" && dims.find((s) => s.id === d.dimId)?.values.find((v) => v.value === d.raw)?.status === "new",
   );
+
+  // Live KPI derivations — replace the static fixtures.
+  // Values mapped = total raw-value entries already in the map tables.
+  // Rows at risk = warehouse source rows behind currently-unmapped values.
+  // Coverage = mapped rows / (mapped rows + at-risk rows).
+  const valuesMapped = dims.reduce((n, d) => n + d.rows, 0);
+  const rowsAtRisk = dims.reduce(
+    (n, d) => n + d.values.filter((v) => v.status === "new").reduce((m, v) => m + valueRows(v), 0),
+    0,
+  );
+  const rowsMapped = dims.reduce(
+    (n, d) => n + d.values.filter((v) => v.status === "mapped").reduce((m, v) => m + valueRows(v), 0),
+    0,
+  );
+  const coverage = rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
+  const kpis: Array<{ label: string; value: string; featured?: boolean }> = [
+    { label: "Tables", value: String(dims.length) },
+    { label: "Values mapped", value: fmtK(valuesMapped) },
+    { label: "New to resolve", value: String(totalNew), featured: totalNew > 0 },
+    { label: "Rows at risk", value: fmtK(rowsAtRisk) },
+  ];
+
+  if (dims.length === 0) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          backdrop={<MarkBackdrop />}
+          kicker="Master data"
+          title="Your workspace is empty"
+          lede="Create a master table to start reconciling messy source values to canonical ones. Each table maps a single dimension (countries, regions, post types, …) from your warehouse."
+          meta={
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Link to="/app/tables"><Button icon={<IconPlus className="h-4 w-4" />}>Create your first table</Button></Link>
+              <Link to="/app/sources"><Button variant="secondary">Browse the warehouse</Button></Link>
+            </div>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      {/* masthead */}
-      <div className="zz-rise relative overflow-hidden">
-        <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-ink-3">
-              <span className="text-accent">[ </span>master data<span className="text-accent"> ]</span>
-            </div>
-            <h1 className="mt-1 font-display text-[clamp(34px,5vw,52px)] font-extrabold leading-[0.92] tracking-[-0.035em] text-ink">
-              Value mapping overview
-            </h1>
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-ink-3">
-              <span className="flex items-center gap-1.5 text-ink-2"><span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" /> live</span>
-              <span className="text-line-2">/</span><span>{dims.length} tables</span>
-              <span className="text-line-2">/</span><span>48.6k values mapped</span>
-              <span className="text-line-2">/</span><span className="text-accent">98.2% coverage</span>
-              <span className="text-line-2">/</span><span className="text-warn">{totalNew} new to resolve</span>
-              {staged.length > 0 && <><span className="text-line-2">/</span><span className="text-accent">{staged.length} staged for review</span></>}
-            </div>
+      <PageHeader
+        backdrop={<MarkBackdrop />}
+        kicker="Master data"
+        title="Value mapping overview"
+        meta={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-ink-2">
+            <span className="flex items-center gap-1.5"><span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" /> live</span>
+            <span className="text-line-2">/</span><span className="tabular-nums">{dims.length} tables</span>
+            <span className="text-line-2">/</span><span className="tabular-nums">{fmtK(valuesMapped)} values mapped</span>
+            <span className="text-line-2">/</span><span className="text-accent tabular-nums">{coverage.toFixed(1)}% coverage</span>
+            <span className="text-line-2">/</span><span className="text-warn tabular-nums">{totalNew} new to resolve</span>
+            {staged.length > 0 && <><span className="text-line-2">/</span><span className="text-staged tabular-nums">{staged.length} staged for review</span></>}
           </div>
+        }
+        action={
           <Link to="/app/mapping"><Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">Resolve {totalNew} new</Button></Link>
-        </div>
-      </div>
+        }
+      />
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {metrics.map((m, i) => (
+        {kpis.map((m, i) => (
           <div key={m.label} {...rise(1 + i)}>
-            <Kpi label={m.label} value={m.value} delta={m.delta} dir={m.dir} spark={m.spark} />
+            <Kpi label={m.label} value={m.value} featured={m.featured} />
           </div>
         ))}
       </div>
@@ -64,7 +112,7 @@ export function Dashboard() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
               <div className="flex items-center gap-2.5">
                 <h2 className="font-display text-lg font-semibold text-ink">Staged for review</h2>
-                <Badge tone="warn" dot>{staged.length} pending commit</Badge>
+                <Badge tone="staged" dot>{staged.length} pending commit</Badge>
               </div>
               <Link to="/app/mapping"><Button variant="secondary" size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>Review &amp; commit</Button></Link>
             </div>
@@ -75,8 +123,8 @@ export function Dashboard() {
                   <span className="min-w-0 max-w-[34%] truncate text-ink">{d.raw}</span>
                   <IconArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />
                   <span className="min-w-0 flex-1 truncate text-accent">{d.targetLabel}</span>
-                  <span className="shrink-0 rounded-pill bg-surface-3 px-2 py-0.5 text-[10px] text-ink-3">{dimName(d.dimId)}</span>
-                  <span className="hidden shrink-0 text-[10px] text-ink-3 sm:inline">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
+                  <span className="shrink-0 rounded-pill bg-surface-3 px-2 py-0.5 text-[10px] text-ink-2">{dimName(d.dimId)}</span>
+                  <span className="hidden shrink-0 text-[10px] text-ink-2 tabular-nums sm:inline">{d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}</span>
                 </li>
               ))}
             </ul>
@@ -103,13 +151,13 @@ export function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-display text-[14px] font-semibold text-ink">{s.dimension}</span>
-                        <span className="truncate font-mono text-[11px] text-ink-3">{s.mapTable}</span>
+                        <span className="truncate font-mono text-[11px] text-ink-2">{s.mapTable}</span>
                       </div>
                       <div className="mt-2 flex items-center gap-3">
                         <div className="h-1.5 w-40 overflow-hidden rounded-pill bg-surface-2">
                           <div className="h-full rounded-pill bg-accent" style={{ width: `${pct}%` }} />
                         </div>
-                        <span className="font-mono text-[11px] text-ink-3">{s.rows.toLocaleString()} rows</span>
+                        <span className="font-mono text-[11px] text-ink-2 tabular-nums">{s.rows.toLocaleString()} rows</span>
                       </div>
                     </div>
                     {n > 0 ? <Badge tone="warn" dot>{n} new</Badge> : <Badge tone="ok" dot>clean</Badge>}
@@ -134,7 +182,7 @@ export function Dashboard() {
                   <div className="min-w-0 flex-1 truncate text-[12.5px]">
                     <span className="text-ink">{e.action}</span> <span className="text-ink-3">{e.detail}</span>
                   </div>
-                  <span className="shrink-0 font-mono text-[10px] text-ink-3">{e.at}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-ink-2 tabular-nums">{e.at}</span>
                 </li>
               ))}
             </ul>

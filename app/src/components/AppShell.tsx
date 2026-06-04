@@ -9,7 +9,8 @@ import {
   IconTables,
   IconSources,
   IconSettings,
-  IconChevron,
+  IconChevronLeft,
+  IconChevronRight,
 } from "./Icons";
 import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
@@ -67,11 +68,11 @@ function UserMenu() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-20 min-w-[160px] rounded-sm border border-line bg-surface shadow-md">
+          <div className="zz-pop-in absolute right-0 top-10 z-20 min-w-[160px] rounded-sm border border-line bg-surface-elevated shadow-pop">
             <div className="border-b border-line px-3 py-2">
               <p className="text-[13px] font-medium text-ink">{currentUser.name}</p>
               {currentUser.email && (
-                <p className="text-[11px] text-ink-3">{currentUser.email}</p>
+                <p className="text-[11px] text-ink-2">{currentUser.email}</p>
               )}
             </div>
             <button
@@ -148,11 +149,11 @@ export function AppShell() {
               className={({ isActive }) =>
                 cx(
                   "relative flex items-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
-                  collapsed ? "h-10 justify-center" : "gap-3 rounded-sm px-3 py-2",
+                  collapsed ? "h-10 justify-center" : "gap-3 rounded-sm px-3 py-2.5",
                   isActive
                     ? collapsed
                       ? "bg-accent-wash text-accent"
-                      : "bg-accent-wash text-accent shadow-[inset_2px_0_0_var(--accent)]"
+                      : "bg-accent-wash text-accent shadow-[inset_3px_0_0_var(--accent)]"
                     : "text-ink-2 hover:bg-hover hover:text-ink",
                 )
               }
@@ -162,7 +163,7 @@ export function AppShell() {
                 <>
                   {label}
                   {count != null && (
-                    <span className="ml-auto rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-ink-3">
+                    <span className="ml-auto rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-ink-2 tabular-nums">
                       {count}
                     </span>
                   )}
@@ -195,7 +196,7 @@ export function AppShell() {
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink"
           >
-            <IconChevron className={cx("h-3.5 w-3.5", collapsed ? "-rotate-90" : "rotate-90")} />
+            {collapsed ? <IconChevronRight className="h-3.5 w-3.5" /> : <IconChevronLeft className="h-3.5 w-3.5" />}
           </button>
           <div className="flex-1" />
           <div className="ml-auto flex items-center gap-3">

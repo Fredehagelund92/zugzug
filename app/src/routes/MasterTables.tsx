@@ -7,6 +7,8 @@ import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
 import { CreateTableModal } from "../components/CreateTableModal";
 import { NoTablesYet } from "../components/NoTablesYet";
+import { PageHeader } from "../components/PageHeader";
+import { StatsBar } from "../components/StatsBar";
 import { IconPlus, IconX, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { AddFieldPopover } from "../components/AddFieldPopover";
@@ -112,7 +114,7 @@ export function MasterTables() {
               if (e.key === "Escape") commit(c.label); // no-op cancel
             }}
             onBlur={(e) => commit(e.target.value.trim())}
-            className="w-full rounded-sm border border-accent bg-bg px-2 py-1 font-display text-[14px] font-semibold text-ink outline-none"
+            className="w-full border-b-2 border-b-accent bg-transparent px-1 py-1 font-display text-[14px] font-semibold text-ink outline-none"
           />
         ),
       },
@@ -249,22 +251,23 @@ export function MasterTables() {
 
   return (
     <div className="space-y-6">
-      <div className="zz-rise relative z-40 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">Tables</div>
-          <h1 className="mt-1.5 font-display text-[clamp(28px,4vw,44px)] font-extrabold leading-none tracking-[-0.035em] text-ink">Tables</h1>
-          <p className="mt-3 max-w-[60ch] text-ink-2">Records other systems resolve to. Manual lists welcome too.</p>
-        </div>
-        {sourceOpts.length > 0 && !external && (
-          <div className="w-60"><ComboSelect options={sourceOpts} value={null} placeholder="import from source…" onPick={derive} /></div>
-        )}
-        {external && sourceOpts.length > 0 && (
-          <div className="flex items-end gap-2">
-            <div className="w-44"><ComboSelect options={sourceOpts} value={idOpt} placeholder="id column…" onPick={setIdOpt} /></div>
-            <div className="w-44"><ComboSelect options={sourceOpts} value={nameOpt} placeholder="name column…" onPick={setNameOpt} /></div>
-            <Button size="sm" disabled={!idOpt || !nameOpt || busy} onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}>Import</Button>
-          </div>
-        )}
+      <div className="relative z-40">
+        <PageHeader
+          kicker="Master data"
+          title="Tables"
+          lede="Records other systems resolve to. Manual lists welcome too."
+          action={
+            sourceOpts.length > 0 && !external ? (
+              <div className="w-60"><ComboSelect options={sourceOpts} value={null} placeholder="import from source…" onPick={derive} /></div>
+            ) : external && sourceOpts.length > 0 ? (
+              <div className="flex items-end gap-2">
+                <div className="w-44"><ComboSelect options={sourceOpts} value={idOpt} placeholder="id column…" onPick={setIdOpt} /></div>
+                <div className="w-44"><ComboSelect options={sourceOpts} value={nameOpt} placeholder="name column…" onPick={setNameOpt} /></div>
+                <Button size="sm" disabled={!idOpt || !nameOpt || busy} onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}>Import</Button>
+              </div>
+            ) : null
+          }
+        />
       </div>
 
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
@@ -281,22 +284,22 @@ export function MasterTables() {
         />
       </div>
 
-      <div className="zz-rise flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-line bg-surface px-5 py-4 font-mono text-[11px]" style={{ animationDelay: "100ms" }}>
+      <StatsBar animationDelay="100ms" className="font-mono text-[11px]">
         {engineer && (
           <>
-            <span className="text-ink-3">table <span className="text-ink">{dim.dimTable}</span></span>
-            <span className="text-ink-3">key <span className="text-ink">{dim.keyCol}</span></span>
+            <span className="text-ink-2">table <span className="text-ink">{dim.dimTable}</span></span>
+            <span className="text-ink-2">key <span className="text-ink">{dim.keyCol}</span></span>
           </>
         )}
-        <span className="text-ink-3">{list.length} record{list.length === 1 ? "" : "s"}</span>
-        <span className="text-ink-3">{fields.length} field{fields.length === 1 ? "" : "s"}</span>
+        <span className="text-ink-2 tabular-nums">{list.length} record{list.length === 1 ? "" : "s"}</span>
+        <span className="text-ink-2 tabular-nums">{fields.length} field{fields.length === 1 ? "" : "s"}</span>
         <div className="ml-auto flex items-center gap-4">
-          <span className="text-ink-3">{totalVariants.toLocaleString()} raw value{totalVariants === 1 ? "" : "s"} resolve here</span>
+          <span className="text-ink-2 tabular-nums">{totalVariants.toLocaleString()} raw value{totalVariants === 1 ? "" : "s"} resolve here</span>
           <Button variant="ghost" size="sm" disabled={!undo.canUndo} onClick={() => void undo.undo()}>
             ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
         </div>
-      </div>
+      </StatsBar>
 
       {notice && <div className="rounded-lg border border-line bg-accent-wash px-4 py-2.5 font-mono text-[12px] text-accent">{notice}</div>}
       {renameFlash && (
@@ -321,7 +324,7 @@ export function MasterTables() {
         <div className="flex flex-wrap items-center gap-3 rounded-t-lg border border-b-0 border-line bg-surface px-5 py-2.5">
           {sel.length === 0 ? (
             <span className="font-mono text-[11.5px] text-ink-3">
-              {list.length >= 2 ? "Tip — select two or more records to merge them into one." : ""}
+              {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
             </span>
           ) : (
             <>
@@ -425,7 +428,7 @@ export function MasterTables() {
                 <div className="mt-2 font-mono text-[11px] text-ink-3">loading…</div>
               ) : cached && cached.length ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {cached.map((raw) => <span key={raw} className="rounded-sm border border-line-2 bg-surface px-2 py-1 font-mono text-[11.5px] text-ink-2">{raw}</span>)}
+                  {cached.map((raw) => <Badge key={raw}>{raw}</Badge>)}
                 </div>
               ) : (
                 <div className="mt-2 font-mono text-[11px] text-ink-3">
