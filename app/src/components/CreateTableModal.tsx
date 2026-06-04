@@ -28,6 +28,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   const [external, setExternal] = useState<{ table: string; idColumn: string; nameColumn: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   const sources = useSources();
   const sourceOpts = useMemo(
@@ -43,20 +44,23 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     setName(""); setDescription(""); setMode(defaultMode);
     setColor(defaultTintFor(String(Date.now())));
     setSource(null); setExternal(null);
-    setError(null);
+    setError(null); setConfirmingDiscard(false);
   }, [open, defaultMode]);
 
-  // Esc to close
+  // Esc to close (or cancel the discard prompt if it's already showing)
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (confirmingDiscard) setConfirmingDiscard(false);
+        else requestClose();
+      }
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit()) void submit();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, name, mode, source, external]);
+  }, [open, name, mode, source, external, confirmingDiscard]);
 
   if (!open) return null;
   const monogram = (name.trim().charAt(0) || "?").toUpperCase();
@@ -67,6 +71,17 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     if (mode === "source") return !!(source?.table && source?.column);
     if (mode === "external_id") return !!(external?.table && external?.idColumn && external?.nameColumn);
     return true; // blank: name is enough
+  };
+
+  // Close request — checks dirty state and prompts to discard if so.
+  // Considered "dirty" when the user has typed a name, picked a source, or
+  // bound an external id. The optional description/colour aren't counted —
+  // a casual mode flip shouldn't trigger a guard.
+  const isDirty = (): boolean =>
+    name.trim().length > 0 || source !== null || external !== null;
+  const requestClose = (): void => {
+    if (isDirty()) setConfirmingDiscard(true);
+    else onClose();
   };
 
   const submit = async (): Promise<void> => {
@@ -94,7 +109,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-6 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-6 backdrop-blur-sm" onClick={requestClose}>
       <div
         onClick={(e) => e.stopPropagation()}
         className="mt-[10vh] w-[520px] max-w-full overflow-hidden rounded-lg border border-line-2 bg-surface shadow-pop"
@@ -105,7 +120,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
         <div className="space-y-3 px-6 pb-5 pt-6">
           <div className="flex items-start justify-between">
             <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">New table</div>
-            <button type="button" onClick={onClose} aria-label="close" className="text-ink-3 hover:text-ink"><IconX className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={requestClose} aria-label="close" className="text-ink-3 hover:text-ink"><IconX className="h-3.5 w-3.5" /></button>
           </div>
 
           {/* identity */}
@@ -256,12 +271,29 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           )}
         </div>
 
-        {/* footer */}
-        <div className="flex items-center justify-end gap-2 border-t border-line bg-bg/40 px-6 py-3">
-          <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" onClick={() => void submit()} disabled={!canSubmit() || submitting}>
-            {submitting ? "Creating…" : "Create table"}
-          </Button>
+        {/* footer — swaps to a discard prompt if the user tries to close with
+            in-progress work, so backdrop / ESC / X / Cancel don't silently drop
+            it */}
+        <div className="flex items-center justify-between gap-2 border-t border-line bg-bg/40 px-6 py-3">
+          {confirmingDiscard ? (
+            <>
+              <span className="font-mono text-[12px] text-ink-2">Discard this table?</span>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setConfirmingDiscard(false)}>Keep editing</Button>
+                <Button size="sm" onClick={onClose}>Discard</Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <span />
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={requestClose}>Cancel</Button>
+                <Button size="sm" onClick={() => void submit()} disabled={!canSubmit() || submitting}>
+                  {submitting ? "Creating…" : "Create table"}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>,
