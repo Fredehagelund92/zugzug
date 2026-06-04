@@ -46,7 +46,7 @@ async function cleanup(): Promise<void> {
         ]},
         { label: "Owner", type: "text" },
       ],
-    }),
+    }, "u_verify"),
   );
   assert(blankId.startsWith(SCOPE), `dimId should start with scope; got ${blankId}`);
 
@@ -77,7 +77,7 @@ async function cleanup(): Promise<void> {
   // ─── 2. Validation: name collision ───────────────────────────────────────
   await step("collision returns NAME_TAKEN", async () => {
     try {
-      await createTable({ name: blankName, mode: "blank" });
+      await createTable({ name: blankName, mode: "blank" }, "u_verify");
       throw new Error("expected NAME_TAKEN");
     } catch (e) {
       assert(e instanceof CreateTableError && e.code === "NAME_TAKEN", `expected NAME_TAKEN, got ${(e as Error).message}`);
@@ -87,7 +87,7 @@ async function cleanup(): Promise<void> {
   // ─── 3. Validation: blank with empty name ────────────────────────────────
   await step("empty name returns INVALID", async () => {
     try {
-      await createTable({ name: "  ", mode: "blank" });
+      await createTable({ name: "  ", mode: "blank" }, "u_verify");
       throw new Error("expected INVALID");
     } catch (e) {
       assert(e instanceof CreateTableError && e.code === "INVALID", `expected INVALID, got ${(e as Error).message}`);
@@ -97,7 +97,7 @@ async function cleanup(): Promise<void> {
   // ─── 4. Validation: source mode without source picker ────────────────────
   await step("source without picker returns MISSING_PICKER or WAREHOUSE_OFFLINE", async () => {
     try {
-      await createTable({ name: `${SCOPE} no_pick`, mode: "source" });
+      await createTable({ name: `${SCOPE} no_pick`, mode: "source" }, "u_verify");
       throw new Error("expected error");
     } catch (e) {
       assert(e instanceof CreateTableError, `expected CreateTableError, got ${(e as Error).message}`);
@@ -109,8 +109,8 @@ async function cleanup(): Promise<void> {
   await step("legacy string[] options read as {label, color: null}", async () => {
     // Create a fresh dimension and a select field with empty options via the silent path
     const legacyName = `${SCOPE} legacy`;
-    const legacyId = await repo.addDimension(legacyName, [], { silent: true });
-    await repo.addField(legacyId, "Status", "select", undefined, { silent: true });
+    const legacyId = await repo.addDimension(legacyName, [], { silent: true }, "u_verify");
+    await repo.addField(legacyId, "Status", "select", undefined, { silent: true }, "u_verify");
     // Overwrite the options JSON with the LEGACY string[] shape to simulate pre-T5 data
     await pgRun(
       `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = 'status'`,

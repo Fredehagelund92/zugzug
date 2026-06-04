@@ -8,7 +8,7 @@ import type { OptionDef } from "./repo.ts";
 async function ensureField(dimId: string, label: string, type: string, options?: string[]) {
   try {
     const opts: OptionDef[] | undefined = options?.map((label) => ({ label, color: null }));
-    const r = await addField(dimId, label, type, opts);
+    const r = await addField(dimId, label, type, opts, {}, "u_verify");
     return r?.field ?? label.toLowerCase().replace(/\s+/g, "_");
   } catch {
     return label.toLowerCase().replace(/\s+/g, "_");
@@ -16,7 +16,7 @@ async function ensureField(dimId: string, label: string, type: string, options?:
 }
 
 async function ensureOption(dimId: string, field: string, label: string) {
-  try { await addColumnOption(dimId, field, label); } catch { /* exists */ }
+  try { await addColumnOption(dimId, field, label, null, {}, "u_verify"); } catch { /* exists */ }
 }
 
 const COUNTRY_REGIONS: Record<string, string> = {
