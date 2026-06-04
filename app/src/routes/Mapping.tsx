@@ -3,7 +3,7 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
-import { DimensionPicker } from "../components/DimensionPicker";
+import { TablePicker } from "../components/TablePicker";
 import { NoDimensionsYet } from "../components/NoDimensionsYet";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
@@ -183,7 +183,7 @@ function MappingInner() {
 
       {/* dimension picker — choose master data, or create a new one */}
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
-        <DimensionPicker dims={dims} activeId={seedId} onSelect={selectSeed} onCreate={async (name, keyKind) => selectSeed(await addDimension(name, keyKind))} />
+        <TablePicker dims={dims} activeId={seedId} onSelect={selectSeed} onCreate={async (name, keyKind) => selectSeed(await addDimension(name, keyKind))} />
       </div>
 
       {/* coverage + (engineer-only) target tables */}
