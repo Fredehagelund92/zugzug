@@ -520,14 +520,14 @@ export async function listDimensions(): Promise<DimensionMeta[]> {
             key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} ORDER BY label`,
   );
-  const out: DimensionMeta[] = [];
-  for (const m of metas) {
-    const r = await pgGet<{ n: number }>(
-      `SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`,
-    ).catch(() => null);
-    out.push({ ...m, rows: Number(r?.n ?? 0) });
-  }
-  return out;
+  const counts = await Promise.all(
+    metas.map((m) =>
+      pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`)
+        .catch(() => null),
+    ),
+  );
+
+  return metas.map((m, i) => ({ ...m, rows: Number(counts[i]?.n ?? 0) }));
 }
 
 export async function getDimension(id: string): Promise<MappingDimension | null> {
