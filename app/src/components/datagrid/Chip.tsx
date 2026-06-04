@@ -1,9 +1,14 @@
 import { cx } from "../../lib/cx";
 import { bucket as bucketFor, type Bucket } from "./bucket";
+import type { PaletteName } from "../../lib/palette";
+import { PALETTE } from "../../lib/palette";
 
-/* Chip — single-select rendering. Pass `bucket` explicitly to override the
-   default label-hash (Mapping uses this for semantic status chips: mapped=ok,
-   skipped=neutral, new=warn). When omitted, derived from the label. */
+/* Chip — two coexisting modes:
+   1. Status chip — `bucket` (or label-hash-derived). Used by Mapping for
+      Mapped/Skipped/New status. Semantic palette of 5 buckets.
+   2. Option chip — `color` (curated 7-tint palette). Used by SelectCell and
+      OptionBuilder for predetermined select-field options.
+   `color` wins over `bucket` when both are passed. */
 
 const STYLES: Record<Bucket, string> = {
   "chip-1": "bg-ok-soft text-ok",
@@ -13,9 +18,33 @@ const STYLES: Record<Bucket, string> = {
   "chip-5": "border-line-2 bg-surface-2 text-ink-2",
 };
 
-export function Chip({
-  label, bucket, className, dot,
-}: { label: string; bucket?: Bucket; className?: string; dot?: boolean }) {
+interface ChipProps {
+  label: string;
+  /** Curated palette tint (option chips). Wins over `bucket` when set. */
+  color?: PaletteName | null;
+  /** Semantic status bucket (status chips). Derived from label if omitted. */
+  bucket?: Bucket;
+  className?: string;
+  /** Renders a small leading dot. Implied when `color` is set. */
+  dot?: boolean;
+}
+
+export function Chip({ label, color, bucket, className, dot }: ChipProps) {
+  if (color) {
+    const tint = PALETTE[color];
+    return (
+      <span
+        className={cx(
+          "inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 font-mono text-[10.5px]",
+          className,
+        )}
+        style={{ background: tint.wash, color: tint.fg, borderColor: tint.border }}
+      >
+        <span className="h-1.5 w-1.5 rounded-pill" style={{ background: tint.bg }} />
+        {label}
+      </span>
+    );
+  }
   const b = bucket ?? bucketFor(label);
   return (
     <span className={cx(

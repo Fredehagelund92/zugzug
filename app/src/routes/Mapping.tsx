@@ -3,13 +3,14 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
-import { DimensionPicker } from "../components/DimensionPicker";
-import { NoDimensionsYet } from "../components/NoDimensionsYet";
+import { TablePicker } from "../components/TablePicker";
+import { CreateTableModal } from "../components/CreateTableModal";
+import { NoTablesYet } from "../components/NoTablesYet";
 import { IconCheck, IconX, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import type { MappingValue } from "../data";
-import { useDimensions, addDimension, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
+import { useDimensions, useDrafts, saveDraft, discardDraft, listDrafts, commit, dkey, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useGridCursor, useUndoStack, Chip } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
@@ -30,7 +31,7 @@ const COLS = "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_
 
 export function Mapping() {
   const dims = useDimensions();
-  if (dims.length === 0) return <NoDimensionsYet from="mapping" />;
+  if (dims.length === 0) return <NoTablesYet from="mapping" />;
   return <MappingInner />;
 }
 
@@ -40,6 +41,7 @@ function MappingInner() {
   const { engineer } = useEngineerMode();
   const [seedId, setSeedId] = useState(dims[0].id);
   const seed = dims.find((s) => s.id === seedId) ?? dims[0];
+  const [createOpen, setCreateOpen] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
   const [filter, setFilter] = useState<Filter>("new");
   const [open, setOpen] = useState<string | null>(null);
@@ -120,7 +122,7 @@ function MappingInner() {
   const visibleRows = visible;            // alias for clarity
   const COLS_FOR_CURSOR: ColumnDef<MappingValue>[] = [
     { field: "value", label: "Source", type: "text", editable: false },
-    { field: "target", label: "Master", type: "text", editable: true },
+    { field: "target", label: "Record", type: "text", editable: true },
     { field: "status", label: "Status", type: "text", editable: false },
   ];
   const cursor = useGridCursor<MappingValue>({
@@ -183,7 +185,17 @@ function MappingInner() {
 
       {/* dimension picker — choose master data, or create a new one */}
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
-        <DimensionPicker dims={dims} activeId={seedId} onSelect={selectSeed} onCreate={async (name, keyKind) => selectSeed(await addDimension(name, keyKind))} />
+        <TablePicker
+          dims={dims}
+          activeId={seedId}
+          onSelect={selectSeed}
+          onCreateRequested={() => setCreateOpen(true)}
+        />
+        <CreateTableModal
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(id) => { selectSeed(id); }}
+        />
       </div>
 
       {/* coverage + (engineer-only) target tables */}
@@ -252,7 +264,7 @@ function MappingInner() {
 
         {/* column header */}
         <div className={cx(COLS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
-          <span /><span>Source value · where it's seen</span><span /><span>Master {seed.dimension.toLowerCase()}</span><span>Confidence</span><span>Status</span>
+          <span /><span>Source value · where it's seen</span><span /><span>{seed.dimension.toLowerCase()} record</span><span>Confidence</span><span>Status</span>
         </div>
 
         {/* rows */}
@@ -325,7 +337,7 @@ function MappingInner() {
               {focused && !isOpen && (
                 <div className="border-b border-line bg-surface-2/40 px-4 py-1.5 pl-[52px] font-mono text-[10.5px] text-ink-3">
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">A</kbd> accept</span>
-                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">M</kbd> master</span>
+                  <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">M</kbd> record</span>
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">S</kbd> skip</span>
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">R</kbd> reset</span>
                   <span className="mr-3"><kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">?</kbd> all shortcuts</span>

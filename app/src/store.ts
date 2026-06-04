@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { MappingDimension } from "./data";
+import type { MappingDimension, OptionDef, PaletteName } from "./data";
 
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
@@ -102,6 +102,52 @@ export async function setPreferences(p: Preferences): Promise<void> {
 /* ---- mutations (write through the API, then refetch the affected slice) ---- */
 export async function addDimension(name: string, keyKind?: "slug" | "external_id"): Promise<string> {
   const { id } = await api<{ id: string }>("/dimensions", { method: "POST", body: JSON.stringify({ name, keyKind }) });
+  await refreshDims();
+  await refreshSources();
+  await refreshAudit();
+  emit();
+  return id;
+}
+
+export type CreateTableMode = "blank" | "source" | "external_id";
+
+export interface ColumnDraft {
+  label: string;
+  type: "text" | "number" | "boolean" | "date" | "select";
+  options?: OptionDef[];
+}
+
+export interface CreateTableInput {
+  name: string;
+  description?: string | null;
+  color?: PaletteName | null;
+  mode: CreateTableMode;
+  columns?: ColumnDraft[];
+  source?: { table: string; column: string };
+  external?: { table: string; idColumn: string; nameColumn: string };
+}
+
+export interface CreateTableError {
+  error: string;
+  code: "NAME_TAKEN" | "WAREHOUSE_OFFLINE" | "MISSING_PICKER" | "INVALID";
+}
+
+/** Create a table via the orchestrator. Returns the new dim id on success.
+ *  Throws an Error with .message set to the server's `error` string and a
+ *  numeric `.code` attached for the modal to render an inline banner. */
+export async function createTable(input: CreateTableInput): Promise<string> {
+  const res = await fetch(`/api/tables`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` })) as CreateTableError;
+    const e = new Error(body.error ?? "create failed") as Error & { code?: string };
+    e.code = body.code;
+    throw e;
+  }
+  const { id } = (await res.json()) as { id: string };
   await refreshDims();
   await refreshSources();
   await refreshAudit();
@@ -217,7 +263,7 @@ export async function fetchVariants(dimId: string, key: string): Promise<string[
 
 /** Add an enrichment attribute column to a dimension (text|number|boolean|date|select).
  *  For `select`, `options` seeds the allowed list; otherwise omit. */
-export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<void> {
+export async function addField(dimId: string, label: string, type = "text", options?: OptionDef[]): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
     method: "POST",
     body: JSON.stringify({ label, type, options }),
@@ -227,10 +273,10 @@ export async function addField(dimId: string, label: string, type = "text", opti
 
 /** Append a new option to a select column's allowed list. Refetches the
  *  dimension so subsequent picks see the new option. Returns the new list. */
-export async function addColumnOption(dimId: string, field: string, label: string): Promise<string[]> {
-  const res = await api<{ options: string[] }>(
+export async function addColumnOption(dimId: string, field: string, label: string, color: PaletteName | null = null): Promise<OptionDef[]> {
+  const res = await api<{ options: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}/options`,
-    { method: "POST", body: JSON.stringify({ label }) },
+    { method: "POST", body: JSON.stringify({ label, color }) },
   );
   await refreshDims();
   emit();
@@ -246,9 +292,9 @@ export async function renameColumn(dimId: string, field: string, newLabel: strin
 
 export async function changeColumnType(
   dimId: string, field: string, newType: string,
-  options?: string[], coerceInvalidToNull = false,
-): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
-  const res = await api<{ ok: boolean; invalidCount?: number; options?: string[] }>(
+  options?: OptionDef[], coerceInvalidToNull = false,
+): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
+  const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
     { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull }) },
   );

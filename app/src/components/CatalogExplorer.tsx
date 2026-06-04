@@ -107,7 +107,7 @@ export function CatalogExplorer({ dims, onClose }: { dims: MappingDimension[]; o
                             {wired[key] ? (
                               <span className="flex items-center justify-end gap-1.5 font-mono text-[10.5px] text-ok"><IconArrowRight className="h-3 w-3" />{wired[key].n === null ? `seeding ${wired[key].dim}…` : `${wired[key].dim} · seeded ${wired[key].n}`}</span>
                             ) : (
-                              <ComboSelect options={dimOptions} value={null} placeholder="Add to dimension…" onPick={(d) => wire(t.table, c, d)} />
+                              <ComboSelect options={dimOptions} value={null} placeholder="add to table…" onPick={(d) => wire(t.table, c, d)} />
                             )}
                           </div>
                         );

@@ -32,6 +32,15 @@
   --maxw: 1180px;
   --wide: 1320px;
   --ease: cubic-bezier(.4,0,.2,1);
+  /* Per-table palette — appended outside the generated block; see palette.ts.
+     Move upstream once the brand guide adds a 'tints' export. */
+  --tint-rose:   ***REMOVED***D6336C;
+  --tint-amber:  ***REMOVED***F0A323;
+  --tint-mint:   ***REMOVED***30A46C;
+  --tint-teal:   ***REMOVED***1FA9B8;
+  --tint-indigo: ***REMOVED***6E63E0;
+  --tint-violet: ***REMOVED***A24EE0;
+  --tint-slate:  ***REMOVED***6B7A95;
 }
 [data-theme="light"]{
   --bg: ***REMOVED***F4F6FC;
@@ -54,4 +63,13 @@
   --brand-paper: ***REMOVED***F5F7FC;
   --brand-graphite: ***REMOVED***353D52;
   --brand-mist: ***REMOVED***C4CCDC;
+  /* Per-table palette — appended outside the generated block; see palette.ts.
+     Move upstream once the brand guide adds a 'tints' export. */
+  --tint-rose:   ***REMOVED***D6336C;
+  --tint-amber:  ***REMOVED***C68410;
+  --tint-mint:   ***REMOVED***2A8C5E;
+  --tint-teal:   ***REMOVED***1B8E9C;
+  --tint-indigo: ***REMOVED***5A50C7;
+  --tint-violet: ***REMOVED***8A3FBA;
+  --tint-slate:  ***REMOVED***57637C;
 }

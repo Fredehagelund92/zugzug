@@ -12,7 +12,37 @@ import { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
 import { env, pg } from "./env.ts";
 
 /* ---- shapes (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
-export interface FieldDef { field: string; label: string; type: string; options?: string[] }
+
+/** Curated palette token. Mirror of app/src/lib/palette.ts so the server can
+ *  validate inbound values without a shared module. */
+export type PaletteName = "rose" | "amber" | "mint" | "teal" | "indigo" | "violet" | "slate";
+const PALETTE_NAMES: PaletteName[] = ["rose", "amber", "mint", "teal", "indigo", "violet", "slate"];
+
+export interface OptionDef { label: string; color: PaletteName | null }
+
+/** Read on-disk option JSON in both shapes. Legacy `string[]` lifts to
+ *  `[{ label, color: null }]`; the new `{ label, color }` shape passes through.
+ *  Non-array / malformed JSON returns `undefined`. */
+export function parseOptions(raw: unknown): OptionDef[] | undefined {
+  let arr: unknown = raw;
+  if (typeof arr === "string" && arr.length > 0) {
+    try { arr = JSON.parse(arr); } catch { return undefined; }
+  }
+  if (!Array.isArray(arr)) return undefined;
+  return arr.map((o) => {
+    if (typeof o === "string") return { label: o, color: null };
+    if (o && typeof o === "object" && typeof (o as { label?: unknown }).label === "string") {
+      const color = (o as { color?: unknown }).color;
+      return {
+        label: (o as { label: string }).label,
+        color: typeof color === "string" && PALETTE_NAMES.includes(color as PaletteName) ? color as PaletteName : null,
+      };
+    }
+    return { label: String(o), color: null };
+  });
+}
+
+export interface FieldDef { field: string; label: string; type: string; options?: OptionDef[] }
 export interface CanonicalValue { key: string; label: string; variants?: number; fields?: Record<string, string | null>; unresolved?: boolean }
 export interface SourceOccurrence { table: string; column: string; rows: number }
 export interface MappingValue {
@@ -40,6 +70,8 @@ export interface SourceInfo {
 export interface SchemaFacet { schema: string; columns: number; unmapped: number; missing: number }
 export interface CatalogTable { schema: string; table: string; columns: string[] }
 export interface MappingDimension extends DimensionMeta {
+  description: string | null;
+  color: PaletteName | null;
   canonical: CanonicalValue[];
   values: MappingValue[];
   fields: FieldDef[];
@@ -277,7 +309,8 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
 }
 
 /** Register a warehouse column as a source for a dimension (idempotent). */
-export async function addSource(dimId: string, table: string, column: string): Promise<void> {
+export async function addSource(dimId: string, table: string, column: string, opts: { silent?: boolean } = {}): Promise<void> {
+  void opts;
   await pgRun(
     `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
      VALUES ($1, $2, $3) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
@@ -383,7 +416,7 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *  the ID column: each distinct ID seeds a canonical keyed by the raw ID (no slug),
  *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
  *  the name resolves live on read. Returns how many canonical records resulted. */
-export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string): Promise<{ derived: number }> {
+export async function deriveCanonical(dimId: string, table: string, column: string, nameColumn?: string, opts: { silent?: boolean } = {}): Promise<{ derived: number }> {
   const meta = await get<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1`, [dimId]);
@@ -412,7 +445,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
       await run(`UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
         [table, column, nameColumn, dimId]);
     }
-    await appendAudit("Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
+    if (!opts.silent) await appendAudit("Derived canonical", `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`);
     return { derived: ids.length };
   }
 
@@ -425,7 +458,7 @@ export async function deriveCanonical(dimId: string, table: string, column: stri
   }
   await bulkInsert(`INSERT INTO ${cq(meta.dimTable)} (${key}, label)`, [...dimByKey.entries()], `ON CONFLICT (${key}) DO NOTHING`);
   await bulkInsert(`INSERT INTO ${cq(meta.mapTable)} (raw, ${key})`, mapPairs, `ON CONFLICT (raw) DO NOTHING`);
-  await appendAudit("Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
+  if (!opts.silent) await appendAudit("Derived canonical", `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`);
   return { derived: dimByKey.size };
 }
 
@@ -488,11 +521,18 @@ export async function listDimensions(): Promise<DimensionMeta[]> {
 
 export async function getDimension(id: string): Promise<MappingDimension | null> {
   const meta = await pgGet<
-    Omit<DimensionMeta, "rows"> & { nameTable: string | null; nameIdCol: string | null; nameCol: string | null }
+    Omit<DimensionMeta, "rows"> & {
+      nameTable: string | null;
+      nameIdCol: string | null;
+      nameCol: string | null;
+      description: string | null;
+      color: string | null;
+    }
   >(
     `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable",
             key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind",
-            name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol"
+            name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol",
+            description, color
      FROM ${pg("dimension")} WHERE id = $1`, [id],
   );
   if (!meta) return null;
@@ -554,8 +594,19 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
   ).catch(() => null);
   const values = await scanValues(id, meta);
-  const { nameTable, nameIdCol, nameCol, ...metaOut } = meta;
-  return { ...metaOut, rows: Number(rowsRow?.n ?? 0), canonical, values, fields };
+  const { nameTable, nameIdCol, nameCol, description, color, ...metaOut } = meta;
+  const safeColor = typeof color === "string" && (PALETTE_NAMES as readonly string[]).includes(color)
+    ? color as PaletteName
+    : null;
+  return {
+    ...metaOut,
+    description: description ?? null,
+    color: safeColor,
+    rows: Number(rowsRow?.n ?? 0),
+    canonical,
+    values,
+    fields,
+  };
 }
 
 /** Distinct warehouse values for a dimension WITH provenance, tagged mapped/new
@@ -648,7 +699,7 @@ async function scanValues(
 export async function addDimension(
   name: string,
   sources: SourceDef[] = [],
-  opts: { keyKind?: "slug" | "external_id" } = {},
+  opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
 ): Promise<string> {
   const id = slug(name);
   if (!id) return id;
@@ -666,10 +717,12 @@ export async function addDimension(
        VALUES ($1, $2, $3, $4, $5, $6, current_timestamp)`,
       [id, name.trim(), dimTable, mapTable, keyCol, keyKind],
     );
-    await appendAudit(
-      "Created dimension",
-      `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`,
-    );
+    if (!opts.silent) {
+      await appendAudit(
+        "Created dimension",
+        `${name.trim()} → dim_${id} + map_${id}${keyKind === "external_id" ? " (external-ID key)" : ""}`,
+      );
+    }
   }
   for (const s of sources) {
     await pgRun(
@@ -761,13 +814,12 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
     `SELECT field, label, type, options FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
-  return rows.map((r) => {
-    let opts: string[] | undefined;
-    if (typeof r.options === "string" && r.options.length > 0) {
-      try { const p = JSON.parse(r.options); if (Array.isArray(p)) opts = p as string[]; } catch {}
-    }
-    return { field: r.field, label: r.label, type: r.type, options: opts };
-  });
+  return rows.map((r) => ({
+    field: r.field,
+    label: r.label,
+    type: r.type,
+    options: parseOptions(r.options),
+  }));
 }
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
@@ -778,7 +830,13 @@ const SQL_TYPE: Record<string, string> = { text: "VARCHAR", number: "NUMERIC", b
  *  text | number | boolean | date | select. Select columns store an ordered
  *  option list in `dimension_field.options` (JSON); the dim_ column is VARCHAR
  *  (the value IS the option label). */
-export async function addField(dimId: string, label: string, type = "text", options?: string[]): Promise<{ field: string } | null> {
+export async function addField(
+  dimId: string,
+  label: string,
+  type = "text",
+  options?: OptionDef[],
+  opts: { silent?: boolean } = {},
+): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
   const t       = SQL_TYPE[type] ? type : (type === "select" ? "select" : "text");
@@ -786,13 +844,15 @@ export async function addField(dimId: string, label: string, type = "text", opti
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
   const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
-  const opts = t === "select" ? JSON.stringify(options ?? []) : null;
+  const optsJson = t === "select" ? JSON.stringify(options ?? []) : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at)
      VALUES ($1, $2, $3, $4, $5, current_timestamp) ON CONFLICT (dim_id, field) DO NOTHING`,
-    [dimId, field, label.trim(), t, opts],
+    [dimId, field, label.trim(), t, optsJson],
   );
-  await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
+  if (!opts.silent) {
+    await appendAudit("Added field", `${label.trim()} (${field}, ${t}) → ${m.dimTable}`);
+  }
   return { field };
 }
 
@@ -812,9 +872,12 @@ export async function renameColumn(dimId: string, field: string, newLabel: strin
  *  the new type; returns { ok: false, invalidCount } when N cells would
  *  silently null. Caller decides whether to retry with coerceInvalidToNull. */
 export async function changeColumnType(
-  dimId: string, field: string, newType: string,
-  options?: string[], coerceInvalidToNull = false,
-): Promise<{ ok: boolean; invalidCount?: number; options?: string[] }> {
+  dimId: string,
+  field: string,
+  newType: string,
+  options?: OptionDef[],
+  coerceInvalidToNull = false,
+): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const f = (await listFields(dimId)).find((x) => x.field === field);
@@ -831,8 +894,9 @@ export async function changeColumnType(
     if (r.v == null || r.v === "") { parsed.push({ k: r.k, v: null, bad: false }); continue; }
     if (newType === "text")   { parsed.push({ k: r.k, v: r.v, bad: false }); continue; }
     if (newType === "select") {
-      const collected = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))];
-      parsed.push({ k: r.k, v: r.v, bad: !collected.includes(r.v) });
+      const collected: OptionDef[] = options ?? [...new Set(rows.filter((x) => x.v).map((x) => x.v!))].map((label) => ({ label, color: null }));
+      const ok = collected.some((o) => o.label === r.v);
+      parsed.push({ k: r.k, v: r.v, bad: !ok });
       continue;
     }
     if (newType === "number") {
@@ -861,10 +925,11 @@ export async function changeColumnType(
     : newType === "boolean" ? "BOOLEAN"
     : newType === "date"    ? "DATE"
     : "VARCHAR";
-  const tmp          = `${field}__tmp_${Date.now().toString(36)}`;
-  const finalOptions = newType === "select"
-    ? (options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))])
-    : undefined;
+  const tmp = `${field}__tmp_${Date.now().toString(36)}`;
+  let finalOptions: OptionDef[] | undefined;
+  if (newType === "select") {
+    finalOptions = options ?? [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))].map((label) => ({ label, color: null }));
+  }
 
   await pgTx(async ({ run }) => {
     await run(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN ${qid(tmp)} ${newSql}`);
@@ -929,17 +994,25 @@ export async function setGridLayout(userId: string, dimId: string, config: GridL
 /** Append a new option to a select column's options list. No-op if the option
  *  already exists (case-sensitive). Returns the resulting options list.
  *  Stored as a JSON string in a VARCHAR column — see drizzle/migrations/0000_baseline.sql for rationale. */
-export async function addColumnOption(dimId: string, field: string, label: string): Promise<{ options: string[] } | null> {
+export async function addColumnOption(
+  dimId: string,
+  field: string,
+  label: string,
+  color: PaletteName | null = null,
+  opts: { silent?: boolean } = {},
+): Promise<{ options: OptionDef[] } | null> {
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f || f.type !== "select") return null;
   const existing = f.options ?? [];
-  if (existing.includes(label)) return { options: existing };
-  const next = [...existing, label];
+  if (existing.some((o) => o.label === label)) return { options: existing };
+  const next: OptionDef[] = [...existing, { label, color }];
   await pgRun(
     `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`,
     [JSON.stringify(next), dimId, field],
   );
-  await appendAudit("Added option", `${label} → ${field}`);
+  if (!opts.silent) {
+    await appendAudit("Added field option", `${field} += "${label}"${color ? ` (${color})` : ""}`);
+  }
   return { options: next };
 }
 
