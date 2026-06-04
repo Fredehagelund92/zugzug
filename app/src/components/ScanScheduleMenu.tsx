@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { cx } from "../lib/cx";
 
 /* ScanScheduleMenu — a small clock-icon button that opens a popover with
@@ -21,6 +21,35 @@ export function ScanScheduleMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<HTMLButtonElement[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      itemRefs.current[0]?.focus();
+    }
+  }, [open]);
+
+  const onMenuKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = itemRefs.current.filter(Boolean);
+    if (items.length === 0) return;
+    const i = items.findIndex((el) => el === document.activeElement);
+    if (e.key === "ArrowDown") {
+      items[(i + 1) % items.length]?.focus();
+      e.preventDefault();
+    }
+    if (e.key === "ArrowUp") {
+      items[(i - 1 + items.length) % items.length]?.focus();
+      e.preventDefault();
+    }
+    if (e.key === "Home") {
+      items[0]?.focus();
+      e.preventDefault();
+    }
+    if (e.key === "End") {
+      items[items.length - 1]?.focus();
+      e.preventDefault();
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -70,14 +99,18 @@ export function ScanScheduleMenu({
       {open && (
         <div
           role="menu"
+          onKeyDown={onMenuKey}
           className="zz-pop-in absolute right-0 z-50 mt-1 w-40 overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
         >
           <ul className="py-1">
-            {OPTIONS.map((o) => (
+            {OPTIONS.map((o, idx) => (
               <li key={o.value ?? "off"}>
                 <button
                   type="button"
                   role="menuitem"
+                  ref={(el) => {
+                    if (el) itemRefs.current[idx] = el;
+                  }}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
