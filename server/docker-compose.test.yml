@@ -1,0 +1,14 @@
+services:
+  pg:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zugzug
+      POSTGRES_PASSWORD: zugzug
+      POSTGRES_DB: zugzug_test
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zugzug"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
