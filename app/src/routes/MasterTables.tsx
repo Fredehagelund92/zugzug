@@ -3,7 +3,7 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
 import { ComboSelect } from "../components/ComboSelect";
-import { DimensionPicker } from "../components/DimensionPicker";
+import { TablePicker } from "../components/TablePicker";
 import { NoDimensionsYet } from "../components/NoDimensionsYet";
 import { IconPlus, IconX, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
@@ -270,7 +270,7 @@ export function MasterTables() {
       </div>
 
       <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
-        <DimensionPicker dims={dims} activeId={activeId}
+        <TablePicker dims={dims} activeId={activeId}
           onSelect={(id) => { setDimId(id); reset(); setDraft(""); }}
           onCreate={async (name, keyKind) => { const id = await addDimension(name, keyKind); setDimId(id); reset(); setDraft(""); }} />
       </div>
