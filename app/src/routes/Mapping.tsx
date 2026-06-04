@@ -25,6 +25,17 @@ import type { ColumnDef } from "../components/datagrid";
 type RStatus = "mapped" | "new" | "skipped";
 type ValueState = Record<string, { target: string | null; status: RStatus }>;
 type Filter = "new" | "all" | "mapped";
+type ViewMode = "single" | "all";
+type CrossRow = {
+  dimId: string;
+  dimName: string;
+  dimRows: number;
+  raw: string;
+  suggestion: string | null;
+  confidence: number;
+  status: RStatus;
+  target: string | null;
+};
 
 const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
 const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
@@ -71,6 +82,8 @@ function MappingInner() {
   const [createOpen, setCreateOpen] = useState(false);
   const [sel, setSel] = useState<string[]>([]);
   const [filter, setFilter] = useSessionState<Filter>("zz:mapping:filter", "new");
+  const [viewMode, setViewMode] = useSessionState<ViewMode>("zz:mapping:viewMode", "single");
+  const [crossCursor, setCrossCursor] = useState<{ dimId: string; raw: string } | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
@@ -107,6 +120,53 @@ function MappingInner() {
     for (const v of seed.values) c[state[v.value]?.status ?? "new"]++;
     return c;
   }, [seed, state]);
+
+  // every value across every dimension, normalized into one queue ranked
+  // by impact (unmapped × log10(rows) per-dim, then by confidence ascending).
+  // drives the cross-dim inbox view.
+  const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
+  const crossDimRows = useMemo<CrossRow[]>(() => {
+    const dimScore = new Map<string, number>();
+    for (const d of dims) {
+      let unmapped = 0;
+      for (const v of d.values) {
+        const draft = allDrafts[dkey(d.id, v.value)];
+        const status = draft ? draft.status : (v.current ? "mapped" : "new");
+        if (status === "new") unmapped++;
+      }
+      dimScore.set(d.id, unmapped * Math.log10(Math.max(10, d.rows)));
+    }
+    const out: CrossRow[] = [];
+    for (const d of dims) {
+      for (const v of d.values) {
+        const draft = allDrafts[dkey(d.id, v.value)];
+        const status: RStatus = draft ? draft.status : (v.current ? "mapped" : "new");
+        out.push({
+          dimId: d.id, dimName: d.dimension, dimRows: d.rows,
+          raw: v.value, suggestion: v.suggestion ?? null,
+          confidence: v.confidence ?? 0,
+          status, target: draft ? draft.targetLabel : v.current,
+        });
+      }
+    }
+    out.sort((a, b) => {
+      const sa = dimScore.get(a.dimId) ?? 0;
+      const sb = dimScore.get(b.dimId) ?? 0;
+      if (sa !== sb) return sb - sa;
+      return (a.confidence || 0) - (b.confidence || 0); // lower confidence first within a dim
+    });
+    return out;
+  }, [dims, allDrafts]);
+
+  const visibleCross = useMemo(
+    () => crossDimRows.filter((r) => filter === "all" || r.status === filter),
+    [crossDimRows, filter],
+  );
+  const crossCounts = useMemo(() => {
+    const c = { all: crossDimRows.length, new: 0, mapped: 0, skipped: 0 };
+    for (const r of crossDimRows) c[r.status]++;
+    return c;
+  }, [crossDimRows]);
 
   // unmapped count per dimension, sorted desc — drives the "next dimension with
   // work" handoff when the current dim's inbox is empty.
@@ -171,6 +231,97 @@ function MappingInner() {
     setTimeout(() => setAutoFlash(null), 2600);
   };
   const bulkApply = (fn: (v: string) => void) => { sel.forEach(fn); setSel([]); };
+
+  // ── cross-dimension inbox handlers ─────────────────────────────────────────
+  const keyForLabelIn = (dimId: string, label: string) => {
+    const d = dimById.get(dimId);
+    return d?.canonical.find((c) => c.label === label)?.key
+      ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  };
+  const stageMapCross = (dimId: string, raw: string, label: string) => {
+    const prev = allDrafts[dkey(dimId, raw)];
+    undo.push({
+      label: `match "${raw}" → ${label}`,
+      apply: () => saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label)),
+      inverse: () => prev
+        ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
+        : discardDraft(dimId, raw),
+    });
+    return saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label));
+  };
+  const acceptCross = (dimId: string, raw: string) => {
+    const d = dimById.get(dimId);
+    const r = d?.values.find((v) => v.value === raw);
+    if (!r || !r.suggestion) return;
+    void stageMapCross(dimId, raw, r.suggestion);
+    advanceCrossNext(dimId, raw);
+  };
+  const skipCross = (dimId: string, raw: string) => {
+    const prev = allDrafts[dkey(dimId, raw)];
+    undo.push({
+      label: `skip "${raw}"`,
+      apply: () => saveDraft(dimId, raw, "skipped", null, null),
+      inverse: () => prev
+        ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
+        : discardDraft(dimId, raw),
+    });
+    void saveDraft(dimId, raw, "skipped", null, null);
+    advanceCrossNext(dimId, raw);
+  };
+  const pickCross = (dimId: string, raw: string, label: string) => {
+    void stageMapCross(dimId, raw, label);
+    advanceCrossNext(dimId, raw);
+  };
+  function advanceCrossNext(fromDimId: string | null, fromRaw: string | null) {
+    const rows = visibleCross;
+    if (rows.length === 0) return;
+    const fromKey = fromDimId && fromRaw ? `${fromDimId}::${fromRaw}` : null;
+    const idx = fromKey ? rows.findIndex((r) => `${r.dimId}::${r.raw}` === fromKey) : -1;
+    for (let i = 1; i <= rows.length; i++) {
+      const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
+      if (rows[j].status === "new") {
+        setCrossCursor({ dimId: rows[j].dimId, raw: rows[j].raw });
+        return;
+      }
+    }
+  }
+
+  // staged drafts across ALL dimensions — drives the commit footer in all-mode
+  const stagedAllDrafts = useMemo(
+    () => Object.values(allDrafts).filter((d) => {
+      if (d.status !== "mapped") return false;
+      const dim = dimById.get(d.dimId);
+      const v = dim?.values.find((x) => x.value === d.raw);
+      return !!(v && !v.current);
+    }),
+    [allDrafts, dimById],
+  );
+  const approveAndCommitAll = async () => {
+    setCommitError(null);
+    const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
+    if (dimIds.length === 0) return;
+    try {
+      let total = 0, totalRows = 0;
+      for (const id of dimIds) {
+        const res = await commit(id);
+        total += res.committed; totalRows += res.rowsRecovered;
+      }
+      if (total === 0) return;
+      setFlash({ n: total, rows: totalRows }); setShowSql(false); setReview(false);
+      setTimeout(() => setFlash(null), 2800);
+    } catch (err) {
+      setCommitError(err instanceof Error ? err.message : "Commit failed across dimensions — check your connection and try again.");
+    }
+  };
+
+  // on switching to all-mode, drop the cursor on the first cross-dim "new" row
+  const focusedModeRef = useRef<ViewMode | null>(null);
+  useEffect(() => {
+    if (focusedModeRef.current === viewMode) return;
+    focusedModeRef.current = viewMode;
+    if (viewMode === "all" && !crossCursor) advanceCrossNext(null, null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   const visible = seed.values.filter((v) => filter === "all" || state[v.value]?.status === filter);
   const visIds = visible.map((v) => v.value);
@@ -273,38 +424,57 @@ function MappingInner() {
         </Button>
       </div>
 
-      {/* dimension picker — choose master data, or create a new one */}
-      <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
-        <TablePicker
-          dims={dims}
-          activeId={seedId}
-          onSelect={selectSeed}
-          onCreateRequested={() => setCreateOpen(true)}
-        />
-        <CreateTableModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={(id) => { selectSeed(id); }}
-        />
+      {/* view-mode toggle: focus one dimension, or work the cross-dim inbox */}
+      <div className="zz-rise flex items-center gap-1.5 rounded-lg border border-line bg-surface p-1 text-[12px] font-medium" style={{ animationDelay: "50ms" }}>
+        <button
+          type="button"
+          onClick={() => setViewMode("single")}
+          className={cx("flex-1 rounded-sm px-3 py-1.5 transition-colors", viewMode === "single" ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}
+        >Single dim · {seed.dimension}</button>
+        <button
+          type="button"
+          onClick={() => setViewMode("all")}
+          className={cx("flex-1 rounded-sm px-3 py-1.5 transition-colors", viewMode === "all" ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}
+        >All dimensions · {crossCounts.new} to resolve</button>
       </div>
 
-      {/* coverage + (engineer-only) target tables */}
-      <div className="zz-rise flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-line bg-surface px-5 py-4" style={{ animationDelay: "100ms" }}>
-        {engineer && (
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
-            <span className="text-ink-3">master <span className="text-ink">{seed.dimTable}</span></span>
-            <span className="text-ink-3">lookup <span className="text-ink">{seed.mapTable}</span></span>
-            <span className="text-ink-3">{seed.rows.toLocaleString()} rows · key <span className="text-ink">{seed.keyCol}</span></span>
+      {viewMode === "single" && (
+        <>
+          {/* dimension picker — choose master data, or create a new one */}
+          <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
+            <TablePicker
+              dims={dims}
+              activeId={seedId}
+              onSelect={selectSeed}
+              onCreateRequested={() => setCreateOpen(true)}
+            />
+            <CreateTableModal
+              open={createOpen}
+              onClose={() => setCreateOpen(false)}
+              onCreated={(id) => { selectSeed(id); }}
+            />
           </div>
-        )}
-        <div className={cx("flex items-center gap-3", engineer && "ml-auto")}>
-          <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2"><div className="h-full rounded-pill bg-accent transition-[width] duration-300" style={{ width: `${coverage}%` }} /></div>
-          <span className="font-mono text-[11px] text-ink-2 tabular-nums">{coverage}% mapped</span>
-          {counts.new > 0 && <Badge tone="warn" dot>{counts.new} need review</Badge>}
-        </div>
-      </div>
 
-      {/* workbench */}
+          {/* coverage + (engineer-only) target tables */}
+          <div className="zz-rise flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-line bg-surface px-5 py-4" style={{ animationDelay: "100ms" }}>
+            {engineer && (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 font-mono text-[11px]">
+                <span className="text-ink-3">master <span className="text-ink">{seed.dimTable}</span></span>
+                <span className="text-ink-3">lookup <span className="text-ink">{seed.mapTable}</span></span>
+                <span className="text-ink-3">{seed.rows.toLocaleString()} rows · key <span className="text-ink">{seed.keyCol}</span></span>
+              </div>
+            )}
+            <div className={cx("flex items-center gap-3", engineer && "ml-auto")}>
+              <div className="h-1.5 w-36 overflow-hidden rounded-pill bg-surface-2"><div className="h-full rounded-pill bg-accent transition-[width] duration-300" style={{ width: `${coverage}%` }} /></div>
+              <span className="font-mono text-[11px] text-ink-2 tabular-nums">{coverage}% mapped</span>
+              {counts.new > 0 && <Badge tone="warn" dot>{counts.new} need review</Badge>}
+            </div>
+          </div>
+        </>
+      )}
+
+      {viewMode === "single" && (
+      /* workbench — single-dim mode */
       <div className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
         ref={cursor.ref}
         tabIndex={0}
@@ -523,6 +693,184 @@ function MappingInner() {
           {showSql && staged.length > 0 && (
             <pre className="overflow-x-auto border-t border-line bg-bg px-5 py-4 font-mono text-[11.5px] leading-relaxed text-ink-2">{sql}</pre>
           )}
+        </div>
+      </div>
+      )}
+
+      {viewMode === "all" && <CrossDimInbox
+        rows={visibleCross}
+        counts={crossCounts}
+        filter={filter}
+        setFilter={setFilter}
+        cursor={crossCursor}
+        setCursor={setCrossCursor}
+        accept={acceptCross}
+        skip={skipCross}
+        pick={pickCross}
+        advanceNext={advanceCrossNext}
+        dimById={dimById}
+        stagedAllCount={stagedAllDrafts.length}
+        commitAll={approveAndCommitAll}
+        commitError={commitError}
+        setCommitError={setCommitError}
+        flash={flash}
+        undo={undo}
+      />}
+    </div>
+  );
+}
+
+interface CrossDimInboxProps {
+  rows: CrossRow[];
+  counts: { all: number; new: number; mapped: number; skipped: number };
+  filter: Filter;
+  setFilter: (f: Filter) => void;
+  cursor: { dimId: string; raw: string } | null;
+  setCursor: (c: { dimId: string; raw: string } | null) => void;
+  accept: (dimId: string, raw: string) => void;
+  skip: (dimId: string, raw: string) => void;
+  pick: (dimId: string, raw: string, label: string) => void;
+  advanceNext: (fromDimId: string | null, fromRaw: string | null) => void;
+  dimById: Map<string, import("../data").MappingDimension>;
+  stagedAllCount: number;
+  commitAll: () => void;
+  commitError: string | null;
+  setCommitError: (e: string | null) => void;
+  flash: { n: number; rows: number } | null;
+  undo: ReturnType<typeof useUndoStack>;
+}
+
+const COLS_CROSS = "grid grid-cols-[120px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
+
+function CrossDimInbox(p: CrossDimInboxProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const FILTERS: { k: Filter; label: string; n: number }[] = [
+    { k: "new", label: "Needs review", n: p.counts.new },
+    { k: "all", label: "All", n: p.counts.all },
+    { k: "mapped", label: "Mapped", n: p.counts.mapped },
+  ];
+  const curKey = p.cursor ? `${p.cursor.dimId}::${p.cursor.raw}` : null;
+  const curIdx = curKey ? p.rows.findIndex((r) => `${r.dimId}::${r.raw}` === curKey) : -1;
+
+  const move = (delta: 1 | -1) => {
+    if (p.rows.length === 0) return;
+    const next = curIdx < 0 ? 0 : Math.max(0, Math.min(p.rows.length - 1, curIdx + delta));
+    const r = p.rows[next];
+    p.setCursor({ dimId: r.dimId, raw: r.raw });
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      tabIndex={0}
+      className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); move(1); return; }
+        if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); move(-1); return; }
+        if (!p.cursor) return;
+        if (e.key === "a" || e.key === "A") { e.preventDefault(); p.accept(p.cursor.dimId, p.cursor.raw); return; }
+        if (e.key === "s" || e.key === "S") { e.preventDefault(); p.skip(p.cursor.dimId, p.cursor.raw); return; }
+        if (e.key === "n" || e.key === "N") { e.preventDefault(); p.advanceNext(p.cursor.dimId, p.cursor.raw); return; }
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); p.commitAll(); return; }
+      }}
+      style={{ animationDelay: "150ms" }}
+    >
+      {/* toolbar — sticky filter chips */}
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {FILTERS.map((f) => (
+            <button key={f.k} type="button" onClick={() => p.setFilter(f.k)}
+              className={cx("rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors", p.filter === f.k ? "bg-accent-wash text-accent" : "text-ink-3 hover:bg-hover hover:text-ink-2")}>
+              {f.label} <span className="opacity-60">{f.n}</span>
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
+          ranked by impact · J/K navigate · A accept · S skip · N next · ⌘↵ publish
+        </span>
+      </div>
+
+      {/* column header */}
+      <div className={cx(COLS_CROSS, "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3")}>
+        <span>Dimension</span><span>Source value</span><span /><span>Record</span><span>Confidence</span><span>Status</span>
+      </div>
+
+      {/* rows */}
+      {p.rows.length === 0 ? (
+        <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+          {p.filter === "new" ? "🎉 nothing left to reconcile across all dimensions" : "no values in this view"}
+        </div>
+      ) : p.rows.slice(0, 500).map((r) => {
+        const key = `${r.dimId}::${r.raw}`;
+        const focused = curKey === key;
+        const dim = p.dimById.get(r.dimId);
+        const options = dim?.canonical.map((c) => c.label) ?? [];
+        const external = dim?.keyKind === "external_id";
+        return (
+          <div
+            key={key}
+            className={cx(COLS_CROSS, "border-b border-line px-4 py-2.5 transition-colors hover:bg-hover", focused && "ring-1 ring-accent/60 bg-accent-wash/40")}
+            onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
+          >
+            <span><Chip label={r.dimName} bucket="chip-3" /></span>
+            <div className="min-w-0">
+              <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
+              <div className="font-mono text-[10px] text-ink-3">{r.dimRows.toLocaleString()} rows in warehouse</div>
+            </div>
+            <IconArrowRight className="h-4 w-4 text-ink-3" />
+            <ComboSelect
+              options={options} value={r.target}
+              suggestion={r.suggestion ?? undefined}
+              allowCreate={!external}
+              onPick={(t) => p.pick(r.dimId, r.raw, t)}
+            />
+            <div>
+              {r.confidence > 0 ? (
+                <div className="flex items-center gap-2">
+                  <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2"><div className={cx("h-full rounded-pill", confBar(r.confidence))} style={{ width: `${r.confidence}%` }} /></div>
+                  <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>{r.confidence}</span>
+                </div>
+              ) : <span className="font-mono text-[11px] text-ink-3">—</span>}
+            </div>
+            <div>{r.status === "mapped"
+              ? <Chip label="Mapped" bucket="chip-1" dot />
+              : r.status === "skipped"
+                ? <Chip label="Skipped" bucket="chip-5" />
+                : <Chip label="New" bucket="chip-2" dot />}</div>
+          </div>
+        );
+      })}
+
+      {/* footer — multi-dim commit */}
+      <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
+        {p.commitError && (
+          <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
+            <span>Commit failed — {p.commitError}</span>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>Dismiss</Button>
+              <Button size="sm" onClick={() => p.commitAll()}>Retry</Button>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <span className="font-mono text-[11px] text-ink-3">
+            {p.flash ? (
+              <span className="text-ok">✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published · {p.flash.rows.toLocaleString()} rows recovered</span>
+            ) : p.stagedAllCount > 0 ? (
+              <>{p.stagedAllCount} change{p.stagedAllCount === 1 ? "" : "s"} staged across dimensions, ready to publish</>
+            ) : (
+              <>nothing to publish yet — accept or merge values above to stage them</>
+            )}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" disabled={!p.undo.canUndo} onClick={() => void p.undo.undo()}>
+              ↶ Undo<span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+            </Button>
+            <Button size="sm" disabled={p.stagedAllCount === 0} onClick={() => p.commitAll()}>
+              Publish {p.stagedAllCount} change{p.stagedAllCount === 1 ? "" : "s"}
+              <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
