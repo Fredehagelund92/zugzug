@@ -224,7 +224,8 @@ export function MasterTables() {
   // stores attribute values in c.fields[field]; flatten before passing so the
   // default (row as Record<string,unknown>)[field] accessor finds row.region etc.
   const rowsForGrid = useMemo(
-    () => list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
+    () =>
+      list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
     [list],
   );
 

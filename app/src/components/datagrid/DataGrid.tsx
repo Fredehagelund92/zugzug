@@ -632,11 +632,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               role="columnheader"
               aria-colindex={idx + 1}
               aria-sort={
-                sort?.field === c.field
-                  ? sort.dir === "asc"
-                    ? "ascending"
-                    : "descending"
-                  : "none"
+                sort?.field === c.field ? (sort.dir === "asc" ? "ascending" : "descending") : "none"
               }
               className={cx(
                 "group relative flex items-center gap-1.5 px-3 py-2",

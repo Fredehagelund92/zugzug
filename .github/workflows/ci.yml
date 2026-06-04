@@ -1,0 +1,58 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run format:check
+      - run: bun run test
+
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: zugzug
+          POSTGRES_PASSWORD: zugzug
+          POSTGRES_DB: zugzug_test
+        ports:
+          - "55432:5432"
+        options: >-
+          --health-cmd "pg_isready -U zugzug"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 30
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run format:check
+      - run: bun run test
+        env:
+          DATABASE_URL: postgres://zugzug:zugzug@localhost:55432/zugzug_test
+          MOTHERDUCK_TOKEN: dummy-for-ci
+          GOOGLE_CLIENT_ID: dummy
+          GOOGLE_CLIENT_SECRET: dummy
+          ATTACH_WAREHOUSE: "false"
