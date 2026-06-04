@@ -191,12 +191,14 @@ export async function scanSources(): Promise<number> {
         unmapped = Number(u?.n ?? 0);
       }
     } catch { present = false; }
-    await run(
-      `INSERT INTO ${pg("source_stat")} (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7, current_timestamp)
+    await pgRun(
+      `INSERT INTO ${pg("source_stat")}
+         (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, current_timestamp)
        ON CONFLICT (dim_id, source_table, source_column) DO UPDATE SET
-         present = excluded.present, rows = excluded.rows, distinct_values = excluded.distinct_values,
-         unmapped = excluded.unmapped, scanned_at = excluded.scanned_at`,
+         present = EXCLUDED.present, rows = EXCLUDED.rows,
+         distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
+         scanned_at = EXCLUDED.scanned_at`,
       [r.dimId, r.table, r.column, present, rows, distinct, unmapped],
     );
   }
@@ -485,43 +487,72 @@ export async function listDimensions(): Promise<DimensionMeta[]> {
 }
 
 export async function getDimension(id: string): Promise<MappingDimension | null> {
-  const meta = await get<Omit<DimensionMeta, "rows"> & { nameTable: string | null; nameIdCol: string | null; nameCol: string | null }>(
-    `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
-            COALESCE(key_kind, 'slug') AS "keyKind",
+  const meta = await pgGet<
+    Omit<DimensionMeta, "rows"> & { nameTable: string | null; nameIdCol: string | null; nameCol: string | null }
+  >(
+    `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable",
+            key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind",
             name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol"
      FROM ${pg("dimension")} WHERE id = $1`, [id],
   );
   if (!meta) return null;
-  const k = qid(meta.keyCol);
+
+  const k      = qid(meta.keyCol);
   const fields = await listFields(id);
   const fieldCols = fields.map((f) => `CAST(d.${qid(f.field)} AS VARCHAR) AS ${qid(f.field)}`).join(", ");
 
-  // external-ID dims resolve the display name live from the warehouse (store the
-  // ID, render the name). When the warehouse is detached or no binding is set,
-  // every row is unresolved and the label falls back to the key.
-  const liveName = meta.keyKind === "external_id" && env.attachWarehouse && !!meta.nameTable && !!meta.nameIdCol && !!meta.nameCol;
-  const variantsJoin = `LEFT JOIN (SELECT ${k} AS gk, count(*) AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}`;
+  const liveName =
+    meta.keyKind === "external_id" && env.attachWarehouse &&
+    !!meta.nameTable && !!meta.nameIdCol && !!meta.nameCol;
 
-  const sql = liveName
-    ? `SELECT d.${k} AS key, w.nm AS label, (w.id IS NULL) AS unresolved, COALESCE(v.n, 0) AS variants${fields.length ? ", " + fieldCols : ""}
+  // Fetch canonical rows from Postgres
+  let canonRows: Record<string, unknown>[];
+  if (meta.keyKind === "external_id") {
+    canonRows = await pgAll<Record<string, unknown>>(
+      `SELECT d.${k} AS key, NULL AS label, true AS unresolved${fields.length ? ", " + fieldCols : ""},
+              COALESCE(v.n, 0)::int AS variants
        FROM ${cq(meta.dimTable)} d
-       LEFT JOIN (SELECT CAST(${qid(meta.nameIdCol!)} AS VARCHAR) AS id, CAST(${qid(meta.nameCol!)} AS VARCHAR) AS nm FROM ${whTable(meta.nameTable!)}) w ON w.id = d.${k}
-       ${variantsJoin}
-       ORDER BY variants DESC, d.${k}`
-    : meta.keyKind === "external_id"
-    ? `SELECT d.${k} AS key, NULL AS label, true AS unresolved, COALESCE(v.n, 0) AS variants${fields.length ? ", " + fieldCols : ""}
-       FROM ${cq(meta.dimTable)} d ${variantsJoin} ORDER BY variants DESC, d.${k}`
-    : `SELECT d.${k} AS key, d.label, false AS unresolved, COALESCE(v.n, 0) AS variants${fields.length ? ", " + fieldCols : ""}
-       FROM ${cq(meta.dimTable)} d ${variantsJoin} ORDER BY variants DESC, d.label`;
+       LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
+       ORDER BY variants DESC, d.${k}`,
+    );
+  } else {
+    canonRows = await pgAll<Record<string, unknown>>(
+      `SELECT d.${k} AS key, d.label, false AS unresolved${fields.length ? ", " + fieldCols : ""},
+              COALESCE(v.n, 0)::int AS variants
+       FROM ${cq(meta.dimTable)} d
+       LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
+       ORDER BY variants DESC, d.label`,
+    );
+  }
 
-  const canonical = await all<Record<string, unknown>>(sql).then((rows) => rows.map((r) => ({
-    key: String(r.key),
-    label: r.label == null ? String(r.key) : String(r.label),
+  // For external_id dims with warehouse attached: resolve names from MotherDuck
+  if (liveName) {
+    const nameRows = await all<{ id: string; nm: string }>(
+      `SELECT CAST(${qid(meta.nameIdCol!)} AS VARCHAR) AS id,
+              CAST(${qid(meta.nameCol!)} AS VARCHAR) AS nm
+       FROM ${whTable(meta.nameTable!)}`,
+    ).catch(() => [] as { id: string; nm: string }[]);
+    const nameMap = new Map(nameRows.map((r) => [r.id, r.nm]));
+    for (const r of canonRows) {
+      const key = String(r.key);
+      r.label      = nameMap.get(key) ?? null;
+      r.unresolved = !nameMap.has(key);
+    }
+  }
+
+  const canonical = canonRows.map((r) => ({
+    key:        String(r.key),
+    label:      r.label == null ? String(r.key) : String(r.label),
     unresolved: !!r.unresolved,
-    variants: Number(r.variants),
-    fields: Object.fromEntries(fields.map((f) => [f.field, r[f.field] == null ? null : String(r[f.field])])),
-  })));
-  const rowsRow = await get<{ n: bigint }>(`SELECT count(*) AS n FROM ${cq(meta.mapTable)}`).catch(() => null);
+    variants:   Number(r.variants),
+    fields:     Object.fromEntries(
+      fields.map((f) => [f.field, r[f.field] == null ? null : String(r[f.field])]),
+    ),
+  }));
+
+  const rowsRow = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
+  ).catch(() => null);
   const values = await scanValues(id, meta);
   const { nameTable, nameIdCol, nameCol, ...metaOut } = meta;
   return { ...metaOut, rows: Number(rowsRow?.n ?? 0), canonical, values, fields };
