@@ -66,9 +66,15 @@ export function ThresholdRange({ publish, suggest, min = 50, max = 100, onChange
         />
       </div>
       <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1 font-mono text-[11px] text-ink-3">
-        <span>Below {suggest}%: <span className="text-ink-2">no suggestion</span></span>
-        <span>{suggest}–{publish}%: <span className="text-warn">suggest</span></span>
-        <span>≥ {publish}%: <span className="text-ok">auto-publish</span></span>
+        <span>
+          Below {suggest}%: <span className="text-ink-2">no suggestion</span>
+        </span>
+        <span>
+          {suggest}–{publish}%: <span className="text-warn">suggest</span>
+        </span>
+        <span>
+          ≥ {publish}%: <span className="text-ok">auto-publish</span>
+        </span>
       </div>
     </div>
   );

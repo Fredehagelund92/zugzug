@@ -24,7 +24,8 @@ const base = cx(
 );
 
 const variants: Record<Variant, string> = {
-  primary: "bg-accent text-accent-ink border-accent shadow-[0_4px_16px_-12px_var(--accent)] hover:bg-accent-hover hover:shadow-[0_8px_24px_-8px_var(--accent)]",
+  primary:
+    "bg-accent text-accent-ink border-accent shadow-[0_4px_16px_-12px_var(--accent)] hover:bg-accent-hover hover:shadow-[0_8px_24px_-8px_var(--accent)]",
   secondary: "bg-transparent text-ink border-line-2 hover:bg-hover",
   ghost: "bg-transparent text-ink-2 hover:bg-hover hover:text-ink",
   danger: "bg-danger text-white border-danger hover:brightness-110",

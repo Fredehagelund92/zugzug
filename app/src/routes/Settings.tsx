@@ -14,7 +14,15 @@ import { usePreferences, setPreferences, currentUser } from "../store";
 /* Settings — workspace, appearance (theme), the DuckDB connection, and matching
    defaults. Token-driven, squared. UI only. */
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <Card className="p-0">
       <div className="border-b border-line px-6 py-4">
@@ -26,9 +34,14 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   );
 }
 
-const input = "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-accent";
+const input =
+  "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-accent";
 
-interface Member { email: string; addedBy: string; addedAt: string }
+interface Member {
+  email: string;
+  addedBy: string;
+  addedAt: string;
+}
 
 function TeamSection() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -56,9 +69,18 @@ function TeamSection() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: addEmail.trim().toLowerCase() }),
       });
-      if (res.status === 409) { setAddError("Already added."); return; }
-      if (res.status === 400) { setAddError("Must be a @bettercollective.com email."); return; }
-      if (!res.ok) { setAddError("Something went wrong."); return; }
+      if (res.status === 409) {
+        setAddError("Already added.");
+        return;
+      }
+      if (res.status === 400) {
+        setAddError("Must be a @bettercollective.com email.");
+        return;
+      }
+      if (!res.ok) {
+        setAddError("Something went wrong.");
+        return;
+      }
       setAddEmail("");
       load();
     } finally {
@@ -75,7 +97,10 @@ function TeamSection() {
   const myEmail = currentUser.email;
 
   return (
-    <Section title="Team" hint="Only people on this list can log in. Any team member can add or remove others.">
+    <Section
+      title="Team"
+      hint="Only people on this list can log in. Any team member can add or remove others."
+    >
       <ul className="divide-y divide-line rounded-sm border border-line">
         {members.length === 0 && (
           <li className="px-4 py-3 text-[13px] text-ink-3">No members yet.</li>
@@ -105,8 +130,13 @@ function TeamSection() {
             className={input}
             placeholder="colleague@bettercollective.com"
             value={addEmail}
-            onChange={(e) => { setAddEmail(e.target.value); setAddError(null); }}
-            onKeyDown={(e) => { if (e.key === "Enter") void add(); }}
+            onChange={(e) => {
+              setAddEmail(e.target.value);
+              setAddError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void add();
+            }}
             disabled={adding}
           />
           {addError && <p className="font-mono text-[11px] text-warn">{addError}</p>}
@@ -139,67 +169,120 @@ export function Settings() {
                 onClick={() => setEngineer(!engineer)}
                 className={cx("ak-toggle", engineer && "on")}
               />
-              <span className="text-[13px] text-ink-2">Show warehouse table names, SQL, and join warnings</span>
+              <span className="text-[13px] text-ink-2">
+                Show warehouse table names, SQL, and join warnings
+              </span>
             </div>
           </FormField>
         </Section>
       </div>
 
       <div className="zz-rise" style={{ animationDelay: "140ms" }}>
-        <Section title="Connections" hint={engineer ? "Reads your warehouse (MotherDuck), writes records to its own MotherDuck database, and keeps multi-user app state in Postgres." : "Where Zug Zug is connected."}>
+        <Section
+          title="Connections"
+          hint={
+            engineer
+              ? "Reads your warehouse (MotherDuck), writes records to its own MotherDuck database, and keeps multi-user app state in Postgres."
+              : "Where Zug Zug is connected."
+          }
+        >
           {engineer ? (
             <>
               <div className="rounded-sm border border-line bg-surface-2 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">Warehouse</span><Badge>read-only</Badge></div>
-                  <Badge tone="ok" dot>connected</Badge>
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-[14px] font-semibold text-ink">
+                      Warehouse
+                    </span>
+                    <Badge>read-only</Badge>
+                  </div>
+                  <Badge tone="ok" dot>
+                    connected
+                  </Badge>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                  <span className="text-ink-2">md:analytics</span><span>·</span><span>attached &amp; scanned for source values — never written to</span>
+                  <span className="text-ink-2">md:analytics</span>
+                  <span>·</span>
+                  <span>attached &amp; scanned for source values — never written to</span>
                 </div>
               </div>
               <div className="rounded-sm border border-line bg-surface-2 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">Master store</span><Badge>MotherDuck</Badge></div>
-                  <Badge tone="ok" dot>connected</Badge>
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-[14px] font-semibold text-ink">
+                      Master store
+                    </span>
+                    <Badge>MotherDuck</Badge>
+                  </div>
+                  <Badge tone="ok" dot>
+                    connected
+                  </Badge>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                  <span className="text-ink-2">md:zugzug</span><span>·</span><span>its own database — every dim_* master + map_* lookup dbt joins</span>
+                  <span className="text-ink-2">md:zugzug</span>
+                  <span>·</span>
+                  <span>its own database — every dim_* master + map_* lookup dbt joins</span>
                 </div>
               </div>
               <div className="rounded-sm border border-line bg-surface-2 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2"><span className="font-display text-[14px] font-semibold text-ink">App state</span><Badge tone="accent">Postgres</Badge></div>
-                  <Badge tone="ok" dot>connected</Badge>
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-[14px] font-semibold text-ink">
+                      App state
+                    </span>
+                    <Badge tone="accent">Postgres</Badge>
+                  </div>
+                  <Badge tone="ok" dot>
+                    connected
+                  </Badge>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                  <span className="text-ink-2">postgres://zugzug</span><span>·</span><span>drafts, audit log, users &amp; presence — the multi-user layer</span>
+                  <span className="text-ink-2">postgres://zugzug</span>
+                  <span>·</span>
+                  <span>drafts, audit log, users &amp; presence — the multi-user layer</span>
                 </div>
               </div>
-              <p className="font-mono text-[10.5px] leading-relaxed text-ink-3">DuckDB <span className="text-ink-2">ATTACH … (TYPE postgres)</span> bridges them — a single scan can join live drafts ⋈ master ⋈ warehouse.</p>
+              <p className="font-mono text-[10.5px] leading-relaxed text-ink-3">
+                DuckDB <span className="text-ink-2">ATTACH … (TYPE postgres)</span> bridges them — a
+                single scan can join live drafts ⋈ master ⋈ warehouse.
+              </p>
             </>
           ) : (
             <>
               <div className="rounded-sm border border-line bg-surface-2 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
-                  <Badge tone="ok" dot>connected</Badge>
+                  <Badge tone="ok" dot>
+                    connected
+                  </Badge>
                 </div>
-                <div className="mt-1 text-[12.5px] text-ink-2">Reading from your warehouse — read-only.</div>
+                <div className="mt-1 text-[12.5px] text-ink-2">
+                  Reading from your warehouse — read-only.
+                </div>
               </div>
               <div className="rounded-sm border border-line bg-surface-2 p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[14px] font-semibold text-ink">Master store</span>
-                  <Badge tone="ok" dot>connected</Badge>
+                  <span className="font-display text-[14px] font-semibold text-ink">
+                    Master store
+                  </span>
+                  <Badge tone="ok" dot>
+                    connected
+                  </Badge>
                 </div>
-                <div className="mt-1 text-[12.5px] text-ink-2">Stores every table — this is what downstream models pick up.</div>
+                <div className="mt-1 text-[12.5px] text-ink-2">
+                  Stores every table — this is what downstream models pick up.
+                </div>
               </div>
               <div className="rounded-sm border border-line bg-surface-2 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-display text-[14px] font-semibold text-ink">Workspace</span>
-                  <Badge tone="ok" dot>connected</Badge>
+                  <Badge tone="ok" dot>
+                    connected
+                  </Badge>
                 </div>
-                <div className="mt-1 text-[12.5px] text-ink-2">Drafts, history, and your team — the collaborative layer.</div>
+                <div className="mt-1 text-[12.5px] text-ink-2">
+                  Drafts, history, and your team — the collaborative layer.
+                </div>
               </div>
             </>
           )}
@@ -207,7 +290,10 @@ export function Settings() {
       </div>
 
       <div className="zz-rise" style={{ animationDelay: "180ms" }}>
-        <Section title="Matching defaults" hint="How aggressively Zug Zug matches new values when a scan finds them.">
+        <Section
+          title="Matching defaults"
+          hint="How aggressively Zug Zug matches new values when a scan finds them."
+        >
           <FormField label="Confidence bands">
             <ThresholdRange
               publish={prefs.publishThreshold}

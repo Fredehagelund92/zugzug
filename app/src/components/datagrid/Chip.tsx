@@ -47,10 +47,13 @@ export function Chip({ label, color, bucket, className, dot }: ChipProps) {
   }
   const b = bucket ?? bucketFor(label);
   return (
-    <span className={cx(
-      "inline-flex items-center gap-1.5 rounded-sm border border-transparent px-2 py-0.5 font-mono text-[11px] font-medium",
-      STYLES[b], className,
-    )}>
+    <span
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-sm border border-transparent px-2 py-0.5 font-mono text-[11px] font-medium",
+        STYLES[b],
+        className,
+      )}
+    >
       {dot && <span className="h-1.5 w-1.5 rounded-pill bg-current" />}
       {label}
     </span>
