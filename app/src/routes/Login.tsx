@@ -14,9 +14,9 @@ export function Login() {
   const [devBypass, setDevBypass] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/config")
-      .then((r) => r.json())
-      .then((d: { devBypass: boolean }) => { if (d.devBypass) setDevBypass(true); })
+    if (!import.meta.env.DEV) return;
+    fetch("/api/auth/dev", { method: "HEAD" })
+      .then((r) => setDevBypass(r.status !== 404))
       .catch(() => {});
   }, []);
 
