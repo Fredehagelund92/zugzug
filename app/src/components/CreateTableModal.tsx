@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { IconX } from "./Icons";
@@ -111,6 +111,31 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     return () => document.removeEventListener("keydown", onKey);
   }, [open, canSubmit, requestClose, submit, confirmingDiscard]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const root = containerRef.current;
+    if (!root) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const focusable = root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        last.focus();
+        e.preventDefault();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        first.focus();
+        e.preventDefault();
+      }
+    };
+    root.addEventListener("keydown", onKey);
+    return () => root.removeEventListener("keydown", onKey);
+  }, [open]);
+
   if (!open) return null;
   const monogram = (name.trim().charAt(0) || "?").toUpperCase();
   const tint = PALETTE[color];
@@ -121,6 +146,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
       onClick={requestClose}
     >
       <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-table-title"
         onClick={(e) => e.stopPropagation()}
         className="mt-[10vh] w-[520px] max-w-full overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
       >
@@ -129,7 +158,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
 
         <div className="space-y-3 px-6 pb-5 pt-6">
           <div className="flex items-start justify-between">
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+            <div id="create-table-title" className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
               New table
             </div>
             <button
