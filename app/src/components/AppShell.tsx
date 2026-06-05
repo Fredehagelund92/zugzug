@@ -151,7 +151,7 @@ export function AppShell() {
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
-    { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
+    { to: "/app/triage", label: "Triage", Icon: IconMapping, count: totalNew },
     {
       to: "/app/sources",
       label: "Sources",
@@ -178,22 +178,13 @@ export function AppShell() {
       priority: true,
     });
     out.push({
-      id: "nav:mapping",
+      id: "nav:triage",
       group: "Navigate",
-      label: "Match values",
+      label: "Triage",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/mapping"),
-      keywords: "reconcile mapping",
-      priority: true,
-    });
-    out.push({
-      id: "nav:mapping:all",
-      group: "Navigate",
-      label: "Match values — all dimensions",
-      icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/mapping?view=all"),
-      keywords: "cross dim inbox",
+      action: () => navigate("/app/triage"),
+      keywords: "inbox queue match reconcile mapping",
       priority: true,
     });
     out.push({
