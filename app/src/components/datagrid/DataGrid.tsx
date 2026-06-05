@@ -38,6 +38,8 @@ interface GridRowProps<Row> {
   cellInRange: (field: string) => boolean;
   selected: boolean;
   selectionCol: boolean;
+  showRowNumbers: boolean;
+  cellPadY: string;
   gridStyle: React.CSSProperties;
   onAddFieldClick: (() => void) | undefined;
   hiddenFieldCount: number;
@@ -64,6 +66,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     cellInRange,
     selected,
     selectionCol,
+    showRowNumbers,
+    cellPadY,
     gridStyle,
     onAddFieldClick,
     hiddenFieldCount,
@@ -86,8 +90,18 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
       style={gridStyle}
       data-row={rk}
     >
+      {showRowNumbers && (
+        <div
+          className={cx(
+            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums",
+            cellPadY,
+          )}
+        >
+          {rowIndex + 1}
+        </div>
+      )}
       {selectionCol && (
-        <div className="flex items-center justify-center border-r border-line py-[7px]">
+        <div className={cx("flex items-center justify-center border-r border-line", cellPadY)}>
           <Checkbox
             state={selected ? "on" : "off"}
             onClick={() => onToggleSelect(rk)}
@@ -103,7 +117,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
         const isLastCol = idx === columns.length - 1;
         const cellCx = cx(
-          "relative flex min-w-0 select-none items-center px-3 py-[7px]",
+          "relative flex min-w-0 select-none items-center px-3",
+          cellPadY,
           !isLastCol && "border-r border-line",
           c.align === "right" && "justify-end text-right",
           inRangeCell && !focused && "bg-accent-wash/25",
@@ -236,6 +251,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
   const visible = columns.filter((c) => !c.hidden);
   const selectionCol = !!selection;
+  const showRowNumbers = !!props.showRowNumbers;
+  const compact = props.density === "compact";
+  const cellPadY = compact ? "py-[3px]" : "py-[7px]";
+  const headerPadY = compact ? "py-[5px]" : "py-2";
   const undo = useUndoStack();
 
   // Typed cell-value accessor: uses the prop if provided, otherwise falls back
@@ -312,10 +331,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       return w ? `${w}px` : "minmax(96px, 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
+    if (showRowNumbers) tracks.unshift("36px");
     if (onAddFieldClick) tracks.push("auto");
     return { gridTemplateColumns: tracks.join(" ") };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedVisible, selectionCol, widths, onAddFieldClick]);
+  }, [orderedVisible, selectionCol, showRowNumbers, widths, onAddFieldClick]);
 
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = useCallback(
@@ -793,8 +813,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         className="grid items-stretch border-b border-line text-[12px] font-medium text-ink-2"
         style={gridStyle}
       >
+        {showRowNumbers && (
+          <div className={cx("flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3", headerPadY)}>
+            #
+          </div>
+        )}
         {selectionCol && (
-          <div className="flex items-center justify-center border-r border-line py-2">
+          <div className={cx("flex items-center justify-center border-r border-line", headerPadY)}>
             <Checkbox
               state={
                 selection!.selected.length === sortedRows.length && sortedRows.length > 0
@@ -825,7 +850,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 sort?.field === c.field ? (sort.dir === "asc" ? "ascending" : "descending") : "none"
               }
               className={cx(
-                "group relative flex items-center gap-1.5 px-3 py-2",
+                "group relative flex items-center gap-1.5 px-3",
+                headerPadY,
                 !isLastCol && "border-r border-line",
               )}
               data-header={c.field}
@@ -1036,6 +1062,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 cellInRange={(field) => inRange(rk, field)}
                 selected={isSelected(rk)}
                 selectionCol={selectionCol}
+                showRowNumbers={showRowNumbers}
+                cellPadY={cellPadY}
                 gridStyle={gridStyle}
                 onAddFieldClick={onAddFieldClick}
                 hiddenFieldCount={hiddenList.length}
