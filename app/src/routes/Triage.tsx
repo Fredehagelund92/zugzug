@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
-import { ComboSelect } from "../components/ComboSelect";
+import { ComboSelect, type ComboSelectHandle } from "../components/ComboSelect";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
@@ -346,6 +346,11 @@ interface CrossDimInboxProps {
 
 function CrossDimInbox(p: CrossDimInboxProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Imperative handle attached to the focused row's ComboSelect so the M
+  // keybinding can open the picker without DOM querySelectoring. Only the
+  // currently-focused row receives this ref, so there's exactly one live
+  // attachment at any time.
+  const focusedComboRef = useRef<ComboSelectHandle | null>(null);
   const FILTERS: { k: Filter; label: string; n: number }[] = [
     { k: "new", label: "Needs review", n: p.counts.new },
     { k: "all", label: "All", n: p.counts.all },
@@ -394,14 +399,11 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           return;
         }
         // M opens the focused row's ComboSelect for manual pick — matches the
-        // single-dim workbench's M binding. We find the row via data-row-key
-        // and click its picker trigger (the one with aria-haspopup="listbox").
+        // single-dim workbench's M binding. Uses the focused row's imperative
+        // handle (set by ref attachment below), not DOM querying.
         if (e.key === "m" || e.key === "M") {
           e.preventDefault();
-          const rowEl = containerRef.current?.querySelector<HTMLElement>(
-            `[data-row-key="${curKey}"]`,
-          );
-          rowEl?.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')?.click();
+          focusedComboRef.current?.open();
           return;
         }
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -520,6 +522,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
               </div>
               <IconArrowRight className="h-4 w-4 text-ink-3" />
               <ComboSelect
+                ref={focused ? focusedComboRef : undefined}
                 options={options}
                 value={r.target}
                 suggestion={r.suggestion ?? undefined}
