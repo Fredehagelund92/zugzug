@@ -332,8 +332,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     [dim, allDrafts],
   );
   const staged = stagedDrafts.map((d) => ({ raw: d.raw, label: d.targetLabel! }));
-  const coverage = Math.round((counts.mapped / counts.all) * 100);
-  void coverage; // header coverage lives in TablePane toolbar now; kept for future inline use
 
   const sql = useMemo(() => {
     if (!staged.length) return "";
@@ -388,8 +386,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   return (
     <div className="flex flex-1 flex-col min-h-0">
       {/* small left-aligned toolbar above the body — owns Auto-match per spec § 1 */}
-      <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2">
-        {counts.new > 0 && (
+      {counts.new > 0 && (
+        <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2">
           <Button
             size="sm"
             variant="ghost"
@@ -399,8 +397,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           >
             {autoFlash !== null ? `✓ Auto-matched ${autoFlash}` : "Auto-match new values"}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* workbench — single-dim mode */}
       <div
