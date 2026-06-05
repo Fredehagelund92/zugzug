@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
+import { OpenTabsProvider } from "./lib/open-tabs";
 import { UndoStackProvider } from "./components/datagrid";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
@@ -58,17 +59,19 @@ createRoot(root).render(
               <UndoStackProvider>
                 <EngineerModeProvider>
                   <BootGate>
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/app" replace />} />
-                      <Route element={<AppShell />}>
-                        <Route path="/app" element={<Dashboard />} />
-                        <Route path="/app/mapping" element={<Mapping />} />
-                        <Route path="/app/sources" element={<Sources />} />
-                        <Route path="/app/tables" element={<MasterTables />} />
-                        <Route path="/app/settings" element={<Settings />} />
-                      </Route>
-                      <Route path="*" element={<Navigate to="/app" replace />} />
-                    </Routes>
+                    <OpenTabsProvider>
+                      <Routes>
+                        <Route path="/" element={<Navigate to="/app" replace />} />
+                        <Route element={<AppShell />}>
+                          <Route path="/app" element={<Dashboard />} />
+                          <Route path="/app/mapping" element={<Mapping />} />
+                          <Route path="/app/sources" element={<Sources />} />
+                          <Route path="/app/tables" element={<MasterTables />} />
+                          <Route path="/app/settings" element={<Settings />} />
+                        </Route>
+                        <Route path="*" element={<Navigate to="/app" replace />} />
+                      </Routes>
+                    </OpenTabsProvider>
                   </BootGate>
                 </EngineerModeProvider>
               </UndoStackProvider>
