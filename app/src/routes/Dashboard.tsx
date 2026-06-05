@@ -192,11 +192,20 @@ export function Dashboard() {
           </div>
         }
         action={
-          <Link to="/app/triage">
-            <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
-              Resolve {totalNew} new
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link to="/app/tables">
+              <Button variant="secondary" icon={<IconPlus className="h-4 w-4" />}>
+                New table
+              </Button>
+            </Link>
+            {totalNew > 0 && (
+              <Link to="/app/triage">
+                <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
+                  Resolve {totalNew} new
+                </Button>
+              </Link>
+            )}
+          </div>
         }
       />
 
@@ -326,7 +335,7 @@ export function Dashboard() {
                   onClick={() => navigate(`/app/tables?open=${dim.id}&active=${dim.id}&mode=match`)}
                   className={cx(
                     "cursor-pointer",
-                    isStaged ? "bg-staged/[0.04] hover:bg-staged/[0.07]" : "hover:bg-hover",
+                    isStaged ? "bg-staged/[0.04] hover:bg-staged/[0.07]" : "bg-surface hover:bg-hover",
                   )}
                 >
                   {/* tint accent bar — only on urgent rows */}
