@@ -70,7 +70,7 @@ export function Dashboard() {
       label: "Tables",
       value: String(dims.length),
       delta: `${attentionTables} active · ${cleanTables} clean`,
-      dir: "warn",
+      dir: attentionTables > 0 ? "warn" : undefined,
     },
     {
       label: "Values mapped",
