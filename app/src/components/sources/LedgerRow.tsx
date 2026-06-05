@@ -22,6 +22,9 @@ interface LedgerRowProps {
   hideStandingBar?: boolean;
   /** Keyboard cursor is on this row — paint the focus ring + accent wash. */
   focused?: boolean;
+  /** Stable key used by the cursor scroll-into-view query (`data-row-key`).
+   *  Format: `${dimId}::${table}::${column}`. */
+  rowKey?: string;
 }
 
 export function LedgerRow({
@@ -32,6 +35,7 @@ export function LedgerRow({
   onDerive,
   hideStandingBar,
   focused,
+  rowKey,
 }: LedgerRowProps) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
   const coverage =
@@ -61,6 +65,7 @@ export function LedgerRow({
 
   return (
     <div
+      data-row-key={rowKey}
       className={cx(
         "relative bg-surface transition-colors",
         // When the standing bar is hidden (per-table workbench mode), a 1px

@@ -654,6 +654,7 @@ function SchemaSection({
             return (
               <LedgerRow
                 key={key}
+                rowKey={key}
                 row={r}
                 expanded={expanded === key}
                 focused={focusedRowKey === key}
