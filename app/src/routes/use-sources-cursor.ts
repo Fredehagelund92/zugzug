@@ -26,6 +26,8 @@ export function useSourcesCursor(
 
   // Staleness: when the visible row set changes and the cursor's key is no
   // longer in it, clear cursor. Same invariant as Task 1.4 of workbench-paradigm.
+  // Consumer contract: memoize visibleKeys (e.g. via useMemo) so this effect
+  // doesn't re-run on every parent render with an identity-fresh array.
   useEffect(() => {
     if (cursor && !visibleKeys.includes(cursor)) setCursor(null);
   }, [visibleKeys, cursor]);
@@ -87,6 +89,7 @@ export function useSourcesCursor(
         return;
       }
       if (e.key === "Escape") {
+        if (cursor === null) return;
         e.preventDefault();
         setCursor(null);
         return;

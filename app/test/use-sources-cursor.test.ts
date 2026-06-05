@@ -124,6 +124,18 @@ describe("useSourcesCursor", () => {
     expect(hook.result.current.cursor).toBeNull();
   });
 
+  test("Escape is a no-op when cursor is null", () => {
+    const { hook } = mount();
+    const e = {
+      key: "Escape",
+      target: { tagName: "DIV", isContentEditable: false } as unknown as EventTarget,
+      preventDefault: vi.fn(),
+    } as unknown as React.KeyboardEvent<HTMLElement>;
+    act(() => hook.result.current.onKeyDown(e));
+    expect(hook.result.current.cursor).toBeNull();
+    expect(e.preventDefault).not.toHaveBeenCalled();
+  });
+
   test("input-focus guard: keys are ignored when target is INPUT", () => {
     const { hook } = mount();
     const e = {
