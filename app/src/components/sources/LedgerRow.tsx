@@ -41,6 +41,8 @@ export function LedgerRow({
           : stale
             ? "stale"
             : "clean";
+  // Canonical status scale (shared with DataGrid Chip + Match-mode status pills):
+  //   clean → text-ok ; warn states → text-warn ; meta/unscanned → text-ink-3
   const standingTone =
     standing === "clean"
       ? "text-ok"
