@@ -63,7 +63,6 @@ export async function listSources(
     values: number;
     unmapped: number;
     scanned: boolean;
-    schedule: string | null;
     scannedAt: string | null;
   }>(
     `SELECT s.dim_id AS "dimId", d.label AS dimension, s.source_table AS "table", s.source_column AS column,
@@ -72,7 +71,6 @@ export async function listSources(
             COALESCE(st.distinct_values, 0)::int AS values,
             COALESCE(st.unmapped, 0)::int AS unmapped,
             (st.scanned_at IS NOT NULL) AS scanned,
-            s.schedule AS schedule,
             st.scanned_at::text AS "scannedAt"
      FROM ${pg("dimension_source")} s
      JOIN ${pg("dimension")} d ON d.id = s.dim_id
@@ -93,7 +91,6 @@ export async function listSources(
     values: Number(r.values),
     unmapped: Number(r.unmapped),
     scanned: !!r.scanned,
-    schedule: r.schedule ?? null,
     scannedAt: r.scannedAt ?? null,
   }));
 }
@@ -332,54 +329,62 @@ export async function topUnmapped(
     .map((r) => ({ raw: r.raw, rows: Number(r.cnt) }));
 }
 
-/** Set (or clear) the automatic scan cadence for a wired source. Valid values:
- *  null (no schedule), '15m', 'hourly', 'daily'. */
-export async function setSourceSchedule(
-  dimId: string,
-  table: string,
-  column: string,
-  schedule: string | null,
-): Promise<void> {
-  const valid = schedule === null || ["15m", "hourly", "daily"].includes(schedule);
-  if (!valid) throw new Error(`invalid schedule: ${schedule}`);
-  await pgRun(
-    `UPDATE ${pg("dimension_source")} SET schedule = $1
-     WHERE dim_id = $2 AND source_table = $3 AND source_column = $4`,
-    [schedule, dimId, table, column],
-  );
-}
-
-/** Returns true when at least one wired source is due for its scheduled scan,
- *  given the last scanned_at on source_stat. The scheduler uses this as a cheap
+/** Returns true when the workspace scan is due based on preferences.scan_schedule
+ *  and the last scanned_at timestamp. The scheduler uses this as a cheap
  *  is-anything-pending check before triggering scanSources (which scans them all).
  *  Returns false (silently) if the app-state schema hasn't been provisioned yet —
  *  the scheduler tick should no-op on a fresh DB, not spam the logs. */
 export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
-  let rows: { schedule: string; scanned_at: string | null }[];
+  let sched: string | null;
+  let lastScan: Date | null;
   try {
-    rows = await pgAll<{ schedule: string; scanned_at: string | null }>(
-      `SELECT s.schedule, st.scanned_at::text AS scanned_at
-       FROM ${pg("dimension_source")} s
-       LEFT JOIN ${pg("source_stat")} st
-         ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
-       WHERE s.schedule IS NOT NULL`,
+    const row = await pgGet<{ scan_schedule: string | null; last_scan: string | null }>(
+      `SELECT p.scan_schedule,
+              (SELECT max(st.scanned_at)::text
+               FROM ${pg("source_stat")} st) AS last_scan
+       FROM ${pg("preferences")} p WHERE p.id = 1`,
     );
+    if (!row) return false;
+    sched = row.scan_schedule;
+    lastScan = row.last_scan ? new Date(row.last_scan) : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/relation.*zugzug_app.*does not exist/i.test(msg)) return false;
     throw e;
   }
-  const dueMs = (s: string) =>
-    s === "15m"
-      ? 15 * 60_000
-      : s === "hourly"
-        ? 60 * 60_000
-        : s === "daily"
-          ? 24 * 60 * 60_000
-          : Infinity;
-  return rows.some(
-    (r) => !r.scanned_at || now.getTime() - new Date(r.scanned_at).getTime() >= dueMs(r.schedule),
-  );
+  if (!sched) return false;
+  if (!lastScan) return true; // never scanned → run immediately
+  const dueMs =
+    sched === "15m" ? 15 * 60_000 : sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
+  return now.getTime() - lastScan.getTime() >= dueMs;
+}
+
+export interface ScanStatusResult {
+  lastScanAt: string | null;
+  sourceCount: number;
+  unmappedCount: number;
+}
+
+export async function scanStatus(): Promise<ScanStatusResult> {
+  const row = await pgGet<{
+    last_scan: string | null;
+    sources: number;
+    unmapped: number;
+  }>(
+    `SELECT max(st.scanned_at)::text                   AS last_scan,
+            count(s.*)::int                            AS sources,
+            COALESCE(sum(st.unmapped), 0)::int         AS unmapped
+     FROM ${pg("dimension_source")} s
+     LEFT JOIN ${pg("source_stat")} st
+       ON  st.dim_id = s.dim_id
+       AND st.source_table  = s.source_table
+       AND st.source_column = s.source_column`,
+  ).catch(() => null);
+  return {
+    lastScanAt:    row?.last_scan   ?? null,
+    sourceCount:   Number(row?.sources ?? 0),
+    unmappedCount: Number(row?.unmapped ?? 0),
+  };
 }
 
 /** Browse/search the warehouse catalog (the 1000+ tables) — server-side search +
