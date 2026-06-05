@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
@@ -52,6 +52,21 @@ export function MasterTables() {
     }
   }, [tabs.length, dims, openTab]);
 
+  // One-shot toast triggered by the legacy /app/mapping redirect when the
+  // referenced dimId no longer exists (table was deleted/renamed). Clears
+  // the URL param so a reload doesn't re-fire.
+  const [missingFlash, setMissingFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (searchParams.get("toast") !== "missing-table") return;
+    setMissingFlash("That table no longer exists.");
+    const next = new URLSearchParams(searchParams);
+    next.delete("toast");
+    setSearchParams(next, { replace: true });
+    const t = setTimeout(() => setMissingFlash(null), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!didInitFromUrl.current) return;
     const next = new URLSearchParams(searchParams);
@@ -83,6 +98,11 @@ export function MasterTables() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {missingFlash && (
+        <div className="border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
+          {missingFlash}
+        </div>
+      )}
       <TableTabStrip onCreateRequested={create.open} />
 
       <div className="relative flex-1 min-h-0">
