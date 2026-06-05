@@ -54,11 +54,43 @@ export function Dashboard() {
   );
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
-  const kpis: Array<{ label: string; value: string; featured?: boolean }> = [
-    { label: "Tables", value: String(dims.length) },
-    { label: "Values mapped", value: fmtK(valuesMapped) },
-    { label: "New to resolve", value: String(totalNew), featured: totalNew > 0 },
-    { label: "Rows at risk", value: fmtK(rowsAtRisk) },
+  const attentionTables = dims.filter((d) =>
+    d.values.some((v) => v.status === "new"),
+  ).length;
+  const cleanTables = dims.length - attentionTables;
+
+  const kpis: Array<{
+    label: string;
+    value: string;
+    featured?: boolean;
+    delta?: string;
+    dir?: "up" | "down" | "warn";
+  }> = [
+    {
+      label: "Tables",
+      value: String(dims.length),
+      delta: `${attentionTables} active · ${cleanTables} clean`,
+      dir: "warn",
+    },
+    {
+      label: "Values mapped",
+      value: fmtK(valuesMapped),
+      delta: undefined,
+      dir: undefined,
+    },
+    {
+      label: "New to resolve",
+      value: String(totalNew),
+      featured: totalNew > 0,
+      delta: totalNew > 0 ? `across ${attentionTables} table${attentionTables === 1 ? "" : "s"}` : undefined,
+      dir: totalNew > 0 ? "warn" : undefined,
+    },
+    {
+      label: "Rows at risk",
+      value: fmtK(rowsAtRisk),
+      delta: rowsAtRisk > 0 ? "unmapped warehouse rows" : undefined,
+      dir: rowsAtRisk > 0 ? "warn" : undefined,
+    },
   ];
 
   if (dims.length === 0) {
@@ -124,7 +156,13 @@ export function Dashboard() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {kpis.map((m, i) => (
           <div key={m.label} {...rise(1 + i)}>
-            <Kpi label={m.label} value={m.value} featured={m.featured} />
+            <Kpi
+              label={m.label}
+              value={m.value}
+              featured={m.featured}
+              delta={m.delta}
+              dir={m.dir}
+            />
           </div>
         ))}
       </div>
