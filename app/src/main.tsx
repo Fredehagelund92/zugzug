@@ -13,6 +13,7 @@ import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
 import { Dashboard } from "./routes/Dashboard";
 import { Mapping } from "./routes/Mapping";
+import { Triage } from "./routes/Triage";
 import { Sources } from "./routes/Sources";
 import { MasterTables } from "./routes/MasterTables";
 import { Settings } from "./routes/Settings";
@@ -65,6 +66,7 @@ createRoot(root).render(
                       <Route element={<AppShell />}>
                         <Route path="/app" element={<Dashboard />} />
                         <Route path="/app/mapping" element={<Mapping />} />
+                        <Route path="/app/triage" element={<Triage />} />
                         <Route path="/app/sources" element={<Sources />} />
                         <Route path="/app/tables" element={<MasterTables />} />
                         <Route path="/app/settings" element={<Settings />} />
