@@ -112,7 +112,7 @@ export function Dashboard() {
           </div>
         }
         action={
-          <Link to="/app/mapping">
+          <Link to="/app/triage">
             <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
               Resolve {totalNew} new
             </Button>
@@ -140,7 +140,7 @@ export function Dashboard() {
                   {staged.length} pending commit
                 </Badge>
               </div>
-              <Link to="/app/mapping?view=all">
+              <Link to="/app/triage">
                 <Button
                   variant="secondary"
                   size="sm"
@@ -195,7 +195,7 @@ export function Dashboard() {
                 return (
                   <Link
                     key={s.id}
-                    to={`/app/mapping?dimId=${s.id}`}
+                    to={`/app/tables?open=${s.id}&active=${s.id}&mode=match`}
                     className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-hover"
                   >
                     <div className="min-w-0 flex-1">
