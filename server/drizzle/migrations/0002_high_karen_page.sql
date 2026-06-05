@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."preferences" ADD COLUMN "scan_schedule" varchar(10);
