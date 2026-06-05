@@ -1,25 +1,38 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useId, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { cx } from "../lib/cx";
 import { IconSearch, IconChevron, IconPlus } from "./Icons";
 
 /* ComboSelect — generic searchable popover over string options, with optional
    "create new value". Used to map a distinct source value to a canonical value
-   (or coin a new one). Squared, token-driven, no hex. */
-export function ComboSelect({
-  options,
-  value,
-  suggestion = null,
-  placeholder = "Select…",
-  allowCreate = false,
-  onPick,
-}: {
+   (or coin a new one). Squared, token-driven, no hex.
+
+   Imperative handle: parents can open the picker programmatically via
+   `ref.open()` — load-bearing for keyboard shortcuts (Triage's `M` key, etc.)
+   that need to drive a row's picker without DOM querySelectoring. */
+export interface ComboSelectHandle {
+  open: () => void;
+}
+
+interface ComboSelectProps {
   options: string[];
   value: string | null;
   suggestion?: string | null;
   placeholder?: string;
   allowCreate?: boolean;
   onPick: (v: string) => void;
-}) {
+}
+
+export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(function ComboSelect(
+  {
+    options,
+    value,
+    suggestion = null,
+    placeholder = "Select…",
+    allowCreate = false,
+    onPick,
+  },
+  imperativeRef,
+) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [highlight, setHighlight] = useState(0);
@@ -27,6 +40,8 @@ export function ComboSelect({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const listboxId = useId();
+
+  useImperativeHandle(imperativeRef, () => ({ open: () => setOpen(true) }), []);
 
   useEffect(() => {
     if (!open) return;
@@ -184,4 +199,4 @@ export function ComboSelect({
       )}
     </div>
   );
-}
+});

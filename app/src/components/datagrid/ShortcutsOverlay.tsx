@@ -22,12 +22,30 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "Mapping",
+    title: "Workbench",
+    rows: [
+      ["⌘1 … ⌘9", "switch tab by position"],
+      ["⌥1 / ⌥2 / ⌥3", "switch mode (Records / Match / Sources)"],
+      ["[ / ]", "previous / next mode"],
+    ],
+  },
+  {
+    title: "Sources",
+    rows: [
+      ["j / k", "navigate columns"],
+      ["Enter", "toggle drill"],
+      ["N", "next unmapped column"],
+      ["/", "focus search"],
+    ],
+  },
+  {
+    title: "Match · Triage",
     rows: [
       ["A", "accept suggestion"],
-      ["M", "pick master"],
+      ["M", "pick master record"],
       ["S", "skip"],
       ["R", "reset draft"],
+      ["N", "jump to next new"],
       ["⌘↵", "publish staged drafts"],
     ],
   },
@@ -69,7 +87,7 @@ export function ShortcutsOverlay({ open, onClose }: { open: boolean; onClose: ()
             esc
           </button>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {GROUPS.map((g) => (
             <div key={g.title}>
               <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">

@@ -38,6 +38,8 @@ interface GridRowProps<Row> {
   cellInRange: (field: string) => boolean;
   selected: boolean;
   selectionCol: boolean;
+  showRowNumbers: boolean;
+  cellPadY: string;
   gridStyle: React.CSSProperties;
   onAddFieldClick: (() => void) | undefined;
   hiddenFieldCount: number;
@@ -64,6 +66,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     cellInRange,
     selected,
     selectionCol,
+    showRowNumbers,
+    cellPadY,
     gridStyle,
     onAddFieldClick,
     hiddenFieldCount,
@@ -86,8 +90,18 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
       style={gridStyle}
       data-row={rk}
     >
+      {showRowNumbers && (
+        <div
+          className={cx(
+            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums",
+            cellPadY,
+          )}
+        >
+          {rowIndex + 1}
+        </div>
+      )}
       {selectionCol && (
-        <div className="flex items-center justify-center border-r border-line py-[7px]">
+        <div className={cx("flex items-center justify-center border-r border-line", cellPadY)}>
           <Checkbox
             state={selected ? "on" : "off"}
             onClick={() => onToggleSelect(rk)}
@@ -103,11 +117,12 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
         const isLastCol = idx === columns.length - 1;
         const cellCx = cx(
-          "relative flex min-w-0 select-none items-center px-3 py-[7px]",
+          "relative flex min-w-0 select-none items-center px-3",
+          cellPadY,
           !isLastCol && "border-r border-line",
           c.align === "right" && "justify-end text-right",
-          inRangeCell && !focused && "bg-accent-wash/25",
-          focused && "ring-1 ring-accent bg-accent-wash/40",
+          inRangeCell && "bg-accent/20",
+          focused && "ring-2 ring-accent ring-inset bg-accent/30",
         );
         const data = `${rk}::${c.field}`;
         return (
@@ -236,6 +251,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
   const visible = columns.filter((c) => !c.hidden);
   const selectionCol = !!selection;
+  const showRowNumbers = !!props.showRowNumbers;
+  const compact = props.density === "compact";
+  const cellPadY = compact ? "py-[3px]" : "py-[7px]";
+  const headerPadY = compact ? "py-[5px]" : "py-2";
   const undo = useUndoStack();
 
   // Typed cell-value accessor: uses the prop if provided, otherwise falls back
@@ -251,14 +270,27 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
   // ── Task 19: sort state + sortedRows ────────────────────────────────────────
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
   const hiddenList = useMemo(() => columns.filter((c) => c.hidden), [columns]);
 
+  const filteredRows = useMemo(() => {
+    const entries = Object.entries(filters);
+    if (entries.length === 0) return rows;
+    return rows.filter((r) =>
+      entries.every(([field, needle]) => {
+        const v = getValue(r, field);
+        if (v == null) return false;
+        return String(v).toLowerCase().includes(needle.toLowerCase());
+      }),
+    );
+  }, [rows, filters, getValue]);
+
   const sortedRows = useMemo(() => {
-    if (!sort) return rows;
+    if (!sort) return filteredRows;
     const sign = sort.dir === "asc" ? 1 : -1;
     const cmp = (a: Row, b: Row) => {
       const av = getValue(a, sort.field);
@@ -269,8 +301,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign;
       return String(av ?? "").localeCompare(String(bv ?? "")) * sign;
     };
-    return [...rows].sort(cmp);
-  }, [rows, sort, getValue]);
+    return [...filteredRows].sort(cmp);
+  }, [filteredRows, sort, getValue]);
 
   // ── Task 20: per-column widths ──────────────────────────────────────────────
   const [widths, setWidths] = useState<Record<string, number>>(() =>
@@ -312,10 +344,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       return w ? `${w}px` : "minmax(96px, 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
+    if (showRowNumbers) tracks.unshift("36px");
     if (onAddFieldClick) tracks.push("auto");
     return { gridTemplateColumns: tracks.join(" ") };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedVisible, selectionCol, widths, onAddFieldClick]);
+  }, [orderedVisible, selectionCol, showRowNumbers, widths, onAddFieldClick]);
 
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = useCallback(
@@ -793,8 +826,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         className="grid items-stretch border-b border-line text-[12px] font-medium text-ink-2"
         style={gridStyle}
       >
+        {showRowNumbers && (
+          <div className={cx("flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3", headerPadY)}>
+            #
+          </div>
+        )}
         {selectionCol && (
-          <div className="flex items-center justify-center border-r border-line py-2">
+          <div className={cx("flex items-center justify-center border-r border-line", headerPadY)}>
             <Checkbox
               state={
                 selection!.selected.length === sortedRows.length && sortedRows.length > 0
@@ -825,7 +863,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 sort?.field === c.field ? (sort.dir === "asc" ? "ascending" : "descending") : "none"
               }
               className={cx(
-                "group relative flex items-center gap-1.5 px-3 py-2",
+                "group relative flex items-center gap-1.5 px-3",
+                headerPadY,
                 !isLastCol && "border-r border-line",
               )}
               data-header={c.field}
@@ -892,6 +931,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 {c.label}
                 {sortGlyph}
               </span>
+              {filters[c.field] && (
+                <span
+                  className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"
+                  title={`filter: contains "${filters[c.field]}"`}
+                >
+                  ▣
+                </span>
+              )}
 
               {/* Task 19: ⋯ menu button — always pushed to the far right edge of
                   the header cell via ml-auto, regardless of column alignment. */}
@@ -915,9 +962,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   column={c}
                   anchorRef={menuAnchorRef}
                   sortDir={sort?.field === c.field ? sort.dir : null}
+                  filterValue={filters[c.field] ?? null}
                   onClose={() => setMenuFor(null)}
                   onRename={(label) => props.onRenameColumn?.(c.field, label)}
                   onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
+                  onFilter={(v) =>
+                    setFilters((cur) => {
+                      const next = { ...cur };
+                      if (v && v.length > 0) next[c.field] = v;
+                      else delete next[c.field];
+                      return next;
+                    })
+                  }
                   onChangeType={async (newType) => {
                     if (!props.onChangeColumnType) return;
                     const res = await props.onChangeColumnType(c.field, newType);
@@ -1036,6 +1092,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 cellInRange={(field) => inRange(rk, field)}
                 selected={isSelected(rk)}
                 selectionCol={selectionCol}
+                showRowNumbers={showRowNumbers}
+                cellPadY={cellPadY}
                 gridStyle={gridStyle}
                 onAddFieldClick={onAddFieldClick}
                 hiddenFieldCount={hiddenList.length}
