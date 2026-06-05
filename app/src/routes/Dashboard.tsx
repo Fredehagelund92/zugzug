@@ -16,7 +16,11 @@ import {
   type SortKey,
   applyFilter,
   applySort,
+  coveragePct,
+  coverageColor,
+  lastAuditForDim,
 } from "./dashboard-helpers";
+import { PALETTE, defaultTintFor } from "../lib/palette";
 
 const MarkBackdrop = () => (
   <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
@@ -92,6 +96,19 @@ export function Dashboard() {
     () => applySort(applyFilter(dims, filter, stagedDimIds), sort),
     [dims, filter, sort, stagedDimIds],
   );
+
+  const lastAuditByDim = useMemo(
+    () =>
+      Object.fromEntries(
+        dims.map((d) => [d.id, lastAuditForDim(d.id, d.dimension, auditLog)]),
+      ),
+    [dims, auditLog],
+  );
+
+  const dimTint = (dim: typeof dims[0]) => {
+    const palette = dim.color ?? defaultTintFor(dim.id);
+    return PALETTE[palette].fg; // e.g. "var(--tint-rose)"
+  };
 
   const kpis: Array<{
     label: string;
@@ -267,6 +284,188 @@ export function Dashboard() {
             {label}
           </button>
         ))}
+      </div>
+
+      {/* Dimension health table */}
+      <div {...rise(5)} className="px-8 pb-8">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              <th className="w-1 p-0" />
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Table
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Coverage
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Records
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Rows
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Status
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Last activity
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleDims.map((dim) => {
+              const pct = coveragePct(dim);
+              const color = coverageColor(pct);
+              const newCount = dim.values.filter((v) => v.status === "new").length;
+              const dimStaged = stagedByDim[dim.id] ?? [];
+              const isStaged = dimStaged.length > 0;
+              const lastAudit = lastAuditByDim[dim.id] ?? null;
+              const tint = dimTint(dim);
+              const hasUrgency = newCount > 0 || isStaged;
+
+              return (
+                <tr
+                  key={dim.id}
+                  onClick={() =>
+                    window.location.assign(
+                      `/app/tables?open=${dim.id}&active=${dim.id}&mode=match`,
+                    )
+                  }
+                  className={cx(
+                    "cursor-pointer",
+                    isStaged ? "bg-staged/[0.04] hover:bg-staged/[0.07]" : "hover:bg-hover",
+                  )}
+                >
+                  {/* tint accent bar — only on urgent rows */}
+                  <td className="p-0">
+                    {hasUrgency && (
+                      <div
+                        className="h-10 w-[3px] rounded-sm"
+                        style={{ background: tint }}
+                      />
+                    )}
+                  </td>
+
+                  {/* table name + map table + optional staged flag */}
+                  <td className="border-b border-line px-4 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="h-2 w-2 shrink-0 rounded-pill"
+                        style={{ background: tint }}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-display text-[13px] font-semibold text-ink">
+                          {dim.dimension}
+                        </div>
+                        <div className="font-mono text-[9px] text-ink-3">{dim.mapTable}</div>
+                        {isStaged && (
+                          <div className="mt-1 flex items-center gap-1 rounded-sm border border-staged/25 bg-staged-soft px-1.5 py-0.5 font-mono text-[9px] text-staged w-fit">
+                            <span>⏸</span>
+                            <span>
+                              {dimStaged.length} staged
+                              {dimStaged[0]
+                                ? ` · ${dimStaged[0].user.initials} staged "${dimStaged[0].raw}"`
+                                : ""}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* coverage bar + pct */}
+                  <td className="border-b border-line px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-[3px] w-18 overflow-hidden rounded-pill bg-surface-3">
+                        <div
+                          className="h-full rounded-pill"
+                          style={{ width: `${pct}%`, background: color }}
+                        />
+                      </div>
+                      <span
+                        className="min-w-[28px] font-mono text-[11px] tabular-nums"
+                        style={{ color }}
+                      >
+                        {pct}%
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* records */}
+                  <td className="border-b border-line px-4 py-2.5 text-right font-mono text-[11px] tabular-nums text-ink-2">
+                    {dim.canonical.length.toLocaleString()}
+                  </td>
+
+                  {/* rows */}
+                  <td className="border-b border-line px-4 py-2.5 text-right font-mono text-[11px] tabular-nums text-ink-2">
+                    {fmtK(dim.rows)}
+                  </td>
+
+                  {/* status badge */}
+                  <td className="border-b border-line px-4 py-2.5">
+                    {newCount > 0 ? (
+                      <Badge tone={newCount > 5 ? "accent" : "warn"} dot>
+                        {newCount} new
+                      </Badge>
+                    ) : isStaged ? (
+                      <Badge tone="staged" dot>
+                        staged
+                      </Badge>
+                    ) : (
+                      <Badge tone="ok" dot>
+                        clean
+                      </Badge>
+                    )}
+                  </td>
+
+                  {/* last activity */}
+                  <td className="border-b border-line px-4 py-2.5">
+                    {lastAudit ? (
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[7px] font-semibold text-ink-2"
+                        >
+                          {lastAudit.user.initials}
+                        </span>
+                        <span className="font-mono text-[10px] text-ink-3">
+                          {lastAudit.action} · {lastAudit.at}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="font-mono text-[10px] text-ink-3">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+
+            {/* empty filter state */}
+            {visibleDims.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  className="border-b border-line px-4 py-8 text-center font-mono text-[11px] text-ink-3"
+                >
+                  no tables match the current filter
+                </td>
+              </tr>
+            )}
+
+            {/* add row */}
+            <tr>
+              <td colSpan={7} className="px-4 py-2.5">
+                <button
+                  type="button"
+                  onClick={create.open}
+                  className="flex items-center gap-1.5 font-mono text-[10px] text-ink-3 transition-colors hover:text-accent"
+                >
+                  <IconPlus className="h-3 w-3" />
+                  New table
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {/* staged drafts awaiting review/approve — the OLTP draft layer (Postgres) */}
