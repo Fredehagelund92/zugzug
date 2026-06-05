@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
@@ -129,7 +129,13 @@ export function AppShell() {
     });
   };
   const navigate = useNavigate();
-  const { openTab } = useOpenTabs();
+  const { tabs, openTab, focusTab } = useOpenTabs();
+  // Mirror `tabs` into a ref so the global key handler can read the latest list
+  // without re-binding the document listener every time tabs open/close/reorder.
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -143,11 +149,22 @@ export function AppShell() {
         // Fires even inside inputs so the user can always reach it.
         e.preventDefault();
         setPaletteOpen(true);
+      } else if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+        // Cmd+1..9 → switch to the Nth tab in the tab strip (1-indexed).
+        // Only fires on /app/tables, since tabs only exist there; elsewhere we
+        // bail so the browser's own Cmd+1..9 shortcut still works.
+        if (!window.location.pathname.startsWith("/app/tables")) return;
+        const idx = parseInt(e.key, 10) - 1;
+        const target = tabsRef.current[idx];
+        if (target) {
+          e.preventDefault();
+          focusTab(target.id);
+        }
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [focusTab]);
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
