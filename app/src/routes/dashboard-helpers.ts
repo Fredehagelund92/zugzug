@@ -5,7 +5,11 @@ import type { AuditEntry } from "../store";
 export type FilterKey = "all" | "attention" | "clean";
 export type SortKey = "urgency" | "coverage" | "name" | "rows";
 
-/** Percentage of values already mapped (count-based, not row-weighted). */
+/**
+ * Percentage of values already mapped (count-based, not row-weighted).
+ * Note: the global "coverage" KPI in Dashboard.tsx is row-weighted via `v.current`.
+ * This function counts mapping entries — use it only for per-dim health display.
+ */
 export function coveragePct(dim: MappingDimension): number {
   if (dim.values.length === 0) return 100;
   return Math.round(
@@ -34,6 +38,8 @@ export function coverageColor(pct: number): string {
  * Returns the most recent audit entry whose detail mentions this dim.
  * AuditEntry has no dimId field, so we do a case-insensitive string match
  * on both the dimension display name and the dimId. Falls back to null.
+ *
+ * Assumes `auditLog` is ordered newest-first (as returned by the server).
  */
 export function lastAuditForDim(
   dimId: string,
