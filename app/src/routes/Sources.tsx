@@ -283,7 +283,7 @@ export function Sources() {
   const totalFilteredUnmapped = groups.reduce((n, g) => n + g.unmapped, 0);
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-[var(--wide)] p-8">
       {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
