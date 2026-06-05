@@ -78,7 +78,32 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
   const activeMode: Mode = mode ?? "records";
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
+    <div
+      className="flex flex-1 flex-col min-h-0"
+      onKeyDown={(e) => {
+        // Skip when editing in a grid cell (focus is inside an input)
+        const t = e.target as HTMLElement;
+        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+        if (e.altKey && (e.key === "1" || e.key === "2" || e.key === "3")) {
+          const idx = parseInt(e.key, 10) - 1;
+          const target = activeModes[idx];
+          if (target) {
+            e.preventDefault();
+            onModeChange?.(target);
+          }
+          return;
+        }
+        if (e.key === "[" || e.key === "]") {
+          const dir = e.key === "]" ? 1 : -1;
+          const i = activeModes.indexOf(activeMode);
+          const next = activeModes[i + dir];
+          if (next) {
+            e.preventDefault();
+            onModeChange?.(next);
+          }
+        }
+      }}
+    >
       {activeModes.length > 1 && (
         <div className="border-b border-line bg-surface px-4 py-2.5">
           <ModeStrip
