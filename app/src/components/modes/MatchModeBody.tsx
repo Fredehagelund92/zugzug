@@ -97,8 +97,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [autoFlash, setAutoFlash] = useState<number | null>(null);
-  const [_shortcuts, setShortcuts] = useState(false);
-  void _shortcuts; // placeholder — wired to ShortcutsOverlay in Task 29
 
   const byVal = (v: string) => dim.values.find((r) => r.value === v)!;
   const keyFor = (label: string) =>
@@ -249,7 +247,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     onSelectAll: () => setSel(visIds),
     onUndo: () => void undo.undo(),
     onRedo: () => void undo.redo(),
-    onShortcuts: () => setShortcuts(true),
     onFocusFilter: () => {
       /* filter chips already global */
     },
