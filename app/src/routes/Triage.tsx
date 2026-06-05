@@ -707,6 +707,9 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
                 {p.undo.topLabel}
               </span>
             )}
+            {p.undo.topSurface && (
+              <span className="ml-1.5 font-mono text-[10px] text-ink-3">({p.undo.topSurface})</span>
+            )}
             <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
           <Button

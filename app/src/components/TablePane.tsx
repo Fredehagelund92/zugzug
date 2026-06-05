@@ -202,7 +202,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       el.classList.add("zz-row-flash");
       window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const list = dim.canonical;
