@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
 import { Checkbox } from "./Checkbox";
 import { ComboSelect } from "./ComboSelect";
 import { AddFieldPopover } from "./AddFieldPopover";
-import { IconPlus, IconX, IconChevron } from "./Icons";
-import { cx } from "../lib/cx";
+import { IconPlus, IconX } from "./Icons";
 import {
   slug,
   useSources,
@@ -161,13 +160,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [density, toggleDensity] = useDensity();
 
   const [sel, setSel] = useState<string[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
-  const openRef = useRef(open);
-  useEffect(() => {
-    openRef.current = open;
-  }, [open]);
   const [draft, setDraft] = useState("");
-  const [variantsCache, setVariantsCache] = useState<Record<string, string[] | "loading">>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [renameFlash, setRenameFlash] = useState<{
     prev: string;
@@ -205,7 +198,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   }, []);
 
   const list = dim.canonical;
-  const fields = dim.fields ?? [];
+  const fields = useMemo(() => dim.fields ?? [], [dim.fields]);
   const external = dim.keyKind === "external_id";
   const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
   const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
@@ -218,30 +211,17 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         type: "text",
         pinnedLeft: true,
         editable: !external,
-        render: (c) => (
-          <button
-            type="button"
-            onClick={() => toggleOpen(c.key)}
-            className="flex min-w-0 items-center gap-2 text-left"
-          >
-            <IconChevron
-              className={cx(
-                "h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform",
-                openRef.current === c.key && "rotate-180",
-              )}
-            />
-            {c.unresolved ? (
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-mono text-[13px] text-ink-2">{c.key}</span>
-                <Badge tone="warn">unresolved</Badge>
-              </span>
-            ) : (
-              <span className="truncate font-display text-[14px] font-semibold text-ink">
-                {c.label}
-              </span>
-            )}
-          </button>
-        ),
+        render: (c) =>
+          c.unresolved ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono text-[13px] text-ink-2">{c.key}</span>
+              <Badge tone="warn">unresolved</Badge>
+            </span>
+          ) : (
+            <span className="truncate font-display text-[14px] font-semibold text-ink">
+              {c.label}
+            </span>
+          ),
         edit: (c, { commit }) => (
           <input
             autoFocus
@@ -275,19 +255,28 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         editable: true,
         render: undefined,
       })),
-      {
-        field: "variants",
-        label: "Raw",
-        type: "number",
-        editable: false,
-        align: "right",
-        render: (c) =>
-          (c.variants ?? 0) > 0 ? (
-            <Badge>{c.variants}</Badge>
-          ) : (
-            <span className="font-mono text-[11px] text-ink-3">0</span>
-          ),
-      },
+      // Raw-variant count — engineer-only. Surfaces how many distinct source
+      // values resolve to each canonical record. Useless on external_id
+      // dims (sole crosswalk is the ID self-map) and on static-reference
+      // tables (no wiring at all); hidden behind the engineer toggle so
+      // Sheets-refugee users don't see a column of zeros.
+      ...(engineer
+        ? [
+            {
+              field: "variants",
+              label: "Raw",
+              type: "number",
+              editable: false,
+              align: "right",
+              render: (c: CanonicalValue) =>
+                (c.variants ?? 0) > 0 ? (
+                  <Badge>{c.variants}</Badge>
+                ) : (
+                  <span className="font-mono text-[11px] text-ink-3">0</span>
+                ),
+            } as ColumnDef<CanonicalValue>,
+          ]
+        : []),
     ];
     const ordered = cols
       .map((c) => ({
@@ -305,7 +294,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         return ai - bi;
       });
     return ordered;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields, engineer, dim.keyCol, external, layout]);
 
   const rowsForGrid = useMemo(
@@ -316,20 +304,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const flash = (m: string) => {
     setNotice(m);
     setTimeout(() => setNotice(null), 3000);
-  };
-  const ck = (key: string) => `${activeId}::${key}`;
-
-  const toggleOpen = async (key: string) => {
-    if (open === key) {
-      setOpen(null);
-      return;
-    }
-    setOpen(key);
-    if (!variantsCache[ck(key)]) {
-      setVariantsCache((c) => ({ ...c, [ck(key)]: "loading" }));
-      const vs = await fetchVariants(activeId, key);
-      setVariantsCache((c) => ({ ...c, [ck(key)]: vs }));
-    }
   };
 
   const add = async () => {
@@ -677,39 +651,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             }}
           />
         )}
-
-        {open &&
-          (() => {
-            const c = list.find((x) => x.key === open);
-            const cached = c ? variantsCache[ck(c.key)] : undefined;
-            if (!c) return null;
-            return (
-              <div className="border border-t-0 border-line bg-surface-2/40 px-5 py-3 pl-[44px]">
-                <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                  raw values mapped to <span className="text-ink">{c.label}</span>
-                </div>
-                {cached === "loading" ? (
-                  <div className="mt-2 font-mono text-[11px] text-ink-3">loading…</div>
-                ) : cached && cached.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {cached.map((raw) => (
-                      <Badge key={raw}>{raw}</Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-2 font-mono text-[11px] text-ink-3">
-                    no source values map here yet —{" "}
-                    <Link
-                      to={`/app/tables?open=${activeId}&active=${activeId}&mode=match`}
-                      className="text-accent hover:underline"
-                    >
-                      match them in Match values
-                    </Link>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
         {!external && (
           <div className="flex items-center gap-2 border-t border-line bg-surface px-5 py-3">

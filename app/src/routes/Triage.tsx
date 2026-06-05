@@ -283,19 +283,21 @@ function TriageInner() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] space-y-5 p-8">
-      <PageHeader
-        kicker="WORKFLOW"
-        title={
-          <>
-            Triage{" "}
-            <span className="font-mono text-[14px] text-ink-3">
-              · {crossCounts.new} across {dimsWithWork} table{dimsWithWork === 1 ? "" : "s"}
-            </span>
-          </>
-        }
-        lede="Sorted by blast radius. Press ⌘↵ to publish."
-      />
+    <div className="flex h-full min-h-0 flex-col px-5 pb-5 pt-4">
+      <div className="mb-4 shrink-0">
+        <PageHeader
+          kicker="WORKFLOW"
+          title={
+            <>
+              Triage{" "}
+              <span className="font-mono text-[14px] text-ink-3">
+                · {crossCounts.new} across {dimsWithWork} table{dimsWithWork === 1 ? "" : "s"}
+              </span>
+            </>
+          }
+          lede="Sorted by blast radius. Press ⌘↵ to publish."
+        />
+      </div>
 
       <CrossDimInbox
         rows={visibleCross}
@@ -363,7 +365,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
     <div
       ref={containerRef}
       tabIndex={0}
-      className="zz-rise rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
+      className="zz-rise flex min-h-0 flex-1 flex-col rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
       onKeyDown={(e) => {
         if (e.key === "ArrowDown" || e.key === "j") {
           e.preventDefault();
@@ -434,11 +436,15 @@ function CrossDimInbox(p: CrossDimInboxProps) {
         </span>
       </div>
 
+      {/* scroll region — column header sticks to its top, rows flow, footer
+          (CrossDimFooter below) is pinned at the panel bottom. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+
       {/* column header */}
       <div
         className={cx(
           COLS_CROSS,
-          "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3",
+          "sticky top-0 z-10 border-b border-line bg-surface px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 backdrop-blur-sm",
         )}
       >
         <span>Dimension</span>
@@ -552,6 +558,8 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           );
         })
       )}
+
+      </div>{/* /scroll region */}
 
       {/* footer — multi-dim commit */}
       <CrossDimFooter p={p} />

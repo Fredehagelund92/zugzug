@@ -315,11 +315,11 @@ export function Sources() {
   const totalFilteredUnmapped = groups.reduce((n, g) => n + g.unmapped, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] p-8">
+    <div className="flex h-full min-h-0 flex-col px-5 pb-5 pt-4">
       {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
-      <div className="mb-6">
+      <div className="mb-4 shrink-0">
         <PageHeader
           kicker="Warehouse"
           title="Sources"
@@ -357,14 +357,14 @@ export function Sources() {
       </div>
 
       {derived && (
-        <div className="mb-4 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">
+        <div className="mb-3 shrink-0 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">
           {derived}
         </div>
       )}
 
       {/* ─────────── LEDGER SURFACE (paper) ─────────── */}
       <section
-        className="zz-rise relative overflow-hidden border border-line bg-surface shadow-pop"
+        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden border border-line bg-surface shadow-pop"
         style={{ animationDelay: "60ms" }}
       >
         {/* a thin accent edge at the very top — the 'folder tab' that signals
@@ -412,6 +412,10 @@ export function Sources() {
             </p>
           </div>
         ) : null}
+
+        {/* scroll region — Standing scrolls away, Toolbar sticks at the top,
+            the ledger flows underneath. The page footer below is pinned. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
         {/* ─── TOOLBAR (sticky inside the surface) ─── */}
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-3 backdrop-blur-sm">
@@ -511,6 +515,8 @@ export function Sources() {
             </div>
           )}
         </div>
+
+        </div>{/* /scroll region */}
 
         {/* ─── FOOTER — the only at-a-glance totals on the page ─── */}
         {sources.length > 0 && (
