@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
@@ -15,6 +15,7 @@ import {
   setSourceSchedule,
   type SourceInfo,
 } from "../store";
+import { useSourcesCursor } from "./use-sources-cursor";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
    tomorrow.
@@ -82,6 +83,7 @@ export function Sources() {
   const [expanded, setExpanded] = useState<string | null>(null); // expanded column drill
   const [openSchemas, setOpenSchemas] = useState<Set<string>>(new Set());
   const [openInit, setOpenInit] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   /* ---- aggregates ---- */
   const agg = useMemo(() => {
@@ -260,6 +262,48 @@ export function Sources() {
     return matchingSchemas;
   }, [q, openSchemas, matchingSchemas]);
 
+  // Flatten visible expanded-schema rows into an ordered key list for the cursor.
+  // A row that lives inside a collapsed schema is unreachable via j/k; collapsing
+  // a schema while the cursor is on one of its rows triggers staleness in the hook.
+  const visibleKeys = useMemo<string[]>(() => {
+    const out: string[] = [];
+    for (const g of visibleGroups) {
+      if (!effectiveOpen.has(g.schema)) continue;
+      for (const r of g.columns) out.push(`${r.dimId}::${r.table}::${r.column}`);
+    }
+    return out;
+  }, [visibleGroups, effectiveOpen]);
+
+  const rowsWithUnmapped = useMemo<string[]>(
+    () => visibleKeys.filter((k) => {
+      // O(N·M) lookup is fine — visible row counts are bounded by PAGE (=60).
+      for (const g of visibleGroups) {
+        for (const r of g.columns) {
+          if (`${r.dimId}::${r.table}::${r.column}` === k) return r.unmapped > 0;
+        }
+      }
+      return false;
+    }),
+    [visibleKeys, visibleGroups],
+  );
+
+  const cursor = useSourcesCursor({
+    visibleKeys,
+    rowsWithUnmapped,
+    toggleDrillAt: (key) => setExpanded(expanded === key ? null : key),
+    focusSearch: () => searchInputRef.current?.focus(),
+  });
+
+  // Bring the focused row into view as the cursor moves. The ledger surface
+  // (the parent <section>) is the scroll context, so scrollIntoView with
+  // block:"nearest" keeps the sticky toolbar pinned at the top.
+  useLayoutEffect(() => {
+    const key = cursor.cursor;
+    if (!key) return;
+    const el = document.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(key)}"]`);
+    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [cursor.cursor]);
+
   /* ---- actions ---- */
   const scan = async () => {
     setScanning(true);
@@ -364,7 +408,9 @@ export function Sources() {
 
       {/* ─────────── LEDGER SURFACE (paper) ─────────── */}
       <section
-        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden border border-line bg-surface shadow-pop"
+        tabIndex={0}
+        onKeyDown={cursor.onKeyDown}
+        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden border border-line bg-surface shadow-pop outline-none focus:ring-1 focus:ring-accent/30"
         style={{ animationDelay: "60ms" }}
       >
         {/* a thin accent edge at the very top — the 'folder tab' that signals
@@ -422,6 +468,7 @@ export function Sources() {
           <label className="flex min-w-[240px] flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3">
             <IconSearch className="h-3.5 w-3.5" />
             <input
+              ref={searchInputRef}
               value={q}
               onChange={(e) => {
                 setQ(e.target.value);
@@ -484,7 +531,7 @@ export function Sources() {
               onToggle={() => toggleSchema(g.schema)}
               expanded={expanded}
               setExpanded={setExpanded}
-              focusedRowKey={null}
+              focusedRowKey={cursor.cursor}
               onScheduleChange={(r, next) => {
                 void setSourceSchedule(r.dimId, r.table, r.column, next);
               }}
