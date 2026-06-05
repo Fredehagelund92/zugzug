@@ -30,17 +30,73 @@ import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef } from "./datagrid";
 import type { CanonicalValue, MappingDimension } from "../data";
+import { ModeStrip } from "./modes/ModeStrip";
+import { MatchModeBody } from "./modes/MatchModeBody";
+import type { Mode } from "../lib/available-modes";
 
 interface TablePaneProps {
   dim: MappingDimension;
   isActive: boolean;
+  /** Currently-selected mode for this pane. Optional — defaults to "records"
+   *  so callers that haven't wired URL-folded mode yet still compile. Task 3.4
+   *  threads the real value through from MasterTables. */
+  mode?: Mode;
+  /** Modes available for this dim (records always present; match + sources
+   *  conditional on wiring). Optional + defaults to ["records"] — when ≤ 1
+   *  the ModeStrip self-hides anyway, so no chrome appears. */
+  modes?: readonly Mode[];
+  /** Called when the user picks a different mode. No-op default lets the
+   *  component stand alone in tests/previews. */
+  onModeChange?: (m: Mode) => void;
 }
 
-export function TablePane({ dim, isActive }: TablePaneProps) {
+export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
   return (
     <UndoStackProvider scopeKey={dim.id}>
-      <TablePaneInner dim={dim} isActive={isActive} />
+      <TablePaneInner
+        dim={dim}
+        isActive={isActive}
+        mode={mode}
+        modes={modes}
+        onModeChange={onModeChange}
+      />
     </UndoStackProvider>
+  );
+}
+
+/** Records mode has only the "new" status for canonical values right now —
+ *  treat any value whose status is missing as "mapped" for the badge count. */
+function countNewForDim(dim: MappingDimension): number {
+  return dim.values.filter((v) => v.status === "new").length;
+}
+
+function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
+  const sources = useSources();
+  const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
+  const activeModes: readonly Mode[] = modes ?? ["records"];
+  const activeMode: Mode = mode ?? "records";
+
+  return (
+    <div className="flex flex-1 flex-col min-h-0">
+      {activeModes.length > 1 && (
+        <div className="border-b border-line bg-surface px-4 py-2.5">
+          <ModeStrip
+            modes={activeModes}
+            active={activeMode}
+            onSelect={onModeChange ?? (() => {})}
+            badges={{
+              match: { count: countNewForDim(dim) },
+              sources: { warn: wired.some((s) => s.unmapped > 0) },
+            }}
+          />
+        </div>
+      )}
+      <div className="flex flex-1 flex-col min-h-0 overflow-auto">
+        {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} />}
+        {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
+        {/* sources mode arrives in Task 4.1 */}
+      </div>
+    </div>
   );
 }
 
@@ -66,7 +122,11 @@ function useDensity(): ["default" | "compact", () => void] {
   ];
 }
 
-function TablePaneInner({ dim, isActive }: TablePaneProps) {
+/** RecordsBody — the original TablePane body, lifted verbatim so TablePaneInner
+ *  can switch between this and other mode bodies (Match, Sources) under one
+ *  shared UndoStackProvider. The body owns its own grid layout state, density
+ *  toggle, popovers, etc. */
+function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
   const sources = useSources();
   const { engineer } = useEngineerMode();
   const [searchParams] = useSearchParams();
