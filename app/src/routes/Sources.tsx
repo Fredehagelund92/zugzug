@@ -12,7 +12,6 @@ import {
   useSources,
   scanSources,
   deriveCanonical,
-  setSourceSchedule,
   type SourceInfo,
 } from "../store";
 import { useSourcesCursor } from "./use-sources-cursor";
@@ -533,9 +532,6 @@ export function Sources() {
               setExpanded={setExpanded}
               focusedRowKey={cursor.cursor}
               onRowClick={cursor.setCursor}
-              onScheduleChange={(r, next) => {
-                void setSourceSchedule(r.dimId, r.table, r.column, next);
-              }}
               onDerive={derive}
             />
           ))}
@@ -599,7 +595,6 @@ function SchemaSection({
   onToggle,
   expanded,
   setExpanded,
-  onScheduleChange,
   onDerive,
   focusedRowKey,
   onRowClick,
@@ -609,7 +604,6 @@ function SchemaSection({
   onToggle: () => void;
   expanded: string | null;
   setExpanded: (next: string | null) => void;
-  onScheduleChange: (r: SourceInfo, next: string | null) => void;
   onDerive: (r: SourceInfo) => void;
   focusedRowKey?: string | null;
   onRowClick?: (key: string) => void;
@@ -665,7 +659,6 @@ function SchemaSection({
                   onRowClick?.(key);
                   setExpanded(expanded === key ? null : key);
                 }}
-                onScheduleChange={(next) => onScheduleChange(r, next)}
                 onDerive={() => onDerive(r)}
               />
             );
