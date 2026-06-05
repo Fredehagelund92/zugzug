@@ -193,7 +193,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => 
   return (
     <div
       role="tablist"
-      className="sticky top-0 z-40 flex h-9 items-stretch border-b border-line bg-surface-2"
+      className="sticky top-0 z-10 flex h-9 items-stretch border-b border-line bg-surface-2"
     >
       <div className="flex flex-1 items-stretch overflow-x-auto">
         {tabs.map((tab) => {
