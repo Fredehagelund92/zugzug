@@ -117,8 +117,12 @@ export function MasterTables() {
 
   // When the active tab changes (or its mode changes), sync ?mode= in the URL.
   // Drop ?value= whenever we're not in match mode — value is only meaningful
-  // for the match body's cursor.
+  // for the match body's cursor. Gate on initialModeRef so we don't fire on
+  // the very first commit (before foldUrlMode has populated perTabMode) and
+  // strip ?value= that the legacy redirect just dropped on the URL for the
+  // match-mode cursor pin.
   useEffect(() => {
+    if (!initialModeRef.current) return;
     if (!activeTabId) return;
     const dimId = dimIdFromTabId(activeTabId);
     const dim = dimById.get(dimId);
