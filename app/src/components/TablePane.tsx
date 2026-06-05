@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
 import { Checkbox } from "./Checkbox";
 import { ComboSelect } from "./ComboSelect";
 import { AddFieldPopover } from "./AddFieldPopover";
-import { IconPlus, IconX, IconChevron } from "./Icons";
-import { cx } from "../lib/cx";
+import { IconPlus, IconX } from "./Icons";
 import {
   slug,
   useSources,
@@ -30,17 +29,99 @@ import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef } from "./datagrid";
 import type { CanonicalValue, MappingDimension } from "../data";
+import { ModeStrip } from "./modes/ModeStrip";
+import { MatchModeBody } from "./modes/MatchModeBody";
+import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
+import type { Mode } from "../lib/available-modes";
 
 interface TablePaneProps {
   dim: MappingDimension;
   isActive: boolean;
+  /** Currently-selected mode for this pane. Optional — defaults to "records"
+   *  so callers that haven't wired URL-folded mode yet still compile. Task 3.4
+   *  threads the real value through from MasterTables. */
+  mode?: Mode;
+  /** Modes available for this dim (records always present; match + sources
+   *  conditional on wiring). Optional + defaults to ["records"] — when ≤ 1
+   *  the ModeStrip self-hides anyway, so no chrome appears. */
+  modes?: readonly Mode[];
+  /** Called when the user picks a different mode. No-op default lets the
+   *  component stand alone in tests/previews. */
+  onModeChange?: (m: Mode) => void;
 }
 
-export function TablePane({ dim, isActive }: TablePaneProps) {
+export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
   return (
     <UndoStackProvider scopeKey={dim.id}>
-      <TablePaneInner dim={dim} isActive={isActive} />
+      <TablePaneInner
+        dim={dim}
+        isActive={isActive}
+        mode={mode}
+        modes={modes}
+        onModeChange={onModeChange}
+      />
     </UndoStackProvider>
+  );
+}
+
+/** Records mode has only the "new" status for canonical values right now —
+ *  treat any value whose status is missing as "mapped" for the badge count. */
+function countNewForDim(dim: MappingDimension): number {
+  return dim.values.filter((v) => v.status === "new").length;
+}
+
+function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
+  const sources = useSources();
+  const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
+  const activeModes: readonly Mode[] = modes ?? ["records"];
+  const activeMode: Mode = mode ?? "records";
+
+  return (
+    <div
+      className="flex flex-1 flex-col min-h-0"
+      onKeyDown={(e) => {
+        // Skip when editing in a grid cell (focus is inside an input)
+        const t = e.target as HTMLElement;
+        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+        if (e.altKey && (e.key === "1" || e.key === "2" || e.key === "3")) {
+          const idx = parseInt(e.key, 10) - 1;
+          const target = activeModes[idx];
+          if (target) {
+            e.preventDefault();
+            onModeChange?.(target);
+          }
+          return;
+        }
+        if (e.key === "[" || e.key === "]") {
+          const dir = e.key === "]" ? 1 : -1;
+          const i = activeModes.indexOf(activeMode);
+          const next = activeModes[i + dir];
+          if (next) {
+            e.preventDefault();
+            onModeChange?.(next);
+          }
+        }
+      }}
+    >
+      {activeModes.length > 1 && (
+        <div className="border-b border-line bg-surface px-4 py-2.5">
+          <ModeStrip
+            modes={activeModes}
+            active={activeMode}
+            onSelect={onModeChange ?? (() => {})}
+            badges={{
+              match: { count: countNewForDim(dim) },
+              sources: { warn: wired.some((s) => s.unmapped > 0) },
+            }}
+          />
+        </div>
+      )}
+      <div className="flex flex-1 flex-col min-h-0 overflow-auto">
+        {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} />}
+        {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
+        {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}
+      </div>
+    </div>
   );
 }
 
@@ -66,7 +147,11 @@ function useDensity(): ["default" | "compact", () => void] {
   ];
 }
 
-function TablePaneInner({ dim, isActive }: TablePaneProps) {
+/** RecordsBody — the original TablePane body, lifted verbatim so TablePaneInner
+ *  can switch between this and other mode bodies (Match, Sources) under one
+ *  shared UndoStackProvider. The body owns its own grid layout state, density
+ *  toggle, popovers, etc. */
+function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
   const sources = useSources();
   const { engineer } = useEngineerMode();
   const [searchParams] = useSearchParams();
@@ -75,13 +160,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
   const [density, toggleDensity] = useDensity();
 
   const [sel, setSel] = useState<string[]>([]);
-  const [open, setOpen] = useState<string | null>(null);
-  const openRef = useRef(open);
-  useEffect(() => {
-    openRef.current = open;
-  }, [open]);
   const [draft, setDraft] = useState("");
-  const [variantsCache, setVariantsCache] = useState<Record<string, string[] | "loading">>({});
   const [notice, setNotice] = useState<string | null>(null);
   const [renameFlash, setRenameFlash] = useState<{
     prev: string;
@@ -116,11 +195,10 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
       el.classList.add("zz-row-flash");
       window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const list = dim.canonical;
-  const fields = dim.fields ?? [];
+  const fields = useMemo(() => dim.fields ?? [], [dim.fields]);
   const external = dim.keyKind === "external_id";
   const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
   const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
@@ -133,30 +211,17 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
         type: "text",
         pinnedLeft: true,
         editable: !external,
-        render: (c) => (
-          <button
-            type="button"
-            onClick={() => toggleOpen(c.key)}
-            className="flex min-w-0 items-center gap-2 text-left"
-          >
-            <IconChevron
-              className={cx(
-                "h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform",
-                openRef.current === c.key && "rotate-180",
-              )}
-            />
-            {c.unresolved ? (
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-mono text-[13px] text-ink-2">{c.key}</span>
-                <Badge tone="warn">unresolved</Badge>
-              </span>
-            ) : (
-              <span className="truncate font-display text-[14px] font-semibold text-ink">
-                {c.label}
-              </span>
-            )}
-          </button>
-        ),
+        render: (c) =>
+          c.unresolved ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-mono text-[13px] text-ink-2">{c.key}</span>
+              <Badge tone="warn">unresolved</Badge>
+            </span>
+          ) : (
+            <span className="truncate font-display text-[14px] font-semibold text-ink">
+              {c.label}
+            </span>
+          ),
         edit: (c, { commit }) => (
           <input
             autoFocus
@@ -190,19 +255,28 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
         editable: true,
         render: undefined,
       })),
-      {
-        field: "variants",
-        label: "Raw",
-        type: "number",
-        editable: false,
-        align: "right",
-        render: (c) =>
-          (c.variants ?? 0) > 0 ? (
-            <Badge>{c.variants}</Badge>
-          ) : (
-            <span className="font-mono text-[11px] text-ink-3">0</span>
-          ),
-      },
+      // Raw-variant count — engineer-only. Surfaces how many distinct source
+      // values resolve to each canonical record. Useless on external_id
+      // dims (sole crosswalk is the ID self-map) and on static-reference
+      // tables (no wiring at all); hidden behind the engineer toggle so
+      // Sheets-refugee users don't see a column of zeros.
+      ...(engineer
+        ? [
+            {
+              field: "variants",
+              label: "Raw",
+              type: "number",
+              editable: false,
+              align: "right",
+              render: (c: CanonicalValue) =>
+                (c.variants ?? 0) > 0 ? (
+                  <Badge>{c.variants}</Badge>
+                ) : (
+                  <span className="font-mono text-[11px] text-ink-3">0</span>
+                ),
+            } as ColumnDef<CanonicalValue>,
+          ]
+        : []),
     ];
     const ordered = cols
       .map((c) => ({
@@ -220,7 +294,6 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
         return ai - bi;
       });
     return ordered;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields, engineer, dim.keyCol, external, layout]);
 
   const rowsForGrid = useMemo(
@@ -232,20 +305,6 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
     setNotice(m);
     setTimeout(() => setNotice(null), 3000);
   };
-  const ck = (key: string) => `${activeId}::${key}`;
-
-  const toggleOpen = async (key: string) => {
-    if (open === key) {
-      setOpen(null);
-      return;
-    }
-    setOpen(key);
-    if (!variantsCache[ck(key)]) {
-      setVariantsCache((c) => ({ ...c, [ck(key)]: "loading" }));
-      const vs = await fetchVariants(activeId, key);
-      setVariantsCache((c) => ({ ...c, [ck(key)]: vs }));
-    }
-  };
 
   const add = async () => {
     const label = draft.trim();
@@ -254,6 +313,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
     await addCanonical(activeId, label);
     undo.push({
       label: `add "${label}"`,
+      surface: "Records",
       apply: () => addCanonical(activeId, label),
       inverse: () => retireCanonical(activeId, slug(label)).then(() => undefined),
     });
@@ -274,6 +334,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
     const n = await mergeCanonical(activeId, survivor, losers);
     undo.push({
       label: `merge ${losers.length} into "${survivorLabel}"`,
+      surface: "Records",
       apply: () => mergeCanonical(activeId, survivor, losers).then(() => undefined),
       inverse: async () => {
         for (const s of snapshot) await addCanonical(activeId, s.label);
@@ -296,6 +357,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
       }
       undo.push({
         label: `remove "${label}"`,
+        surface: "Records",
         apply: () => retireCanonical(activeId, key).then(() => undefined),
         inverse: () => addCanonical(activeId, label),
       });
@@ -366,6 +428,9 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
             title={undo.topLabel ?? undefined}
           >
             ↶ Undo
+            {undo.topSurface && (
+              <span className="ml-1.5 font-mono text-[10px] text-ink-3">({undo.topSurface})</span>
+            )}
             <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
           <Button
@@ -524,6 +589,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
               if (prev) {
                 undo.push({
                   label: `rename "${prev}" → "${value}"`,
+                  surface: "Records",
                   apply: () => renameCanonical(activeId, rowKey, value),
                   inverse: () => renameCanonical(activeId, rowKey, prev),
                 });
@@ -541,6 +607,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
             if (prev !== v)
               undo.push({
                 label: `edit ${field} on "${rowKey}"`,
+                surface: "Records",
                 apply: () => setFieldValue(activeId, rowKey, field, v),
                 inverse: () => setFieldValue(activeId, rowKey, field, prev),
               });
@@ -584,39 +651,6 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
             }}
           />
         )}
-
-        {open &&
-          (() => {
-            const c = list.find((x) => x.key === open);
-            const cached = c ? variantsCache[ck(c.key)] : undefined;
-            if (!c) return null;
-            return (
-              <div className="border border-t-0 border-line bg-surface-2/40 px-5 py-3 pl-[44px]">
-                <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                  raw values mapped to <span className="text-ink">{c.label}</span>
-                </div>
-                {cached === "loading" ? (
-                  <div className="mt-2 font-mono text-[11px] text-ink-3">loading…</div>
-                ) : cached && cached.length ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {cached.map((raw) => (
-                      <Badge key={raw}>{raw}</Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-2 font-mono text-[11px] text-ink-3">
-                    no source values map here yet —{" "}
-                    <Link
-                      to={`/app/mapping?dimId=${activeId}`}
-                      className="text-accent hover:underline"
-                    >
-                      match them on Value mapping
-                    </Link>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
         {!external && (
           <div className="flex items-center gap-2 border-t border-line bg-surface px-5 py-3">

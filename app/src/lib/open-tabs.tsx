@@ -19,6 +19,9 @@ export function makeTabId(dimId: string): TabId {
   return `${TAB_PREFIX}${dimId}` as TabId;
 }
 export function dimIdFromTabId(id: TabId): string {
+  if (!id.startsWith(TAB_PREFIX)) {
+    throw new Error(`dimIdFromTabId: malformed tab id (missing "${TAB_PREFIX}" prefix): ${id}`);
+  }
   return id.slice(TAB_PREFIX.length);
 }
 
@@ -114,16 +117,31 @@ function readStored(): OpenTabsState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { tabs: [], activeId: null };
-    const parsed = JSON.parse(raw) as Serialized;
-    return {
-      tabs: parsed.tabs.map((t) => ({
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !Array.isArray((parsed as { tabs?: unknown }).tabs)
+    ) {
+      return { tabs: [], activeId: null };
+    }
+    const p = parsed as Serialized;
+    const tabs: OpenTab[] = [];
+    for (const t of p.tabs) {
+      if (typeof t?.id !== "string" || !t.id.startsWith(TAB_PREFIX)) continue;
+      if (typeof t.dimId !== "string" || t.dimId.length === 0) continue;
+      tabs.push({
         id: t.id as TabId,
         dimId: t.dimId,
-        pinned: t.pinned,
-        openedAt: t.openedAt,
-      })),
-      activeId: (parsed.activeId as TabId | null) ?? null,
-    };
+        pinned: !!t.pinned,
+        openedAt: typeof t.openedAt === "number" ? t.openedAt : Date.now(),
+      });
+    }
+    const activeId =
+      typeof p.activeId === "string" && p.activeId.startsWith(TAB_PREFIX)
+        ? (p.activeId as TabId)
+        : null;
+    return { tabs, activeId };
   } catch {
     return { tabs: [], activeId: null };
   }

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
 import { PageHeader } from "../components/PageHeader";
-import { ScanScheduleMenu } from "../components/ScanScheduleMenu";
+import { LedgerRow } from "../components/sources/LedgerRow";
+import { ago } from "../components/sources/utils";
 import { IconSearch, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import {
@@ -12,9 +13,7 @@ import {
   scanSources,
   deriveCanonical,
   setSourceSchedule,
-  fetchUnmappedSample,
   type SourceInfo,
-  type UnmappedSample,
 } from "../store";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
@@ -34,12 +33,6 @@ import {
    Accent appears on exactly two surfaces: the Standing callout (chrome) and
    the unmapped count on a column row (data). Everything else lives in ink. */
 
-const SCHED_LABEL: Record<string, string> = {
-  "15m": "auto 15m",
-  hourly: "auto hourly",
-  daily: "auto daily",
-};
-const STALE_DAYS = 7;
 const PAGE = 60;
 /* schemas auto-expand when there are this many or fewer wired; beyond that,
    only the schema containing the standing source opens by default. */
@@ -51,20 +44,6 @@ type Sort = "impact" | "name" | "recent";
 
 const statusOf = (s: SourceInfo): RealStatus =>
   s.unmapped > 0 ? "needs" : s.scanned && !s.present ? "missing" : "clean";
-
-function ago(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (sec < 60) return `${sec}s`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h`;
-  return `${Math.round(sec / 86400)}d`;
-}
-
-function daysAgo(iso: string | null | undefined): number {
-  if (!iso) return Infinity;
-  return (Date.now() - new Date(iso).getTime()) / 86_400_000;
-}
 
 interface SchemaGroup {
   schema: string;
@@ -81,9 +60,20 @@ interface SchemaGroup {
 export function Sources() {
   const sources = useSources();
   const dims = useDimensions();
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<Status>("needs");
-  const [sort, setSort] = useState<Sort>("impact");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQ = searchParams.get("q") ?? "";
+  const initialStatus = ((): Status => {
+    const v = searchParams.get("status");
+    return v === "needs" || v === "all" || v === "clean" || v === "missing" ? v : "needs";
+  })();
+  const initialSort = ((): Sort => {
+    const v = searchParams.get("sort");
+    return v === "impact" || v === "name" || v === "recent" ? v : "impact";
+  })();
+
+  const [q, setQ] = useState(initialQ);
+  const [status, setStatus] = useState<Status>(initialStatus);
+  const [sort, setSort] = useState<Sort>(initialSort);
   const [shown, setShown] = useState(PAGE);
   const [scanning, setScanning] = useState(false);
   const [flash, setFlash] = useState<number | null>(null);
@@ -212,13 +202,55 @@ export function Sources() {
       return;
     }
     const allSchemas = new Set(sources.map((s) => s.table.split(".")[0]));
-    if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
+    const focusParam = searchParams.get("focus");
+    if (focusParam && allSchemas.has(focusParam)) {
+      // honor the deep-link first; auto-expand still applies on top per spec
+      // open question #6, which we resolve "preserves user intent" (add to set).
+      if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
+        setOpenSchemas(allSchemas);
+      } else if (agg.worst) {
+        setOpenSchemas(new Set([focusParam, agg.worst.table.split(".")[0]]));
+      } else {
+        setOpenSchemas(new Set([focusParam]));
+      }
+    } else if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
       setOpenSchemas(allSchemas);
     } else if (agg.worst) {
       setOpenSchemas(new Set([agg.worst.table.split(".")[0]]));
     }
     setOpenInit(true);
-  }, [sources, agg.worst, openInit]);
+  }, [sources, agg.worst, openInit, searchParams]);
+
+  /* ---- URL write-through: q is debounced 200ms ---- */
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (q.trim()) next.set("q", q);
+          else next.delete("q");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [q, setSearchParams]);
+
+  /* ---- URL write-through: status + sort are immediate ---- */
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (status !== "needs") next.set("status", status);
+        else next.delete("status");
+        if (sort !== "impact") next.set("sort", sort);
+        else next.delete("sort");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [status, sort, setSearchParams]);
 
   /* ---- when the user types a search, auto-open every group with a match ---- */
   const visibleGroups = useMemo<SchemaGroup[]>(() => groups.slice(0, shown), [groups, shown]);
@@ -283,11 +315,11 @@ export function Sources() {
   const totalFilteredUnmapped = groups.reduce((n, g) => n + g.unmapped, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] p-8">
+    <div className="flex h-full min-h-0 flex-col px-5 pb-5 pt-4">
       {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
-      <div className="mb-6">
+      <div className="mb-4 shrink-0">
         <PageHeader
           kicker="Warehouse"
           title="Sources"
@@ -325,14 +357,14 @@ export function Sources() {
       </div>
 
       {derived && (
-        <div className="mb-4 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">
+        <div className="mb-3 shrink-0 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">
           {derived}
         </div>
       )}
 
       {/* ─────────── LEDGER SURFACE (paper) ─────────── */}
       <section
-        className="zz-rise relative overflow-hidden border border-line bg-surface shadow-pop"
+        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden border border-line bg-surface shadow-pop"
         style={{ animationDelay: "60ms" }}
       >
         {/* a thin accent edge at the very top — the 'folder tab' that signals
@@ -366,7 +398,7 @@ export function Sources() {
                   <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link to={`/app/mapping?dimId=${agg.worst.dimId}`} className="shrink-0">
+              <Link to={`/app/tables?open=${agg.worst.dimId}&active=${agg.worst.dimId}&mode=match`} className="shrink-0">
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                   Resolve
                 </Button>
@@ -380,6 +412,10 @@ export function Sources() {
             </p>
           </div>
         ) : null}
+
+        {/* scroll region — Standing scrolls away, Toolbar sticks at the top,
+            the ledger flows underneath. The page footer below is pinned. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
         {/* ─── TOOLBAR (sticky inside the surface) ─── */}
         <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-3 backdrop-blur-sm">
@@ -480,6 +516,8 @@ export function Sources() {
           )}
         </div>
 
+        </div>{/* /scroll region */}
+
         {/* ─── FOOTER — the only at-a-glance totals on the page ─── */}
         {sources.length > 0 && (
           <div className="flex items-center justify-between border-t border-line px-7 py-3 font-mono text-[10.5px] text-ink-3">
@@ -576,179 +614,6 @@ function SchemaSection({
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function LedgerRow({
-  row,
-  expanded,
-  onToggle,
-  onScheduleChange,
-  onDerive,
-}: {
-  row: SourceInfo;
-  expanded: boolean;
-  onToggle: () => void;
-  onScheduleChange: (next: string | null) => void;
-  onDerive: () => void;
-}) {
-  const tableName = row.table.split(".").slice(1).join(".") || row.table;
-  const coverage =
-    row.values > 0 ? ((row.values - row.unmapped) / row.values) * 100 : row.scanned ? 100 : 0;
-  const stale = daysAgo(row.scannedAt) > STALE_DAYS;
-  const standing =
-    !row.scanned && !row.scannedAt
-      ? "unscanned"
-      : !row.present && row.scanned
-        ? "not found"
-        : row.unmapped > 0
-          ? stale
-            ? "stale drift"
-            : "drift"
-          : stale
-            ? "stale"
-            : "clean";
-  const standingTone =
-    standing === "clean"
-      ? "text-ok"
-      : standing === "unscanned" || standing === "not found"
-        ? "text-ink-3"
-        : "text-warn";
-  const standingBarTone = coverage >= 95 ? "bg-ok" : coverage >= 70 ? "bg-ink-3/40" : "bg-accent";
-
-  return (
-    <div
-      className={cx("relative transition-colors", expanded ? "bg-surface-2/40" : "hover:bg-hover")}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="grid w-full grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 px-7 py-2.5 text-left"
-      >
-        <IconChevron
-          className={cx(
-            "h-3 w-3 shrink-0 text-ink-3 transition-transform",
-            expanded && "rotate-180",
-          )}
-        />
-        <div className="min-w-0">
-          <div className="truncate font-mono text-[12.5px] text-ink">
-            {tableName}
-            <span className="text-ink-3">.{row.column}</span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10.5px] text-ink-3">
-            <span>
-              → <span className="text-ink-2">{row.dimension}</span>
-            </span>
-            {row.schedule && <span>· {SCHED_LABEL[row.schedule] ?? row.schedule}</span>}
-            {row.scannedAt && <span>· {ago(row.scannedAt)} ago</span>}
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className={cx("text-[12px] font-medium", standingTone)}>{standing}</div>
-          <div className="mt-0.5 font-mono text-[10px] text-ink-3 tabular-nums">
-            {Math.round(coverage)}% mapped
-          </div>
-        </div>
-        <div className="text-right text-[12.5px] tabular-nums text-ink-2">
-          {row.rows.toLocaleString()}
-        </div>
-        <div className="text-right">
-          {row.unmapped > 0 ? (
-            <span className="font-display text-[14px] font-semibold tabular-nums text-accent">
-              {row.unmapped.toLocaleString()}
-            </span>
-          ) : (
-            <span className="font-mono text-[11.5px] text-ink-3 tabular-nums">0</span>
-          )}
-        </div>
-        <div className="flex items-center justify-end gap-1.5">
-          <ScanScheduleMenu value={row.schedule ?? null} onChange={onScheduleChange} />
-          <button
-            type="button"
-            aria-label={`Import records from ${row.table}.${row.column}`}
-            title="Import records from this column"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDerive();
-            }}
-            className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
-          >
-            <IconWand className="h-3 w-3" />
-          </button>
-        </div>
-      </button>
-      {/* standing bar — 1px hairline that fills from the left in the row's tone */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line">
-        <div
-          className={cx("h-full transition-[width] duration-500", standingBarTone)}
-          style={{ width: `${Math.max(0, Math.min(100, coverage))}%` }}
-        />
-      </div>
-      {expanded && <ExpandedDrill row={row} />}
-    </div>
-  );
-}
-
-function ExpandedDrill({ row }: { row: SourceInfo }) {
-  const [sample, setSample] = useState<UnmappedSample[] | "loading" | "error">("loading");
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const s = await fetchUnmappedSample(row.dimId, row.table, row.column, 8);
-        if (alive) setSample(s);
-      } catch {
-        if (alive) setSample("error");
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [row.dimId, row.table, row.column]);
-
-  return (
-    <div className="border-t border-line/60 bg-bg/30 px-7 py-4 pl-[68px]">
-      <div className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-ink-3">
-        Top unmapped values
-        {row.unmapped > 0 ? ` — showing up to 8 of ${row.unmapped.toLocaleString()}` : ""}
-      </div>
-      {sample === "loading" ? (
-        <div className="mt-2 text-[12px] text-ink-3">loading…</div>
-      ) : sample === "error" ? (
-        <div className="mt-2 text-[12px] text-danger">
-          couldn&apos;t load — is the warehouse attached?
-        </div>
-      ) : sample.length === 0 ? (
-        row.unmapped > 0 ? (
-          <div className="mt-2 text-[12px] text-ink-3">
-            Run a scan — the unmapped count is cached; the sample needs a live read.
-          </div>
-        ) : (
-          <div className="mt-2 text-[12px] text-ok">No unmapped values here.</div>
-        )
-      ) : (
-        <ul className="mt-3 grid gap-1.5">
-          {sample.map((s, i) => (
-            <li key={i} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
-              <span className="truncate font-mono text-[12.5px] text-ink">{s.raw}</span>
-              <span className="shrink-0 text-[11.5px] tabular-nums text-ink-3">
-                {s.rows.toLocaleString()} rows
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link to={`/app/mapping?dimId=${row.dimId}`} className="text-accent hover:underline">
-          Resolve in Match values →
-        </Link>
-        <span>→ {row.dimension}</span>
-      </div>
     </div>
   );
 }
