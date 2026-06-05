@@ -697,7 +697,7 @@ function MappingInner() {
   }, [viewMode, seed.dimension, crossCounts.new]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-8">
       <PageHeader
         kicker="Master data"
         title="Match values"
