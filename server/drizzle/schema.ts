@@ -129,6 +129,7 @@ export const preferences = app.table("preferences", {
   id:                integer("id").primaryKey(),
   publish_threshold: integer("publish_threshold").notNull(),
   suggest_threshold: integer("suggest_threshold").notNull(),
+  scan_schedule:     varchar("scan_schedule", { length: 10 }),
   updated_at:        timestamp("updated_at").notNull(),
 });
 
