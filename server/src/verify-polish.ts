@@ -34,7 +34,7 @@ check(
   `publish=${before.publishThreshold}, suggest=${before.suggestThreshold}`,
 );
 
-await repo.setPreferences({ publishThreshold: 88, suggestThreshold: 60 });
+await repo.setPreferences({ publishThreshold: 88, suggestThreshold: 60, scanSchedule: null });
 const after = await repo.getPreferences();
 check(
   "setPreferences round-trips",
@@ -43,7 +43,7 @@ check(
 );
 
 // clamp invariant: suggest <= publish
-await repo.setPreferences({ publishThreshold: 70, suggestThreshold: 90 });
+await repo.setPreferences({ publishThreshold: 70, suggestThreshold: 90, scanSchedule: null });
 const clamped = await repo.getPreferences();
 check(
   "setPreferences clamps suggest <= publish",
@@ -55,6 +55,7 @@ check(
 await repo.setPreferences({
   publishThreshold: before.publishThreshold,
   suggestThreshold: before.suggestThreshold,
+  scanSchedule: before.scanSchedule,
 });
 
 // 2. u_system user exists (idempotent insert on schema bootstrap)
