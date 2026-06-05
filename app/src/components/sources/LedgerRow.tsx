@@ -20,6 +20,8 @@ interface LedgerRowProps {
    *  its place in the full Sources ledger (long, dense list, the % readout is
    *  load-bearing) but turns to chartjunk in a per-table panel of 1–3 rows. */
   hideStandingBar?: boolean;
+  /** Keyboard cursor is on this row — paint the focus ring + accent wash. */
+  focused?: boolean;
 }
 
 export function LedgerRow({
@@ -29,6 +31,7 @@ export function LedgerRow({
   onScheduleChange,
   onDerive,
   hideStandingBar,
+  focused,
 }: LedgerRowProps) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
   const coverage =
@@ -64,9 +67,15 @@ export function LedgerRow({
         // hairline carries the separator instead — same role the bar plays
         // in the dense Sources ledger.
         hideStandingBar && "border-b border-line",
-        // Solid step up the surface hierarchy for hover, not the translucent
-        // bg-hover (which renders weak when the parent isn't bg-surface).
-        expanded ? "bg-surface-2/40" : "hover:bg-surface-2",
+        // Focus ring stays whether or not the row is expanded; bg precedence is
+        // expanded > focused > default-hover so a focused+expanded row reads
+        // as "drill is open" while still showing keyboard focus.
+        focused && "ring-1 ring-accent/60",
+        expanded
+          ? "bg-surface-2/40"
+          : focused
+            ? "bg-accent-wash/40"
+            : "hover:bg-surface-2",
       )}
     >
       <button
