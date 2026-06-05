@@ -47,7 +47,6 @@ export interface SourceInfo {
   values: number;
   unmapped: number;
   scanned: boolean;
-  schedule?: string | null; // null | '15m' | 'hourly' | 'daily'
   scannedAt?: string | null; // ISO timestamp of last scan
 }
 
@@ -66,6 +65,7 @@ export let collaborators: User[] = [currentUser];
 export interface Preferences {
   publishThreshold: number;
   suggestThreshold: number;
+  scanSchedule: "15m" | "hourly" | "daily" | null;
 }
 
 /* ---- in-memory cache of server state ---- */
@@ -73,7 +73,7 @@ let dims: MappingDimension[] = [];
 let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
-let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80 };
+let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null };
 
 const listeners = new Set<() => void>();
 const subscribe = (l: () => void) => {
@@ -333,21 +333,6 @@ export async function fetchUnmappedSample(
 ): Promise<UnmappedSample[]> {
   const qs = new URLSearchParams({ dimId, table, column, limit: String(limit) });
   return api<UnmappedSample[]>(`/sources/unmapped?${qs.toString()}`);
-}
-
-/** Set (or clear) an automatic scan cadence on a wired source. */
-export async function setSourceSchedule(
-  dimId: string,
-  table: string,
-  column: string,
-  schedule: string | null,
-): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/sources/schedule`, {
-    method: "PUT",
-    body: JSON.stringify({ table, column, schedule }),
-  });
-  await refreshSources();
-  emit();
 }
 
 /** Seed a dimension's canonical set from a source column's distinct values
