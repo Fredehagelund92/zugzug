@@ -30,6 +30,15 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
+    title: "Sources",
+    rows: [
+      ["j / k", "navigate columns"],
+      ["Enter", "toggle drill"],
+      ["N", "next unmapped column"],
+      ["/", "focus search"],
+    ],
+  },
+  {
     title: "Match · Triage",
     rows: [
       ["A", "accept suggestion"],
@@ -78,7 +87,7 @@ export function ShortcutsOverlay({ open, onClose }: { open: boolean; onClose: ()
             esc
           </button>
         </div>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           {GROUPS.map((g) => (
             <div key={g.title}>
               <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
