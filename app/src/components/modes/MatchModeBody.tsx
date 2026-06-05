@@ -828,6 +828,11 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 title={undo.topLabel ?? undefined}
               >
                 ↶ Undo
+                {undo.topSurface && (
+                  <span className="ml-1.5 font-mono text-[10px] text-ink-3">
+                    ({undo.topSurface})
+                  </span>
+                )}
                 {undo.topLabel && (
                   <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">
                     {undo.topLabel}
