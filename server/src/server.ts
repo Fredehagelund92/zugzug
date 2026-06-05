@@ -122,11 +122,15 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   setUid(me);
 
   try {
-    // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold}
+    // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
       if (method === "GET") return json(await repo.getPreferences());
       if (method === "PUT") {
-        const p = (await req.json()) as { publishThreshold: number; suggestThreshold: number };
+        const p = (await req.json()) as {
+          publishThreshold: number;
+          suggestThreshold: number;
+          scanSchedule: "15m" | "hourly" | "daily" | null;
+        };
         await repo.setPreferences(p);
         return noContent();
       }
@@ -153,6 +157,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         );
       if (seg[2] === "facets" && seg.length === 3 && method === "GET")
         return json(await repo.sourceFacets());
+      if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
+        return json(await repo.scanStatus());
       if (seg[2] === "scan" && seg.length === 3 && method === "POST")
         return json({ scanned: await repo.scanSources() });
       // GET /api/sources/unmapped?dimId=&table=&column=&limit=
@@ -265,16 +271,6 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
         const { table, column } = (await req.json()) as { table: string; column: string };
         await repo.addSource(id, table, column);
-        return noContent();
-      }
-      // PUT /api/dimensions/:id/sources/schedule {table, column, schedule}
-      if (seg[3] === "sources" && seg[4] === "schedule" && seg.length === 5 && method === "PUT") {
-        const { table, column, schedule } = (await req.json()) as {
-          table: string;
-          column: string;
-          schedule: string | null;
-        };
-        await repo.setSourceSchedule(id, table, column, schedule);
         return noContent();
       }
       // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
