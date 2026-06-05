@@ -85,7 +85,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="mx-auto w-full max-w-[var(--wide)] space-y-8 p-8">
       <PageHeader
         backdrop={<MarkBackdrop />}
         kicker="Master data"
