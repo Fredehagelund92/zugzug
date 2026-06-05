@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CreateTableModal } from "../components/CreateTableModal";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
 import { TablePane } from "../components/TablePane";
 import { useDimensions } from "../store";
 import { useOpenTabs, dimIdFromTabId } from "../lib/open-tabs";
+import { useCreateTableModal } from "../lib/create-table-modal";
 
 /* Tables — the master-record workbench, now multi-tab. The route owns the URL
    contract (?open=a,b,c&active=<id> + legacy ?dimId=) and the tab strip. Each
@@ -17,7 +17,7 @@ export function MasterTables() {
   const dims = useDimensions();
   const [searchParams, setSearchParams] = useSearchParams();
   const { tabs, activeId: activeTabId, openTab } = useOpenTabs();
-  const [createOpen, setCreateOpen] = useState(false);
+  const create = useCreateTableModal();
 
   // Mount-only URL → state fold. Honors legacy ?dimId=<id> from old palette
   // links + bookmarks. New contract is ?open=a,b,c&active=<dimId>.
@@ -76,28 +76,14 @@ export function MasterTables() {
   if (dims.length === 0) {
     return (
       <div className="mx-auto w-full max-w-[var(--wide)] p-8">
-        <NoTablesYet from="tables" onCreateRequested={() => setCreateOpen(true)} />
-        <CreateTableModal
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onCreated={(id) => {
-            openTab(id);
-          }}
-        />
+        <NoTablesYet from="tables" onCreateRequested={create.open} />
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <TableTabStrip onCreateRequested={() => setCreateOpen(true)} />
-      <CreateTableModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onCreated={(id) => {
-          openTab(id);
-        }}
-      />
+      <TableTabStrip onCreateRequested={create.open} />
 
       <div className="relative flex-1 min-h-0">
         {tabs.map((tab) => {

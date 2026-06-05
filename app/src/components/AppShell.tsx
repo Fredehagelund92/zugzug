@@ -18,6 +18,7 @@ import {
 import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
+import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
 
 /* AppShell — the signed-in product chrome.
@@ -278,9 +279,35 @@ export function AppShell() {
           )}
         </div>
 
-        {!collapsed && (
+        {collapsed ? (
           <>
-            <div className="flex items-center gap-2 px-5 pt-4 pb-1">
+            <nav className="flex flex-1 flex-col gap-0.5 p-2">
+              {nav.map(({ to, label, Icon, count, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  title={count != null ? `${label} · ${count}` : label}
+                  className={({ isActive }) =>
+                    cx(
+                      "relative flex h-10 items-center justify-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
+                      isActive
+                        ? "bg-accent-wash text-accent"
+                        : "text-ink-2 hover:bg-hover hover:text-ink",
+                    )
+                  }
+                >
+                  <Icon />
+                  {count != null && count > 0 && (
+                    <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 px-5 pt-3 pb-1">
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
                 Master data layer
               </span>
@@ -288,50 +315,40 @@ export function AppShell() {
             <div className="px-5 pb-2">
               <ZigRule />
             </div>
+
+            <SidebarTableTree />
+
+            <nav className="shrink-0 border-t border-line">
+              <div className="flex items-center justify-around px-2 py-2">
+                {nav
+                  .filter((n) => n.to !== "/app/tables")
+                  .map(({ to, label, Icon, count, end }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      title={count != null ? `${label} · ${count}` : label}
+                      className={({ isActive }) =>
+                        cx(
+                          "relative grid h-9 w-9 place-items-center rounded-sm transition-colors",
+                          isActive
+                            ? "bg-accent-wash text-accent"
+                            : "text-ink-3 hover:bg-hover hover:text-ink",
+                        )
+                      }
+                    >
+                      <Icon />
+                      {count != null && count > 0 && (
+                        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                      )}
+                    </NavLink>
+                  ))}
+              </div>
+            </nav>
           </>
         )}
-        {collapsed && <div className="h-3 shrink-0" />}
 
-        <nav className={cx("flex flex-1 flex-col gap-0.5", collapsed ? "p-2" : "p-3")}>
-          {nav.map(({ to, label, Icon, count, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              title={collapsed ? (count != null ? `${label} · ${count}` : label) : undefined}
-              className={({ isActive }) =>
-                cx(
-                  "relative flex items-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
-                  collapsed ? "h-10 justify-center" : "gap-3 rounded-sm px-3 py-2.5",
-                  isActive
-                    ? collapsed
-                      ? "bg-accent-wash text-accent"
-                      : "bg-accent-wash text-accent shadow-[inset_3px_0_0_var(--accent)]"
-                    : "text-ink-2 hover:bg-hover hover:text-ink",
-                )
-              }
-            >
-              <Icon />
-              {!collapsed && (
-                <>
-                  {label}
-                  {count != null && (
-                    <span className="ml-auto rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-ink-2 tabular-nums">
-                      {count}
-                    </span>
-                  )}
-                </>
-              )}
-              {collapsed && count != null && count > 0 && (
-                <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* footer — just a live dot + 'Connected' (single line). The collapse
-            toggle lives in the topbar now. */}
-        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-3")}>
+        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-2")}>
           <div
             className={cx(
               "flex items-center gap-2 font-mono text-[11px] text-ink",
