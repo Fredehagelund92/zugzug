@@ -254,6 +254,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
     await addCanonical(activeId, label);
     undo.push({
       label: `add "${label}"`,
+      surface: "Records",
       apply: () => addCanonical(activeId, label),
       inverse: () => retireCanonical(activeId, slug(label)).then(() => undefined),
     });
@@ -274,6 +275,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
     const n = await mergeCanonical(activeId, survivor, losers);
     undo.push({
       label: `merge ${losers.length} into "${survivorLabel}"`,
+      surface: "Records",
       apply: () => mergeCanonical(activeId, survivor, losers).then(() => undefined),
       inverse: async () => {
         for (const s of snapshot) await addCanonical(activeId, s.label);
@@ -296,6 +298,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
       }
       undo.push({
         label: `remove "${label}"`,
+        surface: "Records",
         apply: () => retireCanonical(activeId, key).then(() => undefined),
         inverse: () => addCanonical(activeId, label),
       });
@@ -366,6 +369,9 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
             title={undo.topLabel ?? undefined}
           >
             ↶ Undo
+            {undo.topSurface && (
+              <span className="ml-1.5 font-mono text-[10px] text-ink-3">({undo.topSurface})</span>
+            )}
             <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
           <Button
@@ -524,6 +530,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
               if (prev) {
                 undo.push({
                   label: `rename "${prev}" → "${value}"`,
+                  surface: "Records",
                   apply: () => renameCanonical(activeId, rowKey, value),
                   inverse: () => renameCanonical(activeId, rowKey, prev),
                 });
@@ -541,6 +548,7 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
             if (prev !== v)
               undo.push({
                 label: `edit ${field} on "${rowKey}"`,
+                surface: "Records",
                 apply: () => setFieldValue(activeId, rowKey, field, v),
                 inverse: () => setFieldValue(activeId, rowKey, field, prev),
               });
