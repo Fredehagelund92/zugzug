@@ -14,7 +14,7 @@ export function Kpi({
   label: string;
   value: string;
   delta?: string;
-  dir?: "up" | "down";
+  dir?: "up" | "down" | "warn";
   spark?: number[];
   featured?: boolean;
 }) {
@@ -46,8 +46,13 @@ export function Kpi({
         )}
       </div>
       {delta && (
-        <div className={cx("mt-1 font-mono text-xs", dir === "up" ? "text-ok" : "text-danger")}>
-          {dir === "up" ? "▲" : "▼"} {delta}
+        <div
+          className={cx(
+            "mt-1 font-mono text-xs",
+            dir === "up" ? "text-ok" : dir === "warn" ? "text-warn" : "text-danger",
+          )}
+        >
+          {dir === "up" ? "▲ " : dir === "down" ? "▼ " : ""}{delta}
         </div>
       )}
     </div>
