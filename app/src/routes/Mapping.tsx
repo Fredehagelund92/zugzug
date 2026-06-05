@@ -32,7 +32,7 @@ import {
   currentUser,
 } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
-import { useGridCursor, useUndoStack, Chip } from "../components/datagrid";
+import { useGridCursor, useUndoStack, UndoStackProvider, Chip } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
 
 /* Value mapping — match messy source values to one master record. Each accept /
@@ -111,7 +111,11 @@ export function Mapping() {
         />
       </>
     );
-  return <MappingInner />;
+  return (
+    <UndoStackProvider scopeKey="mapping">
+      <MappingInner />
+    </UndoStackProvider>
+  );
 }
 
 function MappingInner() {
