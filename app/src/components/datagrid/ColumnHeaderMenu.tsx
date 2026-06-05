@@ -10,6 +10,7 @@ import {
   IconEyeOff,
   IconTrash,
   IconChevronLeft,
+  IconFilter,
 } from "../Icons";
 import type { CellType, ColumnDef } from "./types";
 
@@ -17,12 +18,14 @@ interface Props<Row> {
   column: ColumnDef<Row>;
   anchorRef: React.RefObject<HTMLElement | null>;
   sortDir: "asc" | "desc" | null;
+  filterValue: string | null;
   onClose: () => void;
   onRename: (newLabel: string) => void;
   onSort: (dir: "asc" | "desc" | null) => void;
   onChangeType: (newType: CellType) => void;
   onHide: () => void;
   onDelete: () => void;
+  onFilter: (value: string | null) => void;
 }
 
 const TYPES: CellType[] = ["text", "number", "boolean", "date", "select"];
@@ -33,15 +36,20 @@ export function ColumnHeaderMenu<Row>({
   column,
   anchorRef,
   sortDir,
+  filterValue,
   onClose,
   onRename,
   onSort,
   onChangeType,
   onHide,
   onDelete,
+  onFilter,
 }: Props<Row>) {
-  const [mode, setMode] = useState<"menu" | "rename" | "type" | "confirm-delete">("menu");
+  const [mode, setMode] = useState<"menu" | "rename" | "type" | "filter" | "confirm-delete">(
+    "menu",
+  );
   const [draft, setDraft] = useState(column.label);
+  const [filterDraft, setFilterDraft] = useState(filterValue ?? "");
   const ref = useRef<HTMLDivElement>(null);
 
   // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
@@ -104,6 +112,14 @@ export function ColumnHeaderMenu<Row>({
           </button>
           <button type="button" className={item} onClick={() => setMode("type")}>
             <IconType className={iconCls} /> change type
+          </button>
+          <button type="button" className={item} onClick={() => setMode("filter")}>
+            <IconFilter className={iconCls} /> filter…
+            {filterValue && (
+              <span className="ml-auto rounded-pill bg-accent-wash px-1.5 font-mono text-[9px] text-accent">
+                on
+              </span>
+            )}
           </button>
           <div className="my-1 h-px bg-line" />
           <button
@@ -214,6 +230,56 @@ export function ColumnHeaderMenu<Row>({
           <button type="button" className={item} onClick={() => setMode("menu")}>
             <IconChevronLeft className={iconCls} /> back
           </button>
+        </div>
+      )}
+      {mode === "filter" && (
+        <div className="p-1">
+          <input
+            autoFocus
+            value={filterDraft}
+            onChange={(e) => setFilterDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onFilter(filterDraft.trim() || null);
+                onClose();
+              }
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onClose();
+              }
+            }}
+            placeholder="contains…"
+            className="w-full rounded-sm border border-accent bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none placeholder:text-ink-3"
+          />
+          <div className="mt-1.5 flex gap-1">
+            <button
+              type="button"
+              className={cx(item, "justify-center bg-accent text-accent-ink hover:brightness-110")}
+              onClick={() => {
+                onFilter(filterDraft.trim() || null);
+                onClose();
+              }}
+            >
+              apply
+            </button>
+            {filterValue && (
+              <button
+                type="button"
+                className={item + " justify-center"}
+                onClick={() => {
+                  setFilterDraft("");
+                  onFilter(null);
+                  onClose();
+                }}
+              >
+                clear
+              </button>
+            )}
+            <button type="button" className={item + " justify-center"} onClick={() => setMode("menu")}>
+              <IconChevronLeft className={iconCls} />
+            </button>
+          </div>
         </div>
       )}
       {mode === "confirm-delete" && (
