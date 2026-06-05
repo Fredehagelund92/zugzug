@@ -16,6 +16,10 @@ interface LedgerRowProps {
   onToggle: () => void;
   onScheduleChange: (next: string | null) => void;
   onDerive: () => void;
+  /** Drop the coverage-encoded standing bar at the bottom edge. The bar earns
+   *  its place in the full Sources ledger (long, dense list, the % readout is
+   *  load-bearing) but turns to chartjunk in a per-table panel of 1–3 rows. */
+  hideStandingBar?: boolean;
 }
 
 export function LedgerRow({
@@ -24,6 +28,7 @@ export function LedgerRow({
   onToggle,
   onScheduleChange,
   onDerive,
+  hideStandingBar,
 }: LedgerRowProps) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
   const coverage =
@@ -53,7 +58,16 @@ export function LedgerRow({
 
   return (
     <div
-      className={cx("relative transition-colors", expanded ? "bg-surface-2/40" : "hover:bg-hover")}
+      className={cx(
+        "relative bg-surface transition-colors",
+        // When the standing bar is hidden (per-table workbench mode), a 1px
+        // hairline carries the separator instead — same role the bar plays
+        // in the dense Sources ledger.
+        hideStandingBar && "border-b border-line",
+        // Solid step up the surface hierarchy for hover, not the translucent
+        // bg-hover (which renders weak when the parent isn't bg-surface).
+        expanded ? "bg-surface-2/40" : "hover:bg-surface-2",
+      )}
     >
       <button
         type="button"
@@ -115,13 +129,15 @@ export function LedgerRow({
           </button>
         </div>
       </button>
-      {/* standing bar — 1px hairline that fills from the left in the row's tone */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line">
-        <div
-          className={cx("h-full transition-[width] duration-500", standingBarTone)}
-          style={{ width: `${Math.max(0, Math.min(100, coverage))}%` }}
-        />
-      </div>
+      {!hideStandingBar && (
+        /* standing bar — 1px hairline that fills from the left in the row's tone */
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line">
+          <div
+            className={cx("h-full transition-[width] duration-500", standingBarTone)}
+            style={{ width: `${Math.max(0, Math.min(100, coverage))}%` }}
+          />
+        </div>
+      )}
       {expanded && <ExpandedDrill row={row} />}
     </div>
   );
