@@ -17,6 +17,7 @@ import {
 } from "./Icons";
 import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { useOpenTabs } from "../lib/open-tabs";
 import { ShortcutsOverlay } from "./datagrid";
 
 /* AppShell — the signed-in product chrome.
@@ -127,6 +128,7 @@ export function AppShell() {
     });
   };
   const navigate = useNavigate();
+  const { openTab } = useOpenTabs();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -236,7 +238,7 @@ export function AppShell() {
       });
     }
 
-    // Section 3: every canonical record — jumps to Tables with focus
+    // Section 3: every canonical record — opens the dim as a Tables tab + focus
     for (const d of dims) {
       for (const c of d.canonical) {
         out.push({
@@ -245,15 +247,15 @@ export function AppShell() {
           label: c.label ?? c.key,
           secondary: `${d.dimension} · ${c.key}`,
           keywords: `${d.dimension} ${c.key} ${d.id}`,
-          action: () =>
-            navigate(
-              `/app/tables?dimId=${encodeURIComponent(d.id)}&focus=${encodeURIComponent(c.key)}`,
-            ),
+          action: () => {
+            openTab(d.id);
+            navigate(`/app/tables?focus=${encodeURIComponent(c.key)}`);
+          },
         });
       }
     }
     return out;
-  }, [dims, totalNew, navigate]);
+  }, [dims, totalNew, navigate, openTab]);
 
   return (
     <div

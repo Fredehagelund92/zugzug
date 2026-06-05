@@ -31,6 +31,7 @@ import {
   type GridLayoutConfig,
 } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { useOpenTabs, dimIdFromTabId } from "../lib/open-tabs";
 import { DataGrid, useUndoStack } from "../components/datagrid";
 import type { ColumnDef } from "../components/datagrid";
 import type { CanonicalValue } from "../data";
@@ -45,14 +46,64 @@ export function MasterTables() {
   const dims = useDimensions();
   const sources = useSources();
   const { engineer } = useEngineerMode();
-  const [searchParams] = useSearchParams();
-  // dimId honors ?dimId= so the Cmd-K palette (and any future deep-link) can
-  // jump straight to a specific table; falls back to the first dim otherwise.
-  const [dimId, setDimId] = useState<string | null>(() => {
-    const fromUrl = searchParams.get("dimId");
-    if (fromUrl && dims.some((d) => d.id === fromUrl)) return fromUrl;
-    return dims[0]?.id ?? null;
-  });
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { tabs, activeId: activeTabId, openTab } = useOpenTabs();
+
+  // Mount-only URL → state fold. Honors legacy ?dimId=<id> from old palette
+  // links + bookmarks. New contract is ?open=a,b,c&active=<dimId>.
+  const didInitFromUrl = useRef(false);
+  useEffect(() => {
+    if (didInitFromUrl.current) return;
+    didInitFromUrl.current = true;
+    const legacyDim = searchParams.get("dimId");
+    const openParam = searchParams.get("open");
+    const activeParam = searchParams.get("active");
+    if (legacyDim && dims.some((d) => d.id === legacyDim)) {
+      openTab(legacyDim);
+      return;
+    }
+    if (openParam) {
+      for (const did of openParam.split(",").filter(Boolean)) {
+        if (dims.some((d) => d.id === did)) openTab(did);
+      }
+    }
+    if (activeParam && dims.some((d) => d.id === activeParam)) {
+      openTab(activeParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fallback: nothing open yet, but we have dims → open the first so the
+  // existing single-table workflow still has something to render.
+  useEffect(() => {
+    if (!didInitFromUrl.current) return;
+    if (tabs.length === 0 && dims.length > 0) {
+      openTab(dims[0].id);
+    }
+  }, [tabs.length, dims, openTab]);
+
+  // State → URL sync. While the user is on /app/tables, the URL mirrors the
+  // open-tabs context so the page is shareable + survives reloads via URL.
+  useEffect(() => {
+    if (!didInitFromUrl.current) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("dimId");
+    if (tabs.length > 0) {
+      next.set("open", tabs.map((t) => t.dimId).join(","));
+    } else {
+      next.delete("open");
+    }
+    if (activeTabId) {
+      next.set("active", dimIdFromTabId(activeTabId));
+    } else {
+      next.delete("active");
+    }
+    if (next.toString() !== searchParams.toString()) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [tabs, activeTabId, searchParams, setSearchParams]);
+
+  const dimId = activeTabId ? dimIdFromTabId(activeTabId) : null;
   const dim = dims.find((d) => d.id === dimId) ?? dims[0] ?? null;
 
   // ?focus=<key> — scroll the focused record into view and briefly tint it so
@@ -238,7 +289,7 @@ export function MasterTables() {
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           onCreated={(id) => {
-            setDimId(id);
+            openTab(id);
           }}
         />
       </div>
@@ -363,7 +414,7 @@ export function MasterTables() {
           dims={dims}
           activeId={activeId ?? ""}
           onSelect={(id) => {
-            setDimId(id);
+            openTab(id);
             reset();
             setDraft("");
           }}
@@ -373,7 +424,7 @@ export function MasterTables() {
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           onCreated={(id) => {
-            setDimId(id);
+            openTab(id);
             reset();
             setDraft("");
           }}
