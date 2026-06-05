@@ -132,6 +132,11 @@ export const IconWand = (p: SVGProps<SVGSVGElement>) => (
     <path d="M5 21 19 7M14 4l1.5 1.5M19 9l1.5 1.5M9 3l.8 2 2 .8-2 .8L9 9l-.8-2L6.2 6.2 8.2 5z" />
   </Base>
 );
+export const IconPin = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M12 17v5M9 4h6l-1 5 3 3v2H7v-2l3-3z" />
+  </Base>
+);
 export const IconSun = (p: SVGProps<SVGSVGElement>) => (
   <Base {...p}>
     <circle cx="12" cy="12" r="4" />

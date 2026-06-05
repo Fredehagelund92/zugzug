@@ -6,6 +6,7 @@ import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
 import { OpenTabsProvider } from "./lib/open-tabs";
+import { CreateTableModalProvider } from "./lib/create-table-modal";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
@@ -58,6 +59,7 @@ createRoot(root).render(
               <EngineerModeProvider>
                 <BootGate>
                   <OpenTabsProvider>
+                    <CreateTableModalProvider>
                     <Routes>
                       <Route path="/" element={<Navigate to="/app" replace />} />
                       <Route element={<AppShell />}>
@@ -69,6 +71,7 @@ createRoot(root).render(
                       </Route>
                       <Route path="*" element={<Navigate to="/app" replace />} />
                     </Routes>
+                    </CreateTableModalProvider>
                   </OpenTabsProvider>
                 </BootGate>
               </EngineerModeProvider>

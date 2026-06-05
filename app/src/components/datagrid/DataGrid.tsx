@@ -121,8 +121,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
           cellPadY,
           !isLastCol && "border-r border-line",
           c.align === "right" && "justify-end text-right",
-          inRangeCell && !focused && "bg-accent-wash/25",
-          focused && "ring-1 ring-accent bg-accent-wash/40",
+          inRangeCell && "bg-accent-soft",
+          focused && "ring-2 ring-accent ring-inset bg-accent-soft",
         );
         const data = `${rk}::${c.field}`;
         return (
