@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { PALETTE, type PaletteName } from "../lib/palette";
@@ -9,6 +9,33 @@ import { useCreateTableModal } from "../lib/create-table-modal";
 import type { MappingDimension } from "../data";
 
 const PINNED_KEY = "zugzug:pinned-dims";
+const RECENTS_KEY = "zugzug:recent-dims";
+const RECENTS_CAP = 5;
+
+function useRecentDimIds(activeDimId: string | null): string[] {
+  const [ids, setIds] = useState<string[]>(() => {
+    if (typeof localStorage === "undefined") return [];
+    try {
+      const raw = localStorage.getItem(RECENTS_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  useEffect(() => {
+    if (!activeDimId) return;
+    setIds((prev) => {
+      const next = [activeDimId, ...prev.filter((id) => id !== activeDimId)].slice(0, RECENTS_CAP);
+      try {
+        localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, [activeDimId]);
+  return ids;
+}
 
 function usePinnedDims(): [Set<string>, (id: string, pinned: boolean) => void] {
   const [ids, setIds] = useState<Set<string>>(() => {
@@ -120,14 +147,14 @@ export function SidebarTableTree() {
   const navigate = useNavigate();
   const [pinnedIds, togglePin] = usePinnedDims();
   const [q, setQ] = useState("");
+  const activeDimId = activeId ? activeId.slice("tables:".length) : null;
+  const recentIds = useRecentDimIds(activeDimId);
 
   const dirtyDimIds = useMemo(() => {
     const s = new Set<string>();
     for (const d of Object.values(drafts)) s.add(d.dimId);
     return s;
   }, [drafts]);
-
-  const activeDimId = activeId ? activeId.slice("tables:".length) : null;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -136,6 +163,13 @@ export function SidebarTableTree() {
 
   const pinned = filtered.filter((d) => pinnedIds.has(d.id));
   const unpinned = filtered.filter((d) => !pinnedIds.has(d.id));
+  const recents = useMemo(() => {
+    const filteredIds = new Set(filtered.map((d) => d.id));
+    return recentIds
+      .filter((id) => filteredIds.has(id) && !pinnedIds.has(id))
+      .map((id) => dims.find((d) => d.id === id))
+      .filter((d): d is MappingDimension => !!d);
+  }, [recentIds, filtered, pinnedIds, dims]);
 
   const openDim = (id: string) => {
     openTab(id);
@@ -186,6 +220,30 @@ export function SidebarTableTree() {
             ))}
             <li className="my-1 mx-3 border-t border-line" aria-hidden />
           </>
+        )}
+        {recents.length > 0 && (
+          <>
+            <li className="px-3 pb-1 pt-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-3">
+              Recents
+            </li>
+            {recents.map((d) => (
+              <DimRow
+                key={`recent:${d.id}`}
+                dim={d}
+                active={d.id === activeDimId}
+                dirty={dirtyDimIds.has(d.id)}
+                pinned={false}
+                onOpen={() => openDim(d.id)}
+                onTogglePin={() => togglePin(d.id, true)}
+              />
+            ))}
+            <li className="my-1 mx-3 border-t border-line" aria-hidden />
+          </>
+        )}
+        {(pinned.length > 0 || recents.length > 0) && unpinned.length > 0 && (
+          <li className="px-3 pb-1 pt-1.5 font-mono text-[9px] uppercase tracking-[0.2em] text-ink-3">
+            All tables
+          </li>
         )}
         {unpinned.map((d) => (
           <DimRow
