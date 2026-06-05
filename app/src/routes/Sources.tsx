@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
 import { PageHeader } from "../components/PageHeader";
-import { ScanScheduleMenu } from "../components/ScanScheduleMenu";
+import { LedgerRow } from "../components/sources/LedgerRow";
+import { ago } from "../components/sources/utils";
 import { IconSearch, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import {
@@ -12,9 +13,7 @@ import {
   scanSources,
   deriveCanonical,
   setSourceSchedule,
-  fetchUnmappedSample,
   type SourceInfo,
-  type UnmappedSample,
 } from "../store";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
@@ -34,12 +33,6 @@ import {
    Accent appears on exactly two surfaces: the Standing callout (chrome) and
    the unmapped count on a column row (data). Everything else lives in ink. */
 
-const SCHED_LABEL: Record<string, string> = {
-  "15m": "auto 15m",
-  hourly: "auto hourly",
-  daily: "auto daily",
-};
-const STALE_DAYS = 7;
 const PAGE = 60;
 /* schemas auto-expand when there are this many or fewer wired; beyond that,
    only the schema containing the standing source opens by default. */
@@ -51,20 +44,6 @@ type Sort = "impact" | "name" | "recent";
 
 const statusOf = (s: SourceInfo): RealStatus =>
   s.unmapped > 0 ? "needs" : s.scanned && !s.present ? "missing" : "clean";
-
-function ago(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const sec = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (sec < 60) return `${sec}s`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h`;
-  return `${Math.round(sec / 86400)}d`;
-}
-
-function daysAgo(iso: string | null | undefined): number {
-  if (!iso) return Infinity;
-  return (Date.now() - new Date(iso).getTime()) / 86_400_000;
-}
 
 interface SchemaGroup {
   schema: string;
@@ -629,179 +608,6 @@ function SchemaSection({
           })}
         </div>
       )}
-    </div>
-  );
-}
-
-function LedgerRow({
-  row,
-  expanded,
-  onToggle,
-  onScheduleChange,
-  onDerive,
-}: {
-  row: SourceInfo;
-  expanded: boolean;
-  onToggle: () => void;
-  onScheduleChange: (next: string | null) => void;
-  onDerive: () => void;
-}) {
-  const tableName = row.table.split(".").slice(1).join(".") || row.table;
-  const coverage =
-    row.values > 0 ? ((row.values - row.unmapped) / row.values) * 100 : row.scanned ? 100 : 0;
-  const stale = daysAgo(row.scannedAt) > STALE_DAYS;
-  const standing =
-    !row.scanned && !row.scannedAt
-      ? "unscanned"
-      : !row.present && row.scanned
-        ? "not found"
-        : row.unmapped > 0
-          ? stale
-            ? "stale drift"
-            : "drift"
-          : stale
-            ? "stale"
-            : "clean";
-  const standingTone =
-    standing === "clean"
-      ? "text-ok"
-      : standing === "unscanned" || standing === "not found"
-        ? "text-ink-3"
-        : "text-warn";
-  const standingBarTone = coverage >= 95 ? "bg-ok" : coverage >= 70 ? "bg-ink-3/40" : "bg-accent";
-
-  return (
-    <div
-      className={cx("relative transition-colors", expanded ? "bg-surface-2/40" : "hover:bg-hover")}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        className="grid w-full grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 px-7 py-2.5 text-left"
-      >
-        <IconChevron
-          className={cx(
-            "h-3 w-3 shrink-0 text-ink-3 transition-transform",
-            expanded && "rotate-180",
-          )}
-        />
-        <div className="min-w-0">
-          <div className="truncate font-mono text-[12.5px] text-ink">
-            {tableName}
-            <span className="text-ink-3">.{row.column}</span>
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10.5px] text-ink-3">
-            <span>
-              → <span className="text-ink-2">{row.dimension}</span>
-            </span>
-            {row.schedule && <span>· {SCHED_LABEL[row.schedule] ?? row.schedule}</span>}
-            {row.scannedAt && <span>· {ago(row.scannedAt)} ago</span>}
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className={cx("text-[12px] font-medium", standingTone)}>{standing}</div>
-          <div className="mt-0.5 font-mono text-[10px] text-ink-3 tabular-nums">
-            {Math.round(coverage)}% mapped
-          </div>
-        </div>
-        <div className="text-right text-[12.5px] tabular-nums text-ink-2">
-          {row.rows.toLocaleString()}
-        </div>
-        <div className="text-right">
-          {row.unmapped > 0 ? (
-            <span className="font-display text-[14px] font-semibold tabular-nums text-accent">
-              {row.unmapped.toLocaleString()}
-            </span>
-          ) : (
-            <span className="font-mono text-[11.5px] text-ink-3 tabular-nums">0</span>
-          )}
-        </div>
-        <div className="flex items-center justify-end gap-1.5">
-          <ScanScheduleMenu value={row.schedule ?? null} onChange={onScheduleChange} />
-          <button
-            type="button"
-            aria-label={`Import records from ${row.table}.${row.column}`}
-            title="Import records from this column"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDerive();
-            }}
-            className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
-          >
-            <IconWand className="h-3 w-3" />
-          </button>
-        </div>
-      </button>
-      {/* standing bar — 1px hairline that fills from the left in the row's tone */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line">
-        <div
-          className={cx("h-full transition-[width] duration-500", standingBarTone)}
-          style={{ width: `${Math.max(0, Math.min(100, coverage))}%` }}
-        />
-      </div>
-      {expanded && <ExpandedDrill row={row} />}
-    </div>
-  );
-}
-
-function ExpandedDrill({ row }: { row: SourceInfo }) {
-  const [sample, setSample] = useState<UnmappedSample[] | "loading" | "error">("loading");
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const s = await fetchUnmappedSample(row.dimId, row.table, row.column, 8);
-        if (alive) setSample(s);
-      } catch {
-        if (alive) setSample("error");
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [row.dimId, row.table, row.column]);
-
-  return (
-    <div className="border-t border-line/60 bg-bg/30 px-7 py-4 pl-[68px]">
-      <div className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-ink-3">
-        Top unmapped values
-        {row.unmapped > 0 ? ` — showing up to 8 of ${row.unmapped.toLocaleString()}` : ""}
-      </div>
-      {sample === "loading" ? (
-        <div className="mt-2 text-[12px] text-ink-3">loading…</div>
-      ) : sample === "error" ? (
-        <div className="mt-2 text-[12px] text-danger">
-          couldn&apos;t load — is the warehouse attached?
-        </div>
-      ) : sample.length === 0 ? (
-        row.unmapped > 0 ? (
-          <div className="mt-2 text-[12px] text-ink-3">
-            Run a scan — the unmapped count is cached; the sample needs a live read.
-          </div>
-        ) : (
-          <div className="mt-2 text-[12px] text-ok">No unmapped values here.</div>
-        )
-      ) : (
-        <ul className="mt-3 grid gap-1.5">
-          {sample.map((s, i) => (
-            <li key={i} className="grid grid-cols-[1fr_auto] items-baseline gap-3">
-              <span className="truncate font-mono text-[12.5px] text-ink">{s.raw}</span>
-              <span className="shrink-0 text-[11.5px] tabular-nums text-ink-3">
-                {s.rows.toLocaleString()} rows
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link to={`/app/mapping?dimId=${row.dimId}`} className="text-accent hover:underline">
-          Resolve in Match values →
-        </Link>
-        <span>→ {row.dimension}</span>
-      </div>
     </div>
   );
 }
