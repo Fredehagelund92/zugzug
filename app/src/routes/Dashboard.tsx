@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "../components/Card";
 import { Kpi } from "../components/Kpi";
 import { Badge } from "../components/Badge";
@@ -20,7 +20,7 @@ import {
   coverageColor,
   lastAuditForDim,
 } from "./dashboard-helpers";
-import { PALETTE, defaultTintFor } from "../lib/palette";
+import { PALETTE, defaultTintFor, type PaletteName } from "../lib/palette";
 
 const MarkBackdrop = () => (
   <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
@@ -41,6 +41,7 @@ export function Dashboard() {
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();
+  const navigate = useNavigate();
   const newCount = (id: string) =>
     dims.find((s) => s.id === id)?.values.filter((v) => v.status === "new").length ?? 0;
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
@@ -107,7 +108,7 @@ export function Dashboard() {
 
   const dimTint = (dim: typeof dims[0]) => {
     const palette = dim.color ?? defaultTintFor(dim.id);
-    return PALETTE[palette].fg; // e.g. "var(--tint-rose)"
+    return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(dim.id)]).fg; // e.g. "var(--tint-rose)"
   };
 
   const kpis: Array<{
@@ -326,11 +327,7 @@ export function Dashboard() {
               return (
                 <tr
                   key={dim.id}
-                  onClick={() =>
-                    window.location.assign(
-                      `/app/tables?open=${dim.id}&active=${dim.id}&mode=match`,
-                    )
-                  }
+                  onClick={() => navigate(`/app/tables?open=${dim.id}&active=${dim.id}&mode=match`)}
                   className={cx(
                     "cursor-pointer",
                     isStaged ? "bg-staged/[0.04] hover:bg-staged/[0.07]" : "hover:bg-hover",
@@ -376,7 +373,7 @@ export function Dashboard() {
                   {/* coverage bar + pct */}
                   <td className="border-b border-line px-4 py-2.5">
                     <div className="flex items-center gap-2">
-                      <div className="h-[3px] w-18 overflow-hidden rounded-pill bg-surface-3">
+                      <div className="h-[3px] w-[72px] overflow-hidden rounded-pill bg-surface-3">
                         <div
                           className="h-full rounded-pill"
                           style={{ width: `${pct}%`, background: color }}
