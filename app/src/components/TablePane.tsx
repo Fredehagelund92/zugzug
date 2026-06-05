@@ -44,12 +44,35 @@ export function TablePane({ dim, isActive }: TablePaneProps) {
   );
 }
 
+const DENSITY_KEY = "zugzug:grid-density";
+
+function useDensity(): ["default" | "compact", () => void] {
+  const [d, setD] = useState<"default" | "compact">(() => {
+    if (typeof localStorage === "undefined") return "default";
+    return localStorage.getItem(DENSITY_KEY) === "compact" ? "compact" : "default";
+  });
+  return [
+    d,
+    () =>
+      setD((cur) => {
+        const next = cur === "compact" ? "default" : "compact";
+        try {
+          localStorage.setItem(DENSITY_KEY, next);
+        } catch {
+          /* ignore */
+        }
+        return next;
+      }),
+  ];
+}
+
 function TablePaneInner({ dim, isActive }: TablePaneProps) {
   const sources = useSources();
   const { engineer } = useEngineerMode();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
   const undo = useUndoStack();
+  const [density, toggleDensity] = useDensity();
 
   const [sel, setSel] = useState<string[]>([]);
   const [open, setOpen] = useState<string | null>(null);
@@ -353,6 +376,14 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
           >
             ↷ Redo
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleDensity}
+            title={density === "compact" ? "Default row height" : "Compact row height"}
+          >
+            {density === "compact" ? "▤ Default" : "≡ Compact"}
+          </Button>
           {sourceOpts.length > 0 && !external && (
             <div className="w-56">
               <ComboSelect
@@ -482,6 +513,8 @@ function TablePaneInner({ dim, isActive }: TablePaneProps) {
           rows={rowsForGrid}
           rowKey={(c) => c.key}
           columns={columns}
+          density={density}
+          showRowNumbers
           selection={{ selected: sel, onChange: setSel }}
           onCommit={async (rowKey, field, value) => {
             if (field === "label") {
