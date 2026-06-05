@@ -76,6 +76,14 @@ export function useGridCursor<Row>({
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [cursor?.rowKey, cursor?.field]);
 
+  // When the host's rows change (filter toggle, async save), drop the cursor if
+  // its row vanished — prevents an orphan focus ring on a dead key.
+  useEffect(() => {
+    if (!cursor) return;
+    const present = rows.some((r) => rowKey(r) === cursor.rowKey);
+    if (!present) setCursor(null);
+  }, [rows, cursor, rowKey]);
+
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (!cursor) return;

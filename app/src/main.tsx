@@ -5,13 +5,14 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
-import { UndoStackProvider } from "./components/datagrid";
+import { OpenTabsProvider } from "./lib/open-tabs";
+import { CreateTableModalProvider } from "./lib/create-table-modal";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
 import { Dashboard } from "./routes/Dashboard";
-import { Mapping } from "./routes/Mapping";
+import { Triage } from "./routes/Triage";
 import { Sources } from "./routes/Sources";
 import { MasterTables } from "./routes/MasterTables";
 import { Settings } from "./routes/Settings";
@@ -55,23 +56,25 @@ createRoot(root).render(
           path="*"
           element={
             <RouteErrorBoundary>
-              <UndoStackProvider>
-                <EngineerModeProvider>
-                  <BootGate>
+              <EngineerModeProvider>
+                <BootGate>
+                  <OpenTabsProvider>
+                    <CreateTableModalProvider>
                     <Routes>
                       <Route path="/" element={<Navigate to="/app" replace />} />
                       <Route element={<AppShell />}>
                         <Route path="/app" element={<Dashboard />} />
-                        <Route path="/app/mapping" element={<Mapping />} />
+                        <Route path="/app/triage" element={<Triage />} />
                         <Route path="/app/sources" element={<Sources />} />
                         <Route path="/app/tables" element={<MasterTables />} />
                         <Route path="/app/settings" element={<Settings />} />
                       </Route>
                       <Route path="*" element={<Navigate to="/app" replace />} />
                     </Routes>
-                  </BootGate>
-                </EngineerModeProvider>
-              </UndoStackProvider>
+                    </CreateTableModalProvider>
+                  </OpenTabsProvider>
+                </BootGate>
+              </EngineerModeProvider>
             </RouteErrorBoundary>
           }
         />

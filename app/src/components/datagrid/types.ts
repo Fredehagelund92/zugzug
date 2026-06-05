@@ -92,4 +92,8 @@ export interface DataGridProps<Row> {
    *  Pass a typed reader when the row type's fields don't match column `field`
    *  names directly (e.g. flattened nested objects). */
   getValue?: (row: Row, field: string) => unknown;
+  /** Row density. "compact" tightens cell padding to ~24px rows; default ~32px. */
+  density?: "default" | "compact";
+  /** Prepend a 1-based row number column (read-only, 36px wide). */
+  showRowNumbers?: boolean;
 }
