@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
 import { PageHeader } from "../components/PageHeader";
@@ -81,9 +81,20 @@ interface SchemaGroup {
 export function Sources() {
   const sources = useSources();
   const dims = useDimensions();
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState<Status>("needs");
-  const [sort, setSort] = useState<Sort>("impact");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQ = searchParams.get("q") ?? "";
+  const initialStatus = ((): Status => {
+    const v = searchParams.get("status");
+    return v === "needs" || v === "all" || v === "clean" || v === "missing" ? v : "needs";
+  })();
+  const initialSort = ((): Sort => {
+    const v = searchParams.get("sort");
+    return v === "impact" || v === "name" || v === "recent" ? v : "impact";
+  })();
+
+  const [q, setQ] = useState(initialQ);
+  const [status, setStatus] = useState<Status>(initialStatus);
+  const [sort, setSort] = useState<Sort>(initialSort);
   const [shown, setShown] = useState(PAGE);
   const [scanning, setScanning] = useState(false);
   const [flash, setFlash] = useState<number | null>(null);
@@ -212,13 +223,55 @@ export function Sources() {
       return;
     }
     const allSchemas = new Set(sources.map((s) => s.table.split(".")[0]));
-    if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
+    const focusParam = searchParams.get("focus");
+    if (focusParam && allSchemas.has(focusParam)) {
+      // honor the deep-link first; auto-expand still applies on top per spec
+      // open question ***REMOVED***6, which we resolve "preserves user intent" (add to set).
+      if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
+        setOpenSchemas(allSchemas);
+      } else if (agg.worst) {
+        setOpenSchemas(new Set([focusParam, agg.worst.table.split(".")[0]]));
+      } else {
+        setOpenSchemas(new Set([focusParam]));
+      }
+    } else if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
       setOpenSchemas(allSchemas);
     } else if (agg.worst) {
       setOpenSchemas(new Set([agg.worst.table.split(".")[0]]));
     }
     setOpenInit(true);
-  }, [sources, agg.worst, openInit]);
+  }, [sources, agg.worst, openInit, searchParams]);
+
+  /* ---- URL write-through: q is debounced 200ms ---- */
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (q.trim()) next.set("q", q);
+          else next.delete("q");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [q, setSearchParams]);
+
+  /* ---- URL write-through: status + sort are immediate ---- */
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (status !== "needs") next.set("status", status);
+        else next.delete("status");
+        if (sort !== "impact") next.set("sort", sort);
+        else next.delete("sort");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [status, sort, setSearchParams]);
 
   /* ---- when the user types a search, auto-open every group with a match ---- */
   const visibleGroups = useMemo<SchemaGroup[]>(() => groups.slice(0, shown), [groups, shown]);
