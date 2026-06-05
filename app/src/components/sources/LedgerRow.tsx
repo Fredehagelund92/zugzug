@@ -1,8 +1,7 @@
-import { ScanScheduleMenu } from "../ScanScheduleMenu";
 import { IconChevron, IconWand } from "../Icons";
 import { cx } from "../../lib/cx";
 import type { SourceInfo } from "../../store";
-import { SCHED_LABEL, STALE_DAYS, ago, daysAgo } from "./utils";
+import { STALE_DAYS, ago, daysAgo } from "./utils";
 import { ExpandedDrill } from "./ExpandedDrill";
 
 /* LedgerRow — a single wired-column line in the Sources ledger. Extracted
@@ -14,7 +13,6 @@ interface LedgerRowProps {
   row: SourceInfo;
   expanded: boolean;
   onToggle: () => void;
-  onScheduleChange: (next: string | null) => void;
   onDerive: () => void;
   /** Drop the coverage-encoded standing bar at the bottom edge. The bar earns
    *  its place in the full Sources ledger (long, dense list, the % readout is
@@ -31,7 +29,6 @@ export function LedgerRow({
   row,
   expanded,
   onToggle,
-  onScheduleChange,
   onDerive,
   hideStandingBar,
   focused,
@@ -104,7 +101,6 @@ export function LedgerRow({
             <span>
               → <span className="text-ink-2">{row.dimension}</span>
             </span>
-            {row.schedule && <span>· {SCHED_LABEL[row.schedule] ?? row.schedule}</span>}
             {row.scannedAt && <span>· {ago(row.scannedAt)} ago</span>}
           </div>
         </div>
@@ -127,7 +123,6 @@ export function LedgerRow({
           )}
         </div>
         <div className="flex items-center justify-end gap-1.5">
-          <ScanScheduleMenu value={row.schedule ?? null} onChange={onScheduleChange} />
           <button
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
