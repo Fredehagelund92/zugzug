@@ -155,6 +155,7 @@ export interface GridLayoutConfig {
 export interface Preferences {
   publishThreshold: number;
   suggestThreshold: number;
+  scanSchedule: "15m" | "hourly" | "daily" | null;
 }
 
 /* ---- shared helpers ---- */
