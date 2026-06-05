@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
@@ -129,7 +129,13 @@ export function AppShell() {
     });
   };
   const navigate = useNavigate();
-  const { openTab } = useOpenTabs();
+  const { tabs, openTab, focusTab } = useOpenTabs();
+  // Mirror `tabs` into a ref so the global key handler can read the latest list
+  // without re-binding the document listener every time tabs open/close/reorder.
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -143,15 +149,26 @@ export function AppShell() {
         // Fires even inside inputs so the user can always reach it.
         e.preventDefault();
         setPaletteOpen(true);
+      } else if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+        // Cmd+1..9 → switch to the Nth tab in the tab strip (1-indexed).
+        // Only fires on /app/tables, since tabs only exist there; elsewhere we
+        // bail so the browser's own Cmd+1..9 shortcut still works.
+        if (!window.location.pathname.startsWith("/app/tables")) return;
+        const idx = parseInt(e.key, 10) - 1;
+        const target = tabsRef.current[idx];
+        if (target) {
+          e.preventDefault();
+          focusTab(target.id);
+        }
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [focusTab]);
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
-    { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
+    { to: "/app/triage", label: "Triage", Icon: IconMapping, count: totalNew },
     {
       to: "/app/sources",
       label: "Sources",
@@ -178,22 +195,13 @@ export function AppShell() {
       priority: true,
     });
     out.push({
-      id: "nav:mapping",
+      id: "nav:triage",
       group: "Navigate",
-      label: "Match values",
+      label: "Triage",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/mapping"),
-      keywords: "reconcile mapping",
-      priority: true,
-    });
-    out.push({
-      id: "nav:mapping:all",
-      group: "Navigate",
-      label: "Match values — all dimensions",
-      icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/mapping?view=all"),
-      keywords: "cross dim inbox",
+      action: () => navigate("/app/triage"),
+      keywords: "inbox queue match reconcile mapping",
       priority: true,
     });
     out.push({
@@ -225,17 +233,20 @@ export function AppShell() {
       priority: true,
     });
 
-    // Section 2: jump to a dimension's mapping inbox
+    // Section 2: jump to a table's Match mode
     for (const d of dims) {
       const newCount = d.values.filter((v) => v.status === "new").length;
       out.push({
         id: `dim:${d.id}`,
-        group: "Dimensions",
+        group: "Tables",
         label: d.dimension,
         secondary: newCount > 0 ? `${newCount} new` : "clean",
         icon: <IconArrowRight className="h-4 w-4" />,
         keywords: `${d.id} ${d.mapTable} ${d.dimTable} ${d.keyCol}`,
-        action: () => navigate(`/app/mapping?dimId=${encodeURIComponent(d.id)}`),
+        action: () => {
+          openTab(d.id);
+          navigate(`/app/tables?open=${d.id}&active=${d.id}&mode=match`);
+        },
       });
     }
 

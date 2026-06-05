@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
 import { TablePane } from "../components/TablePane";
-import { useDimensions } from "../store";
+import { useDimensions, useSources } from "../store";
 import { useOpenTabs, dimIdFromTabId } from "../lib/open-tabs";
 import { useCreateTableModal } from "../lib/create-table-modal";
+import { availableModes, type Mode } from "../lib/available-modes";
+import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
 
 /* Tables — the master-record workbench, now multi-tab. The route owns the URL
    contract (?open=a,b,c&active=<id> + legacy ?dimId=) and the tab strip. Each
@@ -73,6 +75,56 @@ export function MasterTables() {
 
   const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
 
+  // Per-tab mode state. Keyed by dimId so tab switches don't clobber a pane's
+  // chosen mode. Mount fold reads ?mode= for the active tab once; thereafter,
+  // user-driven mode changes flow through onModeChange (state + localStorage),
+  // and the tab-switch effect mirrors the active tab's mode back into the URL.
+  const sources = useSources();
+  const [perTabMode, setPerTabMode] = useState<Record<string, Mode>>({});
+
+  const foldedDimsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeTabId) return;
+    const dimId = dimIdFromTabId(activeTabId);
+    if (foldedDimsRef.current.has(dimId)) return;
+    const dim = dimById.get(dimId);
+    if (!dim) return;
+    const modes = availableModes(dim, sources);
+    const folded = foldUrlMode(searchParams, dimId, modes);
+    setPerTabMode((cur) => ({ ...cur, [dimId]: folded }));
+    foldedDimsRef.current.add(dimId);
+  }, [activeTabId, dimById, sources, searchParams]);
+
+  const onModeChange = useCallback((dimId: string, m: Mode) => {
+    setPerTabMode((cur) => ({ ...cur, [dimId]: m }));
+    writeStoredMode(dimId, m);
+  }, []);
+
+  // When the active tab changes (or its mode changes), sync ?mode= in the URL.
+  // Drop ?value= whenever we're not in match mode — value is only meaningful
+  // for the match body's cursor. Gate on the fold so we don't fire before
+  // foldUrlMode has populated perTabMode and accidentally strip a fresh ?value=
+  // from a deep-link before the cursor reads it.
+  useEffect(() => {
+    if (!activeTabId) return;
+    const dimId = dimIdFromTabId(activeTabId);
+    if (!foldedDimsRef.current.has(dimId)) return;
+    const dim = dimById.get(dimId);
+    if (!dim) return;
+    const modes = availableModes(dim, sources);
+    const mode = perTabMode[dimId] ?? readStoredMode(dimId, modes);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (mode !== "records") next.set("mode", mode);
+        else next.delete("mode");
+        if (mode !== "match") next.delete("value");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [activeTabId, perTabMode, dimById, sources, setSearchParams]);
+
   if (dims.length === 0) {
     return (
       <div className="mx-auto w-full max-w-[var(--wide)] p-8">
@@ -90,9 +142,21 @@ export function MasterTables() {
           const dim = dimById.get(tab.dimId);
           if (!dim) return null;
           const isActive = tab.id === activeTabId;
+          const modes = availableModes(dim, sources);
+          const mode: Mode = perTabMode[tab.dimId] ?? readStoredMode(tab.dimId, modes);
           return (
-            <div key={tab.id} hidden={!isActive}>
-              <TablePane dim={dim} isActive={isActive} />
+            <div
+              key={tab.id}
+              hidden={!isActive}
+              className="absolute inset-0 flex flex-col min-h-0"
+            >
+              <TablePane
+                dim={dim}
+                isActive={isActive}
+                mode={mode}
+                modes={modes}
+                onModeChange={(m) => onModeChange(tab.dimId, m)}
+              />
             </div>
           );
         })}
