@@ -169,7 +169,7 @@ export function Dashboard() {
       <PageHeader
         backdrop={<MarkBackdrop />}
         kicker="Master data"
-        title="Value mapping overview"
+        title="Home"
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-ink-2">
             <span className="flex items-center gap-1.5">
