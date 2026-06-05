@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../components/Card";
 import { Kpi } from "../components/Kpi";
@@ -6,8 +7,16 @@ import { Button } from "../components/Button";
 import { Mark } from "../components/Mark";
 import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconArrowRight, IconPlus } from "../components/Icons";
+import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import { useDimensions, useAudit, useDrafts, currentUser } from "../store";
+import { useCreateTableModal } from "../lib/create-table-modal";
+import {
+  type FilterKey,
+  type SortKey,
+  applyFilter,
+  applySort,
+} from "./dashboard-helpers";
 
 const MarkBackdrop = () => (
   <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
@@ -58,6 +67,31 @@ export function Dashboard() {
     d.values.some((v) => v.status === "new"),
   ).length;
   const cleanTables = dims.length - attentionTables;
+
+  const create = useCreateTableModal();
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [sort, setSort] = useState<SortKey>("urgency");
+
+  // Dim ids that have at least one staged draft (for filter + row highlighting)
+  const stagedDimIds = useMemo(
+    () => new Set(staged.map((d) => d.dimId)),
+    [staged],
+  );
+
+  // Staged drafts grouped by dimId for the inline flag in table rows
+  const stagedByDim = useMemo(() => {
+    const map: Record<string, typeof staged> = {};
+    for (const d of staged) {
+      if (!map[d.dimId]) map[d.dimId] = [];
+      map[d.dimId].push(d);
+    }
+    return map;
+  }, [staged]);
+
+  const visibleDims = useMemo(
+    () => applySort(applyFilter(dims, filter, stagedDimIds), sort),
+    [dims, filter, sort, stagedDimIds],
+  );
 
   const kpis: Array<{
     label: string;
@@ -167,6 +201,74 @@ export function Dashboard() {
         ))}
       </div>
 
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-1.5 px-8">
+        {/* filter pills */}
+        {(
+          [
+            { key: "all" as FilterKey, label: "All", count: dims.length },
+            {
+              key: "attention" as FilterKey,
+              label: "Needs attention",
+              count: dims.filter(
+                (d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id),
+              ).length,
+            },
+            {
+              key: "clean" as FilterKey,
+              label: "Clean",
+              count: dims.filter(
+                (d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id),
+              ).length,
+            },
+          ] as const
+        ).map(({ key, label, count }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setFilter(key)}
+            className={cx(
+              "flex h-6 items-center gap-1.5 rounded-sm border px-2.5 font-mono text-[10px] transition-colors",
+              filter === key && key === "attention"
+                ? "border-warn/40 bg-warn-soft text-warn"
+                : filter === key
+                  ? "border-accent/40 bg-accent-wash text-accent"
+                  : "border-line-2 bg-surface-2 text-ink-3 hover:text-ink-2",
+            )}
+          >
+            {label}
+            <span className="opacity-50">{count}</span>
+          </button>
+        ))}
+
+        <div className="mx-1 h-4 w-px bg-line-2" />
+
+        {/* sort pills */}
+        {(
+          [
+            { key: "urgency" as SortKey, label: "Urgency" },
+            { key: "coverage" as SortKey, label: "Coverage" },
+            { key: "name" as SortKey, label: "Name" },
+            { key: "rows" as SortKey, label: "Rows" },
+          ] as const
+        ).map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setSort(key)}
+            className={cx(
+              "flex h-6 items-center gap-1 rounded-sm border px-2.5 font-mono text-[10px] transition-colors",
+              sort === key
+                ? "border-line bg-surface-3 text-ink-2"
+                : "border-transparent text-ink-3 hover:text-ink-2",
+            )}
+          >
+            {sort === key && <span className="opacity-60">↑</span>}
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* staged drafts awaiting review/approve — the OLTP draft layer (Postgres) */}
       {staged.length > 0 && (
         <div {...rise(5)}>
@@ -222,10 +324,20 @@ export function Dashboard() {
           <Card className="p-0">
             <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <h2 className="font-display text-lg font-semibold text-ink">Mapping seeds</h2>
-              <span className="font-mono text-xs text-ink-3">{dims.length} tables</span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs text-ink-3">{visibleDims.length} of {dims.length} tables</span>
+                <button
+                  type="button"
+                  onClick={() => create.open()}
+                  className="flex h-6 items-center gap-1 rounded-sm border border-line-2 bg-surface-2 px-2 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink-2"
+                >
+                  <IconPlus className="h-3 w-3" />
+                  New
+                </button>
+              </div>
             </div>
             <div className="divide-y divide-line">
-              {dims.map((s) => {
+              {visibleDims.map((s) => {
                 const total = s.values.length;
                 const mapped = s.values.filter((v) => v.current).length;
                 const pct = Math.round((mapped / total) * 100);
@@ -257,7 +369,11 @@ export function Dashboard() {
                         </span>
                       </div>
                     </div>
-                    {n > 0 ? (
+                    {stagedByDim[s.id]?.length ? (
+                      <Badge tone="staged" dot>
+                        {stagedByDim[s.id].length} staged
+                      </Badge>
+                    ) : n > 0 ? (
                       <Badge tone="warn" dot>
                         {n} new
                       </Badge>
