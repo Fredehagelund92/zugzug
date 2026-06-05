@@ -137,6 +137,11 @@ export const IconPin = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 17v5M9 4h6l-1 5 3 3v2H7v-2l3-3z" />
   </Base>
 );
+export const IconFilter = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M3 5h18l-7 8v6l-4 2v-8z" />
+  </Base>
+);
 export const IconSun = (p: SVGProps<SVGSVGElement>) => (
   <Base {...p}>
     <circle cx="12" cy="12" r="4" />

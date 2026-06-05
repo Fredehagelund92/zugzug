@@ -121,8 +121,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
           cellPadY,
           !isLastCol && "border-r border-line",
           c.align === "right" && "justify-end text-right",
-          inRangeCell && "bg-accent-soft",
-          focused && "ring-2 ring-accent ring-inset bg-accent-soft",
+          inRangeCell && "bg-accent/20",
+          focused && "ring-2 ring-accent ring-inset bg-accent/30",
         );
         const data = `${rk}::${c.field}`;
         return (
@@ -270,14 +270,27 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
   // ── Task 19: sort state + sortedRows ────────────────────────────────────────
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
   const hiddenList = useMemo(() => columns.filter((c) => c.hidden), [columns]);
 
+  const filteredRows = useMemo(() => {
+    const entries = Object.entries(filters);
+    if (entries.length === 0) return rows;
+    return rows.filter((r) =>
+      entries.every(([field, needle]) => {
+        const v = getValue(r, field);
+        if (v == null) return false;
+        return String(v).toLowerCase().includes(needle.toLowerCase());
+      }),
+    );
+  }, [rows, filters, getValue]);
+
   const sortedRows = useMemo(() => {
-    if (!sort) return rows;
+    if (!sort) return filteredRows;
     const sign = sort.dir === "asc" ? 1 : -1;
     const cmp = (a: Row, b: Row) => {
       const av = getValue(a, sort.field);
@@ -288,8 +301,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign;
       return String(av ?? "").localeCompare(String(bv ?? "")) * sign;
     };
-    return [...rows].sort(cmp);
-  }, [rows, sort, getValue]);
+    return [...filteredRows].sort(cmp);
+  }, [filteredRows, sort, getValue]);
 
   // ── Task 20: per-column widths ──────────────────────────────────────────────
   const [widths, setWidths] = useState<Record<string, number>>(() =>
@@ -918,6 +931,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 {c.label}
                 {sortGlyph}
               </span>
+              {filters[c.field] && (
+                <span
+                  className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"
+                  title={`filter: contains "${filters[c.field]}"`}
+                >
+                  ▣
+                </span>
+              )}
 
               {/* Task 19: ⋯ menu button — always pushed to the far right edge of
                   the header cell via ml-auto, regardless of column alignment. */}
@@ -941,9 +962,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   column={c}
                   anchorRef={menuAnchorRef}
                   sortDir={sort?.field === c.field ? sort.dir : null}
+                  filterValue={filters[c.field] ?? null}
                   onClose={() => setMenuFor(null)}
                   onRename={(label) => props.onRenameColumn?.(c.field, label)}
                   onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
+                  onFilter={(v) =>
+                    setFilters((cur) => {
+                      const next = { ...cur };
+                      if (v && v.length > 0) next[c.field] = v;
+                      else delete next[c.field];
+                      return next;
+                    })
+                  }
                   onChangeType={async (newType) => {
                     if (!props.onChangeColumnType) return;
                     const res = await props.onChangeColumnType(c.field, newType);
