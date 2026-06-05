@@ -4,10 +4,11 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { FormField } from "../components/FormField";
 import { PageHeader } from "../components/PageHeader";
+import { SegControl } from "../components/SegControl";
 import { ThresholdRange } from "../components/ThresholdRange";
 import { cx } from "../lib/cx";
 import { useEngineerMode } from "../lib/engineer-mode";
-import { usePreferences, setPreferences, currentUser } from "../store";
+import { usePreferences, setPreferences, currentUser, scanSources } from "../store";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -36,6 +37,106 @@ function Section({
 
 const input =
   "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-accent";
+
+interface ScanStatus {
+  lastScanAt: string | null;
+  sourceCount: number;
+  unmappedCount: number;
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "never";
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
+function ScansSection() {
+  const prefs = usePreferences();
+  const [status, setStatus] = useState<ScanStatus | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/sources/scan-status")
+      .then((r) => r.json() as Promise<ScanStatus>)
+      .then(setStatus)
+      .catch(() => {});
+  }, []);
+
+  const handleScheduleChange = (next: string | null) => {
+    void setPreferences({
+      ...prefs,
+      scanSchedule: next as "15m" | "hourly" | "daily" | null,
+    });
+  };
+
+  const handleScanNow = async () => {
+    setScanning(true);
+    try {
+      await scanSources();
+      const fresh = await fetch("/api/sources/scan-status").then(
+        (r) => r.json() as Promise<ScanStatus>,
+      );
+      setStatus(fresh);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const scheduleOptions = [
+    { value: null,     label: "Off" },
+    { value: "15m",    label: "15 min" },
+    { value: "hourly", label: "Hourly" },
+    { value: "daily",  label: "Daily" },
+  ];
+
+  return (
+    <Section
+      title="Scans"
+      hint="How often Zug Zug checks your warehouse sources for new unmapped values."
+    >
+      <FormField label="Schedule">
+        <SegControl
+          value={prefs.scanSchedule}
+          options={scheduleOptions}
+          onChange={handleScheduleChange}
+        />
+      </FormField>
+
+      {status && (
+        <div className="flex items-center justify-between rounded-sm border border-line bg-surface-2 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span
+              className={cx(
+                "inline-block h-2 w-2 rounded-full",
+                status.unmappedCount > 0
+                  ? "bg-accent shadow-[0_0_6px_var(--accent)]"
+                  : "bg-ok shadow-[0_0_6px_var(--ok)]",
+              )}
+            />
+            <span className="font-mono text-[11.5px] text-ink-2">
+              last scan {relativeTime(status.lastScanAt)}
+              {" · "}
+              {status.sourceCount} {status.sourceCount === 1 ? "source" : "sources"}
+              {status.unmappedCount > 0 && (
+                <span className="text-accent"> · {status.unmappedCount} unmapped</span>
+              )}
+            </span>
+          </div>
+          <Button onClick={() => void handleScanNow()} disabled={scanning}>
+            {scanning ? "Scanning…" : "Scan now"}
+          </Button>
+        </div>
+      )}
+
+      {!status && prefs.scanSchedule && (
+        <p className="font-mono text-[11px] text-ink-3">Loading scan status…</p>
+      )}
+    </Section>
+  );
+}
 
 interface Member {
   email: string;
@@ -154,8 +255,12 @@ export function Settings() {
   const prefs = usePreferences();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-8">
+    <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-8">
       <PageHeader kicker="Workspace" title="Settings" lede="Changes are saved as you make them." />
+
+      <div className="zz-rise" style={{ animationDelay: "60ms" }}>
+        <ScansSection />
+      </div>
 
       <div className="zz-rise" style={{ animationDelay: "100ms" }}>
         <Section title="Appearance" hint="Theme follows the toggle in the top bar.">
@@ -299,7 +404,7 @@ export function Settings() {
               publish={prefs.publishThreshold}
               suggest={prefs.suggestThreshold}
               onChange={({ publish, suggest }) =>
-                setPreferences({ publishThreshold: publish, suggestThreshold: suggest })
+                setPreferences({ ...prefs, publishThreshold: publish, suggestThreshold: suggest })
               }
             />
           </FormField>
