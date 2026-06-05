@@ -675,10 +675,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   <div className="mt-2 font-mono text-[11px] text-ink-3">
                     no source values map here yet —{" "}
                     <Link
-                      to={`/app/mapping?dimId=${activeId}`}
+                      to={`/app/tables?open=${activeId}&active=${activeId}&mode=match`}
                       className="text-accent hover:underline"
                     >
-                      match them on Value mapping
+                      match them in Match values
                     </Link>
                   </div>
                 )}

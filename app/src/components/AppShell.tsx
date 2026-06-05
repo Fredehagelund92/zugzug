@@ -216,17 +216,20 @@ export function AppShell() {
       priority: true,
     });
 
-    // Section 2: jump to a dimension's mapping inbox
+    // Section 2: jump to a table's Match mode
     for (const d of dims) {
       const newCount = d.values.filter((v) => v.status === "new").length;
       out.push({
         id: `dim:${d.id}`,
-        group: "Dimensions",
+        group: "Tables",
         label: d.dimension,
         secondary: newCount > 0 ? `${newCount} new` : "clean",
         icon: <IconArrowRight className="h-4 w-4" />,
         keywords: `${d.id} ${d.mapTable} ${d.dimTable} ${d.keyCol}`,
-        action: () => navigate(`/app/mapping?dimId=${encodeURIComponent(d.id)}`),
+        action: () => {
+          openTab(d.id);
+          navigate(`/app/tables?open=${d.id}&active=${d.id}&mode=match`);
+        },
       });
     }
 
