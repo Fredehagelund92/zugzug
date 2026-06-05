@@ -6,7 +6,7 @@ import { LedgerRow } from "../sources/LedgerRow";
 import { ago } from "../sources/utils";
 import { PALETTE } from "../../lib/palette";
 import { cx } from "../../lib/cx";
-import { deriveCanonical, setSourceSchedule, useSources } from "../../store";
+import { deriveCanonical, useSources } from "../../store";
 import type { MappingDimension } from "../../data";
 
 /* WiredSourcesModeBody — third mode for a per-table workbench tab. A console
@@ -36,14 +36,12 @@ export function WiredSourcesModeBody({ dim }: Props) {
     let values = 0;
     let unmapped = 0;
     let rows = 0;
-    let scheduled = 0;
     let lastScannedAt: string | null = null;
     let worstUnmapped = 0;
     for (const s of wired) {
       values += s.values;
       unmapped += s.unmapped;
       rows += s.rows;
-      if (s.schedule) scheduled++;
       if (s.unmapped > worstUnmapped) worstUnmapped = s.unmapped;
       if (s.scannedAt && (!lastScannedAt || new Date(s.scannedAt) > new Date(lastScannedAt))) {
         lastScannedAt = s.scannedAt;
@@ -51,7 +49,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
     }
     const coverage = values > 0 ? Math.round(((values - unmapped) / values) * 100) : 100;
     const schemas = new Set(wired.map((s) => s.table.split(".")[0]));
-    return { values, unmapped, rows, coverage, lastScannedAt, scheduled, schemas, worstUnmapped };
+    return { values, unmapped, rows, coverage, lastScannedAt, schemas, worstUnmapped };
   }, [wired]);
 
   // ── Empty state — no wiring yet ─────────────────────────────────────────
@@ -167,16 +165,6 @@ export function WiredSourcesModeBody({ dim }: Props) {
               <span className="text-ink-3">rows watched</span>
             </span>
 
-            {agg.scheduled > 0 && (
-              <>
-                <span className="text-line-2">·</span>
-                <span>
-                  <span className="tabular-nums text-ink-2">{agg.scheduled}</span>{" "}
-                  <span className="text-ink-3">on a schedule</span>
-                </span>
-              </>
-            )}
-
             {agg.lastScannedAt && (
               <span className="ml-auto">
                 <span className="text-ink-3">last scan </span>
@@ -210,9 +198,6 @@ export function WiredSourcesModeBody({ dim }: Props) {
                 expanded={expanded === key}
                 hideStandingBar
                 onToggle={() => setExpanded(expanded === key ? null : key)}
-                onScheduleChange={(next) =>
-                  void setSourceSchedule(row.dimId, row.table, row.column, next)
-                }
                 onDerive={() => void deriveCanonical(row.dimId, row.table, row.column)}
               />
             );
