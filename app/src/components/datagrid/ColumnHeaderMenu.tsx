@@ -103,7 +103,7 @@ export function ColumnHeaderMenu<Row>({
     <div
       ref={ref}
       style={{ position: "fixed", top: 0, left: 0, width: MENU_WIDTH }}
-      className="zz-pop-in z-50 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
+      className="zz-pop-in z-40 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
     >
       {mode === "menu" && (
         <>

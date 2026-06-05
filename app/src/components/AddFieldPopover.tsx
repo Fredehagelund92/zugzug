@@ -184,7 +184,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
       role="dialog"
       aria-modal="true"
       aria-label="Add field"
-      className="zz-pop-in fixed z-50 w-80 rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
+      className="zz-pop-in fixed z-40 w-80 rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
       style={{ width: 320 }}
     >
       {/* Accent top edge */}

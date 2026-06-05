@@ -82,8 +82,8 @@ function UserMenu() {
       </button>
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="zz-pop-in absolute right-0 top-10 z-20 min-w-[160px] rounded-sm border border-line bg-surface-elevated shadow-pop">
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="zz-pop-in absolute right-0 top-10 z-40 min-w-[160px] rounded-sm border border-line bg-surface-elevated shadow-pop">
             <div className="border-b border-line px-3 py-2">
               <p className="text-[13px] font-medium text-ink">{currentUser.name}</p>
               {currentUser.email && <p className="text-[11px] text-ink-2">{currentUser.email}</p>}
