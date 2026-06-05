@@ -83,3 +83,10 @@
   --tint-violet: #8a3fba;
   --tint-slate: #57637c;
 }
+
+/* Z-index layers:
+ *   10  — sticky surfaces (tab strip, toolbar headers)
+ *   30  — overlay/modal backdrops
+ *   40  — dropdowns, popovers, context menus
+ *   50  — full-screen overlays (command palette, modals)
+ */

@@ -60,7 +60,7 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
     <div
       ref={ref}
       style={{ position: "fixed", top: 0, left: 0, width: POPOVER_WIDTH }}
-      className="zz-pop-in z-50 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
+      className="zz-pop-in z-40 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
     >
       <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-ink-3">
         Hidden fields ({hidden.length})
