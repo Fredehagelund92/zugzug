@@ -225,7 +225,7 @@ export function Dashboard() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1.5 px-8">
+      <div className="flex flex-wrap items-center gap-1.5">
         {/* filter pills */}
         {(
           [
@@ -293,7 +293,7 @@ export function Dashboard() {
       </div>
 
       {/* Dimension health table */}
-      <div {...rise(5)} className="px-8 pb-8">
+      <div {...rise(5)}>
         <table className="w-full border-collapse">
           <thead>
             <tr>
