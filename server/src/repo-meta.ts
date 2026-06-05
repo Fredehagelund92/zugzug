@@ -63,25 +63,34 @@ export async function listAudit(limit = 30): Promise<AuditEntry[]> {
 
 /* --- workspace-global preferences (single row, id=1) --- */
 export async function getPreferences(): Promise<Preferences> {
-  const row = (
-    await pgAll<{ publish_threshold: number; suggest_threshold: number }>(
-      `SELECT publish_threshold, suggest_threshold FROM ${pg("preferences")} WHERE id = 1`,
-    )
-  )[0];
-  return row
-    ? {
-        publishThreshold: Number(row.publish_threshold),
-        suggestThreshold: Number(row.suggest_threshold),
-      }
-    : { publishThreshold: 95, suggestThreshold: 80 };
+  const row = await pgGet<{
+    publish_threshold: number;
+    suggest_threshold: number;
+    scan_schedule: string | null;
+  }>(
+    `SELECT publish_threshold, suggest_threshold, scan_schedule
+     FROM ${pg("preferences")} WHERE id = 1`,
+  );
+  const validSchedule = ["15m", "hourly", "daily"] as const;
+  const sched = row?.scan_schedule ?? null;
+  return {
+    publishThreshold: row?.publish_threshold ?? 95,
+    suggestThreshold: row?.suggest_threshold ?? 80,
+    scanSchedule: validSchedule.includes(sched as (typeof validSchedule)[number])
+      ? (sched as Preferences["scanSchedule"])
+      : null,
+  };
 }
 
 export async function setPreferences(p: Preferences): Promise<void> {
-  const publish = Math.max(0, Math.min(100, Math.round(p.publishThreshold)));
-  const suggest = Math.max(0, Math.min(publish, Math.round(p.suggestThreshold)));
+  const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
+  if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
   await pgRun(
-    `UPDATE ${pg("preferences")} SET publish_threshold = $1, suggest_threshold = $2, updated_at = current_timestamp WHERE id = 1`,
-    [publish, suggest],
+    `UPDATE ${pg("preferences")}
+     SET publish_threshold = $1, suggest_threshold = $2,
+         scan_schedule = $3, updated_at = current_timestamp
+     WHERE id = 1`,
+    [p.publishThreshold, p.suggestThreshold, p.scanSchedule],
   );
 }
 
