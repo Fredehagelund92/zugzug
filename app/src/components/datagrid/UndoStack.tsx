@@ -16,6 +16,9 @@ export interface UndoEntry {
   apply: () => Promise<void>;
   inverse: () => Promise<void>;
   label: string;
+  /** Optional surface tag — e.g. "Records", "Match" — shown next to the undo
+   *  label so a user pressing ⌘Z sees which surface the inverse will land on. */
+  surface?: string;
 }
 
 interface Ctx {
@@ -26,6 +29,9 @@ interface Ctx {
   canRedo: boolean;
   /** label of the top of the undo stack — surfaced in the toolbar */
   topLabel: string | null;
+  /** surface tag of the top of the undo stack — surfaced in the toolbar so a
+   *  user pressing ⌘Z sees which surface the inverse will land on. */
+  topSurface: string | null;
   /** Begin a compound undo group. Every push() between begin/end is coalesced
    *  into a single entry labelled `label`. Async-safe (the group is open until
    *  endTransaction is called, not until the JS frame ends). Nested calls are
@@ -84,11 +90,16 @@ export function UndoStackProvider({
     if (!tx) return;
     txRef.current = null;
     if (tx.entries.length === 0) return;
+    const surfaces = new Set(
+      tx.entries.map((e) => e.surface).filter((s): s is string => !!s),
+    );
+    const surface = surfaces.size === 1 ? [...surfaces][0] : undefined;
     const combined: UndoEntry =
       tx.entries.length === 1
-        ? { ...tx.entries[0], label: tx.label }
+        ? { ...tx.entries[0], label: tx.label, surface }
         : {
             label: tx.label,
+            surface,
             apply: async () => {
               for (const e of tx.entries) await e.apply();
             },
@@ -140,6 +151,7 @@ export function UndoStackProvider({
     canUndo: undoStack.current.length > 0,
     canRedo: redoStack.current.length > 0,
     topLabel: undoStack.current.at(-1)?.label ?? null,
+    topSurface: undoStack.current.at(-1)?.surface ?? null,
     beginTransaction,
     endTransaction,
   };

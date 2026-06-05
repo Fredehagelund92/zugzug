@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
@@ -17,6 +17,8 @@ import {
 } from "./Icons";
 import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { useOpenTabs } from "../lib/open-tabs";
+import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
 
 /* AppShell — the signed-in product chrome.
@@ -127,6 +129,13 @@ export function AppShell() {
     });
   };
   const navigate = useNavigate();
+  const { tabs, openTab, focusTab } = useOpenTabs();
+  // Mirror `tabs` into a ref so the global key handler can read the latest list
+  // without re-binding the document listener every time tabs open/close/reorder.
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -140,15 +149,26 @@ export function AppShell() {
         // Fires even inside inputs so the user can always reach it.
         e.preventDefault();
         setPaletteOpen(true);
+      } else if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+        // Cmd+1..9 → switch to the Nth tab in the tab strip (1-indexed).
+        // Only fires on /app/tables, since tabs only exist there; elsewhere we
+        // bail so the browser's own Cmd+1..9 shortcut still works.
+        if (!window.location.pathname.startsWith("/app/tables")) return;
+        const idx = parseInt(e.key, 10) - 1;
+        const target = tabsRef.current[idx];
+        if (target) {
+          e.preventDefault();
+          focusTab(target.id);
+        }
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [focusTab]);
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
-    { to: "/app/mapping", label: "Match values", Icon: IconMapping, count: totalNew },
+    { to: "/app/triage", label: "Triage", Icon: IconMapping, count: totalNew },
     {
       to: "/app/sources",
       label: "Sources",
@@ -175,22 +195,13 @@ export function AppShell() {
       priority: true,
     });
     out.push({
-      id: "nav:mapping",
+      id: "nav:triage",
       group: "Navigate",
-      label: "Match values",
+      label: "Triage",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/mapping"),
-      keywords: "reconcile mapping",
-      priority: true,
-    });
-    out.push({
-      id: "nav:mapping:all",
-      group: "Navigate",
-      label: "Match values — all dimensions",
-      icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/mapping?view=all"),
-      keywords: "cross dim inbox",
+      action: () => navigate("/app/triage"),
+      keywords: "inbox queue match reconcile mapping",
       priority: true,
     });
     out.push({
@@ -222,21 +233,24 @@ export function AppShell() {
       priority: true,
     });
 
-    // Section 2: jump to a dimension's mapping inbox
+    // Section 2: jump to a table's Match mode
     for (const d of dims) {
       const newCount = d.values.filter((v) => v.status === "new").length;
       out.push({
         id: `dim:${d.id}`,
-        group: "Dimensions",
+        group: "Tables",
         label: d.dimension,
         secondary: newCount > 0 ? `${newCount} new` : "clean",
         icon: <IconArrowRight className="h-4 w-4" />,
         keywords: `${d.id} ${d.mapTable} ${d.dimTable} ${d.keyCol}`,
-        action: () => navigate(`/app/mapping?dimId=${encodeURIComponent(d.id)}`),
+        action: () => {
+          openTab(d.id);
+          navigate(`/app/tables?open=${d.id}&active=${d.id}&mode=match`);
+        },
       });
     }
 
-    // Section 3: every canonical record — jumps to Tables with focus
+    // Section 3: every canonical record — opens the dim as a Tables tab + focus
     for (const d of dims) {
       for (const c of d.canonical) {
         out.push({
@@ -245,15 +259,15 @@ export function AppShell() {
           label: c.label ?? c.key,
           secondary: `${d.dimension} · ${c.key}`,
           keywords: `${d.dimension} ${c.key} ${d.id}`,
-          action: () =>
-            navigate(
-              `/app/tables?dimId=${encodeURIComponent(d.id)}&focus=${encodeURIComponent(c.key)}`,
-            ),
+          action: () => {
+            openTab(d.id);
+            navigate(`/app/tables?focus=${encodeURIComponent(c.key)}`);
+          },
         });
       }
     }
     return out;
-  }, [dims, totalNew, navigate]);
+  }, [dims, totalNew, navigate, openTab]);
 
   return (
     <div
@@ -276,9 +290,35 @@ export function AppShell() {
           )}
         </div>
 
-        {!collapsed && (
+        {collapsed ? (
           <>
-            <div className="flex items-center gap-2 px-5 pt-4 pb-1">
+            <nav className="flex flex-1 flex-col gap-0.5 p-2">
+              {nav.map(({ to, label, Icon, count, end }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  title={count != null ? `${label} · ${count}` : label}
+                  className={({ isActive }) =>
+                    cx(
+                      "relative flex h-10 items-center justify-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
+                      isActive
+                        ? "bg-accent-wash text-accent"
+                        : "text-ink-2 hover:bg-hover hover:text-ink",
+                    )
+                  }
+                >
+                  <Icon />
+                  {count != null && count > 0 && (
+                    <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                  )}
+                </NavLink>
+              ))}
+            </nav>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 px-5 pt-3 pb-1">
               <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
                 Master data layer
               </span>
@@ -286,50 +326,40 @@ export function AppShell() {
             <div className="px-5 pb-2">
               <ZigRule />
             </div>
+
+            <SidebarTableTree />
+
+            <nav className="shrink-0 border-t border-line">
+              <div className="flex items-center justify-around px-2 py-2">
+                {nav
+                  .filter((n) => n.to !== "/app/tables")
+                  .map(({ to, label, Icon, count, end }) => (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      title={count != null ? `${label} · ${count}` : label}
+                      className={({ isActive }) =>
+                        cx(
+                          "relative grid h-9 w-9 place-items-center rounded-sm transition-colors",
+                          isActive
+                            ? "bg-accent-wash text-accent"
+                            : "text-ink-3 hover:bg-hover hover:text-ink",
+                        )
+                      }
+                    >
+                      <Icon />
+                      {count != null && count > 0 && (
+                        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                      )}
+                    </NavLink>
+                  ))}
+              </div>
+            </nav>
           </>
         )}
-        {collapsed && <div className="h-3 shrink-0" />}
 
-        <nav className={cx("flex flex-1 flex-col gap-0.5", collapsed ? "p-2" : "p-3")}>
-          {nav.map(({ to, label, Icon, count, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              title={collapsed ? (count != null ? `${label} · ${count}` : label) : undefined}
-              className={({ isActive }) =>
-                cx(
-                  "relative flex items-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
-                  collapsed ? "h-10 justify-center" : "gap-3 rounded-sm px-3 py-2.5",
-                  isActive
-                    ? collapsed
-                      ? "bg-accent-wash text-accent"
-                      : "bg-accent-wash text-accent shadow-[inset_3px_0_0_var(--accent)]"
-                    : "text-ink-2 hover:bg-hover hover:text-ink",
-                )
-              }
-            >
-              <Icon />
-              {!collapsed && (
-                <>
-                  {label}
-                  {count != null && (
-                    <span className="ml-auto rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-ink-2 tabular-nums">
-                      {count}
-                    </span>
-                  )}
-                </>
-              )}
-              {collapsed && count != null && count > 0 && (
-                <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* footer — just a live dot + 'Connected' (single line). The collapse
-            toggle lives in the topbar now. */}
-        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-3")}>
+        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-2")}>
           <div
             className={cx(
               "flex items-center gap-2 font-mono text-[11px] text-ink",
