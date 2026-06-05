@@ -167,7 +167,7 @@ export function AppShell() {
   }, [focusTab]);
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
-    { to: "/app", label: "Dashboard", Icon: IconDashboard, end: true },
+    { to: "/app", label: "Home", Icon: IconDashboard, end: true },
     { to: "/app/triage", label: "Triage", Icon: IconMapping, count: totalNew },
     {
       to: "/app/sources",
@@ -188,10 +188,10 @@ export function AppShell() {
     out.push({
       id: "nav:dashboard",
       group: "Navigate",
-      label: "Dashboard",
+      label: "Home",
       icon: <IconDashboard className="h-4 w-4" />,
       action: () => navigate("/app"),
-      keywords: "home overview",
+      keywords: "dashboard overview",
       priority: true,
     });
     out.push({
@@ -374,7 +374,7 @@ export function AppShell() {
 
       {/* main column — flex column with the inner main as the only scroll area */}
       <div className="flex h-screen min-w-0 flex-col">
-        <header className="flex h-[var(--ak-topbar)] shrink-0 items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-4 backdrop-blur-md">
+        <header className="relative z-10 flex h-[var(--ak-topbar)] shrink-0 items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-4 backdrop-blur-md">
           <button
             type="button"
             onClick={toggle}
