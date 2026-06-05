@@ -97,17 +97,17 @@ export function MasterTables() {
   const sources = useSources();
   const [perTabMode, setPerTabMode] = useState<Record<string, Mode>>({});
 
-  const initialModeRef = useRef(false);
+  const foldedDimsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (initialModeRef.current) return;
     if (!activeTabId) return;
     const dimId = dimIdFromTabId(activeTabId);
+    if (foldedDimsRef.current.has(dimId)) return;
     const dim = dimById.get(dimId);
     if (!dim) return;
     const modes = availableModes(dim, sources);
     const folded = foldUrlMode(searchParams, dimId, modes);
     setPerTabMode((cur) => ({ ...cur, [dimId]: folded }));
-    initialModeRef.current = true;
+    foldedDimsRef.current.add(dimId);
   }, [activeTabId, dimById, sources, searchParams]);
 
   const onModeChange = useCallback((dimId: string, m: Mode) => {
@@ -122,9 +122,9 @@ export function MasterTables() {
   // strip ?value= that the legacy redirect just dropped on the URL for the
   // match-mode cursor pin.
   useEffect(() => {
-    if (!initialModeRef.current) return;
     if (!activeTabId) return;
     const dimId = dimIdFromTabId(activeTabId);
+    if (!foldedDimsRef.current.has(dimId)) return;
     const dim = dimById.get(dimId);
     if (!dim) return;
     const modes = availableModes(dim, sources);
