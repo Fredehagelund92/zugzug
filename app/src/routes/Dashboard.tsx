@@ -1,15 +1,14 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Card } from "../components/Card";
 import { Kpi } from "../components/Kpi";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Mark } from "../components/Mark";
 import { PageHeader } from "../components/PageHeader";
-import { IconWand, IconArrowRight, IconPlus } from "../components/Icons";
+import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
-import { useDimensions, useAudit, useDrafts, currentUser } from "../store";
+import { useDimensions, useAudit, useDrafts } from "../store";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import {
   type FilterKey,
@@ -42,10 +41,7 @@ export function Dashboard() {
   const auditLog = useAudit();
   const draftsMap = useDrafts();
   const navigate = useNavigate();
-  const newCount = (id: string) =>
-    dims.find((s) => s.id === id)?.values.filter((v) => v.status === "new").length ?? 0;
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
-  const dimName = (id: string) => dims.find((s) => s.id === id)?.dimension ?? id;
   const staged = Object.values(draftsMap).filter(
     (d) =>
       d.status === "mapped" &&
@@ -465,152 +461,6 @@ export function Dashboard() {
         </table>
       </div>
 
-      {/* staged drafts awaiting review/approve — the OLTP draft layer (Postgres) */}
-      {staged.length > 0 && (
-        <div {...rise(5)}>
-          <Card className="p-0">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
-              <div className="flex items-center gap-2.5">
-                <h2 className="font-display text-lg font-semibold text-ink">Staged for review</h2>
-                <Badge tone="staged" dot>
-                  {staged.length} pending commit
-                </Badge>
-              </div>
-              <Link to="/app/triage">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<IconArrowRight className="h-3.5 w-3.5" />}
-                >
-                  Review &amp; commit
-                </Button>
-              </Link>
-            </div>
-            <ul className="divide-y divide-line">
-              {staged.slice(0, 5).map((d) => (
-                <li
-                  key={`${d.dimId}-${d.raw}`}
-                  className="flex items-center gap-3 px-6 py-3 font-mono text-[12px]"
-                >
-                  <span
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-surface-3 text-[9px] text-ink-2"
-                    title={d.user.name}
-                  >
-                    {d.user.initials}
-                  </span>
-                  <span className="min-w-0 max-w-[34%] truncate text-ink">{d.raw}</span>
-                  <IconArrowRight className="h-3.5 w-3.5 shrink-0 text-ink-3" />
-                  <span className="min-w-0 flex-1 truncate text-accent">{d.targetLabel}</span>
-                  <span className="shrink-0 rounded-pill bg-surface-3 px-2 py-0.5 text-[10px] text-ink-2">
-                    {dimName(d.dimId)}
-                  </span>
-                  <span className="hidden shrink-0 text-[10px] text-ink-2 tabular-nums sm:inline">
-                    {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
-        {/* mapping seeds */}
-        <div {...rise(5)}>
-          <Card className="p-0">
-            <div className="flex items-center justify-between border-b border-line px-6 py-4">
-              <h2 className="font-display text-lg font-semibold text-ink">Mapping seeds</h2>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-ink-3">{visibleDims.length} of {dims.length} tables</span>
-                <button
-                  type="button"
-                  onClick={() => create.open()}
-                  className="flex h-6 items-center gap-1 rounded-sm border border-line-2 bg-surface-2 px-2 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink-2"
-                >
-                  <IconPlus className="h-3 w-3" />
-                  New
-                </button>
-              </div>
-            </div>
-            <div className="divide-y divide-line">
-              {visibleDims.map((s) => {
-                const total = s.values.length;
-                const mapped = s.values.filter((v) => v.current).length;
-                const pct = Math.round((mapped / total) * 100);
-                const n = newCount(s.id);
-                return (
-                  <Link
-                    key={s.id}
-                    to={`/app/tables?open=${s.id}&active=${s.id}&mode=match`}
-                    className="group flex items-center gap-4 px-6 py-4 transition-colors hover:bg-hover"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-display text-[14px] font-semibold text-ink">
-                          {s.dimension}
-                        </span>
-                        <span className="truncate font-mono text-[11px] text-ink-2">
-                          {s.mapTable}
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-center gap-3">
-                        <div className="h-1.5 w-40 overflow-hidden rounded-pill bg-surface-2">
-                          <div
-                            className="h-full rounded-pill bg-accent"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="font-mono text-[11px] text-ink-2 tabular-nums">
-                          {s.rows.toLocaleString()} rows
-                        </span>
-                      </div>
-                    </div>
-                    {stagedByDim[s.id]?.length ? (
-                      <Badge tone="staged" dot>
-                        {stagedByDim[s.id].length} staged
-                      </Badge>
-                    ) : n > 0 ? (
-                      <Badge tone="warn" dot>
-                        {n} new
-                      </Badge>
-                    ) : (
-                      <Badge tone="ok" dot>
-                        clean
-                      </Badge>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-
-        {/* new-value inbox */}
-        <div {...rise(6)}>
-          <Card className="p-0">
-            <div className="flex items-center justify-between border-b border-line px-6 py-4">
-              <h2 className="font-display text-lg font-semibold text-ink">Activity</h2>
-              <span className="font-mono text-xs text-ink-3">team</span>
-            </div>
-            <ul className="divide-y divide-line">
-              {auditLog.slice(0, 7).map((e) => (
-                <li key={e.id} className="flex items-center gap-3 px-6 py-3">
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[9px] text-ink-2">
-                    {e.user.initials}
-                  </span>
-                  <div className="min-w-0 flex-1 truncate text-[12.5px]">
-                    <span className="text-ink">{e.action}</span>{" "}
-                    <span className="text-ink-3">{e.detail}</span>
-                  </div>
-                  <span className="shrink-0 font-mono text-[10px] text-ink-2 tabular-nums">
-                    {e.at}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      </div>
     </div>
   );
 }
