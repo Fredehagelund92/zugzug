@@ -398,7 +398,7 @@ export function Sources() {
                   <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link to={`/app/mapping?dimId=${agg.worst.dimId}`} className="shrink-0">
+              <Link to={`/app/tables?open=${agg.worst.dimId}&active=${agg.worst.dimId}&mode=match`} className="shrink-0">
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                   Resolve
                 </Button>
