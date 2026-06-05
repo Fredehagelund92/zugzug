@@ -111,7 +111,11 @@ export function MasterTables() {
           if (!dim) return null;
           const isActive = tab.id === activeTabId;
           return (
-            <div key={tab.id} hidden={!isActive}>
+            <div
+              key={tab.id}
+              hidden={!isActive}
+              className="absolute inset-0 flex flex-col min-h-0"
+            >
               <TablePane dim={dim} isActive={isActive} />
             </div>
           );
