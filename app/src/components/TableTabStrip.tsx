@@ -165,7 +165,7 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
           onClose();
         }}
         className={cx(
-          "grid h-4 w-4 place-items-center rounded-sm text-ink-3 transition-opacity hover:bg-line hover:text-ink",
+          "grid h-4 w-4 place-items-center rounded-sm text-ink-3 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 hover:bg-line hover:text-ink",
           active ? "opacity-60 hover:opacity-100" : "opacity-0 group-hover:opacity-60 hover:!opacity-100",
         )}
       >
@@ -218,7 +218,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => 
           type="button"
           onClick={() => setAddOpen((o) => !o)}
           aria-label="Open table"
-          className="grid h-full w-9 place-items-center text-ink-3 transition-colors hover:bg-hover hover:text-accent"
+          className="grid h-full w-9 place-items-center text-ink-3 transition-colors hover:bg-hover hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <IconPlus className="h-4 w-4" />
         </button>
