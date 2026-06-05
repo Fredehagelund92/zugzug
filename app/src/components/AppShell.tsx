@@ -91,7 +91,7 @@ function UserMenu() {
             <button
               type="button"
               onClick={signOut}
-              className="w-full px-3 py-2 text-left text-[13px] text-ink-2 hover:bg-hover hover:text-ink"
+              className="w-full px-3 py-2 text-left text-[13px] text-ink-2 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               Sign out
             </button>
@@ -380,7 +380,7 @@ export function AppShell() {
             onClick={toggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink"
+            className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             {collapsed ? (
               <IconChevronRight className="h-3.5 w-3.5" />
@@ -391,7 +391,7 @@ export function AppShell() {
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex h-8 min-w-[260px] max-w-[420px] flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 text-left text-[12.5px] text-ink-3 transition-colors hover:border-accent hover:text-ink-2"
+            className="flex h-8 min-w-[260px] max-w-[420px] flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 text-left text-[12.5px] text-ink-3 transition-colors hover:border-accent hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             aria-label="Open command palette"
           >
             <IconSearch className="h-3.5 w-3.5" />
