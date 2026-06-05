@@ -31,9 +31,19 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
   const [hl, setHl] = useState(0);
   const [pickedColor, setPickedColor] = useState<PaletteName | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!popRef.current) return;
+      if (popRef.current.contains(e.target as Node)) return;
+      cancel();
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [cancel]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -54,6 +64,7 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
 
   return (
     <div
+      ref={popRef}
       className="absolute left-0 top-0 z-30 w-[240px] rounded-sm border border-line-2 bg-surface p-1 shadow-lg"
       onClick={(e) => e.stopPropagation()}
     >
