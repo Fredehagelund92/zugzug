@@ -20,3 +20,6 @@ dist/
 
 # brainstorm companion (mockups, transient state)
 .superpowers/
+
+# local worktrees (subagent-driven execution)
+.worktrees/
