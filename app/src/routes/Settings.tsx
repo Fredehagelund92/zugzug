@@ -154,7 +154,7 @@ export function Settings() {
   const prefs = usePreferences();
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-8">
       <PageHeader kicker="Workspace" title="Settings" lede="Changes are saved as you make them." />
 
       <div className="zz-rise" style={{ animationDelay: "100ms" }}>

@@ -7,8 +7,6 @@ import { ComboSelect } from "../components/ComboSelect";
 import { TablePicker } from "../components/TablePicker";
 import { CreateTableModal } from "../components/CreateTableModal";
 import { NoTablesYet } from "../components/NoTablesYet";
-import { PageHeader } from "../components/PageHeader";
-import { StatsBar } from "../components/StatsBar";
 import { IconPlus, IconX, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { AddFieldPopover } from "../components/AddFieldPopover";
@@ -234,7 +232,7 @@ export function MasterTables() {
 
   if (!dim)
     return (
-      <>
+      <div className="mx-auto w-full max-w-[var(--wide)] p-8">
         <NoTablesYet from="tables" onCreateRequested={() => setCreateOpen(true)} />
         <CreateTableModal
           open={createOpen}
@@ -243,7 +241,7 @@ export function MasterTables() {
             setDimId(id);
           }}
         />
-      </>
+      </div>
     );
 
   const reset = () => {
@@ -359,57 +357,11 @@ export function MasterTables() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="relative z-40">
-        <PageHeader
-          kicker="Master data"
-          title="Tables"
-          lede="Records other systems resolve to. Manual lists welcome too."
-          action={
-            sourceOpts.length > 0 && !external ? (
-              <div className="w-60">
-                <ComboSelect
-                  options={sourceOpts}
-                  value={null}
-                  placeholder="import from source…"
-                  onPick={derive}
-                />
-              </div>
-            ) : external && sourceOpts.length > 0 ? (
-              <div className="flex items-end gap-2">
-                <div className="w-44">
-                  <ComboSelect
-                    options={sourceOpts}
-                    value={idOpt}
-                    placeholder="id column…"
-                    onPick={setIdOpt}
-                  />
-                </div>
-                <div className="w-44">
-                  <ComboSelect
-                    options={sourceOpts}
-                    value={nameOpt}
-                    placeholder="name column…"
-                    onPick={setNameOpt}
-                  />
-                </div>
-                <Button
-                  size="sm"
-                  disabled={!idOpt || !nameOpt || busy}
-                  onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}
-                >
-                  Import
-                </Button>
-              </div>
-            ) : null
-          }
-        />
-      </div>
-
-      <div className="zz-rise relative z-30" style={{ animationDelay: "60ms" }}>
+    <div>
+      <div className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
         <TablePicker
           dims={dims}
-          activeId={activeId}
+          activeId={activeId ?? ""}
           onSelect={(id) => {
             setDimId(id);
             reset();
@@ -426,29 +378,31 @@ export function MasterTables() {
             setDraft("");
           }}
         />
-      </div>
 
-      <StatsBar animationDelay="100ms" className="font-mono text-[11px]">
-        {engineer && (
-          <>
-            <span className="text-ink-2">
-              table <span className="text-ink">{dim.dimTable}</span>
-            </span>
-            <span className="text-ink-2">
-              key <span className="text-ink">{dim.keyCol}</span>
-            </span>
-          </>
-        )}
-        <span className="text-ink-2 tabular-nums">
-          {list.length} record{list.length === 1 ? "" : "s"}
-        </span>
-        <span className="text-ink-2 tabular-nums">
-          {fields.length} field{fields.length === 1 ? "" : "s"}
-        </span>
-        <div className="ml-auto flex items-center gap-4">
-          <span className="text-ink-2 tabular-nums">
-            {totalVariants.toLocaleString()} raw value{totalVariants === 1 ? "" : "s"} resolve here
+        <div className="flex items-center gap-3 font-mono text-[11px] text-ink-2">
+          {engineer && (
+            <>
+              <span>
+                table <span className="text-ink">{dim.dimTable}</span>
+              </span>
+              <span>
+                key <span className="text-ink">{dim.keyCol}</span>
+              </span>
+              <span className="text-line-2">·</span>
+            </>
+          )}
+          <span className="tabular-nums">
+            {list.length} record{list.length === 1 ? "" : "s"}
           </span>
+          <span className="tabular-nums">
+            {fields.length} field{fields.length === 1 ? "" : "s"}
+          </span>
+          <span className="tabular-nums">
+            {totalVariants.toLocaleString()} raw
+          </span>
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -457,23 +411,55 @@ export function MasterTables() {
             title={undo.topLabel ?? undefined}
           >
             ↶ Undo
-            {undo.topLabel && (
-              <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">
-                {undo.topLabel}
-              </span>
-            )}
             <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
           </Button>
+          {sourceOpts.length > 0 && !external && (
+            <div className="w-56">
+              <ComboSelect
+                options={sourceOpts}
+                value={null}
+                placeholder="import from source…"
+                onPick={derive}
+              />
+            </div>
+          )}
+          {external && sourceOpts.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-40">
+                <ComboSelect
+                  options={sourceOpts}
+                  value={idOpt}
+                  placeholder="id column…"
+                  onPick={setIdOpt}
+                />
+              </div>
+              <div className="w-40">
+                <ComboSelect
+                  options={sourceOpts}
+                  value={nameOpt}
+                  placeholder="name column…"
+                  onPick={setNameOpt}
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={!idOpt || !nameOpt || busy}
+                onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}
+              >
+                Import
+              </Button>
+            </div>
+          )}
         </div>
-      </StatsBar>
+      </div>
 
       {notice && (
-        <div className="rounded-lg border border-line bg-accent-wash px-4 py-2.5 font-mono text-[12px] text-accent">
+        <div className="border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
           {notice}
         </div>
       )}
       {renameFlash && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-accent-wash px-4 py-2.5 font-mono text-[12px] text-accent">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
           <span>
             Renamed “{renameFlash.prev}” → “{renameFlash.next}”.{" "}
             {renameFlash.variants.toLocaleString()} raw value{renameFlash.variants === 1 ? "" : "s"}{" "}
@@ -498,7 +484,7 @@ export function MasterTables() {
         </div>
       )}
 
-      <div className="zz-rise space-y-0" style={{ animationDelay: "150ms" }}>
+      <div className="zz-rise space-y-0" style={{ animationDelay: "60ms" }}>
         {/* selection / action bar */}
         <div className="flex flex-wrap items-center gap-3 rounded-t-lg border border-b-0 border-line bg-surface px-5 py-2.5">
           {sel.length === 0 ? (

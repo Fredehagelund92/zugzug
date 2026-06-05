@@ -377,9 +377,7 @@ export function AppShell() {
         </header>
 
         <main className="zz-canvas flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
-          <div className="mx-auto w-full max-w-[var(--wide)] p-8">
-            <Outlet />
-          </div>
+          <Outlet />
         </main>
       </div>
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
