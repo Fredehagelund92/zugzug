@@ -32,6 +32,7 @@ import type { ColumnDef } from "./datagrid";
 import type { CanonicalValue, MappingDimension } from "../data";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MatchModeBody } from "./modes/MatchModeBody";
+import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 
 interface TablePaneProps {
@@ -94,7 +95,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
       <div className="flex flex-1 flex-col min-h-0 overflow-auto">
         {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} />}
         {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
-        {/* sources mode arrives in Task 4.1 */}
+        {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}
       </div>
     </div>
   );
