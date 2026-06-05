@@ -484,6 +484,7 @@ export function Sources() {
               onToggle={() => toggleSchema(g.schema)}
               expanded={expanded}
               setExpanded={setExpanded}
+              focusedRowKey={null}
               onScheduleChange={(r, next) => {
                 void setSourceSchedule(r.dimId, r.table, r.column, next);
               }}
@@ -552,6 +553,7 @@ function SchemaSection({
   setExpanded,
   onScheduleChange,
   onDerive,
+  focusedRowKey,
 }: {
   group: SchemaGroup;
   open: boolean;
@@ -560,6 +562,7 @@ function SchemaSection({
   setExpanded: (next: string | null) => void;
   onScheduleChange: (r: SourceInfo, next: string | null) => void;
   onDerive: (r: SourceInfo) => void;
+  focusedRowKey?: string | null;
 }) {
   return (
     <div className="border-b border-line last:border-b-0">
@@ -606,6 +609,7 @@ function SchemaSection({
                 key={key}
                 row={r}
                 expanded={expanded === key}
+                focused={focusedRowKey === key}
                 onToggle={() => setExpanded(expanded === key ? null : key)}
                 onScheduleChange={(next) => onScheduleChange(r, next)}
                 onDerive={() => onDerive(r)}
