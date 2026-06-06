@@ -6,24 +6,30 @@ export type { NumberFormat };
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
    grid through these types; new cell types slot in via the union. */
 
-export type CellType = "text" | "number" | "boolean" | "date" | "select";
+export type ColumnConfig =
+  | { type: "text" }
+  | { type: "number"; numberFormat?: NumberFormat }
+  | { type: "boolean" }
+  | { type: "date" }
+  | { type: "select"; options: OptionDef[] }
+  | { type: "url" }
+  | { type: "email" }
+  | { type: "rating"; ratingMax: number };
+
+export type CellType = ColumnConfig["type"];
 
 export interface ColumnDef<Row> {
-  field: string; // stable id
-  label: string; // header text
-  type: CellType;
-  width?: number; // px; persisted via user_grid_layout
-  hidden?: boolean; // persisted
-  sortable?: boolean; // default true
-  editable?: boolean; // default true
-  pinnedLeft?: boolean; // pinned columns can't be reordered or moved past
-  align?: "left" | "right"; // default left
-  options?: OptionDef[]; // only set when type === "select"
-  numberFormat?: NumberFormat; // only set when type === "number"
-  // Render hook for custom cell content (e.g. Mapping's source-value+provenance cell)
-  render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
-  // Editor hook for custom editing (e.g. Mapping's target-master ComboSelect)
-  edit?: (row: Row, ctx: EditCtx<Row>) => ReactNode;
+  field:       string;
+  label:       string;
+  config:      ColumnConfig;
+  width?:      number;
+  hidden?:     boolean;
+  sortable?:   boolean;
+  editable?:   boolean;
+  pinnedLeft?: boolean;
+  align?:      "left" | "right";
+  render?:     (row: Row, ctx: CellCtx<Row>) => ReactNode;
+  edit?:       (row: Row, ctx: EditCtx<Row>) => ReactNode;
 }
 
 export interface CellCtx<Row> {
@@ -86,13 +92,12 @@ export interface DataGridProps<Row> {
   onDeleteColumn?: (field: string) => void;
   /** Header menu: rename label */
   onRenameColumn?: (field: string, newLabel: string) => void;
-  /** Header menu: change type (with the new type + new options if select). Set
-   *  coerceInvalidToNull when re-trying after the host has confirmed N values
-   *  would coerce to empty. */
+  /** Header menu: change type (with the new config). Set coerceInvalidToNull
+   *  when re-trying after the host has confirmed N values would coerce to empty. */
   onChangeColumnType?: (
     field: string,
-    newType: CellType,
-    opts?: { options?: OptionDef[]; numberFormat?: NumberFormat; coerceInvalidToNull?: boolean },
+    newConfig: ColumnConfig,
+    opts?: { coerceInvalidToNull?: boolean },
   ) => Promise<{ ok: boolean; invalidCount?: number }>;
   /** Header menu: add a new option to a select column. Returns the new option list. */
   onAddColumnOption?: (
