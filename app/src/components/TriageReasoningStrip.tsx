@@ -1,4 +1,3 @@
-// app/src/components/TriageReasoningStrip.tsx
 import type { AiHint } from "../lib/use-ai-hint";
 
 interface Props {
@@ -7,14 +6,13 @@ interface Props {
 }
 
 export function TriageReasoningStrip({ loading, hint }: Props) {
-  // Error state or no data yet — render nothing (confidence bar is the fallback).
   if (!loading && !hint) return null;
 
   if (loading) {
     return (
       <div className="mb-2 flex items-center gap-1.5 pl-[2px]">
         <span className="h-1.5 w-1.5 shrink-0 rounded-pill bg-accent/30" aria-hidden="true" />
-        {/* ak-skeleton applies the shimmer gradient + animation from app-kit.css */}
+        {/* ak-skeleton: shimmer gradient + animation from app-kit.css */}
         <div className="ak-skeleton h-[10px] w-[58%] rounded-sm" />
       </div>
     );
