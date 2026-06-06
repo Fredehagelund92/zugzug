@@ -51,6 +51,28 @@ export interface Cursor {
   initial?: string;
 }
 
+export type FilterOperator =
+  | "contains"
+  | "not_contains"
+  | "equals"
+  | "not_equals"
+  | "starts_with"
+  | "ends_with"
+  | "is_empty"
+  | "is_not_empty";
+
+export interface FilterCondition {
+  id: string;
+  field: string;
+  operator: FilterOperator;
+  value: string;
+}
+
+export interface FilterSet {
+  conjunction: "and" | "or";
+  conditions: FilterCondition[];
+}
+
 export interface DataGridProps<Row> {
   rows: Row[];
   rowKey: (row: Row) => string;

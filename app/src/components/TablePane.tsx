@@ -147,6 +147,25 @@ function useDensity(): ["default" | "compact", () => void] {
   ];
 }
 
+function exportToCSV(dim: MappingDimension): void {
+  const fields = dim.fields ?? [];
+  const headers = ["key", "label", ...fields.map((f) => f.label)];
+  const escape = (v: string) => {
+    if (/[,"\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
+    return v;
+  };
+  const rows = dim.canonical.map((c) =>
+    [c.key, c.label, ...fields.map((f) => String(c.fields?.[f.field] ?? ""))].map(escape).join(","),
+  );
+  const csv = [headers.map(escape).join(","), ...rows].join("\r\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${slug(dim.dimension)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** RecordsBody — the original TablePane body, lifted verbatim so TablePaneInner
  *  can switch between this and other mode bodies (Match, Sources) under one
  *  shared UndoStackProvider. The body owns its own grid layout state, density
@@ -449,6 +468,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           >
             {density === "compact" ? "▤ Default" : "≡ Compact"}
           </Button>
+          {list.length > 0 && (
+            <Button variant="ghost" size="sm" onClick={() => exportToCSV(dim)}>
+              ↓ Export CSV
+            </Button>
+          )}
           {sourceOpts.length > 0 && !external && (
             <div className="w-56">
               <ComboSelect
@@ -520,59 +544,70 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         </div>
       )}
 
-      <div className="zz-rise space-y-0" style={{ animationDelay: "60ms" }}>
-        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
-          {sel.length === 0 ? (
+      <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
+        {sel.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-3 border-b border-accent/30 bg-accent-wash px-5 py-2.5">
+            <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear selection" />
+            <span className="font-mono text-[12px] font-medium text-accent">
+              {sel.length} record{sel.length === 1 ? "" : "s"} selected
+            </span>
+            {sel.length < list.length && (
+              <button
+                type="button"
+                onClick={() => setSel(list.map((c) => c.key))}
+                className="font-mono text-[11px] text-accent underline underline-offset-2 hover:opacity-80"
+              >
+                Select all {list.length}
+              </button>
+            )}
+            <div className="w-56">
+              <ComboSelect
+                options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
+                value={null}
+                placeholder={sel.length < 2 ? "select 2+ to merge" : "merge into…"}
+                onPick={merge}
+              />
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconX className="h-3.5 w-3.5" />}
+              onClick={async () => {
+                const targets = sel
+                  .map((k) => list.find((x) => x.key === k))
+                  .filter((c): c is NonNullable<typeof c> => c != null);
+                if (targets.length === 0) return;
+                setSel([]);
+                const label =
+                  targets.length === 1
+                    ? `remove "${targets[0].label}"`
+                    : `remove ${targets.length} records`;
+                undo.beginTransaction(label);
+                try {
+                  await Promise.all(targets.map((c) => retire(c.key, c.label)));
+                } finally {
+                  undo.endTransaction();
+                }
+              }}
+              disabled={busy}
+            >
+              Remove
+            </Button>
+            <button
+              type="button"
+              onClick={() => setSel([])}
+              className="ml-auto font-mono text-[11px] text-accent/60 hover:text-accent"
+            >
+              clear
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
             <span className="font-mono text-[11.5px] text-ink-3">
               {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
             </span>
-          ) : (
-            <>
-              <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear" />
-              <span className="font-mono text-[12px] text-ink">{sel.length} selected</span>
-              <div className="w-56">
-                <ComboSelect
-                  options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
-                  value={null}
-                  placeholder={sel.length < 2 ? "select 2+ to merge" : "merge into…"}
-                  onPick={merge}
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<IconX className="h-3.5 w-3.5" />}
-                onClick={async () => {
-                  const targets = sel
-                    .map((k) => list.find((x) => x.key === k))
-                    .filter((c): c is NonNullable<typeof c> => c != null);
-                  if (targets.length === 0) return;
-                  setSel([]);
-                  const label =
-                    targets.length === 1
-                      ? `remove "${targets[0].label}"`
-                      : `remove ${targets.length} records`;
-                  undo.beginTransaction(label);
-                  try {
-                    await Promise.all(targets.map((c) => retire(c.key, c.label)));
-                  } finally {
-                    undo.endTransaction();
-                  }
-                }}
-                disabled={busy}
-              >
-                Remove
-              </Button>
-              <button
-                type="button"
-                onClick={() => setSel([])}
-                className="ml-auto font-mono text-[11px] text-ink-3 hover:text-ink"
-              >
-                clear
-              </button>
-            </>
-          )}
-        </div>
+          </div>
+        )}
 
         <DataGrid<CanonicalValue>
           rows={rowsForGrid}
@@ -661,7 +696,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               placeholder={`new ${dim.dimension.toLowerCase()} record…`}
               className="w-full max-w-xs rounded-sm border border-line-2 bg-bg px-3 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
             />
-            {draft.trim() && (
+            {draft.trim() && engineer && (
               <span className="font-mono text-[11px] text-ink-3">
                 {dim.keyCol} = <span className="text-accent">{slug(draft)}</span>
               </span>
@@ -671,6 +706,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               icon={<IconPlus className="h-3.5 w-3.5" />}
               onClick={add}
               disabled={!draft.trim() || busy}
+              loading={busy}
               className="ml-auto"
             >
               Add record
