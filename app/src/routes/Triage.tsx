@@ -103,7 +103,14 @@ function TriageInner() {
   const [cursor, setCursor] = useState<{ dimId: string; raw: string } | null>(null);
   const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
+
+  const reportDraftError = useCallback((action: string, err: unknown) => {
+    setDraftError(
+      err instanceof Error ? `Couldn't ${action}: ${err.message}` : `Couldn't ${action}.`,
+    );
+  }, []);
 
   const aiHint = useAiHint(
     cursor?.dimId ?? "",
@@ -187,7 +194,9 @@ function TriageInner() {
     const v = d?.values.find((x) => x.value === raw);
     const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
     if (!suggestion) return;
-    void stageMapCross(dimId, raw, suggestion);
+    stageMapCross(dimId, raw, suggestion).catch((err) =>
+      reportDraftError(`accept "${raw}"`, err),
+    );
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
@@ -202,12 +211,16 @@ function TriageInner() {
           ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
           : discardDraft(dimId, raw),
     });
-    void saveDraft(dimId, raw, "skipped", null, null);
+    saveDraft(dimId, raw, "skipped", null, null).catch((err) =>
+      reportDraftError(`skip "${raw}"`, err),
+    );
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
   const pickCross = (dimId: string, raw: string, label: string) => {
-    void stageMapCross(dimId, raw, label);
+    stageMapCross(dimId, raw, label).catch((err) =>
+      reportDraftError(`map "${raw}" → ${label}`, err),
+    );
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
@@ -221,7 +234,7 @@ function TriageInner() {
       apply: () => discardDraft(dimId, raw),
       inverse: () => saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey),
     });
-    void discardDraft(dimId, raw);
+    discardDraft(dimId, raw).catch((err) => reportDraftError(`discard "${raw}"`, err));
   };
   const advanceCrossNext = useCallback(
     (fromDimId: string | null, fromRaw: string | null) => {
@@ -330,6 +343,8 @@ function TriageInner() {
         committing={committing}
         commitError={commitError}
         setCommitError={setCommitError}
+        draftError={draftError}
+        setDraftError={setDraftError}
         flash={flash}
         undo={undo}
         aiHint={aiHint}
@@ -356,6 +371,8 @@ interface CrossDimInboxProps {
   committing: boolean;
   commitError: string | null;
   setCommitError: (e: string | null) => void;
+  draftError: string | null;
+  setDraftError: (e: string | null) => void;
   flash: { n: number; rows: number } | null;
   undo: ReturnType<typeof useUndoStack>;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
@@ -432,7 +449,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       style={{ animationDelay: "150ms" }}
     >
       {/* toolbar — sticky filter chips */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => (
             <button
@@ -641,7 +658,15 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
   }, [p.stagedDrafts, p.dimById]);
 
   return (
-    <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
+    <div className="sticky bottom-0 z-10 border-t border-line bg-surface">
+      {p.draftError && (
+        <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
+          <span>{p.draftError}</span>
+          <Button variant="ghost" size="sm" onClick={() => p.setDraftError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
       {p.commitError && (
         <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
           <span>Commit failed — {p.commitError}</span>

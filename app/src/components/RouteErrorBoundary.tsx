@@ -44,7 +44,7 @@ export class RouteErrorBoundary extends React.Component<{ children: React.ReactN
             <button
               type="button"
               onClick={() => window.location.assign("/app")}
-              className="rounded bg-accent px-3 py-1.5 text-sm text-white"
+              className="rounded bg-accent px-3 py-1.5 text-sm text-accent-ink"
             >
               Go to dashboard
             </button>

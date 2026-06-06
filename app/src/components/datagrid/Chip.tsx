@@ -14,7 +14,7 @@ const STYLES: Record<Bucket, string> = {
   "chip-1": "bg-ok-soft text-ok",
   "chip-2": "bg-warn-soft text-warn",
   "chip-3": "bg-accent-soft text-accent",
-  "chip-4": "bg-accent-2/16 border-accent-2/30 text-[#B8780F]",
+  "chip-4": "bg-accent-2/16 border-accent-2/30 text-[var(--tint-amber)]",
   "chip-5": "border-line-2 bg-surface-2 text-ink-2",
 };
 

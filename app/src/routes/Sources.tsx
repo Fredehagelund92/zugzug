@@ -463,7 +463,7 @@ export function Sources() {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
         {/* ─── TOOLBAR (sticky inside the surface) ─── */}
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-2 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-2 backdrop-blur-sm">
           <label className="flex min-w-[240px] flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3">
             <IconSearch className="h-3.5 w-3.5" />
             <input
@@ -481,7 +481,7 @@ export function Sources() {
                 type="button"
                 onClick={() => setQ("")}
                 aria-label="Clear search"
-                className="text-ink-3 hover:text-ink"
+                className="text-ink-3 transition-colors hover:text-ink"
               >
                 ×
               </button>
@@ -510,7 +510,7 @@ export function Sources() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as Sort)}
-            className="border-0 bg-transparent text-[12.5px] text-ink-2 outline-none hover:text-ink"
+            className="rounded-sm border-0 bg-transparent px-1 text-[12.5px] text-ink-2 outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             {SORTS.map((s) => (
               <option key={s.k} value={s.k}>

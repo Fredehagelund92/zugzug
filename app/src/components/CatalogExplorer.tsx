@@ -26,24 +26,37 @@ export function CatalogExplorer({
   const [total, setTotal] = useState(0);
   const [schemas, setSchemas] = useState<{ schema: string; tables: number }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
-  const [wired, setWired] = useState<Record<string, { dim: string; n: number | null }>>({}); // "table.col" → result
+  type WireState = { dim: string; n: number | null; error?: string };
+  const [wired, setWired] = useState<Record<string, WireState>>({}); // "table.col" → result
   const seq = useRef(0);
 
   const load = async (append: boolean) => {
     const ticket = ++seq.current;
     setLoading(true);
-    const r = await searchCatalog({
-      q,
-      schema: schema ?? undefined,
-      limit: PAGE,
-      offset: append ? rows.length : 0,
-    });
-    if (ticket !== seq.current) return; // a newer search superseded this one
-    setTotal(r.total);
-    setSchemas(r.schemas);
-    setRows((prev) => (append ? [...prev, ...r.rows] : r.rows));
-    setLoading(false);
+    setLoadError(null);
+    try {
+      const r = await searchCatalog({
+        q,
+        schema: schema ?? undefined,
+        limit: PAGE,
+        offset: append ? rows.length : 0,
+      });
+      if (ticket !== seq.current) return; // a newer search superseded this one
+      setTotal(r.total);
+      setSchemas(r.schemas);
+      setRows((prev) => (append ? [...prev, ...r.rows] : r.rows));
+    } catch (err) {
+      if (ticket !== seq.current) return;
+      setLoadError(err instanceof Error ? err.message : "Catalog search failed.");
+      if (!append) {
+        setRows([]);
+        setTotal(0);
+      }
+    } finally {
+      if (ticket === seq.current) setLoading(false);
+    }
   };
 
   // (re)search from the top on query / schema change, debounced
@@ -58,8 +71,23 @@ export function CatalogExplorer({
     if (!dim) return;
     const key = `${table}.${column}`;
     setWired((w) => ({ ...w, [key]: { dim: dimLabel, n: null } })); // pending
-    const n = await deriveCanonical(dim.id, table, column); // wire + seed canonical
-    setWired((w) => ({ ...w, [key]: { dim: dimLabel, n } }));
+    try {
+      const n = await deriveCanonical(dim.id, table, column); // wire + seed canonical
+      setWired((w) => ({ ...w, [key]: { dim: dimLabel, n } }));
+    } catch (err) {
+      setWired((w) => ({
+        ...w,
+        [key]: { dim: dimLabel, n: null, error: err instanceof Error ? err.message : "wire failed" },
+      }));
+    }
+  };
+
+  const clearWireError = (key: string) => {
+    setWired((w) => {
+      const next = { ...w };
+      delete next[key];
+      return next;
+    });
   };
 
   const dimOptions = dims.map((d) => d.dimension);
@@ -135,6 +163,14 @@ export function CatalogExplorer({
 
           {/* results */}
           <div className="min-h-0 overflow-y-auto">
+            {loadError && (
+              <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-5 py-2.5 font-mono text-[11.5px] text-danger">
+                <span>Catalog search failed — {loadError}</span>
+                <Button variant="ghost" size="sm" onClick={() => load(false)}>
+                  Retry
+                </Button>
+              </div>
+            )}
             {rows.map((t) => {
               const isOpen = open === t.table;
               return (
@@ -165,7 +201,29 @@ export function CatalogExplorer({
                             className="grid grid-cols-[1fr_180px] items-center gap-3 py-0.5"
                           >
                             <span className="truncate font-mono text-[11.5px] text-ink-2">{c}</span>
-                            {wired[key] ? (
+                            {wired[key]?.error ? (
+                              <span
+                                className="flex items-center justify-end gap-2 font-mono text-[10.5px] text-danger"
+                                title={wired[key].error}
+                              >
+                                <span className="truncate">wire failed</span>
+                                <button
+                                  type="button"
+                                  onClick={() => wire(t.table, c, wired[key].dim)}
+                                  className="rounded-sm border border-danger/40 px-1.5 py-0.5 text-danger transition-colors hover:bg-danger-soft"
+                                >
+                                  Retry
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => clearWireError(key)}
+                                  aria-label="Dismiss wire error"
+                                  className="text-ink-3 transition-colors hover:text-ink"
+                                >
+                                  <IconX className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ) : wired[key] ? (
                               <span className="flex items-center justify-end gap-1.5 font-mono text-[10.5px] text-ok">
                                 <IconArrowRight className="h-3 w-3" />
                                 {wired[key].n === null

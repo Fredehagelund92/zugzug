@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -27,16 +27,20 @@ function Section({
   return (
     <Card className="p-0">
       <div className="border-b border-line px-6 py-4">
-        <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-        {hint && <p className="mt-0.5 text-[13px] text-ink-2">{hint}</p>}
+        <div className="max-w-2xl">
+          <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
+          {hint && <p className="mt-0.5 text-[13px] text-ink-2">{hint}</p>}
+        </div>
       </div>
-      <div className="space-y-5 px-6 py-5">{children}</div>
+      <div className="px-6 py-5">
+        <div className="max-w-2xl space-y-5">{children}</div>
+      </div>
     </Card>
   );
 }
 
 const input =
-  "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 focus:border-accent";
+  "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40";
 
 interface ScanStatus {
   lastScanAt: string | null;
@@ -57,13 +61,23 @@ function ScansSection() {
   const prefs = usePreferences();
   const [status, setStatus] = useState<ScanStatus | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  const loadStatus = useCallback(async () => {
+    setStatusError(null);
+    try {
+      const r = await fetch("/api/sources/scan-status");
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      setStatus((await r.json()) as ScanStatus);
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : "Could not reach the server.");
+    }
+  }, []);
 
   useEffect(() => {
-    fetch("/api/sources/scan-status")
-      .then((r) => r.json() as Promise<ScanStatus>)
-      .then(setStatus)
-      .catch(() => {});
-  }, []);
+    void loadStatus();
+  }, [loadStatus]);
 
   const handleScheduleChange = (next: string | null) => {
     void setPreferences({
@@ -74,12 +88,12 @@ function ScansSection() {
 
   const handleScanNow = async () => {
     setScanning(true);
+    setScanError(null);
     try {
       await scanSources();
-      const fresh = await fetch("/api/sources/scan-status").then(
-        (r) => r.json() as Promise<ScanStatus>,
-      );
-      setStatus(fresh);
+      await loadStatus();
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "Scan failed.");
     } finally {
       setScanning(false);
     }
@@ -131,8 +145,31 @@ function ScansSection() {
         </div>
       )}
 
-      {!status && prefs.scanSchedule && (
+      {!status && !statusError && prefs.scanSchedule && (
         <p className="font-mono text-[11px] text-ink-3">Loading scan status…</p>
+      )}
+
+      {statusError && (
+        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>Couldn't load scan status — {statusError}</span>
+          <Button variant="ghost" size="sm" onClick={() => void loadStatus()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
+      {scanError && (
+        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>Scan failed — {scanError}</span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setScanError(null)}>
+              Dismiss
+            </Button>
+            <Button size="sm" onClick={() => void handleScanNow()} loading={scanning}>
+              Retry
+            </Button>
+          </div>
+        </div>
       )}
     </Section>
   );
@@ -149,16 +186,26 @@ function TeamSection() {
   const [addEmail, setAddEmail] = useState("");
   const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const load = () => {
-    fetch("/api/team/members")
-      .then((r) => r.json())
-      .then((data: Member[]) => setMembers(data))
-      .catch(() => {});
-  };
+  const load = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const r = await fetch("/api/team/members");
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      setMembers((await r.json()) as Member[]);
+      setLoaded(true);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not reach the server.");
+    }
+  }, []);
 
-  useEffect(load, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const add = async () => {
     setAddError(null);
@@ -183,7 +230,7 @@ function TeamSection() {
         return;
       }
       setAddEmail("");
-      load();
+      void load();
     } finally {
       setAdding(false);
       inputRef.current?.focus();
@@ -191,8 +238,19 @@ function TeamSection() {
   };
 
   const remove = async (email: string) => {
-    const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, { method: "DELETE" });
-    if (res.ok) load();
+    setRemoveError(null);
+    try {
+      const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, { method: "DELETE" });
+      if (!res.ok) {
+        setRemoveError(`Couldn't remove ${email} — ${res.status} ${res.statusText}`);
+        return;
+      }
+      void load();
+    } catch (err) {
+      setRemoveError(
+        err instanceof Error ? `Couldn't remove ${email} — ${err.message}` : `Couldn't remove ${email}.`,
+      );
+    }
   };
 
   const myEmail = currentUser.email;
@@ -202,8 +260,17 @@ function TeamSection() {
       title="Team"
       hint="Only people on this list can log in. Any team member can add or remove others."
     >
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>Couldn't load the team — {loadError}</span>
+          <Button variant="ghost" size="sm" onClick={() => void load()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       <ul className="divide-y divide-line rounded-sm border border-line">
-        {members.length === 0 && (
+        {loaded && members.length === 0 && (
           <li className="px-4 py-3 text-[13px] text-ink-3">No members yet.</li>
         )}
         {members.map((m) => (
@@ -216,7 +283,7 @@ function TeamSection() {
               <button
                 type="button"
                 onClick={() => remove(m.email)}
-                className="text-[11px] text-ink-3 hover:text-warn"
+                className="rounded-sm text-[11px] text-ink-3 transition-colors hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 Remove
               </button>
@@ -246,6 +313,14 @@ function TeamSection() {
           {adding ? "Adding…" : "Add"}
         </Button>
       </div>
+      {removeError && (
+        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>{removeError}</span>
+          <Button variant="ghost" size="sm" onClick={() => setRemoveError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
     </Section>
   );
 }
@@ -255,7 +330,7 @@ export function Settings() {
   const prefs = usePreferences();
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-6 p-8">
+    <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-8">
       <PageHeader kicker="Workspace" title="Settings" lede="Changes are saved as you make them." />
 
       <div className="zz-rise" style={{ animationDelay: "60ms" }}>
