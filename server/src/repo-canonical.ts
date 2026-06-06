@@ -22,6 +22,7 @@ import {
   occUnion,
   dimMeta,
   parseOptions,
+  parseNumberFormat,
   all,
   pgAll,
   pgGet,
@@ -415,7 +416,8 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
     field: r.field,
     label: r.label,
     type: r.type,
-    options: parseOptions(r.options),
+    options: r.type === "select" ? parseOptions(r.options) : undefined,
+    numberFormat: r.type === "number" ? parseNumberFormat(r.options) : undefined,
   }));
 }
 
