@@ -17,9 +17,10 @@ export type CreateTableMode = "blank" | "source" | "external_id";
 
 export interface ColumnDraft {
   label: string;
-  type: "text" | "number" | "boolean" | "date" | "select";
+  type: "text" | "number" | "boolean" | "date" | "select" | "url" | "email" | "rating";
   options?: OptionDef[];
   numberFormat?: NumberFormat;
+  ratingMax?: number;
 }
 
 export interface CreateTableInput {
@@ -124,7 +125,7 @@ export async function createTable(
   // 4. Fields (blank mode) — addField issues DDL + INSERT, outside tx
   if (input.mode === "blank" && input.columns) {
     for (const c of input.columns) {
-      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true, numberFormat: c.numberFormat }, userId);
+      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true, numberFormat: c.numberFormat, ratingMax: c.ratingMax }, userId);
       fieldCount++;
     }
   }

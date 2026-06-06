@@ -37,6 +37,7 @@ export interface FieldDef {
   type: string;
   options?: OptionDef[];
   numberFormat?: NumberFormat;
+  ratingMax?: number;
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {

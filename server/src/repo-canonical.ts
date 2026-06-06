@@ -547,6 +547,11 @@ export async function changeColumnType(
       parsed.push({ k: r.k, v: r.v, bad: !ok });
       continue;
     }
+    if (newType === "url" || newType === "email") {
+      // All existing values are valid VARCHAR — stringify whatever's there
+      parsed.push({ k: r.k, v: r.v, bad: false });
+      continue;
+    }
     if (newType === "number") {
       const n = Number(r.v);
       parsed.push({ k: r.k, v: Number.isFinite(n) ? n : null, bad: !Number.isFinite(n) });
