@@ -125,8 +125,8 @@ function ScansSection() {
               )}
             </span>
           </div>
-          <Button onClick={() => void handleScanNow()} disabled={scanning}>
-            {scanning ? "Scanning…" : "Scan now"}
+          <Button onClick={() => void handleScanNow()} loading={scanning}>
+            Scan now
           </Button>
         </div>
       )}
@@ -255,7 +255,7 @@ export function Settings() {
   const prefs = usePreferences();
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-8">
+    <div className="mx-auto w-full max-w-2xl space-y-6 p-8">
       <PageHeader kicker="Workspace" title="Settings" lede="Changes are saved as you make them." />
 
       <div className="zz-rise" style={{ animationDelay: "60ms" }}>
