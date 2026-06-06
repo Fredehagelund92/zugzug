@@ -679,7 +679,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             anchorRef={addFieldRef as React.RefObject<HTMLElement | null>}
             onClose={() => setAddOpen(false)}
             onSubmit={async (input) => {
-              await addField(activeId, input.label, input.type, input.options, input.numberFormat);
+              const { label, config } = input;
+              const options = config.type === "select" ? config.options : undefined;
+              const numberFormat = config.type === "number" ? config.numberFormat : undefined;
+              const ratingMax = config.type === "rating" ? config.ratingMax : undefined;
+              await addField(activeId, label, config.type, options, { numberFormat, ratingMax });
             }}
           />
         )}
