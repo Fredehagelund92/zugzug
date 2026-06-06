@@ -52,7 +52,7 @@ function Renderer<Row>(ctx: CellCtx<Row>) {
   }
   return (
     <span className="text-right tabular-nums font-mono text-[12px] text-ink">
-      {formatNumber(value, fmt)}
+      {formatNumber(n, fmt)}
     </span>
   );
 }
@@ -64,12 +64,14 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
   // For percent fields, display the value * 100 for editing (e.g. 0.42 → "42")
   const displayValue =
     isPercent && value != null && value !== "" && Number.isFinite(Number(value))
-      ? String(Number(value) * 100)
+      ? String(parseFloat((Number(value) * 100).toPrecision(10)))
       : value == null
         ? ""
         : String(value);
 
   const seeded = initial != null;
+  // Type-to-edit with a non-numeric character is ignored — leave the cell
+  // alone so the keystroke doesn't accidentally clear a numeric value.
   const usable = seeded && /^[0-9.-]$/.test(initial);
   const [v, setV] = useState(usable ? initial : displayValue);
   const ref = useRef<HTMLInputElement>(null);
@@ -106,6 +108,9 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
       inputMode="decimal"
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
+      // Enter / Tab also commit synchronously: useGridCursor's stopEdit
+      // unmounts the editor before the browser blur event reaches React, so
+      // relying on onBlur alone silently drops the typed value.
       onKeyDown={(e) => {
         if (e.key === "Escape") {
           e.preventDefault();
