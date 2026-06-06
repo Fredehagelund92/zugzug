@@ -443,7 +443,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
         }}
       >
         {/* toolbar / bulk bar */}
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
           {sel.length === 0 ? (
             <>
               <Checkbox
@@ -768,7 +768,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
         </div>
 
         {/* review & commit footer — drafts stage in Postgres, commit batch-MERGEs to DuckDB */}
-        <div className="sticky bottom-0 z-20 border-t border-line bg-surface">
+        <div className="sticky bottom-0 z-10 border-t border-line bg-surface">
           {commitError && (
             <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
               <span>Commit failed — {commitError}</span>

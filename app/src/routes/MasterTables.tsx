@@ -161,8 +161,17 @@ export function MasterTables() {
           );
         })}
         {tabs.length === 0 && (
-          <div className="grid place-items-center px-8 py-20 text-center font-mono text-[12px] text-ink-3">
-            no table open — pick one from the sidebar, or press ⌘K
+          <div className="grid place-items-center px-8 py-16">
+            <div className="text-center">
+              <div className="font-display text-[20px] text-ink-2">No table open</div>
+              <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
+                Pick one from the sidebar, or press{" "}
+                <kbd className="inline-flex items-center rounded-sm border border-line-2 bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] text-ink-2">
+                  ⌘K
+                </kbd>{" "}
+                to search.
+              </p>
+            </div>
           </div>
         )}
       </div>

@@ -288,7 +288,7 @@ export function Dashboard() {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th className="w-1 p-0" />
+              <th className="w-1 border-b border-line-2 bg-surface p-0" />
               <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
                 Table
               </th>
@@ -435,11 +435,30 @@ export function Dashboard() {
             {/* empty filter state */}
             {visibleDims.length === 0 && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="border-b border-line px-4 py-8 text-center font-mono text-[11px] text-ink-3"
-                >
-                  no tables match the current filter
+                <td colSpan={7} className="border-b border-line px-4 py-12 text-center">
+                  <div className="font-display text-[20px] text-ink-2">
+                    {filter === "attention"
+                      ? "Nothing needs attention."
+                      : filter === "clean"
+                        ? "No tables are fully clean yet."
+                        : "No tables match."}
+                  </div>
+                  <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
+                    {filter === "attention"
+                      ? "Every table is mapped or has its drafts published."
+                      : filter === "clean"
+                        ? "Resolve the new values in your active tables to flip them clean."
+                        : "Try a different filter."}
+                  </p>
+                  {filter !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => setFilter("all")}
+                      className="mt-3 font-mono text-[11px] text-accent transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-sm"
+                    >
+                      Show all tables →
+                    </button>
+                  )}
                 </td>
               </tr>
             )}
