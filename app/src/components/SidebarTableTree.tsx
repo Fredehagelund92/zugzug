@@ -78,7 +78,7 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
         type="button"
         onClick={onOpen}
         className={cx(
-          "flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors",
+          "flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors max-md:min-h-[44px]",
           active
             ? "text-accent shadow-[inset_2px_0_0_var(--accent)]"
             : "text-ink-2 hover:bg-hover hover:text-ink",
@@ -114,7 +114,7 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
   );
 }
 
-export function SidebarTableTree() {
+export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
   const dims = useDimensions();
   const drafts = useDrafts();
   const { activeId, openTab } = useOpenTabs();
@@ -141,6 +141,7 @@ export function SidebarTableTree() {
   const openDim = (id: string) => {
     openTab(id);
     navigate("/app/tables");
+    onNavigate?.();
   };
 
   return (

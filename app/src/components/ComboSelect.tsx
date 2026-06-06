@@ -60,6 +60,8 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
   useImperativeHandle(imperativeRef, () => ({ open: () => setOpen(true) }), []);
 
   // Position the portalled dropdown below (or above) the trigger button.
+  // On mobile (<768px) the dropdown expands to fill available width (inset-x-4)
+  // and anchors below the trigger, clamped to the viewport.
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
@@ -69,6 +71,18 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
       const rect = trigger.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
+      if (window.innerWidth < 768) {
+        const margin = 16;
+        const w = window.innerWidth - margin * 2;
+        dropdown.style.width = `${w}px`;
+        dropdown.style.left = `${margin}px`;
+        let top = rect.bottom + 4;
+        if (top + dropH > window.innerHeight - 8) top = Math.max(8, rect.top - 4 - dropH);
+        dropdown.style.top = `${top}px`;
+        return;
+      }
+
+      dropdown.style.width = `${DROPDOWN_W}px`;
       let left = rect.left;
       if (left + DROPDOWN_W > window.innerWidth - 8) left = window.innerWidth - DROPDOWN_W - 8;
       if (left < 8) left = 8;
@@ -171,7 +185,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
         createPortal(
           <div
             ref={dropdownRef}
-            style={{ position: "fixed", top: 0, left: 0, width: DROPDOWN_W }}
+            style={{ position: "fixed", top: 0, left: 0 }}
             className="zz-pop-in z-50 overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
           >
             <div className="flex items-center gap-2 border-b border-line px-2.5 py-2 text-ink-3">

@@ -127,7 +127,7 @@ export function MasterTables() {
 
   if (dims.length === 0) {
     return (
-      <div className="mx-auto w-full max-w-[var(--wide)] p-8">
+      <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
         <NoTablesYet from="tables" onCreateRequested={create.open} />
       </div>
     );

@@ -80,11 +80,12 @@ export function LedgerRow({
             : "hover:bg-surface-2",
       )}
     >
+      {/* Desktop layout: single grid row across 6 columns (original structure) */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="grid w-full grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 px-7 py-2.5 text-left"
+        className="hidden md:grid w-full grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 px-7 py-2.5 text-left"
       >
         <IconChevron
           className={cx(
@@ -138,6 +139,62 @@ export function LedgerRow({
           </button>
         </div>
       </button>
+
+      {/* Mobile layout: two-line stacked card */}
+      <div className="flex md:hidden min-h-[44px] items-stretch">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          className="flex min-w-0 flex-1 items-start gap-2.5 px-4 py-3 text-left"
+        >
+          <IconChevron
+            className={cx(
+              "mt-1 h-3 w-3 shrink-0 text-ink-3 transition-transform",
+              expanded && "rotate-180",
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-mono text-[13px] text-ink">
+              {tableName}
+              <span className="text-ink-3">.{row.column}</span>
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
+              <span>
+                → <span className="text-ink-2">{row.dimension}</span>
+              </span>
+              <span className={cx("font-medium", standingTone)}>{standing}</span>
+              <span className="tabular-nums">{Math.round(coverage)}% mapped</span>
+              {row.scannedAt && <span>{ago(row.scannedAt)} ago</span>}
+            </div>
+          </div>
+        </button>
+        {/* right cluster: unmapped count + wand — both touch-friendly */}
+        <div className="flex shrink-0 items-stretch divide-x divide-line">
+          <div className="flex min-w-[48px] items-center justify-center px-3">
+            {row.unmapped > 0 ? (
+              <span className="font-display text-[14px] font-semibold tabular-nums text-accent">
+                {row.unmapped.toLocaleString()}
+              </span>
+            ) : (
+              <span className="font-mono text-[11.5px] text-ink-3 tabular-nums">0</span>
+            )}
+          </div>
+          <button
+            type="button"
+            aria-label={`Import records from ${row.table}.${row.column}`}
+            title="Import records from this column"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDerive();
+            }}
+            className="grid min-h-[44px] w-11 place-items-center text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+          >
+            <IconWand className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
       {!hideStandingBar && (
         /* standing bar — 1px hairline that fills from the left in the row's tone */
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-line">

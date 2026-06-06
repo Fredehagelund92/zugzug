@@ -50,6 +50,9 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   // the right edge of the column headers, so growing rightward would clamp
   // against the viewport and read as "stuck in the corner").
   //
+  // On mobile (<768px) the popover fills the viewport width with horizontal
+  // inset-4 margins, centered, instead of anchoring to the small trigger.
+  //
   // The popover is rendered in a portal on document.body and positioned with
   // `position: fixed`, so coordinates are viewport-relative — getBoundingClientRect
   // already returns viewport coords. NO scrollY math; the portal escapes any
@@ -65,6 +68,16 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     const place = (): void => {
       const anchor = anchorRef.current;
       if (!anchor) return;
+
+      if (window.innerWidth < 768) {
+        const margin = 16;
+        popover.style.left = `${margin}px`;
+        popover.style.top = `${margin * 4}px`;
+        popover.style.width = `${window.innerWidth - margin * 2}px`;
+        return;
+      }
+
+      popover.style.width = `${POPOVER_WIDTH}px`;
       const rect = anchor.getBoundingClientRect();
       const popH = popover.offsetHeight;
 
@@ -184,8 +197,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
       role="dialog"
       aria-modal="true"
       aria-label="Add field"
-      className="zz-pop-in fixed z-40 w-80 rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
-      style={{ width: 320 }}
+      className="zz-pop-in fixed z-40 max-h-[90vh] overflow-y-auto rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
     >
       {/* Accent top edge */}
       <div className="h-px w-full rounded-t-sm bg-gradient-to-r from-transparent via-accent/70 to-transparent" />

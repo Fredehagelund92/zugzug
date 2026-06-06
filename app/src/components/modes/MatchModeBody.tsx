@@ -33,7 +33,7 @@ type Filter = "new" | "all" | "mapped";
 const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
 const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
 const COLS =
-  "grid grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
+  "grid max-md:grid-cols-[28px_1fr] md:grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
 // Escape a string for use inside a double-quoted CSS attribute selector.
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -546,10 +546,10 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
         >
           <span />
           <span>Source value · where it&apos;s seen</span>
-          <span />
-          <span>{dim.dimension.toLowerCase()} record</span>
-          <span>Confidence</span>
-          <span>Status</span>
+          <span className="max-md:hidden" />
+          <span className="max-md:hidden">{dim.dimension.toLowerCase()} record</span>
+          <span className="max-md:hidden">Confidence</span>
+          <span className="max-md:hidden">Status</span>
         </div>
 
         {/* rows */}
@@ -585,7 +585,18 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     aria-label={`Select ${r.value}`}
                   />
                   <div className="min-w-0">
-                    <div className="truncate font-mono text-[13px] text-ink">{r.value}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="truncate font-mono text-[13px] text-ink">{r.value}</div>
+                      <span className="md:hidden">
+                        {row.status === "mapped" ? (
+                          <Chip label="Mapped" bucket="chip-1" dot />
+                        ) : row.status === "skipped" ? (
+                          <Chip label="Skipped" bucket="chip-5" />
+                        ) : (
+                          <Chip label="New" bucket="chip-2" dot />
+                        )}
+                      </span>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setOpen(isOpen ? null : r.value)}
@@ -598,16 +609,27 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       {r.sources.length > 1 ? ` +${r.sources.length - 1}` : ""} ·{" "}
                       {valueRows(r).toLocaleString()} rows
                     </button>
+                    <div className="mt-1.5 md:hidden">
+                      <ComboSelect
+                        options={options}
+                        value={row.target}
+                        suggestion={r.suggestion}
+                        allowCreate={!external}
+                        onPick={(t) => pick(r.value, t)}
+                      />
+                    </div>
                   </div>
-                  <IconArrowRight className="h-4 w-4 text-ink-3" />
-                  <ComboSelect
-                    options={options}
-                    value={row.target}
-                    suggestion={r.suggestion}
-                    allowCreate={!external}
-                    onPick={(t) => pick(r.value, t)}
-                  />
-                  <div>
+                  <IconArrowRight className="max-md:hidden h-4 w-4 text-ink-3" />
+                  <div className="max-md:hidden">
+                    <ComboSelect
+                      options={options}
+                      value={row.target}
+                      suggestion={r.suggestion}
+                      allowCreate={!external}
+                      onPick={(t) => pick(r.value, t)}
+                    />
+                  </div>
+                  <div className="max-md:hidden">
                     {r.confidence > 0 ? (
                       <div className="flex items-center gap-2">
                         <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
@@ -629,7 +651,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       <span className="font-mono text-[11px] text-ink-2">—</span>
                     )}
                   </div>
-                  <div>
+                  <div className="max-md:hidden">
                     {row.status === "mapped" ? (
                       <Chip label="Mapped" bucket="chip-1" dot />
                     ) : row.status === "skipped" ? (
@@ -782,7 +804,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               </div>
             </div>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <span className="font-mono text-[11px] text-ink-2">
               {flash ? (
                 <span

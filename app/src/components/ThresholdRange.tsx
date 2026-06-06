@@ -30,8 +30,8 @@ export function ThresholdRange({ publish, suggest, min = 50, max = 100, onChange
   const pct = (v: number) => ((v - min) / (max - min)) * 100;
 
   return (
-    <div className="w-full max-w-md">
-      <div className="relative h-6">
+    <div className="w-full max-w-full md:max-w-md">
+      <div className="relative h-10 md:h-6">
         {/* base track */}
         <div className="pointer-events-none absolute inset-y-1/2 left-0 right-0 h-1 -translate-y-1/2 rounded-pill bg-surface-2" />
         {/* suggest..publish band (warn) */}

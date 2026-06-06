@@ -60,6 +60,18 @@ function AddTabPopover({
       const rect = anchor.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
+      if (window.innerWidth < 768) {
+        const margin = 8;
+        const w = window.innerWidth - margin * 2;
+        dropdown.style.width = `${w}px`;
+        dropdown.style.left = `${margin}px`;
+        let top = rect.bottom + 2;
+        if (top + dropH > window.innerHeight - 8) top = Math.max(8, rect.top - 2 - dropH);
+        dropdown.style.top = `${top}px`;
+        return;
+      }
+
+      dropdown.style.width = `${DROPDOWN_W}px`;
       // right-align with the anchor button
       let left = rect.right - DROPDOWN_W;
       if (left < 8) left = 8;
@@ -101,7 +113,7 @@ function AddTabPopover({
   return createPortal(
     <div
       ref={dropdownRef}
-      style={{ position: "fixed", top: 0, left: 0, width: DROPDOWN_W }}
+      style={{ position: "fixed", top: 0, left: 0 }}
       className="zz-pop-in z-50 overflow-hidden rounded-md border border-line-2 bg-surface-elevated shadow-pop"
     >
       <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-ink-3">
@@ -191,7 +203,7 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
     >
       {active && <span aria-hidden className="absolute inset-x-0 top-0 h-[2px] bg-accent" />}
       <TabMono label={dim.dimension} color={dim.color ?? null} active={active} />
-      <span className="max-w-[160px] truncate font-display font-semibold">{dim.dimension}</span>
+      <span className="max-w-[120px] truncate font-display font-semibold md:max-w-[160px]">{dim.dimension}</span>
       {dirty && (
         <span
           aria-label="uncommitted drafts"
@@ -238,7 +250,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => 
       role="tablist"
       className="sticky top-0 z-10 flex h-9 items-stretch border-b border-line bg-surface-2"
     >
-      <div className="flex flex-1 items-stretch overflow-x-auto">
+      <div className="flex flex-1 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch]">
         {tabs.map((tab) => {
           const dim = dimById.get(tab.dimId);
           if (!dim) return null;
