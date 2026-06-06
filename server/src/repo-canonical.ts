@@ -13,6 +13,7 @@ import {
   type OptionDef,
   type PaletteName,
   type SourceOccurrence,
+  type NumberFormat,
   PALETTE_NAMES,
   slug,
   qid,
@@ -430,7 +431,7 @@ export async function addField(
   label: string,
   type: string = "text",
   options: OptionDef[] | undefined,
-  opts: { silent?: boolean } = {},
+  opts: { silent?: boolean; numberFormat?: NumberFormat } = {},
   userId: string,
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
@@ -440,7 +441,12 @@ export async function addField(
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
   const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
-  const optsJson = t === "select" ? JSON.stringify(options ?? []) : null;
+  const optsJson =
+    t === "select"
+      ? JSON.stringify(options ?? [])
+      : t === "number" && opts.numberFormat != null
+        ? JSON.stringify(opts.numberFormat)
+        : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at)
      VALUES ($1, $2, $3, $4, $5, current_timestamp) ON CONFLICT (dim_id, field) DO NOTHING`,
@@ -480,6 +486,7 @@ export async function changeColumnType(
   options: OptionDef[] | undefined,
   coerceInvalidToNull: boolean = false,
   userId: string,
+  numberFormat?: NumberFormat,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
@@ -565,7 +572,16 @@ export async function changeColumnType(
     await run(`ALTER TABLE ${cq(m.dimTable)} RENAME COLUMN ${qid(tmp)} TO ${col}`);
     await run(
       `UPDATE ${pg("dimension_field")} SET type = $1, options = $2 WHERE dim_id = $3 AND field = $4`,
-      [newType, newType === "select" ? JSON.stringify(finalOptions ?? []) : null, dimId, field],
+      [
+        newType,
+        newType === "select"
+          ? JSON.stringify(finalOptions ?? [])
+          : newType === "number" && numberFormat != null
+            ? JSON.stringify(numberFormat)
+            : null,
+        dimId,
+        field,
+      ],
     );
   });
 
