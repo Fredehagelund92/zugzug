@@ -24,6 +24,9 @@ import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
 import { BooleanCell } from "./cells/BooleanCell";
 import { DateCell } from "./cells/DateCell";
+import { UrlCell } from "./cells/UrlCell";
+import { EmailCell } from "./cells/EmailCell";
+import { RatingCell } from "./cells/RatingCell";
 import { SelectCell } from "./cells/SelectCell";
 import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
@@ -241,9 +244,9 @@ const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }>
   number:  NumberCell,
   boolean: BooleanCell,
   date:    DateCell,
-  url:     TextCell,   // placeholder until Task 13
-  email:   TextCell,   // placeholder until Task 13
-  rating:  TextCell,   // placeholder until Task 13
+  url:     UrlCell,
+  email:   EmailCell,
+  rating:  RatingCell,
 };
 
 // ── Range selection types ───────────────────────────────────────────────────
