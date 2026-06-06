@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -38,9 +38,6 @@ function Section({
     </Card>
   );
 }
-
-const input =
-  "w-full rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40";
 
 interface ScanStatus {
   lastScanAt: string | null;
@@ -181,15 +178,97 @@ interface Member {
   addedAt: string;
 }
 
+type ChipStatus = "valid" | "invalid" | "inviting" | "failed";
+interface Chip {
+  id: string;
+  email: string;
+  status: ChipStatus;
+  reason?: string;
+}
+
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ALLOWED_DOMAIN = "@example.com";
+
+function validateChip(
+  email: string,
+  membersByEmail: Set<string>,
+  prevChips: Chip[],
+): { ok: true } | { ok: false; reason: string } {
+  if (!EMAIL_RX.test(email)) return { ok: false, reason: "Doesn't look like an email" };
+  if (!email.endsWith(ALLOWED_DOMAIN))
+    return { ok: false, reason: `Must be a ${ALLOWED_DOMAIN} email` };
+  if (membersByEmail.has(email)) return { ok: false, reason: "Already on the team" };
+  if (prevChips.some((c) => c.email === email && (c.status === "valid" || c.status === "inviting")))
+    return { ok: false, reason: "Already in the list" };
+  return { ok: true };
+}
+
+function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
+  const tone =
+    chip.status === "valid"
+      ? "border-line-2 bg-surface-2 text-ink"
+      : chip.status === "inviting"
+        ? "border-accent/40 bg-accent-wash text-accent"
+        : chip.status === "invalid"
+          ? "border-warn/40 bg-warn-soft text-warn"
+          : "border-danger/40 bg-danger-soft text-danger";
+  return (
+    <span
+      className={cx(
+        "zz-pop-in inline-flex max-w-full items-center gap-1.5 rounded-sm border px-2 py-1 font-mono text-[11.5px] transition-colors",
+        tone,
+      )}
+      title={chip.reason}
+    >
+      {chip.status === "inviting" && (
+        <svg
+          className="h-3 w-3 shrink-0 animate-spin"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25" />
+          <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      )}
+      <span className="min-w-0 max-w-[240px] truncate">{chip.email}</span>
+      {chip.status !== "inviting" && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          aria-label={`Remove ${chip.email}`}
+          className="-mr-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-pill opacity-70 transition-opacity hover:bg-current/15 hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/40"
+        >
+          <svg
+            viewBox="0 0 12 12"
+            className="h-2.5 w-2.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          >
+            <path d="M3 3 L9 9 M9 3 L3 9" />
+          </svg>
+        </button>
+      )}
+    </span>
+  );
+}
+
 function TeamSection() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [addEmail, setAddEmail] = useState("");
-  const [addError, setAddError] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [chips, setChips] = useState<Chip[]>([]);
+  const [buffer, setBuffer] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const idCounter = useRef(0);
+  const newId = () => `c${idCounter.current++}`;
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -207,40 +286,92 @@ function TeamSection() {
     void load();
   }, [load]);
 
-  const add = async () => {
-    setAddError(null);
-    if (!addEmail.trim()) return;
-    setAdding(true);
-    try {
-      const res = await fetch("/api/team/members", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: addEmail.trim().toLowerCase() }),
+  const membersByEmail = useMemo(
+    () => new Set(members.map((m) => m.email.toLowerCase())),
+    [members],
+  );
+
+  const addChip = useCallback(
+    (raw: string) => {
+      const email = raw.trim().toLowerCase();
+      if (!email) return;
+      setChips((prev) => {
+        const res = validateChip(email, membersByEmail, prev);
+        const chip: Chip = res.ok
+          ? { id: newId(), email, status: "valid" }
+          : { id: newId(), email, status: "invalid", reason: res.reason };
+        return [...prev, chip];
       });
-      if (res.status === 409) {
-        setAddError("Already added.");
-        return;
-      }
-      if (res.status === 400) {
-        setAddError("Must be a @example.com email.");
-        return;
-      }
-      if (!res.ok) {
-        setAddError("Something went wrong.");
-        return;
-      }
-      setAddEmail("");
-      void load();
-    } finally {
-      setAdding(false);
-      inputRef.current?.focus();
+    },
+    [membersByEmail],
+  );
+
+  const removeChip = (id: string) => setChips((prev) => prev.filter((c) => c.id !== id));
+
+  const submit = async () => {
+    let working = chips;
+    if (buffer.trim()) {
+      const email = buffer.trim().toLowerCase();
+      const res = validateChip(email, membersByEmail, chips);
+      const chip: Chip = res.ok
+        ? { id: newId(), email, status: "valid" }
+        : { id: newId(), email, status: "invalid", reason: res.reason };
+      working = [...chips, chip];
+      setChips(working);
+      setBuffer("");
     }
+    const validChips = working.filter((c) => c.status === "valid");
+    if (validChips.length === 0) return;
+
+    const validIds = new Set(validChips.map((c) => c.id));
+    setChips((prev) =>
+      prev.map((c) =>
+        validIds.has(c.id) ? { id: c.id, email: c.email, status: "inviting" } : c,
+      ),
+    );
+    setSubmitting(true);
+
+    const results = await Promise.allSettled(
+      validChips.map(async (c) => {
+        const res = await fetch("/api/team/members", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: c.email }),
+        });
+        if (res.status === 409) throw new Error("Already on the team");
+        if (res.status === 400) throw new Error(`Must be a ${ALLOWED_DOMAIN} email`);
+        if (!res.ok) throw new Error("Couldn't add — try again");
+        return c.id;
+      }),
+    );
+
+    const failedById = new Map<string, string>();
+    const succeededIds = new Set<string>();
+    validChips.forEach((c, i) => {
+      const r = results[i];
+      if (r.status === "fulfilled") succeededIds.add(c.id);
+      else failedById.set(c.id, r.reason instanceof Error ? r.reason.message : "Failed");
+    });
+    setChips((prev) =>
+      prev.flatMap((c) => {
+        if (succeededIds.has(c.id)) return [];
+        const failedReason = failedById.get(c.id);
+        if (failedReason)
+          return [{ id: c.id, email: c.email, status: "failed", reason: failedReason }];
+        return [c];
+      }),
+    );
+    setSubmitting(false);
+    void load();
+    inputRef.current?.focus();
   };
 
   const remove = async (email: string) => {
     setRemoveError(null);
     try {
-      const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, { method: "DELETE" });
+      const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, {
+        method: "DELETE",
+      });
       if (!res.ok) {
         setRemoveError(`Couldn't remove ${email} — ${res.status} ${res.statusText}`);
         return;
@@ -248,12 +379,17 @@ function TeamSection() {
       void load();
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? `Couldn't remove ${email} — ${err.message}` : `Couldn't remove ${email}.`,
+        err instanceof Error
+          ? `Couldn't remove ${email} — ${err.message}`
+          : `Couldn't remove ${email}.`,
       );
     }
   };
 
   const myEmail = currentUser.email;
+  const validCount = chips.filter((c) => c.status === "valid").length;
+  const invalidCount = chips.filter((c) => c.status === "invalid").length;
+  const failedCount = chips.filter((c) => c.status === "failed").length;
 
   return (
     <Section
@@ -291,28 +427,135 @@ function TeamSection() {
           </li>
         ))}
       </ul>
-      <div className="flex items-start gap-2">
-        <div className="flex-1 space-y-1">
+
+      <div className="space-y-2">
+        <div
+          className={cx(
+            "flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-sm border border-line-2 bg-bg px-2 py-1.5 transition-colors",
+            "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/40",
+            submitting && "opacity-70",
+          )}
+          onClick={() => inputRef.current?.focus()}
+        >
+          {chips.map((c) => (
+            <ChipPill key={c.id} chip={c} onRemove={() => removeChip(c.id)} />
+          ))}
           <input
             ref={inputRef}
-            className={input}
-            placeholder="colleague@example.com"
-            value={addEmail}
+            className="min-w-[160px] flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
+            placeholder={
+              chips.length === 0
+                ? "colleague@example.com, another@example.com…"
+                : ""
+            }
+            value={buffer}
             onChange={(e) => {
-              setAddEmail(e.target.value);
-              setAddError(null);
+              const v = e.target.value;
+              if (/[,;\n\t]/.test(v)) {
+                v.split(/[,;\n\t]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .forEach(addChip);
+                setBuffer("");
+              } else {
+                setBuffer(v);
+              }
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void add();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (buffer.trim()) {
+                  addChip(buffer);
+                  setBuffer("");
+                } else if (validCount > 0) {
+                  void submit();
+                }
+              } else if (e.key === "Tab" && buffer.trim()) {
+                addChip(buffer);
+                setBuffer("");
+              } else if (e.key === "Backspace" && !buffer && chips.length > 0) {
+                e.preventDefault();
+                removeChip(chips[chips.length - 1].id);
+              }
             }}
-            disabled={adding}
+            onPaste={(e) => {
+              const text = e.clipboardData.getData("text");
+              if (/[\s,;]/.test(text)) {
+                e.preventDefault();
+                text
+                  .split(/[\s,;]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .forEach(addChip);
+                setBuffer("");
+              }
+            }}
+            onBlur={() => {
+              if (buffer.trim()) {
+                addChip(buffer);
+                setBuffer("");
+              }
+            }}
+            disabled={submitting}
+            aria-label="Invite team members"
           />
-          {addError && <p className="font-mono text-[11px] text-warn">{addError}</p>}
         </div>
-        <Button onClick={() => void add()} disabled={adding || !addEmail.trim()}>
-          {adding ? "Adding…" : "Add"}
-        </Button>
+
+        <div className="flex items-center justify-between gap-3 font-mono text-[11px]">
+          {chips.length === 0 ? (
+            <p className="text-ink-3">
+              Type or paste emails — separate with commas. Press Enter to add.
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {validCount > 0 && (
+                <span className="text-ink-2">
+                  <span className="tabular-nums text-ink">{validCount}</span> ready
+                </span>
+              )}
+              {invalidCount > 0 && (
+                <span className="text-warn">
+                  <span className="tabular-nums">{invalidCount}</span> invalid
+                </span>
+              )}
+              {failedCount > 0 && (
+                <span className="text-danger">
+                  <span className="tabular-nums">{failedCount}</span> failed
+                </span>
+              )}
+            </div>
+          )}
+          {chips.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setChips([]);
+                setBuffer("");
+                inputRef.current?.focus();
+              }}
+              disabled={submitting}
+              className="shrink-0 text-ink-3 transition-colors hover:text-warn disabled:opacity-50"
+            >
+              clear all
+            </button>
+          )}
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            onClick={() => void submit()}
+            disabled={submitting || (validCount === 0 && !buffer.trim())}
+            className="max-md:w-full max-md:justify-center"
+          >
+            {submitting
+              ? "Adding…"
+              : validCount > 1
+                ? `Add ${validCount} members`
+                : "Add"}
+          </Button>
+        </div>
       </div>
+
       {removeError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>{removeError}</span>
