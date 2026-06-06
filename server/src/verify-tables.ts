@@ -154,7 +154,7 @@ async function cleanup(): Promise<void> {
     await repo.addField(legacyId, "Status", "select", undefined, { silent: true }, "u_verify");
     // Overwrite the options JSON with the LEGACY string[] shape to simulate pre-T5 data
     await pgRun(
-      `UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = 'status'`,
+      `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = 'status'`,
       [JSON.stringify(["open", "closed"]), legacyId],
     );
     const fields = await repo.listFields(legacyId);
