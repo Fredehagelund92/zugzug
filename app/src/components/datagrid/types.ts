@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type React from "react";
-import type { OptionDef } from "../../data";
+import type { OptionDef, NumberFormat } from "../../data";
+export type { NumberFormat };
 
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
    grid through these types; new cell types slot in via the union. */
@@ -18,6 +19,7 @@ export interface ColumnDef<Row> {
   pinnedLeft?: boolean; // pinned columns can't be reordered or moved past
   align?: "left" | "right"; // default left
   options?: OptionDef[]; // only set when type === "select"
+  numberFormat?: NumberFormat; // only set when type === "number"
   // Render hook for custom cell content (e.g. Mapping's source-value+provenance cell)
   render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
   // Editor hook for custom editing (e.g. Mapping's target-master ComboSelect)
@@ -90,7 +92,7 @@ export interface DataGridProps<Row> {
   onChangeColumnType?: (
     field: string,
     newType: CellType,
-    opts?: { options?: OptionDef[]; coerceInvalidToNull?: boolean },
+    opts?: { options?: OptionDef[]; numberFormat?: NumberFormat; coerceInvalidToNull?: boolean },
   ) => Promise<{ ok: boolean; invalidCount?: number }>;
   /** Header menu: add a new option to a select column. Returns the new option list. */
   onAddColumnOption?: (
