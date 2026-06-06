@@ -362,7 +362,7 @@ export function Sources() {
       {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
-      <div className="mb-4 shrink-0">
+      <div className="mb-3 shrink-0">
         <PageHeader
           kicker="Warehouse"
           title="Sources"
@@ -421,7 +421,7 @@ export function Sources() {
 
         {/* ─── STANDING CALLOUT (the moment) ─── */}
         {agg.worst && agg.worst.unmapped > 0 ? (
-          <div className="border-b border-line border-l-2 border-l-accent bg-accent-wash px-7 py-5">
+          <div className="border-b border-line border-l-2 border-l-accent bg-accent-wash px-7 py-3">
             <div className="flex items-baseline gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-accent">
               <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
               Standing · today
@@ -451,7 +451,7 @@ export function Sources() {
             </div>
           </div>
         ) : agg.columns > 0 ? (
-          <div className="border-b border-line px-7 py-5">
+          <div className="border-b border-line px-7 py-3">
             <p className="font-display text-[18px] italic text-ink-2">
               Nothing requires a decision today.
             </p>
@@ -463,7 +463,7 @@ export function Sources() {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
         {/* ─── TOOLBAR (sticky inside the surface) ─── */}
-        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-3 backdrop-blur-sm">
+        <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-2 backdrop-blur-sm">
           <label className="flex min-w-[240px] flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3">
             <IconSearch className="h-3.5 w-3.5" />
             <input

@@ -151,7 +151,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
         aria-modal="true"
         aria-labelledby="create-table-title"
         onClick={(e) => e.stopPropagation()}
-        className="mt-[10vh] w-[520px] max-w-full overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
+        className="mt-[10vh] w-[520px] max-w-full rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
       >
         {/* accent edge */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
@@ -357,7 +357,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
         {/* footer — swaps to a discard prompt if the user tries to close with
             in-progress work, so backdrop / ESC / X / Cancel don't silently drop
             it */}
-        <div className="flex items-center justify-between gap-2 border-t border-line bg-bg/40 px-6 py-3">
+        <div className="flex items-center justify-between gap-2 rounded-b-lg border-t border-line bg-bg/40 px-6 py-3">
           {confirmingDiscard ? (
             <>
               <span className="font-mono text-[12px] text-ink-2">Discard this table?</span>

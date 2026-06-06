@@ -297,7 +297,7 @@ function TriageInner() {
 
   return (
     <div className="flex h-full min-h-0 flex-col px-5 pb-5 pt-4">
-      <div className="mb-4 shrink-0">
+      <div className="mb-3 shrink-0">
         <PageHeader
           kicker="WORKFLOW"
           title={
@@ -432,7 +432,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       style={{ animationDelay: "150ms" }}
     >
       {/* toolbar — sticky filter chips */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => (
             <button
