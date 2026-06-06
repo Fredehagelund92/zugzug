@@ -1071,9 +1071,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       return { conjunction: cur?.conjunction ?? "and", conditions };
                     })
                   }
-                  onChangeType={async (newType) => {
+                  onChangeType={async (newType, numberFormat) => {
                     if (!props.onChangeColumnType) return;
-                    const res = await props.onChangeColumnType(c.field, newType);
+                    const res = await props.onChangeColumnType(c.field, newType, { numberFormat });
                     if (!res.ok && res.invalidCount) {
                       if (
                         confirm(
@@ -1081,6 +1081,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                         )
                       ) {
                         await props.onChangeColumnType(c.field, newType, {
+                          numberFormat,
                           coerceInvalidToNull: true,
                         });
                       }

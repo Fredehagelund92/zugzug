@@ -12,7 +12,7 @@ import {
   IconChevronLeft,
   IconFilter,
 } from "../Icons";
-import type { CellType, ColumnDef } from "./types";
+import type { CellType, ColumnDef, NumberFormat } from "./types";
 
 interface Props<Row> {
   column: ColumnDef<Row>;
@@ -22,7 +22,7 @@ interface Props<Row> {
   onClose: () => void;
   onRename: (newLabel: string) => void;
   onSort: (dir: "asc" | "desc" | null) => void;
-  onChangeType: (newType: CellType) => void;
+  onChangeType: (newType: CellType, numberFormat?: NumberFormat) => void;
   onHide: () => void;
   onDelete: () => void;
   onFilter: (value: string | null) => void;
@@ -45,11 +45,15 @@ export function ColumnHeaderMenu<Row>({
   onDelete,
   onFilter,
 }: Props<Row>) {
-  const [mode, setMode] = useState<"menu" | "rename" | "type" | "filter" | "confirm-delete">(
+  const [mode, setMode] = useState<"menu" | "rename" | "type" | "number-format" | "filter" | "confirm-delete">(
     "menu",
   );
   const [draft, setDraft] = useState(column.label);
   const [filterDraft, setFilterDraft] = useState(filterValue ?? "");
+  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency">("integer");
+  const [numPrecision, setNumPrecision] = useState<number>(2);
+  const [currSymbol, setCurrSymbol] = useState("$");
+  const [currPosition, setCurrPosition] = useState<"prefix" | "suffix">("prefix");
   const ref = useRef<HTMLDivElement>(null);
 
   // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
@@ -229,8 +233,16 @@ export function ColumnHeaderMenu<Row>({
               type="button"
               className={cx(item, column.type === t && "bg-accent-wash text-accent")}
               onClick={() => {
-                if (t !== column.type) onChangeType(t);
-                onClose();
+                if (t !== column.type) {
+                  if (t === "number") {
+                    setMode("number-format");
+                  } else {
+                    onChangeType(t);
+                    onClose();
+                  }
+                } else {
+                  onClose();
+                }
               }}
             >
               {t}
@@ -240,6 +252,136 @@ export function ColumnHeaderMenu<Row>({
           <div className="my-1 h-px bg-line" />
           <button type="button" className={item} onClick={() => setMode("menu")}>
             <IconChevronLeft className={iconCls} /> back
+          </button>
+        </div>
+      )}
+      {mode === "number-format" && (
+        <div className="p-2 space-y-2">
+          {/* Back button */}
+          <button
+            type="button"
+            onClick={() => setMode("type")}
+            className="flex items-center gap-1 font-mono text-[11px] text-ink-3 hover:text-ink"
+          >
+            <IconChevronLeft className="h-3 w-3" />
+            Back
+          </button>
+
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3 px-1">
+            Number format
+          </div>
+
+          {/* Format tiles */}
+          {(["integer", "decimal", "percent", "currency"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setNumFmt(f)}
+              className={cx(
+                "w-full flex items-center gap-2 rounded-sm border px-2 py-1.5 text-left text-[11px] font-mono transition-colors",
+                numFmt === f
+                  ? "border-accent bg-accent-wash text-ink"
+                  : "border-line hover:border-line-2 hover:bg-hover text-ink",
+              )}
+            >
+              {{ integer: "***REMOVED***", decimal: "***REMOVED***.0", percent: "%", currency: "$" }[f]}
+              <span className="ml-1 capitalize">{f}</span>
+            </button>
+          ))}
+
+          {/* Precision (decimal / percent / currency) */}
+          {(numFmt === "decimal" || numFmt === "percent" || numFmt === "currency") && (
+            <div className="flex items-center gap-1.5 px-1">
+              <span className="font-mono text-[10px] text-ink-3 w-14">Precision</span>
+              {(numFmt === "decimal" ? [1, 2, 3, 4] : [0, 1, 2]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setNumPrecision(p)}
+                  className={cx(
+                    "h-6 w-6 rounded-sm border font-mono text-[11px] transition-colors",
+                    numPrecision === p
+                      ? "border-accent bg-accent-wash text-ink"
+                      : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                  )}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Symbol + position (currency only) */}
+          {numFmt === "currency" && (
+            <div className="space-y-1.5 px-1">
+              <div className="flex flex-wrap gap-1">
+                {["$", "€", "£", "¥", "kr", "USD", "EUR", "GBP"].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setCurrSymbol(s)}
+                    className={cx(
+                      "rounded-sm border px-1.5 py-0.5 font-mono text-[10px] transition-colors",
+                      currSymbol === s
+                        ? "border-accent bg-accent-wash text-ink"
+                        : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                    )}
+                  >
+                    {s}
+                  </button>
+                ))}
+                <input
+                  value={currSymbol}
+                  onChange={(e) => setCurrSymbol(e.target.value.slice(0, 6))}
+                  placeholder="…"
+                  className="w-12 rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-ink outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex gap-1">
+                {(["prefix", "suffix"] as const).map((pos) => (
+                  <button
+                    key={pos}
+                    type="button"
+                    onClick={() => setCurrPosition(pos)}
+                    className={cx(
+                      "flex-1 rounded-sm border px-2 py-1 font-mono text-[10px] capitalize transition-colors",
+                      currPosition === pos
+                        ? "border-accent bg-accent-wash text-ink"
+                        : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                    )}
+                  >
+                    {pos}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Confirm button */}
+          <button
+            type="button"
+            onClick={() => {
+              let fmt: NumberFormat;
+              if (numFmt === "integer") {
+                fmt = { format: "integer" };
+              } else if (numFmt === "decimal") {
+                fmt = { format: "decimal", precision: numPrecision as 1 | 2 | 3 | 4 };
+              } else if (numFmt === "percent") {
+                fmt = { format: "percent", precision: numPrecision as 0 | 1 | 2 };
+              } else {
+                fmt = {
+                  format: "currency",
+                  symbol: currSymbol || "$",
+                  position: currPosition,
+                  precision: numPrecision as 0 | 1 | 2,
+                };
+              }
+              onChangeType("number", fmt);
+              onClose();
+            }}
+            className="w-full rounded-sm border border-accent bg-accent px-3 py-1.5 font-mono text-[11px] text-accent-ink hover:opacity-90"
+          >
+            Apply
           </button>
         </div>
       )}
