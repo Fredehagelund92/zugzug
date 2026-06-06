@@ -503,8 +503,11 @@ export async function changeColumnType(
   const keyc = qid(m.keyCol);
   const { newType, coerceInvalidToNull, userId } = opts;
 
-  // url and email are VARCHAR relabels — no data migration needed
-  if (newType === "url" || newType === "email") {
+  // VARCHAR relabels — only safe when current SQL type is already VARCHAR
+  if (
+    (newType === "url" || newType === "email") &&
+    (f.type === "text" || f.type === "select" || f.type === "url" || f.type === "email")
+  ) {
     await pgTx(async ({ run }) => {
       await run(
         `UPDATE ${pg("dimension_field")} SET type = $1, field_config = null WHERE dim_id = $2 AND field = $3`,
