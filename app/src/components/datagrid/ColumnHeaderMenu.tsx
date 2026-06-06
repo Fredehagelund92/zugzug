@@ -50,10 +50,19 @@ export function ColumnHeaderMenu<Row>({
   );
   const [draft, setDraft] = useState(column.label);
   const [filterDraft, setFilterDraft] = useState(filterValue ?? "");
-  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency">("integer");
-  const [numPrecision, setNumPrecision] = useState<number>(2);
-  const [currSymbol, setCurrSymbol] = useState("$");
-  const [currPosition, setCurrPosition] = useState<"prefix" | "suffix">("prefix");
+  const existingFmt = column.numberFormat;
+  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency">(
+    existingFmt?.format ?? "integer",
+  );
+  const [numPrecision, setNumPrecision] = useState<number>(
+    existingFmt && "precision" in existingFmt ? existingFmt.precision : 2,
+  );
+  const [currSymbol, setCurrSymbol] = useState(
+    existingFmt?.format === "currency" ? existingFmt.symbol : "$",
+  );
+  const [currPosition, setCurrPosition] = useState<"prefix" | "suffix">(
+    existingFmt?.format === "currency" ? existingFmt.position : "prefix",
+  );
   const ref = useRef<HTMLDivElement>(null);
 
   // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
@@ -233,13 +242,11 @@ export function ColumnHeaderMenu<Row>({
               type="button"
               className={cx(item, column.type === t && "bg-accent-wash text-accent")}
               onClick={() => {
-                if (t !== column.type) {
-                  if (t === "number") {
-                    setMode("number-format");
-                  } else {
-                    onChangeType(t);
-                    onClose();
-                  }
+                if (t === "number") {
+                  setMode("number-format");
+                } else if (t !== column.type) {
+                  onChangeType(t);
+                  onClose();
                 } else {
                   onClose();
                 }
