@@ -56,11 +56,40 @@ export function parseOptions(raw: unknown): OptionDef[] | undefined {
   });
 }
 
+export type NumberFormat =
+  | { format: "integer" }
+  | { format: "decimal"; precision: 1 | 2 | 3 | 4 }
+  | { format: "percent"; precision: 0 | 1 | 2 }
+  | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 };
+
+const VALID_FORMATS = ["integer", "decimal", "percent", "currency"];
+
+export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
+  let obj: unknown = raw;
+  if (typeof obj === "string" && obj.length > 0) {
+    try {
+      obj = JSON.parse(obj);
+    } catch {
+      return undefined;
+    }
+  }
+  if (
+    obj == null ||
+    typeof obj !== "object" ||
+    Array.isArray(obj) ||
+    !VALID_FORMATS.includes((obj as { format?: unknown }).format as string)
+  ) {
+    return undefined;
+  }
+  return obj as NumberFormat;
+}
+
 export interface FieldDef {
   field: string;
   label: string;
   type: string;
   options?: OptionDef[];
+  numberFormat?: NumberFormat;
 }
 export interface CanonicalValue {
   key: string;
