@@ -137,6 +137,21 @@ export async function commit(
     "Committed",
     `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
   );
+
+  // Prune ai_hint_cache entries whose suggestion no longer matches a valid
+  // canonical label (e.g. after a canonical record was deleted).
+  const currentLabels = await pgAll<{ label: string }>(
+    `SELECT label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
+  ).catch(() => [] as { label: string }[]);
+  if (currentLabels.length > 0) {
+    const labelArr = currentLabels.map((r) => r.label);
+    await pgRun(
+      `DELETE FROM ${pg("ai_hint_cache")}
+       WHERE dim_id = $1 AND suggestion IS NOT NULL AND NOT (suggestion = ANY($2::text[]))`,
+      [dimId, labelArr],
+    ).catch(() => { /* table may not exist in older deploys */ });
+  }
+
   return { committed, rowsRecovered };
 }
 
