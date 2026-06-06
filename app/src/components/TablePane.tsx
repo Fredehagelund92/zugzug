@@ -43,7 +43,7 @@ function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
     case "select": return { type: "select", options: f.options ?? [] };
     case "url": return { type: "url" };
     case "email": return { type: "email" };
-    case "rating": return { type: "rating", ratingMax: 5 };
+    case "rating": return { type: "rating", ratingMax: f.ratingMax ?? 5 };
     default: return { type: "text" };
   }
 }
