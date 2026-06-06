@@ -3,12 +3,13 @@ import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { Button } from "./Button";
 import { OptionBuilder } from "./OptionBuilder";
-import type { OptionDef } from "../data";
+import type { NumberFormat, OptionDef } from "../data";
 
 export interface AddFieldInput {
   label: string;
   type: "text" | "number" | "boolean" | "date" | "select";
   options?: OptionDef[];
+  numberFormat?: NumberFormat;
 }
 
 interface AddFieldPopoverProps {
@@ -43,6 +44,10 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   const [createAnother, setCreateAnother] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency">("integer");
+  const [numPrecision, setNumPrecision] = useState<number>(2);
+  const [currSymbol, setCurrSymbol] = useState("$");
+  const [currPosition, setCurrPosition] = useState<"prefix" | "suffix">("prefix");
 
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
@@ -118,7 +123,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [label, type, options, createAnother, busy]);
+  }, [label, type, options, createAnother, busy, numFmt, numPrecision, currSymbol, currPosition]);
 
   // Focus trap
   useEffect(() => {
@@ -162,6 +167,10 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     setLabel("");
     setType("text");
     setOptions([]);
+    setNumFmt("integer");
+    setNumPrecision(2);
+    setCurrSymbol("$");
+    setCurrPosition("prefix");
     setError(null);
     nameInputRef.current?.focus();
   };
@@ -172,10 +181,28 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     setError(null);
     setBusy(true);
     try {
+      let numberFormat: NumberFormat | undefined;
+      if (type === "number") {
+        if (numFmt === "integer") {
+          numberFormat = { format: "integer" };
+        } else if (numFmt === "decimal") {
+          numberFormat = { format: "decimal", precision: numPrecision as 1 | 2 | 3 | 4 };
+        } else if (numFmt === "percent") {
+          numberFormat = { format: "percent", precision: numPrecision as 0 | 1 | 2 };
+        } else {
+          numberFormat = {
+            format: "currency",
+            symbol: currSymbol || "$",
+            position: currPosition,
+            precision: numPrecision as 0 | 1 | 2,
+          };
+        }
+      }
       await onSubmit({
         label: trimmed,
         type,
         options: type === "select" ? options : undefined,
+        numberFormat,
       });
       if (createAnother) {
         resetForm();
@@ -273,6 +300,127 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
           <>
             <div className="border-t border-line" />
             <OptionBuilder options={options} onChange={setOptions} />
+          </>
+        )}
+
+        {/* Number format config */}
+        {type === "number" && (
+          <>
+            <div className="border-t border-line" />
+            <div className="space-y-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                Format
+              </div>
+
+              {/* Format tiles */}
+              <div className="grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    { f: "integer", icon: "***REMOVED***", label: "Integer" },
+                    { f: "decimal", icon: "***REMOVED***.0", label: "Decimal" },
+                    { f: "percent", icon: "%", label: "Percent" },
+                    { f: "currency", icon: "$", label: "Currency" },
+                  ] as const
+                ).map(({ f, icon, label: fLabel }) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => {
+                      setNumFmt(f);
+                      // Reset precision to a valid value for the new format's range
+                      setNumPrecision(f === "decimal" ? 2 : f === "integer" ? 2 : 0);
+                    }}
+                    className={cx(
+                      "flex items-center gap-2 rounded-sm border p-2 text-left transition-colors",
+                      numFmt === f
+                        ? "border-accent bg-accent-wash"
+                        : "border-line hover:border-line-2 hover:bg-hover",
+                    )}
+                  >
+                    <span
+                      className={cx(
+                        "flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm font-mono text-[10px]",
+                        numFmt === f ? "bg-accent text-accent-ink" : "bg-surface-2 text-ink-2",
+                      )}
+                      aria-hidden
+                    >
+                      {icon}
+                    </span>
+                    <span className="font-mono text-[11px] text-ink">{fLabel}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Precision (decimal / percent / currency) */}
+              {(numFmt === "decimal" || numFmt === "percent" || numFmt === "currency") && (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-ink-3 w-16 shrink-0">Precision</span>
+                  <div className="flex gap-1">
+                    {(numFmt === "decimal" ? [1, 2, 3, 4] : [0, 1, 2]).map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setNumPrecision(p)}
+                        className={cx(
+                          "h-6 w-6 rounded-sm border font-mono text-[11px] transition-colors",
+                          numPrecision === p
+                            ? "border-accent bg-accent-wash text-ink"
+                            : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                        )}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Symbol + position (currency) */}
+              {numFmt === "currency" && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1">
+                    {["$", "€", "£", "¥", "kr", "USD", "EUR", "GBP"].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setCurrSymbol(s)}
+                        className={cx(
+                          "rounded-sm border px-1.5 py-0.5 font-mono text-[10px] transition-colors",
+                          currSymbol === s
+                            ? "border-accent bg-accent-wash text-ink"
+                            : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                    <input
+                      value={currSymbol}
+                      onChange={(e) => setCurrSymbol(e.target.value.slice(0, 6))}
+                      placeholder="…"
+                      className="w-12 rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-ink outline-none focus:border-accent"
+                    />
+                  </div>
+                  <div className="flex gap-1.5">
+                    {(["prefix", "suffix"] as const).map((pos) => (
+                      <button
+                        key={pos}
+                        type="button"
+                        onClick={() => setCurrPosition(pos)}
+                        className={cx(
+                          "flex-1 rounded-sm border px-2 py-1.5 font-mono text-[10px] capitalize transition-colors",
+                          currPosition === pos
+                            ? "border-accent bg-accent-wash text-ink"
+                            : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                        )}
+                      >
+                        {pos === "prefix" ? "$ 42.00" : "42.00 $"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         )}
 
