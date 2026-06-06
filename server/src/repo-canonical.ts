@@ -340,8 +340,24 @@ export async function renameCanonical(
 ): Promise<void> {
   const m = await dimMeta(dimId);
   if (!m) return;
+
+  // Fetch old label before overwriting — needed for cache sync below.
+  const oldRow = await pgGet<{ label: string }>(
+    `SELECT label FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`,
+    [key],
+  ).catch(() => null);
+
   await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
   await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`);
+
+  // Keep ai_hint_cache consistent: update any hint that was pointing at the old label.
+  if (oldRow?.label) {
+    await pgRun(
+      `UPDATE ${pg("ai_hint_cache")} SET suggestion = $1
+       WHERE dim_id = $2 AND suggestion = $3`,
+      [label, dimId, oldRow.label],
+    ).catch(() => { /* table may not exist in older deploys */ });
+  }
 }
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
