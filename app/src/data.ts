@@ -22,6 +22,7 @@ export interface OptionDef {
   label: string;
   color: PaletteName | null;
 }
+
 export type NumberFormat =
   | { format: "integer" }
   | { format: "decimal"; precision: 1 | 2 | 3 | 4 }
