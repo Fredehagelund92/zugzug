@@ -22,12 +22,18 @@ export interface OptionDef {
   label: string;
   color: PaletteName | null;
 }
+export type NumberFormat =
+  | { format: "integer" }
+  | { format: "decimal"; precision: 1 | 2 | 3 | 4 }
+  | { format: "percent"; precision: 0 | 1 | 2 }
+  | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 };
 /* an enrichment attribute column on a dimension (e.g. currency, locale) */
 export interface FieldDef {
   field: string;
   label: string;
   type: string;
   options?: OptionDef[];
+  numberFormat?: NumberFormat;
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {
