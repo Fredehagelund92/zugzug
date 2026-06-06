@@ -165,6 +165,35 @@ async function cleanup() {
     );
   });
 
+  // ---- Phase 4: rating, url, and email field types ----
+
+  const ratingFieldId = await step("addField(rating)", async () => {
+    const result = await repo.addField(dimId, "Quality", "rating", undefined, { ratingMax: 5 }, "u_verify");
+    assert(result != null, "addField(rating) returned null");
+    return result.field;
+  });
+
+  await step("listFields returns ratingMax", async () => {
+    const fields = await repo.listFields(dimId);
+    const f = fields.find((x) => x.field === ratingFieldId);
+    assert(f != null, "rating field not found");
+    assert(f.type === "rating", `expected type=rating, got ${f.type}`);
+    assert(f.ratingMax === 5, `expected ratingMax=5, got ${f.ratingMax}`);
+  });
+
+  await step("changeColumnType text → url (lossless relabel)", async () => {
+    const textField = await repo.addField(dimId, "Website", "text", undefined, {}, "u_verify");
+    assert(textField != null, "addField(text) returned null");
+    const res = await repo.changeColumnType(dimId, textField.field, {
+      newType: "url",
+      coerceInvalidToNull: false,
+      userId: "u_verify",
+    });
+    assert(res.ok, "changeColumnType to url failed");
+    const fields = await repo.listFields(dimId);
+    assert(fields.find((x) => x.field === textField.field)?.type === "url", "type should be url");
+  });
+
   await step("cleanup grid layout rows", async () => {
     await pgRun(`DELETE FROM ${pg("user_grid_layout")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
   });
