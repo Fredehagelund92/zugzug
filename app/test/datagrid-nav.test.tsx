@@ -30,8 +30,8 @@ const rows: Row[] = [
 
 // id is non-editable (excluded from navCols); name is editable.
 const columns: ColumnDef<Row>[] = [
-  { field: "id", label: "ID", type: "text", editable: false },
-  { field: "name", label: "Name", type: "text", editable: true },
+  { field: "id", label: "ID", config: { type: "text" }, editable: false },
+  { field: "name", label: "Name", config: { type: "text" }, editable: true },
 ];
 
 function renderGrid() {

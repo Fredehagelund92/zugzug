@@ -15,7 +15,8 @@ function Renderer<Row>({ value, column }: CellCtx<Row>) {
     return <span className="font-mono text-[12px] text-ink-2">—</span>;
   }
   const label = String(value);
-  const opt = column.options?.find((o) => o.label === label);
+  const opts = column.config.type === "select" ? column.config.options : [];
+  const opt = opts.find((o) => o.label === label);
   return <Chip label={label} color={opt?.color ?? null} />;
 }
 

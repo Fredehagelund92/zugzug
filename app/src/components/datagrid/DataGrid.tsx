@@ -10,6 +10,16 @@ import {
   IconFieldSelect,
   IconFieldText,
 } from "../Icons";
+
+const IconFieldUrl = ({ className }: { className?: string }) => (
+  <span className={className} style={{ fontSize: "10px" }}>↗</span>
+);
+const IconFieldEmail = ({ className }: { className?: string }) => (
+  <span className={className} style={{ fontSize: "10px" }}>@</span>
+);
+const IconFieldRating = ({ className }: { className?: string }) => (
+  <span className={className} style={{ fontSize: "10px" }}>★</span>
+);
 import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
 import { BooleanCell } from "./cells/BooleanCell";
@@ -156,7 +166,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
                   },
                   cancel: () => onStopEdit(),
                 })
-              ) : c.type === "select" ? (
+              ) : c.config.type === "select" ? (
                 <SelectCell.Editor
                   row={row}
                   rowKey={rk}
@@ -170,15 +180,15 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
                     onCommitCell(rk, c.field, v);
                   }}
                   cancel={() => onStopEdit()}
-                  options={c.options ?? []}
+                  options={c.config.options}
                   onCreate={async (label: string, color) => {
-                    if (!onAddColumnOption) return c.options ?? [];
+                    if (!onAddColumnOption) return c.config.type === "select" ? c.config.options : [];
                     return await onAddColumnOption(c.field, label, color);
                   }}
                 />
               ) : (
                 <CellEditor
-                  type={c.type}
+                  type={c.config.type}
                   ctx={{
                     ...ctx,
                     initial: cursorInitial,
@@ -192,10 +202,10 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
               )
             ) : c.render ? (
               c.render(row, ctx)
-            ) : c.type === "select" ? (
+            ) : c.config.type === "select" ? (
               <SelectCell.Renderer {...ctx} />
             ) : (
-              <CellRenderer type={c.type} ctx={ctx} />
+              <CellRenderer type={c.config.type} ctx={ctx} />
             )}
           </div>
         );
@@ -216,18 +226,24 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
 const GridRow = React.memo(GridRowInner) as <Row>(props: GridRowProps<Row>) => React.ReactElement;
 
 const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: string }>> = {
-  text: IconFieldText,
-  number: IconFieldNumber,
+  text:    IconFieldText,
+  number:  IconFieldNumber,
   boolean: IconFieldBoolean,
-  date: IconFieldDate,
-  select: IconFieldSelect,
+  date:    IconFieldDate,
+  select:  IconFieldSelect,
+  url:     IconFieldUrl,
+  email:   IconFieldEmail,
+  rating:  IconFieldRating,
 };
 
 const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }> = {
-  text: TextCell,
-  number: NumberCell,
+  text:    TextCell,
+  number:  NumberCell,
   boolean: BooleanCell,
-  date: DateCell,
+  date:    DateCell,
+  url:     TextCell,   // placeholder until Task 13
+  email:   TextCell,   // placeholder until Task 13
+  rating:  TextCell,   // placeholder until Task 13
 };
 
 // ── Range selection types ───────────────────────────────────────────────────
@@ -531,17 +547,28 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // `undefined` to mean "skip this cell" (unparseable / not a valid option).
   const coerceForColumn = useCallback(
     (rawVal: string, col: (typeof orderedVisible)[number]): unknown => {
-      if (col.type === "number") {
-        const n = Number(rawVal);
-        return isNaN(n) ? null : n;
+      switch (col.config.type) {
+        case "number": {
+          const n = Number(rawVal);
+          return isNaN(n) ? null : n;
+        }
+        case "boolean": return rawVal.toLowerCase() === "true";
+        case "select": {
+          const match = col.config.options.find((o) => o.label === rawVal);
+          if (!match) return undefined;
+          return rawVal;
+        }
+        case "rating": {
+          const n = parseInt(rawVal, 10);
+          return isNaN(n) ? null : n;
+        }
+        case "text":
+        case "url":
+        case "email":
+        case "date":
+          return rawVal;
+        default: col.config satisfies never; return rawVal;
       }
-      if (col.type === "boolean") return rawVal.toLowerCase() === "true";
-      if (col.type === "select") {
-        const match = col.options?.find((o) => o.label === rawVal);
-        if (!match) return undefined;
-        return rawVal;
-      }
-      return rawVal;
     },
     [],
   );
@@ -929,7 +956,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         )}
         {orderedVisible.map((c, idx) => {
           const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
-          const TypeIcon = FIELD_TYPE_ICONS[c.type];
+          const TypeIcon = FIELD_TYPE_ICONS[c.config.type];
           const isLastCol = idx === orderedVisible.length - 1;
           return (
             <div
@@ -1071,17 +1098,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       return { conjunction: cur?.conjunction ?? "and", conditions };
                     })
                   }
-                  onChangeType={async (newType, numberFormat) => {
+                  onChangeType={async (newConfig) => {
                     if (!props.onChangeColumnType) return;
-                    const res = await props.onChangeColumnType(c.field, newType, { numberFormat });
+                    const res = await props.onChangeColumnType(c.field, newConfig);
                     if (!res.ok && res.invalidCount) {
                       if (
                         confirm(
-                          `${res.invalidCount} value(s) won't parse as ${newType}. Coerce to empty?`,
+                          `${res.invalidCount} value(s) won't parse as ${newConfig.type}. Coerce to empty?`,
                         )
                       ) {
-                        await props.onChangeColumnType(c.field, newType, {
-                          numberFormat,
+                        await props.onChangeColumnType(c.field, newConfig, {
                           coerceInvalidToNull: true,
                         });
                       }

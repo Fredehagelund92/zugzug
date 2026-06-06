@@ -12,7 +12,7 @@ import {
   IconChevronLeft,
   IconFilter,
 } from "../Icons";
-import type { CellType, ColumnDef, NumberFormat } from "./types";
+import type { CellType, ColumnConfig, ColumnDef, NumberFormat } from "./types";
 
 interface Props<Row> {
   column: ColumnDef<Row>;
@@ -22,7 +22,7 @@ interface Props<Row> {
   onClose: () => void;
   onRename: (newLabel: string) => void;
   onSort: (dir: "asc" | "desc" | null) => void;
-  onChangeType: (newType: CellType, numberFormat?: NumberFormat) => void;
+  onChangeType: (newConfig: ColumnConfig) => void;
   onHide: () => void;
   onDelete: () => void;
   onFilter: (value: string | null) => void;
@@ -50,9 +50,10 @@ export function ColumnHeaderMenu<Row>({
   );
   const [draft, setDraft] = useState(column.label);
   const [filterDraft, setFilterDraft] = useState(filterValue ?? "");
-  const existingFmt = column.numberFormat;
+  const existingFmt = column.config.type === "number" ? column.config.numberFormat : undefined;
+  const initialNumFmt = (existingFmt?.format ?? "integer") as "integer" | "decimal" | "percent" | "currency";
   const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency">(
-    existingFmt?.format ?? "integer",
+    ["integer", "decimal", "percent", "currency"].includes(initialNumFmt) ? initialNumFmt : "integer",
   );
   const [numPrecision, setNumPrecision] = useState<number>(
     existingFmt && "precision" in existingFmt ? existingFmt.precision : 2,
@@ -240,12 +241,12 @@ export function ColumnHeaderMenu<Row>({
             <button
               key={t}
               type="button"
-              className={cx(item, column.type === t && "bg-accent-wash text-accent")}
+              className={cx(item, column.config.type === t && "bg-accent-wash text-accent")}
               onClick={() => {
                 if (t === "number") {
                   setMode("number-format");
-                } else if (t !== column.type) {
-                  onChangeType(t);
+                } else if (t !== column.config.type) {
+                  onChangeType({ type: t } as ColumnConfig);
                   onClose();
                 } else {
                   onClose();
@@ -253,7 +254,7 @@ export function ColumnHeaderMenu<Row>({
               }}
             >
               {t}
-              {column.type === t ? " · current" : ""}
+              {column.config.type === t ? " · current" : ""}
             </button>
           ))}
           <div className="my-1 h-px bg-line" />
@@ -387,7 +388,7 @@ export function ColumnHeaderMenu<Row>({
                   precision: numPrecision as 0 | 1 | 2,
                 };
               }
-              onChangeType("number", fmt);
+              onChangeType({ type: "number", numberFormat: fmt });
               onClose();
             }}
             className="w-full rounded-sm border border-accent bg-accent px-3 py-1.5 font-mono text-[11px] text-accent-ink hover:opacity-90"
