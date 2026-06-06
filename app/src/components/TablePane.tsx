@@ -663,6 +663,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               newType,
               opts?.options,
               opts?.coerceInvalidToNull ?? false,
+              opts?.numberFormat,
             )
           }
           onDeleteColumn={(field) => void deleteColumn(activeId, field)}
@@ -687,7 +688,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             anchorRef={addFieldRef as React.RefObject<HTMLElement | null>}
             onClose={() => setAddOpen(false)}
             onSubmit={async (input) => {
-              await addField(activeId, input.label, input.type, input.options);
+              await addField(activeId, input.label, input.type, input.options, input.numberFormat);
             }}
           />
         )}

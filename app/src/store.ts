@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { MappingDimension, OptionDef, PaletteName } from "./data";
+import type { MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
 
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
@@ -418,10 +418,11 @@ export async function addField(
   label: string,
   type = "text",
   options?: OptionDef[],
+  numberFormat?: NumberFormat,
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
     method: "POST",
-    body: JSON.stringify({ label, type, options }),
+    body: JSON.stringify({ label, type, options, numberFormat }),
   });
   await refreshDim(dimId);
   await refreshAudit();
@@ -460,10 +461,11 @@ export async function changeColumnType(
   newType: string,
   options?: OptionDef[],
   coerceInvalidToNull = false,
+  numberFormat?: NumberFormat,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
-    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull }) },
+    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull, numberFormat }) },
   );
   if (res.ok) {
     await refreshDim(dimId);
