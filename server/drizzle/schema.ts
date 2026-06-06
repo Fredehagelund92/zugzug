@@ -42,12 +42,12 @@ export const dimensionSource = app.table(
 export const dimensionField = app.table(
   "dimension_field",
   {
-    dim_id:     varchar("dim_id").notNull(),
-    field:      varchar("field").notNull(),
-    label:      varchar("label").notNull(),
-    type:       varchar("type").notNull(),
-    created_at: timestamp("created_at").notNull(),
-    options:    varchar("options"),
+    dim_id:      varchar("dim_id").notNull(),
+    field:       varchar("field").notNull(),
+    label:       varchar("label").notNull(),
+    type:        varchar("type").notNull(),
+    created_at:  timestamp("created_at").notNull(),
+    field_config: varchar("field_config"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.field] })],
 );
