@@ -139,14 +139,11 @@ async function cleanup() {
     await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify");
     await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen");
     await repo.setFieldValue(dimId, "germany", "capital", "Berlin");
-    const res = await repo.changeColumnType(
-      dimId,
-      "capital",
-      "select",
-      undefined,
-      false,
-      "u_verify",
-    );
+    const res = await repo.changeColumnType(dimId, "capital", {
+      newType: "select",
+      coerceInvalidToNull: false,
+      userId: "u_verify",
+    });
     assert(res.ok, `changeColumnType failed: ${JSON.stringify(res)}`);
     const fields = await repo.listFields(dimId);
     const cap = fields.find((f) => f.field === "capital");
