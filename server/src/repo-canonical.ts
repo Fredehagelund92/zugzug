@@ -427,30 +427,34 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
 }
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈
- *  text | number | boolean | date | select. Select columns store an ordered
- *  option list in `dimension_field.options` (JSON); the dim_ column is VARCHAR
- *  (the value IS the option label). */
+ *  text | number | boolean | date | select | url | email | rating.
+ *  Select columns store an ordered option list in `dimension_field.field_config` (JSON);
+ *  the dim_ column is VARCHAR (the value IS the option label).
+ *  Rating columns store { ratingMax } in field_config. */
 export async function addField(
   dimId: string,
   label: string,
   type: string = "text",
   options: OptionDef[] | undefined,
-  opts: { silent?: boolean; numberFormat?: NumberFormat } = {},
+  opts: { silent?: boolean; numberFormat?: NumberFormat; ratingMax?: number } = {},
   userId: string,
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const t = SQL_TYPE[type] ? type : type === "select" ? "select" : "text";
+  const KNOWN = new Set(["text", "number", "boolean", "date", "select", "url", "email", "rating"]);
+  const t = KNOWN.has(type) ? type : "text";
   const field = slug(label);
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
-  const sqlType = t === "select" ? "VARCHAR" : SQL_TYPE[t];
+  const sqlType = SQL_TYPE[t] ?? "VARCHAR";
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
   const optsJson =
     t === "select"
       ? JSON.stringify(options ?? [])
       : t === "number" && opts.numberFormat != null
         ? JSON.stringify(opts.numberFormat)
-        : null;
+        : t === "rating"
+          ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
+          : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, field_config, created_at)
      VALUES ($1, $2, $3, $4, $5, current_timestamp) ON CONFLICT (dim_id, field) DO NOTHING`,

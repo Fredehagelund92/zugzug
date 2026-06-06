@@ -107,6 +107,28 @@ test("changeColumnType to url is a lossless relabel", async () => {
   expect(fields.find((x) => x.field === "site")?.type).toBe("url");
 });
 
+test("addField with type=rating persists ratingMax via listFields", async () => {
+  const userId = "u_test";
+  const dimId = await repo.addDimension("Reviews", [], { keyKind: "slug" }, userId);
+  await repo.addField(dimId, "Stars", "rating", undefined, { ratingMax: 5 }, userId);
+  const fields = await repo.listFields(dimId);
+  const f = fields.find((x) => x.label === "Stars");
+  expect(f?.type).toBe("rating");
+  expect(f?.ratingMax).toBe(5);
+  expect(f?.options).toBeUndefined();
+  expect(f?.numberFormat).toBeUndefined();
+});
+
+test("addField with type=url and listFields returns it", async () => {
+  const userId = "u_test";
+  const dimId = await repo.addDimension("Links", [], { keyKind: "slug" }, userId);
+  await repo.addField(dimId, "Website", "url", undefined, {}, userId);
+  const fields = await repo.listFields(dimId);
+  const f = fields.find((x) => x.label === "Website");
+  expect(f?.type).toBe("url");
+  expect(f?.ratingMax).toBeUndefined();
+});
+
 test("parseFieldConfig returns ratingMax for rating type", async () => {
   const { parseFieldConfig } = await import("../src/repo-shared.ts");
   expect(parseFieldConfig("rating", '{"ratingMax":5}')).toEqual({ ratingMax: 5 });
