@@ -462,10 +462,11 @@ export async function changeColumnType(
   options?: OptionDef[],
   coerceInvalidToNull = false,
   numberFormat?: NumberFormat,
+  ratingMax?: number,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
-    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull, numberFormat }) },
+    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull, numberFormat, ratingMax }) },
   );
   if (res.ok) {
     await refreshDim(dimId);
