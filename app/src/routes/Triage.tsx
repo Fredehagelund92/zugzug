@@ -19,6 +19,8 @@ import {
 import type { Draft } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
+import { useAiHint, type AiHint } from "../lib/use-ai-hint";
+import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
 
 /* Triage — cross-dimension inbox lifted out of Mapping.tsx (the all-dim view).
    Surfaces every unmapped source value across every table, ranked by blast
@@ -103,6 +105,12 @@ function TriageInner() {
   const [commitError, setCommitError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
 
+  const aiHint = useAiHint(
+    cursor?.dimId ?? "",
+    cursor?.raw ?? "",
+    cursor !== null,
+  );
+
   // every value across every dimension, normalized into one queue ranked
   // by impact (unmapped × log10(rows) per-dim, then by confidence ascending).
   const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
@@ -176,9 +184,10 @@ function TriageInner() {
   };
   const acceptCross = (dimId: string, raw: string) => {
     const d = dimById.get(dimId);
-    const r = d?.values.find((v) => v.value === raw);
-    if (!r || !r.suggestion) return;
-    void stageMapCross(dimId, raw, r.suggestion);
+    const v = d?.values.find((x) => x.value === raw);
+    const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
+    if (!suggestion) return;
+    void stageMapCross(dimId, raw, suggestion);
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
@@ -323,6 +332,7 @@ function TriageInner() {
         setCommitError={setCommitError}
         flash={flash}
         undo={undo}
+        aiHint={aiHint}
       />
     </div>
   );
@@ -348,6 +358,7 @@ interface CrossDimInboxProps {
   setCommitError: (e: string | null) => void;
   flash: { n: number; rows: number } | null;
   undo: ReturnType<typeof useUndoStack>;
+  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
 }
 
 function CrossDimInbox(p: CrossDimInboxProps) {
@@ -511,58 +522,67 @@ function CrossDimInbox(p: CrossDimInboxProps) {
               key={key}
               data-row-key={key}
               className={cx(
-                COLS_CROSS,
-                "border-b border-line px-4 py-2.5 transition-colors hover:bg-hover",
+                "border-b border-line px-4 transition-colors hover:bg-hover",
                 focused && "ring-1 ring-accent/60 bg-accent-wash/40",
               )}
               onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
             >
-              <span>
-                <Chip label={r.dimName} bucket="chip-3" />
-              </span>
-              <div className="min-w-0">
-                <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
-                <div className="font-mono text-[10px] text-ink-2 tabular-nums">
-                  {r.dimRows.toLocaleString()} rows in warehouse
+              <div className={cx(COLS_CROSS, "py-2.5")}>
+                <span>
+                  <Chip label={r.dimName} bucket="chip-3" />
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
+                  <div className="font-mono text-[10px] text-ink-2 tabular-nums">
+                    {r.dimRows.toLocaleString()} rows in warehouse
+                  </div>
+                </div>
+                <IconArrowRight className="h-4 w-4 text-ink-3" />
+                <ComboSelect
+                  ref={focused ? focusedComboRef : undefined}
+                  options={options}
+                  value={r.target}
+                  suggestion={r.suggestion ?? undefined}
+                  allowCreate={!external}
+                  onPick={(t) => p.pick(r.dimId, r.raw, t)}
+                />
+                <div>
+                  {r.confidence > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+                        <div
+                          className={cx("h-full rounded-pill", confBar(r.confidence))}
+                          style={{ width: `${r.confidence}%` }}
+                        />
+                      </div>
+                      <span
+                        className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}
+                        title={
+                          focused && p.aiHint.hint?.reasoning
+                            ? `${r.confidence}% · ${p.aiHint.hint.reasoning}`
+                            : `${r.confidence}%`
+                        }
+                      >
+                        {r.confidence}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-mono text-[11px] text-ink-2">—</span>
+                  )}
+                </div>
+                <div>
+                  {r.status === "mapped" ? (
+                    <Chip label="Mapped" bucket="chip-1" dot />
+                  ) : r.status === "skipped" ? (
+                    <Chip label="Skipped" bucket="chip-5" />
+                  ) : (
+                    <Chip label="New" bucket="chip-2" dot />
+                  )}
                 </div>
               </div>
-              <IconArrowRight className="h-4 w-4 text-ink-3" />
-              <ComboSelect
-                ref={focused ? focusedComboRef : undefined}
-                options={options}
-                value={r.target}
-                suggestion={r.suggestion ?? undefined}
-                allowCreate={!external}
-                onPick={(t) => p.pick(r.dimId, r.raw, t)}
-              />
-              <div>
-                {r.confidence > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
-                      <div
-                        className={cx("h-full rounded-pill", confBar(r.confidence))}
-                        style={{ width: `${r.confidence}%` }}
-                      />
-                    </div>
-                    <span
-                      className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}
-                    >
-                      {r.confidence}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="font-mono text-[11px] text-ink-2">—</span>
-                )}
-              </div>
-              <div>
-                {r.status === "mapped" ? (
-                  <Chip label="Mapped" bucket="chip-1" dot />
-                ) : r.status === "skipped" ? (
-                  <Chip label="Skipped" bucket="chip-5" />
-                ) : (
-                  <Chip label="New" bucket="chip-2" dot />
-                )}
-              </div>
+              {focused && !r.target && (
+                <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
+              )}
             </div>
           );
         })
