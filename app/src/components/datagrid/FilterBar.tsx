@@ -56,7 +56,7 @@ function FilterConditionEditor<Row>({
   const visibleCols = columns.filter((c) => !c.hidden);
   const defaultField = initial?.field ?? visibleCols[0]?.field ?? "";
   const [field, setField] = useState(defaultField);
-  const colType = visibleCols.find((c) => c.field === field)?.type ?? "text";
+  const colType = visibleCols.find((c) => c.field === field)?.config.type ?? "text";
   const ops = operatorsFor(colType);
   const defaultOp = initial?.operator ?? ops[0]?.op ?? "contains";
   const [operator, setOperator] = useState<FilterOperator>(defaultOp);
@@ -146,7 +146,7 @@ function FilterConditionEditor<Row>({
         value={field}
         onChange={(e) => {
           setField(e.target.value);
-          const newType = visibleCols.find((c) => c.field === e.target.value)?.type ?? "text";
+          const newType = visibleCols.find((c) => c.field === e.target.value)?.config.type ?? "text";
           const newOps = operatorsFor(newType);
           if (!newOps.find((o) => o.op === operator)) {
             setOperator(newOps[0]?.op ?? "contains");

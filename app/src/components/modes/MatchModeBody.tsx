@@ -236,9 +236,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
 
   const visibleRows = visible; // alias for clarity
   const COLS_FOR_CURSOR: ColumnDef<MappingValue>[] = [
-    { field: "value", label: "Source", type: "text", editable: false },
-    { field: "target", label: "Record", type: "text", editable: true },
-    { field: "status", label: "Status", type: "text", editable: false },
+    { field: "value", label: "Source", config: { type: "text" }, editable: false },
+    { field: "target", label: "Record", config: { type: "text" }, editable: true },
+    { field: "status", label: "Status", config: { type: "text" }, editable: false },
   ];
   const cursor = useGridCursor<MappingValue>({
     rows: visibleRows,

@@ -27,12 +27,26 @@ import {
 } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
-import type { ColumnDef } from "./datagrid";
-import type { CanonicalValue, MappingDimension } from "../data";
+import type { ColumnDef, ColumnConfig } from "./datagrid";
+import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
+
+/** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
+function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
+  switch (f.type) {
+    case "number": return { type: "number", numberFormat: f.numberFormat };
+    case "boolean": return { type: "boolean" };
+    case "date": return { type: "date" };
+    case "select": return { type: "select", options: f.options ?? [] };
+    case "url": return { type: "url" };
+    case "email": return { type: "email" };
+    case "rating": return { type: "rating", ratingMax: 5 };
+    default: return { type: "text" };
+  }
+}
 
 interface TablePaneProps {
   dim: MappingDimension;
@@ -227,7 +241,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       {
         field: "label",
         label: "Record",
-        type: "text",
+        config: { type: "text" },
         pinnedLeft: true,
         editable: !external,
         render: (c) =>
@@ -257,7 +271,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       {
         field: "key",
         label: engineer ? dim.keyCol : "Key",
-        type: "text",
+        config: { type: "text" },
         pinnedLeft: true,
         editable: false,
         render: (c) => (
@@ -269,9 +283,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       ...fields.map<ColumnDef<CanonicalValue>>((f) => ({
         field: f.field,
         label: f.label,
-        type: f.type as ColumnDef<CanonicalValue>["type"],
-        options: f.options,
-        numberFormat: f.numberFormat,
+        config: fieldDefToColumnConfig(f),
         editable: true,
         render: undefined,
       })),
@@ -634,14 +646,15 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             addColumnOption(activeId, field, label, color ?? null)
           }
           onRenameColumn={(field, label) => void renameColumn(activeId, field, label)}
-          onChangeColumnType={(field, newType, opts) =>
+          onChangeColumnType={(field, newConfig, opts) =>
             changeColumnType(
               activeId,
               field,
-              newType,
-              opts?.options,
+              newConfig.type,
+              newConfig.type === "select" ? newConfig.options : undefined,
               opts?.coerceInvalidToNull ?? false,
-              opts?.numberFormat,
+              newConfig.type === "number" ? newConfig.numberFormat : undefined,
+              newConfig.type === "rating" ? newConfig.ratingMax : undefined,
             )
           }
           onDeleteColumn={(field) => void deleteColumn(activeId, field)}
