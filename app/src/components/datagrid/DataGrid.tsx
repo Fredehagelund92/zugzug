@@ -615,10 +615,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         ? `fill ${writes.length} cell${writes.length === 1 ? "" : "s"}`
         : `paste ${writes.length} cell${writes.length === 1 ? "" : "s"}`;
     undo.beginTransaction(label);
-    void Promise.all(writes.map((w) => commitValue(w.rk, w.field, w.value))).finally(() => {
-      undo.endTransaction();
-      for (const w of writes) flashCell(w.rk, w.field);
-    });
+    void Promise.all(writes.map((w) => commitValue(w.rk, w.field, w.value)))
+      .catch((err) => {
+        console.error(`DataGrid: ${label} failed`, err);
+      })
+      .finally(() => {
+        undo.endTransaction();
+        for (const w of writes) flashCell(w.rk, w.field);
+      });
   }, [
     cursor.cursor,
     range,
@@ -694,10 +698,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         // one Cmd+Z restores the whole range, not cell-by-cell.
         const label = targets.length === 1 ? "clear cell" : `clear ${targets.length} cells`;
         undo.beginTransaction(label);
-        void Promise.all(targets.map((t) => commitValue(t.rk, t.field, null))).finally(() => {
-          undo.endTransaction();
-          for (const t of targets) flashCell(t.rk, t.field);
-        });
+        void Promise.all(targets.map((t) => commitValue(t.rk, t.field, null)))
+          .catch((err) => {
+            console.error(`DataGrid: ${label} failed`, err);
+          })
+          .finally(() => {
+            undo.endTransaction();
+            for (const t of targets) flashCell(t.rk, t.field);
+          });
         return;
       }
 

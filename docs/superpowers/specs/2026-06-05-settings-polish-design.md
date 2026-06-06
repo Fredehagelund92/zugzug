@@ -177,6 +177,10 @@ Remove `setSourceSchedule` from store (was used only by `ScanScheduleMenu`). The
 
 Keep the existing full-bleed `Section` card pattern (Layout B). Add **Scans** as the first section, above Appearance.
 
+**Width:** Change the root container from `max-w-3xl` to `max-w-[var(--wide)]` — matching Dashboard and MasterTables. Sections get a maximum inner width of `max-w-2xl` on their content areas (labels, inputs) so the form doesn't become unreadably wide on large screens, but the card borders and section chrome span the full `--wide` width.
+
+**Red thread:** All sections use the same `Section` card component with consistent `px-6 py-4` header and `px-6 py-5` body. The active `SegControl` button uses `bg-surface-3 border border-line-2 text-ink` (neutral, matching the rest of the app's selected states). The status dot uses `bg-ok` (green) when all is clean, `bg-accent` (red) when there are unmapped values — mirroring the badge tones used on the Dashboard and Sources page. The `scan now` button uses the same ghost-button class as the existing `Add` button in TeamSection.
+
 Section order after the change:
 1. **Scans** (new)
 2. Appearance
