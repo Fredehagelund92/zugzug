@@ -271,6 +271,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         label: f.label,
         type: f.type as ColumnDef<CanonicalValue>["type"],
         options: f.options,
+        numberFormat: f.numberFormat,
         editable: true,
         render: undefined,
       })),
