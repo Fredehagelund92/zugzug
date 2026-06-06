@@ -172,15 +172,15 @@ export function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-center bg-ink/40 p-4 pt-[12vh] backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex justify-center bg-ink/40 backdrop-blur-sm max-md:items-start md:p-4 md:pt-[12vh]"
       onClick={onClose}
     >
       <div
-        className="zz-pop-in h-fit w-full max-w-[640px] overflow-hidden rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
+        className="zz-pop-in w-full overflow-hidden border border-line-2 bg-surface-elevated shadow-pop max-md:inset-x-0 max-md:top-0 max-md:rounded-none max-md:rounded-b-lg md:h-fit md:max-w-[640px] md:rounded-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 text-ink-3">
-          <IconSearch className="h-4 w-4" />
+        <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-3 text-ink-3 md:py-2.5">
+          <IconSearch className="h-4 w-4 shrink-0" />
           <input
             ref={inputRef}
             autoFocus
@@ -202,7 +202,7 @@ export function CommandPalette({
           ref={listRef}
           id={listboxId}
           role="listbox"
-          className="max-h-[60vh] overflow-y-auto py-1"
+          className="overflow-y-auto py-1 max-md:max-h-[65vh] md:max-h-[60vh]"
         >
           {grouped.length === 0 ? (
             <li className="px-4 py-8 text-center font-mono text-[12px] text-ink-2">No matches.</li>
@@ -227,7 +227,7 @@ export function CommandPalette({
                           onMouseEnter={() => setHighlight(idx)}
                           onClick={() => runAt(idx)}
                           className={cx(
-                            "flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors",
+                            "flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors max-md:min-h-[44px] md:py-2",
                             focused ? "bg-accent-wash text-accent" : "text-ink hover:bg-hover",
                           )}
                         >

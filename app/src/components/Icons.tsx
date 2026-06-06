@@ -194,3 +194,8 @@ export const IconFieldSelect = (p: SVGProps<SVGSVGElement>) => (
     <rect x="13" y="9" width="8" height="6" rx="3" />
   </Base>
 );
+export const IconMenu = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M3 6h18M3 12h18M3 18h18" />
+  </Base>
+);

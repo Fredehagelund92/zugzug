@@ -77,6 +77,18 @@ export function TablePicker({
       const rect = trigger.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
+      if (window.innerWidth < 768) {
+        const margin = 8;
+        const w = window.innerWidth - margin * 2;
+        dropdown.style.width = `${w}px`;
+        dropdown.style.left = `${margin}px`;
+        let top = rect.bottom + 6;
+        if (top + dropH > window.innerHeight - 8) top = Math.max(8, rect.top - 6 - dropH);
+        dropdown.style.top = `${top}px`;
+        return;
+      }
+
+      dropdown.style.width = `${DROPDOWN_W}px`;
       let left = rect.left;
       if (left + DROPDOWN_W > window.innerWidth - 8) left = window.innerWidth - DROPDOWN_W - 8;
       if (left < 8) left = 8;
@@ -134,7 +146,7 @@ export function TablePicker({
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cx(
-          "flex min-w-[260px] items-center gap-2.5 rounded-md border bg-surface px-3 py-2 text-left transition-colors",
+          "flex w-full min-w-0 items-center gap-2.5 rounded-md border bg-surface px-3 py-2 text-left transition-colors md:min-w-[260px] md:w-auto",
           open ? "border-accent" : "border-line-2 hover:border-accent",
         )}
       >
@@ -167,7 +179,7 @@ export function TablePicker({
         createPortal(
           <div
             ref={dropdownRef}
-            style={{ position: "fixed", top: 0, left: 0, width: DROPDOWN_W }}
+            style={{ position: "fixed", top: 0, left: 0 }}
             className="zz-pop-in z-50 overflow-hidden rounded-md border border-line-2 bg-surface-elevated shadow-pop"
           >
             <div className="flex items-center gap-2 border-b border-line px-3 py-2.5 text-ink-3">

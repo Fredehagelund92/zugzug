@@ -309,7 +309,7 @@ function TriageInner() {
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-5 pb-5 pt-4">
+    <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-4 md:px-5 md:pb-5">
       <div className="mb-3 shrink-0">
         <PageHeader
           kicker="WORKFLOW"
@@ -457,7 +457,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
               type="button"
               onClick={() => p.setFilter(f.k)}
               className={cx(
-                "rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors",
+                "min-h-[44px] rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors md:min-h-0",
                 p.filter === f.k
                   ? "bg-accent-wash text-accent"
                   : "text-ink-3 hover:bg-hover hover:text-ink-2",
@@ -467,7 +467,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
             </button>
           ))}
         </div>
-        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
+        <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
           ranked by impact · J/K navigate · A accept · M pick · S skip · N next · ⌘↵ publish
         </span>
       </div>
@@ -476,11 +476,11 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           (CrossDimFooter below) is pinned at the panel bottom. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
-      {/* column header */}
+      {/* column header — hidden on mobile, shown on md+ */}
       <div
         className={cx(
           COLS_CROSS,
-          "sticky top-0 z-10 border-b border-line bg-surface px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 backdrop-blur-sm",
+          "sticky top-0 z-10 hidden border-b border-line bg-surface px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 backdrop-blur-sm md:grid",
         )}
       >
         <span>Dimension</span>
@@ -544,7 +544,8 @@ function CrossDimInbox(p: CrossDimInboxProps) {
               )}
               onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
             >
-              <div className={cx(COLS_CROSS, "py-2.5")}>
+              {/* Desktop row — 6-col grid */}
+              <div className={cx(COLS_CROSS, "hidden py-2.5 md:grid")}>
                 <span>
                   <Chip label={r.dimName} bucket="chip-3" />
                 </span>
@@ -597,6 +598,81 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                   )}
                 </div>
               </div>
+
+              {/* Mobile card — stacked layout */}
+              <div className="flex flex-col gap-2 py-3 md:hidden">
+                {/* row 1: dim chip + status badge */}
+                <div className="flex items-center justify-between gap-2">
+                  <Chip label={r.dimName} bucket="chip-3" />
+                  <div className="shrink-0">
+                    {r.status === "mapped" ? (
+                      <Chip label="Mapped" bucket="chip-1" dot />
+                    ) : r.status === "skipped" ? (
+                      <Chip label="Skipped" bucket="chip-5" />
+                    ) : (
+                      <Chip label="New" bucket="chip-2" dot />
+                    )}
+                  </div>
+                </div>
+                {/* row 2: raw value + warehouse row count */}
+                <div className="min-w-0">
+                  <div className="break-all font-mono text-[13px] text-ink">{r.raw}</div>
+                  <div className="font-mono text-[10px] text-ink-2 tabular-nums">
+                    {r.dimRows.toLocaleString()} rows in warehouse
+                  </div>
+                </div>
+                {/* row 3: confidence bar + combo target picker */}
+                <div className="flex items-center gap-3">
+                  {r.confidence > 0 ? (
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+                        <div
+                          className={cx("h-full rounded-pill", confBar(r.confidence))}
+                          style={{ width: `${r.confidence}%` }}
+                        />
+                      </div>
+                      <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>
+                        {r.confidence}%
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="shrink-0 font-mono text-[11px] text-ink-2">—</span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <ComboSelect
+                      ref={focused ? focusedComboRef : undefined}
+                      options={options}
+                      value={r.target}
+                      suggestion={r.suggestion ?? undefined}
+                      allowCreate={!external}
+                      onPick={(t) => p.pick(r.dimId, r.raw, t)}
+                    />
+                  </div>
+                </div>
+                {/* row 4: inline action buttons — only on focused row */}
+                {focused && (
+                  <div
+                    className="flex gap-2 pt-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      size="sm"
+                      disabled={!r.suggestion && !p.aiHint.hint?.suggestion}
+                      onClick={() => p.accept(r.dimId, r.raw)}
+                    >
+                      Accept
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => p.skip(r.dimId, r.raw)}
+                    >
+                      Skip
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {focused && !r.target && (
                 <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
               )}
@@ -736,7 +812,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
           </div>
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
         <span className="font-mono text-[11px] text-ink-2">
           {p.flash ? (
             <span
@@ -752,7 +828,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
               {grouped.length === 1 ? "" : "s"}, ready to publish
             </>
           ) : (
-            <>nothing to publish yet — accept or merge values above to stage them</>
+            <span className="hidden md:inline">nothing to publish yet — accept or merge values above to stage them</span>
           )}
         </span>
         <div className="flex items-center gap-2">
@@ -765,14 +841,14 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
           >
             ↶ Undo
             {p.undo.topLabel && (
-              <span className="ml-1.5 inline-block max-w-[140px] truncate align-bottom text-[11px] text-ink-3">
+              <span className="ml-1.5 hidden max-w-[140px] truncate align-bottom text-[11px] text-ink-3 md:inline-block">
                 {p.undo.topLabel}
               </span>
             )}
             {p.undo.topSurface && (
-              <span className="ml-1.5 font-mono text-[10px] text-ink-3">({p.undo.topSurface})</span>
+              <span className="ml-1.5 hidden font-mono text-[10px] text-ink-3 md:inline">({p.undo.topSurface})</span>
             )}
-            <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
+            <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘Z</span>
           </Button>
           <Button
             variant="ghost"
@@ -780,11 +856,12 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
             disabled={stagedCount === 0}
             onClick={() => setReview((s) => !s)}
           >
-            {review ? "Hide review" : `Review ${stagedCount}`}
+            {review ? "Hide" : `Review ${stagedCount}`}
           </Button>
           <Button size="sm" disabled={stagedCount === 0} loading={p.committing} onClick={() => p.commitAll()}>
-            Publish {stagedCount} change{stagedCount === 1 ? "" : "s"}
-            <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
+            Publish {stagedCount}
+            <span className="hidden md:inline"> change{stagedCount === 1 ? "" : "s"}</span>
+            <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
           </Button>
         </div>
       </div>

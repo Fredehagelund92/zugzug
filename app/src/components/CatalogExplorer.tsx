@@ -94,7 +94,7 @@ export function CatalogExplorer({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-2 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
       <div
@@ -102,7 +102,7 @@ export function CatalogExplorer({
         onClick={(e) => e.stopPropagation()}
       >
         {/* header + search */}
-        <div className="flex items-center gap-3 border-b border-line px-5 py-4">
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 md:px-5 md:py-4">
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
               Warehouse catalog
@@ -111,8 +111,8 @@ export function CatalogExplorer({
               Wire a source
             </h2>
           </div>
-          <label className="ml-auto flex w-full max-w-sm items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent">
-            <IconSearch className="h-4 w-4" />
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent md:ml-auto md:max-w-sm">
+            <IconSearch className="h-4 w-4 shrink-0" />
             <input
               autoFocus
               value={q}
@@ -125,20 +125,20 @@ export function CatalogExplorer({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
+            className="grid h-11 w-11 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink md:h-8 md:w-8"
           >
             <IconX className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[180px_1fr]">
-          {/* schema facets */}
-          <div className="overflow-y-auto border-r border-line bg-surface/40 py-2">
+        <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[180px_1fr]">
+          {/* schema facets — horizontal scroll strip on mobile, side rail on desktop */}
+          <div className="flex overflow-x-auto border-b border-line bg-surface/40 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:border-r md:py-2">
             <button
               type="button"
               onClick={() => setSchema(null)}
               className={cx(
-                "flex w-full items-center justify-between px-4 py-1.5 text-left font-mono text-[11px] transition-colors",
+                "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:py-1.5",
                 schema === null ? "text-accent" : "text-ink-3 hover:text-ink-2",
               )}
             >
@@ -151,7 +151,7 @@ export function CatalogExplorer({
                 type="button"
                 onClick={() => setSchema(s.schema === schema ? null : s.schema)}
                 className={cx(
-                  "flex w-full items-center justify-between gap-2 px-4 py-1.5 text-left font-mono text-[11px] transition-colors",
+                  "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:gap-2 md:py-1.5",
                   s.schema === schema ? "text-accent" : "text-ink-3 hover:text-ink-2",
                 )}
               >
@@ -198,7 +198,7 @@ export function CatalogExplorer({
                         return (
                           <div
                             key={c}
-                            className="grid grid-cols-[1fr_180px] items-center gap-3 py-0.5"
+                            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-0.5 md:grid md:grid-cols-[1fr_180px] md:gap-3"
                           >
                             <span className="truncate font-mono text-[11.5px] text-ink-2">{c}</span>
                             {wired[key]?.error ? (

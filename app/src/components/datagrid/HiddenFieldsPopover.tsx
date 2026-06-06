@@ -22,6 +22,19 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
     const place = (): void => {
       const a = anchor.getBoundingClientRect();
       const popH = pop.offsetHeight;
+
+      if (window.innerWidth < 768) {
+        const margin = 16;
+        const w = Math.min(POPOVER_WIDTH, window.innerWidth - margin * 2);
+        pop.style.width = `${w}px`;
+        pop.style.left = `${Math.max(margin, (window.innerWidth - w) / 2)}px`;
+        let top = a.bottom + GAP;
+        if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - GAP - popH);
+        pop.style.top = `${top}px`;
+        return;
+      }
+
+      pop.style.width = `${POPOVER_WIDTH}px`;
       let left = a.right - POPOVER_WIDTH;
       if (left < 8) left = 8;
       if (left + POPOVER_WIDTH > window.innerWidth - 8)
@@ -59,7 +72,7 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
   return createPortal(
     <div
       ref={ref}
-      style={{ position: "fixed", top: 0, left: 0, width: POPOVER_WIDTH }}
+      style={{ position: "fixed", top: 0, left: 0 }}
       className="zz-pop-in z-40 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
     >
       <div className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-ink-3">

@@ -163,7 +163,7 @@ export function Dashboard() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] space-y-8 p-8">
+    <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-3 md:space-y-8 md:p-8">
       <PageHeader
         backdrop={<MarkBackdrop />}
         kicker="Master data"
@@ -201,7 +201,7 @@ export function Dashboard() {
       />
 
       {/* KPI row */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-4">
         {kpis.map((m, i) => (
           <div key={m.label} {...rise(1 + i)}>
             <Kpi
@@ -216,7 +216,7 @@ export function Dashboard() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-0.5 md:overflow-visible md:pb-0">
         {/* filter pills */}
         {(
           [
@@ -284,12 +284,12 @@ export function Dashboard() {
       </div>
 
       {/* Dimension health table */}
-      <div {...rise(5)}>
-        <table className="w-full border-collapse">
+      <div {...rise(5)} className="overflow-x-auto rounded-sm">
+        <table className="w-full min-w-[560px] border-collapse">
           <thead>
             <tr>
               <th className="w-1 border-b border-line-2 bg-surface p-0" />
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="sticky left-0 z-10 border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
                 Table
               </th>
               <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
@@ -340,7 +340,7 @@ export function Dashboard() {
                   </td>
 
                   {/* table name + map table + optional staged flag */}
-                  <td className="border-b border-line px-4 py-2.5">
+                  <td className="sticky left-0 z-10 border-b border-line bg-[inherit] px-4 py-2.5">
                     <div className="flex items-center gap-2.5">
                       <div
                         className="h-2 w-2 shrink-0 rounded-pill"

@@ -21,7 +21,7 @@ export function Kpi({
   return (
     <div
       className={cx(
-        "group h-full rounded-lg border border-line bg-surface p-6 shadow-pop transition-[transform,border-color] duration-[var(--ak-dur)] hover:-translate-y-0.5 hover:border-line-2",
+        "group h-full rounded-lg border border-line bg-surface p-4 shadow-pop transition-[transform,border-color] duration-[var(--ak-dur)] hover:-translate-y-0.5 hover:border-line-2 md:p-6",
         featured && "border-l-2 border-l-accent",
       )}
     >

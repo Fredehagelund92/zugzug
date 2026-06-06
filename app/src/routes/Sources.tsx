@@ -358,7 +358,7 @@ export function Sources() {
   const totalFilteredUnmapped = groups.reduce((n, g) => n + g.unmapped, 0);
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-5 pb-5 pt-4">
+    <div className="flex h-full min-h-0 flex-col px-2 pb-3 pt-3 md:px-5 md:pb-5 md:pt-4">
       {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
@@ -400,7 +400,7 @@ export function Sources() {
       </div>
 
       {derived && (
-        <div className="mb-3 shrink-0 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12.5px] text-accent">
+        <div className="mb-3 shrink-0 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12px] text-accent md:text-[12.5px]">
           {derived}
         </div>
       )}
@@ -421,19 +421,19 @@ export function Sources() {
 
         {/* ─── STANDING CALLOUT (the moment) ─── */}
         {agg.worst && agg.worst.unmapped > 0 ? (
-          <div className="border-b border-line border-l-2 border-l-accent bg-accent-wash px-7 py-3">
+          <div className="border-b border-line border-l-2 border-l-accent bg-accent-wash px-4 py-3 md:px-7">
             <div className="flex items-baseline gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-accent">
               <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
               Standing · today
             </div>
             <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
               <div className="min-w-0">
-                <div className="font-display text-[22px] font-semibold tracking-[-0.02em]">
-                  <span className="font-mono text-[18px] text-ink-2">{agg.worst.table}</span>
-                  <span className="font-mono text-[18px] text-ink-3">.</span>
-                  <span className="font-mono text-[18px] text-ink">{agg.worst.column}</span>
+                <div className="font-display text-[18px] font-semibold tracking-[-0.02em] md:text-[22px]">
+                  <span className="truncate font-mono text-[15px] text-ink-2 md:text-[18px]">{agg.worst.table}</span>
+                  <span className="font-mono text-[15px] text-ink-3 md:text-[18px]">.</span>
+                  <span className="font-mono text-[15px] text-ink md:text-[18px]">{agg.worst.column}</span>
                 </div>
-                <p className="mt-1.5 text-[13.5px] text-ink-2">
+                <p className="mt-1.5 text-[13px] text-ink-2 md:text-[13.5px]">
                   <span className="font-semibold text-ink">
                     {agg.worst.unmapped.toLocaleString()}
                   </span>{" "}
@@ -451,7 +451,7 @@ export function Sources() {
             </div>
           </div>
         ) : agg.columns > 0 ? (
-          <div className="border-b border-line px-7 py-3">
+          <div className="border-b border-line px-4 py-3 md:px-7">
             <p className="font-display text-[18px] italic text-ink-2">
               Nothing requires a decision today.
             </p>
@@ -463,8 +463,8 @@ export function Sources() {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
         {/* ─── TOOLBAR (sticky inside the surface) ─── */}
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface/95 px-7 py-2 backdrop-blur-sm">
-          <label className="flex min-w-[240px] flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur-sm md:gap-3 md:px-7">
+          <label className="flex min-w-0 flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3 md:min-w-[240px]">
             <IconSearch className="h-3.5 w-3.5" />
             <input
               ref={searchInputRef}
@@ -546,7 +546,7 @@ export function Sources() {
           )}
 
           {groups.length > shown && (
-            <div className="flex items-center justify-between border-t border-line px-7 py-3">
+            <div className="flex items-center justify-between border-t border-line px-4 py-3 md:px-7">
               <span className="font-mono text-[10.5px] text-ink-3">
                 {shown} of {groups.length} systems
               </span>
@@ -565,7 +565,7 @@ export function Sources() {
 
         {/* ─── FOOTER — the only at-a-glance totals on the page ─── */}
         {sources.length > 0 && (
-          <div className="flex items-center justify-between border-t border-line px-7 py-3 font-mono text-[10.5px] text-ink-3">
+          <div className="flex flex-wrap items-center justify-between gap-1 border-t border-line px-4 py-3 font-mono text-[10.5px] text-ink-3 md:flex-nowrap md:px-7">
             <span>
               {q.trim() || status !== "all"
                 ? `${totalFilteredCols} of ${agg.columns} columns shown`
@@ -615,24 +615,27 @@ function SchemaSection({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="group grid w-full grid-cols-[20px_minmax(0,1fr)_auto_auto] items-center gap-4 bg-surface-2/60 px-7 py-2.5 text-left transition-colors hover:bg-surface-2"
+        className="group grid w-full grid-cols-[20px_minmax(0,1fr)_auto_auto] items-center gap-3 bg-surface-2/60 px-4 py-2.5 text-left transition-colors hover:bg-surface-2 md:gap-4 md:px-7"
       >
         <IconChevron
           className={cx("h-3 w-3 shrink-0 text-ink-3 transition-transform", open && "rotate-180")}
         />
-        <div className="flex min-w-0 items-baseline gap-3">
+        <div className="flex min-w-0 items-baseline gap-2 md:gap-3">
           <span className="truncate font-display text-[15px] font-semibold capitalize text-ink">
             {group.schema}
           </span>
           <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">
-            {group.totalCols} column{group.totalCols === 1 ? "" : "s"}
+            {group.totalCols} col{group.totalCols === 1 ? "" : "s"}
+            <span className="hidden md:inline">
+              umn{group.totalCols === 1 ? "" : "s"}
+            </span>
             {group.lastScanned ? ` · ${ago(group.lastScanned)} ago` : ""}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 font-mono text-[11px] text-ink-3 tabular-nums">
+        <div className="hidden items-center gap-1.5 font-mono text-[11px] text-ink-3 tabular-nums md:flex">
           <span>{Math.round(group.coverage)}%</span>
         </div>
-        <div className="flex w-[72px] justify-end">
+        <div className="flex w-[56px] justify-end md:w-[72px]">
           {group.unmapped > 0 ? (
             <span className="font-display text-[13px] font-semibold tabular-nums text-accent">
               {group.unmapped.toLocaleString()}

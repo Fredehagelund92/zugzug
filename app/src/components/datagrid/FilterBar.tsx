@@ -64,7 +64,8 @@ function FilterConditionEditor<Row>({
   const ref = useRef<HTMLDivElement>(null);
   const opMeta = OPERATORS.find((o) => o.op === operator);
 
-  // Reposition popover below anchor
+  // Reposition popover below anchor.
+  // On mobile (<768px) centers horizontally in the viewport.
   useLayoutEffect(() => {
     const popover = ref.current;
     const anchor = anchorRef.current;
@@ -72,6 +73,19 @@ function FilterConditionEditor<Row>({
     const place = () => {
       const a = anchor.getBoundingClientRect();
       const popH = popover.offsetHeight;
+
+      if (window.innerWidth < 768) {
+        const margin = 16;
+        const w = Math.min(POPOVER_WIDTH, window.innerWidth - margin * 2);
+        popover.style.width = `${w}px`;
+        popover.style.left = `${Math.max(margin, (window.innerWidth - w) / 2)}px`;
+        let top = a.bottom + 4;
+        if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - 4 - popH);
+        popover.style.top = `${top}px`;
+        return;
+      }
+
+      popover.style.width = `${POPOVER_WIDTH}px`;
       let left = a.left;
       if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
       let top = a.bottom + 4;
@@ -118,7 +132,7 @@ function FilterConditionEditor<Row>({
   return createPortal(
     <div
       ref={ref}
-      style={{ position: "fixed", top: 0, left: 0, width: POPOVER_WIDTH }}
+      style={{ position: "fixed", top: 0, left: 0 }}
       className="zz-pop-in z-50 rounded-sm border border-line-2 bg-surface-elevated p-2 shadow-pop"
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose();

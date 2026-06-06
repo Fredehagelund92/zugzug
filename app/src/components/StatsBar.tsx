@@ -17,7 +17,7 @@ export function StatsBar({
   return (
     <div
       className={cx(
-        "zz-rise flex flex-wrap items-center gap-x-6 gap-y-2.5 rounded-lg border border-line bg-surface px-5 py-4",
+        "zz-rise flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-surface px-3 py-3 md:gap-x-6 md:gap-y-2.5 md:px-5 md:py-4",
         className,
       )}
       style={animationDelay ? { animationDelay } : undefined}

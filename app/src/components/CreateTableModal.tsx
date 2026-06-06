@@ -142,7 +142,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-4 backdrop-blur-sm md:p-6"
       onClick={requestClose}
     >
       <div
@@ -151,7 +151,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
         aria-modal="true"
         aria-labelledby="create-table-title"
         onClick={(e) => e.stopPropagation()}
-        className="mt-[10vh] w-[520px] max-w-full rounded-lg border border-line-2 bg-surface-elevated shadow-pop"
+        className="mt-[5vh] w-full rounded-lg border border-line-2 bg-surface-elevated shadow-pop md:mt-[10vh] md:w-[520px]"
       >
         {/* accent edge */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
@@ -220,13 +220,13 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
             Start from
           </div>
-          <div className="flex gap-0.5 rounded-sm border border-line bg-bg p-0.5">
+          <div className="flex flex-wrap gap-0.5 rounded-sm border border-line bg-bg p-0.5">
             {(["blank", "source", "external_id"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`flex-1 rounded-sm px-2.5 py-1.5 font-body text-[12.5px] transition-colors ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
+                className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors md:px-2.5 md:text-[12.5px] ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
               >
                 {m === "blank" ? "blank" : m === "source" ? "from a column" : "from warehouse IDs"}
               </button>
@@ -303,7 +303,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 For foreign keys. The warehouse ID becomes the stable key. A second column provides
                 the human name.
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <div>
                   <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
                     id column

@@ -25,7 +25,7 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
   }, [row.dimId, row.table, row.column]);
 
   return (
-    <div className="border-t border-line/60 bg-bg/30 px-7 py-4 pl-[68px]">
+    <div className="border-t border-line/60 bg-bg/30 px-4 py-4 md:pl-[68px]">
       <div className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-ink-3">
         Top unmapped values
         {row.unmapped > 0 ? ` — showing up to 8 of ${row.unmapped.toLocaleString()}` : ""}

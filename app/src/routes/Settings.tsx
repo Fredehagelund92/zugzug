@@ -26,13 +26,13 @@ function Section({
 }) {
   return (
     <Card className="p-0">
-      <div className="border-b border-line px-6 py-4">
+      <div className="border-b border-line px-4 py-3 md:px-6 md:py-4">
         <div className="max-w-2xl">
           <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
           {hint && <p className="mt-0.5 text-[13px] text-ink-2">{hint}</p>}
         </div>
       </div>
-      <div className="px-6 py-5">
+      <div className="px-4 py-4 md:px-6 md:py-5">
         <div className="max-w-2xl space-y-5">{children}</div>
       </div>
     </Card>
@@ -40,7 +40,7 @@ function Section({
 }
 
 const input =
-  "w-full max-w-sm rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40";
+  "w-full rounded-sm border border-line-2 bg-bg px-3 py-2 font-mono text-[13px] text-ink outline-none transition-colors placeholder:text-ink-3 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40";
 
 interface ScanStatus {
   lastScanAt: string | null;
@@ -120,11 +120,11 @@ function ScansSection() {
       </FormField>
 
       {status && (
-        <div className="flex items-center justify-between rounded-sm border border-line bg-surface-2 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface-2 px-4 py-3">
           <div className="flex items-center gap-2">
             <span
               className={cx(
-                "inline-block h-2 w-2 rounded-full",
+                "inline-block h-2 w-2 shrink-0 rounded-full",
                 status.unmappedCount > 0
                   ? "bg-accent shadow-[0_0_6px_var(--accent)]"
                   : "bg-ok shadow-[0_0_6px_var(--ok)]",
@@ -150,7 +150,7 @@ function ScansSection() {
       )}
 
       {statusError && (
-        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>Couldn't load scan status — {statusError}</span>
           <Button variant="ghost" size="sm" onClick={() => void loadStatus()}>
             Retry
@@ -159,7 +159,7 @@ function ScansSection() {
       )}
 
       {scanError && (
-        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>Scan failed — {scanError}</span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => setScanError(null)}>
@@ -261,7 +261,7 @@ function TeamSection() {
       hint="Only people on this list can log in. Any team member can add or remove others."
     >
       {loadError && (
-        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>Couldn't load the team — {loadError}</span>
           <Button variant="ghost" size="sm" onClick={() => void load()}>
             Retry
@@ -275,15 +275,15 @@ function TeamSection() {
         )}
         {members.map((m) => (
           <li key={m.email} className="flex items-center gap-3 px-4 py-2.5">
-            <span className="flex-1 font-mono text-[12px] text-ink">{m.email}</span>
-            <span className="text-[11px] text-ink-3">
+            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">{m.email}</span>
+            <span className="hidden shrink-0 text-[11px] text-ink-3 sm:inline">
               added by {m.addedBy === "bootstrap" ? "bootstrap" : m.addedBy}
             </span>
             {m.email !== myEmail && (
               <button
                 type="button"
                 onClick={() => remove(m.email)}
-                className="rounded-sm text-[11px] text-ink-3 transition-colors hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                className="shrink-0 rounded-sm text-[11px] text-ink-3 transition-colors hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 Remove
               </button>
@@ -314,7 +314,7 @@ function TeamSection() {
         </Button>
       </div>
       {removeError && (
-        <div className="flex items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>{removeError}</span>
           <Button variant="ghost" size="sm" onClick={() => setRemoveError(null)}>
             Dismiss
@@ -330,7 +330,7 @@ export function Settings() {
   const prefs = usePreferences();
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-8">
+    <div className="mx-auto w-full max-w-[var(--wide)] space-y-4 p-4 md:space-y-6 md:p-8">
       <PageHeader kicker="Workspace" title="Settings" lede="Changes are saved as you make them." />
 
       <div className="zz-rise" style={{ animationDelay: "60ms" }}>
