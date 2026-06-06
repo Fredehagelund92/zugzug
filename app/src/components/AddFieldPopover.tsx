@@ -4,12 +4,11 @@ import { cx } from "../lib/cx";
 import { Button } from "./Button";
 import { OptionBuilder } from "./OptionBuilder";
 import type { NumberFormat, OptionDef } from "../data";
+import type { ColumnConfig } from "./datagrid/types";
 
 export interface AddFieldInput {
   label: string;
-  type: "text" | "number" | "boolean" | "date" | "select";
-  options?: OptionDef[];
-  numberFormat?: NumberFormat;
+  config: ColumnConfig;
 }
 
 interface AddFieldPopoverProps {
@@ -18,7 +17,7 @@ interface AddFieldPopoverProps {
   onSubmit: (input: AddFieldInput) => Promise<void>;
 }
 
-type FieldType = AddFieldInput["type"];
+type FieldType = ColumnConfig["type"];
 
 interface TypeTile {
   type: FieldType;
@@ -27,11 +26,14 @@ interface TypeTile {
 }
 
 const TYPE_TILES: TypeTile[] = [
-  { type: "text", icon: "A", label: "Text" },
-  { type: "number", icon: "***REMOVED***", label: "Number" },
-  { type: "boolean", icon: "☑", label: "Boolean" },
-  { type: "date", icon: "⊞", label: "Date" },
-  { type: "select", icon: "◉", label: "Select" },
+  { type: "text",    icon: "A",  label: "Text" },
+  { type: "number",  icon: "***REMOVED***",  label: "Number" },
+  { type: "boolean", icon: "☑",  label: "Boolean" },
+  { type: "date",    icon: "⊞",  label: "Date" },
+  { type: "select",  icon: "◉",  label: "Select" },
+  { type: "url",     icon: "↗",  label: "URL" },
+  { type: "email",   icon: "@",  label: "Email" },
+  { type: "rating",  icon: "★",  label: "Rating" },
 ];
 
 export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopoverProps) {
@@ -44,10 +46,13 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   const [createAnother, setCreateAnother] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency">("integer");
+  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency" | "compact" | "duration">("integer");
   const [numPrecision, setNumPrecision] = useState<number>(2);
   const [currSymbol, setCurrSymbol] = useState("$");
   const [currPosition, setCurrPosition] = useState<"prefix" | "suffix">("prefix");
+  const [ratingMax, setRatingMax] = useState<number>(5);
+  const [ratingMaxCustom, setRatingMaxCustom] = useState("");
+  const [durationDisplay, setDurationDisplay] = useState<"hm" | "hms">("hm");
 
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
@@ -123,7 +128,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [label, type, options, createAnother, busy, numFmt, numPrecision, currSymbol, currPosition]);
+  }, [label, type, options, createAnother, busy, numFmt, numPrecision, currSymbol, currPosition, ratingMax, durationDisplay]);
 
   // Focus trap
   useEffect(() => {
@@ -171,6 +176,9 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     setNumPrecision(2);
     setCurrSymbol("$");
     setCurrPosition("prefix");
+    setRatingMax(5);
+    setRatingMaxCustom("");
+    setDurationDisplay("hm");
     setError(null);
     nameInputRef.current?.focus();
   };
@@ -181,14 +189,19 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     setError(null);
     setBusy(true);
     try {
-      let numberFormat: NumberFormat | undefined;
+      let config: ColumnConfig;
       if (type === "number") {
+        let numberFormat: NumberFormat | undefined;
         if (numFmt === "integer") {
           numberFormat = { format: "integer" };
         } else if (numFmt === "decimal") {
           numberFormat = { format: "decimal", precision: numPrecision as 1 | 2 | 3 | 4 };
         } else if (numFmt === "percent") {
           numberFormat = { format: "percent", precision: numPrecision as 0 | 1 | 2 };
+        } else if (numFmt === "compact") {
+          numberFormat = { format: "compact", precision: numPrecision as 0 | 1 | 2 };
+        } else if (numFmt === "duration") {
+          numberFormat = { format: "duration", display: durationDisplay };
         } else {
           numberFormat = {
             format: "currency",
@@ -197,13 +210,15 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
             precision: numPrecision as 0 | 1 | 2,
           };
         }
+        config = { type: "number", numberFormat };
+      } else if (type === "select") {
+        config = { type: "select", options };
+      } else if (type === "rating") {
+        config = { type: "rating", ratingMax };
+      } else {
+        config = { type } as ColumnConfig;
       }
-      await onSubmit({
-        label: trimmed,
-        type,
-        options: type === "select" ? options : undefined,
-        numberFormat,
-      });
+      await onSubmit({ label: trimmed, config });
       if (createAnother) {
         resetForm();
       } else {
@@ -277,22 +292,6 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
             );
           })}
 
-          {/* Linked record — disabled/coming-soon tile */}
-          <div
-            className="relative flex items-center gap-2 rounded-sm border border-line p-2 opacity-40 cursor-not-allowed"
-            aria-disabled="true"
-          >
-            <span
-              className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm bg-surface-2 font-mono text-[11px] text-ink-2"
-              aria-hidden
-            >
-              ↗
-            </span>
-            <span className="font-mono text-[11px] text-ink">Linked record</span>
-            <span className="absolute top-1 right-1 rounded-sm bg-surface-2 px-1 py-px font-mono text-[8px] uppercase tracking-widest text-ink-3">
-              soon
-            </span>
-          </div>
         </div>
 
         {/* Type-specific config */}
@@ -316,10 +315,12 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
               <div className="grid grid-cols-2 gap-1.5">
                 {(
                   [
-                    { f: "integer", icon: "***REMOVED***", label: "Integer" },
-                    { f: "decimal", icon: "***REMOVED***.0", label: "Decimal" },
-                    { f: "percent", icon: "%", label: "Percent" },
-                    { f: "currency", icon: "$", label: "Currency" },
+                    { f: "integer",  icon: "***REMOVED***",    label: "Integer" },
+                    { f: "decimal",  icon: "***REMOVED***.0",  label: "Decimal" },
+                    { f: "percent",  icon: "%",    label: "Percent" },
+                    { f: "currency", icon: "$",    label: "Currency" },
+                    { f: "compact",  icon: "1.2M", label: "Compact" },
+                    { f: "duration", icon: "⏱",   label: "Duration" },
                   ] as const
                 ).map(({ f, icon, label: fLabel }) => (
                   <button
@@ -375,6 +376,52 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
                 </div>
               )}
 
+              {/* Compact precision picker */}
+              {numFmt === "compact" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono text-[10px] text-ink-3 w-14">Precision</span>
+                  {([0, 1, 2] as const).map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setNumPrecision(p)}
+                      className={cx(
+                        "h-6 w-6 rounded-sm border font-mono text-[11px] transition-colors",
+                        numPrecision === p
+                          ? "border-accent bg-accent-wash text-ink"
+                          : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                      )}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Duration display-mode toggle */}
+              {numFmt === "duration" && (
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-ink-3 w-16 shrink-0">Display</span>
+                  <div className="flex gap-1">
+                    {(["hm", "hms"] as const).map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDurationDisplay(d)}
+                        className={cx(
+                          "rounded-sm border px-2 py-0.5 font-mono text-[10px] transition-colors",
+                          durationDisplay === d
+                            ? "border-accent bg-accent-wash text-ink"
+                            : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                        )}
+                      >
+                        {d === "hm" ? "h m" : "h:mm:ss"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Symbol + position (currency) */}
               {numFmt === "currency" && (
                 <div className="space-y-2">
@@ -420,6 +467,50 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
                   </div>
                 </div>
               )}
+            </div>
+          </>
+        )}
+
+        {/* Rating max config */}
+        {type === "rating" && (
+          <>
+            <div className="border-t border-line" />
+            <div className="space-y-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                Max stars
+              </div>
+              <div className="flex items-center gap-1.5">
+                {[3, 5, 10].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => { setRatingMax(n); setRatingMaxCustom(""); }}
+                    className={cx(
+                      "h-7 w-8 rounded-sm border font-mono text-[11px] transition-colors",
+                      ratingMax === n && !ratingMaxCustom
+                        ? "border-accent bg-accent-wash text-ink"
+                        : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
+                    )}
+                  >{n}</button>
+                ))}
+                <input
+                  value={ratingMaxCustom}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") {
+                      setRatingMaxCustom("");
+                      return;
+                    }
+                    const n = parseInt(raw, 10);
+                    if (Number.isInteger(n) && n >= 1 && n <= 20) {
+                      setRatingMaxCustom(raw);
+                      setRatingMax(n);
+                    }
+                  }}
+                  placeholder="…"
+                  className="w-12 rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-ink outline-none focus:border-accent"
+                />
+              </div>
             </div>
           </>
         )}
