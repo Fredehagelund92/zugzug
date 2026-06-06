@@ -254,6 +254,9 @@ export function ColumnHeaderMenu<Row>({
                     setMode("number-format");
                   } else if (t === "rating") {
                     setMode("rating-max");
+                  } else if (t === "select") {
+                    onChangeType({ type: "select", options: [] });
+                    onClose();
                   } else if (t !== column.config.type) {
                     onChangeType({ type: t } as ColumnConfig);
                     onClose();
@@ -479,9 +482,16 @@ export function ColumnHeaderMenu<Row>({
             <input
               value={ratingMaxCustom}
               onChange={(e) => {
-                setRatingMaxCustom(e.target.value);
-                const n = parseInt(e.target.value, 10);
-                if (n >= 1 && n <= 20) setRatingMax(n);
+                const raw = e.target.value;
+                if (raw === "") {
+                  setRatingMaxCustom("");
+                  return;
+                }
+                const n = parseInt(raw, 10);
+                if (Number.isInteger(n) && n >= 1 && n <= 20) {
+                  setRatingMaxCustom(raw);
+                  setRatingMax(n);
+                }
               }}
               placeholder="…"
               className="w-10 rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-ink outline-none focus:border-accent"
