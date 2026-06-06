@@ -22,8 +22,7 @@ import {
   liveSources,
   occUnion,
   dimMeta,
-  parseOptions,
-  parseNumberFormat,
+  parseFieldConfig,
   all,
   pgAll,
   pgGet,
@@ -41,6 +40,9 @@ const SQL_TYPE: Record<string, string> = {
   number: "NUMERIC",
   boolean: "BOOLEAN",
   date: "DATE",
+  url: "VARCHAR",
+  email: "VARCHAR",
+  rating: "INTEGER",
 };
 
 /* ---- dimension registry (Postgres) + canonical tables ---- */
@@ -409,17 +411,19 @@ export async function retireCanonical(
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
 export async function listFields(dimId: string): Promise<FieldDef[]> {
-  const rows = await pgAll<{ field: string; label: string; type: string; options: string | null }>(
-    `SELECT field, label, type, options FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
+  const rows = await pgAll<{ field: string; label: string; type: string; field_config: string | null }>(
+    `SELECT field, label, type, field_config FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
-  return rows.map((r) => ({
-    field: r.field,
-    label: r.label,
-    type: r.type,
-    options: r.type === "select" ? parseOptions(r.options) : undefined,
-    numberFormat: r.type === "number" ? parseNumberFormat(r.options) : undefined,
-  }));
+  return rows.map((r) => {
+    const cfg = parseFieldConfig(r.type, r.field_config);
+    return {
+      field: r.field,
+      label: r.label,
+      type: r.type,
+      ...cfg,
+    };
+  });
 }
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈
@@ -448,7 +452,7 @@ export async function addField(
         ? JSON.stringify(opts.numberFormat)
         : null;
   await pgRun(
-    `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, options, created_at)
+    `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, field_config, created_at)
      VALUES ($1, $2, $3, $4, $5, current_timestamp) ON CONFLICT (dim_id, field) DO NOTHING`,
     [dimId, field, label.trim(), t, optsJson],
   );
@@ -482,11 +486,14 @@ export async function renameColumn(
 export async function changeColumnType(
   dimId: string,
   field: string,
-  newType: string,
-  options: OptionDef[] | undefined,
-  coerceInvalidToNull: boolean = false,
-  userId: string,
-  numberFormat?: NumberFormat,
+  opts: {
+    newType: string;
+    options?: OptionDef[];
+    numberFormat?: NumberFormat;
+    ratingMax?: number;
+    coerceInvalidToNull: boolean;
+    userId: string;
+  },
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
@@ -494,6 +501,19 @@ export async function changeColumnType(
   if (!f) return { ok: false };
   const col = qid(field);
   const keyc = qid(m.keyCol);
+  const { newType, coerceInvalidToNull, userId } = opts;
+
+  // url and email are VARCHAR relabels — no data migration needed
+  if (newType === "url" || newType === "email") {
+    await pgTx(async ({ run }) => {
+      await run(
+        `UPDATE ${pg("dimension_field")} SET type = $1, field_config = null WHERE dim_id = $2 AND field = $3`,
+        [newType, dimId, field],
+      );
+    });
+    await appendAuditAs(userId, "Changed column type", `${field} → ${newType}`);
+    return { ok: true };
+  }
 
   const rows = await pgAll<{ k: string; v: string | null }>(
     `SELECT ${keyc} AS k, CAST(${col} AS VARCHAR) AS v FROM ${cq(m.dimTable)}`,
@@ -511,7 +531,7 @@ export async function changeColumnType(
     }
     if (newType === "select") {
       const collected: OptionDef[] =
-        options ??
+        opts.options ??
         [...new Set(rows.filter((x) => x.v).map((x) => x.v!))].map((label) => ({
           label,
           color: null,
@@ -535,27 +555,42 @@ export async function changeColumnType(
       parsed.push({ k: r.k, v: ok ? r.v : null, bad: !ok });
       continue;
     }
+    if (newType === "rating") {
+      const max = opts.ratingMax ?? 5;
+      if (r.v === "true") {
+        parsed.push({ k: r.k, v: 1, bad: false });
+        continue;
+      }
+      if (r.v === "false") {
+        // boolean false → 0, which is out of range for 1-based rating → bad
+        parsed.push({ k: r.k, v: null, bad: true });
+        continue;
+      }
+      const n = Number(r.v);
+      if (!Number.isFinite(n)) {
+        parsed.push({ k: r.k, v: null, bad: true });
+        continue;
+      }
+      const rounded = Math.round(n);
+      if (rounded < 1 || rounded > max) {
+        parsed.push({ k: r.k, v: null, bad: true });
+        continue;
+      }
+      parsed.push({ k: r.k, v: rounded, bad: false });
+      continue;
+    }
     parsed.push({ k: r.k, v: r.v, bad: true });
   }
 
   const invalidCount = parsed.filter((p) => p.bad).length;
   if (invalidCount > 0 && !coerceInvalidToNull) return { ok: false, invalidCount };
 
-  const newSql =
-    newType === "select"
-      ? "VARCHAR"
-      : newType === "number"
-        ? "NUMERIC"
-        : newType === "boolean"
-          ? "BOOLEAN"
-          : newType === "date"
-            ? "DATE"
-            : "VARCHAR";
+  const newSql = SQL_TYPE[newType] ?? "VARCHAR";
   const tmp = `${field}__tmp_${Date.now().toString(36)}`;
   let finalOptions: OptionDef[] | undefined;
   if (newType === "select") {
     finalOptions =
-      options ??
+      opts.options ??
       [...new Set(parsed.filter((p) => p.v != null).map((p) => String(p.v)))].map((label) => ({
         label,
         color: null,
@@ -571,14 +606,16 @@ export async function changeColumnType(
     await run(`ALTER TABLE ${cq(m.dimTable)} DROP COLUMN ${col}`);
     await run(`ALTER TABLE ${cq(m.dimTable)} RENAME COLUMN ${qid(tmp)} TO ${col}`);
     await run(
-      `UPDATE ${pg("dimension_field")} SET type = $1, options = $2 WHERE dim_id = $3 AND field = $4`,
+      `UPDATE ${pg("dimension_field")} SET type = $1, field_config = $2 WHERE dim_id = $3 AND field = $4`,
       [
         newType,
         newType === "select"
           ? JSON.stringify(finalOptions ?? [])
-          : newType === "number" && numberFormat != null
-            ? JSON.stringify(numberFormat)
-            : null,
+          : newType === "number" && opts.numberFormat != null
+            ? JSON.stringify(opts.numberFormat)
+            : newType === "rating"
+              ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
+              : null,
         dimId,
         field,
       ],
@@ -630,7 +667,7 @@ export async function addColumnOption(
   const existing = f.options ?? [];
   if (existing.some((o) => o.label === label)) return { options: existing };
   const next: OptionDef[] = [...existing, { label, color }];
-  await pgRun(`UPDATE ${pg("dimension_field")} SET options = $1 WHERE dim_id = $2 AND field = $3`, [
+  await pgRun(`UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`, [
     JSON.stringify(next),
     dimId,
     field,
