@@ -33,6 +33,8 @@ export const env = {
   origin: (process.env.ORIGIN?.trim() || "http://localhost:5173").replace(/\/$/, ""),
   /** Skip Google OAuth in dev — shows a one-click login button. Never use in prod. */
   devBypassAuth: process.env.DEV_BYPASS_AUTH?.trim() === "true",
+  /** Optional: Anthropic API key for AI features. Soft-fail (empty string when absent). */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() ?? "",
 };
 
 /** Qualified Postgres app-state table name: "zugzug_app"."table" */
