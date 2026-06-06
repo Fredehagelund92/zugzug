@@ -338,21 +338,21 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
             type?: string;
             options?: { label: string; color: string | null }[];
             numberFormat?: NumberFormat;
+            ratingMax?: number;
             coerceInvalidToNull?: boolean;
           };
           if (body.label != null) {
             await repo.renameColumn(id, field, body.label, me);
           }
           if (body.type != null) {
-            const res = await repo.changeColumnType(
-              id,
-              field,
-              body.type,
-              body.options as repo.OptionDef[] | undefined,
-              body.coerceInvalidToNull ?? false,
-              me,
-              body.numberFormat,
-            );
+            const res = await repo.changeColumnType(id, field, {
+              newType: body.type,
+              options: body.options as repo.OptionDef[] | undefined,
+              numberFormat: body.numberFormat,
+              ratingMax: body.ratingMax,
+              coerceInvalidToNull: body.coerceInvalidToNull ?? false,
+              userId: me,
+            });
             return json(res);
           }
           return noContent();
