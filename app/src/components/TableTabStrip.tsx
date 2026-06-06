@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { PALETTE, type PaletteName } from "../lib/palette";
 import { IconPlus, IconX, IconSearch } from "./Icons";
 import { useDimensions, useDrafts } from "../store";
 import { useOpenTabs, type OpenTab } from "../lib/open-tabs";
 import type { MappingDimension } from "../data";
+
+const DROPDOWN_W = 280;
 
 function TabMono({ label, color, active }: { label: string; color: PaletteName | null; active: boolean }) {
   const ch = label.charAt(0).toUpperCase();
@@ -32,12 +35,14 @@ function TabMono({ label, color, active }: { label: string; color: PaletteName |
 }
 
 function AddTabPopover({
+  anchorRef,
   dims,
   openIds,
   onPick,
   onClose,
   onCreate,
 }: {
+  anchorRef: React.RefObject<HTMLElement | null>;
   dims: MappingDimension[];
   openIds: Set<string>;
   onPick: (id: string) => void;
@@ -45,9 +50,43 @@ function AddTabPopover({
   onCreate: () => void;
 }) {
   const [q, setQ] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const place = () => {
+      const dropdown = dropdownRef.current;
+      const anchor = anchorRef.current;
+      if (!dropdown || !anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const dropH = dropdown.offsetHeight;
+
+      // right-align with the anchor button
+      let left = rect.right - DROPDOWN_W;
+      if (left < 8) left = 8;
+      if (left + DROPDOWN_W > window.innerWidth - 8) left = window.innerWidth - DROPDOWN_W - 8;
+
+      let top = rect.bottom + 2;
+      if (top + dropH > window.innerHeight - 8) top = Math.max(8, rect.top - 2 - dropH);
+
+      dropdown.style.left = `${left}px`;
+      dropdown.style.top = `${top}px`;
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [anchorRef]);
+
   useEffect(() => {
-    const onDown = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && onClose();
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (dropdownRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose();
+    };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -55,13 +94,15 @@ function AddTabPopover({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, [onClose, anchorRef]);
 
   const list = dims.filter((d) => d.dimension.toLowerCase().includes(q.toLowerCase().trim()));
-  return (
+
+  return createPortal(
     <div
-      ref={ref}
-      className="zz-pop-in absolute right-0 top-full z-50 mt-px w-[280px] overflow-hidden rounded-md border border-line-2 bg-surface-elevated shadow-pop"
+      ref={dropdownRef}
+      style={{ position: "fixed", top: 0, left: 0, width: DROPDOWN_W }}
+      className="zz-pop-in z-50 overflow-hidden rounded-md border border-line-2 bg-surface-elevated shadow-pop"
     >
       <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-ink-3">
         <IconSearch className="h-3.5 w-3.5" />
@@ -107,7 +148,8 @@ function AddTabPopover({
       >
         <IconPlus className="h-3.5 w-3.5" /> New table
       </button>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -180,6 +222,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => 
   const drafts = useDrafts();
   const { tabs, activeId, focusTab, closeTab, openTab } = useOpenTabs();
   const [addOpen, setAddOpen] = useState(false);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
 
   const dirtyDimIds = useMemo(() => {
     const s = new Set<string>();
@@ -213,8 +256,9 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => 
         })}
       </div>
 
-      <div className="relative flex items-center border-l border-line">
+      <div className="flex items-center border-l border-line">
         <button
+          ref={addBtnRef}
           type="button"
           onClick={() => setAddOpen((o) => !o)}
           aria-label="Open table"
@@ -224,6 +268,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => 
         </button>
         {addOpen && (
           <AddTabPopover
+            anchorRef={addBtnRef}
             dims={dims}
             openIds={openIds}
             onPick={(id) => openTab(id)}

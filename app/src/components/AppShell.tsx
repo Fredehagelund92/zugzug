@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
@@ -57,8 +58,57 @@ function ZigRule() {
   );
 }
 
+const USERMENU_W = 160;
+
 function UserMenu() {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const dropdown = dropdownRef.current;
+      const trigger = triggerRef.current;
+      if (!dropdown || !trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const dropH = dropdown.offsetHeight;
+
+      // right-align with the trigger button
+      let left = rect.right - USERMENU_W;
+      if (left < 8) left = 8;
+
+      let top = rect.bottom + 4;
+      if (top + dropH > window.innerHeight - 8) top = Math.max(8, rect.top - 4 - dropH);
+
+      dropdown.style.left = `${left}px`;
+      dropdown.style.top = `${top}px`;
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (dropdownRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const signOut = () => {
     fetch("/api/auth/logout", { method: "POST" })
@@ -73,6 +123,7 @@ function UserMenu() {
   return (
     <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         title={currentUser.name}
@@ -81,10 +132,13 @@ function UserMenu() {
       >
         {currentUser.initials}
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="zz-pop-in absolute right-0 top-10 z-40 min-w-[160px] rounded-sm border border-line bg-surface-elevated shadow-pop">
+      {open &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={{ position: "fixed", top: 0, left: 0, minWidth: USERMENU_W }}
+            className="zz-pop-in z-50 rounded-sm border border-line bg-surface-elevated shadow-pop"
+          >
             <div className="border-b border-line px-3 py-2">
               <p className="text-[13px] font-medium text-ink">{currentUser.name}</p>
               {currentUser.email && <p className="text-[11px] text-ink-2">{currentUser.email}</p>}
@@ -96,9 +150,9 @@ function UserMenu() {
             >
               Sign out
             </button>
-          </div>
-        </>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
