@@ -13,6 +13,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   icon?: ReactNode;
+  loading?: boolean;
 }
 
 const base = cx(
@@ -37,17 +38,38 @@ const sizes: Record<Size, string> = {
   lg: "text-[15px] px-[22px] py-[13px]",
 };
 
+const spinnerSm = (
+  <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25"/>
+    <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+const spinnerMd = (
+  <svg className="h-4 w-4 animate-spin" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25"/>
+    <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
 export function Button({
   variant = "primary",
   size = "md",
   icon,
+  loading = false,
   className,
   children,
   ...rest
 }: ButtonProps) {
+  const spinner = size === "sm" ? spinnerSm : spinnerMd;
+  const leadingNode = loading ? spinner : icon;
   return (
-    <button className={cx(base, variants[variant], sizes[size], className)} {...rest}>
-      {icon}
+    <button
+      className={cx(base, variants[variant], sizes[size], className)}
+      disabled={loading || rest.disabled}
+      {...rest}
+    >
+      {leadingNode}
       {children}
     </button>
   );

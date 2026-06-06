@@ -24,7 +24,7 @@ import {
   log,
 } from "./repo-shared.ts";
 import { appendAuditAs, getPreferences } from "./repo-meta.ts";
-import { saveDraft } from "./repo-drafts.ts";
+import { saveDraft, commit } from "./repo-drafts.ts";
 
 export interface UnmappedSample {
   raw: string;
@@ -200,17 +200,18 @@ export async function scanSources(): Promise<number> {
     );
   }
 
-  // automation: for every dimension, auto-stage drafts where a freshly-scanned
-  // raw value matches an existing canonical label case-insensitively. This is
-  // a confidence=100 deterministic match — fuzzy/AI suggestion machinery is a
-  // future fast-follow. Only runs when the warehouse is attached + the prefs
-  // publish threshold allows exact matches (always true today; the threshold
-  // matters when fuzzy lands).
+  // automation: for every dimension, find raw values that case-insensitively
+  // match an existing canonical label (confidence=100 exact match). Stage them
+  // as drafts, then auto-commit when 100 >= publishThreshold (true for the
+  // default of 95 — user raises the slider to require manual review instead).
   if (env.attachWarehouse) {
     const prefs = await getPreferences();
-    if (prefs.publishThreshold <= 100) {
-      const dimIds = [...new Set(regs.map((r) => r.dimId))];
-      for (const id of dimIds) await autoStageExactMatches(id);
+    const dimIds = [...new Set(regs.map((r) => r.dimId))];
+    for (const id of dimIds) {
+      const staged = await autoStageExactMatches(id);
+      if (staged > 0 && prefs.publishThreshold <= 100) {
+        await commit(id, "u_system");
+      }
     }
   }
 

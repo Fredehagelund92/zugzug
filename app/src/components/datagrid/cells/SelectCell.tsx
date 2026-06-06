@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Chip } from "../Chip";
 import { PALETTE, PALETTE_NAMES } from "../../../lib/palette";
 import type { CellCtx, EditCtx } from "../types";
@@ -20,21 +21,51 @@ function Renderer<Row>({ value, column }: CellCtx<Row>) {
 
 interface SelectEditorProps<Row> extends EditCtx<Row> {
   options: OptionDef[];
+  /** Ref to the cell DOM element — used to position the portal popover. */
+  anchorRef: React.RefObject<HTMLDivElement | null>;
   /** Host hook — creates an option with optional color. Returns the new list. */
   onCreate: (label: string, color: PaletteName | null) => Promise<OptionDef[]>;
 }
 
+const POPOVER_WIDTH = 240;
+
 function Editor<Row>(props: SelectEditorProps<Row>) {
-  const { value, commit, cancel, options, onCreate } = props;
+  const { value, commit, cancel, options, onCreate, anchorRef } = props;
   const [opts, setOpts] = useState(options);
   const [q, setQ] = useState("");
   const [hl, setHl] = useState(0);
   const [pickedColor, setPickedColor] = useState<PaletteName | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Position the portal popover below (or above) the anchor cell using fixed coords.
+  useLayoutEffect(() => {
+    const pop = popRef.current;
+    const anchor = anchorRef.current;
+    if (!pop || !anchor) return;
+    const place = () => {
+      const a = anchor.getBoundingClientRect();
+      const popH = pop.offsetHeight;
+      let left = a.left;
+      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      let top = a.bottom + 2;
+      if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - 2 - popH);
+      pop.style.top = `${top}px`;
+      pop.style.left = `${left}px`;
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [anchorRef]);
+
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!popRef.current) return;
@@ -62,10 +93,11 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
     commit(label);
   };
 
-  return (
+  return createPortal(
     <div
       ref={popRef}
-      className="absolute left-0 top-0 z-30 w-[240px] rounded-sm border border-line-2 bg-surface p-1 shadow-lg"
+      style={{ position: "fixed", top: 0, left: 0, width: POPOVER_WIDTH }}
+      className="z-50 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
       onClick={(e) => e.stopPropagation()}
     >
       <input
@@ -136,6 +168,8 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
                     setPickedColor(c);
                   }}
                   title={c}
+                  aria-label={c}
+                  aria-pressed={pickedColor === c}
                   className={`h-3.5 w-3.5 rounded-sm ${pickedColor === c ? "ring-1 ring-ink" : ""}`}
                   style={{ background: PALETTE[c].bg }}
                 />
@@ -147,6 +181,8 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
                   setPickedColor(null);
                 }}
                 title="no color"
+                aria-label="No color"
+                aria-pressed={pickedColor === null}
                 className={`h-3.5 w-3.5 rounded-sm border border-line-2 ${pickedColor === null ? "ring-1 ring-ink" : ""}`}
               />
             </div>
@@ -163,7 +199,8 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

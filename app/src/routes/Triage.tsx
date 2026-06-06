@@ -101,6 +101,7 @@ function TriageInner() {
   const [cursor, setCursor] = useState<{ dimId: string; raw: string } | null>(null);
   const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
+  const [committing, setCommitting] = useState(false);
 
   // every value across every dimension, normalized into one queue ranked
   // by impact (unmapped × log10(rows) per-dim, then by confidence ascending).
@@ -245,6 +246,7 @@ function TriageInner() {
     setCommitError(null);
     const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
     if (dimIds.length === 0) return;
+    setCommitting(true);
     // Optimistic flash — predict count + warehouse rows before the server roundtrip
     // so the success moment lands on click. Reverted on failure.
     const predictedRows = stagedAllDrafts.reduce((n, d) => {
@@ -273,6 +275,8 @@ function TriageInner() {
           ? err.message
           : "Commit failed across dimensions — check your connection and try again.",
       );
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -314,6 +318,7 @@ function TriageInner() {
         stagedDrafts={stagedAllDrafts}
         discard={discardCross}
         commitAll={approveAndCommitAll}
+        committing={committing}
         commitError={commitError}
         setCommitError={setCommitError}
         flash={flash}
@@ -338,6 +343,7 @@ interface CrossDimInboxProps {
   stagedDrafts: Draft[];
   discard: (dimId: string, raw: string) => void;
   commitAll: () => void;
+  committing: boolean;
   commitError: string | null;
   setCommitError: (e: string | null) => void;
   flash: { n: number; rows: number } | null;
@@ -731,7 +737,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
           >
             {review ? "Hide review" : `Review ${stagedCount}`}
           </Button>
-          <Button size="sm" disabled={stagedCount === 0} onClick={() => p.commitAll()}>
+          <Button size="sm" disabled={stagedCount === 0} loading={p.committing} onClick={() => p.commitAll()}>
             Publish {stagedCount} change{stagedCount === 1 ? "" : "s"}
             <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
           </Button>

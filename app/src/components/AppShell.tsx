@@ -76,6 +76,7 @@ function UserMenu() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         title={currentUser.name}
+        aria-label={`User menu for ${currentUser.name}`}
         className="grid h-8 w-8 place-items-center rounded-pill border border-line-2 bg-surface-3 font-mono text-[10px] text-ink-2 ring-1 ring-accent transition-colors hover:bg-hover"
       >
         {currentUser.initials}

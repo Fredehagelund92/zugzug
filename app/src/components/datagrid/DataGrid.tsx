@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import {
@@ -18,7 +19,8 @@ import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
-import type { DataGridProps, CellType, ColumnDef } from "./types";
+import { FilterBar } from "./FilterBar";
+import type { DataGridProps, CellType, ColumnDef, FilterSet } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
 
@@ -55,6 +57,9 @@ interface GridRowProps<Row> {
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
+  // Ref for the currently-editing cell — passed to SelectCell.Editor so the
+  // portal popover can position itself relative to the cell anchor.
+  const editingCellRef = useRef<HTMLDivElement>(null);
   const {
     row,
     rowKey: rk,
@@ -128,6 +133,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         return (
           <div
             key={c.field}
+            ref={editing ? editingCellRef : undefined}
             role="gridcell"
             aria-colindex={idx + 1}
             aria-selected={focused ? true : undefined}
@@ -155,6 +161,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
                   value={value}
                   focused
                   column={c}
+                  anchorRef={editingCellRef}
                   commit={(v: unknown) => {
                     onStopEdit();
                     onCommitCell(rk, c.field, v);
@@ -268,9 +275,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     [propGetValue],
   );
 
-  // ── Task 19: sort state + sortedRows ────────────────────────────────────────
+  // ── Sort + filter state ─────────────────────────────────────────────────────
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
@@ -278,16 +285,29 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const hiddenList = useMemo(() => columns.filter((c) => c.hidden), [columns]);
 
   const filteredRows = useMemo(() => {
-    const entries = Object.entries(filters);
-    if (entries.length === 0) return rows;
-    return rows.filter((r) =>
-      entries.every(([field, needle]) => {
-        const v = getValue(r, field);
-        if (v == null) return false;
-        return String(v).toLowerCase().includes(needle.toLowerCase());
-      }),
-    );
-  }, [rows, filters, getValue]);
+    if (!filterSet || filterSet.conditions.length === 0) return rows;
+    const { conjunction, conditions } = filterSet;
+    const match = (r: Row) => {
+      const check = conditions.map((cond): boolean => {
+        const raw = getValue(r, cond.field);
+        const str = raw == null ? "" : String(raw).toLowerCase();
+        const needle = cond.value.toLowerCase();
+        switch (cond.operator) {
+          case "contains":     return str.includes(needle);
+          case "not_contains": return !str.includes(needle);
+          case "equals":       return str === needle;
+          case "not_equals":   return str !== needle;
+          case "starts_with":  return str.startsWith(needle);
+          case "ends_with":    return str.endsWith(needle);
+          case "is_empty":     return raw == null || String(raw) === "";
+          case "is_not_empty": return raw != null && String(raw) !== "";
+          default:             return true;
+        }
+      });
+      return conjunction === "and" ? check.every(Boolean) : check.some(Boolean);
+    };
+    return rows.filter(match);
+  }, [rows, filterSet, getValue]);
 
   const sortedRows = useMemo(() => {
     if (!sort) return filteredRows;
@@ -440,6 +460,35 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     onUndo: () => undo.undo(),
     onRedo: () => undo.redo(),
   });
+
+  // ── Virtualiser ────────────────────────────────────────────────────────────
+  const estimatedRowHeight = compact ? 26 : 38;
+  const virtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => cursor.ref.current,
+    estimateSize: () => estimatedRowHeight,
+    overscan: 5,
+  });
+
+  // Scroll the cursor row into view when it changes.
+  // Step 1: bring the row into the virtualiser's render window (vertical).
+  // Step 2 (rAF): once React has rendered the row, scroll the cell for
+  // horizontal alignment using scrollIntoView.
+  useEffect(() => {
+    const rk = cursor.cursor?.rowKey;
+    const field = cursor.cursor?.field;
+    if (!rk) return;
+    const idx = rowIndexMap.get(rk);
+    if (idx == null) return;
+    virtualizer.scrollToIndex(idx, { align: "auto" });
+    requestAnimationFrame(() => {
+      const el = cursor.ref.current?.querySelector<HTMLElement>(
+        `[data-cell="${attrEsc(`${rk}::${field ?? ""}`)}"]`,
+      );
+      el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursor.cursor?.rowKey, cursor.cursor?.field]);
 
   // Keep range anchor in sync when cursor moves without shift (range collapses)
   // We handle this explicitly in the key handler below, not via useEffect, to
@@ -609,6 +658,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return;
       }
 
+      // Cmd+A: select all rows via the row-checkbox selection (when not editing)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a" && selection) {
+        e.preventDefault();
+        const allRowKeys = sortedRows.map(rowKey);
+        selection.onChange(allRowKeys);
+        return;
+      }
+
       // Delete / Backspace (without Cmd): clear focused cell or range to null.
       // Cmd+Backspace falls through to the cursor handler for bulk row delete.
       if ((e.key === "Delete" || e.key === "Backspace") && !e.metaKey && !e.ctrlKey) {
@@ -716,6 +773,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       undo,
       commitValue,
       computeRangeBounds,
+      selection,
     ],
   );
 
@@ -810,20 +868,28 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   return (
-    <div
-      ref={cursor.ref}
-      tabIndex={0}
-      role="grid"
-      aria-rowcount={sortedRows.length + 1}
-      aria-colcount={orderedVisible.length}
-      onKeyDown={handleKeyDown}
-      className="overflow-x-auto rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
-    >
+    <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
+      {filterSet && filterSet.conditions.length > 0 && (
+        <FilterBar
+          filterSet={filterSet}
+          columns={orderedVisible}
+          onChange={setFilterSet}
+        />
+      )}
+      <div
+        ref={cursor.ref}
+        tabIndex={0}
+        role="grid"
+        aria-rowcount={sortedRows.length + 1}
+        aria-colcount={orderedVisible.length}
+        onKeyDown={handleKeyDown}
+        className="flex flex-1 flex-col min-h-0 overflow-auto outline-none"
+      >
       {/* header row */}
       <div
         role="row"
         aria-rowindex={1}
-        className="grid items-stretch border-b border-line text-[12px] font-medium text-ink-2"
+        className="grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
         style={gridStyle}
       >
         {showRowNumbers && (
@@ -931,10 +997,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 {c.label}
                 {sortGlyph}
               </span>
-              {filters[c.field] && (
+              {filterSet?.conditions.some((fc) => fc.field === c.field) && (
                 <span
                   className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"
-                  title={`filter: contains "${filters[c.field]}"`}
+                  title="column filtered"
                 >
                   ▣
                 </span>
@@ -962,16 +1028,35 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   column={c}
                   anchorRef={menuAnchorRef}
                   sortDir={sort?.field === c.field ? sort.dir : null}
-                  filterValue={filters[c.field] ?? null}
+                  filterValue={
+                    filterSet?.conditions.find(
+                      (fc) => fc.field === c.field && fc.operator === "contains",
+                    )?.value ?? null
+                  }
                   onClose={() => setMenuFor(null)}
                   onRename={(label) => props.onRenameColumn?.(c.field, label)}
                   onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
                   onFilter={(v) =>
-                    setFilters((cur) => {
-                      const next = { ...cur };
-                      if (v && v.length > 0) next[c.field] = v;
-                      else delete next[c.field];
-                      return next;
+                    setFilterSet((cur) => {
+                      const existing = cur?.conditions ?? [];
+                      const withoutThis = existing.filter(
+                        (fc) => !(fc.field === c.field && fc.operator === "contains"),
+                      );
+                      if (!v) {
+                        return withoutThis.length === 0
+                          ? null
+                          : { conjunction: cur?.conjunction ?? "and", conditions: withoutThis };
+                      }
+                      const conditions = [
+                        ...withoutThis,
+                        {
+                          id: `${c.field}-contains`,
+                          field: c.field,
+                          operator: "contains" as const,
+                          value: v,
+                        },
+                      ];
+                      return { conjunction: cur?.conjunction ?? "and", conditions };
                     })
                   }
                   onChangeType={async (newType) => {
@@ -1076,37 +1161,53 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         ? (empty ?? (
             <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">No rows.</div>
           ))
-        : sortedRows.map((row, rowIdx) => {
-            const rk = rowKey(row);
-            const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
+        : (() => {
+            const vItems = virtualizer.getVirtualItems();
+            const topPad = vItems[0]?.start ?? 0;
+            const bottomPad =
+              vItems.length > 0
+                ? virtualizer.getTotalSize() - (vItems[vItems.length - 1]?.end ?? 0)
+                : virtualizer.getTotalSize();
             return (
-              <GridRow
-                key={rk}
-                row={row}
-                rowKey={rk}
-                rowIndex={rowIdx}
-                columns={orderedVisible}
-                focusedField={cursorOnThisRow?.field ?? null}
-                editingField={cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null}
-                cursorInitial={cursorOnThisRow?.initial}
-                cellInRange={(field) => inRange(rk, field)}
-                selected={isSelected(rk)}
-                selectionCol={selectionCol}
-                showRowNumbers={showRowNumbers}
-                cellPadY={cellPadY}
-                gridStyle={gridStyle}
-                onAddFieldClick={onAddFieldClick}
-                hiddenFieldCount={hiddenList.length}
-                getValue={getValue}
-                onCellPointerDown={onCellPointerDown}
-                onCellDoubleClick={onCellDoubleClick}
-                onToggleSelect={onToggleSelect}
-                onCommitCell={commitValue}
-                onStopEdit={onStopEdit}
-                onAddColumnOption={props.onAddColumnOption}
-              />
+              <>
+                {topPad > 0 && <div style={{ height: topPad }} />}
+                {vItems.map((vRow) => {
+                  const row = sortedRows[vRow.index]!;
+                  const rk = rowKey(row);
+                  const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
+                  return (
+                    <GridRow
+                      key={rk}
+                      row={row}
+                      rowKey={rk}
+                      rowIndex={vRow.index}
+                      columns={orderedVisible}
+                      focusedField={cursorOnThisRow?.field ?? null}
+                      editingField={cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null}
+                      cursorInitial={cursorOnThisRow?.initial}
+                      cellInRange={(field) => inRange(rk, field)}
+                      selected={isSelected(rk)}
+                      selectionCol={selectionCol}
+                      showRowNumbers={showRowNumbers}
+                      cellPadY={cellPadY}
+                      gridStyle={gridStyle}
+                      onAddFieldClick={onAddFieldClick}
+                      hiddenFieldCount={hiddenList.length}
+                      getValue={getValue}
+                      onCellPointerDown={onCellPointerDown}
+                      onCellDoubleClick={onCellDoubleClick}
+                      onToggleSelect={onToggleSelect}
+                      onCommitCell={commitValue}
+                      onStopEdit={onStopEdit}
+                      onAddColumnOption={props.onAddColumnOption}
+                    />
+                  );
+                })}
+                {bottomPad > 0 && <div style={{ height: bottomPad }} />}
+              </>
             );
-          })}
+          })()}
+      </div>
     </div>
   );
 }
