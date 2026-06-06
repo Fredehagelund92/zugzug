@@ -143,3 +143,21 @@ export const userGridLayout = app.table(
   },
   (t) => [primaryKey({ columns: [t.user_id, t.dim_id] })],
 );
+
+export const aiHintCache = app.table(
+  "ai_hint_cache",
+  {
+    dim_id:     varchar("dim_id").notNull(),
+    raw:        varchar("raw").notNull(),
+    suggestion: varchar("suggestion"),
+    confidence: integer("confidence").notNull(),
+    reasoning:  varchar("reasoning").notNull(),
+    model:      varchar("model").notNull(),
+    created_at: timestamp("created_at").notNull(),
+    hits:       integer("hits").notNull().default(sql`0`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.dim_id, t.raw] }),
+    index("ai_hint_cache_dim_id_idx").on(t.dim_id),
+  ],
+);
