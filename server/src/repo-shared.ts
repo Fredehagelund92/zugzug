@@ -60,9 +60,11 @@ export type NumberFormat =
   | { format: "integer" }
   | { format: "decimal"; precision: 1 | 2 | 3 | 4 }
   | { format: "percent"; precision: 0 | 1 | 2 }
-  | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 };
+  | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 }
+  | { format: "compact"; precision: 0 | 1 | 2 }
+  | { format: "duration"; display: "hm" | "hms" };
 
-const VALID_FORMATS = ["integer", "decimal", "percent", "currency"];
+const VALID_FORMATS = ["integer", "decimal", "percent", "currency", "compact", "duration"];
 
 export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
   let obj: unknown = raw;
@@ -84,12 +86,30 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
   return obj as NumberFormat;
 }
 
+export function parseFieldConfig(
+  type: string,
+  raw: unknown,
+): { options?: OptionDef[]; numberFormat?: NumberFormat; ratingMax?: number } {
+  if (type === "select") return { options: parseOptions(raw) };
+  if (type === "number") return { numberFormat: parseNumberFormat(raw) };
+  if (type === "rating") {
+    let obj: unknown = raw;
+    if (typeof obj === "string" && obj.length > 0) {
+      try { obj = JSON.parse(obj); } catch { return { ratingMax: 5 }; }
+    }
+    const max = (obj as { ratingMax?: unknown } | null)?.ratingMax;
+    return { ratingMax: typeof max === "number" && max >= 1 ? max : 5 };
+  }
+  return {};
+}
+
 export interface FieldDef {
   field: string;
   label: string;
   type: string;
   options?: OptionDef[];
   numberFormat?: NumberFormat;
+  ratingMax?: number;
 }
 export interface CanonicalValue {
   key: string;

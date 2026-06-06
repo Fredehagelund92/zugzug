@@ -71,3 +71,16 @@ test("changeColumnType to number with currency format persists it", async () => 
   const f = fields.find((x) => x.field === "score");
   expect(f?.numberFormat).toEqual({ format: "currency", symbol: "€", position: "prefix", precision: 2 });
 });
+
+test("parseFieldConfig returns ratingMax for rating type", async () => {
+  const { parseFieldConfig } = await import("../src/repo-shared.ts");
+  expect(parseFieldConfig("rating", '{"ratingMax":5}')).toEqual({ ratingMax: 5 });
+  expect(parseFieldConfig("rating", null)).toEqual({ ratingMax: 5 }); // default
+  expect(parseFieldConfig("number", '{"format":"integer"}')).toEqual({
+    numberFormat: { format: "integer" },
+  });
+  expect(parseFieldConfig("select", '[{"label":"A","color":null}]')).toEqual({
+    options: [{ label: "A", color: null }],
+  });
+  expect(parseFieldConfig("text", null)).toEqual({});
+});
