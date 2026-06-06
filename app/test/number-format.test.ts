@@ -54,3 +54,32 @@ describe("formatNumber", () => {
     ).toBe("-42.00 kr");
   });
 });
+
+describe("compact format", () => {
+  test("precision 0: abbreviates to nearest unit", () => {
+    expect(formatNumber(45000, { format: "compact", precision: 0 })).toBe("45K");
+    expect(formatNumber(1200000, { format: "compact", precision: 0 })).toBe("1M");
+    expect(formatNumber(999, { format: "compact", precision: 0 })).toBe("999");
+  });
+  test("precision 1: one decimal after abbreviation", () => {
+    expect(formatNumber(1200000, { format: "compact", precision: 1 })).toBe("1.2M");
+  });
+  test("negative values", () => {
+    expect(formatNumber(-45000, { format: "compact", precision: 0 })).toBe("-45K");
+  });
+});
+
+describe("duration format", () => {
+  test("hm: shows hours and minutes, drops seconds", () => {
+    expect(formatNumber(3600 + 23 * 60, { format: "duration", display: "hm" })).toBe("1h 23m");
+    expect(formatNumber(45 * 60, { format: "duration", display: "hm" })).toBe("45m");
+    expect(formatNumber(30, { format: "duration", display: "hm" })).toBe("< 1m");
+  });
+  test("hms: zero-padded H:MM:SS", () => {
+    expect(formatNumber(3600 + 23 * 60 + 45, { format: "duration", display: "hms" })).toBe("1:23:45");
+    expect(formatNumber(90, { format: "duration", display: "hms" })).toBe("0:01:30");
+  });
+  test("null returns em dash", () => {
+    expect(formatNumber(null, { format: "duration", display: "hm" })).toBe("—");
+  });
+});
