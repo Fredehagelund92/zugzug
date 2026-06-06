@@ -9,7 +9,6 @@ import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import { useDimensions, useAudit, useDrafts } from "../store";
-import { useCreateTableModal } from "../lib/create-table-modal";
 import {
   type FilterKey,
   type SortKey,
@@ -69,7 +68,6 @@ export function Dashboard() {
   ).length;
   const cleanTables = dims.length - attentionTables;
 
-  const create = useCreateTableModal();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("urgency");
 
@@ -192,20 +190,13 @@ export function Dashboard() {
           </div>
         }
         action={
-          <div className="flex items-center gap-2">
-            <Link to="/app/tables">
-              <Button variant="secondary" icon={<IconPlus className="h-4 w-4" />}>
-                New table
+          totalNew > 0 ? (
+            <Link to="/app/triage">
+              <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
+                Resolve {totalNew} new
               </Button>
             </Link>
-            {totalNew > 0 && (
-              <Link to="/app/triage">
-                <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
-                  Resolve {totalNew} new
-                </Button>
-              </Link>
-            )}
-          </div>
+          ) : undefined
         }
       />
 
@@ -453,19 +444,6 @@ export function Dashboard() {
               </tr>
             )}
 
-            {/* add row */}
-            <tr>
-              <td colSpan={7} className="px-4 py-2.5">
-                <button
-                  type="button"
-                  onClick={create.open}
-                  className="flex items-center gap-1.5 font-mono text-[10px] text-ink-3 transition-colors hover:text-accent"
-                >
-                  <IconPlus className="h-3 w-3" />
-                  New table
-                </button>
-              </td>
-            </tr>
           </tbody>
         </table>
       </div>
