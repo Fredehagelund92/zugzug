@@ -276,7 +276,11 @@ export function ColumnHeaderMenu<Row>({
             <button
               key={f}
               type="button"
-              onClick={() => setNumFmt(f)}
+              onClick={() => {
+                setNumFmt(f);
+                // Reset precision to a valid value for the new format's range
+                setNumPrecision(f === "decimal" ? 2 : f === "integer" ? 2 : 0);
+              }}
               className={cx(
                 "w-full flex items-center gap-2 rounded-sm border px-2 py-1.5 text-left text-[11px] font-mono transition-colors",
                 numFmt === f
