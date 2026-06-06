@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CellCtx, EditCtx } from "../types";
+import type { CellCtx, EditCtx, ColumnDef } from "../types";
 import type { NumberFormat } from "../../../data";
 
 const inputBase =
@@ -46,7 +46,7 @@ export function formatNumber(value: unknown, fmt: NumberFormat | undefined): str
         notation: "compact",
         minimumFractionDigits: fmt.precision,
         maximumFractionDigits: fmt.precision,
-      });
+      } as Intl.NumberFormatOptions);
 
     case "duration": {
       const totalSec = Math.round(Math.abs(n));
@@ -57,14 +57,39 @@ export function formatNumber(value: unknown, fmt: NumberFormat | undefined): str
       if (fmt.display === "hms") {
         return `${sign}${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
       }
-      return `${sign}${h}:${String(m).padStart(2, "0")}`;
+      // hm: human-readable "Xh Ym" or "Ym" or "< 1m"
+      if (totalSec < 60) return "< 1m";
+      if (h > 0) return `${sign}${h}h ${m}m`;
+      return `${sign}${m}m`;
     }
   }
 }
 
+function getNumberFormat<Row>(column: ColumnDef<Row>): NumberFormat | undefined {
+  return column.config.type === "number" ? column.config.numberFormat : undefined;
+}
+
+function secondsToHms(n: number): string {
+  const secs = Math.round(Math.abs(n));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function hmsToSeconds(v: string): number | null {
+  const match = v.trim().match(/^(\d+):(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const h = parseInt(match[1]!, 10);
+  const m = parseInt(match[2]!, 10);
+  const s = parseInt(match[3]!, 10);
+  if (m >= 60 || s >= 60) return null;
+  return h * 3600 + m * 60 + s;
+}
+
 function Renderer<Row>(ctx: CellCtx<Row>) {
   const { value, column } = ctx;
-  const fmt = column.config.type === "number" ? column.config.numberFormat : undefined;
+  const fmt = getNumberFormat(column);
   const n = value == null || value === "" ? null : Number(value);
   if (n == null || !Number.isFinite(n)) {
     return <span className="font-mono text-[12px] text-ink-3">—</span>;
@@ -77,16 +102,20 @@ function Renderer<Row>(ctx: CellCtx<Row>) {
 }
 
 function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
-  const fmt = column.config.type === "number" ? column.config.numberFormat : undefined;
+  const fmt = getNumberFormat(column);
   const isPercent = fmt?.format === "percent";
+  const isDuration = fmt?.format === "duration";
 
-  // For percent fields, display the value * 100 for editing (e.g. 0.42 → "42")
-  const displayValue =
-    isPercent && value != null && value !== "" && Number.isFinite(Number(value))
-      ? String(parseFloat((Number(value) * 100).toPrecision(10)))
-      : value == null
-        ? ""
-        : String(value);
+  // Compute display value based on format
+  const displayValue = (() => {
+    if (isDuration && value != null && value !== "" && Number.isFinite(Number(value))) {
+      return secondsToHms(Number(value));
+    }
+    if (isPercent && value != null && value !== "" && Number.isFinite(Number(value))) {
+      return String(parseFloat((Number(value) * 100).toPrecision(10)));
+    }
+    return value == null ? "" : String(value);
+  })();
 
   const seeded = initial != null;
   // Type-to-edit with a non-numeric character is ignored — leave the cell
@@ -111,6 +140,10 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
       commit(null);
       return;
     }
+    if (isDuration) {
+      commit(hmsToSeconds(t)); // null if invalid → stored as null
+      return;
+    }
     const n = Number(t);
     if (!Number.isFinite(n)) {
       commit(null);
@@ -125,6 +158,7 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
       ref={ref}
       value={v}
       inputMode="decimal"
+      placeholder={isDuration ? "0:00:00" : undefined}
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
       // Enter / Tab also commit synchronously: useGridCursor's stopEdit
