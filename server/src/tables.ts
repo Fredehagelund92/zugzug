@@ -5,7 +5,7 @@
    emits one summary entry at the end. */
 
 import * as repo from "./repo.ts";
-import type { OptionDef, PaletteName } from "./repo.ts";
+import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
@@ -19,6 +19,7 @@ export interface ColumnDraft {
   label: string;
   type: "text" | "number" | "boolean" | "date" | "select";
   options?: OptionDef[];
+  numberFormat?: NumberFormat;
 }
 
 export interface CreateTableInput {
@@ -123,7 +124,7 @@ export async function createTable(
   // 4. Fields (blank mode) — addField issues DDL + INSERT, outside tx
   if (input.mode === "blank" && input.columns) {
     for (const c of input.columns) {
-      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true }, userId);
+      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true, numberFormat: c.numberFormat }, userId);
       fieldCount++;
     }
   }
