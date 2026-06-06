@@ -5,6 +5,7 @@
 import { connect } from "./db.ts";
 import { env } from "./env.ts";
 import * as repo from "./repo.ts";
+import type { NumberFormat } from "./repo-shared.ts";
 import {
   getSessionUser,
   handleGoogleRedirect,
@@ -302,15 +303,16 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         };
         return json(await repo.deriveCanonical(id, table, column, nameColumn, {}, me));
       }
-      // POST /api/dimensions/:id/fields {label, type?, options?} — add an attribute column
+      // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-        const { label, type, options } = (await req.json()) as {
+        const { label, type, options, numberFormat } = (await req.json()) as {
           label: string;
           type?: string;
           options?: { label: string; color: string | null }[];
+          numberFormat?: NumberFormat;
         };
         return json(
-          await repo.addField(id, label, type, options as repo.OptionDef[] | undefined, {}, me),
+          await repo.addField(id, label, type, options as repo.OptionDef[] | undefined, { numberFormat }, me),
         );
       }
       // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
@@ -335,6 +337,7 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
             label?: string;
             type?: string;
             options?: { label: string; color: string | null }[];
+            numberFormat?: NumberFormat;
             coerceInvalidToNull?: boolean;
           };
           if (body.label != null) {
@@ -348,6 +351,7 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
               body.options as repo.OptionDef[] | undefined,
               body.coerceInvalidToNull ?? false,
               me,
+              body.numberFormat,
             );
             return json(res);
           }
