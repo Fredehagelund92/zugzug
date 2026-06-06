@@ -12,3 +12,4 @@ export * from "./repo-canonical.ts";
 export * from "./repo-drafts.ts";
 export * from "./repo-meta.ts";
 export * from "./repo-shared.ts";
+export * from "./repo-ai-hint.ts";
