@@ -140,8 +140,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
           cellPadY,
           !isLastCol && "border-r border-line",
           c.align === "right" && "justify-end text-right",
-          inRangeCell && "bg-accent/20",
-          focused && "ring-2 ring-accent ring-inset bg-accent/30",
+          inRangeCell && !focused && "bg-accent/10",
+          focused && "ring-2 ring-accent ring-inset",
           isFirstPinned && "sticky left-0 z-[5] bg-[var(--surface)]",
           isFirstPinned && selected && "!bg-[var(--surface-2)]",
         );
