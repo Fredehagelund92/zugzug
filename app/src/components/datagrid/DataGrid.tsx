@@ -121,6 +121,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         const value = getValue(row, c.field);
         const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
         const isLastCol = idx === columns.length - 1;
+        const isFirstPinned = c.pinnedLeft && !columns.slice(0, idx).some((x) => x.pinnedLeft);
         const cellCx = cx(
           "relative flex min-w-0 select-none items-center px-3",
           cellPadY,
@@ -128,6 +129,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
           c.align === "right" && "justify-end text-right",
           inRangeCell && "bg-accent/20",
           focused && "ring-2 ring-accent ring-inset bg-accent/30",
+          isFirstPinned && "sticky left-0 z-[5] bg-[var(--surface)]",
+          isFirstPinned && selected && "!bg-[var(--surface-2)]",
         );
         const data = `${rk}::${c.field}`;
         return (
@@ -891,7 +894,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-rowcount={sortedRows.length + 1}
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
-        className="flex flex-1 flex-col min-h-0 overflow-auto outline-none"
+        className="flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
       >
       {/* header row */}
       <div
@@ -940,6 +943,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 "group relative flex items-center gap-1.5 px-3",
                 headerPadY,
                 !isLastCol && "border-r border-line",
+                c.pinnedLeft && idx === 0 && "sticky left-0 z-10 bg-surface",
               )}
               data-header={c.field}
             >
@@ -1020,7 +1024,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 <button
                   type="button"
                   aria-label="Column menu"
-                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40"
                   onClick={(e) => {
                     menuAnchorRef.current = e.currentTarget;
                     setMenuFor((s) => (s === c.field ? null : c.field));

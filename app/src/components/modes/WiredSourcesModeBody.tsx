@@ -126,7 +126,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
           </div>
 
           {/* KPI ribbon — coverage with hairline bar, then mono stats, then schedule rollup */}
-          <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-3 font-mono text-[11px] text-ink-3">
+          <div className="mt-4 flex items-center gap-x-6 gap-y-2 overflow-x-auto border-t border-line pt-3 font-mono text-[11px] text-ink-3 [scrollbar-width:none] max-md:flex-nowrap">
             {/* Coverage with progress bar — the headline metric */}
             <div className="flex items-center gap-2.5">
               <span className="uppercase tracking-wider">Coverage</span>
@@ -175,13 +175,15 @@ export function WiredSourcesModeBody({ dim }: Props) {
         </header>
 
         {/* Sticky column header so the LedgerRow grid reads at scale */}
-        <div className="sticky top-0 z-10 grid grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 border-b border-line bg-surface/95 px-7 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3 backdrop-blur-sm">
-          <span />
-          <span>Column → record</span>
-          <span>Standing</span>
-          <span className="text-right">Rows</span>
-          <span className="text-right">Unmapped</span>
-          <span className="text-right">Actions</span>
+        <div className="sticky top-0 z-10 overflow-x-auto border-b border-line bg-surface/95 backdrop-blur-sm">
+          <div className="grid min-w-[480px] grid-cols-[20px_minmax(0,1fr)_minmax(110px,1fr)_88px_72px_88px] items-center gap-4 px-7 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
+            <span />
+            <span>Column → record</span>
+            <span>Standing</span>
+            <span className="text-right">Rows</span>
+            <span className="text-right">Unmapped</span>
+            <span className="text-right">Actions</span>
+          </div>
         </div>
 
         {/* Row list — each LedgerRow paints its own bg-surface so the canvas

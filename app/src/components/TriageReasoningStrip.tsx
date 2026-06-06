@@ -29,7 +29,7 @@ export function TriageReasoningStrip({ loading, hint }: Props) {
         className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-pill bg-accent/50"
         aria-hidden="true"
       />
-      <p className="font-mono text-[11px] italic leading-snug text-ink-2">
+      <p className="min-w-0 break-words font-mono text-[11px] italic leading-snug text-ink-2">
         {hint.reasoning}
       </p>
     </div>

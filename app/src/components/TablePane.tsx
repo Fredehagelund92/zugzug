@@ -104,7 +104,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
       }}
     >
       {activeModes.length > 1 && (
-        <div className="border-b border-line bg-surface px-4 py-2.5">
+        <div className="sticky top-0 z-10 border-b border-line bg-surface px-4 py-2.5 overflow-x-auto [scrollbar-width:none]">
           <ModeStrip
             modes={activeModes}
             active={activeMode}
@@ -416,8 +416,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
-        <div className="flex items-center gap-3 font-mono text-[11px] text-ink-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-2">
           {engineer && (
             <>
               <span>
@@ -438,13 +438,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           <span className="tabular-nums">{totalVariants.toLocaleString()} raw</span>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
           <Button
             variant="ghost"
             size="sm"
             disabled={!undo.canUndo}
             onClick={() => void undo.undo()}
             title={undo.topLabel ?? undefined}
+            className="max-md:hidden"
           >
             ↶ Undo
             {undo.topSurface && (
@@ -457,6 +458,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             size="sm"
             disabled={!undo.canRedo}
             onClick={() => void undo.redo()}
+            className="max-md:hidden"
           >
             ↷ Redo
           </Button>
@@ -465,6 +467,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             size="sm"
             onClick={toggleDensity}
             title={density === "compact" ? "Default row height" : "Compact row height"}
+            className="max-md:hidden"
           >
             {density === "compact" ? "▤ Default" : "≡ Compact"}
           </Button>
@@ -474,7 +477,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             </Button>
           )}
           {sourceOpts.length > 0 && !external && (
-            <div className="w-56">
+            <div className="w-full md:w-56">
               <ComboSelect
                 options={sourceOpts}
                 value={null}
@@ -484,8 +487,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             </div>
           )}
           {external && sourceOpts.length > 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-40">
+            <div className="flex flex-wrap items-center gap-2 max-md:w-full">
+              <div className="w-full md:w-40">
                 <ComboSelect
                   options={sourceOpts}
                   value={idOpt}
@@ -493,7 +496,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   onPick={setIdOpt}
                 />
               </div>
-              <div className="w-40">
+              <div className="w-full md:w-40">
                 <ComboSelect
                   options={sourceOpts}
                   value={nameOpt}
@@ -505,6 +508,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 size="sm"
                 disabled={!idOpt || !nameOpt || busy}
                 onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}
+                className="max-md:w-full"
               >
                 Import
               </Button>
@@ -688,7 +692,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         )}
 
         {!external && (
-          <div className="flex items-center gap-2 border-t border-line bg-surface px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

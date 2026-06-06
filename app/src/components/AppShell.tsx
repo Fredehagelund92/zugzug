@@ -15,6 +15,8 @@ import {
   IconChevronRight,
   IconSearch,
   IconArrowRight,
+  IconMenu,
+  IconX,
 } from "./Icons";
 import { useDimensions, currentUser } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
@@ -28,6 +30,8 @@ import { ShortcutsOverlay } from "./datagrid";
    - The sidebar collapses to an icon-only rail (~64px) via a chevron toggle.
      Collapsed state is persisted to localStorage so the user's preference
      survives reloads.
+   - On <md the sidebar becomes an off-canvas drawer triggered by a hamburger
+     button. The desktop collapsed/expanded state is preserved independently.
    - The engineer-mode toggle lives in Settings → Appearance only. */
 
 const NAV_COLLAPSED_KEY = "zugzug:nav-collapsed";
@@ -42,6 +46,21 @@ function useNavCollapsed(): [boolean, () => void] {
     localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
   return [collapsed, () => setCollapsed((c) => !c)];
+}
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  });
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    setMatches(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [query]);
+  return matches;
 }
 
 function ZigRule() {
@@ -163,6 +182,15 @@ export function AppShell() {
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const isMobile = useMediaQuery("(max-width: 767px)");
+
+  // Close the drawer whenever the viewport leaves mobile — avoids a stuck open
+  // drawer if the user resizes or rotates their device to desktop width.
+  useEffect(() => {
+    if (!isMobile) setDrawerOpen(false);
+  }, [isMobile]);
+
   // Last 5 invoked palette command ids — surfaced in a "Recent" section on
   // empty search so the user's most-used jumps are one keystroke away.
   const [recents, setRecents] = useState<string[]>(() => {
@@ -215,11 +243,14 @@ export function AppShell() {
           e.preventDefault();
           focusTab(target.id);
         }
+      } else if (e.key === "Escape" && drawerOpen) {
+        setDrawerOpen(false);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [focusTab]);
+  }, [focusTab, drawerOpen]);
+
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Home", Icon: IconDashboard, end: true },
@@ -324,13 +355,105 @@ export function AppShell() {
     return out;
   }, [dims, totalNew, navigate, openTab]);
 
+  // Shared sidebar content — rendered both in the desktop aside and the mobile drawer.
+  const sidebarContent = (
+    <>
+      {collapsed && !isMobile ? (
+        <>
+          <nav className="flex flex-1 flex-col gap-0.5 p-2">
+            {nav.map(({ to, label, Icon, count, end }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={end}
+                title={count != null ? `${label} · ${count}` : label}
+                className={({ isActive }) =>
+                  cx(
+                    "relative flex h-10 items-center justify-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
+                    isActive
+                      ? "bg-accent-wash text-accent"
+                      : "text-ink-2 hover:bg-hover hover:text-ink",
+                  )
+                }
+              >
+                <Icon />
+                {count != null && count > 0 && (
+                  <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                )}
+              </NavLink>
+            ))}
+          </nav>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 px-5 pt-3 pb-1">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+              Master data layer
+            </span>
+          </div>
+          <div className="px-5 pb-2">
+            <ZigRule />
+          </div>
+
+          <SidebarTableTree onNavigate={isMobile ? () => setDrawerOpen(false) : undefined} />
+
+          <nav className="shrink-0 border-t border-line">
+            <div className="flex items-center justify-around px-2 py-2">
+              {nav
+                .filter((n) => n.to !== "/app/tables")
+                .map(({ to, label, Icon, count, end }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    title={count != null ? `${label} · ${count}` : label}
+                    onClick={isMobile ? () => setDrawerOpen(false) : undefined}
+                    className={({ isActive }) =>
+                      cx(
+                        "relative grid place-items-center rounded-sm transition-colors",
+                        "h-11 w-11 max-md:h-12 max-md:w-12",
+                        isActive
+                          ? "bg-accent-wash text-accent"
+                          : "text-ink-3 hover:bg-hover hover:text-ink",
+                      )
+                    }
+                  >
+                    <Icon />
+                    {count != null && count > 0 && (
+                      <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
+                    )}
+                  </NavLink>
+                ))}
+            </div>
+          </nav>
+        </>
+      )}
+
+      <div className={cx("shrink-0 border-t border-line", collapsed && !isMobile ? "p-3" : "px-5 py-2")}>
+        <div
+          className={cx(
+            "flex items-center gap-2 font-mono text-[11px] text-ink",
+            collapsed && !isMobile && "justify-center",
+          )}
+        >
+          <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
+          {(!collapsed || isMobile) && <span>{engineer ? "analytics.duckdb" : "Connected"}</span>}
+        </div>
+      </div>
+    </>
+  );
+
   return (
     <div
-      className="grid h-screen overflow-hidden"
-      style={{ gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }}
+      className="flex h-screen overflow-hidden md:grid"
+      style={
+        isMobile
+          ? undefined
+          : { gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }
+      }
     >
-      {/* command rail — fixed; does not scroll with the page */}
-      <aside className="flex flex-col overflow-hidden border-r border-line bg-surface">
+      {/* Desktop sidebar — hidden on mobile (drawer takes over) */}
+      <aside className="hidden md:flex flex-col overflow-hidden border-r border-line bg-surface">
         <div
           className={cx(
             "flex h-[var(--ak-topbar)] shrink-0 items-center gap-2.5 border-b border-line font-display text-lg font-extrabold tracking-tight text-ink",
@@ -344,117 +467,101 @@ export function AppShell() {
             </>
           )}
         </div>
-
-        {collapsed ? (
-          <>
-            <nav className="flex flex-1 flex-col gap-0.5 p-2">
-              {nav.map(({ to, label, Icon, count, end }) => (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  title={count != null ? `${label} · ${count}` : label}
-                  className={({ isActive }) =>
-                    cx(
-                      "relative flex h-10 items-center justify-center text-[13px] font-medium transition-colors duration-[var(--ak-dur)]",
-                      isActive
-                        ? "bg-accent-wash text-accent"
-                        : "text-ink-2 hover:bg-hover hover:text-ink",
-                    )
-                  }
-                >
-                  <Icon />
-                  {count != null && count > 0 && (
-                    <span className="absolute right-2 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
-                  )}
-                </NavLink>
-              ))}
-            </nav>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 px-5 pt-3 pb-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-                Master data layer
-              </span>
-            </div>
-            <div className="px-5 pb-2">
-              <ZigRule />
-            </div>
-
-            <SidebarTableTree />
-
-            <nav className="shrink-0 border-t border-line">
-              <div className="flex items-center justify-around px-2 py-2">
-                {nav
-                  .filter((n) => n.to !== "/app/tables")
-                  .map(({ to, label, Icon, count, end }) => (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      title={count != null ? `${label} · ${count}` : label}
-                      className={({ isActive }) =>
-                        cx(
-                          "relative grid h-9 w-9 place-items-center rounded-sm transition-colors",
-                          isActive
-                            ? "bg-accent-wash text-accent"
-                            : "text-ink-3 hover:bg-hover hover:text-ink",
-                        )
-                      }
-                    >
-                      <Icon />
-                      {count != null && count > 0 && (
-                        <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
-                      )}
-                    </NavLink>
-                  ))}
-              </div>
-            </nav>
-          </>
-        )}
-
-        <div className={cx("shrink-0 border-t border-line", collapsed ? "p-3" : "px-5 py-2")}>
-          <div
-            className={cx(
-              "flex items-center gap-2 font-mono text-[11px] text-ink",
-              collapsed && "justify-center",
-            )}
-          >
-            <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-            {!collapsed && <span>{engineer ? "analytics.duckdb" : "Connected"}</span>}
-          </div>
-        </div>
+        {sidebarContent}
       </aside>
 
+      {/* Mobile drawer — portaled so it sits above everything */}
+      {isMobile &&
+        createPortal(
+          <>
+            {/* Backdrop */}
+            <div
+              aria-hidden="true"
+              onClick={() => setDrawerOpen(false)}
+              className={cx(
+                "fixed inset-0 z-40 bg-ink/50 backdrop-blur-sm transition-opacity",
+                drawerOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+              )}
+              style={{ transitionDuration: "var(--dur-slide)" }}
+            />
+            {/* Drawer panel */}
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
+              className={cx(
+                "fixed inset-y-0 left-0 z-50 flex w-[var(--ak-nav)] max-w-[85vw] flex-col overflow-hidden border-r border-line bg-surface",
+                "transition-transform",
+                drawerOpen ? "translate-x-0" : "-translate-x-full",
+              )}
+              style={{
+                transitionDuration: "var(--dur-slide)",
+                transitionTimingFunction: "var(--ease-spring)",
+              }}
+            >
+              {/* Drawer header */}
+              <div className="flex h-[var(--ak-topbar)] shrink-0 items-center justify-between border-b border-line px-5">
+                <div className="flex items-center gap-2.5 font-display text-lg font-extrabold tracking-tight text-ink">
+                  <Mark className="h-7 w-7" />
+                  Zug Zug<span className="text-accent">.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(false)}
+                  aria-label="Close navigation"
+                  className="grid h-11 w-11 place-items-center rounded-sm text-ink-2 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                >
+                  <IconX className="h-4 w-4" />
+                </button>
+              </div>
+              {sidebarContent}
+            </div>
+          </>,
+          document.body,
+        )}
+
       {/* main column — flex column with the inner main as the only scroll area */}
-      <div className="flex h-screen min-w-0 flex-col">
-        <header className="relative z-10 flex h-[var(--ak-topbar)] shrink-0 items-center gap-4 border-b border-line bg-[var(--ak-glass)] px-4 backdrop-blur-md">
+      <div className="flex h-screen min-w-0 flex-1 flex-col">
+        <header className="relative z-10 flex h-[var(--ak-topbar)] shrink-0 items-center gap-3 border-b border-line bg-[var(--ak-glass)] px-3 backdrop-blur-md md:gap-4 md:px-4">
+          {/* Mobile: hamburger. Desktop: collapse chevron. */}
           <button
             type="button"
-            onClick={toggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="grid h-8 w-8 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            onClick={isMobile ? () => setDrawerOpen(true) : toggle}
+            aria-label={
+              isMobile ? "Open navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+            title={
+              isMobile ? "Open navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:h-8 md:w-8"
           >
-            {collapsed ? (
+            {isMobile ? (
+              <IconMenu className="h-4 w-4" />
+            ) : collapsed ? (
               <IconChevronRight className="h-3.5 w-3.5" />
             ) : (
               <IconChevronLeft className="h-3.5 w-3.5" />
             )}
           </button>
+
+          {/* Search button — full label on desktop, icon-only on mobile */}
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="flex h-8 min-w-[260px] max-w-[420px] flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 text-left text-[12.5px] text-ink-3 transition-colors hover:border-accent hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className={cx(
+              "flex h-11 items-center gap-2 rounded-sm border border-line-2 bg-surface text-left text-[12.5px] text-ink-3 transition-colors hover:border-accent hover:text-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              "max-md:w-11 max-md:justify-center max-md:px-0",
+              "md:h-8 md:min-w-[260px] md:max-w-[420px] md:flex-1 md:px-3",
+            )}
             aria-label="Open command palette"
           >
-            <IconSearch className="h-3.5 w-3.5" />
-            <span className="flex-1 truncate">Jump to anything…</span>
-            <kbd className="rounded border border-line-2 bg-surface-2 px-1 font-mono text-[10px] text-ink-2">
+            <IconSearch className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 truncate max-md:hidden">Jump to anything…</span>
+            <kbd className="rounded border border-line-2 bg-surface-2 px-1 font-mono text-[10px] text-ink-2 max-md:hidden">
               ⌘K
             </kbd>
           </button>
+
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
             <UserMenu />

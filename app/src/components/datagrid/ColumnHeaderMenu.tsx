@@ -55,6 +55,7 @@ export function ColumnHeaderMenu<Row>({
   // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
   // in a portal on document.body so the menu escapes the grid's stacking
   // context entirely — sticky bars and other contexts can no longer cover it.
+  // On mobile (<768px) the menu is centered horizontally in the viewport.
   useLayoutEffect(() => {
     const popover = ref.current;
     const anchor = anchorRef.current;
@@ -62,6 +63,16 @@ export function ColumnHeaderMenu<Row>({
     const place = (): void => {
       const a = anchor.getBoundingClientRect();
       const popH = popover.offsetHeight;
+
+      if (window.innerWidth < 768) {
+        const left = Math.max(8, (window.innerWidth - MENU_WIDTH) / 2);
+        let top = a.bottom + GAP;
+        if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - GAP - popH);
+        popover.style.top = `${top}px`;
+        popover.style.left = `${left}px`;
+        return;
+      }
+
       // align right edges, drop below the button; flip above on viewport overflow
       let left = a.right - MENU_WIDTH;
       if (left < 8) left = 8;

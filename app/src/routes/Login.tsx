@@ -27,10 +27,10 @@ export function Login() {
 
   return (
     <div
-      className="grid min-h-screen place-items-center p-8"
+      className="grid min-h-screen place-items-center p-4 sm:p-8"
       style={{ background: "var(--bg)", color: "var(--ink)" }}
     >
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-8">
+      <div className="w-full max-w-sm space-y-6 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-5 sm:p-8">
         <div className="flex items-center gap-2.5">
           <Mark className="h-7 w-7" />
           <span className="font-display text-lg font-extrabold tracking-tight">
