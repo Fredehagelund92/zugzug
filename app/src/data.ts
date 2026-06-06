@@ -27,7 +27,9 @@ export type NumberFormat =
   | { format: "integer" }
   | { format: "decimal"; precision: 1 | 2 | 3 | 4 }
   | { format: "percent"; precision: 0 | 1 | 2 }
-  | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 };
+  | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 }
+  | { format: "compact"; precision: 0 | 1 | 2 }
+  | { format: "duration"; display: "hm" | "hms" };
 /* an enrichment attribute column on a dimension (e.g. currency, locale) */
 export interface FieldDef {
   field: string;
