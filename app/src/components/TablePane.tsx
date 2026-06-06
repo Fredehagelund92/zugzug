@@ -275,28 +275,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         editable: true,
         render: undefined,
       })),
-      // Raw-variant count — engineer-only. Surfaces how many distinct source
-      // values resolve to each canonical record. Useless on external_id
-      // dims (sole crosswalk is the ID self-map) and on static-reference
-      // tables (no wiring at all); hidden behind the engineer toggle so
-      // Sheets-refugee users don't see a column of zeros.
-      ...(engineer
-        ? [
-            {
-              field: "variants",
-              label: "Raw",
-              type: "number",
-              editable: false,
-              align: "right",
-              render: (c: CanonicalValue) =>
-                (c.variants ?? 0) > 0 ? (
-                  <Badge>{c.variants}</Badge>
-                ) : (
-                  <span className="font-mono text-[11px] text-ink-3">0</span>
-                ),
-            } as ColumnDef<CanonicalValue>,
-          ]
-        : []),
     ];
     const ordered = cols
       .map((c) => ({
