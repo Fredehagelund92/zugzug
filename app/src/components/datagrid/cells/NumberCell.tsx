@@ -40,12 +40,31 @@ export function formatNumber(value: unknown, fmt: NumberFormat | undefined): str
       if (fmt.position === "prefix") return `${sign}${fmt.symbol}${formatted}`;
       return `${sign}${formatted} ${fmt.symbol}`;
     }
+
+    case "compact":
+      return n.toLocaleString("en-US", {
+        notation: "compact",
+        minimumFractionDigits: fmt.precision,
+        maximumFractionDigits: fmt.precision,
+      });
+
+    case "duration": {
+      const totalSec = Math.round(Math.abs(n));
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const sign = n < 0 ? "-" : "";
+      if (fmt.display === "hms") {
+        return `${sign}${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      }
+      return `${sign}${h}:${String(m).padStart(2, "0")}`;
+    }
   }
 }
 
 function Renderer<Row>(ctx: CellCtx<Row>) {
   const { value, column } = ctx;
-  const fmt = column.numberFormat;
+  const fmt = column.config.type === "number" ? column.config.numberFormat : undefined;
   const n = value == null || value === "" ? null : Number(value);
   if (n == null || !Number.isFinite(n)) {
     return <span className="font-mono text-[12px] text-ink-3">—</span>;
@@ -58,7 +77,7 @@ function Renderer<Row>(ctx: CellCtx<Row>) {
 }
 
 function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
-  const fmt = column.numberFormat;
+  const fmt = column.config.type === "number" ? column.config.numberFormat : undefined;
   const isPercent = fmt?.format === "percent";
 
   // For percent fields, display the value * 100 for editing (e.g. 0.42 → "42")
