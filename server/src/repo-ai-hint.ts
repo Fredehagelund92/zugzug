@@ -1,4 +1,5 @@
-import { env } from "./env.ts";
+import { env, pg } from "./env.ts";
+import { pgGet, pgRun } from "./repo-shared.ts";
 
 export interface AiHint {
   suggestion: string | null;
@@ -119,4 +120,69 @@ Raw source value to match: "${raw}"`;
   }
 
   return validateClaudeResponse(parsed, canonicalLabels);
+}
+
+// ── cache + orchestration ─────────────────────────────────────────────────────
+
+interface CacheRow {
+  suggestion: string | null;
+  confidence: number;
+  reasoning:  string;
+}
+
+export async function getAiHint(
+  dimId:          string,
+  raw:            string,
+  canonicalLabels: string[],
+  dim:            DimContext,
+): Promise<AiHintResult> {
+  // 1. Postgres cache hit
+  const cached = await pgGet<CacheRow>(
+    `SELECT suggestion, confidence, reasoning
+     FROM ${pg("ai_hint_cache")}
+     WHERE dim_id = $1 AND raw = $2`,
+    [dimId, raw],
+  );
+  if (cached) {
+    void pgRun(
+      `UPDATE ${pg("ai_hint_cache")} SET hits = hits + 1
+       WHERE dim_id = $1 AND raw = $2`,
+      [dimId, raw],
+    );
+    return { ...cached, cached: true };
+  }
+
+  // 2. Empty canonical set — skip Claude
+  if (canonicalLabels.length === 0) {
+    return {
+      suggestion: null,
+      confidence: 0,
+      reasoning:  "No canonical records exist yet.",
+      cached:     false,
+    };
+  }
+
+  // 3. No API key — graceful degradation
+  if (!env.anthropicApiKey) {
+    return { suggestion: null, confidence: 0, reasoning: "", cached: false };
+  }
+
+  // 4. Claude call
+  const result = await callClaude(raw, canonicalLabels, dim);
+
+  // 5. Store in cache
+  await pgRun(
+    `INSERT INTO ${pg("ai_hint_cache")}
+       (dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, 0)
+     ON CONFLICT (dim_id, raw) DO UPDATE
+       SET suggestion  = EXCLUDED.suggestion,
+           confidence  = EXCLUDED.confidence,
+           reasoning   = EXCLUDED.reasoning,
+           model       = EXCLUDED.model,
+           created_at  = EXCLUDED.created_at`,
+    [dimId, raw, result.suggestion, result.confidence, result.reasoning, "claude-haiku-4-5-20251001"],
+  );
+
+  return { ...result, cached: false };
 }
