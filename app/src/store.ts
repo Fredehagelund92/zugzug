@@ -418,11 +418,11 @@ export async function addField(
   label: string,
   type = "text",
   options?: OptionDef[],
-  numberFormat?: NumberFormat,
+  extras?: { numberFormat?: NumberFormat; ratingMax?: number },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
     method: "POST",
-    body: JSON.stringify({ label, type, options, numberFormat }),
+    body: JSON.stringify({ label, type, options, ...extras }),
   });
   await refreshDim(dimId);
   await refreshAudit();
