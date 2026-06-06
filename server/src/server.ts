@@ -136,6 +136,26 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
     }
 
+    if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
+      const dimId = url.searchParams.get("dimId") ?? "";
+      const raw   = url.searchParams.get("raw") ?? "";
+      if (!dimId || !raw) return err("dimId and raw required", 400);
+      const dim = await repo.getDimension(dimId);
+      if (!dim) return json({ error: "not found" }, 404);
+      if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
+      try {
+        const canonicalLabels = dim.canonical.map((c) => c.label);
+        const hint = await repo.getAiHint(dimId, raw, canonicalLabels, { label: dim.dimension });
+        return json(hint);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.includes("timeout") || msg.includes("AbortError")) {
+          return json({ error: "hint_timeout" }, 503);
+        }
+        return json({ error: "hint_error" }, 502);
+      }
+    }
+
     // GET /api/users → { currentUser, collaborators }
     if (seg[1] === "users" && seg.length === 2 && method === "GET") {
       const users = await repo.listUsers();
