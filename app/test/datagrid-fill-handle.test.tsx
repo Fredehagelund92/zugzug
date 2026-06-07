@@ -1,4 +1,4 @@
-import { test, expect, describe, vi } from "vitest";
+import { test, expect, describe, vi, afterEach } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
@@ -12,6 +12,8 @@ const columns: ColumnDef<Row>[] = [
 ];
 
 describe("fill handle", () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
   test("drag the corner handle down fills target rows with source value", async () => {
     const commits: Array<{ rk: string; field: string; value: unknown }> = [];
     const onCommit = vi.fn(async (rk: string, field: string, value: unknown) => {
