@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
+import type { ConditionalRule } from "./components/datagrid/types";
 
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
@@ -483,6 +484,36 @@ export async function changeColumnType(
 export async function deleteColumn(dimId: string, field: string): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
     method: "DELETE",
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
+/** Persist conditional formatting rules for a field. Merges rules into the
+ *  existing field_config JSON so other config keys (options, numberFormat, etc.)
+ *  are preserved. */
+export async function updateFieldRules(
+  dimId: string,
+  field: string,
+  rules: ConditionalRule[],
+): Promise<void> {
+  // Fetch current dimension to get the existing field_config
+  const dim = await api<{ fields: Array<{ field: string; field_config?: string }> }>(
+    `/dimensions/${encodeURIComponent(dimId)}`,
+  );
+  const existing = dim.fields?.find((f) => f.field === field);
+  let cfg: Record<string, unknown> = {};
+  if (existing?.field_config) {
+    try {
+      cfg = JSON.parse(existing.field_config) as Record<string, unknown>;
+    } catch {
+      cfg = {};
+    }
+  }
+  cfg.rules = rules;
+  await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify(cfg) }),
   });
   await refreshDim(dimId);
   emit();

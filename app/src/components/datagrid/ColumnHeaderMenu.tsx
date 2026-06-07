@@ -14,6 +14,10 @@ import {
 } from "../Icons";
 import type { CellType, ColumnConfig, ColumnDef, NumberFormat } from "./types";
 
+const IconRules = ({ className }: { className?: string }) => (
+  <span className={className} style={{ fontSize: "10px" }}>◈</span>
+);
+
 interface Props<Row> {
   column: ColumnDef<Row>;
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -26,6 +30,7 @@ interface Props<Row> {
   onHide: () => void;
   onDelete: () => void;
   onFilter: (value: string | null) => void;
+  onOpenRules?: () => void;
 }
 
 const TYPES: CellType[] = ["text", "number", "boolean", "date", "select", "url", "email", "rating"];
@@ -44,6 +49,7 @@ export function ColumnHeaderMenu<Row>({
   onHide,
   onDelete,
   onFilter,
+  onOpenRules,
 }: Props<Row>) {
   const [mode, setMode] = useState<"menu" | "rename" | "type" | "number-format" | "rating-max" | "filter" | "confirm-delete">(
     "menu",
@@ -152,6 +158,18 @@ export function ColumnHeaderMenu<Row>({
               </span>
             )}
           </button>
+          {onOpenRules && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onOpenRules();
+                onClose();
+              }}
+            >
+              <IconRules className={iconCls} /> conditional formatting…
+            </button>
+          )}
           <div className="my-1 h-px bg-line" />
           <button
             type="button"

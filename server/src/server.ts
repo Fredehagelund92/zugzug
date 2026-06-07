@@ -369,8 +369,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return noContent();
         }
         if (method === "PATCH") {
-          const body = (await req.json()) as { description?: string | null };
-          await repo.updateField(id, field, { description: body.description }, me);
+          const body = (await req.json()) as { description?: string | null; field_config?: string | null };
+          await repo.updateField(id, field, { description: body.description, fieldConfig: body.field_config }, me);
           return noContent();
         }
         if (method === "DELETE") return json(await repo.deleteColumn(id, field, me));

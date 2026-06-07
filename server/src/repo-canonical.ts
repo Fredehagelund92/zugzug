@@ -472,26 +472,36 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
   });
 }
 
-/** Update metadata on an existing field (currently: description). When
- *  `description` is undefined it is left unchanged; null clears it. */
+/** Update metadata on an existing field (description and/or field_config).
+ *  When a key is undefined it is left unchanged; null clears it. */
 export async function updateField(
   dimId: string,
   field: string,
-  updates: { description?: string | null },
+  updates: { description?: string | null; fieldConfig?: string | null },
   userId: string,
 ): Promise<void> {
-  if (updates.description === undefined) return;
-  const desc =
-    typeof updates.description === "string"
-      ? updates.description.trim() === ""
-        ? null
-        : updates.description.trim()
-      : updates.description;
-  await pgRun(
-    `UPDATE ${pg("dimension_field")} SET description = $1 WHERE dim_id = $2 AND field = $3`,
-    [desc, dimId, field],
-  );
-  await appendAuditAs(userId, "Updated field description", field);
+  if (updates.description === undefined && updates.fieldConfig === undefined) return;
+
+  if (updates.description !== undefined) {
+    const desc =
+      typeof updates.description === "string"
+        ? updates.description.trim() === ""
+          ? null
+          : updates.description.trim()
+        : updates.description;
+    await pgRun(
+      `UPDATE ${pg("dimension_field")} SET description = $1 WHERE dim_id = $2 AND field = $3`,
+      [desc, dimId, field],
+    );
+    await appendAuditAs(userId, "Updated field description", field);
+  }
+
+  if (updates.fieldConfig !== undefined) {
+    await pgRun(
+      `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
+      [updates.fieldConfig, dimId, field],
+    );
+  }
 }
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈

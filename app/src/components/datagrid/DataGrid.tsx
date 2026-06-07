@@ -42,7 +42,9 @@ import { StatusBar } from "./StatusBar";
 import { computeAggregates } from "./useAggregates";
 import { useContextMenu, type ContextSurface } from "./useContextMenu";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
-import type { DataGridProps, CellType, ColumnDef, FilterSet } from "./types";
+import { ConditionalFormatPopover } from "./ConditionalFormatPopover";
+import { useConditionalFormatting, type RowEvaluation } from "./useConditionalFormatting";
+import type { DataGridProps, CellType, ColumnDef, FilterSet, RuleStyle } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
 
@@ -77,6 +79,7 @@ interface GridRowProps<Row> {
     | ((field: string, label: string, color?: PaletteName | null) => Promise<OptionDef[]>)
     | undefined;
   onRowNumPointerDown?: (e: React.PointerEvent, rk: string) => void;
+  evaluation: RowEvaluation;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -107,18 +110,27 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     onStopEdit,
     onAddColumnOption,
     onRowNumPointerDown,
+    evaluation,
   } = props;
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 2}
       className={cx(
-        "grid items-stretch border-b border-line transition-colors",
+        "relative grid items-stretch border-b border-line transition-colors",
         selected ? "bg-surface-2" : "hover:bg-hover",
       )}
       style={gridStyle}
       data-row={rk}
     >
+      {evaluation.rowStripe && (
+        <span
+          aria-hidden
+          data-row-stripe={evaluation.rowStripe}
+          className="absolute left-0 top-0 bottom-0 w-1 z-[1]"
+          style={{ background: `var(--tint-${evaluation.rowStripe})` }}
+        />
+      )}
       {showRowNumbers && (
         <div
           data-row-num={rk}
@@ -158,6 +170,10 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
           isFirstPinned && "sticky left-0 z-[5] bg-[var(--surface)]",
           isFirstPinned && selected && "!bg-[var(--surface-2)]",
         );
+        const ruleStyle: RuleStyle | undefined = evaluation.cellStyles.get(c.field);
+        const cellInlineStyle: React.CSSProperties = {};
+        if (ruleStyle?.cellBg) cellInlineStyle.background = `color-mix(in srgb,var(--tint-${ruleStyle.cellBg}) 18%,transparent)`;
+        if (ruleStyle?.textColor) cellInlineStyle.color = `var(--tint-${ruleStyle.textColor})`;
         const data = `${rk}::${c.field}`;
         return (
           <div
@@ -170,6 +186,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
             onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
             onDoubleClick={() => onCellDoubleClick(rk, c.field)}
             className={cellCx}
+            style={Object.keys(cellInlineStyle).length > 0 ? cellInlineStyle : undefined}
           >
             {editing && c.editable !== false ? (
               c.edit ? (
@@ -379,6 +396,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
   const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [rulesEditor, setRulesEditor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -558,6 +576,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if (!lastRow || !lastCol) return null;
     return `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`;
   }, [range, sortedRows, orderedVisible, rowKey, computeRangeBounds]);
+
+  // ── Conditional formatting ─────────────────────────────────────────────────
+  const condFmt = useConditionalFormatting(orderedVisible, getValue);
 
   const statusAgg = useMemo(() => {
     if (!range) return null;
@@ -826,6 +847,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         { label: "Sort descending", onClick: () => setSort({ field: surface.field, dir: "desc" }) },
         { label: "Rename", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); } },
         { label: "Change type", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); }, disabled: !props.onChangeColumnType },
+        { label: "Conditional formatting…", onClick: () => setRulesEditor(surface.field), disabled: !props.onSaveColumnRules },
         { separator: true, label: "", onClick: () => {} },
         { separator: true, label: "", onClick: () => {} },
         { label: "Hide column", onClick: () => {
@@ -1342,6 +1364,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   onClose={() => setMenuFor(null)}
                   onRename={(label) => props.onRenameColumn?.(c.field, label)}
                   onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
+                  onOpenRules={props.onSaveColumnRules ? () => { setMenuFor(null); setRulesEditor(c.field); } : undefined}
                   onFilter={(v) =>
                     setFilterSet((cur) => {
                       const existing = cur?.conditions ?? [];
@@ -1481,6 +1504,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   const row = sortedRows[vRow.index]!;
                   const rk = rowKey(row);
                   const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
+                  const evaluation = condFmt.evaluateRow(row);
                   return (
                     <GridRow
                       key={rk}
@@ -1507,6 +1531,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       onStopEdit={onStopEdit}
                       onAddColumnOption={props.onAddColumnOption}
                       onRowNumPointerDown={onRowNumPointerDown}
+                      evaluation={evaluation}
                     />
                   );
                 })}
@@ -1524,6 +1549,19 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           items={buildMenuItems(contextMenu.surface)}
         />
       )}
+      {rulesEditor && (() => {
+        const col = orderedVisible.find((c) => c.field === rulesEditor);
+        if (!col) return null;
+        return (
+          <ConditionalFormatPopover
+            column={col}
+            rules={col.rules ?? []}
+            anchorRef={menuAnchorRef}
+            onChange={(rules) => props.onSaveColumnRules?.(col.field, rules)}
+            onClose={() => setRulesEditor(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -1,7 +1,21 @@
 import type { ReactNode } from "react";
 import type React from "react";
 import type { OptionDef, NumberFormat } from "../../data";
+import type { PaletteName } from "../../lib/palette";
 export type { NumberFormat };
+
+export interface RuleStyle {
+  cellBg?:    PaletteName;
+  textColor?: PaletteName;
+  rowStripe?: PaletteName;
+}
+
+export type ConditionalRule =
+  | { id: string; field: string; trigger: { kind: "equals" | "not_equals" | "contains" | "starts_with" | "ends_with"; value: string }; style: RuleStyle }
+  | { id: string; field: string; trigger: { kind: "is_empty" | "is_not_empty" }; style: RuleStyle }
+  | { id: string; field: string; trigger: { kind: "is_in"; values: string[] }; style: RuleStyle }
+  | { id: string; field: string; trigger: { kind: "gt" | "lt"; value: number }; style: RuleStyle }
+  | { id: string; field: string; trigger: { kind: "between"; min: number; max: number }; style: RuleStyle };
 
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
    grid through these types; new cell types slot in via the union. */
@@ -34,6 +48,7 @@ export interface ColumnDef<Row> {
   editable?:   boolean;
   pinnedLeft?: boolean;
   align?:      "left" | "right";
+  rules?:      ConditionalRule[];
   render?:     (row: Row, ctx: CellCtx<Row>) => ReactNode;
   edit?:       (row: Row, ctx: EditCtx<Row>) => ReactNode;
 }
@@ -135,4 +150,6 @@ export interface DataGridProps<Row> {
   onInsertRow?:    (rowKey: string, where: "above" | "below") => void;
   onDeleteRow?:    (rowKey: string) => void;
   onDuplicateRow?: (rowKey: string) => void;
+  /** Save per-column conditional formatting rules (persisted in field_config). */
+  onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
 }
