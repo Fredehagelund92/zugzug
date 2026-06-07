@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
@@ -36,6 +36,7 @@ import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
+import { useFillHandle } from "./useFillHandle";
 import { FilterBar } from "./FilterBar";
 import type { DataGridProps, CellType, ColumnDef, FilterSet } from "./types";
 import type { PaletteName } from "../../lib/palette";
@@ -303,6 +304,52 @@ function flashCell(rk: string, field: string): void {
   });
 }
 
+// ── FillHandle — absolutely-positioned 8×8 accent square ────────────────────
+function FillHandle({
+  targetSelector,
+  containerRef,
+  onPointerDown,
+  dragging,
+}: {
+  targetSelector: string;
+  containerRef: React.RefObject<HTMLDivElement>;
+  onPointerDown: (e: React.PointerEvent) => void;
+  dragging: boolean;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const update = () => {
+      const target = container.querySelector<HTMLElement>(targetSelector);
+      if (!target) { setPos(null); return; }
+      const cRect = container.getBoundingClientRect();
+      const tRect = target.getBoundingClientRect();
+      setPos({
+        top: tRect.bottom - cRect.top + container.scrollTop - 4,
+        left: tRect.right - cRect.left + container.scrollLeft - 4,
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    container.addEventListener("scroll", update);
+    return () => { ro.disconnect(); container.removeEventListener("scroll", update); };
+  }, [targetSelector, containerRef]);
+  if (!pos) return null;
+  return (
+    <div
+      data-fill-handle="true"
+      onPointerDown={onPointerDown}
+      style={{ position: "absolute", top: pos.top, left: pos.left, width: 8, height: 8 }}
+      className={cx(
+        "z-20 cursor-crosshair rounded-sm bg-accent",
+        dragging && "scale-125 shadow-pop",
+      )}
+    />
+  );
+}
+
 export function DataGrid<Row>(props: DataGridProps<Row>) {
   const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
   const visible = columns.filter((c) => !c.hidden);
@@ -435,6 +482,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   useEffect(() => {
     rangeRef.current = range;
   }, [range]);
+
   // whether we are currently drag-selecting
   const draggingRange = useRef(false);
 
@@ -480,6 +528,32 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     },
     [range, rowIndexMap, colIndexMap, computeRangeBounds],
   );
+
+  // ── Fill handle hook ────────────────────────────────────────────────────────
+  const fillHandle = useFillHandle({
+    range,
+    sortedRows,
+    rowKey,
+    orderedVisible,
+    rowIndexMap,
+    getValue,
+    commitValue,
+    setRange,
+    beginTransaction: undo.beginTransaction,
+    endTransaction: undo.endTransaction,
+    flashCell,
+  });
+
+  // Selector for the bottom-right cell of the current range (used to anchor
+  // the fill handle square). Recalculated whenever the range changes.
+  const fillHandlePos = useMemo(() => {
+    if (!range) return null;
+    const bounds = computeRangeBounds(range);
+    const lastRow = sortedRows[bounds.maxRow];
+    const lastCol = orderedVisible[bounds.maxCol];
+    if (!lastRow || !lastCol) return null;
+    return `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`;
+  }, [range, sortedRows, orderedVisible, rowKey, computeRangeBounds]);
 
   // ── Cursor ─────────────────────────────────────────────────────────────────
   const cursor = useGridCursor({
@@ -989,7 +1063,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
+    <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
       {filterSet && filterSet.conditions.length > 0 && (
         <FilterBar
           filterSet={filterSet}
@@ -1004,8 +1078,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-rowcount={sortedRows.length + 1}
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
-        className="flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
+        className="relative flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
       >
+      {fillHandlePos && (
+        <FillHandle
+          targetSelector={fillHandlePos}
+          containerRef={cursor.ref}
+          onPointerDown={fillHandle.onHandlePointerDown}
+          dragging={fillHandle.dragging}
+        />
+      )}
       {/* header row */}
       <div
         role="row"
