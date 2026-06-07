@@ -139,27 +139,6 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
   );
 }
 
-const DENSITY_KEY = "zugzug:grid-density";
-
-function useDensity(): ["default" | "compact", () => void] {
-  const [d, setD] = useState<"default" | "compact">(() => {
-    if (typeof localStorage === "undefined") return "default";
-    return localStorage.getItem(DENSITY_KEY) === "compact" ? "compact" : "default";
-  });
-  return [
-    d,
-    () =>
-      setD((cur) => {
-        const next = cur === "compact" ? "default" : "compact";
-        try {
-          localStorage.setItem(DENSITY_KEY, next);
-        } catch {
-          /* ignore */
-        }
-        return next;
-      }),
-  ];
-}
 
 function exportToCSV(dim: MappingDimension): void {
   const fields = dim.fields ?? [];
@@ -182,15 +161,14 @@ function exportToCSV(dim: MappingDimension): void {
 
 /** RecordsBody — the original TablePane body, lifted verbatim so TablePaneInner
  *  can switch between this and other mode bodies (Match, Sources) under one
- *  shared UndoStackProvider. The body owns its own grid layout state, density
- *  toggle, popovers, etc. */
+ *  shared UndoStackProvider. The body owns its own grid layout state, popovers, etc. */
 function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
   const sources = useSources();
   const { engineer } = useEngineerMode();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
   const undo = useUndoStack();
-  const [density, toggleDensity] = useDensity();
+
 
   const [sel, setSel] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
@@ -453,15 +431,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           >
             ↷ Redo
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleDensity}
-            title={density === "compact" ? "Default row height" : "Compact row height"}
-            className="max-md:hidden"
-          >
-            {density === "compact" ? "▤ Default" : "≡ Compact"}
-          </Button>
+
           {list.length > 0 && (
             <Button variant="ghost" size="sm" onClick={() => exportToCSV(dim)}>
               ↓ Export CSV
@@ -608,7 +578,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           rows={rowsForGrid}
           rowKey={(c) => c.key}
           columns={columns}
-          density={density}
+
           showRowNumbers
           selection={{ selected: sel, onChange: setSel }}
           onCommit={async (rowKey, field, value) => {
