@@ -303,17 +303,27 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         };
         return json(await repo.deriveCanonical(id, table, column, nameColumn, {}, me));
       }
-      // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?} — add an attribute column
+      // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-        const { label, type, options, numberFormat, ratingMax } = (await req.json()) as {
+        const {
+          label, type, options, numberFormat, ratingMax,
+          referencedDimId, displayFields,
+        } = (await req.json()) as {
           label: string;
           type?: string;
           options?: { label: string; color: string | null }[];
           numberFormat?: NumberFormat;
           ratingMax?: number;
+          referencedDimId?: string;
+          displayFields?: string[];
         };
         return json(
-          await repo.addField(id, label, type, options as repo.OptionDef[] | undefined, { numberFormat, ratingMax }, me),
+          await repo.addField(
+            id, label, type,
+            options as repo.OptionDef[] | undefined,
+            { numberFormat, ratingMax, referencedDimId, displayFields },
+            me,
+          ),
         );
       }
       // POST /api/dimensions/:id/fields/:field/options {label} — append a select option

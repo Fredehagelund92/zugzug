@@ -411,14 +411,19 @@ export async function fetchVariants(dimId: string, key: string): Promise<string[
   );
 }
 
-/** Add an enrichment attribute column to a dimension (text|number|boolean|date|select).
- *  For `select`, `options` seeds the allowed list; otherwise omit. */
+/** Add an enrichment attribute column to a dimension (text|number|boolean|date|select|linked).
+ *  For `select`, `options` seeds the allowed list; for `linked`, pass `referencedDimId` and optionally `displayFields`; otherwise omit extras. */
 export async function addField(
   dimId: string,
   label: string,
   type = "text",
   options?: OptionDef[],
-  extras?: { numberFormat?: NumberFormat; ratingMax?: number },
+  extras?: {
+    numberFormat?: NumberFormat;
+    ratingMax?: number;
+    referencedDimId?: string;
+    displayFields?: string[];
+  },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
     method: "POST",
