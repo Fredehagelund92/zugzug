@@ -38,6 +38,8 @@ import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
 import { useFillHandle } from "./useFillHandle";
 import { FilterBar } from "./FilterBar";
+import { StatusBar } from "./StatusBar";
+import { computeAggregates } from "./useAggregates";
 import type { DataGridProps, CellType, ColumnDef, FilterSet } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
@@ -1434,6 +1436,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             );
           })()}
       </div>
+      {range && (() => {
+        const b = computeRangeBounds(range);
+        const cellCount = (b.maxRow - b.minRow + 1) * (b.maxCol - b.minCol + 1);
+        if (cellCount <= 1) return null;
+        return <StatusBar agg={computeAggregates(sortedRows, orderedVisible, getValue, b)} />;
+      })()}
     </div>
   );
 }
