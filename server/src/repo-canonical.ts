@@ -43,6 +43,7 @@ const SQL_TYPE: Record<string, string> = {
   url: "VARCHAR",
   email: "VARCHAR",
   rating: "INTEGER",
+  linked: "VARCHAR",
 };
 
 /* ---- dimension registry (Postgres) + canonical tables ---- */
@@ -436,13 +437,26 @@ export async function addField(
   label: string,
   type: string = "text",
   options: OptionDef[] | undefined,
-  opts: { silent?: boolean; numberFormat?: NumberFormat; ratingMax?: number } = {},
+  opts: {
+    silent?: boolean;
+    numberFormat?: NumberFormat;
+    ratingMax?: number;
+    referencedDimId?: string;
+    displayFields?: string[];
+  } = {},
   userId: string,
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const KNOWN = new Set(["text", "number", "boolean", "date", "select", "url", "email", "rating"]);
+  const KNOWN = new Set(["text", "number", "boolean", "date", "select", "url", "email", "rating", "linked"]);
   const t = KNOWN.has(type) ? type : "text";
+
+  if (t === "linked") {
+    if (!opts.referencedDimId) return null;
+    const targetExists = await dimMeta(opts.referencedDimId);
+    if (!targetExists) return null;
+  }
+
   const field = slug(label);
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
   const sqlType = SQL_TYPE[t] ?? "VARCHAR";
@@ -454,7 +468,12 @@ export async function addField(
         ? JSON.stringify(opts.numberFormat)
         : t === "rating"
           ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
-          : null;
+          : t === "linked"
+            ? JSON.stringify({
+                targetDimId: opts.referencedDimId,
+                displayFields: opts.displayFields ?? ["label"],
+              })
+            : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, field_config, created_at)
      VALUES ($1, $2, $3, $4, $5, current_timestamp) ON CONFLICT (dim_id, field) DO NOTHING`,
