@@ -21,7 +21,7 @@ const IconFieldRating = ({ className }: { className?: string }) => (
   <span className={className} style={{ fontSize: "10px" }}>★</span>
 );
 const IconFieldLinked = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>🔗</span>
+  <span className={className} style={{ fontSize: "10px" }}>⇢</span>
 );
 import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
