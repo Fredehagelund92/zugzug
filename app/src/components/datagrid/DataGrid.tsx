@@ -849,6 +849,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         { label: "Sort descending", onClick: () => setSort({ field: surface.field, dir: "desc" }) },
         { label: "Rename", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); } },
         { label: "Change type", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); }, disabled: !props.onChangeColumnType },
+        { separator: true, label: "", onClick: () => {} },
         {
           label: "Conditional formatting…",
           onClick: () => {
@@ -867,7 +868,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           },
           disabled: !props.onSaveColumnDescription,
         },
-        { separator: true, label: "", onClick: () => {} },
         { separator: true, label: "", onClick: () => {} },
         { label: "Hide column", onClick: () => {
             const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];

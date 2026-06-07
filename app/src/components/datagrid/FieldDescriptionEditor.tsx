@@ -41,7 +41,7 @@ export function FieldDescriptionEditor({
       <div className="mt-2 flex justify-end gap-1">
         <button onClick={onClose} className="rounded px-2 py-1 text-[11px] text-ink-2 hover:bg-hover">Cancel</button>
         <button
-          onClick={() => { onSave(value.trim() === "" ? null : value); onClose(); }}
+          onClick={() => { onSave(value.trim() || null); onClose(); }}
           className="rounded bg-accent px-2 py-1 text-[11px] text-white hover:brightness-110"
         >Save</button>
       </div>

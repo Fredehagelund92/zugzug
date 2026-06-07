@@ -525,12 +525,10 @@ export async function updateFieldDescription(
   field: string,
   description: string | null,
 ): Promise<void> {
-  const res = await fetch(`/api/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
-    headers: { "content-type": "application/json" },
     body: JSON.stringify({ description }),
   });
-  if (!res.ok) throw new Error(`updateFieldDescription failed: ${res.status}`);
   await refreshDim(dimId);
   emit();
 }
