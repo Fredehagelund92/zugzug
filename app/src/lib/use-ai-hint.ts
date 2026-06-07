@@ -3,14 +3,14 @@ import { useEffect, useRef, useState } from "react";
 export interface AiHint {
   suggestion: string | null;
   confidence: number;
-  reasoning:  string;
-  cached?:    boolean;
+  reasoning: string;
+  cached?: boolean;
 }
 
 interface State {
-  hint:    AiHint | null;
+  hint: AiHint | null;
   loading: boolean;
-  error:   boolean;
+  error: boolean;
 }
 
 // Module-level session cache — survives remounts, makes re-focuses instant.
@@ -20,18 +20,14 @@ function cacheKey(dimId: string, raw: string): string {
   return `${dimId}::${raw}`;
 }
 
-export function useAiHint(
-  dimId:   string,
-  raw:     string,
-  enabled: boolean,
-): State {
+export function useAiHint(dimId: string, raw: string, enabled: boolean): State {
   const [state, setState] = useState<State>(() => {
     const cached = enabled ? sessionCache.get(cacheKey(dimId, raw)) : undefined;
     return { hint: cached ?? null, loading: false, error: false };
   });
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef    = useRef<AbortController | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!enabled || !dimId || !raw) return;

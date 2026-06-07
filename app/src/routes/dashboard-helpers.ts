@@ -65,14 +65,10 @@ export function applyFilter(
 ): MappingDimension[] {
   if (filter === "all") return dims;
   if (filter === "attention") {
-    return dims.filter(
-      (d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id),
-    );
+    return dims.filter((d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id));
   }
   // "clean"
-  return dims.filter(
-    (d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id),
-  );
+  return dims.filter((d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id));
 }
 
 /** Sort dims. Returns a new array — never mutates the input. */

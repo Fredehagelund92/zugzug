@@ -77,7 +77,11 @@ export function CatalogExplorer({
     } catch (err) {
       setWired((w) => ({
         ...w,
-        [key]: { dim: dimLabel, n: null, error: err instanceof Error ? err.message : "wire failed" },
+        [key]: {
+          dim: dimLabel,
+          n: null,
+          error: err instanceof Error ? err.message : "wire failed",
+        },
       }));
     }
   };

@@ -145,11 +145,7 @@ export function MasterTables() {
           const modes = availableModes(dim, sources);
           const mode: Mode = perTabMode[tab.dimId] ?? readStoredMode(tab.dimId, modes);
           return (
-            <div
-              key={tab.id}
-              hidden={!isActive}
-              className="absolute inset-0 flex flex-col min-h-0"
-            >
+            <div key={tab.id} hidden={!isActive} className="absolute inset-0 flex flex-col min-h-0">
               <TablePane
                 dim={dim}
                 isActive={isActive}

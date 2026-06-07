@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
+import type { ConditionalRule } from "./components/datagrid/types";
 
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
@@ -471,7 +472,16 @@ export async function changeColumnType(
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
-    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull, numberFormat, ratingMax }) },
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        type: newType,
+        options,
+        coerceInvalidToNull,
+        numberFormat,
+        ratingMax,
+      }),
+    },
   );
   if (res.ok) {
     await refreshDim(dimId);
@@ -483,6 +493,36 @@ export async function changeColumnType(
 export async function deleteColumn(dimId: string, field: string): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
     method: "DELETE",
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
+/** Persist conditional formatting rules for a field. The server merges the
+ *  incoming field_config patch with the existing stored config, so sending only
+ *  { rules } is safe and will not wipe options / numberFormat / ratingMax. */
+export async function updateFieldRules(
+  dimId: string,
+  field: string,
+  rules: ConditionalRule[],
+): Promise<void> {
+  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify({ rules }) }),
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
+/** Persist a plain-text description for a field. Pass null to clear it. */
+export async function updateFieldDescription(
+  dimId: string,
+  field: string,
+  description: string | null,
+): Promise<void> {
+  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ description }),
   });
   await refreshDim(dimId);
   emit();

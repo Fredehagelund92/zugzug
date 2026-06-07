@@ -1,7 +1,34 @@
 import type { ReactNode } from "react";
 import type React from "react";
 import type { OptionDef, NumberFormat } from "../../data";
+import type { PaletteName } from "../../lib/palette";
 export type { NumberFormat };
+
+export interface RuleStyle {
+  cellBg?: PaletteName;
+  textColor?: PaletteName;
+  rowStripe?: PaletteName;
+}
+
+export type ConditionalRule =
+  | {
+      id: string;
+      field: string;
+      trigger: {
+        kind: "equals" | "not_equals" | "contains" | "starts_with" | "ends_with";
+        value: string;
+      };
+      style: RuleStyle;
+    }
+  | { id: string; field: string; trigger: { kind: "is_empty" | "is_not_empty" }; style: RuleStyle }
+  | { id: string; field: string; trigger: { kind: "is_in"; values: string[] }; style: RuleStyle }
+  | { id: string; field: string; trigger: { kind: "gt" | "lt"; value: number }; style: RuleStyle }
+  | {
+      id: string;
+      field: string;
+      trigger: { kind: "between"; min: number; max: number };
+      style: RuleStyle;
+    };
 
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
    grid through these types; new cell types slot in via the union. */
@@ -25,17 +52,19 @@ export type ColumnConfig =
 export type CellType = ColumnConfig["type"];
 
 export interface ColumnDef<Row> {
-  field:       string;
-  label:       string;
-  config:      ColumnConfig;
-  width?:      number;
-  hidden?:     boolean;
-  sortable?:   boolean;
-  editable?:   boolean;
+  field: string;
+  label: string;
+  config: ColumnConfig;
+  width?: number;
+  hidden?: boolean;
+  sortable?: boolean;
+  editable?: boolean;
   pinnedLeft?: boolean;
-  align?:      "left" | "right";
-  render?:     (row: Row, ctx: CellCtx<Row>) => ReactNode;
-  edit?:       (row: Row, ctx: EditCtx<Row>) => ReactNode;
+  align?: "left" | "right";
+  rules?: ConditionalRule[];
+  description?: string;
+  render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
+  edit?: (row: Row, ctx: EditCtx<Row>) => ReactNode;
 }
 
 export interface CellCtx<Row> {
@@ -131,4 +160,12 @@ export interface DataGridProps<Row> {
   density?: "default" | "compact";
   /** Prepend a 1-based row number column (read-only, 36px wide). */
   showRowNumbers?: boolean;
+  /** Row operations triggered from the right-click context menu. */
+  onInsertRow?: (rowKey: string, where: "above" | "below") => void;
+  onDeleteRow?: (rowKey: string) => void;
+  onDuplicateRow?: (rowKey: string) => void;
+  /** Save per-column conditional formatting rules (persisted in field_config). */
+  onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
+  /** Save a plain-text description for a column (persisted in dimension_field.description). */
+  onSaveColumnDescription?: (field: string, description: string | null) => void;
 }

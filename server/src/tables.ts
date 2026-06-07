@@ -125,7 +125,14 @@ export async function createTable(
   // 4. Fields (blank mode) — addField issues DDL + INSERT, outside tx
   if (input.mode === "blank" && input.columns) {
     for (const c of input.columns) {
-      await repo.addField(id, c.label.trim(), c.type, c.options, { silent: true, numberFormat: c.numberFormat, ratingMax: c.ratingMax }, userId);
+      await repo.addField(
+        id,
+        c.label.trim(),
+        c.type,
+        c.options,
+        { silent: true, numberFormat: c.numberFormat, ratingMax: c.ratingMax },
+        userId,
+      );
       fieldCount++;
     }
   }

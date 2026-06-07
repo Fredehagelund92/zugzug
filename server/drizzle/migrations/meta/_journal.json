@@ -36,6 +36,13 @@
       "when": 1780720640000,
       "tag": "0004_rename_options_to_field_config",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780823597564,
+      "tag": "0005_warm_thunderbolts",
+      "breakpoints": true
     }
   ]
 }

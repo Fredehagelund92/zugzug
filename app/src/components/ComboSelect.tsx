@@ -261,7 +261,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
                       list.length === highlight ? "bg-hover" : "",
                     )}
                   >
-                    <IconPlus className="h-3.5 w-3.5" /> Create "{norm}"
+                    <IconPlus className="h-3.5 w-3.5" /> Create &ldquo;{norm}&rdquo;
                   </button>
                 </li>
               )}

@@ -10,15 +10,20 @@ function nextId(): string {
   return Math.random().toString(36).slice(2, 9);
 }
 
-const OPERATORS: { op: FilterOperator; label: string; types: CellType[] | "all"; hasValue: boolean }[] = [
-  { op: "contains",     label: "contains",      types: ["text", "select"],          hasValue: true },
-  { op: "not_contains", label: "not contains",   types: ["text", "select"],          hasValue: true },
-  { op: "equals",       label: "equals",         types: "all",                       hasValue: true },
-  { op: "not_equals",   label: "not equals",     types: "all",                       hasValue: true },
-  { op: "starts_with",  label: "starts with",    types: ["text", "select"],          hasValue: true },
-  { op: "ends_with",    label: "ends with",      types: ["text", "select"],          hasValue: true },
-  { op: "is_empty",     label: "is empty",       types: "all",                       hasValue: false },
-  { op: "is_not_empty", label: "is not empty",   types: "all",                       hasValue: false },
+const OPERATORS: {
+  op: FilterOperator;
+  label: string;
+  types: CellType[] | "all";
+  hasValue: boolean;
+}[] = [
+  { op: "contains", label: "contains", types: ["text", "select"], hasValue: true },
+  { op: "not_contains", label: "not contains", types: ["text", "select"], hasValue: true },
+  { op: "equals", label: "equals", types: "all", hasValue: true },
+  { op: "not_equals", label: "not equals", types: "all", hasValue: true },
+  { op: "starts_with", label: "starts with", types: ["text", "select"], hasValue: true },
+  { op: "ends_with", label: "ends with", types: ["text", "select"], hasValue: true },
+  { op: "is_empty", label: "is empty", types: "all", hasValue: false },
+  { op: "is_not_empty", label: "is not empty", types: "all", hasValue: false },
 ];
 
 function operatorsFor(type: CellType): typeof OPERATORS {
@@ -87,7 +92,8 @@ function FilterConditionEditor<Row>({
 
       popover.style.width = `${POPOVER_WIDTH}px`;
       let left = a.left;
-      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      if (left + POPOVER_WIDTH > window.innerWidth - 8)
+        left = window.innerWidth - POPOVER_WIDTH - 8;
       let top = a.bottom + 4;
       if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - 4 - popH);
       popover.style.top = `${top}px`;
@@ -136,7 +142,10 @@ function FilterConditionEditor<Row>({
       className="zz-pop-in z-50 rounded-sm border border-line-2 bg-surface-elevated p-2 shadow-pop"
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose();
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          save();
+        }
       }}
     >
       <div className="mb-1.5 font-mono text-[10px] font-medium uppercase tracking-wider text-ink-3">
@@ -146,7 +155,8 @@ function FilterConditionEditor<Row>({
         value={field}
         onChange={(e) => {
           setField(e.target.value);
-          const newType = visibleCols.find((c) => c.field === e.target.value)?.config.type ?? "text";
+          const newType =
+            visibleCols.find((c) => c.field === e.target.value)?.config.type ?? "text";
           const newOps = operatorsFor(newType);
           if (!newOps.find((o) => o.op === operator)) {
             setOperator(newOps[0]?.op ?? "contains");
@@ -155,7 +165,9 @@ function FilterConditionEditor<Row>({
         className={cx(inputCls, "mb-2 cursor-pointer")}
       >
         {visibleCols.map((c) => (
-          <option key={c.field} value={c.field}>{c.label}</option>
+          <option key={c.field} value={c.field}>
+            {c.label}
+          </option>
         ))}
       </select>
 
@@ -168,7 +180,9 @@ function FilterConditionEditor<Row>({
         className={cx(inputCls, "mb-2 cursor-pointer")}
       >
         {ops.map((o) => (
-          <option key={o.op} value={o.op}>{o.label}</option>
+          <option key={o.op} value={o.op}>
+            {o.label}
+          </option>
         ))}
       </select>
 
@@ -266,7 +280,10 @@ export function FilterBar<Row>({ filterSet, columns, onChange }: FilterBarProps<
             )}
             <span className="flex items-center gap-0 rounded-pill border border-line-2 bg-hover text-[11px]">
               <button
-                ref={(el) => { if (el) pillRefs.current.set(cond.id, el); else pillRefs.current.delete(cond.id); }}
+                ref={(el) => {
+                  if (el) pillRefs.current.set(cond.id, el);
+                  else pillRefs.current.delete(cond.id);
+                }}
                 type="button"
                 onClick={() => setEditing((s) => (s === cond.id ? null : cond.id))}
                 className="rounded-l-pill px-2.5 py-0.5 font-mono text-ink-2 hover:text-ink"

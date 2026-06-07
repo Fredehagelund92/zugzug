@@ -52,7 +52,8 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
       const a = anchor.getBoundingClientRect();
       const popH = pop.offsetHeight;
       let left = a.left;
-      if (left + POPOVER_WIDTH > window.innerWidth - 8) left = window.innerWidth - POPOVER_WIDTH - 8;
+      if (left + POPOVER_WIDTH > window.innerWidth - 8)
+        left = window.innerWidth - POPOVER_WIDTH - 8;
       let top = a.bottom + 2;
       if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - 2 - popH);
       pop.style.top = `${top}px`;
