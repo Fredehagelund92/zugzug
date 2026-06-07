@@ -5,7 +5,7 @@ interface Bounds { minRow: number; maxRow: number; minCol: number; maxCol: numbe
 
 export interface Aggregates {
   count:    number;
-  distinct: number;
+  distinct: number | null;
   sum:      number | null;
   avg:      number | null;
   min:      number | string | null;
@@ -22,7 +22,7 @@ export function computeAggregates<Row>(
 ): Aggregates {
   const cellCount = (b.maxRow - b.minRow + 1) * (b.maxCol - b.minCol + 1);
   if (cellCount > MAX_CELLS) {
-    return { count: cellCount, distinct: NaN, sum: null, avg: null, min: null, max: null };
+    return { count: cellCount, distinct: null, sum: null, avg: null, min: null, max: null };
   }
   let count = 0;
   const seen = new Set<string>();

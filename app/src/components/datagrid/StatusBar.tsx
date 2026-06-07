@@ -36,6 +36,15 @@ export function StatusBar({ agg }: { agg: Aggregates }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { saveVisible(visible); }, [visible]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   const toggle = (k: AggKey) => {
     setVisible((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
   };

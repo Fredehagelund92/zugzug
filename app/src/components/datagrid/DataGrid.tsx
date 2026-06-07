@@ -557,6 +557,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     return `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`;
   }, [range, sortedRows, orderedVisible, rowKey, computeRangeBounds]);
 
+  const statusAgg = useMemo(() => {
+    if (!range) return null;
+    const b = computeRangeBounds(range);
+    const cellCount = (b.maxRow - b.minRow + 1) * (b.maxCol - b.minCol + 1);
+    if (cellCount <= 1) return null;
+    return computeAggregates(sortedRows, orderedVisible, getValue, b);
+  }, [range, sortedRows, orderedVisible, getValue, computeRangeBounds]);
+
   // ── Cursor ─────────────────────────────────────────────────────────────────
   const cursor = useGridCursor({
     rows: sortedRows,
@@ -1436,12 +1444,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             );
           })()}
       </div>
-      {range && (() => {
-        const b = computeRangeBounds(range);
-        const cellCount = (b.maxRow - b.minRow + 1) * (b.maxCol - b.minCol + 1);
-        if (cellCount <= 1) return null;
-        return <StatusBar agg={computeAggregates(sortedRows, orderedVisible, getValue, b)} />;
-      })()}
+      {statusAgg && <StatusBar agg={statusAgg} />}
     </div>
   );
 }
