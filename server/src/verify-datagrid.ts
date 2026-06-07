@@ -168,7 +168,14 @@ async function cleanup() {
   // ---- Phase 4: rating, url, and email field types ----
 
   const ratingFieldId = await step("addField(rating)", async () => {
-    const result = await repo.addField(dimId, "Quality", "rating", undefined, { ratingMax: 5 }, "u_verify");
+    const result = await repo.addField(
+      dimId,
+      "Quality",
+      "rating",
+      undefined,
+      { ratingMax: 5 },
+      "u_verify",
+    );
     assert(result != null, "addField(rating) returned null");
     return result.field;
   });

@@ -7,13 +7,7 @@ import { LedgerRow } from "../components/sources/LedgerRow";
 import { ago } from "../components/sources/utils";
 import { IconSearch, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
-import {
-  useDimensions,
-  useSources,
-  scanSources,
-  deriveCanonical,
-  type SourceInfo,
-} from "../store";
+import { useDimensions, useSources, scanSources, deriveCanonical, type SourceInfo } from "../store";
 import { useSourcesCursor } from "./use-sources-cursor";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
@@ -274,15 +268,16 @@ export function Sources() {
   }, [visibleGroups, effectiveOpen]);
 
   const rowsWithUnmapped = useMemo<string[]>(
-    () => visibleKeys.filter((k) => {
-      // O(N·M) lookup is fine — visible row counts are bounded by PAGE (=60).
-      for (const g of visibleGroups) {
-        for (const r of g.columns) {
-          if (`${r.dimId}::${r.table}::${r.column}` === k) return r.unmapped > 0;
+    () =>
+      visibleKeys.filter((k) => {
+        // O(N·M) lookup is fine — visible row counts are bounded by PAGE (=60).
+        for (const g of visibleGroups) {
+          for (const r of g.columns) {
+            if (`${r.dimId}::${r.table}::${r.column}` === k) return r.unmapped > 0;
+          }
         }
-      }
-      return false;
-    }),
+        return false;
+      }),
     [visibleKeys, visibleGroups],
   );
 
@@ -429,9 +424,13 @@ export function Sources() {
             <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
               <div className="min-w-0">
                 <div className="font-display text-[18px] font-semibold tracking-[-0.02em] md:text-[22px]">
-                  <span className="truncate font-mono text-[15px] text-ink-2 md:text-[18px]">{agg.worst.table}</span>
+                  <span className="truncate font-mono text-[15px] text-ink-2 md:text-[18px]">
+                    {agg.worst.table}
+                  </span>
                   <span className="font-mono text-[15px] text-ink-3 md:text-[18px]">.</span>
-                  <span className="font-mono text-[15px] text-ink md:text-[18px]">{agg.worst.column}</span>
+                  <span className="font-mono text-[15px] text-ink md:text-[18px]">
+                    {agg.worst.column}
+                  </span>
                 </div>
                 <p className="mt-1.5 text-[13px] text-ink-2 md:text-[13.5px]">
                   <span className="font-semibold text-ink">
@@ -443,7 +442,10 @@ export function Sources() {
                   <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link to={`/app/tables?open=${agg.worst.dimId}&active=${agg.worst.dimId}&mode=match`} className="shrink-0">
+              <Link
+                to={`/app/tables?open=${agg.worst.dimId}&active=${agg.worst.dimId}&mode=match`}
+                className="shrink-0"
+              >
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                   Resolve
                 </Button>
@@ -461,107 +463,106 @@ export function Sources() {
         {/* scroll region — Standing scrolls away, Toolbar sticks at the top,
             the ledger flows underneath. The page footer below is pinned. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-
-        {/* ─── TOOLBAR (sticky inside the surface) ─── */}
-        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur-sm md:gap-3 md:px-7">
-          <label className="flex min-w-0 flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3 md:min-w-[240px]">
-            <IconSearch className="h-3.5 w-3.5" />
-            <input
-              ref={searchInputRef}
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setShown(PAGE);
-              }}
-              placeholder={`Search ${agg.columns.toLocaleString()} column${agg.columns === 1 ? "" : "s"} across ${agg.systems} system${agg.systems === 1 ? "" : "s"}…`}
-              className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3"
-            />
-            {q.trim() && (
-              <button
-                type="button"
-                onClick={() => setQ("")}
-                aria-label="Clear search"
-                className="text-ink-3 transition-colors hover:text-ink"
-              >
-                ×
-              </button>
-            )}
-          </label>
-
-          <div className="flex items-center gap-0.5 rounded-sm border border-line bg-bg p-0.5">
-            {CHIPS.map((c) => (
-              <button
-                key={c.k}
-                type="button"
-                onClick={() => {
-                  setStatus(c.k);
+          {/* ─── TOOLBAR (sticky inside the surface) ─── */}
+          <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-surface/95 px-4 py-2 backdrop-blur-sm md:gap-3 md:px-7">
+            <label className="flex min-w-0 flex-1 items-center gap-2 border-b border-line py-1 text-ink-3 focus-within:border-ink-3 md:min-w-[240px]">
+              <IconSearch className="h-3.5 w-3.5" />
+              <input
+                ref={searchInputRef}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
                   setShown(PAGE);
                 }}
-                className={cx(
-                  "rounded-sm px-2.5 py-1 text-[12px] transition-colors",
-                  status === c.k ? "bg-surface-3 text-ink" : "text-ink-3 hover:text-ink-2",
-                )}
-              >
-                {c.label} <span className="font-mono text-[10.5px] text-ink-3">{c.n}</span>
-              </button>
-            ))}
+                placeholder={`Search ${agg.columns.toLocaleString()} column${agg.columns === 1 ? "" : "s"} across ${agg.systems} system${agg.systems === 1 ? "" : "s"}…`}
+                className="w-full bg-transparent text-[13.5px] text-ink outline-none placeholder:text-ink-3"
+              />
+              {q.trim() && (
+                <button
+                  type="button"
+                  onClick={() => setQ("")}
+                  aria-label="Clear search"
+                  className="text-ink-3 transition-colors hover:text-ink"
+                >
+                  ×
+                </button>
+              )}
+            </label>
+
+            <div className="flex items-center gap-0.5 rounded-sm border border-line bg-bg p-0.5">
+              {CHIPS.map((c) => (
+                <button
+                  key={c.k}
+                  type="button"
+                  onClick={() => {
+                    setStatus(c.k);
+                    setShown(PAGE);
+                  }}
+                  className={cx(
+                    "rounded-sm px-2.5 py-1 text-[12px] transition-colors",
+                    status === c.k ? "bg-surface-3 text-ink" : "text-ink-3 hover:text-ink-2",
+                  )}
+                >
+                  {c.label} <span className="font-mono text-[10.5px] text-ink-3">{c.n}</span>
+                </button>
+              ))}
+            </div>
+
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              className="rounded-sm border-0 bg-transparent px-1 text-[12.5px] text-ink-2 outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              {SORTS.map((s) => (
+                <option key={s.k} value={s.k}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as Sort)}
-            className="rounded-sm border-0 bg-transparent px-1 text-[12.5px] text-ink-2 outline-none transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            {SORTS.map((s) => (
-              <option key={s.k} value={s.k}>
-                {s.label}
-              </option>
+          {/* ─── GROUPED LEDGER ─── */}
+          <div>
+            {visibleGroups.map((g) => (
+              <SchemaSection
+                key={g.schema}
+                group={g}
+                open={effectiveOpen.has(g.schema)}
+                onToggle={() => toggleSchema(g.schema)}
+                expanded={expanded}
+                setExpanded={setExpanded}
+                focusedRowKey={cursor.cursor}
+                onRowClick={cursor.setCursor}
+                onDerive={derive}
+              />
             ))}
-          </select>
+
+            {groups.length === 0 && (
+              <EmptyState
+                wired={sources.length}
+                filteredByStatus={status !== "all" || !!q.trim()}
+                status={status}
+                onBrowse={() => setCatalog(true)}
+              />
+            )}
+
+            {groups.length > shown && (
+              <div className="flex items-center justify-between border-t border-line px-4 py-3 md:px-7">
+                <span className="font-mono text-[10.5px] text-ink-3">
+                  {shown} of {groups.length} systems
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShown((n) => n + PAGE)}
+                  className="font-mono text-[11px] text-ink-2 hover:text-ink"
+                >
+                  Load {Math.min(PAGE, groups.length - shown)} more →
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-
-        {/* ─── GROUPED LEDGER ─── */}
-        <div>
-          {visibleGroups.map((g) => (
-            <SchemaSection
-              key={g.schema}
-              group={g}
-              open={effectiveOpen.has(g.schema)}
-              onToggle={() => toggleSchema(g.schema)}
-              expanded={expanded}
-              setExpanded={setExpanded}
-              focusedRowKey={cursor.cursor}
-              onRowClick={cursor.setCursor}
-              onDerive={derive}
-            />
-          ))}
-
-          {groups.length === 0 && (
-            <EmptyState
-              wired={sources.length}
-              filteredByStatus={status !== "all" || !!q.trim()}
-              status={status}
-              onBrowse={() => setCatalog(true)}
-            />
-          )}
-
-          {groups.length > shown && (
-            <div className="flex items-center justify-between border-t border-line px-4 py-3 md:px-7">
-              <span className="font-mono text-[10.5px] text-ink-3">
-                {shown} of {groups.length} systems
-              </span>
-              <button
-                type="button"
-                onClick={() => setShown((n) => n + PAGE)}
-                className="font-mono text-[11px] text-ink-2 hover:text-ink"
-              >
-                Load {Math.min(PAGE, groups.length - shown)} more →
-              </button>
-            </div>
-          )}
-        </div>
-
-        </div>{/* /scroll region */}
+        {/* /scroll region */}
 
         {/* ─── FOOTER — the only at-a-glance totals on the page ─── */}
         {sources.length > 0 && (
@@ -626,9 +627,7 @@ function SchemaSection({
           </span>
           <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">
             {group.totalCols} col{group.totalCols === 1 ? "" : "s"}
-            <span className="hidden md:inline">
-              umn{group.totalCols === 1 ? "" : "s"}
-            </span>
+            <span className="hidden md:inline">umn{group.totalCols === 1 ? "" : "s"}</span>
             {group.lastScanned ? ` · ${ago(group.lastScanned)} ago` : ""}
           </span>
         </div>
@@ -702,14 +701,18 @@ function EmptyState({
   if (filteredByStatus && status === "clean") {
     return (
       <div className="py-12 text-center">
-        <div className="font-display text-[18px] font-semibold text-ink">Everything here is clean. 💎</div>
+        <div className="font-display text-[18px] font-semibold text-ink">
+          Everything here is clean. 💎
+        </div>
       </div>
     );
   }
   if (filteredByStatus && status === "needs") {
     return (
       <div className="py-12 text-center">
-        <div className="font-display text-[18px] font-semibold text-ink">Nothing needs your attention. ☮️</div>
+        <div className="font-display text-[18px] font-semibold text-ink">
+          Nothing needs your attention. ☮️
+        </div>
       </div>
     );
   }

@@ -277,9 +277,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   // matches, then cleared from the ref so subsequent dim switches auto-
   // advance normally. Only fires when this pane is the active tab — inactive
   // panes shouldn't pin the cursor based on a URL that belongs to another tab.
-  const initialUrlValueRef = useRef<string | null>(
-    isActive ? searchParams.get("value") : null,
-  );
+  const initialUrlValueRef = useRef<string | null>(isActive ? searchParams.get("value") : null);
 
   // on mount and every dim change, drop the cursor on the first unmapped row
   // — unless the URL pinned a value present in this dim. Lets a user open
@@ -322,8 +320,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const stagedDrafts = useMemo(
     () =>
       listDrafts(dim.id).filter(
-        (d) =>
-          d.status === "mapped" && dim.values.find((v) => v.value === d.raw)?.status === "new",
+        (d) => d.status === "mapped" && dim.values.find((v) => v.value === d.raw)?.status === "new",
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dim, allDrafts],
@@ -367,9 +364,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     } catch (err) {
       setFlash(null);
       setCommitError(
-        err instanceof Error
-          ? err.message
-          : "Commit failed — check your connection and try again.",
+        err instanceof Error ? err.message : "Commit failed — check your connection and try again.",
       );
     }
   };
@@ -476,11 +471,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             </>
           ) : (
             <>
-              <Checkbox
-                state={headState}
-                onClick={() => setSel([])}
-                aria-label="Clear selection"
-              />
+              <Checkbox state={headState} onClick={() => setSel([])} aria-label="Clear selection" />
               <span className="font-mono text-[12px] text-ink">{sel.length} selected</span>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -517,9 +508,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   size="sm"
                   icon={<IconX className="h-3.5 w-3.5" />}
                   onClick={() =>
-                    void bulkApply(
-                      `skip ${sel.length} value${sel.length === 1 ? "" : "s"}`,
-                      (v) => skipPersist(v),
+                    void bulkApply(`skip ${sel.length} value${sel.length === 1 ? "" : "s"}`, (v) =>
+                      skipPersist(v),
                     )
                   }
                 >
@@ -813,11 +803,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 >
                   ✓ {flash.n} {engineer ? "draft" : "change"}
                   {flash.n === 1 ? "" : "s"}{" "}
-                  {engineer ? (
-                    <>merged into {dim.mapTable}</>
-                  ) : (
-                    <>published to {dim.dimension}</>
-                  )}
+                  {engineer ? <>merged into {dim.mapTable}</> : <>published to {dim.dimension}</>}
                   {" · "}
                   {flash.rows.toLocaleString()} rows recovered
                 </span>

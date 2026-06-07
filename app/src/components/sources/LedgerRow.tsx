@@ -73,11 +73,7 @@ export function LedgerRow({
         // expanded > focused > default-hover so a focused+expanded row reads
         // as "drill is open" while still showing keyboard focus.
         focused && "ring-1 ring-accent/60",
-        expanded
-          ? "bg-surface-2/40"
-          : focused
-            ? "bg-accent-wash/40"
-            : "hover:bg-surface-2",
+        expanded ? "bg-surface-2/40" : focused ? "bg-accent-wash/40" : "hover:bg-surface-2",
       )}
     >
       {/* Desktop layout: single grid row across 6 columns (original structure) */}

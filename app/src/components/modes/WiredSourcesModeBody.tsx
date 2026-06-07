@@ -105,21 +105,26 @@ export function WiredSourcesModeBody({ dim }: Props) {
                 className="flex items-baseline gap-2 font-mono text-[10px] font-medium uppercase tracking-[0.22em]"
                 style={{ color: kickerFg }}
               >
-                <span className={cx("zz-live h-1.5 w-1.5 rounded-pill")} style={{ background: stripeBg }} />
+                <span
+                  className={cx("zz-live h-1.5 w-1.5 rounded-pill")}
+                  style={{ background: stripeBg }}
+                />
                 Wired sources · {dim.dimension}
               </div>
               <h2 className="mt-2 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
                 <span className="tabular-nums">{wired.length}</span>{" "}
-                <span className="text-ink-2">
-                  column{wired.length === 1 ? "" : "s"} watched
-                </span>
+                <span className="text-ink-2">column{wired.length === 1 ? "" : "s"} watched</span>
                 <span className="ml-2 font-mono text-[12px] text-ink-3">
                   across {schemaCount} schema{schemaCount === 1 ? "" : "s"}
                 </span>
               </h2>
             </div>
             <Link to={`/app/sources?focus=${encodeURIComponent(firstSchema)}`}>
-              <Button variant="secondary" size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<IconArrowRight className="h-3.5 w-3.5" />}
+              >
                 View in Sources
               </Button>
             </Link>

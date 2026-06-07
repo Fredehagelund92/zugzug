@@ -40,6 +40,8 @@ export interface FieldDef {
   ratingMax?: number;
   referencedDimId?: string;
   displayFields?: string[];
+  description?: string;
+  rules?: import("./components/datagrid/types").ConditionalRule[];
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {

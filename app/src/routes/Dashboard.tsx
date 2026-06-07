@@ -63,19 +63,14 @@ export function Dashboard() {
   );
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
-  const attentionTables = dims.filter((d) =>
-    d.values.some((v) => v.status === "new"),
-  ).length;
+  const attentionTables = dims.filter((d) => d.values.some((v) => v.status === "new")).length;
   const cleanTables = dims.length - attentionTables;
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("urgency");
 
   // Dim ids that have at least one staged draft (for filter + row highlighting)
-  const stagedDimIds = useMemo(
-    () => new Set(staged.map((d) => d.dimId)),
-    [staged],
-  );
+  const stagedDimIds = useMemo(() => new Set(staged.map((d) => d.dimId)), [staged]);
 
   // Staged drafts grouped by dimId for the inline flag in table rows
   const stagedByDim = useMemo(() => {
@@ -93,14 +88,11 @@ export function Dashboard() {
   );
 
   const lastAuditByDim = useMemo(
-    () =>
-      Object.fromEntries(
-        dims.map((d) => [d.id, lastAuditForDim(d.id, d.dimension, auditLog)]),
-      ),
+    () => Object.fromEntries(dims.map((d) => [d.id, lastAuditForDim(d.id, d.dimension, auditLog)])),
     [dims, auditLog],
   );
 
-  const dimTint = (dim: typeof dims[0]) => {
+  const dimTint = (dim: (typeof dims)[0]) => {
     const palette = dim.color ?? defaultTintFor(dim.id);
     return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(dim.id)]).fg; // e.g. "var(--tint-rose)"
   };
@@ -128,7 +120,10 @@ export function Dashboard() {
       label: "New to resolve",
       value: String(totalNew),
       featured: totalNew > 0,
-      delta: totalNew > 0 ? `across ${attentionTables} table${attentionTables === 1 ? "" : "s"}` : undefined,
+      delta:
+        totalNew > 0
+          ? `across ${attentionTables} table${attentionTables === 1 ? "" : "s"}`
+          : undefined,
       dir: totalNew > 0 ? "warn" : undefined,
     },
     {
@@ -326,26 +321,22 @@ export function Dashboard() {
                   onClick={() => navigate(`/app/tables?open=${dim.id}&active=${dim.id}&mode=match`)}
                   className={cx(
                     "cursor-pointer",
-                    isStaged ? "bg-staged/[0.04] hover:bg-staged/[0.07]" : "bg-surface hover:bg-hover",
+                    isStaged
+                      ? "bg-staged/[0.04] hover:bg-staged/[0.07]"
+                      : "bg-surface hover:bg-hover",
                   )}
                 >
                   {/* tint accent bar — only on urgent rows */}
                   <td className="p-0">
                     {hasUrgency && (
-                      <div
-                        className="h-10 w-[3px] rounded-sm"
-                        style={{ background: tint }}
-                      />
+                      <div className="h-10 w-[3px] rounded-sm" style={{ background: tint }} />
                     )}
                   </td>
 
                   {/* table name + map table + optional staged flag */}
                   <td className="sticky left-0 z-10 border-b border-line bg-[inherit] px-4 py-2.5">
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-2 w-2 shrink-0 rounded-pill"
-                        style={{ background: tint }}
-                      />
+                      <div className="h-2 w-2 shrink-0 rounded-pill" style={{ background: tint }} />
                       <div className="min-w-0">
                         <div className="font-display text-[13px] font-semibold text-ink">
                           {dim.dimension}
@@ -415,9 +406,7 @@ export function Dashboard() {
                   <td className="border-b border-line px-4 py-2.5">
                     {lastAudit ? (
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[7px] font-semibold text-ink-2"
-                        >
+                        <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[7px] font-semibold text-ink-2">
                           {lastAudit.user.initials}
                         </span>
                         <span className="font-mono text-[10px] text-ink-3">
@@ -462,11 +451,9 @@ export function Dashboard() {
                 </td>
               </tr>
             )}
-
           </tbody>
         </table>
       </div>
-
     </div>
   );
 }

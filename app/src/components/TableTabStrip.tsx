@@ -9,7 +9,15 @@ import type { MappingDimension } from "../data";
 
 const DROPDOWN_W = 280;
 
-function TabMono({ label, color, active }: { label: string; color: PaletteName | null; active: boolean }) {
+function TabMono({
+  label,
+  color,
+  active,
+}: {
+  label: string;
+  color: PaletteName | null;
+  active: boolean;
+}) {
   const ch = label.charAt(0).toUpperCase();
   if (color) {
     const t = PALETTE[color];
@@ -148,7 +156,9 @@ function AddTabPopover({
             </li>
           );
         })}
-        {list.length === 0 && <li className="px-3 py-2 font-mono text-[12px] text-ink-3">no match</li>}
+        {list.length === 0 && (
+          <li className="px-3 py-2 font-mono text-[12px] text-ink-3">no match</li>
+        )}
       </ul>
       <button
         type="button"
@@ -196,14 +206,14 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
       tabIndex={0}
       className={cx(
         "group relative flex h-full cursor-pointer items-center gap-2 border-r border-line px-3 text-[12.5px] transition-colors",
-        active
-          ? "bg-surface text-ink"
-          : "bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink",
+        active ? "bg-surface text-ink" : "bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink",
       )}
     >
       {active && <span aria-hidden className="absolute inset-x-0 top-0 h-[2px] bg-accent" />}
       <TabMono label={dim.dimension} color={dim.color ?? null} active={active} />
-      <span className="max-w-[120px] truncate font-display font-semibold md:max-w-[160px]">{dim.dimension}</span>
+      <span className="max-w-[120px] truncate font-display font-semibold md:max-w-[160px]">
+        {dim.dimension}
+      </span>
       {dirty && (
         <span
           aria-label="uncommitted drafts"
@@ -220,7 +230,9 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
         }}
         className={cx(
           "grid h-4 w-4 place-items-center rounded-sm text-ink-3 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 hover:bg-line hover:text-ink",
-          active ? "opacity-60 hover:opacity-100" : "opacity-0 group-hover:opacity-60 hover:!opacity-100",
+          active
+            ? "opacity-60 hover:opacity-100"
+            : "opacity-0 group-hover:opacity-60 hover:!opacity-100",
         )}
       >
         <IconX className="h-3 w-3" />

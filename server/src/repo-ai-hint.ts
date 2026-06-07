@@ -4,7 +4,7 @@ import { pgGet, pgRun } from "./repo-shared.ts";
 export interface AiHint {
   suggestion: string | null;
   confidence: number;
-  reasoning:  string;
+  reasoning: string;
 }
 
 export interface AiHintResult extends AiHint {
@@ -17,10 +17,7 @@ interface DimContext {
 
 // ── validation ────────────────────────────────────────────────────────────────
 
-export function validateClaudeResponse(
-  raw: unknown,
-  canonicalLabels: string[],
-): AiHint {
+export function validateClaudeResponse(raw: unknown, canonicalLabels: string[]): AiHint {
   if (typeof raw !== "object" || raw === null) {
     return { suggestion: null, confidence: 0, reasoning: "Invalid response from AI." };
   }
@@ -85,15 +82,15 @@ Raw source value to match: "${raw}"`;
     method: "POST",
     signal: AbortSignal.timeout(8000),
     headers: {
-      "content-type":    "application/json",
-      "x-api-key":       env.anthropicApiKey,
+      "content-type": "application/json",
+      "x-api-key": env.anthropicApiKey,
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model:      "claude-haiku-4-5-20251001",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 256,
-      system:     SYSTEM_PROMPT,
-      messages:   [{ role: "user", content: userMessage }],
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }],
     }),
   });
 
@@ -127,14 +124,14 @@ Raw source value to match: "${raw}"`;
 interface CacheRow {
   suggestion: string | null;
   confidence: number;
-  reasoning:  string;
+  reasoning: string;
 }
 
 export async function getAiHint(
-  dimId:          string,
-  raw:            string,
+  dimId: string,
+  raw: string,
   canonicalLabels: string[],
-  dim:            DimContext,
+  dim: DimContext,
 ): Promise<AiHintResult> {
   // 1. Postgres cache hit
   const cached = await pgGet<CacheRow>(
@@ -157,8 +154,8 @@ export async function getAiHint(
     return {
       suggestion: null,
       confidence: 0,
-      reasoning:  "No canonical records exist yet.",
-      cached:     false,
+      reasoning: "No canonical records exist yet.",
+      cached: false,
     };
   }
 
@@ -181,7 +178,14 @@ export async function getAiHint(
            reasoning   = EXCLUDED.reasoning,
            model       = EXCLUDED.model,
            created_at  = EXCLUDED.created_at`,
-    [dimId, raw, result.suggestion, result.confidence, result.reasoning, "claude-haiku-4-5-20251001"],
+    [
+      dimId,
+      raw,
+      result.suggestion,
+      result.confidence,
+      result.reasoning,
+      "claude-haiku-4-5-20251001",
+    ],
   );
 
   return { ...result, cached: false };

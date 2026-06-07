@@ -57,7 +57,10 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
         </ul>
       )}
       <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link to={`/app/tables?open=${row.dimId}&active=${row.dimId}&mode=match`} className="text-accent hover:underline">
+        <Link
+          to={`/app/tables?open=${row.dimId}&active=${row.dimId}&mode=match`}
+          className="text-accent hover:underline"
+        >
           Resolve in Match values →
         </Link>
         <span>→ {row.dimension}</span>

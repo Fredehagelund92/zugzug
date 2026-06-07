@@ -14,6 +14,12 @@ import {
 } from "../Icons";
 import type { CellType, ColumnConfig, ColumnDef, NumberFormat } from "./types";
 
+const IconRules = ({ className }: { className?: string }) => (
+  <span className={className} style={{ fontSize: "10px" }}>
+    ◈
+  </span>
+);
+
 interface Props<Row> {
   column: ColumnDef<Row>;
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -26,6 +32,8 @@ interface Props<Row> {
   onHide: () => void;
   onDelete: () => void;
   onFilter: (value: string | null) => void;
+  onOpenRules?: () => void;
+  onEditDescription?: () => void;
 }
 
 const TYPES: CellType[] = ["text", "number", "boolean", "date", "select", "url", "email", "rating"];
@@ -44,16 +52,18 @@ export function ColumnHeaderMenu<Row>({
   onHide,
   onDelete,
   onFilter,
+  onOpenRules,
+  onEditDescription,
 }: Props<Row>) {
-  const [mode, setMode] = useState<"menu" | "rename" | "type" | "number-format" | "rating-max" | "filter" | "confirm-delete">(
-    "menu",
-  );
+  const [mode, setMode] = useState<
+    "menu" | "rename" | "type" | "number-format" | "rating-max" | "filter" | "confirm-delete"
+  >("menu");
   const [draft, setDraft] = useState(column.label);
   const [filterDraft, setFilterDraft] = useState(filterValue ?? "");
   const existingFmt = column.config.type === "number" ? column.config.numberFormat : undefined;
-  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency" | "compact" | "duration">(
-    existingFmt?.format ?? "integer",
-  );
+  const [numFmt, setNumFmt] = useState<
+    "integer" | "decimal" | "percent" | "currency" | "compact" | "duration"
+  >(existingFmt?.format ?? "integer");
   const [numPrecision, setNumPrecision] = useState<number>(
     existingFmt && "precision" in existingFmt ? existingFmt.precision : 0,
   );
@@ -152,6 +162,30 @@ export function ColumnHeaderMenu<Row>({
               </span>
             )}
           </button>
+          {onOpenRules && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onOpenRules();
+                onClose();
+              }}
+            >
+              <IconRules className={iconCls} /> conditional formatting…
+            </button>
+          )}
+          {onEditDescription && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onEditDescription();
+                onClose();
+              }}
+            >
+              <IconEdit className={iconCls} /> edit description…
+            </button>
+          )}
           <div className="my-1 h-px bg-line" />
           <button
             type="button"
@@ -293,25 +327,36 @@ export function ColumnHeaderMenu<Row>({
           </div>
 
           {/* Format tiles */}
-          {(["integer", "decimal", "percent", "currency", "compact", "duration"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => {
-                setNumFmt(f);
-                setNumPrecision(f === "decimal" ? 2 : 0);
-              }}
-              className={cx(
-                "w-full flex items-center gap-2 rounded-sm border px-2 py-1.5 text-left text-[11px] font-mono transition-colors",
-                numFmt === f
-                  ? "border-accent bg-accent-wash text-ink"
-                  : "border-line hover:border-line-2 hover:bg-hover text-ink",
-              )}
-            >
-              {{ integer: "***REMOVED***", decimal: "***REMOVED***.0", percent: "%", currency: "$", compact: "1.2M", duration: "⏱" }[f]}
-              <span className="ml-1 capitalize">{f}</span>
-            </button>
-          ))}
+          {(["integer", "decimal", "percent", "currency", "compact", "duration"] as const).map(
+            (f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => {
+                  setNumFmt(f);
+                  setNumPrecision(f === "decimal" ? 2 : 0);
+                }}
+                className={cx(
+                  "w-full flex items-center gap-2 rounded-sm border px-2 py-1.5 text-left text-[11px] font-mono transition-colors",
+                  numFmt === f
+                    ? "border-accent bg-accent-wash text-ink"
+                    : "border-line hover:border-line-2 hover:bg-hover text-ink",
+                )}
+              >
+                {
+                  {
+                    integer: "***REMOVED***",
+                    decimal: "***REMOVED***.0",
+                    percent: "%",
+                    currency: "$",
+                    compact: "1.2M",
+                    duration: "⏱",
+                  }[f]
+                }
+                <span className="ml-1 capitalize">{f}</span>
+              </button>
+            ),
+          )}
 
           {/* Precision (decimal / percent / currency) */}
           {(numFmt === "decimal" || numFmt === "percent" || numFmt === "currency") && (
@@ -461,23 +506,34 @@ export function ColumnHeaderMenu<Row>({
       )}
       {mode === "rating-max" && (
         <div className="p-2 space-y-2">
-          <button type="button" onClick={() => setMode("type")} className="flex items-center gap-1 font-mono text-[11px] text-ink-3 hover:text-ink">
+          <button
+            type="button"
+            onClick={() => setMode("type")}
+            className="flex items-center gap-1 font-mono text-[11px] text-ink-3 hover:text-ink"
+          >
             <IconChevronLeft className="h-3 w-3" /> Back
           </button>
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3 px-1">Max stars</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3 px-1">
+            Max stars
+          </div>
           <div className="flex gap-1 px-1">
             {[3, 5, 10].map((n) => (
               <button
                 key={n}
                 type="button"
-                onClick={() => { setRatingMax(n); setRatingMaxCustom(""); }}
+                onClick={() => {
+                  setRatingMax(n);
+                  setRatingMaxCustom("");
+                }}
                 className={cx(
                   "h-7 w-8 rounded-sm border font-mono text-[11px] transition-colors",
                   ratingMax === n && !ratingMaxCustom
                     ? "border-accent bg-accent-wash text-ink"
                     : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
                 )}
-              >{n}</button>
+              >
+                {n}
+              </button>
             ))}
             <input
               value={ratingMaxCustom}
@@ -499,9 +555,14 @@ export function ColumnHeaderMenu<Row>({
           </div>
           <button
             type="button"
-            onClick={() => { onChangeType({ type: "rating", ratingMax }); onClose(); }}
+            onClick={() => {
+              onChangeType({ type: "rating", ratingMax });
+              onClose();
+            }}
             className="w-full rounded-sm border border-accent bg-accent px-3 py-1.5 font-mono text-[11px] text-accent-ink hover:opacity-90"
-          >Apply</button>
+          >
+            Apply
+          </button>
         </div>
       )}
       {mode === "filter" && (
@@ -548,7 +609,11 @@ export function ColumnHeaderMenu<Row>({
                 clear
               </button>
             )}
-            <button type="button" className={item + " justify-center"} onClick={() => setMode("menu")}>
+            <button
+              type="button"
+              className={item + " justify-center"}
+              onClick={() => setMode("menu")}
+            >
               <IconChevronLeft className={iconCls} />
             </button>
           </div>

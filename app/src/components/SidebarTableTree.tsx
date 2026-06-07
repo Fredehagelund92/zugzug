@@ -37,7 +37,15 @@ function usePinnedDims(): [Set<string>, (id: string, pinned: boolean) => void] {
   return [ids, toggle];
 }
 
-function DimMono({ label, color, active }: { label: string; color: PaletteName | null; active: boolean }) {
+function DimMono({
+  label,
+  color,
+  active,
+}: {
+  label: string;
+  color: PaletteName | null;
+  active: boolean;
+}) {
   const ch = label.charAt(0).toUpperCase();
   if (color) {
     const t = PALETTE[color];
@@ -94,7 +102,10 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
           {dim.dimension}
         </span>
         {dirty && (
-          <span className="h-1.5 w-1.5 shrink-0 rounded-pill bg-accent" title="uncommitted drafts" />
+          <span
+            className="h-1.5 w-1.5 shrink-0 rounded-pill bg-accent"
+            title="uncommitted drafts"
+          />
         )}
       </button>
       <button

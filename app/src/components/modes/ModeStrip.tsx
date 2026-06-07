@@ -71,9 +71,7 @@ export function ModeStrip({ modes, active, onSelect, badges }: ModeStripProps) {
                 {b.count}
               </span>
             )}
-            {b?.warn && (
-              <span aria-hidden className="h-1.5 w-1.5 rounded-sm bg-warn" />
-            )}
+            {b?.warn && <span aria-hidden className="h-1.5 w-1.5 rounded-sm bg-warn" />}
           </button>
         );
       })}

@@ -28,18 +28,24 @@ interface TypeTile {
 }
 
 const TYPE_TILES: TypeTile[] = [
-  { type: "text",    icon: "A",  label: "Text" },
-  { type: "number",  icon: "***REMOVED***",  label: "Number" },
-  { type: "boolean", icon: "☑",  label: "Boolean" },
-  { type: "date",    icon: "⊞",  label: "Date" },
-  { type: "select",  icon: "◉",  label: "Select" },
-  { type: "url",     icon: "↗",  label: "URL" },
-  { type: "email",   icon: "@",  label: "Email" },
-  { type: "rating",  icon: "★",  label: "Rating" },
-  { type: "linked",  icon: "⇢",  label: "Linked" },
+  { type: "text", icon: "A", label: "Text" },
+  { type: "number", icon: "***REMOVED***", label: "Number" },
+  { type: "boolean", icon: "☑", label: "Boolean" },
+  { type: "date", icon: "⊞", label: "Date" },
+  { type: "select", icon: "◉", label: "Select" },
+  { type: "url", icon: "↗", label: "URL" },
+  { type: "email", icon: "@", label: "Email" },
+  { type: "rating", icon: "★", label: "Rating" },
+  { type: "linked", icon: "⇢", label: "Linked" },
 ];
 
-export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, currentDimId }: AddFieldPopoverProps) {
+export function AddFieldPopover({
+  anchorRef,
+  onClose,
+  onSubmit,
+  allDims,
+  currentDimId,
+}: AddFieldPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,7 +55,9 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, current
   const [createAnother, setCreateAnother] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [numFmt, setNumFmt] = useState<"integer" | "decimal" | "percent" | "currency" | "compact" | "duration">("integer");
+  const [numFmt, setNumFmt] = useState<
+    "integer" | "decimal" | "percent" | "currency" | "compact" | "duration"
+  >("integer");
   const [numPrecision, setNumPrecision] = useState<number>(2);
   const [currSymbol, setCurrSymbol] = useState("$");
   const [currPosition, setCurrPosition] = useState<"prefix" | "suffix">("prefix");
@@ -132,7 +140,20 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, current
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [label, type, options, createAnother, busy, numFmt, numPrecision, currSymbol, currPosition, ratingMax, durationDisplay, linkedTargetDimId]);
+  }, [
+    label,
+    type,
+    options,
+    createAnother,
+    busy,
+    numFmt,
+    numPrecision,
+    currSymbol,
+    currPosition,
+    ratingMax,
+    durationDisplay,
+    linkedTargetDimId,
+  ]);
 
   // Focus trap
   useEffect(() => {
@@ -307,7 +328,6 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, current
               </button>
             );
           })}
-
         </div>
 
         {/* Type-specific config */}
@@ -331,12 +351,12 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, current
               <div className="grid grid-cols-2 gap-1.5">
                 {(
                   [
-                    { f: "integer",  icon: "***REMOVED***",    label: "Integer" },
-                    { f: "decimal",  icon: "***REMOVED***.0",  label: "Decimal" },
-                    { f: "percent",  icon: "%",    label: "Percent" },
-                    { f: "currency", icon: "$",    label: "Currency" },
-                    { f: "compact",  icon: "1.2M", label: "Compact" },
-                    { f: "duration", icon: "⏱",   label: "Duration" },
+                    { f: "integer", icon: "***REMOVED***", label: "Integer" },
+                    { f: "decimal", icon: "***REMOVED***.0", label: "Decimal" },
+                    { f: "percent", icon: "%", label: "Percent" },
+                    { f: "currency", icon: "$", label: "Currency" },
+                    { f: "compact", icon: "1.2M", label: "Compact" },
+                    { f: "duration", icon: "⏱", label: "Duration" },
                   ] as const
                 ).map(({ f, icon, label: fLabel }) => (
                   <button
@@ -500,14 +520,19 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, current
                   <button
                     key={n}
                     type="button"
-                    onClick={() => { setRatingMax(n); setRatingMaxCustom(""); }}
+                    onClick={() => {
+                      setRatingMax(n);
+                      setRatingMaxCustom("");
+                    }}
                     className={cx(
                       "h-7 w-8 rounded-sm border font-mono text-[11px] transition-colors",
                       ratingMax === n && !ratingMaxCustom
                         ? "border-accent bg-accent-wash text-ink"
                         : "border-line hover:border-line-2 hover:bg-hover text-ink-2",
                     )}
-                  >{n}</button>
+                  >
+                    {n}
+                  </button>
                 ))}
                 <input
                   value={ratingMaxCustom}
