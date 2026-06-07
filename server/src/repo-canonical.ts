@@ -478,12 +478,20 @@ export async function updateField(
   dimId: string,
   field: string,
   updates: { description?: string | null },
+  userId: string,
 ): Promise<void> {
   if (updates.description === undefined) return;
+  const desc =
+    typeof updates.description === "string"
+      ? updates.description.trim() === ""
+        ? null
+        : updates.description.trim()
+      : updates.description;
   await pgRun(
     `UPDATE ${pg("dimension_field")} SET description = $1 WHERE dim_id = $2 AND field = $3`,
-    [updates.description, dimId, field],
+    [desc, dimId, field],
   );
+  await appendAuditAs(userId, "Updated field description", field);
 }
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈

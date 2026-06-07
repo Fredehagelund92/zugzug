@@ -21,12 +21,12 @@ test("field description round-trip", async () => {
   await repo.addField(dimId, "X", "text", undefined, { silent: true }, userId);
 
   // Set a description
-  await repo.updateField(dimId, "x", { description: "an explanation" });
+  await repo.updateField(dimId, "x", { description: "an explanation" }, userId);
   const dim = await repo.getDimension(dimId);
   expect(dim?.fields.find((f) => f.field === "x")?.description).toBe("an explanation");
 
   // Clear the description
-  await repo.updateField(dimId, "x", { description: null });
+  await repo.updateField(dimId, "x", { description: null }, userId);
   const dim2 = await repo.getDimension(dimId);
   expect(dim2?.fields.find((f) => f.field === "x")?.description).toBeUndefined();
 });
@@ -36,10 +36,10 @@ test("updateField with undefined description is a no-op", async () => {
   const dimId = await repo.addDimension("DescNoOp", [], {}, userId);
 
   await repo.addField(dimId, "Y", "text", undefined, { silent: true }, userId);
-  await repo.updateField(dimId, "y", { description: "original" });
+  await repo.updateField(dimId, "y", { description: "original" }, userId);
 
   // Passing undefined should leave description unchanged
-  await repo.updateField(dimId, "y", {});
+  await repo.updateField(dimId, "y", {}, userId);
   const dim = await repo.getDimension(dimId);
   expect(dim?.fields.find((f) => f.field === "y")?.description).toBe("original");
 });
