@@ -9,6 +9,7 @@ import { IconPlus, IconX } from "./Icons";
 import {
   slug,
   useSources,
+  useDimensions,
   addCanonical,
   renameCanonical,
   mergeCanonical,
@@ -164,6 +165,7 @@ function exportToCSV(dim: MappingDimension): void {
  *  shared UndoStackProvider. The body owns its own grid layout state, popovers, etc. */
 function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
   const sources = useSources();
+  const allDims = useDimensions();
   const { engineer } = useEngineerMode();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
@@ -258,13 +260,44 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           </span>
         ),
       },
-      ...fields.map<ColumnDef<CanonicalValue>>((f) => ({
-        field: f.field,
-        label: f.label,
-        config: fieldDefToColumnConfig(f),
-        editable: true,
-        render: undefined,
-      })),
+      ...fields.flatMap<ColumnDef<CanonicalValue>>((f) => {
+        if (f.type === "linked") {
+          const targetDim = allDims.find((d) => d.id === f.referencedDimId);
+          const candidates =
+            targetDim?.canonical.map((c) => ({ key: c.key, label: c.label })) ?? [];
+          const fkCol: ColumnDef<CanonicalValue> = {
+            field: f.field,
+            label: f.label,
+            config: {
+              type: "linked",
+              targetDimId: f.referencedDimId ?? "",
+              displayFields: f.displayFields ?? ["label"],
+              candidates,
+            },
+            editable: true,
+          };
+          const lookupCols: ColumnDef<CanonicalValue>[] = (f.displayFields ?? ["label"]).map(
+            (df) => {
+              const targetField = targetDim?.fields?.find((tf) => tf.field === df);
+              return {
+                field: `${f.field}__${df}`,
+                label: `↳ ${targetField?.label ?? df}`,
+                config: { type: "text" } as const,
+                editable: false,
+              };
+            },
+          );
+          return [fkCol, ...lookupCols];
+        }
+        return [
+          {
+            field: f.field,
+            label: f.label,
+            config: fieldDefToColumnConfig(f),
+            editable: true,
+          },
+        ];
+      }),
     ];
     const ordered = cols
       .map((c) => ({
@@ -282,7 +315,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         return ai - bi;
       });
     return ordered;
-  }, [fields, engineer, dim.keyCol, external, layout]);
+  }, [fields, engineer, dim.keyCol, external, layout, allDims]);
 
   const rowsForGrid = useMemo(
     () => list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
@@ -615,9 +648,13 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           onAddColumnOption={(field, label, color) =>
             addColumnOption(activeId, field, label, color ?? null)
           }
-          onRenameColumn={(field, label) => void renameColumn(activeId, field, label)}
-          onChangeColumnType={(field, newConfig, opts) =>
-            changeColumnType(
+          onRenameColumn={(field, label) => {
+            if (field.includes("__")) return;
+            void renameColumn(activeId, field, label);
+          }}
+          onChangeColumnType={(field, newConfig, opts) => {
+            if (field.includes("__")) return Promise.resolve({ ok: false });
+            return changeColumnType(
               activeId,
               field,
               newConfig.type,
@@ -625,9 +662,12 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               opts?.coerceInvalidToNull ?? false,
               newConfig.type === "number" ? newConfig.numberFormat : undefined,
               newConfig.type === "rating" ? newConfig.ratingMax : undefined,
-            )
-          }
-          onDeleteColumn={(field) => void deleteColumn(activeId, field)}
+            );
+          }}
+          onDeleteColumn={(field) => {
+            if (field.includes("__")) return;
+            void deleteColumn(activeId, field);
+          }}
           onLayoutChange={(partial) => {
             setLayout((cur) => {
               const next = { ...cur, ...partial };
