@@ -68,10 +68,14 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   // bound an external id. The optional description/colour aren't counted —
   // a casual mode flip shouldn't trigger a guard.
   const requestClose = useCallback((): void => {
+    if (confirmingDiscard) {
+      setConfirmingDiscard(false);
+      return;
+    }
     const isDirty = name.trim().length > 0 || source !== null || external !== null;
     if (isDirty) setConfirmingDiscard(true);
     else onClose();
-  }, [name, source, external, onClose]);
+  }, [confirmingDiscard, name, source, external, onClose]);
 
   const submit = useCallback(async (): Promise<void> => {
     if (submitting || !canSubmit) return;
@@ -191,8 +195,17 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
             />
           </div>
 
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="describe what's in this table (optional)"
+            aria-label="Description"
+            className="w-full resize-none border-0 bg-transparent py-1 font-body text-[13px] text-ink-2 outline-none placeholder:text-ink-3"
+          />
+
           {/* palette swatch row */}
-          <div className="ml-11 flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
+          <div className="ml-0 flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
             <span>tint</span>
             {PALETTE_NAMES.map((c) => (
               <button
@@ -205,14 +218,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               />
             ))}
           </div>
-
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="describe what's in this table (optional)"
-            className="w-full resize-none border-0 bg-transparent py-1 font-body text-[13px] text-ink-2 outline-none placeholder:text-ink-3"
-          />
         </div>
 
         {/* mode segment */}
@@ -220,15 +225,19 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
             Start from
           </div>
-          <div className="flex flex-wrap gap-0.5 rounded-sm border border-line bg-bg p-0.5">
+          <div
+            role="group"
+            aria-label="Start from"
+            className="flex flex-wrap gap-0.5 rounded-sm border border-line bg-bg p-0.5"
+          >
             {(["blank", "source", "external_id"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
-                className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors md:px-2.5 md:text-[12.5px] ${mode === m ? "bg-accent text-accent-ink" : "text-ink-2 hover:text-ink"}`}
+                className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors md:px-2.5 md:text-[12.5px] ${mode === m ? "border border-line-2 bg-surface-3 text-ink shadow-sm" : "text-ink-2 hover:text-ink"}`}
               >
-                {m === "blank" ? "blank" : m === "source" ? "from a column" : "from warehouse IDs"}
+                {m === "blank" ? "blank" : m === "source" ? "from a column" : "from a lookup table"}
               </button>
             ))}
           </div>
@@ -238,7 +247,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
             it lands close to the input that caused the error, not next to the
             footer where the user just pressed Create */}
         {error && (
-          <div className="mx-6 mt-2 rounded-sm border border-danger/40 bg-danger-soft px-3 py-2 font-mono text-[12px] text-danger">
+          <div
+            role="alert"
+            className="mx-6 mt-2 rounded-sm border border-danger/40 bg-danger-soft px-3 py-2 font-mono text-[12px] text-danger"
+          >
             {error}
           </div>
         )}
@@ -281,17 +293,29 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                     Seed records from a warehouse column. Each distinct value becomes one record,
                     with a slug ID.
                   </p>
-                  <ComboSelect
-                    options={sourceOpts}
-                    value={source ? `${source.table}.${source.column}` : null}
-                    placeholder="pick a warehouse column…"
-                    onPick={(opt) => {
-                      const dot = opt.lastIndexOf(".");
-                      if (dot > 0)
-                        setSource({ table: opt.slice(0, dot), column: opt.slice(dot + 1) });
-                    }}
-                  />
-                  <div className="font-mono text-[11px] leading-[1.5] text-ink-3">{helper}</div>
+                  {sourceOpts.length === 0 ? (
+                    <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
+                      No warehouse columns available.{" "}
+                      <a href="/app/sources" className="text-accent underline">
+                        Configure a source
+                      </a>{" "}
+                      first.
+                    </div>
+                  ) : (
+                    <>
+                      <ComboSelect
+                        options={sourceOpts}
+                        value={source ? `${source.table}.${source.column}` : null}
+                        placeholder="pick a warehouse column…"
+                        onPick={(opt) => {
+                          const dot = opt.lastIndexOf(".");
+                          if (dot > 0)
+                            setSource({ table: opt.slice(0, dot), column: opt.slice(dot + 1) });
+                        }}
+                      />
+                      <div className="font-mono text-[11px] leading-[1.5] text-ink-3">{helper}</div>
+                    </>
+                  )}
                 </div>
               );
             })()}
@@ -300,56 +324,88 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {mode === "external_id" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
               <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                For foreign keys. The warehouse ID becomes the stable key. A second column provides
-                the human name.
+                For lookup tables. The warehouse ID becomes the permanent key; a second column
+                provides the human name shown alongside it.
               </p>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <div>
-                  <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
-                    id column
-                  </div>
-                  <ComboSelect
-                    options={sourceOpts}
-                    value={external ? `${external.table}.${external.idColumn}` : null}
-                    placeholder="pick the id column…"
-                    onPick={(opt) => {
-                      const dot = opt.lastIndexOf(".");
-                      if (dot > 0) {
-                        const table = opt.slice(0, dot);
-                        const idColumn = opt.slice(dot + 1);
-                        setExternal((prev) => ({
-                          table,
-                          idColumn,
-                          nameColumn: prev && prev.table === table ? prev.nameColumn : "",
-                        }));
-                      }
-                    }}
-                  />
-                </div>
-                <div>
-                  <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
-                    name column
-                  </div>
-                  <ComboSelect
-                    options={
-                      external?.table
-                        ? columnsOfTable(external.table).filter((c) => c !== external.idColumn)
-                        : []
-                    }
-                    value={external?.nameColumn || null}
-                    placeholder={
-                      external?.table ? "pick the name column…" : "pick an id column first"
-                    }
-                    onPick={(opt) =>
-                      setExternal((prev) => (prev ? { ...prev, nameColumn: opt } : prev))
-                    }
-                  />
-                </div>
-              </div>
               <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
-                ⚠ The key column is fixed at creation and cannot be changed. Records display the ID
-                and the resolved name side by side.
+                ⚠ The ID column is permanent. Pick the column that uniquely and stably identifies
+                each record — it cannot be changed after creation.
               </div>
+              {sourceOpts.length === 0 ? (
+                <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
+                  No warehouse columns available.{" "}
+                  <a href="/app/sources" className="text-accent underline">
+                    Configure a source
+                  </a>{" "}
+                  first.
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <div>
+                      <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
+                        id column
+                      </div>
+                      <ComboSelect
+                        options={sourceOpts}
+                        value={external ? `${external.table}.${external.idColumn}` : null}
+                        placeholder="pick the id column…"
+                        onPick={(opt) => {
+                          const dot = opt.lastIndexOf(".");
+                          if (dot > 0) {
+                            const table = opt.slice(0, dot);
+                            const idColumn = opt.slice(dot + 1);
+                            setExternal((prev) => ({
+                              table,
+                              idColumn,
+                              nameColumn: prev && prev.table === table ? prev.nameColumn : "",
+                            }));
+                          }
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-ink-3">
+                        name column
+                      </div>
+                      <ComboSelect
+                        options={
+                          external?.table
+                            ? columnsOfTable(external.table).filter((c) => c !== external.idColumn)
+                            : []
+                        }
+                        value={external?.nameColumn || null}
+                        placeholder={
+                          external?.table ? "pick the name column…" : "pick an id column first"
+                        }
+                        disabled={!external?.table}
+                        onPick={(opt) =>
+                          setExternal((prev) => (prev ? { ...prev, nameColumn: opt } : prev))
+                        }
+                      />
+                    </div>
+                  </div>
+                  {(() => {
+                    if (!external?.table || !external?.idColumn) return null;
+                    const info = sources.find(
+                      (s) => s.table === external.table && s.column === external.idColumn,
+                    );
+                    if (!info) return null;
+                    if (!info.scanned)
+                      return (
+                        <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
+                          Scan pending — ID count will appear after first sync.
+                        </div>
+                      );
+                    return (
+                      <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
+                        {info.values.toLocaleString()} distinct ID
+                        {info.values === 1 ? "" : "s"} found in the warehouse.
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
             </div>
           )}
         </div>
