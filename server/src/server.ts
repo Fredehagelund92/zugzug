@@ -340,7 +340,7 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         );
         return res ? json(res) : json({ error: "not a select column" }, 400);
       }
-      // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
+      // PUT/PATCH/DELETE /api/dimensions/:id/fields/:field — rename / change type / update meta / delete
       if (seg[3] === "fields" && seg.length === 5) {
         const field = decodeURIComponent(seg[4]!);
         if (method === "PUT") {
@@ -366,6 +366,11 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
             });
             return json(res);
           }
+          return noContent();
+        }
+        if (method === "PATCH") {
+          const body = (await req.json()) as { description?: string | null };
+          await repo.updateField(id, field, { description: body.description });
           return noContent();
         }
         if (method === "DELETE") return json(await repo.deleteColumn(id, field, me));

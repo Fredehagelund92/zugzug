@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."dimension_field" ADD COLUMN "description" varchar;

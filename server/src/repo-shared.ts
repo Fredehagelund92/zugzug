@@ -125,6 +125,7 @@ export interface FieldDef {
   ratingMax?: number;
   referencedDimId?: string;  // only when type === "linked"
   displayFields?: string[];  // fields from target dim to surface as lookup cols
+  description?: string;
 }
 export interface CanonicalValue {
   key: string;

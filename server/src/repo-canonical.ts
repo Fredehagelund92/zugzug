@@ -456,8 +456,8 @@ export async function retireCanonical(
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
 export async function listFields(dimId: string): Promise<FieldDef[]> {
-  const rows = await pgAll<{ field: string; label: string; type: string; field_config: string | null }>(
-    `SELECT field, label, type, field_config FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
+  const rows = await pgAll<{ field: string; label: string; type: string; field_config: string | null; description: string | null }>(
+    `SELECT field, label, type, field_config, description FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
   return rows.map((r) => {
@@ -467,8 +467,23 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
       label: r.label,
       type: r.type,
       ...cfg,
+      description: r.description ?? undefined,
     };
   });
+}
+
+/** Update metadata on an existing field (currently: description). When
+ *  `description` is undefined it is left unchanged; null clears it. */
+export async function updateField(
+  dimId: string,
+  field: string,
+  updates: { description?: string | null },
+): Promise<void> {
+  if (updates.description === undefined) return;
+  await pgRun(
+    `UPDATE ${pg("dimension_field")} SET description = $1 WHERE dim_id = $2 AND field = $3`,
+    [updates.description, dimId, field],
+  );
 }
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈
