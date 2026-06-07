@@ -497,8 +497,13 @@ export async function addField(
 
   if (t === "linked") {
     if (!opts.referencedDimId) return null;
-    const targetExists = await dimMeta(opts.referencedDimId);
-    if (!targetExists) return null;
+    if (opts.referencedDimId === dimId) return null;
+    const targetMeta = await dimMeta(opts.referencedDimId);
+    if (!targetMeta) return null;
+    const targetFieldNames = new Set((await listFields(opts.referencedDimId)).map((f) => f.field));
+    const dfs = opts.displayFields ?? ["label"];
+    // "label" is always present on every dim_* table; validate any others
+    if (!dfs.every((df) => df === "label" || targetFieldNames.has(df))) return null;
   }
 
   const field = slug(label);
@@ -566,7 +571,7 @@ export async function changeColumnType(
   if (!m) return { ok: false };
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f) return { ok: false };
-  if (f.type === "linked" || newType === "linked") return { ok: false };
+  if (f.type === "linked" || opts.newType === "linked") return { ok: false };
   const col = qid(field);
   const keyc = qid(m.keyCol);
   const { newType, coerceInvalidToNull, userId } = opts;
@@ -716,7 +721,23 @@ export async function deleteColumn(
   const m = await dimMeta(dimId);
   if (!m) return { ok: false };
   const col = qid(field);
-  await pgTx(async ({ run }) => {
+  await pgTx(async ({ all, run }) => {
+    // Cascade: strip deleted field from displayFields of any linked fields across all dims
+    const linkedRefs = await all<{ dim_id: string; field: string; field_config: string }>(
+      `SELECT dim_id, field, field_config FROM ${pg("dimension_field")}
+       WHERE type = 'linked'
+       AND field_config::jsonb @> $1::jsonb
+       AND field_config::jsonb -> 'displayFields' ? $2`,
+      [JSON.stringify({ targetDimId: dimId }), field],
+    );
+    for (const ref of linkedRefs) {
+      const cfg = JSON.parse(ref.field_config) as { targetDimId: string; displayFields: string[] };
+      const newDfs = cfg.displayFields.filter((df) => df !== field);
+      await run(
+        `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
+        [JSON.stringify({ ...cfg, displayFields: newDfs }), ref.dim_id, ref.field],
+      );
+    }
     await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`, [
       dimId,
       field,
@@ -787,6 +808,16 @@ export async function setFieldValue(
       empty ? null : value!.trim(),
       key,
     ]);
+  } else if (f.type === "linked") {
+    let fkValue: string | null = empty ? null : value!.trim();
+    if (fkValue !== null && f.referencedDimId) {
+      const tm = await dimMeta(f.referencedDimId);
+      if (tm) {
+        const exists = await pgGet(`SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`, [fkValue]);
+        if (!exists) fkValue = null;
+      }
+    }
+    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [fkValue, key]);
   } else {
     await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [
       empty ? null : value,
