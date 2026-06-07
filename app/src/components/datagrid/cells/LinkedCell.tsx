@@ -1,5 +1,6 @@
 import type { CellCtx, EditCtx } from "../types";
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 
 function Renderer<Row>({ value }: CellCtx<Row>): ReactNode {
   const s = value == null || value === "" ? null : String(value);
@@ -10,21 +11,11 @@ function Renderer<Row>({ value }: CellCtx<Row>): ReactNode {
   );
 }
 
-function Editor<Row>({ value, cancel }: EditCtx<Row>): ReactNode {
-  const s = value == null || value === "" ? null : String(value);
-  return (
-    <div
-      className="flex items-center px-1.5 py-0.5"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          cancel();
-        }
-      }}
-    >
-      <span className="truncate font-mono text-[12px] text-ink">{s || "—"}</span>
-    </div>
-  );
+function Editor<Row>({ cancel }: EditCtx<Row>): ReactNode {
+  useEffect(() => {
+    cancel();
+  }, [cancel]);
+  return null;
 }
 
 export const LinkedCell = { Renderer, Editor };
