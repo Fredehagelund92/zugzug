@@ -71,6 +71,7 @@ interface GridRowProps<Row> {
   onAddColumnOption:
     | ((field: string, label: string, color?: PaletteName | null) => Promise<OptionDef[]>)
     | undefined;
+  onRowNumPointerDown?: (e: React.PointerEvent, rk: string) => void;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -100,6 +101,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     onCommitCell,
     onStopEdit,
     onAddColumnOption,
+    onRowNumPointerDown,
   } = props;
   return (
     <div
@@ -114,8 +116,10 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     >
       {showRowNumbers && (
         <div
+          data-row-num={rk}
+          onPointerDown={(e) => onRowNumPointerDown?.(e, rk)}
           className={cx(
-            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums",
+            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums cursor-cell",
             cellPadY,
           )}
         >
@@ -898,6 +902,28 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
   const onStopEdit = useCallback(() => cursor.stopEdit(), [cursor]);
 
+  // ── Row-number click → select whole row ────────────────────────────────────
+  const onRowNumPointerDown = useCallback(
+    (e: React.PointerEvent, rk: string) => {
+      if (e.button !== 0) return;
+      cursor.ref.current?.focus();
+      const firstCol = orderedVisible[0];
+      const lastCol = orderedVisible[orderedVisible.length - 1];
+      if (!firstCol || !lastCol) return;
+      if (e.shiftKey && range) {
+        setRange({ anchor: range.anchor, focus: { rowKey: rk, field: lastCol.field } });
+      } else {
+        setRange({
+          anchor: { rowKey: rk, field: firstCol.field },
+          focus:  { rowKey: rk, field: lastCol.field },
+        });
+      }
+      cursor.setCursor({ rowKey: rk, field: firstCol.field, editing: false });
+      e.preventDefault();
+    },
+    [cursor, orderedVisible, range],
+  );
+
   // ── Pointer handlers for drag-select ───────────────────────────────────────
   const onCellPointerDown = useCallback(
     (e: React.PointerEvent, rk: string, field: string) => {
@@ -1052,11 +1078,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 onPointerDown={(_e) => {
                   if (c.pinnedLeft) return;
                   let holding = true;
+                  let moved = false;
+                  const startTime = Date.now();
                   const holdTimer = window.setTimeout(() => {
                     if (!holding) return;
                     setDrag({ field: c.field, overIndex: null });
                   }, 200);
                   const onMove = (ev: PointerEvent) => {
+                    moved = true;
                     if (!dragRef.current) return;
                     // determine which header column we're over via element-at-point
                     const target = document.elementFromPoint(
@@ -1074,6 +1103,24 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     window.clearTimeout(holdTimer);
                     window.removeEventListener("pointermove", onMove);
                     window.removeEventListener("pointerup", onUp);
+                    const elapsed = Date.now() - startTime;
+                    if (!moved && elapsed < 200 && !dragRef.current) {
+                      // Plain click — select whole column
+                      cursor.ref.current?.focus();
+                      const firstRow = sortedRows[0];
+                      const lastRow = sortedRows[sortedRows.length - 1];
+                      if (firstRow && lastRow) {
+                        const anchor = { rowKey: rowKey(firstRow), field: c.field };
+                        const focus  = { rowKey: rowKey(lastRow),  field: c.field };
+                        if (_e.shiftKey && range) {
+                          setRange({ anchor: range.anchor, focus });
+                        } else {
+                          setRange({ anchor, focus });
+                        }
+                        cursor.setCursor({ rowKey: anchor.rowKey, field: c.field, editing: false });
+                      }
+                      return;
+                    }
                     setDrag((d) => {
                       if (!d || d.overIndex == null) return null;
                       const from = orderedVisible.findIndex((x) => x.field === d.field);
@@ -1296,6 +1343,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       onCommitCell={commitValue}
                       onStopEdit={onStopEdit}
                       onAddColumnOption={props.onAddColumnOption}
+                      onRowNumPointerDown={onRowNumPointerDown}
                     />
                   );
                 })}
