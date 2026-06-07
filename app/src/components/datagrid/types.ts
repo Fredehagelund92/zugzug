@@ -131,4 +131,8 @@ export interface DataGridProps<Row> {
   density?: "default" | "compact";
   /** Prepend a 1-based row number column (read-only, 36px wide). */
   showRowNumbers?: boolean;
+  /** Row operations triggered from the right-click context menu. */
+  onInsertRow?:    (rowKey: string, where: "above" | "below") => void;
+  onDeleteRow?:    (rowKey: string) => void;
+  onDuplicateRow?: (rowKey: string) => void;
 }

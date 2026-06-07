@@ -40,6 +40,8 @@ import { useFillHandle } from "./useFillHandle";
 import { FilterBar } from "./FilterBar";
 import { StatusBar } from "./StatusBar";
 import { computeAggregates } from "./useAggregates";
+import { useContextMenu, type ContextSurface } from "./useContextMenu";
+import { ContextMenu, type MenuItem } from "./ContextMenu";
 import type { DataGridProps, CellType, ColumnDef, FilterSet } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
@@ -783,6 +785,74 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     undo,
   ]);
 
+  // ── Context menu ────────────────────────────────────────────────────────────
+  const { menu: contextMenu, onContextMenu, close: closeMenu } = useContextMenu();
+
+  const buildMenuItems = (surface: ContextSurface): MenuItem[] => {
+    if (surface.kind === "cell") {
+      const { rowKey: rk, field } = surface;
+      const row = sortedRows.find((r) => rowKey(r) === rk);
+      const value = row ? getValue(row, field) : null;
+      const valStr = value == null ? "" : String(value);
+      return [
+        { label: "Copy", onClick: () => void handleCopy() },
+        { label: "Paste", onClick: () => void handlePaste() },
+        { label: "Clear", onClick: () => void commitValue(rk, field, null) },
+        { separator: true, label: "", onClick: () => {} },
+        { label: `Filter to "${valStr.slice(0, 24)}"`, onClick: () => {
+            setFilterSet((cur) => ({
+              conjunction: cur?.conjunction ?? "and",
+              conditions: [...(cur?.conditions ?? []), { id: `${field}-eq-${Date.now()}`, field, operator: "equals" as const, value: valStr }],
+            }));
+          }
+        },
+        { label: `Filter to NOT "${valStr.slice(0, 24)}"`, onClick: () => {
+            setFilterSet((cur) => ({
+              conjunction: cur?.conjunction ?? "and",
+              conditions: [...(cur?.conditions ?? []), { id: `${field}-neq-${Date.now()}`, field, operator: "not_equals" as const, value: valStr }],
+            }));
+          }
+        },
+        { separator: true, label: "", onClick: () => {} },
+        { label: "Insert row above", onClick: () => props.onInsertRow?.(rk, "above"), disabled: !props.onInsertRow },
+        { label: "Insert row below", onClick: () => props.onInsertRow?.(rk, "below"), disabled: !props.onInsertRow },
+        { label: "Delete row", onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+      ];
+    }
+    if (surface.kind === "header") {
+      const c = orderedVisible.find((col) => col.field === surface.field);
+      return [
+        { label: "Sort ascending",  onClick: () => setSort({ field: surface.field, dir: "asc" }) },
+        { label: "Sort descending", onClick: () => setSort({ field: surface.field, dir: "desc" }) },
+        { label: "Rename", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); } },
+        { label: "Change type", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); }, disabled: !props.onChangeColumnType },
+        { separator: true, label: "", onClick: () => {} },
+        { separator: true, label: "", onClick: () => {} },
+        { label: "Hide column", onClick: () => {
+            const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
+            props.onLayoutChange?.({ hidden });
+          }
+        },
+        { label: "Delete column", onClick: () => props.onDeleteColumn?.(surface.field), disabled: !props.onDeleteColumn || !!c?.pinnedLeft },
+      ];
+    }
+    if (surface.kind === "row-num") {
+      const rk = surface.rowKey;
+      return [
+        { label: "Select row", onClick: () => {
+            const firstCol = orderedVisible[0], lastCol = orderedVisible[orderedVisible.length - 1];
+            if (firstCol && lastCol) setRange({ anchor: { rowKey: rk, field: firstCol.field }, focus: { rowKey: rk, field: lastCol.field } });
+          }
+        },
+        { label: "Insert above", onClick: () => props.onInsertRow?.(rk, "above"), disabled: !props.onInsertRow },
+        { label: "Insert below", onClick: () => props.onInsertRow?.(rk, "below"), disabled: !props.onInsertRow },
+        { label: "Duplicate", onClick: () => props.onDuplicateRow?.(rk), disabled: !props.onDuplicateRow },
+        { label: "Delete", onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+      ];
+    }
+    return [];
+  };
+
   // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1088,6 +1158,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-rowcount={sortedRows.length + 1}
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
+        onContextMenu={onContextMenu}
         className="relative flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
       >
       {fillHandlePos && (
@@ -1445,6 +1516,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           })()}
       </div>
       {statusAgg && <StatusBar agg={statusAgg} />}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeMenu}
+          items={buildMenuItems(contextMenu.surface)}
+        />
+      )}
     </div>
   );
 }
