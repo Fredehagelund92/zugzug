@@ -702,14 +702,14 @@ function EmptyState({
   if (filteredByStatus && status === "clean") {
     return (
       <div className="py-12 text-center">
-        <div className="font-display text-[18px] italic text-ok">Everything here is clean.</div>
+        <div className="font-display text-[18px] font-semibold text-ink">Everything here is clean. 🎉</div>
       </div>
     );
   }
   if (filteredByStatus && status === "needs") {
     return (
       <div className="py-12 text-center">
-        <div className="font-display text-[18px] italic text-ok">Nothing needs your attention.</div>
+        <div className="font-display text-[18px] font-semibold text-ink">Nothing needs your attention. 🎉</div>
       </div>
     );
   }
