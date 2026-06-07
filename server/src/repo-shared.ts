@@ -89,7 +89,7 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
 export function parseFieldConfig(
   type: string,
   raw: unknown,
-): { options?: OptionDef[]; numberFormat?: NumberFormat; ratingMax?: number } {
+): { options?: OptionDef[]; numberFormat?: NumberFormat; ratingMax?: number; referencedDimId?: string; displayFields?: string[] } {
   if (type === "select") return { options: parseOptions(raw) };
   if (type === "number") return { numberFormat: parseNumberFormat(raw) };
   if (type === "rating") {
@@ -99,6 +99,19 @@ export function parseFieldConfig(
     }
     const max = (obj as { ratingMax?: unknown } | null)?.ratingMax;
     return { ratingMax: typeof max === "number" && max >= 1 ? max : 5 };
+  }
+  if (type === "linked") {
+    let obj: unknown = raw;
+    if (typeof obj === "string" && obj.length > 0) {
+      try { obj = JSON.parse(obj); } catch { return {}; }
+    }
+    const cfg = obj as { targetDimId?: unknown; displayFields?: unknown } | null;
+    const referencedDimId =
+      typeof cfg?.targetDimId === "string" ? cfg.targetDimId : undefined;
+    const displayFields = Array.isArray(cfg?.displayFields)
+      ? (cfg.displayFields as unknown[]).filter((s): s is string => typeof s === "string")
+      : ["label"];
+    return { referencedDimId, displayFields };
   }
   return {};
 }
@@ -110,6 +123,8 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
+  referencedDimId?: string;  // only when type === "linked"
+  displayFields?: string[];  // fields from target dim to surface as lookup cols
 }
 export interface CanonicalValue {
   key: string;

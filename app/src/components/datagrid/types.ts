@@ -14,7 +14,13 @@ export type ColumnConfig =
   | { type: "select"; options: OptionDef[] }
   | { type: "url" }
   | { type: "email" }
-  | { type: "rating"; ratingMax: number };
+  | { type: "rating"; ratingMax: number }
+  | {
+      type: "linked";
+      targetDimId: string;
+      displayFields: string[];
+      candidates: { key: string; label: string }[];
+    };
 
 export type CellType = ColumnConfig["type"];
 
