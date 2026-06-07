@@ -497,10 +497,55 @@ export async function updateField(
   }
 
   if (updates.fieldConfig !== undefined) {
+    // Read the existing field_config, parse it, shallow-merge with the incoming
+    // JSON, then write back — so PATCHes with one key (e.g. rules) don't wipe
+    // the rest of the column's config (options, numberFormat, ratingMax, …).
+    //
+    // Normalization: select columns legacy-store their options as a bare JSON
+    // array ("[{…}]"). We lift that into {"options":[…]} so all types share a
+    // uniform object envelope that tolerates extra keys like "rules".
+    const existing = await pgGet<{ field_config: string | null; type: string }>(
+      `SELECT field_config, type FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`,
+      [dimId, field],
+    );
+    let currentCfg: Record<string, unknown> = {};
+    if (existing?.field_config) {
+      try {
+        const parsed: unknown = JSON.parse(existing.field_config);
+        if (Array.isArray(parsed)) {
+          // Legacy bare-array format (select options). Lift to object envelope.
+          currentCfg = { options: parsed };
+        } else if (parsed !== null && typeof parsed === "object") {
+          currentCfg = parsed as Record<string, unknown>;
+        }
+      } catch {
+        currentCfg = {};
+      }
+    }
+    let incomingCfg: Record<string, unknown> | null = null;
+    if (typeof updates.fieldConfig === "string") {
+      try {
+        const parsed: unknown = JSON.parse(updates.fieldConfig);
+        if (Array.isArray(parsed)) {
+          // Caller sent a bare array — treat it as the options list (select compat)
+          incomingCfg = { options: parsed };
+        } else if (parsed !== null && typeof parsed === "object") {
+          incomingCfg = parsed as Record<string, unknown>;
+        }
+      } catch {
+        incomingCfg = null;
+      }
+    }
+    const mergedConfig = incomingCfg !== null
+      ? JSON.stringify({ ...currentCfg, ...incomingCfg })
+      : updates.fieldConfig; // non-JSON or null — write raw (preserves clear semantics)
     await pgRun(
       `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
-      [updates.fieldConfig, dimId, field],
+      [mergedConfig, dimId, field],
     );
+    if (incomingCfg !== null && "rules" in incomingCfg) {
+      await appendAuditAs(userId, "Updated field rules", field);
+    }
   }
 }
 
@@ -797,8 +842,24 @@ export async function addColumnOption(
   const existing = f.options ?? [];
   if (existing.some((o) => o.label === label)) return { options: existing };
   const next: OptionDef[] = [...existing, { label, color }];
+  // Preserve any other keys in field_config (e.g. rules) by reading the raw
+  // stored value and merging only the options key.
+  const rawRow = await pgGet<{ field_config: string | null }>(
+    `SELECT field_config FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`,
+    [dimId, field],
+  );
+  let existingCfg: Record<string, unknown> = {};
+  if (rawRow?.field_config) {
+    try {
+      const parsed: unknown = JSON.parse(rawRow.field_config);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        existingCfg = parsed as Record<string, unknown>;
+      }
+      // bare array: existingCfg stays {} — options come from `next` below
+    } catch { /* ignore */ }
+  }
   await pgRun(`UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`, [
-    JSON.stringify(next),
+    JSON.stringify({ ...existingCfg, options: next }),
     dimId,
     field,
   ]);

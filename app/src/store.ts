@@ -489,31 +489,17 @@ export async function deleteColumn(dimId: string, field: string): Promise<void> 
   emit();
 }
 
-/** Persist conditional formatting rules for a field. Merges rules into the
- *  existing field_config JSON so other config keys (options, numberFormat, etc.)
- *  are preserved. */
+/** Persist conditional formatting rules for a field. The server merges the
+ *  incoming field_config patch with the existing stored config, so sending only
+ *  { rules } is safe and will not wipe options / numberFormat / ratingMax. */
 export async function updateFieldRules(
   dimId: string,
   field: string,
   rules: ConditionalRule[],
 ): Promise<void> {
-  // Fetch current dimension to get the existing field_config
-  const dim = await api<{ fields: Array<{ field: string; field_config?: string }> }>(
-    `/dimensions/${encodeURIComponent(dimId)}`,
-  );
-  const existing = dim.fields?.find((f) => f.field === field);
-  let cfg: Record<string, unknown> = {};
-  if (existing?.field_config) {
-    try {
-      cfg = JSON.parse(existing.field_config) as Record<string, unknown>;
-    } catch {
-      cfg = {};
-    }
-  }
-  cfg.rules = rules;
-  await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
-    body: JSON.stringify({ field_config: JSON.stringify(cfg) }),
+    body: JSON.stringify({ field_config: JSON.stringify({ rules }) }),
   });
   await refreshDim(dimId);
   emit();

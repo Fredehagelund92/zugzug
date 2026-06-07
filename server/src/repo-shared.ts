@@ -40,6 +40,11 @@ export function parseOptions(raw: unknown): OptionDef[] | undefined {
       return undefined;
     }
   }
+  // Support both the legacy bare-array format ("[{...}]") and the merged-object
+  // format ("{\"options\":[...]}") produced by the server-side merge path.
+  if (arr != null && typeof arr === "object" && !Array.isArray(arr) && "options" in arr) {
+    arr = (arr as { options: unknown }).options;
+  }
   if (!Array.isArray(arr)) return undefined;
   return arr.map((o) => {
     if (typeof o === "string") return { label: o, color: null };
@@ -75,6 +80,11 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
     } catch {
       return undefined;
     }
+  }
+  // Support the merged-object format ("{\"numberFormat\":{...}}") produced by
+  // the server-side merge path alongside the legacy direct-object format.
+  if (obj != null && typeof obj === "object" && !Array.isArray(obj) && "numberFormat" in obj) {
+    obj = (obj as { numberFormat: unknown }).numberFormat;
   }
   if (
     obj == null ||
