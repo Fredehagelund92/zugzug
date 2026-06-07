@@ -429,7 +429,12 @@ export function AppShell() {
         </>
       )}
 
-      <div className={cx("shrink-0 border-t border-line", collapsed && !isMobile ? "p-3" : "px-5 py-2")}>
+      <div
+        className={cx(
+          "shrink-0 border-t border-line",
+          collapsed && !isMobile ? "p-3" : "px-5 py-2",
+        )}
+      >
         <div
           className={cx(
             "flex items-center gap-2 font-mono text-[11px] text-ink",
@@ -447,9 +452,7 @@ export function AppShell() {
     <div
       className="flex h-screen overflow-hidden md:grid"
       style={
-        isMobile
-          ? undefined
-          : { gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }
+        isMobile ? undefined : { gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }
       }
     >
       {/* Desktop sidebar — hidden on mobile (drawer takes over) */}
@@ -530,9 +533,7 @@ export function AppShell() {
             aria-label={
               isMobile ? "Open navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"
             }
-            title={
-              isMobile ? "Open navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"
-            }
+            title={isMobile ? "Open navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="grid h-11 w-11 shrink-0 place-items-center rounded-sm border border-line-2 text-ink-2 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:h-8 md:w-8"
           >
             {isMobile ? (

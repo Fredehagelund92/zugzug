@@ -97,10 +97,10 @@ function ScansSection() {
   };
 
   const scheduleOptions = [
-    { value: null,     label: "Off" },
-    { value: "15m",    label: "15 min" },
+    { value: null, label: "Off" },
+    { value: "15m", label: "15 min" },
     { value: "hourly", label: "Hourly" },
-    { value: "daily",  label: "Daily" },
+    { value: "daily", label: "Daily" },
   ];
 
   return (
@@ -228,7 +228,12 @@ function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
           aria-hidden="true"
         >
           <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.25" />
-          <path d="M14 8a6 6 0 0 0-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path
+            d="M14 8a6 6 0 0 0-6-6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
         </svg>
       )}
       <span className="min-w-0 max-w-[240px] truncate">{chip.email}</span>
@@ -325,9 +330,7 @@ function TeamSection() {
 
     const validIds = new Set(validChips.map((c) => c.id));
     setChips((prev) =>
-      prev.map((c) =>
-        validIds.has(c.id) ? { id: c.id, email: c.email, status: "inviting" } : c,
-      ),
+      prev.map((c) => (validIds.has(c.id) ? { id: c.id, email: c.email, status: "inviting" } : c)),
     );
     setSubmitting(true);
 
@@ -411,7 +414,9 @@ function TeamSection() {
         )}
         {members.map((m) => (
           <li key={m.email} className="flex items-center gap-3 px-4 py-2.5">
-            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">{m.email}</span>
+            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">
+              {m.email}
+            </span>
             <span className="hidden shrink-0 text-[11px] text-ink-3 sm:inline">
               added by {m.addedBy === "bootstrap" ? "bootstrap" : m.addedBy}
             </span>
@@ -547,11 +552,7 @@ function TeamSection() {
             disabled={submitting || (validCount === 0 && !buffer.trim())}
             className="max-md:w-full max-md:justify-center"
           >
-            {submitting
-              ? "Adding…"
-              : validCount > 1
-                ? `Add ${validCount} members`
-                : "Add"}
+            {submitting ? "Adding…" : validCount > 1 ? `Add ${validCount} members` : "Add"}
           </Button>
         </div>
       </div>

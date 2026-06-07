@@ -2,7 +2,7 @@ import type { AiHint } from "../lib/use-ai-hint";
 
 interface Props {
   loading: boolean;
-  hint:    AiHint | null;
+  hint: AiHint | null;
 }
 
 export function TriageReasoningStrip({ loading, hint }: Props) {

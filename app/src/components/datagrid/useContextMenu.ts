@@ -23,7 +23,11 @@ export function useContextMenu() {
     if (cell?.dataset.cell) {
       const sep = cell.dataset.cell.indexOf("::");
       if (sep > 0) {
-        surface = { kind: "cell", rowKey: cell.dataset.cell.slice(0, sep), field: cell.dataset.cell.slice(sep + 2) };
+        surface = {
+          kind: "cell",
+          rowKey: cell.dataset.cell.slice(0, sep),
+          field: cell.dataset.cell.slice(sep + 2),
+        };
       }
     } else if (header?.dataset.header) {
       surface = { kind: "header", field: header.dataset.header };
@@ -39,7 +43,9 @@ export function useContextMenu() {
 
   useEffect(() => {
     if (!menu) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('[role="menu"]')) close();

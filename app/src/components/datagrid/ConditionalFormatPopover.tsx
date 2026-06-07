@@ -67,8 +67,18 @@ export function ConditionalFormatPopover<Row>({
 
   const addRule = () => {
     const r: ConditionalRule = numeric
-      ? { id: `r_${Date.now()}`, field: column.field, trigger: { kind: "gt", value: 0 }, style: { rowStripe: "rose" } }
-      : { id: `r_${Date.now()}`, field: column.field, trigger: { kind: "equals", value: "" }, style: { rowStripe: "rose" } };
+      ? {
+          id: `r_${Date.now()}`,
+          field: column.field,
+          trigger: { kind: "gt", value: 0 },
+          style: { rowStripe: "rose" },
+        }
+      : {
+          id: `r_${Date.now()}`,
+          field: column.field,
+          trigger: { kind: "equals", value: "" },
+          style: { rowStripe: "rose" },
+        };
     setLocal((cur) => [...cur, r]);
   };
 
@@ -111,10 +121,18 @@ export function ConditionalFormatPopover<Row>({
               }}
               className="rounded-sm border border-line bg-surface px-1 py-0.5 text-ink outline-none focus:border-accent"
             >
-              {(
-                numeric
-                  ? (["gt", "lt", "between", "is_empty", "is_not_empty"] as const)
-                  : (["equals", "not_equals", "contains", "starts_with", "ends_with", "is_in", "is_empty", "is_not_empty"] as const)
+              {(numeric
+                ? (["gt", "lt", "between", "is_empty", "is_not_empty"] as const)
+                : ([
+                    "equals",
+                    "not_equals",
+                    "contains",
+                    "starts_with",
+                    "ends_with",
+                    "is_in",
+                    "is_empty",
+                    "is_not_empty",
+                  ] as const)
               ).map((k) => (
                 <option key={k} value={k}>
                   {labelFor(k)}
@@ -182,31 +200,40 @@ export function ConditionalFormatPopover<Row>({
 
 function defaultTrigger(kind: string, _numeric: boolean): ConditionalRule["trigger"] {
   switch (kind) {
-    case "is_empty":     return { kind: "is_empty" };
-    case "is_not_empty": return { kind: "is_not_empty" };
-    case "gt":           return { kind: "gt", value: 0 };
-    case "lt":           return { kind: "lt", value: 0 };
-    case "between":      return { kind: "between", min: 0, max: 0 };
-    case "is_in":        return { kind: "is_in", values: [] };
-    default:             return { kind: kind as "equals", value: "" };
+    case "is_empty":
+      return { kind: "is_empty" };
+    case "is_not_empty":
+      return { kind: "is_not_empty" };
+    case "gt":
+      return { kind: "gt", value: 0 };
+    case "lt":
+      return { kind: "lt", value: 0 };
+    case "between":
+      return { kind: "between", min: 0, max: 0 };
+    case "is_in":
+      return { kind: "is_in", values: [] };
+    default:
+      return { kind: kind as "equals", value: "" };
   }
 }
 
 function labelFor(k: string): string {
   return (
-    ({
-      equals: "equals",
-      not_equals: "≠",
-      contains: "contains",
-      starts_with: "starts with",
-      ends_with: "ends with",
-      is_empty: "is empty",
-      is_not_empty: "is not empty",
-      gt: ">",
-      lt: "<",
-      between: "between",
-      is_in: "is one of",
-    } as Record<string, string>)[k] ?? k
+    (
+      {
+        equals: "equals",
+        not_equals: "≠",
+        contains: "contains",
+        starts_with: "starts with",
+        ends_with: "ends with",
+        is_empty: "is empty",
+        is_not_empty: "is not empty",
+        gt: ">",
+        lt: "<",
+        between: "between",
+        is_in: "is one of",
+      } as Record<string, string>
+    )[k] ?? k
   );
 }
 
@@ -256,15 +283,16 @@ function TriggerInput({
         type="text"
         placeholder="comma-separated"
         value={t.values.join(",")}
-        onChange={(e) =>
-          onChange({ ...t, values: e.target.value.split(",").map((s) => s.trim()) })
-        }
+        onChange={(e) => onChange({ ...t, values: e.target.value.split(",").map((s) => s.trim()) })}
         className={cx(inputCls, "w-40")}
       />
     );
   }
   // Remaining cases all have a string `value` field
-  const strTrigger = t as { kind: "equals" | "not_equals" | "contains" | "starts_with" | "ends_with"; value: string };
+  const strTrigger = t as {
+    kind: "equals" | "not_equals" | "contains" | "starts_with" | "ends_with";
+    value: string;
+  };
   return (
     <input
       type="text"

@@ -13,11 +13,17 @@ function loadVisible(): AggKey[] {
     if (!raw) return DEFAULT_VISIBLE;
     const parsed = JSON.parse(raw) as string[];
     return parsed.filter((k): k is AggKey => (AGG_KEYS as readonly string[]).includes(k));
-  } catch { return DEFAULT_VISIBLE; }
+  } catch {
+    return DEFAULT_VISIBLE;
+  }
 }
 
 function saveVisible(v: AggKey[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(v));
+  } catch {
+    /* ignore */
+  }
 }
 
 function fmt(v: number | string | null): string {
@@ -27,14 +33,21 @@ function fmt(v: number | string | null): string {
 }
 
 const LABEL: Record<AggKey, string> = {
-  count: "Count", distinct: "Distinct", sum: "Sum", avg: "Avg", min: "Min", max: "Max",
+  count: "Count",
+  distinct: "Distinct",
+  sum: "Sum",
+  avg: "Avg",
+  min: "Min",
+  max: "Max",
 };
 
 export function StatusBar({ agg }: { agg: Aggregates }) {
   const [visible, setVisible] = useState<AggKey[]>(loadVisible);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { saveVisible(visible); }, [visible]);
+  useEffect(() => {
+    saveVisible(visible);
+  }, [visible]);
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +87,10 @@ export function StatusBar({ agg }: { agg: Aggregates }) {
           className="absolute bottom-full right-0 mb-1 rounded-lg border border-line bg-surface-elevated p-2 shadow-pop"
         >
           {AGG_KEYS.map((k) => (
-            <label key={k} className="flex items-center gap-2 px-2 py-1 text-[12px] text-ink hover:bg-hover rounded">
+            <label
+              key={k}
+              className="flex items-center gap-2 px-2 py-1 text-[12px] text-ink hover:bg-hover rounded"
+            >
               <input type="checkbox" checked={visible.includes(k)} onChange={() => toggle(k)} />
               {LABEL[k]}
             </label>

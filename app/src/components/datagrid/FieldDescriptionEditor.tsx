@@ -1,7 +1,11 @@
 import { useState, useLayoutEffect, useRef } from "react";
 
 export function FieldDescriptionEditor({
-  field, initial, onSave, onClose, anchorRef,
+  field,
+  initial,
+  onSave,
+  onClose,
+  anchorRef,
 }: {
   field: string;
   initial: string | null;
@@ -29,7 +33,9 @@ export function FieldDescriptionEditor({
       style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 50 }}
       className="w-[320px] rounded-lg border border-line-2 bg-surface-elevated p-3 shadow-pop"
     >
-      <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-ink-3">Description</div>
+      <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-ink-3">
+        Description
+      </div>
       <textarea
         autoFocus
         value={value}
@@ -39,11 +45,21 @@ export function FieldDescriptionEditor({
         placeholder="What does this field mean? Where does it come from?"
       />
       <div className="mt-2 flex justify-end gap-1">
-        <button onClick={onClose} className="rounded px-2 py-1 text-[11px] text-ink-2 hover:bg-hover">Cancel</button>
         <button
-          onClick={() => { onSave(value.trim() || null); onClose(); }}
+          onClick={onClose}
+          className="rounded px-2 py-1 text-[11px] text-ink-2 hover:bg-hover"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            onSave(value.trim() || null);
+            onClose();
+          }}
           className="rounded bg-accent px-2 py-1 text-[11px] text-white hover:brightness-110"
-        >Save</button>
+        >
+          Save
+        </button>
       </div>
     </div>
   );

@@ -9,8 +9,16 @@ export interface MenuItem {
 }
 
 export function ContextMenu({
-  items, x, y, onClose,
-}: { items: MenuItem[]; x: number; y: number; onClose: () => void }) {
+  items,
+  x,
+  y,
+  onClose,
+}: {
+  items: MenuItem[];
+  x: number;
+  y: number;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ top: y, left: x });
 
@@ -18,7 +26,8 @@ export function ContextMenu({
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    let top = y, left = x;
+    let top = y,
+      left = x;
     if (left + rect.width > window.innerWidth - 8) left = window.innerWidth - rect.width - 8;
     if (top + rect.height > window.innerHeight - 8) top = window.innerHeight - rect.height - 8;
     setPos({ top, left });
@@ -39,7 +48,10 @@ export function ContextMenu({
             key={i}
             role="menuitem"
             disabled={item.disabled}
-            onClick={() => { item.onClick(); onClose(); }}
+            onClick={() => {
+              item.onClick();
+              onClose();
+            }}
             className={cx(
               "block w-full px-3 py-1.5 text-left text-ink",
               item.disabled ? "cursor-not-allowed opacity-40" : "hover:bg-hover",

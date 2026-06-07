@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ColumnDef } from "./types";
 
-interface RangeCorner { rowKey: string; field: string }
-interface RangeState { anchor: RangeCorner; focus: RangeCorner }
+interface RangeCorner {
+  rowKey: string;
+  field: string;
+}
+interface RangeState {
+  anchor: RangeCorner;
+  focus: RangeCorner;
+}
 
 interface Opts<Row> {
   range: RangeState | null;
@@ -52,7 +58,9 @@ export function useFillHandle<Row>(opts: Opts<Row>) {
   // Keep a stable ref to opts so the closure inside onHandlePointerDown
   // always sees the latest values without recreating event listeners.
   const optsRef = useRef(opts);
-  useEffect(() => { optsRef.current = opts; }, [opts]);
+  useEffect(() => {
+    optsRef.current = opts;
+  }, [opts]);
 
   const onHandlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 || !optsRef.current.range) return;
@@ -116,8 +124,12 @@ export function useFillHandle<Row>(opts: Opts<Row>) {
       const targetRowIdxs: number[] = goingDown
         ? Array.from({ length: finalFocusRowIdx - srcMaxRow }, (_, i) => srcMaxRow + 1 + i)
         : Array.from({ length: srcMinRow - finalFocusRowIdx }, (_, i) => finalFocusRowIdx + i);
-      const srcAnchorColIdx = cur.orderedVisible.findIndex((c) => c.field === sourceRange.anchor.field);
-      const srcFocusColIdx = cur.orderedVisible.findIndex((c) => c.field === sourceRange.focus.field);
+      const srcAnchorColIdx = cur.orderedVisible.findIndex(
+        (c) => c.field === sourceRange.anchor.field,
+      );
+      const srcFocusColIdx = cur.orderedVisible.findIndex(
+        (c) => c.field === sourceRange.focus.field,
+      );
       const srcMinColIdx = Math.min(srcAnchorColIdx, srcFocusColIdx);
       const srcMaxColIdx = Math.max(srcAnchorColIdx, srcFocusColIdx);
       const srcCols = cur.orderedVisible.slice(srcMinColIdx, srcMaxColIdx + 1);
@@ -127,7 +139,7 @@ export function useFillHandle<Row>(opts: Opts<Row>) {
         const targetIdx = targetRowIdxs[i]!;
         const targetRow = cur.sortedRows[targetIdx];
         if (!targetRow) continue;
-        const srcIdxInRange = goingDown ? i % srcRowCount : (srcRowCount - 1) - (i % srcRowCount);
+        const srcIdxInRange = goingDown ? i % srcRowCount : srcRowCount - 1 - (i % srcRowCount);
         const srcRow = cur.sortedRows[srcMinRow + srcIdxInRange];
         if (!srcRow) continue;
         for (const col of srcCols) {

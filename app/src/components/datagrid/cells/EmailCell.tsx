@@ -41,7 +41,11 @@ function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
       onKeyDown={(e) => {
-        if (e.key === "Escape") { e.preventDefault(); cancel(); return; }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          cancel();
+          return;
+        }
         if (e.key === "Enter" || e.key === "Tab") commitNow();
       }}
       className={inputBase}

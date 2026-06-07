@@ -472,7 +472,16 @@ export async function changeColumnType(
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
     `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
-    { method: "PUT", body: JSON.stringify({ type: newType, options, coerceInvalidToNull, numberFormat, ratingMax }) },
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        type: newType,
+        options,
+        coerceInvalidToNull,
+        numberFormat,
+        ratingMax,
+      }),
+    },
   );
   if (res.ok) {
     await refreshDim(dimId);

@@ -1,15 +1,20 @@
 import { useMemo } from "react";
 import type { ColumnDef } from "./types";
 
-interface Bounds { minRow: number; maxRow: number; minCol: number; maxCol: number }
+interface Bounds {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+}
 
 export interface Aggregates {
-  count:    number;
+  count: number;
   distinct: number | null;
-  sum:      number | null;
-  avg:      number | null;
-  min:      number | string | null;
-  max:      number | string | null;
+  sum: number | null;
+  avg: number | null;
+  min: number | string | null;
+  max: number | string | null;
 }
 
 const MAX_CELLS = 100_000;
@@ -26,7 +31,8 @@ export function computeAggregates<Row>(
   }
   let count = 0;
   const seen = new Set<string>();
-  let sum = 0, sumCount = 0;
+  let sum = 0,
+    sumCount = 0;
   let min: number | string | null = null;
   let max: number | string | null = null;
   let anyNumeric = false;

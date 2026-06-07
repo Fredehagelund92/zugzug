@@ -28,29 +28,37 @@ export function findEdge<Row>(
     const v = getValue(row, col.field);
     return v == null || v === "";
   };
-  let r = fromRow, c = fromCol;
-  const lastR = rows.length - 1, lastC = cols.length - 1;
+  let r = fromRow,
+    c = fromCol;
+  const lastR = rows.length - 1,
+    lastC = cols.length - 1;
   const startEmpty = isEmpty(r, c);
   // Step once to inspect the neighbour
-  const nr = r + dr, nc = c + dc;
+  const nr = r + dr,
+    nc = c + dc;
   if (nr < 0 || nr > lastR || nc < 0 || nc > lastC) return { row: r, col: c };
   const neighbourEmpty = isEmpty(nr, nc);
   if (!startEmpty && !neighbourEmpty) {
     // walk forward while next is filled
     while (true) {
-      const nextR = r + dr, nextC = c + dc;
+      const nextR = r + dr,
+        nextC = c + dc;
       if (nextR < 0 || nextR > lastR || nextC < 0 || nextC > lastC) break;
       if (isEmpty(nextR, nextC)) break;
-      r = nextR; c = nextC;
+      r = nextR;
+      c = nextC;
     }
     return { row: r, col: c };
   }
   // startEmpty OR neighbourEmpty: walk past empties to first filled, or to edge
-  r = nr; c = nc;
+  r = nr;
+  c = nc;
   while (isEmpty(r, c)) {
-    const nextR = r + dr, nextC = c + dc;
+    const nextR = r + dr,
+      nextC = c + dc;
     if (nextR < 0 || nextR > lastR || nextC < 0 || nextC > lastC) return { row: r, col: c };
-    r = nextR; c = nextC;
+    r = nextR;
+    c = nextC;
   }
   return { row: r, col: c };
 }
@@ -177,14 +185,28 @@ export function useGridCursor<Row>({
       }
 
       const isCmd = e.metaKey || e.ctrlKey;
-      if (isCmd && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      if (
+        isCmd &&
+        (e.key === "ArrowUp" ||
+          e.key === "ArrowDown" ||
+          e.key === "ArrowLeft" ||
+          e.key === "ArrowRight")
+      ) {
         e.preventDefault();
         const ri = rows.findIndex((r) => rowKey(r) === cursor.rowKey);
         const ci = navCols.findIndex((c) => c.field === cursor.field);
         if (ri < 0 || ci < 0) return;
-        const dir = e.key === "ArrowUp" ? "up" : e.key === "ArrowDown" ? "down" : e.key === "ArrowLeft" ? "left" : "right";
+        const dir =
+          e.key === "ArrowUp"
+            ? "up"
+            : e.key === "ArrowDown"
+              ? "down"
+              : e.key === "ArrowLeft"
+                ? "left"
+                : "right";
         if (e.shiftKey) return; // grid handles shift+meta+arrow
-        const resolvedGetValue = getValue ?? ((r: Row, f: string) => (r as Record<string, unknown>)[f]);
+        const resolvedGetValue =
+          getValue ?? ((r: Row, f: string) => (r as Record<string, unknown>)[f]);
         const target = findEdge(rows, navCols, resolvedGetValue, ri, ci, dir);
         const row = rows[target.row];
         const col = navCols[target.col];
@@ -193,13 +215,15 @@ export function useGridCursor<Row>({
       }
       if (isCmd && e.key === "Home") {
         e.preventDefault();
-        const row = rows[0], col = navCols[0];
+        const row = rows[0],
+          col = navCols[0];
         if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
         return;
       }
       if (isCmd && e.key === "End") {
         e.preventDefault();
-        const row = rows[rows.length - 1], col = navCols[navCols.length - 1];
+        const row = rows[rows.length - 1],
+          col = navCols[navCols.length - 1];
         if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
         return;
       }

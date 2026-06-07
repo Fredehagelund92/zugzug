@@ -90,9 +90,7 @@ export function UndoStackProvider({
     if (!tx) return;
     txRef.current = null;
     if (tx.entries.length === 0) return;
-    const surfaces = new Set(
-      tx.entries.map((e) => e.surface).filter((s): s is string => !!s),
-    );
+    const surfaces = new Set(tx.entries.map((e) => e.surface).filter((s): s is string => !!s));
     const surface = surfaces.size === 1 ? [...surfaces][0] : undefined;
     const combined: UndoEntry =
       tx.entries.length === 1

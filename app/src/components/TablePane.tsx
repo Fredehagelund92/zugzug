@@ -40,14 +40,22 @@ import type { Mode } from "../lib/available-modes";
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
   switch (f.type) {
-    case "number": return { type: "number", numberFormat: f.numberFormat };
-    case "boolean": return { type: "boolean" };
-    case "date": return { type: "date" };
-    case "select": return { type: "select", options: f.options ?? [] };
-    case "url": return { type: "url" };
-    case "email": return { type: "email" };
-    case "rating": return { type: "rating", ratingMax: f.ratingMax ?? 5 };
-    default: return { type: "text" };
+    case "number":
+      return { type: "number", numberFormat: f.numberFormat };
+    case "boolean":
+      return { type: "boolean" };
+    case "date":
+      return { type: "date" };
+    case "select":
+      return { type: "select", options: f.options ?? [] };
+    case "url":
+      return { type: "url" };
+    case "email":
+      return { type: "email" };
+    case "rating":
+      return { type: "rating", ratingMax: f.ratingMax ?? 5 };
+    default:
+      return { type: "text" };
   }
 }
 
@@ -142,7 +150,6 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
   );
 }
 
-
 function exportToCSV(dim: MappingDimension): void {
   const fields = dim.fields ?? [];
   const headers = ["key", "label", ...fields.map((f) => f.label)];
@@ -172,7 +179,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
   const undo = useUndoStack();
-
 
   const [sel, setSel] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
@@ -322,7 +328,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   }, [fields, engineer, dim.keyCol, external, layout, allDims]);
 
   const rowsForGrid = useMemo(
-    () => list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
+    () =>
+      list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
     [list],
   );
 
@@ -615,7 +622,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           rows={rowsForGrid}
           rowKey={(c) => c.key}
           columns={columns}
-
           showRowNumbers
           selection={{ selected: sel, onChange: setSel }}
           onCommit={async (rowKey, field, value) => {
