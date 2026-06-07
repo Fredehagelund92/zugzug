@@ -5,10 +5,61 @@ import type { ColumnDef, Cursor } from "./types";
    handler. Attached to the grid container, not window (so it doesn't fight
    the browser address bar / app shell shortcuts). */
 
+/** Given a starting (row, col) and direction, return the next data-edge target.
+ *  "Empty" = null or empty string. Rules:
+ *  - filled + next filled → last filled of run
+ *  - filled + next empty  → first filled after empty stretch (or edge)
+ *  - empty              → first filled in direction (or edge)
+ */
+export function findEdge<Row>(
+  rows: Row[],
+  cols: ColumnDef<Row>[],
+  getValue: (row: Row, field: string) => unknown,
+  fromRow: number,
+  fromCol: number,
+  dir: "up" | "down" | "left" | "right",
+): { row: number; col: number } {
+  const dr = dir === "down" ? 1 : dir === "up" ? -1 : 0;
+  const dc = dir === "right" ? 1 : dir === "left" ? -1 : 0;
+  const isEmpty = (r: number, c: number): boolean => {
+    const row = rows[r];
+    const col = cols[c];
+    if (!row || !col) return true;
+    const v = getValue(row, col.field);
+    return v == null || v === "";
+  };
+  let r = fromRow, c = fromCol;
+  const lastR = rows.length - 1, lastC = cols.length - 1;
+  const startEmpty = isEmpty(r, c);
+  // Step once to inspect the neighbour
+  const nr = r + dr, nc = c + dc;
+  if (nr < 0 || nr > lastR || nc < 0 || nc > lastC) return { row: r, col: c };
+  const neighbourEmpty = isEmpty(nr, nc);
+  if (!startEmpty && !neighbourEmpty) {
+    // walk forward while next is filled
+    while (true) {
+      const next_r = r + dr, next_c = c + dc;
+      if (next_r < 0 || next_r > lastR || next_c < 0 || next_c > lastC) break;
+      if (isEmpty(next_r, next_c)) break;
+      r = next_r; c = next_c;
+    }
+    return { row: r, col: c };
+  }
+  // startEmpty OR neighbourEmpty: walk past empties to first filled, or to edge
+  r = nr; c = nc;
+  while (isEmpty(r, c)) {
+    const next_r = r + dr, next_c = c + dc;
+    if (next_r < 0 || next_r > lastR || next_c < 0 || next_c > lastC) return { row: r, col: c };
+    r = next_r; c = next_c;
+  }
+  return { row: r, col: c };
+}
+
 interface Opts<Row> {
   rows: Row[];
   rowKey: (row: Row) => string;
   columns: ColumnDef<Row>[];
+  getValue?: (row: Row, field: string) => unknown;
   onCommit?: () => void; // grid asks the host to actually persist
   onSelectAll?: () => void;
   onBulkDelete?: () => void;
@@ -22,6 +73,7 @@ export function useGridCursor<Row>({
   rows,
   rowKey,
   columns,
+  getValue,
   onCommit,
   onSelectAll,
   onBulkDelete,
@@ -124,6 +176,33 @@ export function useGridCursor<Row>({
         return;
       }
 
+      const isCmd = e.metaKey || e.ctrlKey;
+      if (isCmd && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        const ri = rows.findIndex((r) => rowKey(r) === cursor.rowKey);
+        const ci = navCols.findIndex((c) => c.field === cursor.field);
+        if (ri < 0 || ci < 0) return;
+        const dir = e.key === "ArrowUp" ? "up" : e.key === "ArrowDown" ? "down" : e.key === "ArrowLeft" ? "left" : "right";
+        if (e.shiftKey) return; // grid handles shift+meta+arrow
+        const resolvedGetValue = getValue ?? ((r: Row, f: string) => (r as Record<string, unknown>)[f]);
+        const target = findEdge(rows, navCols, resolvedGetValue, ri, ci, dir);
+        const row = rows[target.row];
+        const col = navCols[target.col];
+        if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
+        return;
+      }
+      if (isCmd && e.key === "Home") {
+        e.preventDefault();
+        const row = rows[0], col = navCols[0];
+        if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
+        return;
+      }
+      if (isCmd && e.key === "End") {
+        e.preventDefault();
+        const row = rows[rows.length - 1], col = navCols[navCols.length - 1];
+        if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
+        return;
+      }
       if (e.key === "ArrowUp") {
         e.preventDefault();
         move(0, -1);
@@ -194,8 +273,12 @@ export function useGridCursor<Row>({
       onRedo,
       onShortcuts,
       onFocusFilter,
+      rows,
+      navCols,
+      rowKey,
+      getValue,
     ],
   );
 
-  return { cursor, setCursor, startEdit, stopEdit, move, onKeyDown, ref };
+  return { cursor, setCursor, startEdit, stopEdit, move, onKeyDown, ref, findEdge };
 }

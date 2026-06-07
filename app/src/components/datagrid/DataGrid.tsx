@@ -482,6 +482,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     rows: sortedRows,
     rowKey,
     columns: orderedVisible,
+    getValue,
     onCommit: () => {
       /* the editor's onBlur handles the actual value commit */
     },
@@ -800,6 +801,29 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return;
       }
 
+      // Shift+Cmd+Arrow: extend range to data edge
+      const isShiftMetaArrow =
+        (e.metaKey || e.ctrlKey) && e.shiftKey &&
+        (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight");
+
+      if (isShiftMetaArrow && cur) {
+        e.preventDefault();
+        const focusRk = range?.focus.rowKey ?? cur.rowKey;
+        const focusField = range?.focus.field ?? cur.field;
+        const fr = rowIndexMap.get(focusRk) ?? 0;
+        const fc = colIndexMap.get(focusField) ?? 0;
+        const dir = e.key === "ArrowUp" ? "up" : e.key === "ArrowDown" ? "down" : e.key === "ArrowLeft" ? "left" : "right";
+        const target = cursor.findEdge(sortedRows, orderedVisible, getValue, fr, fc, dir);
+        const newFocusRow = sortedRows[target.row];
+        const newFocusCol = orderedVisible[target.col];
+        if (!newFocusRow || !newFocusCol) return;
+        const newFocus = { rowKey: rowKey(newFocusRow), field: newFocusCol.field };
+        const currentAnchor = range?.anchor ?? { rowKey: cur.rowKey, field: cur.field };
+        setRange({ anchor: currentAnchor, focus: newFocus });
+        cursor.setCursor({ rowKey: newFocus.rowKey, field: newFocus.field, editing: false });
+        return;
+      }
+
       // Escape: collapse range to anchor
       if (e.key === "Escape" && range) {
         e.preventDefault();
@@ -835,6 +859,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       sortedRows,
       orderedVisible,
       rowKey,
+      getValue,
       undo,
       commitValue,
       computeRangeBounds,
