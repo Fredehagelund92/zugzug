@@ -496,7 +496,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
         <>
           {p.filter === "new" && (
             <div className="px-4 py-12 text-center">
-              <div className="font-display text-[18px] font-semibold text-ink">Nothing to triage today. 🎉</div>
+              <div className="font-display text-[18px] font-semibold text-ink">Nothing to triage today. 🎯</div>
               <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
                 Curate records in{" "}
                 <Link to="/app/tables" className="text-accent hover:underline">
