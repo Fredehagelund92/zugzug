@@ -32,6 +32,7 @@ interface ComboSelectProps {
   suggestion?: string | null;
   placeholder?: string;
   allowCreate?: boolean;
+  disabled?: boolean;
   onPick: (v: string) => void;
 }
 
@@ -44,6 +45,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
     suggestion = null,
     placeholder = "Select…",
     allowCreate = false,
+    disabled = false,
     onPick,
   },
   imperativeRef,
@@ -167,14 +169,18 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => !disabled && setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-disabled={disabled}
+        disabled={disabled}
         className={cx(
           "flex w-full items-center justify-between gap-2 rounded-sm border px-2.5 py-1.5 text-[12.5px] transition-colors",
-          value
-            ? "border-line-2 font-medium text-accent hover:border-accent"
-            : "border-dashed border-line-2 font-mono text-ink-3 hover:border-accent hover:text-ink-2",
+          disabled
+            ? "cursor-not-allowed border-dashed border-line font-mono text-ink-4 opacity-50"
+            : value
+              ? "border-line-2 font-medium text-accent hover:border-accent"
+              : "border-dashed border-line-2 font-mono text-ink-3 hover:border-accent hover:text-ink-2",
         )}
       >
         <span className="truncate">{value ?? (suggestion ? `${suggestion}?` : placeholder)}</span>
