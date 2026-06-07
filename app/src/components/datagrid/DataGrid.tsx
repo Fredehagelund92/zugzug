@@ -910,8 +910,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const firstCol = orderedVisible[0];
       const lastCol = orderedVisible[orderedVisible.length - 1];
       if (!firstCol || !lastCol) return;
-      if (e.shiftKey && range) {
-        setRange({ anchor: range.anchor, focus: { rowKey: rk, field: lastCol.field } });
+      if (e.shiftKey && rangeRef.current) {
+        setRange({ anchor: rangeRef.current.anchor, focus: { rowKey: rk, field: lastCol.field } });
       } else {
         setRange({
           anchor: { rowKey: rk, field: firstCol.field },
@@ -921,7 +921,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       cursor.setCursor({ rowKey: rk, field: firstCol.field, editing: false });
       e.preventDefault();
     },
-    [cursor, orderedVisible, range],
+    [cursor, orderedVisible],
   );
 
   // ── Pointer handlers for drag-select ───────────────────────────────────────
@@ -1112,8 +1112,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       if (firstRow && lastRow) {
                         const anchor = { rowKey: rowKey(firstRow), field: c.field };
                         const focus  = { rowKey: rowKey(lastRow),  field: c.field };
-                        if (_e.shiftKey && range) {
-                          setRange({ anchor: range.anchor, focus });
+                        if (_e.shiftKey && rangeRef.current) {
+                          setRange({ anchor: rangeRef.current.anchor, focus });
                         } else {
                           setRange({ anchor, focus });
                         }
