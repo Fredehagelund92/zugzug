@@ -566,6 +566,7 @@ export async function changeColumnType(
   if (!m) return { ok: false };
   const f = (await listFields(dimId)).find((x) => x.field === field);
   if (!f) return { ok: false };
+  if (f.type === "linked" || newType === "linked") return { ok: false };
   const col = qid(field);
   const keyc = qid(m.keyCol);
   const { newType, coerceInvalidToNull, userId } = opts;
