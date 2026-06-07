@@ -767,9 +767,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return;
       }
 
-      // Shift+Arrow: extend range, keep anchor
+      // Shift+Arrow: extend range, keep anchor (exclude meta so ⌘⇧+Arrow falls through to isShiftMetaArrow)
       const isShiftArrow =
-        e.shiftKey &&
+        e.shiftKey && !e.metaKey && !e.ctrlKey &&
         (e.key === "ArrowUp" ||
           e.key === "ArrowDown" ||
           e.key === "ArrowLeft" ||
@@ -811,11 +811,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         const focusRk = range?.focus.rowKey ?? cur.rowKey;
         const focusField = range?.focus.field ?? cur.field;
         const fr = rowIndexMap.get(focusRk) ?? 0;
-        const fc = colIndexMap.get(focusField) ?? 0;
+        const navFc = cursor.navCols.findIndex((c) => c.field === focusField);
+        if (navFc < 0) {
+          // Focus column isn't navigable (hidden/non-editable) — delegate to cursor handler
+          cursor.onKeyDown(e);
+          return;
+        }
         const dir = e.key === "ArrowUp" ? "up" : e.key === "ArrowDown" ? "down" : e.key === "ArrowLeft" ? "left" : "right";
-        const target = cursor.findEdge(sortedRows, orderedVisible, getValue, fr, fc, dir);
+        const target = cursor.findEdge(sortedRows, cursor.navCols, getValue, fr, navFc, dir);
         const newFocusRow = sortedRows[target.row];
-        const newFocusCol = orderedVisible[target.col];
+        const newFocusCol = cursor.navCols[target.col];
         if (!newFocusRow || !newFocusCol) return;
         const newFocus = { rowKey: rowKey(newFocusRow), field: newFocusCol.field };
         const currentAnchor = range?.anchor ?? { rowKey: cur.rowKey, field: cur.field };

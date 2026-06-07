@@ -9,7 +9,7 @@ interface Row { id: string; name: string }
 const rows: Row[] = [
   { id: "1", name: "Acme" },
   { id: "2", name: "Bravo" },
-  { id: "3", name: "" },
+  { id: "3", name: "Charlie" },
   { id: "4", name: "Delta" },
   { id: "5", name: "Echo" },
 ];
@@ -38,17 +38,17 @@ function clickCellByText(container: HTMLElement, text: string): HTMLElement {
 }
 
 describe("DataGrid ⌘+Arrow data-edge jump", () => {
-  test("⌘↓ stops at last filled before empty stretch", () => {
+  test("⌘↓ jumps to last filled of run (edge-jump, not one-step)", () => {
     const { container } = renderGrid();
     clickCellByText(container, "Acme");
     const grid = container.querySelector('[role="grid"]') as HTMLElement;
     act(() => {
       fireEvent.keyDown(grid, { key: "ArrowDown", metaKey: true });
     });
-    // With [Acme, Bravo, "", Delta, Echo] and current rule "filled→filled = last of run",
-    // cursor on Acme (filled) sees Bravo (filled) below → jumps to last filled of run (Bravo).
+    // With [Acme, Bravo, Charlie, Delta, Echo] (all filled), ⌘↓ from Acme
+    // should jump to Echo (last of run) — not Bravo (one-step).
     const focused = container.querySelector('[aria-selected="true"]');
-    expect(focused?.textContent).toContain("Bravo");
+    expect(focused?.textContent).toContain("Echo");
   });
 
   test("⌘⇧↓ extends the range to the data-edge target", () => {
@@ -60,9 +60,9 @@ describe("DataGrid ⌘+Arrow data-edge jump", () => {
     });
     const cells = container.querySelectorAll<HTMLElement>('[role="gridcell"]');
     const acmeCell = Array.from(cells).find((c) => c.textContent?.trim() === "Acme");
-    const bravoCell = Array.from(cells).find((c) => c.textContent?.trim() === "Bravo");
-    // Bravo gets the focus ring; Acme gets the range wash
+    const echoCell = Array.from(cells).find((c) => c.textContent?.trim() === "Echo");
+    // Echo gets the focus ring (edge-jump target); Acme gets the range wash (anchor)
     expect(acmeCell?.className).toContain("bg-accent/10");
-    expect(bravoCell?.getAttribute("aria-selected")).toBe("true");
+    expect(echoCell?.getAttribute("aria-selected")).toBe("true");
   });
 });

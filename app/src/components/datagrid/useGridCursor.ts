@@ -38,19 +38,19 @@ export function findEdge<Row>(
   if (!startEmpty && !neighbourEmpty) {
     // walk forward while next is filled
     while (true) {
-      const next_r = r + dr, next_c = c + dc;
-      if (next_r < 0 || next_r > lastR || next_c < 0 || next_c > lastC) break;
-      if (isEmpty(next_r, next_c)) break;
-      r = next_r; c = next_c;
+      const nextR = r + dr, nextC = c + dc;
+      if (nextR < 0 || nextR > lastR || nextC < 0 || nextC > lastC) break;
+      if (isEmpty(nextR, nextC)) break;
+      r = nextR; c = nextC;
     }
     return { row: r, col: c };
   }
   // startEmpty OR neighbourEmpty: walk past empties to first filled, or to edge
   r = nr; c = nc;
   while (isEmpty(r, c)) {
-    const next_r = r + dr, next_c = c + dc;
-    if (next_r < 0 || next_r > lastR || next_c < 0 || next_c > lastC) return { row: r, col: c };
-    r = next_r; c = next_c;
+    const nextR = r + dr, nextC = c + dc;
+    if (nextR < 0 || nextR > lastR || nextC < 0 || nextC > lastC) return { row: r, col: c };
+    r = nextR; c = nextC;
   }
   return { row: r, col: c };
 }
@@ -280,5 +280,5 @@ export function useGridCursor<Row>({
     ],
   );
 
-  return { cursor, setCursor, startEdit, stopEdit, move, onKeyDown, ref, findEdge };
+  return { cursor, setCursor, startEdit, stopEdit, move, onKeyDown, ref, findEdge, navCols };
 }
