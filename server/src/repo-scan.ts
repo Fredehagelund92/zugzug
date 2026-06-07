@@ -355,8 +355,7 @@ export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
   }
   if (!sched) return false;
   if (!lastScan) return true; // never scanned → run immediately
-  const dueMs =
-    sched === "15m" ? 15 * 60_000 : sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
+  const dueMs = sched === "15m" ? 15 * 60_000 : sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
   return now.getTime() - lastScan.getTime() >= dueMs;
 }
 
@@ -382,8 +381,8 @@ export async function scanStatus(): Promise<ScanStatusResult> {
        AND st.source_column = s.source_column`,
   ).catch(() => null);
   return {
-    lastScanAt:    row?.last_scan   ?? null,
-    sourceCount:   Number(row?.sources ?? 0),
+    lastScanAt: row?.last_scan ?? null,
+    sourceCount: Number(row?.sources ?? 0),
     unmappedCount: Number(row?.unmapped ?? 0),
   };
 }

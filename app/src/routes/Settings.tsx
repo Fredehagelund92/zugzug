@@ -148,7 +148,7 @@ function ScansSection() {
 
       {statusError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-          <span>Couldn't load scan status — {statusError}</span>
+          <span>Couldn&rsquo;t load scan status — {statusError}</span>
           <Button variant="ghost" size="sm" onClick={() => void loadStatus()}>
             Retry
           </Button>
@@ -398,7 +398,7 @@ function TeamSection() {
     >
       {loadError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-          <span>Couldn't load the team — {loadError}</span>
+          <span>Couldn&rsquo;t load the team — {loadError}</span>
           <Button variant="ghost" size="sm" onClick={() => void load()}>
             Retry
           </Button>

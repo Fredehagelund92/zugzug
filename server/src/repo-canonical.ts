@@ -105,8 +105,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     const tm = linkedMetas.get(f.field);
     if (!tm) return [];
     return (f.displayFields ?? ["label"]).map(
-      (df) =>
-        `CAST(t_${f.field}.${qid(df)} AS VARCHAR) AS ${qid(`${f.field}__${df}`)}`,
+      (df) => `CAST(t_${f.field}.${qid(df)} AS VARCHAR) AS ${qid(`${f.field}__${df}`)}`,
     );
   });
   const fieldCols = [...scalarCols, ...linkedFkCols, ...lookupCols].join(", ");
@@ -168,9 +167,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
   const allFieldKeys = [
     ...scalarFields.map((f) => f.field),
     ...linkedFields.map((f) => f.field),
-    ...linkedFields.flatMap((f) =>
-      (f.displayFields ?? ["label"]).map((df) => `${f.field}__${df}`),
-    ),
+    ...linkedFields.flatMap((f) => (f.displayFields ?? ["label"]).map((df) => `${f.field}__${df}`)),
   ];
 
   const canonical = canonRows.map((r) => ({
@@ -405,7 +402,9 @@ export async function renameCanonical(
       `UPDATE ${pg("ai_hint_cache")} SET suggestion = $1
        WHERE dim_id = $2 AND suggestion = $3`,
       [label, dimId, oldRow.label],
-    ).catch(() => { /* table may not exist in older deploys */ });
+    ).catch(() => {
+      /* table may not exist in older deploys */
+    });
   }
 }
 
@@ -456,7 +455,13 @@ export async function retireCanonical(
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
 export async function listFields(dimId: string): Promise<FieldDef[]> {
-  const rows = await pgAll<{ field: string; label: string; type: string; field_config: string | null; description: string | null }>(
+  const rows = await pgAll<{
+    field: string;
+    label: string;
+    type: string;
+    field_config: string | null;
+    description: string | null;
+  }>(
     `SELECT field, label, type, field_config, description FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
@@ -536,9 +541,10 @@ export async function updateField(
         incomingCfg = null;
       }
     }
-    const mergedConfig = incomingCfg !== null
-      ? JSON.stringify({ ...currentCfg, ...incomingCfg })
-      : updates.fieldConfig; // non-JSON or null — write raw (preserves clear semantics)
+    const mergedConfig =
+      incomingCfg !== null
+        ? JSON.stringify({ ...currentCfg, ...incomingCfg })
+        : updates.fieldConfig; // non-JSON or null — write raw (preserves clear semantics)
     await pgRun(
       `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
       [mergedConfig, dimId, field],
@@ -570,7 +576,17 @@ export async function addField(
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const KNOWN = new Set(["text", "number", "boolean", "date", "select", "url", "email", "rating", "linked"]);
+  const KNOWN = new Set([
+    "text",
+    "number",
+    "boolean",
+    "date",
+    "select",
+    "url",
+    "email",
+    "rating",
+    "linked",
+  ]);
   const t = KNOWN.has(type) ? type : "text";
 
   if (t === "linked") {
@@ -856,13 +872,14 @@ export async function addColumnOption(
         existingCfg = parsed as Record<string, unknown>;
       }
       // bare array: existingCfg stays {} — options come from `next` below
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
-  await pgRun(`UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`, [
-    JSON.stringify({ ...existingCfg, options: next }),
-    dimId,
-    field,
-  ]);
+  await pgRun(
+    `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
+    [JSON.stringify({ ...existingCfg, options: next }), dimId, field],
+  );
   if (!opts.silent) {
     await appendAuditAs(
       userId,
@@ -907,7 +924,10 @@ export async function setFieldValue(
     if (fkValue !== null && f.referencedDimId) {
       const tm = await dimMeta(f.referencedDimId);
       if (tm) {
-        const exists = await pgGet(`SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`, [fkValue]);
+        const exists = await pgGet(
+          `SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`,
+          [fkValue],
+        );
         if (!exists) fkValue = null;
       }
     }

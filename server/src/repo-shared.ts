@@ -100,16 +100,33 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
 export function parseFieldConfig(
   type: string,
   raw: unknown,
-): { options?: OptionDef[]; numberFormat?: NumberFormat; ratingMax?: number; referencedDimId?: string; displayFields?: string[]; rules?: ConditionalRule[] } {
+): {
+  options?: OptionDef[];
+  numberFormat?: NumberFormat;
+  ratingMax?: number;
+  referencedDimId?: string;
+  displayFields?: string[];
+  rules?: ConditionalRule[];
+} {
   // Parse the raw JSON once for rules extraction (type-specific parsers re-parse as needed)
   let parsedJson: Record<string, unknown> | null = null;
   if (typeof raw === "string" && raw.length > 0) {
-    try { parsedJson = JSON.parse(raw) as Record<string, unknown>; } catch { /* ignore */ }
+    try {
+      parsedJson = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      /* ignore */
+    }
   } else if (raw != null && typeof raw === "object" && !Array.isArray(raw)) {
     parsedJson = raw as Record<string, unknown>;
   }
 
-  let typeSpecific: { options?: OptionDef[]; numberFormat?: NumberFormat; ratingMax?: number; referencedDimId?: string; displayFields?: string[] } = {};
+  let typeSpecific: {
+    options?: OptionDef[];
+    numberFormat?: NumberFormat;
+    ratingMax?: number;
+    referencedDimId?: string;
+    displayFields?: string[];
+  } = {};
 
   if (type === "select") {
     typeSpecific = { options: parseOptions(raw) };
@@ -120,8 +137,7 @@ export function parseFieldConfig(
     typeSpecific = { ratingMax: typeof max === "number" && max >= 1 ? max : 5 };
   } else if (type === "linked") {
     const cfg = parsedJson as { targetDimId?: unknown; displayFields?: unknown } | null;
-    const referencedDimId =
-      typeof cfg?.targetDimId === "string" ? cfg.targetDimId : undefined;
+    const referencedDimId = typeof cfg?.targetDimId === "string" ? cfg.targetDimId : undefined;
     const displayFields = Array.isArray(cfg?.displayFields)
       ? (cfg.displayFields as unknown[]).filter((s): s is string => typeof s === "string")
       : ["label"];
@@ -144,8 +160,8 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
-  referencedDimId?: string;  // only when type === "linked"
-  displayFields?: string[];  // fields from target dim to surface as lookup cols
+  referencedDimId?: string; // only when type === "linked"
+  displayFields?: string[]; // fields from target dim to surface as lookup cols
   description?: string;
   rules?: ConditionalRule[];
 }
