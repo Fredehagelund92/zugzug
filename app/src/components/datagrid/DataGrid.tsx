@@ -20,6 +20,9 @@ const IconFieldEmail = ({ className }: { className?: string }) => (
 const IconFieldRating = ({ className }: { className?: string }) => (
   <span className={className} style={{ fontSize: "10px" }}>★</span>
 );
+const IconFieldLinked = ({ className }: { className?: string }) => (
+  <span className={className} style={{ fontSize: "10px" }}>🔗</span>
+);
 import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
 import { BooleanCell } from "./cells/BooleanCell";
@@ -27,6 +30,7 @@ import { DateCell } from "./cells/DateCell";
 import { UrlCell } from "./cells/UrlCell";
 import { EmailCell } from "./cells/EmailCell";
 import { RatingCell } from "./cells/RatingCell";
+import { LinkedCell } from "./cells/LinkedCell";
 import { SelectCell } from "./cells/SelectCell";
 import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
@@ -237,6 +241,7 @@ const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: strin
   url:     IconFieldUrl,
   email:   IconFieldEmail,
   rating:  IconFieldRating,
+  linked:  IconFieldLinked,
 };
 
 const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }> = {
@@ -247,6 +252,7 @@ const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }>
   url:     UrlCell,
   email:   EmailCell,
   rating:  RatingCell,
+  linked:  LinkedCell,
 };
 
 // ── Range selection types ───────────────────────────────────────────────────
@@ -569,6 +575,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         case "url":
         case "email":
         case "date":
+        case "linked":
           return rawVal;
         default: col.config satisfies never; return rawVal;
       }

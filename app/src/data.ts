@@ -38,6 +38,8 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
+  referencedDimId?: string;
+  displayFields?: string[];
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {
