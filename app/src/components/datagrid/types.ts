@@ -49,6 +49,7 @@ export interface ColumnDef<Row> {
   pinnedLeft?: boolean;
   align?:      "left" | "right";
   rules?:      ConditionalRule[];
+  description?: string;
   render?:     (row: Row, ctx: CellCtx<Row>) => ReactNode;
   edit?:       (row: Row, ctx: EditCtx<Row>) => ReactNode;
 }
@@ -152,4 +153,6 @@ export interface DataGridProps<Row> {
   onDuplicateRow?: (rowKey: string) => void;
   /** Save per-column conditional formatting rules (persisted in field_config). */
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
+  /** Save a plain-text description for a column (persisted in dimension_field.description). */
+  onSaveColumnDescription?: (field: string, description: string | null) => void;
 }

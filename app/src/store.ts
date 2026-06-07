@@ -519,6 +519,22 @@ export async function updateFieldRules(
   emit();
 }
 
+/** Persist a plain-text description for a field. Pass null to clear it. */
+export async function updateFieldDescription(
+  dimId: string,
+  field: string,
+  description: string | null,
+): Promise<void> {
+  const res = await fetch(`/api/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ description }),
+  });
+  if (!res.ok) throw new Error(`updateFieldDescription failed: ${res.status}`);
+  await refreshDim(dimId);
+  emit();
+}
+
 export interface GridLayoutConfig {
   widths?: Record<string, number>;
   order?: string[];

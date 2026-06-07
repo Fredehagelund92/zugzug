@@ -43,6 +43,7 @@ import { computeAggregates } from "./useAggregates";
 import { useContextMenu, type ContextSurface } from "./useContextMenu";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { ConditionalFormatPopover } from "./ConditionalFormatPopover";
+import { FieldDescriptionEditor } from "./FieldDescriptionEditor";
 import { useConditionalFormatting, type RowEvaluation } from "./useConditionalFormatting";
 import type { DataGridProps, CellType, ColumnDef, FilterSet, RuleStyle } from "./types";
 import type { PaletteName } from "../../lib/palette";
@@ -397,6 +398,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [rulesEditor, setRulesEditor] = useState<string | null>(null);
+  const [descEditor, setDescEditor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -856,6 +858,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           },
           disabled: !props.onSaveColumnRules,
         },
+        {
+          label: "Edit description",
+          onClick: () => {
+            const headerEl = document.querySelector<HTMLElement>(`[data-header="${attrEsc(surface.field)}"]`);
+            if (headerEl) menuAnchorRef.current = headerEl;
+            setDescEditor(surface.field);
+          },
+          disabled: !props.onSaveColumnDescription,
+        },
         { separator: true, label: "", onClick: () => {} },
         { separator: true, label: "", onClick: () => {} },
         { label: "Hide column", onClick: () => {
@@ -1263,6 +1274,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   right-aligned (numeric) columns. Spreadsheet convention:
                   headers read uniformly left-to-right while the body cells
                   themselves right-align their numbers for tabular comparison. */}
+              {c.description && (
+                <span
+                  data-field-info
+                  title={c.description}
+                  className="ml-0.5 inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-line-2 text-[8px] text-ink-3 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                  aria-label={`Description: ${c.description}`}
+                >
+                  i
+                </span>
+              )}
               <span
                 className={cx(
                   "min-w-0 flex-1 truncate cursor-grab select-none",
@@ -1373,6 +1394,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   onRename={(label) => props.onRenameColumn?.(c.field, label)}
                   onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
                   onOpenRules={props.onSaveColumnRules ? () => { setMenuFor(null); setRulesEditor(c.field); } : undefined}
+                  onEditDescription={props.onSaveColumnDescription ? () => { setMenuFor(null); setDescEditor(c.field); } : undefined}
                   onFilter={(v) =>
                     setFilterSet((cur) => {
                       const existing = cur?.conditions ?? [];
@@ -1567,6 +1589,19 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             anchorRef={menuAnchorRef}
             onChange={(rules) => props.onSaveColumnRules?.(col.field, rules)}
             onClose={() => setRulesEditor(null)}
+          />
+        );
+      })()}
+      {descEditor && (() => {
+        const col = orderedVisible.find((c) => c.field === descEditor);
+        if (!col) return null;
+        return (
+          <FieldDescriptionEditor
+            field={col.field}
+            initial={col.description ?? null}
+            anchorRef={menuAnchorRef}
+            onSave={(next) => props.onSaveColumnDescription?.(col.field, next)}
+            onClose={() => setDescEditor(null)}
           />
         );
       })()}

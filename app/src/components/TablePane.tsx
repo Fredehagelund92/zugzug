@@ -23,6 +23,7 @@ import {
   changeColumnType,
   deleteColumn,
   updateFieldRules,
+  updateFieldDescription,
   getGridLayout,
   setGridLayout,
   type GridLayoutConfig,
@@ -297,6 +298,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             config: fieldDefToColumnConfig(f),
             editable: true,
             rules: f.rules,
+            description: f.description,
           },
         ];
       }),
@@ -673,6 +675,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           onSaveColumnRules={(field, rules) => {
             if (field.includes("__")) return;
             void updateFieldRules(activeId, field, rules);
+          }}
+          onSaveColumnDescription={(field, description) => {
+            if (field.includes("__")) return;
+            void updateFieldDescription(activeId, field, description);
           }}
           onLayoutChange={(partial) => {
             setLayout((cur) => {

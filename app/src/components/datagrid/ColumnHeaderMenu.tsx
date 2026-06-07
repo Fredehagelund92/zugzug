@@ -31,6 +31,7 @@ interface Props<Row> {
   onDelete: () => void;
   onFilter: (value: string | null) => void;
   onOpenRules?: () => void;
+  onEditDescription?: () => void;
 }
 
 const TYPES: CellType[] = ["text", "number", "boolean", "date", "select", "url", "email", "rating"];
@@ -50,6 +51,7 @@ export function ColumnHeaderMenu<Row>({
   onDelete,
   onFilter,
   onOpenRules,
+  onEditDescription,
 }: Props<Row>) {
   const [mode, setMode] = useState<"menu" | "rename" | "type" | "number-format" | "rating-max" | "filter" | "confirm-delete">(
     "menu",
@@ -168,6 +170,18 @@ export function ColumnHeaderMenu<Row>({
               }}
             >
               <IconRules className={iconCls} /> conditional formatting…
+            </button>
+          )}
+          {onEditDescription && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onEditDescription();
+                onClose();
+              }}
+            >
+              <IconEdit className={iconCls} /> edit description…
             </button>
           )}
           <div className="my-1 h-px bg-line" />
