@@ -15,6 +15,8 @@ interface AddFieldPopoverProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   onSubmit: (input: AddFieldInput) => Promise<void>;
+  allDims?: { id: string; dimension: string }[];
+  currentDimId?: string;
 }
 
 type FieldType = ColumnConfig["type"];
@@ -34,9 +36,10 @@ const TYPE_TILES: TypeTile[] = [
   { type: "url",     icon: "↗",  label: "URL" },
   { type: "email",   icon: "@",  label: "Email" },
   { type: "rating",  icon: "★",  label: "Rating" },
+  { type: "linked",  icon: "⇢",  label: "Linked" },
 ];
 
-export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopoverProps) {
+export function AddFieldPopover({ anchorRef, onClose, onSubmit, allDims, currentDimId }: AddFieldPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +56,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   const [ratingMax, setRatingMax] = useState<number>(5);
   const [ratingMaxCustom, setRatingMaxCustom] = useState("");
   const [durationDisplay, setDurationDisplay] = useState<"hm" | "hms">("hm");
+  const [linkedTargetDimId, setLinkedTargetDimId] = useState<string>("");
 
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
@@ -128,7 +132,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [label, type, options, createAnother, busy, numFmt, numPrecision, currSymbol, currPosition, ratingMax, durationDisplay]);
+  }, [label, type, options, createAnother, busy, numFmt, numPrecision, currSymbol, currPosition, ratingMax, durationDisplay, linkedTargetDimId]);
 
   // Focus trap
   useEffect(() => {
@@ -179,6 +183,7 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
     setRatingMax(5);
     setRatingMaxCustom("");
     setDurationDisplay("hm");
+    setLinkedTargetDimId("");
     setError(null);
     nameInputRef.current?.focus();
   };
@@ -186,6 +191,10 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
   const handleSubmit = async () => {
     const trimmed = label.trim();
     if (!trimmed || busy) return;
+    if (type === "linked" && !linkedTargetDimId) {
+      setError("Select a dimension to link to.");
+      return;
+    }
     setError(null);
     setBusy(true);
     try {
@@ -215,6 +224,13 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
         config = { type: "select", options };
       } else if (type === "rating") {
         config = { type: "rating", ratingMax };
+      } else if (type === "linked") {
+        config = {
+          type: "linked",
+          targetDimId: linkedTargetDimId,
+          displayFields: ["label"],
+          candidates: [],
+        };
       } else {
         config = { type } as ColumnConfig;
       }
@@ -511,6 +527,31 @@ export function AddFieldPopover({ anchorRef, onClose, onSubmit }: AddFieldPopove
                   className="w-12 rounded-sm border border-line-2 bg-bg px-1.5 py-0.5 font-mono text-[10px] text-ink outline-none focus:border-accent"
                 />
               </div>
+            </div>
+          </>
+        )}
+
+        {type === "linked" && (
+          <>
+            <div className="border-t border-line" />
+            <div className="space-y-3">
+              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                Link to dimension
+              </div>
+              <select
+                value={linkedTargetDimId}
+                onChange={(e) => setLinkedTargetDimId(e.target.value)}
+                className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
+              >
+                <option value="">— pick a dimension —</option>
+                {(allDims ?? [])
+                  .filter((d) => d.id !== currentDimId)
+                  .map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.dimension}
+                    </option>
+                  ))}
+              </select>
             </div>
           </>
         )}

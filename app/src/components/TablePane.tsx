@@ -688,12 +688,27 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           <AddFieldPopover
             anchorRef={addFieldRef as React.RefObject<HTMLElement | null>}
             onClose={() => setAddOpen(false)}
-            onSubmit={async (input) => {
-              const { label, config } = input;
-              const options = config.type === "select" ? config.options : undefined;
-              const numberFormat = config.type === "number" ? config.numberFormat : undefined;
-              const ratingMax = config.type === "rating" ? config.ratingMax : undefined;
-              await addField(activeId, label, config.type, options, { numberFormat, ratingMax });
+            allDims={allDims.map((d) => ({ id: d.id, dimension: d.dimension }))}
+            currentDimId={activeId}
+            onSubmit={async ({ label, config }) => {
+              if (config.type === "linked") {
+                await addField(activeId, label, "linked", undefined, {
+                  referencedDimId: config.targetDimId,
+                  displayFields: config.displayFields,
+                });
+              } else if (config.type === "number") {
+                await addField(activeId, label, "number", undefined, {
+                  numberFormat: config.numberFormat,
+                });
+              } else if (config.type === "select") {
+                await addField(activeId, label, "select", config.options);
+              } else if (config.type === "rating") {
+                await addField(activeId, label, "rating", undefined, {
+                  ratingMax: config.ratingMax,
+                });
+              } else {
+                await addField(activeId, label, config.type);
+              }
             }}
           />
         )}
