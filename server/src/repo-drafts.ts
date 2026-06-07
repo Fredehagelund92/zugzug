@@ -149,7 +149,9 @@ export async function commit(
       `DELETE FROM ${pg("ai_hint_cache")}
        WHERE dim_id = $1 AND suggestion IS NOT NULL AND NOT (suggestion = ANY($2::text[]))`,
       [dimId, labelArr],
-    ).catch(() => { /* table may not exist in older deploys */ });
+    ).catch(() => {
+      /* table may not exist in older deploys */
+    });
   }
 
   return { committed, rowsRecovered };

@@ -86,12 +86,7 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
         }
       }}
     >
-      <Stars
-        value={current}
-        max={max}
-        interactive={true}
-        onPick={(n) => commit(n)}
-      />
+      <Stars value={current} max={max} interactive={true} onPick={(n) => commit(n)} />
     </span>
   );
 }

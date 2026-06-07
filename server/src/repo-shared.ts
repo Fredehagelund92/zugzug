@@ -6,6 +6,7 @@
 import { run } from "./db.ts";
 import { pgAll, pgGet } from "./pg.ts";
 import { env, pg } from "./env.ts";
+import type { ConditionalRule } from "./conditional-format-types.ts";
 
 /* ---- types (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
 
@@ -38,6 +39,11 @@ export function parseOptions(raw: unknown): OptionDef[] | undefined {
     } catch {
       return undefined;
     }
+  }
+  // Support both the legacy bare-array format ("[{...}]") and the merged-object
+  // format ("{\"options\":[...]}") produced by the server-side merge path.
+  if (arr != null && typeof arr === "object" && !Array.isArray(arr) && "options" in arr) {
+    arr = (arr as { options: unknown }).options;
   }
   if (!Array.isArray(arr)) return undefined;
   return arr.map((o) => {
@@ -75,6 +81,11 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
       return undefined;
     }
   }
+  // Support the merged-object format ("{\"numberFormat\":{...}}") produced by
+  // the server-side merge path alongside the legacy direct-object format.
+  if (obj != null && typeof obj === "object" && !Array.isArray(obj) && "numberFormat" in obj) {
+    obj = (obj as { numberFormat: unknown }).numberFormat;
+  }
   if (
     obj == null ||
     typeof obj !== "object" ||
@@ -89,31 +100,57 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
 export function parseFieldConfig(
   type: string,
   raw: unknown,
-): { options?: OptionDef[]; numberFormat?: NumberFormat; ratingMax?: number; referencedDimId?: string; displayFields?: string[] } {
-  if (type === "select") return { options: parseOptions(raw) };
-  if (type === "number") return { numberFormat: parseNumberFormat(raw) };
-  if (type === "rating") {
-    let obj: unknown = raw;
-    if (typeof obj === "string" && obj.length > 0) {
-      try { obj = JSON.parse(obj); } catch { return { ratingMax: 5 }; }
+): {
+  options?: OptionDef[];
+  numberFormat?: NumberFormat;
+  ratingMax?: number;
+  referencedDimId?: string;
+  displayFields?: string[];
+  rules?: ConditionalRule[];
+} {
+  // Parse the raw JSON once for rules extraction (type-specific parsers re-parse as needed)
+  let parsedJson: Record<string, unknown> | null = null;
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      parsedJson = JSON.parse(raw) as Record<string, unknown>;
+    } catch {
+      /* ignore */
     }
-    const max = (obj as { ratingMax?: unknown } | null)?.ratingMax;
-    return { ratingMax: typeof max === "number" && max >= 1 ? max : 5 };
+  } else if (raw != null && typeof raw === "object" && !Array.isArray(raw)) {
+    parsedJson = raw as Record<string, unknown>;
   }
-  if (type === "linked") {
-    let obj: unknown = raw;
-    if (typeof obj === "string" && obj.length > 0) {
-      try { obj = JSON.parse(obj); } catch { return {}; }
-    }
-    const cfg = obj as { targetDimId?: unknown; displayFields?: unknown } | null;
-    const referencedDimId =
-      typeof cfg?.targetDimId === "string" ? cfg.targetDimId : undefined;
+
+  let typeSpecific: {
+    options?: OptionDef[];
+    numberFormat?: NumberFormat;
+    ratingMax?: number;
+    referencedDimId?: string;
+    displayFields?: string[];
+  } = {};
+
+  if (type === "select") {
+    typeSpecific = { options: parseOptions(raw) };
+  } else if (type === "number") {
+    typeSpecific = { numberFormat: parseNumberFormat(raw) };
+  } else if (type === "rating") {
+    const max = parsedJson?.ratingMax;
+    typeSpecific = { ratingMax: typeof max === "number" && max >= 1 ? max : 5 };
+  } else if (type === "linked") {
+    const cfg = parsedJson as { targetDimId?: unknown; displayFields?: unknown } | null;
+    const referencedDimId = typeof cfg?.targetDimId === "string" ? cfg.targetDimId : undefined;
     const displayFields = Array.isArray(cfg?.displayFields)
       ? (cfg.displayFields as unknown[]).filter((s): s is string => typeof s === "string")
       : ["label"];
-    return { referencedDimId, displayFields };
+    typeSpecific = { referencedDimId, displayFields };
   }
-  return {};
+
+  // Extract rules (allowed alongside any type-specific config)
+  const rules =
+    parsedJson != null && Array.isArray(parsedJson.rules)
+      ? (parsedJson.rules as ConditionalRule[])
+      : undefined;
+
+  return rules !== undefined ? { ...typeSpecific, rules } : typeSpecific;
 }
 
 export interface FieldDef {
@@ -123,9 +160,13 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
-  referencedDimId?: string;  // only when type === "linked"
-  displayFields?: string[];  // fields from target dim to surface as lookup cols
+  referencedDimId?: string; // only when type === "linked"
+  displayFields?: string[]; // fields from target dim to surface as lookup cols
+  description?: string;
+  rules?: ConditionalRule[];
 }
+
+export type { ConditionalRule } from "./conditional-format-types.ts";
 export interface CanonicalValue {
   key: string;
   label: string;

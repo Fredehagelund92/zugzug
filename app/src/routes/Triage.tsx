@@ -8,14 +8,7 @@ import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
-import {
-  useDimensions,
-  useDrafts,
-  saveDraft,
-  discardDraft,
-  commit,
-  dkey,
-} from "../store";
+import { useDimensions, useDrafts, saveDraft, discardDraft, commit, dkey } from "../store";
 import type { Draft } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
@@ -112,11 +105,7 @@ function TriageInner() {
     );
   }, []);
 
-  const aiHint = useAiHint(
-    cursor?.dimId ?? "",
-    cursor?.raw ?? "",
-    cursor !== null,
-  );
+  const aiHint = useAiHint(cursor?.dimId ?? "", cursor?.raw ?? "", cursor !== null);
 
   // every value across every dimension, normalized into one queue ranked
   // by impact (unmapped × log10(rows) per-dim, then by confidence ascending).
@@ -194,9 +183,7 @@ function TriageInner() {
     const v = d?.values.find((x) => x.value === raw);
     const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
     if (!suggestion) return;
-    stageMapCross(dimId, raw, suggestion).catch((err) =>
-      reportDraftError(`accept "${raw}"`, err),
-    );
+    stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
@@ -475,136 +462,121 @@ function CrossDimInbox(p: CrossDimInboxProps) {
       {/* scroll region — column header sticks to its top, rows flow, footer
           (CrossDimFooter below) is pinned at the panel bottom. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* column header — hidden on mobile, shown on md+ */}
+        <div
+          className={cx(
+            COLS_CROSS,
+            "sticky top-0 z-10 hidden border-b border-line bg-surface px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 backdrop-blur-sm md:grid",
+          )}
+        >
+          <span>Dimension</span>
+          <span>Source value</span>
+          <span />
+          <span>Record</span>
+          <span>Confidence</span>
+          <span>Status</span>
+        </div>
 
-      {/* column header — hidden on mobile, shown on md+ */}
-      <div
-        className={cx(
-          COLS_CROSS,
-          "sticky top-0 z-10 hidden border-b border-line bg-surface px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 backdrop-blur-sm md:grid",
-        )}
-      >
-        <span>Dimension</span>
-        <span>Source value</span>
-        <span />
-        <span>Record</span>
-        <span>Confidence</span>
-        <span>Status</span>
-      </div>
-
-      {/* rows */}
-      {p.rows.length === 0 ? (
-        <>
-          {p.filter === "new" && (
-            <div className="px-4 py-12 text-center">
-              <div className="font-display text-[18px] font-semibold text-ink">Nothing to triage today. 🎯</div>
-              <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
-                Curate records in{" "}
-                <Link to="/app/tables" className="text-accent hover:underline">
-                  Tables
-                </Link>
-                , or{" "}
-                <Link to="/app/sources" className="text-accent hover:underline">
-                  wire more sources
-                </Link>
-                .
-              </p>
-            </div>
-          )}
-          {p.filter === "mapped" && (
-            <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-              Nothing has been mapped yet.{" "}
-              <button
-                onClick={() => p.setFilter("new")}
-                className="text-accent hover:underline"
-              >
-                View needs review →
-              </button>
-            </div>
-          )}
-          {p.filter === "all" && (
-            <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-              no values in this view
-            </div>
-          )}
-        </>
-      ) : (
-        p.rows.slice(0, 500).map((r) => {
-          const key = `${r.dimId}::${r.raw}`;
-          const focused = curKey === key;
-          const dim = p.dimById.get(r.dimId);
-          const options = dim?.canonical.map((c) => c.label) ?? [];
-          const external = dim?.keyKind === "external_id";
-          return (
-            <div
-              key={key}
-              data-row-key={key}
-              className={cx(
-                "border-b border-line px-4 transition-colors hover:bg-hover",
-                focused && "ring-1 ring-accent/60 bg-accent-wash/40",
-              )}
-              onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
-            >
-              {/* Desktop row — 6-col grid */}
-              <div className={cx(COLS_CROSS, "hidden py-2.5 md:grid")}>
-                <span>
-                  <Chip label={r.dimName} bucket="chip-3" />
-                </span>
-                <div className="min-w-0">
-                  <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
-                  <div className="font-mono text-[10px] text-ink-2 tabular-nums">
-                    {r.dimRows.toLocaleString()} rows in warehouse
-                  </div>
+        {/* rows */}
+        {p.rows.length === 0 ? (
+          <>
+            {p.filter === "new" && (
+              <div className="px-4 py-12 text-center">
+                <div className="font-display text-[18px] font-semibold text-ink">
+                  Nothing to triage today. 🎯
                 </div>
-                <IconArrowRight className="h-4 w-4 text-ink-3" />
-                <ComboSelect
-                  ref={focused ? focusedComboRef : undefined}
-                  options={options}
-                  value={r.target}
-                  suggestion={r.suggestion ?? undefined}
-                  allowCreate={!external}
-                  onPick={(t) => p.pick(r.dimId, r.raw, t)}
-                />
-                <div>
-                  {r.confidence > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
-                        <div
-                          className={cx("h-full rounded-pill", confBar(r.confidence))}
-                          style={{ width: `${r.confidence}%` }}
-                        />
-                      </div>
-                      <span
-                        className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}
-                        title={
-                          focused && p.aiHint.hint?.reasoning
-                            ? `${r.confidence}% · ${p.aiHint.hint.reasoning}`
-                            : `${r.confidence}%`
-                        }
-                      >
-                        {r.confidence}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="font-mono text-[11px] text-ink-2">—</span>
-                  )}
-                </div>
-                <div>
-                  {r.status === "mapped" ? (
-                    <Chip label="Mapped" bucket="chip-1" dot />
-                  ) : r.status === "skipped" ? (
-                    <Chip label="Skipped" bucket="chip-5" />
-                  ) : (
-                    <Chip label="New" bucket="chip-2" dot />
-                  )}
-                </div>
+                <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
+                  Curate records in{" "}
+                  <Link to="/app/tables" className="text-accent hover:underline">
+                    Tables
+                  </Link>
+                  , or{" "}
+                  <Link to="/app/sources" className="text-accent hover:underline">
+                    wire more sources
+                  </Link>
+                  .
+                </p>
               </div>
-
-              {/* Mobile card — stacked layout */}
-              <div className="flex flex-col gap-2 py-3 md:hidden">
-                {/* row 1: dim chip + status badge */}
-                <div className="flex items-center justify-between gap-2">
-                  <Chip label={r.dimName} bucket="chip-3" />
-                  <div className="shrink-0">
+            )}
+            {p.filter === "mapped" && (
+              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+                Nothing has been mapped yet.{" "}
+                <button onClick={() => p.setFilter("new")} className="text-accent hover:underline">
+                  View needs review →
+                </button>
+              </div>
+            )}
+            {p.filter === "all" && (
+              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+                no values in this view
+              </div>
+            )}
+          </>
+        ) : (
+          p.rows.slice(0, 500).map((r) => {
+            const key = `${r.dimId}::${r.raw}`;
+            const focused = curKey === key;
+            const dim = p.dimById.get(r.dimId);
+            const options = dim?.canonical.map((c) => c.label) ?? [];
+            const external = dim?.keyKind === "external_id";
+            return (
+              <div
+                key={key}
+                data-row-key={key}
+                className={cx(
+                  "border-b border-line px-4 transition-colors hover:bg-hover",
+                  focused && "ring-1 ring-accent/60 bg-accent-wash/40",
+                )}
+                onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
+              >
+                {/* Desktop row — 6-col grid */}
+                <div className={cx(COLS_CROSS, "hidden py-2.5 md:grid")}>
+                  <span>
+                    <Chip label={r.dimName} bucket="chip-3" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
+                    <div className="font-mono text-[10px] text-ink-2 tabular-nums">
+                      {r.dimRows.toLocaleString()} rows in warehouse
+                    </div>
+                  </div>
+                  <IconArrowRight className="h-4 w-4 text-ink-3" />
+                  <ComboSelect
+                    ref={focused ? focusedComboRef : undefined}
+                    options={options}
+                    value={r.target}
+                    suggestion={r.suggestion ?? undefined}
+                    allowCreate={!external}
+                    onPick={(t) => p.pick(r.dimId, r.raw, t)}
+                  />
+                  <div>
+                    {r.confidence > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+                          <div
+                            className={cx("h-full rounded-pill", confBar(r.confidence))}
+                            style={{ width: `${r.confidence}%` }}
+                          />
+                        </div>
+                        <span
+                          className={cx(
+                            "font-mono text-[11px] tabular-nums",
+                            confText(r.confidence),
+                          )}
+                          title={
+                            focused && p.aiHint.hint?.reasoning
+                              ? `${r.confidence}% · ${p.aiHint.hint.reasoning}`
+                              : `${r.confidence}%`
+                          }
+                        >
+                          {r.confidence}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="font-mono text-[11px] text-ink-2">—</span>
+                    )}
+                  </div>
+                  <div>
                     {r.status === "mapped" ? (
                       <Chip label="Mapped" bucket="chip-1" dot />
                     ) : r.status === "skipped" ? (
@@ -614,74 +586,88 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                     )}
                   </div>
                 </div>
-                {/* row 2: raw value + warehouse row count */}
-                <div className="min-w-0">
-                  <div className="break-all font-mono text-[13px] text-ink">{r.raw}</div>
-                  <div className="font-mono text-[10px] text-ink-2 tabular-nums">
-                    {r.dimRows.toLocaleString()} rows in warehouse
-                  </div>
-                </div>
-                {/* row 3: confidence bar + combo target picker */}
-                <div className="flex items-center gap-3">
-                  {r.confidence > 0 ? (
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
-                        <div
-                          className={cx("h-full rounded-pill", confBar(r.confidence))}
-                          style={{ width: `${r.confidence}%` }}
-                        />
-                      </div>
-                      <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>
-                        {r.confidence}%
-                      </span>
+
+                {/* Mobile card — stacked layout */}
+                <div className="flex flex-col gap-2 py-3 md:hidden">
+                  {/* row 1: dim chip + status badge */}
+                  <div className="flex items-center justify-between gap-2">
+                    <Chip label={r.dimName} bucket="chip-3" />
+                    <div className="shrink-0">
+                      {r.status === "mapped" ? (
+                        <Chip label="Mapped" bucket="chip-1" dot />
+                      ) : r.status === "skipped" ? (
+                        <Chip label="Skipped" bucket="chip-5" />
+                      ) : (
+                        <Chip label="New" bucket="chip-2" dot />
+                      )}
                     </div>
-                  ) : (
-                    <span className="shrink-0 font-mono text-[11px] text-ink-2">—</span>
+                  </div>
+                  {/* row 2: raw value + warehouse row count */}
+                  <div className="min-w-0">
+                    <div className="break-all font-mono text-[13px] text-ink">{r.raw}</div>
+                    <div className="font-mono text-[10px] text-ink-2 tabular-nums">
+                      {r.dimRows.toLocaleString()} rows in warehouse
+                    </div>
+                  </div>
+                  {/* row 3: confidence bar + combo target picker */}
+                  <div className="flex items-center gap-3">
+                    {r.confidence > 0 ? (
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+                          <div
+                            className={cx("h-full rounded-pill", confBar(r.confidence))}
+                            style={{ width: `${r.confidence}%` }}
+                          />
+                        </div>
+                        <span
+                          className={cx(
+                            "font-mono text-[11px] tabular-nums",
+                            confText(r.confidence),
+                          )}
+                        >
+                          {r.confidence}%
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="shrink-0 font-mono text-[11px] text-ink-2">—</span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <ComboSelect
+                        ref={focused ? focusedComboRef : undefined}
+                        options={options}
+                        value={r.target}
+                        suggestion={r.suggestion ?? undefined}
+                        allowCreate={!external}
+                        onPick={(t) => p.pick(r.dimId, r.raw, t)}
+                      />
+                    </div>
+                  </div>
+                  {/* row 4: inline action buttons — only on focused row */}
+                  {focused && (
+                    <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        disabled={!r.suggestion && !p.aiHint.hint?.suggestion}
+                        onClick={() => p.accept(r.dimId, r.raw)}
+                      >
+                        Accept
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => p.skip(r.dimId, r.raw)}>
+                        Skip
+                      </Button>
+                    </div>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <ComboSelect
-                      ref={focused ? focusedComboRef : undefined}
-                      options={options}
-                      value={r.target}
-                      suggestion={r.suggestion ?? undefined}
-                      allowCreate={!external}
-                      onPick={(t) => p.pick(r.dimId, r.raw, t)}
-                    />
-                  </div>
                 </div>
-                {/* row 4: inline action buttons — only on focused row */}
-                {focused && (
-                  <div
-                    className="flex gap-2 pt-1"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      size="sm"
-                      disabled={!r.suggestion && !p.aiHint.hint?.suggestion}
-                      onClick={() => p.accept(r.dimId, r.raw)}
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => p.skip(r.dimId, r.raw)}
-                    >
-                      Skip
-                    </Button>
-                  </div>
+
+                {focused && !r.target && (
+                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
                 )}
               </div>
-
-              {focused && !r.target && (
-                <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
-              )}
-            </div>
-          );
-        })
-      )}
-
-      </div>{/* /scroll region */}
+            );
+          })
+        )}
+      </div>
+      {/* /scroll region */}
 
       {/* footer — multi-dim commit */}
       <CrossDimFooter p={p} />
@@ -828,7 +814,9 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
               {grouped.length === 1 ? "" : "s"}, ready to publish
             </>
           ) : (
-            <span className="hidden md:inline">nothing to publish yet — accept or merge values above to stage them</span>
+            <span className="hidden md:inline">
+              nothing to publish yet — accept or merge values above to stage them
+            </span>
           )}
         </span>
         <div className="flex items-center gap-2">
@@ -846,7 +834,9 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
               </span>
             )}
             {p.undo.topSurface && (
-              <span className="ml-1.5 hidden font-mono text-[10px] text-ink-3 md:inline">({p.undo.topSurface})</span>
+              <span className="ml-1.5 hidden font-mono text-[10px] text-ink-3 md:inline">
+                ({p.undo.topSurface})
+              </span>
             )}
             <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘Z</span>
           </Button>
@@ -858,7 +848,12 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
           >
             {review ? "Hide" : `Review ${stagedCount}`}
           </Button>
-          <Button size="sm" disabled={stagedCount === 0} loading={p.committing} onClick={() => p.commitAll()}>
+          <Button
+            size="sm"
+            disabled={stagedCount === 0}
+            loading={p.committing}
+            onClick={() => p.commitAll()}
+          >
             Publish {stagedCount}
             <span className="hidden md:inline"> change{stagedCount === 1 ? "" : "s"}</span>
             <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>

@@ -52,7 +52,8 @@ export function Kpi({
             dir === "up" ? "text-ok" : dir === "warn" ? "text-warn" : "text-danger",
           )}
         >
-          {dir === "up" ? "▲ " : dir === "down" ? "▼ " : ""}{delta}
+          {dir === "up" ? "▲ " : dir === "down" ? "▼ " : ""}
+          {delta}
         </div>
       )}
     </div>

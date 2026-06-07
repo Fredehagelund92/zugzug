@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
@@ -12,16 +12,24 @@ import {
 } from "../Icons";
 
 const IconFieldUrl = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>↗</span>
+  <span className={className} style={{ fontSize: "10px" }}>
+    ↗
+  </span>
 );
 const IconFieldEmail = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>@</span>
+  <span className={className} style={{ fontSize: "10px" }}>
+    @
+  </span>
 );
 const IconFieldRating = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>★</span>
+  <span className={className} style={{ fontSize: "10px" }}>
+    ★
+  </span>
 );
 const IconFieldLinked = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>⇢</span>
+  <span className={className} style={{ fontSize: "10px" }}>
+    ⇢
+  </span>
 );
 import { TextCell } from "./cells/TextCell";
 import { NumberCell } from "./cells/NumberCell";
@@ -36,8 +44,16 @@ import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
+import { useFillHandle } from "./useFillHandle";
 import { FilterBar } from "./FilterBar";
-import type { DataGridProps, CellType, ColumnDef, FilterSet } from "./types";
+import { StatusBar } from "./StatusBar";
+import { computeAggregates } from "./useAggregates";
+import { useContextMenu, type ContextSurface } from "./useContextMenu";
+import { ContextMenu, type MenuItem } from "./ContextMenu";
+import { ConditionalFormatPopover } from "./ConditionalFormatPopover";
+import { FieldDescriptionEditor } from "./FieldDescriptionEditor";
+import { useConditionalFormatting, type RowEvaluation } from "./useConditionalFormatting";
+import type { DataGridProps, CellType, ColumnDef, FilterSet, RuleStyle } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
 
@@ -71,6 +87,8 @@ interface GridRowProps<Row> {
   onAddColumnOption:
     | ((field: string, label: string, color?: PaletteName | null) => Promise<OptionDef[]>)
     | undefined;
+  onRowNumPointerDown?: (e: React.PointerEvent, rk: string) => void;
+  evaluation: RowEvaluation;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -100,22 +118,34 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     onCommitCell,
     onStopEdit,
     onAddColumnOption,
+    onRowNumPointerDown,
+    evaluation,
   } = props;
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 2}
       className={cx(
-        "grid items-stretch border-b border-line transition-colors",
+        "relative grid items-stretch border-b border-line transition-colors",
         selected ? "bg-surface-2" : "hover:bg-hover",
       )}
       style={gridStyle}
       data-row={rk}
     >
+      {evaluation.rowStripe && (
+        <span
+          aria-hidden
+          data-row-stripe={evaluation.rowStripe}
+          className="absolute left-0 top-0 bottom-0 w-1 z-[1] pointer-events-none"
+          style={{ background: `var(--tint-${evaluation.rowStripe})` }}
+        />
+      )}
       {showRowNumbers && (
         <div
+          data-row-num={rk}
+          onPointerDown={(e) => onRowNumPointerDown?.(e, rk)}
           className={cx(
-            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums",
+            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums cursor-cell",
             cellPadY,
           )}
         >
@@ -149,6 +179,11 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
           isFirstPinned && "sticky left-0 z-[5] bg-[var(--surface)]",
           isFirstPinned && selected && "!bg-[var(--surface-2)]",
         );
+        const ruleStyle: RuleStyle | undefined = evaluation.cellStyles.get(c.field);
+        const cellInlineStyle: React.CSSProperties = {};
+        if (ruleStyle?.cellBg)
+          cellInlineStyle.background = `color-mix(in srgb,var(--tint-${ruleStyle.cellBg}) 18%,transparent)`;
+        if (ruleStyle?.textColor) cellInlineStyle.color = `var(--tint-${ruleStyle.textColor})`;
         const data = `${rk}::${c.field}`;
         return (
           <div
@@ -161,6 +196,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
             onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
             onDoubleClick={() => onCellDoubleClick(rk, c.field)}
             className={cellCx}
+            style={Object.keys(cellInlineStyle).length > 0 ? cellInlineStyle : undefined}
           >
             {editing && c.editable !== false ? (
               c.edit ? (
@@ -189,7 +225,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
                   cancel={() => onStopEdit()}
                   options={c.config.options}
                   onCreate={async (label: string, color) => {
-                    if (!onAddColumnOption) return c.config.type === "select" ? c.config.options : [];
+                    if (!onAddColumnOption)
+                      return c.config.type === "select" ? c.config.options : [];
                     return await onAddColumnOption(c.field, label, color);
                   }}
                 />
@@ -251,25 +288,25 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
 const GridRow = React.memo(GridRowInner) as <Row>(props: GridRowProps<Row>) => React.ReactElement;
 
 const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: string }>> = {
-  text:    IconFieldText,
-  number:  IconFieldNumber,
+  text: IconFieldText,
+  number: IconFieldNumber,
   boolean: IconFieldBoolean,
-  date:    IconFieldDate,
-  select:  IconFieldSelect,
-  url:     IconFieldUrl,
-  email:   IconFieldEmail,
-  rating:  IconFieldRating,
-  linked:  IconFieldLinked,
+  date: IconFieldDate,
+  select: IconFieldSelect,
+  url: IconFieldUrl,
+  email: IconFieldEmail,
+  rating: IconFieldRating,
+  linked: IconFieldLinked,
 };
 
 const CELLS: Record<Exclude<CellType, "select" | "linked">, { Renderer: any; Editor: any }> = {
-  text:    TextCell,
-  number:  NumberCell,
+  text: TextCell,
+  number: NumberCell,
   boolean: BooleanCell,
-  date:    DateCell,
-  url:     UrlCell,
-  email:   EmailCell,
-  rating:  RatingCell,
+  date: DateCell,
+  url: UrlCell,
+  email: EmailCell,
+  rating: RatingCell,
 };
 
 // ── Range selection types ───────────────────────────────────────────────────
@@ -299,6 +336,58 @@ function flashCell(rk: string, field: string): void {
   });
 }
 
+// ── FillHandle — absolutely-positioned 8×8 accent square ────────────────────
+function FillHandle({
+  targetSelector,
+  containerRef,
+  onPointerDown,
+  dragging,
+}: {
+  targetSelector: string;
+  containerRef: React.RefObject<HTMLDivElement>;
+  onPointerDown: (e: React.PointerEvent) => void;
+  dragging: boolean;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const update = () => {
+      const target = container.querySelector<HTMLElement>(targetSelector);
+      if (!target) {
+        setPos(null);
+        return;
+      }
+      const cRect = container.getBoundingClientRect();
+      const tRect = target.getBoundingClientRect();
+      setPos({
+        top: tRect.bottom - cRect.top + container.scrollTop - 4,
+        left: tRect.right - cRect.left + container.scrollLeft - 4,
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    container.addEventListener("scroll", update);
+    return () => {
+      ro.disconnect();
+      container.removeEventListener("scroll", update);
+    };
+  }, [targetSelector, containerRef]);
+  if (!pos) return null;
+  return (
+    <div
+      data-fill-handle="true"
+      onPointerDown={onPointerDown}
+      style={{ position: "absolute", top: pos.top, left: pos.left, width: 8, height: 8 }}
+      className={cx(
+        "z-20 cursor-crosshair rounded-sm bg-accent",
+        dragging && "scale-125 shadow-pop",
+      )}
+    />
+  );
+}
+
 export function DataGrid<Row>(props: DataGridProps<Row>) {
   const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
   const visible = columns.filter((c) => !c.hidden);
@@ -324,6 +413,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
   const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [rulesEditor, setRulesEditor] = useState<string | null>(null);
+  const [descEditor, setDescEditor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -338,15 +429,24 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         const str = raw == null ? "" : String(raw).toLowerCase();
         const needle = cond.value.toLowerCase();
         switch (cond.operator) {
-          case "contains":     return str.includes(needle);
-          case "not_contains": return !str.includes(needle);
-          case "equals":       return str === needle;
-          case "not_equals":   return str !== needle;
-          case "starts_with":  return str.startsWith(needle);
-          case "ends_with":    return str.endsWith(needle);
-          case "is_empty":     return raw == null || String(raw) === "";
-          case "is_not_empty": return raw != null && String(raw) !== "";
-          default:             return true;
+          case "contains":
+            return str.includes(needle);
+          case "not_contains":
+            return !str.includes(needle);
+          case "equals":
+            return str === needle;
+          case "not_equals":
+            return str !== needle;
+          case "starts_with":
+            return str.startsWith(needle);
+          case "ends_with":
+            return str.endsWith(needle);
+          case "is_empty":
+            return raw == null || String(raw) === "";
+          case "is_not_empty":
+            return raw != null && String(raw) !== "";
+          default:
+            return true;
         }
       });
       return conjunction === "and" ? check.every(Boolean) : check.some(Boolean);
@@ -431,6 +531,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   useEffect(() => {
     rangeRef.current = range;
   }, [range]);
+
   // whether we are currently drag-selecting
   const draggingRange = useRef(false);
 
@@ -477,11 +578,49 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     [range, rowIndexMap, colIndexMap, computeRangeBounds],
   );
 
+  // ── Fill handle hook ────────────────────────────────────────────────────────
+  const fillHandle = useFillHandle({
+    range,
+    sortedRows,
+    rowKey,
+    orderedVisible,
+    rowIndexMap,
+    getValue,
+    commitValue,
+    setRange,
+    beginTransaction: undo.beginTransaction,
+    endTransaction: undo.endTransaction,
+    flashCell,
+  });
+
+  // Selector for the bottom-right cell of the current range (used to anchor
+  // the fill handle square). Recalculated whenever the range changes.
+  const fillHandlePos = useMemo(() => {
+    if (!range) return null;
+    const bounds = computeRangeBounds(range);
+    const lastRow = sortedRows[bounds.maxRow];
+    const lastCol = orderedVisible[bounds.maxCol];
+    if (!lastRow || !lastCol) return null;
+    return `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`;
+  }, [range, sortedRows, orderedVisible, rowKey, computeRangeBounds]);
+
+  // ── Conditional formatting ─────────────────────────────────────────────────
+  const condFmt = useConditionalFormatting(orderedVisible, getValue);
+
+  const statusAgg = useMemo(() => {
+    if (!range) return null;
+    const b = computeRangeBounds(range);
+    const cellCount = (b.maxRow - b.minRow + 1) * (b.maxCol - b.minCol + 1);
+    if (cellCount <= 1) return null;
+    return computeAggregates(sortedRows, orderedVisible, getValue, b);
+  }, [range, sortedRows, orderedVisible, getValue, computeRangeBounds]);
+
   // ── Cursor ─────────────────────────────────────────────────────────────────
   const cursor = useGridCursor({
     rows: sortedRows,
     rowKey,
     columns: orderedVisible,
+    getValue,
     onCommit: () => {
       /* the editor's onBlur handles the actual value commit */
     },
@@ -578,7 +717,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           const n = Number(rawVal);
           return isNaN(n) ? null : n;
         }
-        case "boolean": return rawVal.toLowerCase() === "true";
+        case "boolean":
+          return rawVal.toLowerCase() === "true";
         case "select": {
           const match = col.config.options.find((o) => o.label === rawVal);
           if (!match) return undefined;
@@ -594,7 +734,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         case "date":
         case "linked":
           return rawVal;
-        default: col.config satisfies never; return rawVal;
+        default:
+          col.config satisfies never;
+          return rawVal;
       }
     },
     [],
@@ -694,6 +836,166 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     undo,
   ]);
 
+  // ── Context menu ────────────────────────────────────────────────────────────
+  const { menu: contextMenu, onContextMenu, close: closeMenu } = useContextMenu();
+
+  const buildMenuItems = (surface: ContextSurface): MenuItem[] => {
+    if (surface.kind === "cell") {
+      const { rowKey: rk, field } = surface;
+      const row = sortedRows.find((r) => rowKey(r) === rk);
+      const value = row ? getValue(row, field) : null;
+      const valStr = value == null ? "" : String(value);
+      return [
+        { label: "Copy", onClick: () => void handleCopy() },
+        { label: "Paste", onClick: () => void handlePaste() },
+        { label: "Clear", onClick: () => void commitValue(rk, field, null) },
+        { separator: true, label: "", onClick: () => {} },
+        {
+          label: `Filter to "${valStr.slice(0, 24)}"`,
+          onClick: () => {
+            setFilterSet((cur) => ({
+              conjunction: cur?.conjunction ?? "and",
+              conditions: [
+                ...(cur?.conditions ?? []),
+                {
+                  id: `${field}-eq-${Date.now()}`,
+                  field,
+                  operator: "equals" as const,
+                  value: valStr,
+                },
+              ],
+            }));
+          },
+        },
+        {
+          label: `Filter to NOT "${valStr.slice(0, 24)}"`,
+          onClick: () => {
+            setFilterSet((cur) => ({
+              conjunction: cur?.conjunction ?? "and",
+              conditions: [
+                ...(cur?.conditions ?? []),
+                {
+                  id: `${field}-neq-${Date.now()}`,
+                  field,
+                  operator: "not_equals" as const,
+                  value: valStr,
+                },
+              ],
+            }));
+          },
+        },
+        { separator: true, label: "", onClick: () => {} },
+        {
+          label: "Insert row above",
+          onClick: () => props.onInsertRow?.(rk, "above"),
+          disabled: !props.onInsertRow,
+        },
+        {
+          label: "Insert row below",
+          onClick: () => props.onInsertRow?.(rk, "below"),
+          disabled: !props.onInsertRow,
+        },
+        {
+          label: "Delete row",
+          onClick: () => props.onDeleteRow?.(rk),
+          disabled: !props.onDeleteRow,
+        },
+      ];
+    }
+    if (surface.kind === "header") {
+      const c = orderedVisible.find((col) => col.field === surface.field);
+      return [
+        { label: "Sort ascending", onClick: () => setSort({ field: surface.field, dir: "asc" }) },
+        { label: "Sort descending", onClick: () => setSort({ field: surface.field, dir: "desc" }) },
+        {
+          label: "Rename",
+          onClick: () => {
+            menuAnchorRef.current = null;
+            setMenuFor(surface.field);
+          },
+        },
+        {
+          label: "Change type",
+          onClick: () => {
+            menuAnchorRef.current = null;
+            setMenuFor(surface.field);
+          },
+          disabled: !props.onChangeColumnType,
+        },
+        { separator: true, label: "", onClick: () => {} },
+        {
+          label: "Conditional formatting…",
+          onClick: () => {
+            const headerEl = document.querySelector<HTMLElement>(
+              `[data-header="${attrEsc(surface.field)}"]`,
+            );
+            if (headerEl) menuAnchorRef.current = headerEl;
+            setRulesEditor(surface.field);
+          },
+          disabled: !props.onSaveColumnRules,
+        },
+        {
+          label: "Edit description",
+          onClick: () => {
+            const headerEl = document.querySelector<HTMLElement>(
+              `[data-header="${attrEsc(surface.field)}"]`,
+            );
+            if (headerEl) menuAnchorRef.current = headerEl;
+            setDescEditor(surface.field);
+          },
+          disabled: !props.onSaveColumnDescription,
+        },
+        { separator: true, label: "", onClick: () => {} },
+        {
+          label: "Hide column",
+          onClick: () => {
+            const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
+            props.onLayoutChange?.({ hidden });
+          },
+        },
+        {
+          label: "Delete column",
+          onClick: () => props.onDeleteColumn?.(surface.field),
+          disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
+        },
+      ];
+    }
+    if (surface.kind === "row-num") {
+      const rk = surface.rowKey;
+      return [
+        {
+          label: "Select row",
+          onClick: () => {
+            const firstCol = orderedVisible[0],
+              lastCol = orderedVisible[orderedVisible.length - 1];
+            if (firstCol && lastCol)
+              setRange({
+                anchor: { rowKey: rk, field: firstCol.field },
+                focus: { rowKey: rk, field: lastCol.field },
+              });
+          },
+        },
+        {
+          label: "Insert above",
+          onClick: () => props.onInsertRow?.(rk, "above"),
+          disabled: !props.onInsertRow,
+        },
+        {
+          label: "Insert below",
+          onClick: () => props.onInsertRow?.(rk, "below"),
+          disabled: !props.onInsertRow,
+        },
+        {
+          label: "Duplicate",
+          onClick: () => props.onDuplicateRow?.(rk),
+          disabled: !props.onDuplicateRow,
+        },
+        { label: "Delete", onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+      ];
+    }
+    return [];
+  };
+
   // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -766,9 +1068,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return;
       }
 
-      // Shift+Arrow: extend range, keep anchor
+      // Shift+Arrow: extend range, keep anchor (exclude meta so ⌘⇧+Arrow falls through to isShiftMetaArrow)
       const isShiftArrow =
         e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
         (e.key === "ArrowUp" ||
           e.key === "ArrowDown" ||
           e.key === "ArrowLeft" ||
@@ -796,6 +1100,45 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         const currentAnchor = range?.anchor ?? { rowKey: cur.rowKey, field: cur.field };
         setRange({ anchor: currentAnchor, focus: newFocus });
         // Move the cursor focus cell too (visual feedback)
+        cursor.setCursor({ rowKey: newFocus.rowKey, field: newFocus.field, editing: false });
+        return;
+      }
+
+      // Shift+Cmd+Arrow: extend range to data edge
+      const isShiftMetaArrow =
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        (e.key === "ArrowUp" ||
+          e.key === "ArrowDown" ||
+          e.key === "ArrowLeft" ||
+          e.key === "ArrowRight");
+
+      if (isShiftMetaArrow && cur) {
+        e.preventDefault();
+        const focusRk = range?.focus.rowKey ?? cur.rowKey;
+        const focusField = range?.focus.field ?? cur.field;
+        const fr = rowIndexMap.get(focusRk) ?? 0;
+        const navFc = cursor.navCols.findIndex((c) => c.field === focusField);
+        if (navFc < 0) {
+          // Focus column isn't navigable (hidden/non-editable) — delegate to cursor handler
+          cursor.onKeyDown(e);
+          return;
+        }
+        const dir =
+          e.key === "ArrowUp"
+            ? "up"
+            : e.key === "ArrowDown"
+              ? "down"
+              : e.key === "ArrowLeft"
+                ? "left"
+                : "right";
+        const target = cursor.findEdge(sortedRows, cursor.navCols, getValue, fr, navFc, dir);
+        const newFocusRow = sortedRows[target.row];
+        const newFocusCol = cursor.navCols[target.col];
+        if (!newFocusRow || !newFocusCol) return;
+        const newFocus = { rowKey: rowKey(newFocusRow), field: newFocusCol.field };
+        const currentAnchor = range?.anchor ?? { rowKey: cur.rowKey, field: cur.field };
+        setRange({ anchor: currentAnchor, focus: newFocus });
         cursor.setCursor({ rowKey: newFocus.rowKey, field: newFocus.field, editing: false });
         return;
       }
@@ -835,6 +1178,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       sortedRows,
       orderedVisible,
       rowKey,
+      getValue,
       undo,
       commitValue,
       computeRangeBounds,
@@ -867,6 +1211,28 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   const onStopEdit = useCallback(() => cursor.stopEdit(), [cursor]);
+
+  // ── Row-number click → select whole row ────────────────────────────────────
+  const onRowNumPointerDown = useCallback(
+    (e: React.PointerEvent, rk: string) => {
+      if (e.button !== 0) return;
+      cursor.ref.current?.focus();
+      const firstCol = orderedVisible[0];
+      const lastCol = orderedVisible[orderedVisible.length - 1];
+      if (!firstCol || !lastCol) return;
+      if (e.shiftKey && rangeRef.current) {
+        setRange({ anchor: rangeRef.current.anchor, focus: { rowKey: rk, field: lastCol.field } });
+      } else {
+        setRange({
+          anchor: { rowKey: rk, field: firstCol.field },
+          focus: { rowKey: rk, field: lastCol.field },
+        });
+      }
+      cursor.setCursor({ rowKey: rk, field: firstCol.field, editing: false });
+      e.preventDefault();
+    },
+    [cursor, orderedVisible],
+  );
 
   // ── Pointer handlers for drag-select ───────────────────────────────────────
   const onCellPointerDown = useCallback(
@@ -933,13 +1299,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
+    <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
       {filterSet && filterSet.conditions.length > 0 && (
-        <FilterBar
-          filterSet={filterSet}
-          columns={orderedVisible}
-          onChange={setFilterSet}
-        />
+        <FilterBar filterSet={filterSet} columns={orderedVisible} onChange={setFilterSet} />
       )}
       <div
         ref={cursor.ref}
@@ -948,332 +1310,447 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-rowcount={sortedRows.length + 1}
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
-        className="flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
+        onContextMenu={onContextMenu}
+        className="relative flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
       >
-      {/* header row */}
-      <div
-        role="row"
-        aria-rowindex={1}
-        className="grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
-        style={gridStyle}
-      >
-        {showRowNumbers && (
-          <div className={cx("flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3", headerPadY)}>
-            #
-          </div>
+        {fillHandlePos && (
+          <FillHandle
+            targetSelector={fillHandlePos}
+            containerRef={cursor.ref}
+            onPointerDown={fillHandle.onHandlePointerDown}
+            dragging={fillHandle.dragging}
+          />
         )}
-        {selectionCol && (
-          <div className={cx("flex items-center justify-center border-r border-line", headerPadY)}>
-            <Checkbox
-              state={
-                selection!.selected.length === sortedRows.length && sortedRows.length > 0
-                  ? "on"
-                  : selection!.selected.length > 0
-                    ? "mixed"
-                    : "off"
-              }
-              onClick={() =>
-                selection!.onChange(
-                  selection!.selected.length === sortedRows.length ? [] : sortedRows.map(rowKey),
-                )
-              }
-              aria-label="Select all"
-            />
-          </div>
-        )}
-        {orderedVisible.map((c, idx) => {
-          const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
-          const TypeIcon = FIELD_TYPE_ICONS[c.config.type];
-          const isLastCol = idx === orderedVisible.length - 1;
-          return (
+        {/* header row */}
+        <div
+          role="row"
+          aria-rowindex={1}
+          className="grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
+          style={gridStyle}
+        >
+          {showRowNumbers && (
             <div
-              key={c.field}
-              role="columnheader"
-              aria-colindex={idx + 1}
-              aria-sort={
-                sort?.field === c.field ? (sort.dir === "asc" ? "ascending" : "descending") : "none"
-              }
               className={cx(
-                "group relative flex items-center gap-1.5 px-3",
+                "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3",
                 headerPadY,
-                !isLastCol && "border-r border-line",
-                c.pinnedLeft && idx === 0 && "sticky left-0 z-10 bg-surface",
               )}
-              data-header={c.field}
             >
-              {TypeIcon && <TypeIcon className="h-3.5 w-3.5 shrink-0 text-ink-3" />}
-              {/* Task 21: dragged-column wash + drop-target line */}
-              {drag?.field === c.field && (
-                <span className="absolute inset-0 bg-accent-wash" aria-hidden />
-              )}
-              {drag?.overIndex != null && orderedVisible[drag.overIndex]?.field === c.field && (
-                <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" aria-hidden />
-              )}
+              #
+            </div>
+          )}
+          {selectionCol && (
+            <div
+              className={cx("flex items-center justify-center border-r border-line", headerPadY)}
+            >
+              <Checkbox
+                state={
+                  selection!.selected.length === sortedRows.length && sortedRows.length > 0
+                    ? "on"
+                    : selection!.selected.length > 0
+                      ? "mixed"
+                      : "off"
+                }
+                onClick={() =>
+                  selection!.onChange(
+                    selection!.selected.length === sortedRows.length ? [] : sortedRows.map(rowKey),
+                  )
+                }
+                aria-label="Select all"
+              />
+            </div>
+          )}
+          {orderedVisible.map((c, idx) => {
+            const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
+            const TypeIcon = FIELD_TYPE_ICONS[c.config.type];
+            const isLastCol = idx === orderedVisible.length - 1;
+            return (
+              <div
+                key={c.field}
+                role="columnheader"
+                aria-colindex={idx + 1}
+                aria-sort={
+                  sort?.field === c.field
+                    ? sort.dir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+                className={cx(
+                  "group relative flex items-center gap-1.5 px-3",
+                  headerPadY,
+                  !isLastCol && "border-r border-line",
+                  c.pinnedLeft && idx === 0 && "sticky left-0 z-10 bg-surface",
+                )}
+                data-header={c.field}
+              >
+                {TypeIcon && <TypeIcon className="h-3.5 w-3.5 shrink-0 text-ink-3" />}
+                {/* Task 21: dragged-column wash + drop-target line */}
+                {drag?.field === c.field && (
+                  <span className="absolute inset-0 bg-accent-wash" aria-hidden />
+                )}
+                {drag?.overIndex != null && orderedVisible[drag.overIndex]?.field === c.field && (
+                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" aria-hidden />
+                )}
 
-              {/* Task 21: hold-then-drag label — always left-aligned, even on
+                {/* Task 21: hold-then-drag label — always left-aligned, even on
                   right-aligned (numeric) columns. Spreadsheet convention:
                   headers read uniformly left-to-right while the body cells
                   themselves right-align their numbers for tabular comparison. */}
-              <span
-                className={cx(
-                  "min-w-0 flex-1 truncate cursor-grab select-none",
-                  c.pinnedLeft && "cursor-default",
+                {c.description && (
+                  <span
+                    data-field-info
+                    title={c.description}
+                    className="ml-0.5 inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-line-2 text-[8px] text-ink-3 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                    aria-label={`Description: ${c.description}`}
+                  >
+                    i
+                  </span>
                 )}
-                onPointerDown={(_e) => {
-                  if (c.pinnedLeft) return;
-                  let holding = true;
-                  const holdTimer = window.setTimeout(() => {
-                    if (!holding) return;
-                    setDrag({ field: c.field, overIndex: null });
-                  }, 200);
-                  const onMove = (ev: PointerEvent) => {
-                    if (!dragRef.current) return;
-                    // determine which header column we're over via element-at-point
-                    const target = document.elementFromPoint(
-                      ev.clientX,
-                      ev.clientY,
-                    ) as HTMLElement | null;
-                    const headerEl = target?.closest<HTMLElement>("[data-header]");
-                    const overField = headerEl?.dataset.header ?? null;
-                    if (overField == null) return;
-                    const next = orderedVisible.findIndex((x) => x.field === overField);
-                    setDrag((d) => (d ? { ...d, overIndex: next } : d));
-                  };
-                  const onUp = () => {
-                    holding = false;
-                    window.clearTimeout(holdTimer);
-                    window.removeEventListener("pointermove", onMove);
-                    window.removeEventListener("pointerup", onUp);
-                    setDrag((d) => {
-                      if (!d || d.overIndex == null) return null;
-                      const from = orderedVisible.findIndex((x) => x.field === d.field);
-                      if (from < 0 || from === d.overIndex) return null;
-                      const next = [...orderedVisible.map((x) => x.field)];
-                      next.splice(from, 1);
-                      next.splice(d.overIndex, 0, d.field);
-                      setOrder(next);
-                      props.onLayoutChange?.({ order: next });
-                      return null;
-                    });
-                  };
-                  window.addEventListener("pointermove", onMove);
-                  window.addEventListener("pointerup", onUp);
-                }}
-              >
-                {c.label}
-                {sortGlyph}
-              </span>
-              {filterSet?.conditions.some((fc) => fc.field === c.field) && (
                 <span
-                  className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"
-                  title="column filtered"
-                >
-                  ▣
-                </span>
-              )}
-
-              {/* Task 19: ⋯ menu button — always pushed to the far right edge of
-                  the header cell via ml-auto, regardless of column alignment. */}
-              {!c.pinnedLeft && (
-                <button
-                  type="button"
-                  aria-label="Column menu"
-                  className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40"
-                  onClick={(e) => {
-                    menuAnchorRef.current = e.currentTarget;
-                    setMenuFor((s) => (s === c.field ? null : c.field));
-                  }}
-                >
-                  ⋯
-                </button>
-              )}
-
-              {/* Task 19: ColumnHeaderMenu */}
-              {menuFor === c.field && (
-                <ColumnHeaderMenu
-                  column={c}
-                  anchorRef={menuAnchorRef}
-                  sortDir={sort?.field === c.field ? sort.dir : null}
-                  filterValue={
-                    filterSet?.conditions.find(
-                      (fc) => fc.field === c.field && fc.operator === "contains",
-                    )?.value ?? null
-                  }
-                  onClose={() => setMenuFor(null)}
-                  onRename={(label) => props.onRenameColumn?.(c.field, label)}
-                  onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
-                  onFilter={(v) =>
-                    setFilterSet((cur) => {
-                      const existing = cur?.conditions ?? [];
-                      const withoutThis = existing.filter(
-                        (fc) => !(fc.field === c.field && fc.operator === "contains"),
-                      );
-                      if (!v) {
-                        return withoutThis.length === 0
-                          ? null
-                          : { conjunction: cur?.conjunction ?? "and", conditions: withoutThis };
-                      }
-                      const conditions = [
-                        ...withoutThis,
-                        {
-                          id: `${c.field}-contains`,
-                          field: c.field,
-                          operator: "contains" as const,
-                          value: v,
-                        },
-                      ];
-                      return { conjunction: cur?.conjunction ?? "and", conditions };
-                    })
-                  }
-                  onChangeType={async (newConfig) => {
-                    if (!props.onChangeColumnType) return;
-                    const res = await props.onChangeColumnType(c.field, newConfig);
-                    if (!res.ok && res.invalidCount) {
-                      if (
-                        confirm(
-                          `${res.invalidCount} value(s) won't parse as ${newConfig.type}. Coerce to empty?`,
-                        )
-                      ) {
-                        await props.onChangeColumnType(c.field, newConfig, {
-                          coerceInvalidToNull: true,
-                        });
-                      }
-                    }
-                  }}
-                  onHide={() => {
-                    // include any already-hidden columns from the full prop list — `visible`
-                    // is the post-filter set and never contains them
-                    const hidden = [
-                      ...columns.filter((v) => v.hidden).map((v) => v.field),
-                      c.field,
-                    ];
-                    props.onLayoutChange?.({ hidden });
-                  }}
-                  onDelete={() => props.onDeleteColumn?.(c.field)}
-                />
-              )}
-
-              {/* Task 20: right-edge resize grip */}
-              {!c.pinnedLeft && (
-                <span
-                  aria-hidden
-                  className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors group-hover:bg-line-2"
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    const startX = e.clientX;
-                    const headerEl = e.currentTarget.parentElement as HTMLElement;
-                    const startW = headerEl.getBoundingClientRect().width;
+                  className={cx(
+                    "min-w-0 flex-1 truncate cursor-grab select-none",
+                    c.pinnedLeft && "cursor-default",
+                  )}
+                  onPointerDown={(_e) => {
+                    if (c.pinnedLeft) return;
+                    let holding = true;
+                    let moved = false;
+                    const startTime = Date.now();
+                    const holdTimer = window.setTimeout(() => {
+                      if (!holding) return;
+                      setDrag({ field: c.field, overIndex: null });
+                    }, 200);
                     const onMove = (ev: PointerEvent) => {
-                      const next = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
-                      setWidths((w) => ({ ...w, [c.field]: next }));
+                      moved = true;
+                      if (!dragRef.current) return;
+                      // determine which header column we're over via element-at-point
+                      const target = document.elementFromPoint(
+                        ev.clientX,
+                        ev.clientY,
+                      ) as HTMLElement | null;
+                      const headerEl = target?.closest<HTMLElement>("[data-header]");
+                      const overField = headerEl?.dataset.header ?? null;
+                      if (overField == null) return;
+                      const next = orderedVisible.findIndex((x) => x.field === overField);
+                      setDrag((d) => (d ? { ...d, overIndex: next } : d));
                     };
                     const onUp = () => {
+                      holding = false;
+                      window.clearTimeout(holdTimer);
                       window.removeEventListener("pointermove", onMove);
                       window.removeEventListener("pointerup", onUp);
-                      // commit the final width via the host
-                      setWidths((w) => {
-                        props.onLayoutChange?.({ widths: w });
-                        return w;
+                      const elapsed = Date.now() - startTime;
+                      if (!moved && elapsed < 200 && !dragRef.current) {
+                        // Plain click — select whole column
+                        cursor.ref.current?.focus();
+                        const firstRow = sortedRows[0];
+                        const lastRow = sortedRows[sortedRows.length - 1];
+                        if (firstRow && lastRow) {
+                          const anchor = { rowKey: rowKey(firstRow), field: c.field };
+                          const focus = { rowKey: rowKey(lastRow), field: c.field };
+                          if (_e.shiftKey && rangeRef.current) {
+                            setRange({ anchor: rangeRef.current.anchor, focus });
+                          } else {
+                            setRange({ anchor, focus });
+                          }
+                          cursor.setCursor({
+                            rowKey: anchor.rowKey,
+                            field: c.field,
+                            editing: false,
+                          });
+                        }
+                        return;
+                      }
+                      setDrag((d) => {
+                        if (!d || d.overIndex == null) return null;
+                        const from = orderedVisible.findIndex((x) => x.field === d.field);
+                        if (from < 0 || from === d.overIndex) return null;
+                        const next = [...orderedVisible.map((x) => x.field)];
+                        next.splice(from, 1);
+                        next.splice(d.overIndex, 0, d.field);
+                        setOrder(next);
+                        props.onLayoutChange?.({ order: next });
+                        return null;
                       });
                     };
                     window.addEventListener("pointermove", onMove);
                     window.addEventListener("pointerup", onUp);
                   }}
-                />
+                >
+                  {c.label}
+                  {sortGlyph}
+                </span>
+                {filterSet?.conditions.some((fc) => fc.field === c.field) && (
+                  <span
+                    className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"
+                    title="column filtered"
+                  >
+                    ▣
+                  </span>
+                )}
+
+                {/* Task 19: ⋯ menu button — always pushed to the far right edge of
+                  the header cell via ml-auto, regardless of column alignment. */}
+                {!c.pinnedLeft && (
+                  <button
+                    type="button"
+                    aria-label="Column menu"
+                    className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40"
+                    onClick={(e) => {
+                      menuAnchorRef.current = e.currentTarget;
+                      setMenuFor((s) => (s === c.field ? null : c.field));
+                    }}
+                  >
+                    ⋯
+                  </button>
+                )}
+
+                {/* Task 19: ColumnHeaderMenu */}
+                {menuFor === c.field && (
+                  <ColumnHeaderMenu
+                    column={c}
+                    anchorRef={menuAnchorRef}
+                    sortDir={sort?.field === c.field ? sort.dir : null}
+                    filterValue={
+                      filterSet?.conditions.find(
+                        (fc) => fc.field === c.field && fc.operator === "contains",
+                      )?.value ?? null
+                    }
+                    onClose={() => setMenuFor(null)}
+                    onRename={(label) => props.onRenameColumn?.(c.field, label)}
+                    onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
+                    onOpenRules={
+                      props.onSaveColumnRules
+                        ? () => {
+                            setMenuFor(null);
+                            setRulesEditor(c.field);
+                          }
+                        : undefined
+                    }
+                    onEditDescription={
+                      props.onSaveColumnDescription
+                        ? () => {
+                            setMenuFor(null);
+                            setDescEditor(c.field);
+                          }
+                        : undefined
+                    }
+                    onFilter={(v) =>
+                      setFilterSet((cur) => {
+                        const existing = cur?.conditions ?? [];
+                        const withoutThis = existing.filter(
+                          (fc) => !(fc.field === c.field && fc.operator === "contains"),
+                        );
+                        if (!v) {
+                          return withoutThis.length === 0
+                            ? null
+                            : { conjunction: cur?.conjunction ?? "and", conditions: withoutThis };
+                        }
+                        const conditions = [
+                          ...withoutThis,
+                          {
+                            id: `${c.field}-contains`,
+                            field: c.field,
+                            operator: "contains" as const,
+                            value: v,
+                          },
+                        ];
+                        return { conjunction: cur?.conjunction ?? "and", conditions };
+                      })
+                    }
+                    onChangeType={async (newConfig) => {
+                      if (!props.onChangeColumnType) return;
+                      const res = await props.onChangeColumnType(c.field, newConfig);
+                      if (!res.ok && res.invalidCount) {
+                        if (
+                          confirm(
+                            `${res.invalidCount} value(s) won't parse as ${newConfig.type}. Coerce to empty?`,
+                          )
+                        ) {
+                          await props.onChangeColumnType(c.field, newConfig, {
+                            coerceInvalidToNull: true,
+                          });
+                        }
+                      }
+                    }}
+                    onHide={() => {
+                      // include any already-hidden columns from the full prop list — `visible`
+                      // is the post-filter set and never contains them
+                      const hidden = [
+                        ...columns.filter((v) => v.hidden).map((v) => v.field),
+                        c.field,
+                      ];
+                      props.onLayoutChange?.({ hidden });
+                    }}
+                    onDelete={() => props.onDeleteColumn?.(c.field)}
+                  />
+                )}
+
+                {/* Task 20: right-edge resize grip */}
+                {!c.pinnedLeft && (
+                  <span
+                    aria-hidden
+                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors group-hover:bg-line-2"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      const startX = e.clientX;
+                      const headerEl = e.currentTarget.parentElement as HTMLElement;
+                      const startW = headerEl.getBoundingClientRect().width;
+                      const onMove = (ev: PointerEvent) => {
+                        const next = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
+                        setWidths((w) => ({ ...w, [c.field]: next }));
+                      };
+                      const onUp = () => {
+                        window.removeEventListener("pointermove", onMove);
+                        window.removeEventListener("pointerup", onUp);
+                        // commit the final width via the host
+                        setWidths((w) => {
+                          props.onLayoutChange?.({ widths: w });
+                          return w;
+                        });
+                      };
+                      window.addEventListener("pointermove", onMove);
+                      window.addEventListener("pointerup", onUp);
+                    }}
+                  />
+                )}
+              </div>
+            );
+          })}
+          {onAddFieldClick && (
+            <div className="flex items-center">
+              {hiddenList.length > 0 && (
+                <button
+                  ref={hiddenAnchorRef}
+                  type="button"
+                  onClick={() => setHiddenOpen((s) => !s)}
+                  className="flex items-center gap-1.5 px-2 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
+                  aria-label="Show hidden fields"
+                >
+                  <IconEye className="h-3.5 w-3.5" />
+                  <span className="tabular-nums">{hiddenList.length} hidden</span>
+                </button>
               )}
-            </div>
-          );
-        })}
-        {onAddFieldClick && (
-          <div className="flex items-center">
-            {hiddenList.length > 0 && (
               <button
-                ref={hiddenAnchorRef}
+                ref={addFieldRef as React.RefObject<HTMLButtonElement>}
                 type="button"
-                onClick={() => setHiddenOpen((s) => !s)}
-                className="flex items-center gap-1.5 px-2 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
-                aria-label="Show hidden fields"
+                onClick={onAddFieldClick}
+                className="px-3 py-2 text-[12px] font-medium text-accent transition-colors hover:brightness-110"
+                aria-label="Add field"
               >
-                <IconEye className="h-3.5 w-3.5" />
-                <span className="tabular-nums">{hiddenList.length} hidden</span>
+                + Field
               </button>
-            )}
-            <button
-              ref={addFieldRef as React.RefObject<HTMLButtonElement>}
-              type="button"
-              onClick={onAddFieldClick}
-              className="px-3 py-2 text-[12px] font-medium text-accent transition-colors hover:brightness-110"
-              aria-label="Add field"
-            >
-              + Field
-            </button>
-          </div>
+            </div>
+          )}
+        </div>
+        {hiddenOpen && hiddenList.length > 0 && (
+          <HiddenFieldsPopover
+            hidden={hiddenList}
+            anchorRef={hiddenAnchorRef}
+            onUnhide={(field) => {
+              const next = columns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
+              props.onLayoutChange?.({ hidden: next });
+            }}
+            onClose={() => setHiddenOpen(false)}
+          />
         )}
+
+        {/* body */}
+        {sortedRows.length === 0
+          ? (empty ?? (
+              <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">
+                No rows.
+              </div>
+            ))
+          : (() => {
+              const vItems = virtualizer.getVirtualItems();
+              const topPad = vItems[0]?.start ?? 0;
+              const bottomPad =
+                vItems.length > 0
+                  ? virtualizer.getTotalSize() - (vItems[vItems.length - 1]?.end ?? 0)
+                  : virtualizer.getTotalSize();
+              return (
+                <>
+                  {topPad > 0 && <div style={{ height: topPad }} />}
+                  {vItems.map((vRow) => {
+                    const row = sortedRows[vRow.index]!;
+                    const rk = rowKey(row);
+                    const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
+                    const evaluation = condFmt.evaluateRow(row);
+                    return (
+                      <GridRow
+                        key={rk}
+                        row={row}
+                        rowKey={rk}
+                        rowIndex={vRow.index}
+                        columns={orderedVisible}
+                        focusedField={cursorOnThisRow?.field ?? null}
+                        editingField={
+                          cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null
+                        }
+                        cursorInitial={cursorOnThisRow?.initial}
+                        cellInRange={(field) => inRange(rk, field)}
+                        selected={isSelected(rk)}
+                        selectionCol={selectionCol}
+                        showRowNumbers={showRowNumbers}
+                        cellPadY={cellPadY}
+                        gridStyle={gridStyle}
+                        onAddFieldClick={onAddFieldClick}
+                        hiddenFieldCount={hiddenList.length}
+                        getValue={getValue}
+                        onCellPointerDown={onCellPointerDown}
+                        onCellDoubleClick={onCellDoubleClick}
+                        onToggleSelect={onToggleSelect}
+                        onCommitCell={commitValue}
+                        onStopEdit={onStopEdit}
+                        onAddColumnOption={props.onAddColumnOption}
+                        onRowNumPointerDown={onRowNumPointerDown}
+                        evaluation={evaluation}
+                      />
+                    );
+                  })}
+                  {bottomPad > 0 && <div style={{ height: bottomPad }} />}
+                </>
+              );
+            })()}
       </div>
-      {hiddenOpen && hiddenList.length > 0 && (
-        <HiddenFieldsPopover
-          hidden={hiddenList}
-          anchorRef={hiddenAnchorRef}
-          onUnhide={(field) => {
-            const next = columns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
-            props.onLayoutChange?.({ hidden: next });
-          }}
-          onClose={() => setHiddenOpen(false)}
+      {statusAgg && <StatusBar agg={statusAgg} />}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={closeMenu}
+          items={buildMenuItems(contextMenu.surface)}
         />
       )}
-
-      {/* body */}
-      {sortedRows.length === 0
-        ? (empty ?? (
-            <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">No rows.</div>
-          ))
-        : (() => {
-            const vItems = virtualizer.getVirtualItems();
-            const topPad = vItems[0]?.start ?? 0;
-            const bottomPad =
-              vItems.length > 0
-                ? virtualizer.getTotalSize() - (vItems[vItems.length - 1]?.end ?? 0)
-                : virtualizer.getTotalSize();
-            return (
-              <>
-                {topPad > 0 && <div style={{ height: topPad }} />}
-                {vItems.map((vRow) => {
-                  const row = sortedRows[vRow.index]!;
-                  const rk = rowKey(row);
-                  const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
-                  return (
-                    <GridRow
-                      key={rk}
-                      row={row}
-                      rowKey={rk}
-                      rowIndex={vRow.index}
-                      columns={orderedVisible}
-                      focusedField={cursorOnThisRow?.field ?? null}
-                      editingField={cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null}
-                      cursorInitial={cursorOnThisRow?.initial}
-                      cellInRange={(field) => inRange(rk, field)}
-                      selected={isSelected(rk)}
-                      selectionCol={selectionCol}
-                      showRowNumbers={showRowNumbers}
-                      cellPadY={cellPadY}
-                      gridStyle={gridStyle}
-                      onAddFieldClick={onAddFieldClick}
-                      hiddenFieldCount={hiddenList.length}
-                      getValue={getValue}
-                      onCellPointerDown={onCellPointerDown}
-                      onCellDoubleClick={onCellDoubleClick}
-                      onToggleSelect={onToggleSelect}
-                      onCommitCell={commitValue}
-                      onStopEdit={onStopEdit}
-                      onAddColumnOption={props.onAddColumnOption}
-                    />
-                  );
-                })}
-                {bottomPad > 0 && <div style={{ height: bottomPad }} />}
-              </>
-            );
-          })()}
-      </div>
+      {rulesEditor &&
+        (() => {
+          const col = orderedVisible.find((c) => c.field === rulesEditor);
+          if (!col) return null;
+          return (
+            <ConditionalFormatPopover
+              column={col}
+              rules={col.rules ?? []}
+              anchorRef={menuAnchorRef}
+              onChange={(rules) => props.onSaveColumnRules?.(col.field, rules)}
+              onClose={() => setRulesEditor(null)}
+            />
+          );
+        })()}
+      {descEditor &&
+        (() => {
+          const col = orderedVisible.find((c) => c.field === descEditor);
+          if (!col) return null;
+          return (
+            <FieldDescriptionEditor
+              field={col.field}
+              initial={col.description ?? null}
+              anchorRef={menuAnchorRef}
+              onSave={(next) => props.onSaveColumnDescription?.(col.field, next)}
+              onClose={() => setDescEditor(null)}
+            />
+          );
+        })()}
     </div>
   );
 }

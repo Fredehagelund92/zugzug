@@ -139,7 +139,7 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
 
     if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
       const dimId = url.searchParams.get("dimId") ?? "";
-      const raw   = url.searchParams.get("raw") ?? "";
+      const raw = url.searchParams.get("raw") ?? "";
       if (!dimId || !raw) return err("dimId and raw required", 400);
       const dim = await repo.getDimension(dimId);
       if (!dim) return json({ error: "not found" }, 404);
@@ -305,21 +305,21 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
       // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-        const {
-          label, type, options, numberFormat, ratingMax,
-          referencedDimId, displayFields,
-        } = (await req.json()) as {
-          label: string;
-          type?: string;
-          options?: { label: string; color: string | null }[];
-          numberFormat?: NumberFormat;
-          ratingMax?: number;
-          referencedDimId?: string;
-          displayFields?: string[];
-        };
+        const { label, type, options, numberFormat, ratingMax, referencedDimId, displayFields } =
+          (await req.json()) as {
+            label: string;
+            type?: string;
+            options?: { label: string; color: string | null }[];
+            numberFormat?: NumberFormat;
+            ratingMax?: number;
+            referencedDimId?: string;
+            displayFields?: string[];
+          };
         return json(
           await repo.addField(
-            id, label, type,
+            id,
+            label,
+            type,
             options as repo.OptionDef[] | undefined,
             { numberFormat, ratingMax, referencedDimId, displayFields },
             me,
@@ -340,7 +340,7 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         );
         return res ? json(res) : json({ error: "not a select column" }, 400);
       }
-      // PUT/DELETE /api/dimensions/:id/fields/:field — rename / change type / delete
+      // PUT/PATCH/DELETE /api/dimensions/:id/fields/:field — rename / change type / update meta / delete
       if (seg[3] === "fields" && seg.length === 5) {
         const field = decodeURIComponent(seg[4]!);
         if (method === "PUT") {
@@ -366,6 +366,19 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
             });
             return json(res);
           }
+          return noContent();
+        }
+        if (method === "PATCH") {
+          const body = (await req.json()) as {
+            description?: string | null;
+            field_config?: string | null;
+          };
+          await repo.updateField(
+            id,
+            field,
+            { description: body.description, fieldConfig: body.field_config },
+            me,
+          );
           return noContent();
         }
         if (method === "DELETE") return json(await repo.deleteColumn(id, field, me));

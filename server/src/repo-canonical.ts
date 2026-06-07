@@ -105,8 +105,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     const tm = linkedMetas.get(f.field);
     if (!tm) return [];
     return (f.displayFields ?? ["label"]).map(
-      (df) =>
-        `CAST(t_${f.field}.${qid(df)} AS VARCHAR) AS ${qid(`${f.field}__${df}`)}`,
+      (df) => `CAST(t_${f.field}.${qid(df)} AS VARCHAR) AS ${qid(`${f.field}__${df}`)}`,
     );
   });
   const fieldCols = [...scalarCols, ...linkedFkCols, ...lookupCols].join(", ");
@@ -168,9 +167,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
   const allFieldKeys = [
     ...scalarFields.map((f) => f.field),
     ...linkedFields.map((f) => f.field),
-    ...linkedFields.flatMap((f) =>
-      (f.displayFields ?? ["label"]).map((df) => `${f.field}__${df}`),
-    ),
+    ...linkedFields.flatMap((f) => (f.displayFields ?? ["label"]).map((df) => `${f.field}__${df}`)),
   ];
 
   const canonical = canonRows.map((r) => ({
@@ -405,7 +402,9 @@ export async function renameCanonical(
       `UPDATE ${pg("ai_hint_cache")} SET suggestion = $1
        WHERE dim_id = $2 AND suggestion = $3`,
       [label, dimId, oldRow.label],
-    ).catch(() => { /* table may not exist in older deploys */ });
+    ).catch(() => {
+      /* table may not exist in older deploys */
+    });
   }
 }
 
@@ -456,8 +455,14 @@ export async function retireCanonical(
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
 export async function listFields(dimId: string): Promise<FieldDef[]> {
-  const rows = await pgAll<{ field: string; label: string; type: string; field_config: string | null }>(
-    `SELECT field, label, type, field_config FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
+  const rows = await pgAll<{
+    field: string;
+    label: string;
+    type: string;
+    field_config: string | null;
+    description: string | null;
+  }>(
+    `SELECT field, label, type, field_config, description FROM ${pg("dimension_field")} WHERE dim_id = $1 ORDER BY created_at`,
     [dimId],
   );
   return rows.map((r) => {
@@ -467,8 +472,87 @@ export async function listFields(dimId: string): Promise<FieldDef[]> {
       label: r.label,
       type: r.type,
       ...cfg,
+      description: r.description ?? undefined,
     };
   });
+}
+
+/** Update metadata on an existing field (description and/or field_config).
+ *  When a key is undefined it is left unchanged; null clears it. */
+export async function updateField(
+  dimId: string,
+  field: string,
+  updates: { description?: string | null; fieldConfig?: string | null },
+  userId: string,
+): Promise<void> {
+  if (updates.description === undefined && updates.fieldConfig === undefined) return;
+
+  if (updates.description !== undefined) {
+    const desc =
+      typeof updates.description === "string"
+        ? updates.description.trim() === ""
+          ? null
+          : updates.description.trim()
+        : updates.description;
+    await pgRun(
+      `UPDATE ${pg("dimension_field")} SET description = $1 WHERE dim_id = $2 AND field = $3`,
+      [desc, dimId, field],
+    );
+    await appendAuditAs(userId, "Updated field description", field);
+  }
+
+  if (updates.fieldConfig !== undefined) {
+    // Read the existing field_config, parse it, shallow-merge with the incoming
+    // JSON, then write back — so PATCHes with one key (e.g. rules) don't wipe
+    // the rest of the column's config (options, numberFormat, ratingMax, …).
+    //
+    // Normalization: select columns legacy-store their options as a bare JSON
+    // array ("[{…}]"). We lift that into {"options":[…]} so all types share a
+    // uniform object envelope that tolerates extra keys like "rules".
+    const existing = await pgGet<{ field_config: string | null; type: string }>(
+      `SELECT field_config, type FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`,
+      [dimId, field],
+    );
+    let currentCfg: Record<string, unknown> = {};
+    if (existing?.field_config) {
+      try {
+        const parsed: unknown = JSON.parse(existing.field_config);
+        if (Array.isArray(parsed)) {
+          // Legacy bare-array format (select options). Lift to object envelope.
+          currentCfg = { options: parsed };
+        } else if (parsed !== null && typeof parsed === "object") {
+          currentCfg = parsed as Record<string, unknown>;
+        }
+      } catch {
+        currentCfg = {};
+      }
+    }
+    let incomingCfg: Record<string, unknown> | null = null;
+    if (typeof updates.fieldConfig === "string") {
+      try {
+        const parsed: unknown = JSON.parse(updates.fieldConfig);
+        if (Array.isArray(parsed)) {
+          // Caller sent a bare array — treat it as the options list (select compat)
+          incomingCfg = { options: parsed };
+        } else if (parsed !== null && typeof parsed === "object") {
+          incomingCfg = parsed as Record<string, unknown>;
+        }
+      } catch {
+        incomingCfg = null;
+      }
+    }
+    const mergedConfig =
+      incomingCfg !== null
+        ? JSON.stringify({ ...currentCfg, ...incomingCfg })
+        : updates.fieldConfig; // non-JSON or null — write raw (preserves clear semantics)
+    await pgRun(
+      `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
+      [mergedConfig, dimId, field],
+    );
+    if (incomingCfg !== null && "rules" in incomingCfg) {
+      await appendAuditAs(userId, "Updated field rules", field);
+    }
+  }
 }
 
 /** Add an attribute column to a dimension's dim_ table (ALTER TABLE). type ∈
@@ -492,7 +576,17 @@ export async function addField(
 ): Promise<{ field: string } | null> {
   const m = await dimMeta(dimId);
   if (!m) return null;
-  const KNOWN = new Set(["text", "number", "boolean", "date", "select", "url", "email", "rating", "linked"]);
+  const KNOWN = new Set([
+    "text",
+    "number",
+    "boolean",
+    "date",
+    "select",
+    "url",
+    "email",
+    "rating",
+    "linked",
+  ]);
   const t = KNOWN.has(type) ? type : "text";
 
   if (t === "linked") {
@@ -764,11 +858,28 @@ export async function addColumnOption(
   const existing = f.options ?? [];
   if (existing.some((o) => o.label === label)) return { options: existing };
   const next: OptionDef[] = [...existing, { label, color }];
-  await pgRun(`UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`, [
-    JSON.stringify(next),
-    dimId,
-    field,
-  ]);
+  // Preserve any other keys in field_config (e.g. rules) by reading the raw
+  // stored value and merging only the options key.
+  const rawRow = await pgGet<{ field_config: string | null }>(
+    `SELECT field_config FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2`,
+    [dimId, field],
+  );
+  let existingCfg: Record<string, unknown> = {};
+  if (rawRow?.field_config) {
+    try {
+      const parsed: unknown = JSON.parse(rawRow.field_config);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        existingCfg = parsed as Record<string, unknown>;
+      }
+      // bare array: existingCfg stays {} — options come from `next` below
+    } catch {
+      /* ignore */
+    }
+  }
+  await pgRun(
+    `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = $3`,
+    [JSON.stringify({ ...existingCfg, options: next }), dimId, field],
+  );
   if (!opts.silent) {
     await appendAuditAs(
       userId,
@@ -813,7 +924,10 @@ export async function setFieldValue(
     if (fkValue !== null && f.referencedDimId) {
       const tm = await dimMeta(f.referencedDimId);
       if (tm) {
-        const exists = await pgGet(`SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`, [fkValue]);
+        const exists = await pgGet(
+          `SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`,
+          [fkValue],
+        );
         if (!exists) fkValue = null;
       }
     }
