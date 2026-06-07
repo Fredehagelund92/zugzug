@@ -83,9 +83,43 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
 
   const k = qid(meta.keyCol);
   const fields = await listFields(id);
-  const fieldCols = fields
-    .map((f) => `CAST(d.${qid(f.field)} AS VARCHAR) AS ${qid(f.field)}`)
-    .join(", ");
+  const scalarFields = fields.filter((f) => f.type !== "linked");
+  const linkedFields = fields.filter((f) => f.type === "linked");
+
+  // Pre-fetch target dim metadata for each linked field (needed for JOIN)
+  const linkedMetas = new Map<string, { keyCol: string; dimTable: string }>();
+  for (const lf of linkedFields) {
+    if (lf.referencedDimId) {
+      const tm = await dimMeta(lf.referencedDimId);
+      if (tm) linkedMetas.set(lf.field, tm);
+    }
+  }
+
+  const scalarCols = scalarFields.map(
+    (f) => `CAST(d.${qid(f.field)} AS VARCHAR) AS ${qid(f.field)}`,
+  );
+  const linkedFkCols = linkedFields.map(
+    (f) => `CAST(d.${qid(f.field)} AS VARCHAR) AS ${qid(f.field)}`,
+  );
+  const lookupCols = linkedFields.flatMap((f) => {
+    const tm = linkedMetas.get(f.field);
+    if (!tm) return [];
+    return (f.displayFields ?? ["label"]).map(
+      (df) =>
+        `CAST(t_${f.field}.${qid(df)} AS VARCHAR) AS ${qid(`${f.field}__${df}`)}`,
+    );
+  });
+  const fieldCols = [...scalarCols, ...linkedFkCols, ...lookupCols].join(", ");
+
+  // LEFT JOIN clauses for linked fields
+  const joins = linkedFields
+    .map((lf) => {
+      const tm = linkedMetas.get(lf.field);
+      if (!tm) return "";
+      return `LEFT JOIN ${cq(tm.dimTable)} t_${lf.field} ON d.${qid(lf.field)} = t_${lf.field}.${qid(tm.keyCol)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
 
   const liveName =
     meta.keyKind === "external_id" &&
@@ -101,6 +135,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
       `SELECT d.${k} AS key, NULL AS label, true AS unresolved${fields.length ? ", " + fieldCols : ""},
               COALESCE(v.n, 0)::int AS variants
        FROM ${cq(meta.dimTable)} d
+       ${joins}
        LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
        ORDER BY variants DESC, d.${k}`,
     );
@@ -109,6 +144,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
       `SELECT d.${k} AS key, d.label, false AS unresolved${fields.length ? ", " + fieldCols : ""},
               COALESCE(v.n, 0)::int AS variants
        FROM ${cq(meta.dimTable)} d
+       ${joins}
        LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
        ORDER BY variants DESC, d.label`,
     );
@@ -129,13 +165,21 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     }
   }
 
+  const allFieldKeys = [
+    ...scalarFields.map((f) => f.field),
+    ...linkedFields.map((f) => f.field),
+    ...linkedFields.flatMap((f) =>
+      (f.displayFields ?? ["label"]).map((df) => `${f.field}__${df}`),
+    ),
+  ];
+
   const canonical = canonRows.map((r) => ({
     key: String(r.key),
     label: r.label == null ? String(r.key) : String(r.label),
     unresolved: !!r.unresolved,
     variants: Number(r.variants),
     fields: Object.fromEntries(
-      fields.map((f) => [f.field, r[f.field] == null ? null : String(r[f.field])]),
+      allFieldKeys.map((fk) => [fk, r[fk] == null ? null : String(r[fk])]),
     ),
   }));
 
