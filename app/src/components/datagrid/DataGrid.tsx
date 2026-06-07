@@ -193,6 +193,22 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
                     return await onAddColumnOption(c.field, label, color);
                   }}
                 />
+              ) : c.config.type === "linked" ? (
+                <LinkedCell.Editor
+                  row={row}
+                  rowKey={rk}
+                  field={c.field}
+                  value={value}
+                  focused
+                  column={c}
+                  anchorRef={editingCellRef}
+                  commit={(v: unknown) => {
+                    onStopEdit();
+                    onCommitCell(rk, c.field, v);
+                  }}
+                  cancel={() => onStopEdit()}
+                  candidates={c.config.candidates}
+                />
               ) : (
                 <CellEditor
                   type={c.config.type}
@@ -211,6 +227,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
               c.render(row, ctx)
             ) : c.config.type === "select" ? (
               <SelectCell.Renderer {...ctx} />
+            ) : c.config.type === "linked" ? (
+              <LinkedCell.Renderer {...ctx} />
             ) : (
               <CellRenderer type={c.config.type} ctx={ctx} />
             )}
@@ -244,7 +262,7 @@ const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: strin
   linked:  IconFieldLinked,
 };
 
-const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }> = {
+const CELLS: Record<Exclude<CellType, "select" | "linked">, { Renderer: any; Editor: any }> = {
   text:    TextCell,
   number:  NumberCell,
   boolean: BooleanCell,
@@ -252,7 +270,6 @@ const CELLS: Record<Exclude<CellType, "select">, { Renderer: any; Editor: any }>
   url:     UrlCell,
   email:   EmailCell,
   rating:  RatingCell,
-  linked:  LinkedCell,
 };
 
 // ── Range selection types ───────────────────────────────────────────────────
@@ -1263,12 +1280,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
 function CellRenderer({ type, ctx }: { type: CellType; ctx: any }) {
   if (type === "select") return <SelectCell.Renderer {...ctx} />;
-  const C = CELLS[type as Exclude<CellType, "select">];
+  if (type === "linked") return <LinkedCell.Renderer {...ctx} />;
+  const C = CELLS[type as Exclude<CellType, "select" | "linked">];
   return <C.Renderer {...ctx} />;
 }
 
 function CellEditor({ type, ctx }: { type: CellType; ctx: any }) {
   if (type === "select") return null; // select uses inline SelectCell.Editor in the body (needs options + onCreate)
-  const C = CELLS[type as Exclude<CellType, "select">];
+  if (type === "linked") return null; // linked uses inline LinkedCell.Editor in the body (needs candidates + anchorRef)
+  const C = CELLS[type as Exclude<CellType, "select" | "linked">];
   return <C.Editor {...ctx} />;
 }
