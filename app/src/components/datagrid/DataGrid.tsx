@@ -127,7 +127,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         <span
           aria-hidden
           data-row-stripe={evaluation.rowStripe}
-          className="absolute left-0 top-0 bottom-0 w-1 z-[1]"
+          className="absolute left-0 top-0 bottom-0 w-1 z-[1] pointer-events-none"
           style={{ background: `var(--tint-${evaluation.rowStripe})` }}
         />
       )}
@@ -847,7 +847,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         { label: "Sort descending", onClick: () => setSort({ field: surface.field, dir: "desc" }) },
         { label: "Rename", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); } },
         { label: "Change type", onClick: () => { menuAnchorRef.current = null; setMenuFor(surface.field); }, disabled: !props.onChangeColumnType },
-        { label: "Conditional formatting…", onClick: () => setRulesEditor(surface.field), disabled: !props.onSaveColumnRules },
+        {
+          label: "Conditional formatting…",
+          onClick: () => {
+            const headerEl = document.querySelector<HTMLElement>(`[data-header="${attrEsc(surface.field)}"]`);
+            if (headerEl) menuAnchorRef.current = headerEl;
+            setRulesEditor(surface.field);
+          },
+          disabled: !props.onSaveColumnRules,
+        },
         { separator: true, label: "", onClick: () => {} },
         { separator: true, label: "", onClick: () => {} },
         { label: "Hide column", onClick: () => {

@@ -114,7 +114,7 @@ export function ConditionalFormatPopover<Row>({
               {(
                 numeric
                   ? (["gt", "lt", "between", "is_empty", "is_not_empty"] as const)
-                  : (["equals", "not_equals", "contains", "starts_with", "ends_with", "is_empty", "is_not_empty"] as const)
+                  : (["equals", "not_equals", "contains", "starts_with", "ends_with", "is_in", "is_empty", "is_not_empty"] as const)
               ).map((k) => (
                 <option key={k} value={k}>
                   {labelFor(k)}

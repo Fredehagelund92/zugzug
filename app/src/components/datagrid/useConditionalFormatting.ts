@@ -23,6 +23,11 @@ export interface RowEvaluation {
   rowStripe:  string | null;          // PaletteName of first non-null stripe (L-to-R)
 }
 
+const EMPTY_EVALUATION: RowEvaluation = Object.freeze({
+  cellStyles: new Map<string, RuleStyle>(),
+  rowStripe: null,
+}) as RowEvaluation;
+
 export function useConditionalFormatting<Row>(
   columns: ColumnDef<Row>[],
   getValue: (row: Row, field: string) => unknown,
@@ -30,9 +35,9 @@ export function useConditionalFormatting<Row>(
   return useMemo(() => {
     const hasRules = columns.some((c) => c.rules && c.rules.length > 0);
     const evaluateRow = (row: Row): RowEvaluation => {
+      if (!hasRules) return EMPTY_EVALUATION;
       const cellStyles = new Map<string, RuleStyle>();
       let rowStripe: string | null = null;
-      if (!hasRules) return { cellStyles, rowStripe };
       for (const c of columns) {
         if (!c.rules || c.rules.length === 0) continue;
         const v = getValue(row, c.field);
