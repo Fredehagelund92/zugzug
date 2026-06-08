@@ -416,6 +416,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [rulesEditor, setRulesEditor] = useState<string | null>(null);
   const [descEditor, setDescEditor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
+  // When a popover (ColumnHeaderMenu / ConditionalFormatPopover / FieldDescriptionEditor) is opened
+  // from the right-click context menu, anchor at the click point rather than at the column header.
+  // Zero-width/height rect ⇒ the popover positioning logic switches to point-anchored mode
+  // (open at the cursor, expanding right + down). Cleared on close so the next ⋯ button open
+  // falls back to element-anchored positioning.
+  const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
   const hiddenList = useMemo(() => columns.filter((c) => c.hidden), [columns]);
@@ -910,14 +916,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         {
           label: "Rename",
           onClick: () => {
-            menuAnchorRef.current = null;
+            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setMenuFor(surface.field);
           },
         },
         {
           label: "Change type",
           onClick: () => {
-            menuAnchorRef.current = null;
+            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setMenuFor(surface.field);
           },
           disabled: !props.onChangeColumnType,
@@ -926,10 +932,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         {
           label: "Conditional formatting…",
           onClick: () => {
-            const headerEl = document.querySelector<HTMLElement>(
-              `[data-header="${attrEsc(surface.field)}"]`,
-            );
-            if (headerEl) menuAnchorRef.current = headerEl;
+            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setRulesEditor(surface.field);
           },
           disabled: !props.onSaveColumnRules,
@@ -937,10 +940,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         {
           label: "Edit description",
           onClick: () => {
-            const headerEl = document.querySelector<HTMLElement>(
-              `[data-header="${attrEsc(surface.field)}"]`,
-            );
-            if (headerEl) menuAnchorRef.current = headerEl;
+            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setDescEditor(surface.field);
           },
           disabled: !props.onSaveColumnDescription,
@@ -1396,16 +1396,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   right-aligned (numeric) columns. Spreadsheet convention:
                   headers read uniformly left-to-right while the body cells
                   themselves right-align their numbers for tabular comparison. */}
-                {c.description && (
-                  <span
-                    data-field-info
-                    title={c.description}
-                    className="ml-0.5 inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-line-2 text-[8px] text-ink-3 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
-                    aria-label={`Description: ${c.description}`}
-                  >
-                    i
-                  </span>
-                )}
                 <span
                   className={cx(
                     "min-w-0 flex-1 truncate cursor-grab select-none",
@@ -1489,15 +1479,33 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   </span>
                 )}
 
-                {/* Task 19: ⋯ menu button — always pushed to the far right edge of
-                  the header cell via ml-auto, regardless of column alignment. */}
+                {/* description info badge — paired with the ⋯ menu in the
+                  right-side metadata cluster so the label stays left-aligned
+                  across columns regardless of whether a description exists. */}
+                {c.description && (
+                  <span
+                    data-field-info
+                    title={c.description}
+                    className="ml-auto inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-line-2 text-[8px] text-ink-3 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
+                    aria-label={`Description: ${c.description}`}
+                  >
+                    i
+                  </span>
+                )}
+
+                {/* Task 19: ⋯ menu button — pinned to the right cluster. When the
+                  info badge is present it owns ml-auto; otherwise the button does. */}
                 {!c.pinnedLeft && (
                   <button
                     type="button"
                     aria-label="Column menu"
-                    className="ml-auto opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40"
+                    className={cx(
+                      "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40",
+                      !c.description && "ml-auto",
+                    )}
                     onClick={(e) => {
                       menuAnchorRef.current = e.currentTarget;
+                      setMenuAnchorRect(null);
                       setMenuFor((s) => (s === c.field ? null : c.field));
                     }}
                   >
@@ -1510,13 +1518,17 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   <ColumnHeaderMenu
                     column={c}
                     anchorRef={menuAnchorRef}
+                    anchorRect={menuAnchorRect}
                     sortDir={sort?.field === c.field ? sort.dir : null}
                     filterValue={
                       filterSet?.conditions.find(
                         (fc) => fc.field === c.field && fc.operator === "contains",
                       )?.value ?? null
                     }
-                    onClose={() => setMenuFor(null)}
+                    onClose={() => {
+                      setMenuFor(null);
+                      setMenuAnchorRect(null);
+                    }}
                     onRename={(label) => props.onRenameColumn?.(c.field, label)}
                     onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
                     onOpenRules={
@@ -1732,8 +1744,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               column={col}
               rules={col.rules ?? []}
               anchorRef={menuAnchorRef}
+              anchorRect={menuAnchorRect}
               onChange={(rules) => props.onSaveColumnRules?.(col.field, rules)}
-              onClose={() => setRulesEditor(null)}
+              onClose={() => {
+                setRulesEditor(null);
+                setMenuAnchorRect(null);
+              }}
             />
           );
         })()}
@@ -1746,8 +1762,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               field={col.field}
               initial={col.description ?? null}
               anchorRef={menuAnchorRef}
+              anchorRect={menuAnchorRect}
               onSave={(next) => props.onSaveColumnDescription?.(col.field, next)}
-              onClose={() => setDescEditor(null)}
+              onClose={() => {
+                setDescEditor(null);
+                setMenuAnchorRect(null);
+              }}
             />
           );
         })()}
