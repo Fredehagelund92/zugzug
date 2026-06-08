@@ -22,7 +22,9 @@ import {
   env,
   pg,
   log,
+  parseSourceTable,
 } from "./repo-shared.ts";
+import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs, getPreferences } from "./repo-meta.ts";
 import { saveDraft, commit } from "./repo-drafts.ts";
 
@@ -123,44 +125,32 @@ export async function scanSources(): Promise<number> {
      FROM ${pg("dimension_source")} s JOIN ${pg("dimension")} d ON d.id = s.dim_id`,
   );
   const SCAN_TIMEOUT_MS = 30_000;
+  const adapter = await getAdapter();
   for (const r of regs) {
-    const col = qid(r.column);
+    const ref = parseSourceTable(r.table);
     let present: boolean,
       rows = 0,
       distinct = 0,
       unmapped = 0;
     const t0 = performance.now();
     try {
-      const { agg } = await Promise.race([
-        (async () => {
-          const agg = await get<{ rows: bigint; d: bigint }>(
-            `SELECT count(${col}) AS rows, count(DISTINCT ${col}) AS d FROM ${whTable(r.table)}
-             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
-          );
-          return { agg };
-        })(),
+      const stats = await Promise.race([
+        adapter.columnStats(ref, r.column),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("scan timeout")), SCAN_TIMEOUT_MS),
         ),
       ]);
       present = true;
-      rows = Number(agg?.rows ?? 0);
-      distinct = Number(agg?.d ?? 0);
+      rows = stats.rows;
+      distinct = stats.distinct;
       if (distinct > 0) {
-        // Cross-store unmapped count: was a single LEFT JOIN that hit warehouse
-        // (DuckDB) + canonical map_* (Postgres). DuckDB can no longer reach
-        // Postgres, so fetch each side independently and subtract in JS.
         try {
-          const whRaws = await all<{ raw: string }>(
-            `SELECT DISTINCT CAST(${col} AS VARCHAR) AS raw FROM ${whTable(r.table)}
-             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
-          );
+          const whRaws = await adapter.distinctValues(ref, r.column, 100000);
           const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(r.mapTable)}`);
           const mappedSet = new Set(mappedRows.map((m) => m.raw.toLowerCase()));
-          unmapped = whRaws.filter((w) => !mappedSet.has(w.raw.toLowerCase())).length;
+          unmapped = whRaws.filter((w) => !mappedSet.has(w.toLowerCase())).length;
         } catch {
-          // Either side missing — leave unmapped at 0 instead of poisoning the
-          // present / rows / distinct stats already captured above.
+          /* either side missing — leave at 0 */
         }
       }
       const ms = Math.round(performance.now() - t0);
