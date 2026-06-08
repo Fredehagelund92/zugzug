@@ -206,11 +206,7 @@ export class DuckDbAdapter implements ReadOnlyWarehouseAdapter {
     return { rows: Number(row?.rows ?? 0), distinct: Number(row?.d ?? 0) };
   }
 
-  async nameResolution(
-    table: Ref,
-    idCol: string,
-    nameCol: string,
-  ): Promise<Map<string, string>> {
+  async nameResolution(table: Ref, idCol: string, nameCol: string): Promise<Map<string, string>> {
     const id = this.quoteIdentifier(idCol);
     const nm = this.quoteIdentifier(nameCol);
     // Last-write-wins on duplicate ids (denormalized name tables are common — caller must accept any matching row).

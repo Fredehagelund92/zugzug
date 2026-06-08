@@ -334,7 +334,6 @@ export async function liveSources(dimId: string): Promise<SourceDef[]> {
   return out;
 }
 
-
 export async function dimMeta(dimId: string): Promise<DimMeta | null> {
   return pgGet<DimMeta>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol"

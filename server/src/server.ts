@@ -51,7 +51,9 @@ if (!ok) {
   console.error("✗ warehouse adapter ping failed");
   process.exit(1);
 }
-console.log(`· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`);
+console.log(
+  `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
+);
 
 /* scheduler — every minute, if any wired source is due (per its 15m/hourly/
    daily cadence), run a full scanSources. scanSources handles all wired
