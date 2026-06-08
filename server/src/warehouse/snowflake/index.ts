@@ -74,6 +74,15 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
     return this.conn;
   }
 
+  /** Parse a stored "SCHEMA.TABLE" string into a Ref. Single-token strings get
+   *  the creds default schema. */
+  private parseTwoPartRef(stored: string): Ref {
+    const parts = stored.split(".");
+    if (parts.length === 2) return { schema: parts[0], table: parts[1] };
+    if (parts.length === 3) return { catalog: parts[0], schema: parts[1], table: parts[2] };
+    return { schema: this.creds.schema, table: stored };
+  }
+
   // ---- the rest of the interface — implemented in Tasks 4–9 ----
 
   async ping(): Promise<boolean> {
@@ -291,8 +300,28 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       count: Number(r.N),
     }));
   }
-  ensureCanonicalTables(_dim: DimensionSpec): Promise<void> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 8");
+  async ensureCanonicalTables(dim: DimensionSpec): Promise<void> {
+    // dim.dimTable / dim.mapTable are stored as "SCHEMA.TABLE" (2-part). The database
+    // is the adapter's configured default. LIVE-VALIDATION: confirm Snowflake's
+    // CREATE TABLE IF NOT EXISTS is idempotent and doesn't error if the table
+    // already has a different shape (it silently no-ops; that's the Snowflake contract).
+    const dimRef = this.parseTwoPartRef(dim.dimTable);
+    const mapRef = this.parseTwoPartRef(dim.mapTable);
+    const key = this.quoteIdentifier(dim.keyCol);
+
+    await this._getConnection().execute({
+      sqlText: `CREATE TABLE IF NOT EXISTS ${this.qualifyRef(dimRef)} (
+                ${key} VARCHAR PRIMARY KEY,
+                LABEL VARCHAR
+              )`,
+    });
+
+    await this._getConnection().execute({
+      sqlText: `CREATE TABLE IF NOT EXISTS ${this.qualifyRef(mapRef)} (
+                "RAW" VARCHAR PRIMARY KEY,
+                ${key} VARCHAR NOT NULL
+              )`,
+    });
   }
   commitCanonical(_dim: DimensionSpec, _drafts: ApprovedDraft[]): Promise<CommitResult> {
     throw new Error("SnowflakeAdapter — Phase 2 Task 9");

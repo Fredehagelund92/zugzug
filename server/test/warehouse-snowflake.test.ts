@@ -309,3 +309,22 @@ test("distinctValuesWithProvenance: UNION ALL across sources, tags sourceIndex l
   expect(sql).toContain('"REGION"');
   expect(sql).toContain('"CODE"');
 });
+
+test("ensureCanonicalTables: issues CREATE TABLE IF NOT EXISTS for dim_ and map_", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.ensureCanonicalTables({
+    dimId: "country",
+    dimTable: "ZUGZUG.DIM_COUNTRY",
+    mapTable: "ZUGZUG.MAP_COUNTRY",
+    keyCol: "COUNTRY_CODE",
+  });
+  expect(calls).toHaveLength(2);
+  const sqls = calls.map((c) => c.sqlText).join("\n---\n");
+  expect(sqls).toContain('CREATE TABLE IF NOT EXISTS "ANALYTICS"."ZUGZUG"."DIM_COUNTRY"');
+  expect(sqls).toContain('"COUNTRY_CODE" VARCHAR PRIMARY KEY');
+  expect(sqls).toContain('LABEL VARCHAR');
+  expect(sqls).toContain('CREATE TABLE IF NOT EXISTS "ANALYTICS"."ZUGZUG"."MAP_COUNTRY"');
+  expect(sqls).toContain('"RAW" VARCHAR PRIMARY KEY');
+  expect(sqls).toContain('"COUNTRY_CODE" VARCHAR NOT NULL');
+});
