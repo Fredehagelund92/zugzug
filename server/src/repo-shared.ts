@@ -3,10 +3,10 @@
  *
  * Nothing in here imports from any other repo-*.ts module. */
 
-import { run } from "./db.ts";
 import { pgAll, pgGet } from "./pg.ts";
 import { env, pg } from "./env.ts";
 import type { ConditionalRule } from "./conditional-format-types.ts";
+import type { Ref } from "./warehouse/adapter.ts";
 
 /* ---- types (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
 
@@ -308,15 +308,37 @@ export async function sourcesOf(dimId: string): Promise<SourceDef[]> {
   );
 }
 
+/** Parse a stored 'schema.table' (or 'table') string into the adapter's Ref. */
+export function parseSourceTable(stored: string): Ref {
+  const parts = stored.split(".");
+  if (parts.length === 3) return { catalog: parts[0], schema: parts[1], table: parts[2] };
+  if (parts.length === 2) return { schema: parts[0], table: parts[1] };
+  return { schema: "main", table: stored };
+}
+
 /** Keep only sources whose warehouse table actually resolves — a dimension
  *  registered against tables absent in this WAREHOUSE_DB (e.g. raw_dev vs
  *  raw_prod) still scans the rest instead of throwing. */
 export async function liveSources(dimId: string): Promise<SourceDef[]> {
+  const { getAdapter } = await import("./warehouse/registry.ts");
+  let adapter: Awaited<ReturnType<typeof getAdapter>>;
+  try {
+    adapter = await getAdapter();
+  } catch {
+    // Warehouse adapter unavailable (e.g. factories not registered, no token).
+    // Skip all sources gracefully rather than throwing — same behaviour as the
+    // old `run()` path which also swallowed errors.
+    return [];
+  }
   const out: SourceDef[] = [];
   for (const s of await sourcesOf(dimId)) {
+    const ref = parseSourceTable(s.table);
     try {
-      await run(`SELECT 1 FROM ${whTable(s.table)} LIMIT 0`);
-      out.push(s);
+      if (await adapter.tableExists(ref)) {
+        out.push(s);
+      } else {
+        console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
+      }
     } catch {
       console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
     }
