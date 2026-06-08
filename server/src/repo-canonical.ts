@@ -182,7 +182,7 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
   ).catch(() => null);
   const values = await scanValues(id, meta);
-  const { nameTable, nameIdCol, nameCol, description, color, ...metaOut } = meta;
+  const { nameTable: _nameTable, nameIdCol: _nameIdCol, nameCol: _nameCol, description, color, ...metaOut } = meta;
   const safeColor =
     typeof color === "string" && (PALETTE_NAMES as readonly string[]).includes(color)
       ? (color as PaletteName)
