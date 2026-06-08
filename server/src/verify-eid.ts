@@ -7,10 +7,14 @@
    The live-resolution path is exercised only when ATTACH_WAREHOUSE=true AND a real
    master table is provided via EID_TABLE / EID_ID_COL / EID_NAME_COL — else skipped. */
 
-import { connect, run, all, get } from "./db.ts";
+import { pgRun, pgAll, pgGet } from "./pg.ts";
 import { env, pg } from "./env.ts";
 import * as repo from "./repo.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
+import { registerFactories } from "./warehouse/credentials.ts";
+import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
+import { getAdapter } from "./warehouse/registry.ts";
 
 let pass = 0,
   fail = 0,
@@ -33,20 +37,24 @@ const DIMT = canon(`dim_${DIM_ID}`);
 const MAPT = canon(`map_${DIM_ID}`);
 
 async function cleanup(): Promise<void> {
-  await run(`DROP TABLE IF EXISTS ${DIMT}`).catch(() => {});
-  await run(`DROP TABLE IF EXISTS ${MAPT}`).catch(() => {});
-  await run(`DELETE FROM ${pg("dimension_source")} WHERE dim_id = '${DIM_ID}'`).catch(() => {});
-  await run(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = '${DIM_ID}'`).catch(() => {});
-  await run(`DELETE FROM ${pg("dimension")} WHERE id = '${DIM_ID}'`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS ${DIMT}`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS ${MAPT}`).catch(() => {});
+  await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id = '${DIM_ID}'`).catch(() => {});
+  await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = '${DIM_ID}'`).catch(() => {});
+  await pgRun(`DELETE FROM ${pg("dimension")} WHERE id = '${DIM_ID}'`).catch(() => {});
 }
 
 console.log("\nZug Zug — external-ID keys verification\n");
-await connect();
+registerFactories({
+  duckdb: async (creds) => new DuckDbAdapter(creds),
+  snowflake: async (creds) => new SnowflakeAdapter(creds),
+});
+await getAdapter(); // warm the adapter
 await runMigrations();
 await cleanup();
 
 // 1. migration columns exist on the dimension registry
-const cols = await all<{ column_name: string }>(
+const cols = await pgAll<{ column_name: string }>(
   `SELECT column_name FROM ${env.oltpCatalog}.information_schema.columns
    WHERE table_schema = '${env.appSchema}' AND table_name = 'dimension'`,
 );
@@ -66,7 +74,7 @@ check(
   d?.keyKind === "external_id",
   d?.keyKind ?? "missing",
 );
-const labelNullable = await get<{ is_nullable: string }>(
+const labelNullable = await pgGet<{ is_nullable: string }>(
   `SELECT is_nullable FROM ${env.oltpCatalog}.information_schema.columns
    WHERE table_schema = '${env.canonicalSchema}' AND table_name = 'dim_${DIM_ID}' AND column_name = 'label'`,
 );
@@ -87,7 +95,7 @@ if (env.attachWarehouse && T && IDC && NMC) {
     res.derived > 0,
     `${res.derived} ids from ${T}.${IDC}`,
   );
-  const bind = await get<{ name_table: string; name_col: string }>(
+  const bind = await pgGet<{ name_table: string; name_col: string }>(
     `SELECT name_table, name_col FROM ${pg("dimension")} WHERE id = '${DIM_ID}'`,
   );
   check(
@@ -113,7 +121,7 @@ if (env.attachWarehouse && T && IDC && NMC) {
     "set ATTACH_WAREHOUSE=true and EID_TABLE/EID_ID_COL/EID_NAME_COL to exercise",
   );
   // unresolved fallback IS testable without a binding: seed an ID by hand, read it back
-  await run(`INSERT INTO ${DIMT} (${KEYCOL}) VALUES ('P-001') ON CONFLICT DO NOTHING`);
+  await pgRun(`INSERT INTO ${DIMT} (${KEYCOL}) VALUES ('P-001') ON CONFLICT DO NOTHING`);
   const full = await repo.getDimension(DIM_ID);
   const row = full?.canonical.find((c) => c.key === "P-001");
   check(
