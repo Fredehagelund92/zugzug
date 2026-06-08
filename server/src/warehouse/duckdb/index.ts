@@ -213,9 +213,11 @@ export class DuckDbAdapter implements ReadOnlyWarehouseAdapter {
   ): Promise<Map<string, string>> {
     const id = this.quoteIdentifier(idCol);
     const nm = this.quoteIdentifier(nameCol);
+    // Last-write-wins on duplicate ids (denormalized name tables are common — caller must accept any matching row).
     const rows = await this.all<{ id: string; nm: string }>(
       `SELECT ${this.castToString(id)} AS id, ${this.castToString(nm)} AS nm
-         FROM ${this.qualifyRef(table)}`,
+         FROM ${this.qualifyRef(table)}
+         WHERE ${id} IS NOT NULL`,
     );
     const out = new Map<string, string>();
     for (const r of rows) out.set(r.id, r.nm);

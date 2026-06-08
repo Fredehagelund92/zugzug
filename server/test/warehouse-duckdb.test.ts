@@ -120,6 +120,50 @@ test("nameResolution returns id→name Map", async () => {
   expect(m.size).toBe(2);
 });
 
+test("nameResolution: duplicate ids — last-write-wins, but caller gets a value", async () => {
+  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  // @ts-expect-error — private connect()
+  const c = await a["connect"]();
+  await c.run(`CREATE TABLE dupes (code VARCHAR, label VARCHAR)`);
+  await c.run(`INSERT INTO dupes VALUES ('US', 'United States'), ('US', 'USA')`);
+  const m = await a.nameResolution({ schema: "main", table: "dupes" }, "code", "label");
+  expect(m.size).toBe(1);
+  const v = m.get("US");
+  expect(["United States", "USA"]).toContain(v);
+});
+
+test("nameResolution: null ids are filtered, not present as a null Map key", async () => {
+  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  // @ts-expect-error — private connect()
+  const c = await a["connect"]();
+  await c.run(`CREATE TABLE has_nulls (code VARCHAR, label VARCHAR)`);
+  await c.run(`INSERT INTO has_nulls VALUES ('A', 'alpha'), (NULL, 'orphan'), ('B', 'beta')`);
+  const m = await a.nameResolution({ schema: "main", table: "has_nulls" }, "code", "label");
+  expect(m.size).toBe(2);
+  expect(m.get("A")).toBe("alpha");
+  expect(m.get("B")).toBe("beta");
+  // @ts-expect-error — null is not assignable to string but we want to verify it's not present
+  expect(m.has(null)).toBe(false);
+});
+
+test("listTables: search filters across schema, table name, and column names", async () => {
+  const a = await withFixture();
+
+  // Search by schema name (matches everything in `raw`)
+  const bySchema = await a.listTables({ search: "raw" });
+  expect(bySchema.length).toBeGreaterThanOrEqual(2); // partners + countries
+
+  // Search by table name fragment
+  const byTable = await a.listTables({ search: "partner" });
+  expect(byTable.some((t) => t.table === "partners")).toBe(true);
+  expect(byTable.some((t) => t.table === "countries")).toBe(false);
+
+  // Search by column name (only `partners` has a `region` column)
+  const byColumn = await a.listTables({ search: "region" });
+  expect(byColumn.some((t) => t.table === "partners")).toBe(true);
+  expect(byColumn.some((t) => t.table === "countries")).toBe(false);
+});
+
 test("distinctValuesWithProvenance merges multiple sources and tags sourceIndex", async () => {
   const a = await withFixture();
   const rows = await a.distinctValuesWithProvenance([
