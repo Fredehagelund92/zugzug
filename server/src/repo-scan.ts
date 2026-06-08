@@ -10,9 +10,7 @@ import {
   slug,
   qid,
   cq,
-  whTable,
   liveSources,
-  all,
   pgAll,
   pgGet,
   pgRun,
@@ -453,17 +451,10 @@ export async function deriveCanonical(
   const external = meta.keyKind === "external_id";
   if (external && nameColumn) await addSource(dimId, table, nameColumn);
 
-  const col = qid(column);
-  let vals: string[];
-  try {
-    const rows = await all<{ v: string }>(
-      `SELECT DISTINCT CAST(${col} AS VARCHAR) AS v FROM ${whTable(table)}
-       WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0 ORDER BY 1 LIMIT 5000`,
-    );
-    vals = rows.map((r) => r.v);
-  } catch {
-    return { derived: 0 };
-  } // warehouse not attached / table missing
+  const adapter = await getAdapter();
+  const vals = await adapter
+    .distinctValues(parseSourceTable(table), column, 5000)
+    .catch(() => [] as string[]);
   if (!vals.length) return { derived: 0 };
 
   const key = qid(meta.keyCol);
