@@ -23,6 +23,7 @@ const IconRules = ({ className }: { className?: string }) => (
 interface Props<Row> {
   column: ColumnDef<Row>;
   anchorRef: React.RefObject<HTMLElement | null>;
+  anchorRect?: DOMRect | null;
   sortDir: "asc" | "desc" | null;
   filterValue: string | null;
   onClose: () => void;
@@ -43,6 +44,7 @@ const GAP = 4;
 export function ColumnHeaderMenu<Row>({
   column,
   anchorRef,
+  anchorRect,
   sortDir,
   filterValue,
   onClose,
@@ -88,10 +90,10 @@ export function ColumnHeaderMenu<Row>({
   // On mobile (<768px) the menu is centered horizontally in the viewport.
   useLayoutEffect(() => {
     const popover = ref.current;
-    const anchor = anchorRef.current;
-    if (!popover || !anchor) return;
+    if (!popover) return;
     const place = (): void => {
-      const a = anchor.getBoundingClientRect();
+      const a = anchorRect ?? anchorRef.current?.getBoundingClientRect() ?? null;
+      if (!a) return;
       const popH = popover.offsetHeight;
 
       if (window.innerWidth < 768) {
@@ -103,8 +105,10 @@ export function ColumnHeaderMenu<Row>({
         return;
       }
 
-      // align right edges, drop below the button; flip above on viewport overflow
-      let left = a.right - MENU_WIDTH;
+      // Point-anchored (zero-size rect from a click): open at the cursor, expanding right + down.
+      // Element-anchored (⋯ button): align right edges and drop below the button.
+      const pointAnchored = a.width === 0 && a.height === 0;
+      let left = pointAnchored ? a.left : a.right - MENU_WIDTH;
       if (left < 8) left = 8;
       if (left + MENU_WIDTH > window.innerWidth - 8) left = window.innerWidth - MENU_WIDTH - 8;
       let top = a.bottom + GAP;
@@ -119,7 +123,7 @@ export function ColumnHeaderMenu<Row>({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [anchorRef, mode]);
+  }, [anchorRef, anchorRect, mode]);
 
   // Close on outside click. Skip clicks on the anchor button itself so the
   // user can toggle the menu off via the same ⋯ button.
