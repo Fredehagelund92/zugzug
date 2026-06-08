@@ -8,8 +8,16 @@ import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
-import { useDimensions, useDrafts, saveDraft, discardDraft, commit, dkey } from "../store";
-import type { Draft } from "../store";
+import {
+  useDimensions,
+  useDrafts,
+  saveDraft,
+  discardDraft,
+  commit,
+  dkey,
+  useWorkspaceInfo,
+} from "../store";
+import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import { useAiHint, type AiHint } from "../lib/use-ai-hint";
@@ -69,6 +77,7 @@ function TriageInner() {
   const dims = useDimensions();
   const allDrafts = useDrafts();
   const undo = useUndoStack();
+  const wsInfo = useWorkspaceInfo();
 
   // URL ?filter= state — round-trips; "new" is the default and is omitted.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -335,6 +344,7 @@ function TriageInner() {
         flash={flash}
         undo={undo}
         aiHint={aiHint}
+        wsInfo={wsInfo}
       />
     </div>
   );
@@ -363,6 +373,7 @@ interface CrossDimInboxProps {
   flash: { n: number; rows: number } | null;
   undo: ReturnType<typeof useUndoStack>;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
+  wsInfo: WorkspaceInfo | null;
 }
 
 function CrossDimInbox(p: CrossDimInboxProps) {
@@ -848,16 +859,26 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
           >
             {review ? "Hide" : `Review ${stagedCount}`}
           </Button>
-          <Button
-            size="sm"
-            disabled={stagedCount === 0}
-            loading={p.committing}
-            onClick={() => p.commitAll()}
-          >
-            Publish {stagedCount}
-            <span className="hidden md:inline"> change{stagedCount === 1 ? "" : "s"}</span>
-            <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
-          </Button>
+          <div className="flex flex-col items-end gap-1">
+            <Button
+              size="sm"
+              disabled={stagedCount === 0}
+              loading={p.committing}
+              onClick={() => p.commitAll()}
+            >
+              {p.wsInfo?.writable ? "Approve & commit to warehouse" : "Approve & save"}
+              <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
+            </Button>
+            {p.wsInfo && !p.wsInfo.writable && p.stagedDrafts[0] && (
+              <a
+                href={`/api/dimensions/${p.stagedDrafts[0].dimId}/snapshot.parquet`}
+                download
+                className="text-xs text-ink-3 hover:underline"
+              >
+                Download snapshot →
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -482,6 +482,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               ↓ Export CSV
             </Button>
           )}
+          <a
+            href={`/api/dimensions/${dim.id}/snapshot.parquet`}
+            download={`${dim.id}-map.parquet`}
+            className="text-xs text-ink-3 hover:text-ink-1 hover:underline"
+            title="Download the map table as Parquet"
+          >
+            ↓ Download snapshot
+          </a>
           {sourceOpts.length > 0 && !external && (
             <div className="w-full md:w-56">
               <ComboSelect
