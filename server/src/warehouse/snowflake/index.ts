@@ -76,8 +76,16 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
 
   // ---- the rest of the interface — implemented in Tasks 4–9 ----
 
-  ping(): Promise<boolean> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 4");
+  async ping(): Promise<boolean> {
+    try {
+      const rows = await this._getConnection().execute({ sqlText: "SELECT 1 AS OK" });
+      // LIVE-VALIDATION: Snowflake column names default to UPPERCASE on read.
+      // Confirm `OK` (uppercase) is the actual key in returned row objects.
+      const first = rows[0] as { OK?: number } | undefined;
+      return first?.OK === 1;
+    } catch {
+      return false;
+    }
   }
   listTables(_opts?: { schema?: string; search?: string }): Promise<CatalogTable[]> {
     throw new Error("SnowflakeAdapter — Phase 2 Task 5");

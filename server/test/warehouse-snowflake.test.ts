@@ -83,3 +83,30 @@ test("capabilities are writable Snowflake defaults", () => {
   expect(a.capabilities.identifierCase).toBe("upper");
   expect(a.capabilities.supportsApproximateDistinct).toBe(true);
 });
+
+test("ping returns true when SELECT 1 succeeds", async () => {
+  const { conn, calls } = mockConn((call) => {
+    if (call.sqlText.trim().toUpperCase() === "SELECT 1 AS OK") {
+      return [{ OK: 1 }]; // Snowflake returns column names UPPERCASE by default
+    }
+    return [];
+  });
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await expect(a.ping()).resolves.toBe(true);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].sqlText.trim()).toBe("SELECT 1 AS OK");
+});
+
+test("ping returns false when connection throws", async () => {
+  const conn: SnowflakeConnection = {
+    async execute() {
+      throw new Error("connection refused");
+    },
+    async executeAffected() {
+      return 0;
+    },
+    async close() {},
+  };
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await expect(a.ping()).resolves.toBe(false);
+});
