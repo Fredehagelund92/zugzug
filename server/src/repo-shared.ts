@@ -321,15 +321,7 @@ export function parseSourceTable(stored: string): Ref {
  *  raw_prod) still scans the rest instead of throwing. */
 export async function liveSources(dimId: string): Promise<SourceDef[]> {
   const { getAdapter } = await import("./warehouse/registry.ts");
-  let adapter: Awaited<ReturnType<typeof getAdapter>>;
-  try {
-    adapter = await getAdapter();
-  } catch {
-    // Warehouse adapter unavailable (e.g. factories not registered, no token).
-    // Skip all sources gracefully rather than throwing — same behaviour as the
-    // old `run()` path which also swallowed errors.
-    return [];
-  }
+  const adapter = await getAdapter();
   const out: SourceDef[] = [];
   for (const s of await sourcesOf(dimId)) {
     const ref = parseSourceTable(s.table);
