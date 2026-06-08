@@ -169,7 +169,11 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
 
     // Build the (schema, table) → [column...] map.
     const colsByTable = new Map<string, string[]>();
-    for (const r of colRows as Array<{ TABLE_SCHEMA: string; TABLE_NAME: string; COLUMN_NAME: string }>) {
+    for (const r of colRows as Array<{
+      TABLE_SCHEMA: string;
+      TABLE_NAME: string;
+      COLUMN_NAME: string;
+    }>) {
       const key = `${r.TABLE_SCHEMA}.${r.TABLE_NAME}`;
       const arr = colsByTable.get(key) ?? [];
       arr.push(r.COLUMN_NAME);
@@ -266,11 +270,7 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
     return { rows: Number(first?.ROWS ?? 0), distinct: Number(first?.D ?? 0) };
   }
 
-  async nameResolution(
-    table: Ref,
-    idCol: string,
-    nameCol: string,
-  ): Promise<Map<string, string>> {
+  async nameResolution(table: Ref, idCol: string, nameCol: string): Promise<Map<string, string>> {
     const id = this.quoteIdentifier(idCol);
     const nm = this.quoteIdentifier(nameCol);
     // Last-write-wins on duplicate ids (denormalized name tables are common — caller must accept any matching row).
