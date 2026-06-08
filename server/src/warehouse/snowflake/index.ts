@@ -201,21 +201,72 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       type: r.DATA_TYPE,
     }));
   }
-  distinctValues(_table: Ref, _column: string, _limit: number): Promise<string[]> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 6");
+  async distinctValues(table: Ref, column: string, limit: number): Promise<string[]> {
+    const col = this.quoteIdentifier(column);
+    const n = Math.max(1, Math.min(100000, Math.round(limit)));
+    // LIVE-VALIDATION: confirm Snowflake LENGTH(TRIM(CAST(...AS VARCHAR))) > 0 works.
+    // Snowflake's LENGTH on a NULL returns NULL, so the IS NOT NULL guard is essential.
+    const rows = await this._getConnection().execute({
+      sqlText: `SELECT DISTINCT ${this.castToString(col)} AS V
+              FROM ${this.qualifyRef(table)}
+              WHERE ${col} IS NOT NULL AND LENGTH(TRIM(${this.castToString(col)})) > 0
+              ORDER BY 1
+              LIMIT ${n}`,
+    });
+    return (rows as Array<{ V: string }>).map((r) => r.V);
   }
-  topValuesByFrequency(_table: Ref, _column: string, _limit: number): Promise<ValueCount[]> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 6");
+
+  async topValuesByFrequency(table: Ref, column: string, limit: number): Promise<ValueCount[]> {
+    const col = this.quoteIdentifier(column);
+    const n = Math.max(1, Math.min(10000, Math.round(limit)));
+    const rows = await this._getConnection().execute({
+      sqlText: `SELECT ${this.castToString(col)} AS V, COUNT(*) AS N
+              FROM ${this.qualifyRef(table)}
+              WHERE ${col} IS NOT NULL AND LENGTH(TRIM(${this.castToString(col)})) > 0
+              GROUP BY 1
+              ORDER BY N DESC, V
+              LIMIT ${n}`,
+    });
+    return (rows as Array<{ V: string; N: number }>).map((r) => ({
+      value: r.V,
+      count: Number(r.N),
+    }));
   }
-  columnStats(
-    _table: Ref,
-    _column: string,
-    _opts?: { approximate?: boolean },
+
+  async columnStats(
+    table: Ref,
+    column: string,
+    opts: { approximate?: boolean } = {},
   ): Promise<{ rows: number; distinct: number }> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 6");
+    const col = this.quoteIdentifier(column);
+    const distinctExpr = opts.approximate
+      ? `APPROX_COUNT_DISTINCT(${col})`
+      : `COUNT(DISTINCT ${col})`;
+    const row = await this._getConnection().execute({
+      sqlText: `SELECT COUNT(${col}) AS ROWS, ${distinctExpr} AS D
+              FROM ${this.qualifyRef(table)}
+              WHERE ${col} IS NOT NULL AND LENGTH(TRIM(${this.castToString(col)})) > 0`,
+    });
+    const first = (row as Array<{ ROWS: number; D: number }>)[0];
+    return { rows: Number(first?.ROWS ?? 0), distinct: Number(first?.D ?? 0) };
   }
-  nameResolution(_table: Ref, _idCol: string, _nameCol: string): Promise<Map<string, string>> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 6");
+
+  async nameResolution(
+    table: Ref,
+    idCol: string,
+    nameCol: string,
+  ): Promise<Map<string, string>> {
+    const id = this.quoteIdentifier(idCol);
+    const nm = this.quoteIdentifier(nameCol);
+    // Last-write-wins on duplicate ids (denormalized name tables are common — caller must accept any matching row).
+    const rows = await this._getConnection().execute({
+      sqlText: `SELECT ${this.castToString(id)} AS ID, ${this.castToString(nm)} AS NM
+              FROM ${this.qualifyRef(table)}
+              WHERE ${id} IS NOT NULL`,
+    });
+    const out = new Map<string, string>();
+    for (const r of rows as Array<{ ID: string; NM: string }>) out.set(r.ID, r.NM);
+    return out;
   }
   distinctValuesWithProvenance(
     _sources: ReadonlyArray<{ table: Ref; column: string }>,

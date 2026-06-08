@@ -200,3 +200,78 @@ test("listColumns: returns name + type from INFORMATION_SCHEMA.COLUMNS", async (
   // Confirms the query binds schema and table separately
   expect(calls[0].binds).toEqual(["RAW", "PARTNERS"]);
 });
+
+test("distinctValues: SELECT DISTINCT CAST(... AS VARCHAR) ORDER BY 1 LIMIT n", async () => {
+  const { conn, calls } = mockConn(() => [
+    { V: "EU" },
+    { V: "US" },
+    { V: "us" },
+  ]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const vals = await a.distinctValues({ schema: "RAW", table: "PARTNERS" }, "REGION", 100);
+  expect(vals).toEqual(["EU", "US", "us"]);
+  expect(calls[0].sqlText).toContain('SELECT DISTINCT CAST("REGION" AS VARCHAR) AS V');
+  expect(calls[0].sqlText).toContain('FROM "ANALYTICS"."RAW"."PARTNERS"');
+  expect(calls[0].sqlText).toContain('"REGION" IS NOT NULL');
+  expect(calls[0].sqlText).toContain("LIMIT 100");
+});
+
+test("distinctValues: limit is clamped to [1, 100000]", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.distinctValues({ schema: "RAW", table: "T" }, "C", 999999999);
+  expect(calls[0].sqlText).toContain("LIMIT 100000");
+  await a.distinctValues({ schema: "RAW", table: "T" }, "C", 0);
+  expect(calls[1].sqlText).toContain("LIMIT 1");
+});
+
+test("topValuesByFrequency: GROUP BY 1 + COUNT(*) + ORDER BY n DESC", async () => {
+  const { conn, calls } = mockConn(() => [
+    { V: "EU", N: 2 },
+    { V: "US", N: 1 },
+  ]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const top = await a.topValuesByFrequency({ schema: "RAW", table: "PARTNERS" }, "REGION", 10);
+  expect(top).toEqual([
+    { value: "EU", count: 2 },
+    { value: "US", count: 1 },
+  ]);
+  expect(calls[0].sqlText).toContain("GROUP BY 1");
+  expect(calls[0].sqlText).toContain("ORDER BY N DESC, V");
+  expect(calls[0].sqlText).toContain("LIMIT 10");
+});
+
+test("columnStats: exact mode uses COUNT + COUNT DISTINCT", async () => {
+  const { conn, calls } = mockConn(() => [{ ROWS: 4, D: 3 }]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const s = await a.columnStats({ schema: "RAW", table: "T" }, "REGION");
+  expect(s).toEqual({ rows: 4, distinct: 3 });
+  expect(calls[0].sqlText).toContain('COUNT("REGION") AS ROWS');
+  expect(calls[0].sqlText).toContain('COUNT(DISTINCT "REGION") AS D');
+});
+
+test("columnStats: approximate mode uses APPROX_COUNT_DISTINCT (Snowflake-native)", async () => {
+  const { conn, calls } = mockConn(() => [{ ROWS: 4, D: 3 }]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.columnStats({ schema: "RAW", table: "T" }, "REGION", { approximate: true });
+  expect(calls[0].sqlText).toContain('APPROX_COUNT_DISTINCT("REGION") AS D');
+});
+
+test("nameResolution: returns id→name Map, filters NULL ids", async () => {
+  const { conn } = mockConn(() => [
+    { ID: "US", NM: "United States" },
+    { ID: "EU", NM: "European Union" },
+  ]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const m = await a.nameResolution({ schema: "RAW", table: "COUNTRIES" }, "CODE", "LABEL");
+  expect(m.size).toBe(2);
+  expect(m.get("US")).toBe("United States");
+  expect(m.get("EU")).toBe("European Union");
+});
+
+test("nameResolution: query includes WHERE idCol IS NOT NULL", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.nameResolution({ schema: "RAW", table: "COUNTRIES" }, "CODE", "LABEL");
+  expect(calls[0].sqlText).toContain('"CODE" IS NOT NULL');
+});
