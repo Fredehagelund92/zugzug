@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "bun --watch run src/server.ts",
     "start": "bun run src/server.ts",
-    "spike": "bun run src/spike.ts",
     "verify-eid": "bun run src/verify-eid.ts",
     "verify-polish": "bun run src/verify-polish.ts",
     "verify-datagrid": "bun run src/verify-datagrid.ts",
