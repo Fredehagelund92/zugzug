@@ -17,6 +17,7 @@ import {
   coveragePct,
   coverageColor,
   lastAuditForDim,
+  warehouseSyncStatusByDim,
 } from "./dashboard-helpers";
 import { PALETTE, defaultTintFor, type PaletteName } from "../lib/palette";
 
@@ -91,6 +92,11 @@ export function Dashboard() {
   const lastAuditByDim = useMemo(
     () => Object.fromEntries(dims.map((d) => [d.id, lastAuditForDim(d.id, d.dimension, auditLog)])),
     [dims, auditLog],
+  );
+
+  const syncStatus = useMemo(
+    () => warehouseSyncStatusByDim(auditLog, dims),
+    [auditLog, dims],
   );
 
   const dimTint = (dim: (typeof dims)[0]) => {
@@ -353,8 +359,18 @@ export function Dashboard() {
                     <div className="flex items-center gap-2.5">
                       <div className="h-2 w-2 shrink-0 rounded-pill" style={{ background: tint }} />
                       <div className="min-w-0">
-                        <div className="font-display text-[13px] font-semibold text-ink">
-                          {dim.dimension}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-display text-[13px] font-semibold text-ink">
+                            {dim.dimension}
+                          </span>
+                          {wsInfo?.writable && syncStatus[dim.id] === "failed" && (
+                            <span
+                              title="Last warehouse sync failed — manual resync required"
+                              className="inline-flex items-center font-mono text-[9px] text-amber-600"
+                            >
+                              🔄 needs resync
+                            </span>
+                          )}
                         </div>
                         <div className="font-mono text-[9px] text-ink-3">{dim.mapTable}</div>
                         {isStaged && (

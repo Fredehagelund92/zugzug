@@ -85,3 +85,31 @@ export function applySort(dims: MappingDimension[], sort: SortKey): MappingDimen
       return copy.sort((a, b) => b.rows - a.rows);
   }
 }
+
+/** Per-dimension warehouse-sync status derived from the audit log.
+ *  - "synced": latest warehouse sync event for the dim is "Warehouse synced"
+ *  - "failed": latest warehouse sync event for the dim is "Warehouse sync failed"
+ *  - "unknown": no warehouse sync events yet for the dim (or read-only mode)
+ *  The dim is identified by the dim's mapTable name appearing in the audit detail.
+ *
+ *  Assumes `audits` is ordered newest-first (as returned by the server).
+ */
+export function warehouseSyncStatusByDim(
+  audits: AuditEntry[],
+  dims: Array<{ id: string; mapTable: string }>,
+): Record<string, "synced" | "failed" | "unknown"> {
+  const status: Record<string, "synced" | "failed" | "unknown"> = {};
+  for (const d of dims) status[d.id] = "unknown";
+
+  // Audits are returned newest-first by listAudit; iterate and first match per dim wins.
+  for (const a of audits) {
+    if (a.action !== "Warehouse synced" && a.action !== "Warehouse sync failed") continue;
+    for (const d of dims) {
+      if (status[d.id] !== "unknown") continue;
+      if (a.detail.includes(d.mapTable)) {
+        status[d.id] = a.action === "Warehouse synced" ? "synced" : "failed";
+      }
+    }
+  }
+  return status;
+}
