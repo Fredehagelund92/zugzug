@@ -273,10 +273,6 @@ export const slug = (s: string) =>
 
 export const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
-/** 'schema.table' (or 'table') → fully-qualified warehouse identifier (MotherDuck). */
-export const whTable = (sourceTable: string) =>
-  `${qid(env.warehouseDb)}.` + sourceTable.split(".").map(qid).join(".");
-
 /** canonical table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
 export const cq = (display: string) => display.split(".").map(qid).join(".");
 
@@ -338,20 +334,6 @@ export async function liveSources(dimId: string): Promise<SourceDef[]> {
   return out;
 }
 
-const esc = (s: string) => s.replace(/'/g, "''");
-
-/** One UNION-ALL branch per source: distinct raw value + provenance + row count. */
-export function occUnion(sources: SourceDef[]): string {
-  return sources
-    .map((s) => {
-      const col = qid(s.column);
-      return `SELECT CAST(${col} AS VARCHAR) AS raw, '${esc(s.table)}' AS tbl, '${esc(s.column)}' AS col, count(*) AS rows
-            FROM ${whTable(s.table)}
-            WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
-            GROUP BY 1`;
-    })
-    .join("\nUNION ALL\n");
-}
 
 export async function dimMeta(dimId: string): Promise<DimMeta | null> {
   return pgGet<DimMeta>(
@@ -362,7 +344,6 @@ export async function dimMeta(dimId: string): Promise<DimMeta | null> {
 }
 
 // re-export lower-level modules so domain files can import just from repo-shared
-export { all, get, run } from "./db.ts";
 export { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
 export { env, pg } from "./env.ts";
 export { log } from "./log.ts";
