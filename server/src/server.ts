@@ -20,6 +20,8 @@ import * as tables from "./tables.ts";
 import { pgAll, pgEnd } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
+import { registerFactories } from "./warehouse/credentials.ts";
+import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": env.origin,
@@ -36,6 +38,13 @@ const json = (data: unknown, status = 200) =>
 const noContent = () => new Response(null, { status: 204, headers: corsHeaders });
 const err = (e: unknown, status = 500) =>
   json({ error: e instanceof Error ? e.message : String(e) }, status);
+
+registerFactories({
+  duckdb: async (creds) => new DuckDbAdapter(creds),
+  snowflake: async () => {
+    throw new Error("Snowflake adapter ships in Phase 2");
+  },
+});
 
 await connect();
 console.log("· connected (MotherDuck + Postgres attached)");
