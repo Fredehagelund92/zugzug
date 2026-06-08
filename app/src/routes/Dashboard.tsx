@@ -8,7 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
-import { useDimensions, useAudit, useDrafts } from "../store";
+import { useDimensions, useAudit, useDrafts, useWorkspaceInfo } from "../store";
 import {
   type FilterKey,
   type SortKey,
@@ -39,6 +39,7 @@ export function Dashboard() {
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();
+  const wsInfo = useWorkspaceInfo();
   const navigate = useNavigate();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const staged = Object.values(draftsMap).filter(
@@ -131,6 +132,20 @@ export function Dashboard() {
       value: fmtK(rowsAtRisk),
       delta: rowsAtRisk > 0 ? "unmapped warehouse rows" : undefined,
       dir: rowsAtRisk > 0 ? "warn" : undefined,
+    },
+    {
+      label: "Canonical destination",
+      value: wsInfo
+        ? wsInfo.writable
+          ? `🟢 ${wsInfo.adapter[0].toUpperCase() + wsInfo.adapter.slice(1)} — writable`
+          : "📦 Local + export"
+        : "…",
+      delta: wsInfo
+        ? wsInfo.writable
+          ? `Commits MERGE into ${wsInfo.warehouseDb ?? "warehouse"}`
+          : "Postgres canonical; download Parquet on demand"
+        : undefined,
+      dir: "up" as const,
     },
   ];
 
