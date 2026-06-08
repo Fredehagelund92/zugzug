@@ -94,10 +94,7 @@ export function Dashboard() {
     [dims, auditLog],
   );
 
-  const syncStatus = useMemo(
-    () => warehouseSyncStatusByDim(auditLog, dims),
-    [auditLog, dims],
-  );
+  const syncStatus = useMemo(() => warehouseSyncStatusByDim(auditLog, dims), [auditLog, dims]);
 
   const dimTint = (dim: (typeof dims)[0]) => {
     const palette = dim.color ?? defaultTintFor(dim.id);

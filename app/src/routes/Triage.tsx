@@ -8,7 +8,15 @@ import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
-import { useDimensions, useDrafts, saveDraft, discardDraft, commit, dkey, useWorkspaceInfo } from "../store";
+import {
+  useDimensions,
+  useDrafts,
+  saveDraft,
+  discardDraft,
+  commit,
+  dkey,
+  useWorkspaceInfo,
+} from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
@@ -858,9 +866,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
               loading={p.committing}
               onClick={() => p.commitAll()}
             >
-              {p.wsInfo?.writable
-                ? "Approve & commit to warehouse"
-                : "Approve & save"}
+              {p.wsInfo?.writable ? "Approve & commit to warehouse" : "Approve & save"}
               <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
             </Button>
             {p.wsInfo && !p.wsInfo.writable && p.stagedDrafts[0] && (
