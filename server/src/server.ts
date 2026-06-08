@@ -181,6 +181,18 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       });
     }
 
+    // GET /api/workspace/info — adapter capability metadata for the frontend badge
+    if (seg[1] === "workspace" && seg[2] === "info" && seg.length === 3 && method === "GET") {
+      const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+      const adapterInstance = await getAdapterFn();
+      return json({
+        adapter: adapterInstance.capabilities.id,
+        writable: adapterInstance.capabilities.writable,
+        canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
+        warehouseDb: env.warehouseDb || null,
+      });
+    }
+
     // /api/sources — registered source columns (cached); /facets; /scan
     if (seg[1] === "sources") {
       if (seg.length === 2 && method === "GET")
@@ -433,6 +445,28 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       // POST /api/dimensions/:id/commit
       if (seg[3] === "commit" && seg.length === 4 && method === "POST")
         return json(await repo.commit(id, me));
+      // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
+      if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
+        const dimId = seg[2]!;
+        const dim = await repo.getDimension(dimId);
+        if (!dim) return json({ error: "not found" }, 404);
+        const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
+        const buf = await exportCanonicalToParquet({
+          dimId: dim.id,
+          dimTable: dim.dimTable,
+          mapTable: dim.mapTable,
+          keyCol: dim.keyCol,
+        });
+        return new Response(buf, {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/octet-stream",
+            "content-disposition": `attachment; filename="${dimId}-map.parquet"`,
+            "cache-control": "no-store",
+          },
+        });
+      }
     }
 
     // GET /api/team/members ; POST /api/team/members ; DELETE /api/team/members/:email

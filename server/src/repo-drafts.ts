@@ -21,6 +21,7 @@ import {
 } from "./repo-shared.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { getAdapter } from "./warehouse/registry.ts";
+import { isWritable } from "./warehouse/adapter.ts";
 import type { ValueProvenance } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
@@ -93,13 +94,17 @@ export async function discardDraft(dimId: string, raw: string, userId: string): 
 export async function commit(
   dimId: string,
   userId: string,
-): Promise<{ committed: number; rowsRecovered: number }> {
+): Promise<{
+  committed: number;
+  rowsRecovered: number;
+  warehouseSynced: "n/a" | "synced" | "failed";
+}> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label
      FROM ${pg("dimension")} WHERE id = $1`,
     [dimId],
   );
-  if (!meta) return { committed: 0, rowsRecovered: 0 };
+  if (!meta) return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
   const key = qid(meta.keyCol);
   const DRAFT = pg("draft");
   const DIMT = cq(meta.dimTable);
@@ -111,9 +116,17 @@ export async function commit(
     [dimId],
   );
   const committed = Number(approved?.n ?? 0);
-  if (!committed) return { committed: 0, rowsRecovered: 0 };
+  if (!committed) return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
   const rowsRecovered = await rowsForUnmappedDrafts(dimId, meta.mapTable);
+
+  // Snapshot approved drafts BEFORE the tx so we can pass them to the
+  // warehouse adapter after the Postgres commit succeeds.
+  const approvedDrafts = await pgAll<{ raw: string; key: string; label: string | null }>(
+    `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
+     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId],
+  );
 
   await pgTx(async ({ run }) => {
     await run(
@@ -139,6 +152,33 @@ export async function commit(
     `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
   );
 
+  // After Postgres commit: if the warehouse adapter is writable, attempt the
+  // warehouse MERGE. Failures log + surface but don't roll back Postgres.
+  let warehouseSynced: "n/a" | "synced" | "failed" = "n/a";
+  const adapter = await getAdapter();
+  if (isWritable(adapter)) {
+    const dimSpec = {
+      dimId,
+      dimTable: meta.dimTable,
+      mapTable: meta.mapTable,
+      keyCol: meta.keyCol,
+    };
+    try {
+      await adapter.ensureCanonicalTables(dimSpec);
+      await adapter.commitCanonical(dimSpec, approvedDrafts);
+      await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`);
+      warehouseSynced = "synced";
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await appendAuditAs(
+        userId,
+        "Warehouse sync failed",
+        `${committed} → ${meta.mapTable}: ${msg}`,
+      );
+      warehouseSynced = "failed";
+    }
+  }
+
   // Prune ai_hint_cache entries whose suggestion no longer matches a valid
   // canonical label (e.g. after a canonical record was deleted).
   const currentLabels = await pgAll<{ label: string }>(
@@ -155,7 +195,7 @@ export async function commit(
     });
   }
 
-  return { committed, rowsRecovered };
+  return { committed, rowsRecovered, warehouseSynced };
 }
 
 /** Warehouse rows for raws that have a mapped draft but aren't yet in the map. */
