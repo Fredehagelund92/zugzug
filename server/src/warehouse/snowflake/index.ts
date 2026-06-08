@@ -13,6 +13,12 @@ import type {
 import type { SnowflakeCreds } from "../credentials.ts";
 import { createRealConnection, type SnowflakeConnection } from "./sdk-wrapper.ts";
 
+function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
 /**
  * SnowflakeAdapter — writable warehouse adapter using snowflake-sdk.
  *
@@ -323,7 +329,68 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
               )`,
     });
   }
-  commitCanonical(_dim: DimensionSpec, _drafts: ApprovedDraft[]): Promise<CommitResult> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 9");
+  async commitCanonical(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+    if (drafts.length === 0) return { rowsWritten: 0 };
+    const dimRef = this.parseTwoPartRef(dim.dimTable);
+    const mapRef = this.parseTwoPartRef(dim.mapTable);
+    const key = this.quoteIdentifier(dim.keyCol);
+
+    // Deduplicate canonical rows by key (last write wins on label).
+    const canonByKey = new Map<string, string | null>();
+    for (const d of drafts) canonByKey.set(d.key, d.label);
+    const canonRows = [...canonByKey.entries()].map(([k, l]) => ({ key: k, label: l }));
+
+    // Map rows: one per draft (one (raw, key) pair).
+    const mapRows = drafts.map((d) => ({ raw: d.raw, key: d.key }));
+
+    let rowsWritten = 0;
+    rowsWritten += await this.mergeChunked({
+      targetRef: dimRef,
+      chunks: chunk(canonRows, 1000),
+      sourceCols: [key, "LABEL"],
+      onCol: key,
+      pickBinds: (row) => [row.key, row.label],
+    });
+    rowsWritten += await this.mergeChunked({
+      targetRef: mapRef,
+      chunks: chunk(mapRows, 1000),
+      sourceCols: [`"RAW"`, key],
+      onCol: `"RAW"`,
+      pickBinds: (row) => [row.raw, row.key],
+    });
+    return { rowsWritten };
+  }
+
+  /** Issue chunked MERGE INTO ... USING (VALUES (?, ?), ...) statements.
+   *  Each chunk becomes one MERGE; returns sum of rowsAffected. */
+  private async mergeChunked<T>(opts: {
+    targetRef: Ref;
+    chunks: T[][];
+    sourceCols: [string, string];
+    onCol: string;
+    pickBinds: (row: T) => [unknown, unknown];
+  }): Promise<number> {
+    let total = 0;
+    for (const c of opts.chunks) {
+      if (c.length === 0) continue;
+      const placeholders = c.map(() => "(?, ?)").join(", ");
+      const [colA, colB] = opts.sourceCols;
+      // LIVE-VALIDATION: confirm Snowflake's MERGE INTO + USING (VALUES (?,?), ...) AS S(a, b)
+      // syntax accepts positional placeholders and the column-alias-on-source form. Snowflake
+      // docs example: MERGE INTO t USING (SELECT 1 AS a UNION ALL SELECT 2) s ON t.a = s.a ...
+      // We use the direct VALUES form here; an alternative shape is:
+      //   USING (SELECT $1 AS a, $2 AS b FROM (VALUES (?,?), ...) AS V($1, $2)) S
+      // If neither works, fall back to a temp-table approach: CREATE TEMPORARY TABLE +
+      // INSERT batch + MERGE FROM temp + DROP temp.
+      const sqlText = `MERGE INTO ${this.qualifyRef(opts.targetRef)} T
+                       USING (VALUES ${placeholders}) AS S(${colA}, ${colB})
+                       ON T.${opts.onCol} = S.${colA}
+                       WHEN NOT MATCHED THEN INSERT (${colA}, ${colB}) VALUES (S.${colA}, S.${colB})`;
+      // ^^ LIVE-VALIDATION: also confirm getNumUpdatedRows() returns the inserted row
+      // count for an INSERT-only MERGE (it should — INSERT counts as "affected").
+      const binds = c.flatMap((row) => opts.pickBinds(row));
+      total += await this._getConnection().executeAffected({ sqlText, binds });
+    }
+    return total;
   }
 }

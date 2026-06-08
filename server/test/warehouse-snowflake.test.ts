@@ -328,3 +328,97 @@ test("ensureCanonicalTables: issues CREATE TABLE IF NOT EXISTS for dim_ and map_
   expect(sqls).toContain('"RAW" VARCHAR PRIMARY KEY');
   expect(sqls).toContain('"COUNTRY_CODE" VARCHAR NOT NULL');
 });
+
+test("commitCanonical: empty drafts returns {rowsWritten: 0} without any SQL", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const result = await a.commitCanonical(
+    { dimId: "country", dimTable: "ZUGZUG.DIM_COUNTRY", mapTable: "ZUGZUG.MAP_COUNTRY", keyCol: "COUNTRY_CODE" },
+    [],
+  );
+  expect(result.rowsWritten).toBe(0);
+  expect(calls).toHaveLength(0);
+});
+
+test("commitCanonical: issues two MERGE statements (dim + map)", async () => {
+  const { conn, calls } = mockConn(() => [{ _affected: 3 }]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const result = await a.commitCanonical(
+    { dimId: "country", dimTable: "ZUGZUG.DIM_COUNTRY", mapTable: "ZUGZUG.MAP_COUNTRY", keyCol: "COUNTRY_CODE" },
+    [
+      { raw: "USA", key: "US", label: "United States" },
+      { raw: "U.S.", key: "US", label: "United States" },
+      { raw: "United Kingdom", key: "GB", label: "United Kingdom" },
+    ],
+  );
+  expect(calls).toHaveLength(2);
+  const mergeSqls = calls.map((c) => c.sqlText);
+
+  // First MERGE: dim_country (unique by key)
+  expect(mergeSqls[0]).toContain('MERGE INTO "ANALYTICS"."ZUGZUG"."DIM_COUNTRY"');
+  expect(mergeSqls[0]).toContain('"COUNTRY_CODE"');
+  expect(mergeSqls[0]).toContain("USING (VALUES");
+  expect(mergeSqls[0]).toContain("WHEN NOT MATCHED");
+
+  // Second MERGE: map_country (one row per draft)
+  expect(mergeSqls[1]).toContain('MERGE INTO "ANALYTICS"."ZUGZUG"."MAP_COUNTRY"');
+  expect(mergeSqls[1]).toContain('"RAW"');
+
+  // Binds carry the actual values (Snowflake VALUES with placeholders)
+  const allBinds = calls.flatMap((c) => c.binds ?? []);
+  expect(allBinds).toContain("US");
+  expect(allBinds).toContain("United States");
+  expect(allBinds).toContain("USA");
+  expect(allBinds).toContain("U.S.");
+  expect(allBinds).toContain("GB");
+
+  // rowsWritten sums both MERGEs' affected counts (mock returns 3 per call)
+  expect(result.rowsWritten).toBe(6);
+});
+
+test("commitCanonical: dim MERGE deduplicates by key (one row per unique key, last label wins)", async () => {
+  const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "ZUGZUG.DIM_COUNTRY", mapTable: "ZUGZUG.MAP_COUNTRY", keyCol: "COUNTRY_CODE" },
+    [
+      { raw: "USA", key: "US", label: "United States" },
+      { raw: "U.S.", key: "US", label: "United States of America" }, // same key, different label
+    ],
+  );
+  // The dim MERGE should have ONE pair of placeholders, not two
+  const dimBinds = calls[0].binds ?? [];
+  expect(dimBinds).toHaveLength(2); // [key, label]
+  expect(dimBinds[0]).toBe("US");
+  // Last-write-wins on label (deterministic by input order)
+  expect(dimBinds[1]).toBe("United States of America");
+});
+
+test("commitCanonical: chunks at 1000 rows", async () => {
+  const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  // 1500 unique drafts → dim has 1500 unique keys, map has 1500 rows
+  const drafts = Array.from({ length: 1500 }, (_, i) => ({
+    raw: `raw-${i}`,
+    key: `key-${i}`,
+    label: `Label ${i}`,
+  }));
+  await a.commitCanonical(
+    { dimId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" },
+    drafts,
+  );
+  // 2 MERGEs per chunk × 2 chunks (1000 + 500) = 4 statements
+  expect(calls).toHaveLength(4);
+});
+
+test("commitCanonical: handles drafts with null label (uses NULL bind)", async () => {
+  const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.commitCanonical(
+    { dimId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" },
+    [{ raw: "raw1", key: "k1", label: null }],
+  );
+  const dimBinds = calls[0].binds ?? [];
+  expect(dimBinds[0]).toBe("k1");
+  expect(dimBinds[1]).toBeNull();
+});
