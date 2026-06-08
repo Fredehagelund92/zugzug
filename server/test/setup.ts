@@ -2,6 +2,19 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { resolve } from "node:path";
+import { registerFactories } from "../src/warehouse/credentials.ts";
+import { DuckDbAdapter } from "../src/warehouse/duckdb/index.ts";
+
+// Register adapter factories once for all tests. Mirror of production
+// startup in server.ts. Tests run with ATTACH_WAREHOUSE=false so the DuckDB
+// adapter operates on an in-memory connection — every tableExists() call
+// returns false because no warehouse tables exist in `:memory:`.
+registerFactories({
+  duckdb: async (creds) => new DuckDbAdapter(creds),
+  snowflake: async () => {
+    throw new Error("Snowflake adapter ships in Phase 2");
+  },
+});
 
 export const TEST_DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 

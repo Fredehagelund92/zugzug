@@ -3,10 +3,10 @@
  *
  * Nothing in here imports from any other repo-*.ts module. */
 
-import { run } from "./db.ts";
 import { pgAll, pgGet } from "./pg.ts";
 import { env, pg } from "./env.ts";
 import type { ConditionalRule } from "./conditional-format-types.ts";
+import type { Ref } from "./warehouse/adapter.ts";
 
 /* ---- types (mirror app/src/data.ts so the UI consumes them unchanged) ---- */
 
@@ -273,10 +273,6 @@ export const slug = (s: string) =>
 
 export const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
-/** 'schema.table' (or 'table') → fully-qualified warehouse identifier (MotherDuck). */
-export const whTable = (sourceTable: string) =>
-  `${qid(env.warehouseDb)}.` + sourceTable.split(".").map(qid).join(".");
-
 /** canonical table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
 export const cq = (display: string) => display.split(".").map(qid).join(".");
 
@@ -308,35 +304,34 @@ export async function sourcesOf(dimId: string): Promise<SourceDef[]> {
   );
 }
 
+/** Parse a stored 'schema.table' (or 'table') string into the adapter's Ref. */
+export function parseSourceTable(stored: string): Ref {
+  const parts = stored.split(".");
+  if (parts.length === 3) return { catalog: parts[0], schema: parts[1], table: parts[2] };
+  if (parts.length === 2) return { schema: parts[0], table: parts[1] };
+  return { schema: "main", table: stored };
+}
+
 /** Keep only sources whose warehouse table actually resolves — a dimension
  *  registered against tables absent in this WAREHOUSE_DB (e.g. raw_dev vs
  *  raw_prod) still scans the rest instead of throwing. */
 export async function liveSources(dimId: string): Promise<SourceDef[]> {
+  const { getAdapter } = await import("./warehouse/registry.ts");
+  const adapter = await getAdapter();
   const out: SourceDef[] = [];
   for (const s of await sourcesOf(dimId)) {
+    const ref = parseSourceTable(s.table);
     try {
-      await run(`SELECT 1 FROM ${whTable(s.table)} LIMIT 0`);
-      out.push(s);
+      if (await adapter.tableExists(ref)) {
+        out.push(s);
+      } else {
+        console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
+      }
     } catch {
       console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
     }
   }
   return out;
-}
-
-const esc = (s: string) => s.replace(/'/g, "''");
-
-/** One UNION-ALL branch per source: distinct raw value + provenance + row count. */
-export function occUnion(sources: SourceDef[]): string {
-  return sources
-    .map((s) => {
-      const col = qid(s.column);
-      return `SELECT CAST(${col} AS VARCHAR) AS raw, '${esc(s.table)}' AS tbl, '${esc(s.column)}' AS col, count(*) AS rows
-            FROM ${whTable(s.table)}
-            WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
-            GROUP BY 1`;
-    })
-    .join("\nUNION ALL\n");
 }
 
 export async function dimMeta(dimId: string): Promise<DimMeta | null> {
@@ -348,7 +343,6 @@ export async function dimMeta(dimId: string): Promise<DimMeta | null> {
 }
 
 // re-export lower-level modules so domain files can import just from repo-shared
-export { all, get, run } from "./db.ts";
 export { pgAll, pgGet, pgRun, pgTx } from "./pg.ts";
 export { env, pg } from "./env.ts";
 export { log } from "./log.ts";

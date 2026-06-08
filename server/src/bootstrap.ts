@@ -3,12 +3,20 @@
    • seeds system data (default preferences + u_system user)
    • `--seed` also registers the demo Country/Channel dimensions */
 
-import { connect } from "./db.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
 import { seedDemo } from "./seed.ts";
 import { pgRun, pgGet } from "./pg.ts";
+import { registerFactories } from "./warehouse/credentials.ts";
+import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
+import { getAdapter } from "./warehouse/registry.ts";
 
 const seed = process.argv.includes("--seed");
+
+registerFactories({
+  duckdb: async (creds) => new DuckDbAdapter(creds),
+  snowflake: async (creds) => new SnowflakeAdapter(creds),
+});
 
 console.log("\nZug Zug — bootstrap\n");
 
@@ -50,7 +58,7 @@ if (n <= 1) {
 }
 
 if (seed) {
-  await connect();
+  await getAdapter(); // warm the connection
   await seedDemo();
   console.log("· demo dimensions seeded (Country, Channel)");
 }
