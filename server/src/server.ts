@@ -433,6 +433,28 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       // POST /api/dimensions/:id/commit
       if (seg[3] === "commit" && seg.length === 4 && method === "POST")
         return json(await repo.commit(id, me));
+      // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
+      if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
+        const dimId = seg[2]!;
+        const dim = await repo.getDimension(dimId);
+        if (!dim) return json({ error: "not found" }, 404);
+        const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
+        const buf = await exportCanonicalToParquet({
+          dimId: dim.id,
+          dimTable: dim.dimTable,
+          mapTable: dim.mapTable,
+          keyCol: dim.keyCol,
+        });
+        return new Response(buf, {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/octet-stream",
+            "content-disposition": `attachment; filename="${dimId}-map.parquet"`,
+            "cache-control": "no-store",
+          },
+        });
+      }
     }
 
     // GET /api/team/members ; POST /api/team/members ; DELETE /api/team/members/:email

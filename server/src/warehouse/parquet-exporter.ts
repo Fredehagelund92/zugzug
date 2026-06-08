@@ -17,9 +17,7 @@ async function getInstance(): Promise<DuckDBInstance> {
 
 /** Acquire a DuckDB connection scoped to a single export operation.
  *  Connections are cheap; the underlying instance is shared. */
-export async function withExporterConn<T>(
-  fn: (conn: DuckDBConnection) => Promise<T>,
-): Promise<T> {
+export async function withExporterConn<T>(fn: (conn: DuckDBConnection) => Promise<T>): Promise<T> {
   const inst = await getInstance();
   const conn = await inst.connect();
   return fn(conn);
@@ -52,9 +50,7 @@ export async function exportCanonicalToParquet(dim: DimensionSpec): Promise<Buff
 
   return withExporterConn(async (conn) => {
     try {
-      await conn.run(
-        `CREATE OR REPLACE TABLE ${tableName} (raw VARCHAR, "${dim.keyCol}" VARCHAR)`,
-      );
+      await conn.run(`CREATE OR REPLACE TABLE ${tableName} (raw VARCHAR, "${dim.keyCol}" VARCHAR)`);
       const appender = await conn.createAppender(tableName);
       for (const r of rows) {
         appender.appendVarchar(r.raw);
