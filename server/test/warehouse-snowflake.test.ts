@@ -110,3 +110,93 @@ test("ping returns false when connection throws", async () => {
   const a = new SnowflakeAdapter(CREDS, () => conn);
   await expect(a.ping()).resolves.toBe(false);
 });
+
+test("tableExists: returns true when SELECT 1 ... LIMIT 0 succeeds", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const ok = await a.tableExists({ schema: "RAW", table: "PARTNERS" });
+  expect(ok).toBe(true);
+  expect(calls[0].sqlText).toContain('SELECT 1 FROM "ANALYTICS"."RAW"."PARTNERS" LIMIT 0');
+});
+
+test("tableExists: returns false when execute throws", async () => {
+  const conn: SnowflakeConnection = {
+    async execute() {
+      throw new Error("Table 'ANALYTICS.RAW.NOPE' does not exist");
+    },
+    async executeAffected() {
+      return 0;
+    },
+    async close() {},
+  };
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await expect(a.tableExists({ schema: "RAW", table: "NOPE" })).resolves.toBe(false);
+});
+
+test("listTables: queries INFORMATION_SCHEMA.TABLES + COLUMNS, merges by (schema, table)", async () => {
+  const { conn, calls } = mockConn((call) => {
+    if (call.sqlText.includes("INFORMATION_SCHEMA.TABLES")) {
+      return [
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "PARTNERS" },
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "COUNTRIES" },
+      ];
+    }
+    if (call.sqlText.includes("INFORMATION_SCHEMA.COLUMNS")) {
+      return [
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "PARTNERS", COLUMN_NAME: "ID" },
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "PARTNERS", COLUMN_NAME: "NAME" },
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "PARTNERS", COLUMN_NAME: "REGION" },
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "COUNTRIES", COLUMN_NAME: "CODE" },
+        { TABLE_SCHEMA: "RAW", TABLE_NAME: "COUNTRIES", COLUMN_NAME: "LABEL" },
+      ];
+    }
+    return [];
+  });
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const tables = await a.listTables({});
+  expect(tables).toHaveLength(2);
+  const partners = tables.find((t) => t.table === "PARTNERS");
+  expect(partners?.schema).toBe("RAW");
+  expect(partners?.columns).toEqual(["ID", "NAME", "REGION"]);
+  // Confirms two-query strategy (TABLES + COLUMNS), not a single join (which is fine but slower at scale)
+  expect(calls.length).toBe(2);
+});
+
+test("listTables: schema filter narrows the WHERE clause", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.listTables({ schema: "MARKETING" });
+  // Both queries (TABLES and COLUMNS) should bind the schema filter
+  for (const c of calls) {
+    expect(c.binds).toContain("MARKETING");
+  }
+});
+
+test("listTables: search filter applies to schema, table, or column name", async () => {
+  const { conn, calls } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await a.listTables({ search: "partner" });
+  // search becomes %partner% bound to the ILIKE pattern (case-insensitive)
+  const allBinds = calls.flatMap((c) => c.binds ?? []);
+  expect(allBinds).toContain("%partner%");
+});
+
+test("listColumns: returns name + type from INFORMATION_SCHEMA.COLUMNS", async () => {
+  const { conn, calls } = mockConn((call) => {
+    if (call.sqlText.includes("INFORMATION_SCHEMA.COLUMNS")) {
+      return [
+        { COLUMN_NAME: "ID", DATA_TYPE: "NUMBER" },
+        { COLUMN_NAME: "NAME", DATA_TYPE: "VARCHAR" },
+      ];
+    }
+    return [];
+  });
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const cols = await a.listColumns({ schema: "RAW", table: "PARTNERS" });
+  expect(cols).toEqual([
+    { name: "ID", type: "NUMBER" },
+    { name: "NAME", type: "VARCHAR" },
+  ]);
+  // Confirms the query binds schema and table separately
+  expect(calls[0].binds).toEqual(["RAW", "PARTNERS"]);
+});

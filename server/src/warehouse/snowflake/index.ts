@@ -87,14 +87,119 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       return false;
     }
   }
-  listTables(_opts?: { schema?: string; search?: string }): Promise<CatalogTable[]> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 5");
+  async tableExists(table: Ref): Promise<boolean> {
+    try {
+      // LIVE-VALIDATION: Snowflake supports `SELECT ... LIMIT 0` for an existence
+      // probe; confirm this doesn't trigger a warehouse-resume on a suspended
+      // warehouse (it shouldn't — LIMIT 0 is a metadata-only query).
+      await this._getConnection().execute({
+        sqlText: `SELECT 1 FROM ${this.qualifyRef(table)} LIMIT 0`,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
-  listColumns(_table: Ref): Promise<ColumnMeta[]> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 5");
+
+  async listTables(opts: { schema?: string; search?: string } = {}): Promise<CatalogTable[]> {
+    const db = this.quoteIdentifier(this.creds.database);
+    // LIVE-VALIDATION: INFORMATION_SCHEMA.TABLES view shape. Confirm TABLE_SCHEMA
+    // and TABLE_NAME column names. Also confirm TABLE_TYPE values — we want
+    // 'BASE TABLE' and 'VIEW' (Snowflake also has 'EXTERNAL TABLE', 'TEMPORARY').
+    const tableBinds: unknown[] = [];
+    let tableWhere = `TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA') AND TABLE_TYPE IN ('BASE TABLE','VIEW')`;
+    if (opts.schema) {
+      tableBinds.push(opts.schema);
+      tableWhere += ` AND TABLE_SCHEMA = ?`;
+    }
+    if (opts.search) {
+      tableBinds.push(`%${opts.search}%`);
+      tableWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ?)`;
+      // Bind the same pattern twice (Snowflake ILIKE doesn't deduplicate binds).
+      tableBinds.push(`%${opts.search}%`);
+    }
+    const tableRows = await this._getConnection().execute({
+      sqlText: `SELECT TABLE_SCHEMA, TABLE_NAME
+                FROM ${db}.INFORMATION_SCHEMA.TABLES
+                WHERE ${tableWhere}
+                ORDER BY TABLE_SCHEMA, TABLE_NAME
+                LIMIT 5000`,
+      binds: tableBinds,
+    });
+
+    // LIVE-VALIDATION: Snowflake INFORMATION_SCHEMA.COLUMNS is per-database. The
+    // join below uses TABLE_SCHEMA + TABLE_NAME, identical to TABLES.
+    const colBinds: unknown[] = [];
+    let colWhere = `TABLE_SCHEMA NOT IN ('INFORMATION_SCHEMA')`;
+    if (opts.schema) {
+      colBinds.push(opts.schema);
+      colWhere += ` AND TABLE_SCHEMA = ?`;
+    }
+    // Apply the same search filter to columns so a search by column name surfaces
+    // the parent table (matches Phase 1 DuckDB behavior).
+    if (opts.search) {
+      colBinds.push(`%${opts.search}%`);
+      colWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ? OR COLUMN_NAME ILIKE ?)`;
+      colBinds.push(`%${opts.search}%`);
+      colBinds.push(`%${opts.search}%`);
+    }
+    const colRows = await this._getConnection().execute({
+      sqlText: `SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
+                FROM ${db}.INFORMATION_SCHEMA.COLUMNS
+                WHERE ${colWhere}
+                ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION
+                LIMIT 100000`,
+      binds: colBinds,
+    });
+
+    // Build the (schema, table) → [column...] map.
+    const colsByTable = new Map<string, string[]>();
+    for (const r of colRows as Array<{ TABLE_SCHEMA: string; TABLE_NAME: string; COLUMN_NAME: string }>) {
+      const key = `${r.TABLE_SCHEMA}.${r.TABLE_NAME}`;
+      const arr = colsByTable.get(key) ?? [];
+      arr.push(r.COLUMN_NAME);
+      colsByTable.set(key, arr);
+    }
+
+    // Search-by-column surfaces tables that aren't in `tableRows` (columns were
+    // matched but the parent table didn't match TABLE_SCHEMA/TABLE_NAME). Union
+    // them in so the result mirrors DuckDB's behavior.
+    const seen = new Set<string>();
+    const result: CatalogTable[] = [];
+    for (const t of tableRows as Array<{ TABLE_SCHEMA: string; TABLE_NAME: string }>) {
+      const key = `${t.TABLE_SCHEMA}.${t.TABLE_NAME}`;
+      seen.add(key);
+      result.push({
+        schema: t.TABLE_SCHEMA,
+        table: t.TABLE_NAME,
+        columns: colsByTable.get(key) ?? [],
+      });
+    }
+    if (opts.search) {
+      for (const [key, cols] of colsByTable) {
+        if (seen.has(key)) continue;
+        const [schema, table] = key.split(".");
+        result.push({ schema, table, columns: cols });
+      }
+    }
+    return result;
   }
-  tableExists(_table: Ref): Promise<boolean> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 5");
+
+  async listColumns(table: Ref): Promise<ColumnMeta[]> {
+    const db = this.quoteIdentifier(table.catalog ?? this.creds.database);
+    // LIVE-VALIDATION: Snowflake exposes DATA_TYPE on INFORMATION_SCHEMA.COLUMNS;
+    // confirm casing (NUMBER vs INT, VARCHAR vs TEXT) doesn't surprise consumers.
+    const rows = await this._getConnection().execute({
+      sqlText: `SELECT COLUMN_NAME, DATA_TYPE
+                FROM ${db}.INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+                ORDER BY ORDINAL_POSITION`,
+      binds: [table.schema, table.table],
+    });
+    return (rows as Array<{ COLUMN_NAME: string; DATA_TYPE: string }>).map((r) => ({
+      name: r.COLUMN_NAME,
+      type: r.DATA_TYPE,
+    }));
   }
   distinctValues(_table: Ref, _column: string, _limit: number): Promise<string[]> {
     throw new Error("SnowflakeAdapter — Phase 2 Task 6");
