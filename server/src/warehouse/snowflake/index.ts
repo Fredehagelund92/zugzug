@@ -73,8 +73,6 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
 
   // ---- connection lifecycle (internal) ----
 
-  // Used by Tasks 4–9 once query methods are implemented.
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected _getConnection(): SnowflakeConnection {
     if (!this.conn) this.conn = this.connectionFactory(this.creds);
     return this.conn;
