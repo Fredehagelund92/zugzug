@@ -21,6 +21,7 @@ import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 
 const corsHeaders = {
@@ -41,9 +42,7 @@ const err = (e: unknown, status = 500) =>
 
 registerFactories({
   duckdb: async (creds) => new DuckDbAdapter(creds),
-  snowflake: async () => {
-    throw new Error("Snowflake adapter ships in Phase 2");
-  },
+  snowflake: async (creds) => new SnowflakeAdapter(creds),
 });
 
 const adapter = await getAdapter();
