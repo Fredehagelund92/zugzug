@@ -4,6 +4,7 @@
  * the app-state dimension/dimension_field tables). Warehouse (DuckDB) is
  * touched only in getDimension (to resolve live names for external_id dims). */
 
+import { getAdapter } from "./warehouse/registry.ts";
 import {
   type DimensionMeta,
   type MappingDimension,
@@ -15,15 +16,13 @@ import {
   type SourceOccurrence,
   type NumberFormat,
   PALETTE_NAMES,
+  parseSourceTable,
   slug,
   qid,
   cq,
-  whTable,
   liveSources,
-  occUnion,
   dimMeta,
   parseFieldConfig,
-  all,
   pgAll,
   pgGet,
   pgRun,
@@ -31,6 +30,7 @@ import {
   env,
   pg,
 } from "./repo-shared.ts";
+import type { ValueProvenance } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
@@ -151,12 +151,10 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
 
   // For external_id dims with warehouse attached: resolve names from MotherDuck
   if (liveName) {
-    const nameRows = await all<{ id: string; nm: string }>(
-      `SELECT CAST(${qid(meta.nameIdCol!)} AS VARCHAR) AS id,
-              CAST(${qid(meta.nameCol!)} AS VARCHAR) AS nm
-       FROM ${whTable(meta.nameTable!)}`,
-    ).catch(() => [] as { id: string; nm: string }[]);
-    const nameMap = new Map(nameRows.map((r) => [r.id, r.nm]));
+    const adapter = await getAdapter();
+    const nameMap = await adapter
+      .nameResolution(parseSourceTable(meta.nameTable!), meta.nameIdCol!, meta.nameCol!)
+      .catch(() => new Map<string, string>());
     for (const r of canonRows) {
       const key = String(r.key);
       r.label = nameMap.get(key) ?? null;
@@ -184,7 +182,14 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
   ).catch(() => null);
   const values = await scanValues(id, meta);
-  const { nameTable, nameIdCol, nameCol, description, color, ...metaOut } = meta;
+  const {
+    nameTable: _nameTable,
+    nameIdCol: _nameIdCol,
+    nameCol: _nameCol,
+    description,
+    color,
+    ...metaOut
+  } = meta;
   const safeColor =
     typeof color === "string" && (PALETTE_NAMES as readonly string[]).includes(color)
       ? (color as PaletteName)
@@ -217,23 +222,26 @@ async function scanValues(
   if (!sources.length) return [];
 
   // 1. Warehouse: distinct raw values with provenance + row counts
-  const occRows = await all<{ raw: string; tbl: string; col: string; rows: bigint }>(
-    occUnion(sources),
-  ).catch(() => [] as { raw: string; tbl: string; col: string; rows: bigint }[]);
+  const adapter = await getAdapter();
+  const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
+  const occRows = await adapter
+    .distinctValuesWithProvenance(refs)
+    .catch(() => [] as ValueProvenance[]);
   if (!occRows.length) return [];
 
-  // Collapse to one row per raw value (UNION ALL → aggregate in JS)
+  // sourceIndex maps back to the original SourceDef so the UI shows schema.table.
   const occMap = new Map<string, { tbl: string; col: string; rows: number }[]>();
   for (const r of occRows) {
-    const key = r.raw.toLowerCase();
+    const src = sources[r.sourceIndex];
+    if (!src) continue;
+    const key = r.value.toLowerCase();
     const entry = occMap.get(key) ?? [];
-    entry.push({ tbl: r.tbl, col: r.col, rows: Number(r.rows) });
+    entry.push({ tbl: src.table, col: src.column, rows: r.count });
     occMap.set(key, entry);
   }
-  // Keep insertion order (first raw string wins as the display value)
-  const raws = new Map<string, string>(); // lowercase → original case
+  const raws = new Map<string, string>();
   for (const r of occRows) {
-    if (!raws.has(r.raw.toLowerCase())) raws.set(r.raw.toLowerCase(), r.raw);
+    if (!raws.has(r.value.toLowerCase())) raws.set(r.value.toLowerCase(), r.value);
   }
 
   // 2. Postgres: all mapped raws for this dimension
@@ -250,14 +258,12 @@ async function scanValues(
     !!meta.nameTable &&
     !!meta.nameIdCol &&
     !!meta.nameCol;
-  const nameMap = new Map<string, string>(); // canonical key → display name
+  const nameMap = new Map<string, string>();
   if (liveName) {
-    const nameRows = await all<{ id: string; nm: string }>(
-      `SELECT CAST(${qid(meta.nameIdCol!)} AS VARCHAR) AS id,
-              CAST(${qid(meta.nameCol!)} AS VARCHAR) AS nm
-       FROM ${whTable(meta.nameTable!)}`,
-    ).catch(() => [] as { id: string; nm: string }[]);
-    for (const r of nameRows) nameMap.set(r.id, r.nm);
+    const resolved = await adapter
+      .nameResolution(parseSourceTable(meta.nameTable!), meta.nameIdCol!, meta.nameCol!)
+      .catch(() => new Map<string, string>());
+    for (const [k, v] of resolved) nameMap.set(k, v);
   }
 
   // 4. Postgres: all canonical labels (slug dims)
