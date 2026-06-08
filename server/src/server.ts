@@ -181,6 +181,18 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       });
     }
 
+    // GET /api/workspace/info — adapter capability metadata for the frontend badge
+    if (seg[1] === "workspace" && seg[2] === "info" && seg.length === 3 && method === "GET") {
+      const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+      const adapterInstance = await getAdapterFn();
+      return json({
+        adapter: adapterInstance.capabilities.id,
+        writable: adapterInstance.capabilities.writable,
+        canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
+        warehouseDb: env.warehouseDb || null,
+      });
+    }
+
     // /api/sources — registered source columns (cached); /facets; /scan
     if (seg[1] === "sources") {
       if (seg.length === 2 && method === "GET")
