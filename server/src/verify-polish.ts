@@ -4,10 +4,14 @@
    unless POLISH_AUTOSTAGE=1 is set (in which case the caller is expected to
    have seeded a fixture). Run: `bun run verify-polish`. */
 
-import { connect, all } from "./db.ts";
+import { pgAll } from "./pg.ts";
 import { pg } from "./env.ts";
 import * as repo from "./repo.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
+import { registerFactories } from "./warehouse/credentials.ts";
+import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
+import { getAdapter } from "./warehouse/registry.ts";
 
 let pass = 0,
   fail = 0,
@@ -23,7 +27,11 @@ const note = (name: string, detail: string) => {
 };
 
 console.log("\nZug Zug — polish verification\n");
-await connect();
+registerFactories({
+  duckdb: async (creds) => new DuckDbAdapter(creds),
+  snowflake: async (creds) => new SnowflakeAdapter(creds),
+});
+await getAdapter(); // warm the adapter
 await runMigrations();
 
 // 1. preferences round-trip
@@ -59,7 +67,7 @@ await repo.setPreferences({
 });
 
 // 2. u_system user exists (idempotent insert on schema bootstrap)
-const sys = await all<{ id: string }>(`SELECT id FROM ${pg("users")} WHERE id = 'u_system'`);
+const sys = await pgAll<{ id: string }>(`SELECT id FROM ${pg("users")} WHERE id = 'u_system'`);
 check(
   "u_system user provisioned by migration",
   sys.length === 1,
