@@ -268,10 +268,28 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
     for (const r of rows as Array<{ ID: string; NM: string }>) out.set(r.ID, r.NM);
     return out;
   }
-  distinctValuesWithProvenance(
-    _sources: ReadonlyArray<{ table: Ref; column: string }>,
+  async distinctValuesWithProvenance(
+    sources: ReadonlyArray<{ table: Ref; column: string }>,
   ): Promise<ValueProvenance[]> {
-    throw new Error("SnowflakeAdapter — Phase 2 Task 7");
+    if (sources.length === 0) return [];
+    // LIVE-VALIDATION: confirm Snowflake supports UNION ALL across as many
+    // branches as the typical workspace has sources (~5-20). Snowflake handles
+    // hundreds of branches fine in practice; document if it ever becomes a perf concern.
+    const branches = sources.map((s, i) => {
+      const col = this.quoteIdentifier(s.column);
+      return `SELECT ${this.castToString(col)} AS V, ${i} AS SRC_IDX, COUNT(*) AS N
+            FROM ${this.qualifyRef(s.table)}
+            WHERE ${col} IS NOT NULL AND LENGTH(TRIM(${this.castToString(col)})) > 0
+            GROUP BY 1`;
+    });
+    const rows = await this._getConnection().execute({
+      sqlText: branches.join("\nUNION ALL\n"),
+    });
+    return (rows as Array<{ V: string; SRC_IDX: number; N: number }>).map((r) => ({
+      value: r.V,
+      sourceIndex: Number(r.SRC_IDX),
+      count: Number(r.N),
+    }));
   }
   ensureCanonicalTables(_dim: DimensionSpec): Promise<void> {
     throw new Error("SnowflakeAdapter — Phase 2 Task 8");

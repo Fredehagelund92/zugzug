@@ -275,3 +275,37 @@ test("nameResolution: query includes WHERE idCol IS NOT NULL", async () => {
   await a.nameResolution({ schema: "RAW", table: "COUNTRIES" }, "CODE", "LABEL");
   expect(calls[0].sqlText).toContain('"CODE" IS NOT NULL');
 });
+
+test("distinctValuesWithProvenance: empty sources returns []", async () => {
+  const { conn } = mockConn(() => []);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  await expect(a.distinctValuesWithProvenance([])).resolves.toEqual([]);
+});
+
+test("distinctValuesWithProvenance: UNION ALL across sources, tags sourceIndex literal", async () => {
+  const { conn, calls } = mockConn(() => [
+    { V: "EU", SRC_IDX: 0, N: 2 },
+    { V: "US", SRC_IDX: 0, N: 1 },
+    { V: "us", SRC_IDX: 0, N: 1 },
+    { V: "US", SRC_IDX: 1, N: 1 },
+    { V: "EU", SRC_IDX: 1, N: 1 },
+  ]);
+  const a = new SnowflakeAdapter(CREDS, () => conn);
+  const rows = await a.distinctValuesWithProvenance([
+    { table: { schema: "RAW", table: "PARTNERS" }, column: "REGION" },
+    { table: { schema: "RAW", table: "COUNTRIES" }, column: "CODE" },
+  ]);
+  expect(rows).toHaveLength(5);
+  expect(rows.filter((r) => r.sourceIndex === 0)).toHaveLength(3);
+  expect(rows.filter((r) => r.sourceIndex === 1)).toHaveLength(2);
+  expect(rows.find((r) => r.value === "EU" && r.sourceIndex === 0)?.count).toBe(2);
+
+  // SQL should have UNION ALL between the two source branches with the literal
+  // src_idx values 0 and 1 (no parameter binding for the index).
+  const sql = calls[0].sqlText;
+  expect(sql).toContain("UNION ALL");
+  expect(sql).toContain("0 AS SRC_IDX");
+  expect(sql).toContain("1 AS SRC_IDX");
+  expect(sql).toContain('"REGION"');
+  expect(sql).toContain('"CODE"');
+});
