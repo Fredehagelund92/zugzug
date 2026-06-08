@@ -8,7 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
-import { useDimensions, useAudit, useDrafts } from "../store";
+import { useDimensions, useAudit, useDrafts, useWorkspaceInfo } from "../store";
 import {
   type FilterKey,
   type SortKey,
@@ -17,6 +17,7 @@ import {
   coveragePct,
   coverageColor,
   lastAuditForDim,
+  warehouseSyncStatusByDim,
 } from "./dashboard-helpers";
 import { PALETTE, defaultTintFor, type PaletteName } from "../lib/palette";
 
@@ -39,6 +40,7 @@ export function Dashboard() {
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();
+  const wsInfo = useWorkspaceInfo();
   const navigate = useNavigate();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const staged = Object.values(draftsMap).filter(
@@ -92,6 +94,8 @@ export function Dashboard() {
     [dims, auditLog],
   );
 
+  const syncStatus = useMemo(() => warehouseSyncStatusByDim(auditLog, dims), [auditLog, dims]);
+
   const dimTint = (dim: (typeof dims)[0]) => {
     const palette = dim.color ?? defaultTintFor(dim.id);
     return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(dim.id)]).fg; // e.g. "var(--tint-rose)"
@@ -131,6 +135,20 @@ export function Dashboard() {
       value: fmtK(rowsAtRisk),
       delta: rowsAtRisk > 0 ? "unmapped warehouse rows" : undefined,
       dir: rowsAtRisk > 0 ? "warn" : undefined,
+    },
+    {
+      label: "Canonical destination",
+      value: wsInfo
+        ? wsInfo.writable
+          ? `🟢 ${wsInfo.adapter[0].toUpperCase() + wsInfo.adapter.slice(1)} — writable`
+          : "📦 Local + export"
+        : "…",
+      delta: wsInfo
+        ? wsInfo.writable
+          ? `Commits MERGE into ${wsInfo.warehouseDb ?? "warehouse"}`
+          : "Postgres canonical; download Parquet on demand"
+        : undefined,
+      dir: "up" as const,
     },
   ];
 
@@ -338,8 +356,18 @@ export function Dashboard() {
                     <div className="flex items-center gap-2.5">
                       <div className="h-2 w-2 shrink-0 rounded-pill" style={{ background: tint }} />
                       <div className="min-w-0">
-                        <div className="font-display text-[13px] font-semibold text-ink">
-                          {dim.dimension}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-display text-[13px] font-semibold text-ink">
+                            {dim.dimension}
+                          </span>
+                          {wsInfo?.writable && syncStatus[dim.id] === "failed" && (
+                            <span
+                              title="Last warehouse sync failed — manual resync required"
+                              className="inline-flex items-center font-mono text-[9px] text-amber-600"
+                            >
+                              🔄 needs resync
+                            </span>
+                          )}
                         </div>
                         <div className="font-mono text-[9px] text-ink-3">{dim.mapTable}</div>
                         {isStaged && (
