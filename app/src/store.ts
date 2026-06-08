@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useSyncExternalStore, useState, useEffect } from "react";
 import type { MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
 import type { ConditionalRule } from "./components/datagrid/types";
 
@@ -67,6 +67,33 @@ export interface Preferences {
   publishThreshold: number;
   suggestThreshold: number;
   scanSchedule: "15m" | "hourly" | "daily" | null;
+}
+
+export interface WorkspaceInfo {
+  adapter: "duckdb" | "snowflake";
+  writable: boolean;
+  canonicalMode: "warehouse" | "postgres-export";
+  warehouseDb: string | null;
+}
+
+let _workspaceInfoCache: WorkspaceInfo | null = null;
+let _workspaceInfoPromise: Promise<WorkspaceInfo> | null = null;
+
+export function useWorkspaceInfo(): WorkspaceInfo | null {
+  const [info, setInfo] = useState<WorkspaceInfo | null>(_workspaceInfoCache);
+  useEffect(() => {
+    if (_workspaceInfoCache) return;
+    if (!_workspaceInfoPromise) {
+      _workspaceInfoPromise = fetch("/api/workspace/info")
+        .then((r) => r.json() as Promise<WorkspaceInfo>)
+        .then((data) => {
+          _workspaceInfoCache = data;
+          return data;
+        });
+    }
+    _workspaceInfoPromise.then((data) => setInfo(data));
+  }, []);
+  return info;
 }
 
 /* ---- in-memory cache of server state ---- */
