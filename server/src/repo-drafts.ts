@@ -12,8 +12,7 @@ import {
   qid,
   cq,
   liveSources,
-  occUnion,
-  all,
+  parseSourceTable,
   pgAll,
   pgGet,
   pgRun,
@@ -21,6 +20,8 @@ import {
   pg,
 } from "./repo-shared.ts";
 import { appendAuditAs } from "./repo-meta.ts";
+import { getAdapter } from "./warehouse/registry.ts";
+import type { ValueProvenance } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
 export async function listDrafts(dimId: string): Promise<Draft[]> {
@@ -162,11 +163,15 @@ async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<n
   const sources = await liveSources(dimId);
   if (!sources.length) return 0;
 
-  // Warehouse: distinct raw values with total row counts
-  const occRows = await all<{ raw: string; rows: bigint }>(occUnion(sources)).catch(
-    () => [] as { raw: string; rows: bigint }[],
-  );
-  if (!occRows.length) return 0;
+  // Warehouse: distinct raw values with per-source row counts.
+  // Multiple sources may emit the same raw — we sum counts when summing total rows below
+  // (matches the original UNION-ALL pattern's semantics: count each source-occurrence once).
+  const adapter = await getAdapter();
+  const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
+  const provenance = await adapter
+    .distinctValuesWithProvenance(refs)
+    .catch(() => [] as ValueProvenance[]);
+  if (!provenance.length) return 0;
 
   // Postgres: draft raws for this dimension with status=mapped
   const draftRows = await pgAll<{ raw: string }>(
@@ -181,11 +186,12 @@ async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<n
   );
   const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
 
-  // Sum rows for warehouse values that are in a draft but not yet mapped
+  // Sum rows for warehouse values that are in a draft but not yet mapped.
+  // Iterate per-occurrence (not per-distinct-raw) to preserve the original UNION-ALL sum.
   let total = 0;
-  for (const r of occRows) {
-    const lower = r.raw.toLowerCase();
-    if (draftSet.has(lower) && !mappedSet.has(lower)) total += Number(r.rows);
+  for (const p of provenance) {
+    const lower = p.value.toLowerCase();
+    if (draftSet.has(lower) && !mappedSet.has(lower)) total += p.count;
   }
   return total;
 }

@@ -3,7 +3,6 @@
  * Manages the dimension_source / source_stat tables in Postgres and drives
  * the DuckDB queries that count distinct values in MotherDuck. */
 
-import type { DuckDBValue } from "@duckdb/node-api";
 import {
   type SourceInfo,
   type SchemaFacet,
@@ -11,18 +10,16 @@ import {
   slug,
   qid,
   cq,
-  whTable,
   liveSources,
-  occUnion,
-  all,
-  get,
   pgAll,
   pgGet,
   pgRun,
   env,
   pg,
   log,
+  parseSourceTable,
 } from "./repo-shared.ts";
+import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs, getPreferences } from "./repo-meta.ts";
 import { saveDraft, commit } from "./repo-drafts.ts";
 
@@ -123,44 +120,32 @@ export async function scanSources(): Promise<number> {
      FROM ${pg("dimension_source")} s JOIN ${pg("dimension")} d ON d.id = s.dim_id`,
   );
   const SCAN_TIMEOUT_MS = 30_000;
+  const adapter = await getAdapter();
   for (const r of regs) {
-    const col = qid(r.column);
+    const ref = parseSourceTable(r.table);
     let present: boolean,
       rows = 0,
       distinct = 0,
       unmapped = 0;
     const t0 = performance.now();
     try {
-      const { agg } = await Promise.race([
-        (async () => {
-          const agg = await get<{ rows: bigint; d: bigint }>(
-            `SELECT count(${col}) AS rows, count(DISTINCT ${col}) AS d FROM ${whTable(r.table)}
-             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
-          );
-          return { agg };
-        })(),
+      const stats = await Promise.race([
+        adapter.columnStats(ref, r.column),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error("scan timeout")), SCAN_TIMEOUT_MS),
         ),
       ]);
       present = true;
-      rows = Number(agg?.rows ?? 0);
-      distinct = Number(agg?.d ?? 0);
+      rows = stats.rows;
+      distinct = stats.distinct;
       if (distinct > 0) {
-        // Cross-store unmapped count: was a single LEFT JOIN that hit warehouse
-        // (DuckDB) + canonical map_* (Postgres). DuckDB can no longer reach
-        // Postgres, so fetch each side independently and subtract in JS.
         try {
-          const whRaws = await all<{ raw: string }>(
-            `SELECT DISTINCT CAST(${col} AS VARCHAR) AS raw FROM ${whTable(r.table)}
-             WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0`,
-          );
+          const whRaws = await adapter.distinctValues(ref, r.column, 100000);
           const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(r.mapTable)}`);
           const mappedSet = new Set(mappedRows.map((m) => m.raw.toLowerCase()));
-          unmapped = whRaws.filter((w) => !mappedSet.has(w.raw.toLowerCase())).length;
+          unmapped = whRaws.filter((w) => !mappedSet.has(w.toLowerCase())).length;
         } catch {
-          // Either side missing — leave unmapped at 0 instead of poisoning the
-          // present / rows / distinct stats already captured above.
+          /* either side missing — leave at 0 */
         }
       }
       const ms = Math.round(performance.now() - t0);
@@ -236,11 +221,13 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values
-  const occRows = await all<{ raw: string }>(occUnion(sources)).catch(
-    () => [] as { raw: string }[],
-  );
+  const adapter = await getAdapter();
+  const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
+  const occRows = await adapter
+    .distinctValuesWithProvenance(refs)
+    .catch(() => [] as { value: string }[]);
   if (!occRows.length) return 0;
-  const warehouseRaws = [...new Set(occRows.map((r) => r.raw))];
+  const warehouseRaws = [...new Set(occRows.map((r) => r.value))];
 
   // Postgres: canonical labels
   const canonRows = await pgAll<{ key: string; label: string }>(
@@ -306,28 +293,22 @@ export async function topUnmapped(
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
-  const col = qid(column);
+  const adapter = await getAdapter();
+  const ref = parseSourceTable(table);
   const n = Math.max(1, Math.min(50, Math.round(limit)));
 
-  // Warehouse: raw values + counts (DuckDB)
-  const occRows = await all<{ raw: string; cnt: bigint }>(`
-    SELECT CAST(${col} AS VARCHAR) AS raw, count(*) AS cnt
-    FROM ${whTable(table)}
-    WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0
-    GROUP BY 1`).catch(() => [] as { raw: string; cnt: bigint }[]);
-
-  // Postgres: already-mapped raws
+  const occ = await adapter
+    .topValuesByFrequency(ref, column, 10000)
+    .catch(() => [] as { value: string; count: number }[]);
   const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(meta.mapTable)}`).catch(
     () => [] as { raw: string }[],
   );
   const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
 
-  // JS: filter unmapped, sort by count desc, take top N
-  return occRows
-    .filter((r) => !mappedSet.has(r.raw.toLowerCase()))
-    .sort((a, b) => (b.cnt > a.cnt ? 1 : b.cnt < a.cnt ? -1 : 0))
+  return occ
+    .filter((r) => !mappedSet.has(r.value.toLowerCase()))
     .slice(0, n)
-    .map((r) => ({ raw: r.raw, rows: Number(r.cnt) }));
+    .map((r) => ({ raw: r.value, rows: r.count }));
 }
 
 /** Returns true when the workspace scan is due based on preferences.scan_schedule
@@ -393,54 +374,31 @@ export async function searchCatalog(
   opts: { q?: string; schema?: string; limit?: number; offset?: number } = {},
 ): Promise<{ rows: CatalogTable[]; total: number; schemas: { schema: string; tables: number }[] }> {
   if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
+  const adapter = await getAdapter();
   const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
   const offset = Math.max(0, opts.offset ?? 0);
-  const params: DuckDBValue[] = [env.warehouseDb];
-  const cat = `SELECT schema, name AS tbl, column_names AS cols FROM (SHOW ALL TABLES) WHERE database = $1 AND name NOT LIKE '\\_dlt%' ESCAPE '\\'`;
-  const filters: string[] = [];
-  if (opts.q) {
-    params.push(`%${opts.q}%`);
-    const p = `$${params.length}`;
-    filters.push(
-      `(schema ILIKE ${p} OR tbl ILIKE ${p} OR len(list_filter(cols, c -> c ILIKE ${p})) > 0)`,
-    );
-  }
-  const qWhere = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-  const schemaParams = [...params];
-  let schemaWhere = qWhere;
-  if (opts.schema) {
-    schemaParams.push(opts.schema);
-    schemaWhere = `${qWhere ? qWhere + " AND" : "WHERE"} schema = $${schemaParams.length}`;
-  }
 
-  const rows = await all<{ schema: string; tbl: string; cols: string }>(
-    `WITH cat AS (${cat}), q AS (SELECT * FROM cat ${qWhere}) SELECT schema, tbl, to_json(cols) AS cols FROM q ${opts.schema ? `WHERE schema = $${schemaParams.length}` : ""} ORDER BY schema, tbl LIMIT ${limit} OFFSET ${offset}`,
-    schemaWhere === qWhere ? params : schemaParams,
-  ).catch(() => []);
-  const totalRow = await get<{ n: bigint }>(
-    `WITH cat AS (${cat}), q AS (SELECT * FROM cat ${qWhere}) SELECT count(*) AS n FROM q ${opts.schema ? `WHERE schema = $${schemaParams.length}` : ""}`,
-    opts.schema ? schemaParams : params,
-  ).catch(() => null);
-  const schemas = await all<{ schema: string; tables: bigint }>(
-    `WITH cat AS (${cat}), q AS (SELECT * FROM cat ${qWhere}) SELECT schema, count(*) AS tables FROM q GROUP BY 1 ORDER BY tables DESC, schema LIMIT 100`,
-    params,
-  ).catch(() => []);
-  const parseCols = (c: string): string[] => {
-    try {
-      return (JSON.parse(c) as unknown[]).map(String);
-    } catch {
-      return [];
-    }
-  };
-  return {
-    rows: rows.map((r) => ({
-      schema: r.schema,
-      table: `${r.schema}.${r.tbl}`,
-      columns: parseCols(r.cols),
-    })),
-    total: Number(totalRow?.n ?? 0),
-    schemas: schemas.map((s) => ({ schema: s.schema, tables: Number(s.tables) })),
-  };
+  const tables = await adapter.listTables({
+    schema: opts.schema,
+    search: opts.q,
+  });
+  const schemas = Object.values(
+    tables.reduce<Record<string, { schema: string; tables: number }>>((acc, t) => {
+      acc[t.schema] ??= { schema: t.schema, tables: 0 };
+      acc[t.schema].tables += 1;
+      return acc;
+    }, {}),
+  )
+    .sort((a, b) => b.tables - a.tables || a.schema.localeCompare(b.schema))
+    .slice(0, 100);
+
+  const rows = tables.slice(offset, offset + limit).map((t) => ({
+    schema: t.schema,
+    table: `${t.schema}.${t.table}`,
+    columns: [...t.columns],
+  }));
+
+  return { rows, total: tables.length, schemas };
 }
 
 /* ---- canonical bootstrap from warehouse ---- */
@@ -493,17 +451,10 @@ export async function deriveCanonical(
   const external = meta.keyKind === "external_id";
   if (external && nameColumn) await addSource(dimId, table, nameColumn);
 
-  const col = qid(column);
-  let vals: string[];
-  try {
-    const rows = await all<{ v: string }>(
-      `SELECT DISTINCT CAST(${col} AS VARCHAR) AS v FROM ${whTable(table)}
-       WHERE ${col} IS NOT NULL AND length(trim(CAST(${col} AS VARCHAR))) > 0 ORDER BY 1 LIMIT 5000`,
-    );
-    vals = rows.map((r) => r.v);
-  } catch {
-    return { derived: 0 };
-  } // warehouse not attached / table missing
+  const adapter = await getAdapter();
+  const vals = await adapter
+    .distinctValues(parseSourceTable(table), column, 5000)
+    .catch(() => [] as string[]);
   if (!vals.length) return { derived: 0 };
 
   const key = qid(meta.keyCol);

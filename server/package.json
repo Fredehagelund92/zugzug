@@ -27,7 +27,8 @@
     "@duckdb/node-api": "^1.5.3-r.3",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.3",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
