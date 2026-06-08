@@ -2,7 +2,6 @@
    Bun.serve; one shared DuckDB connection underneath (serialised). The frontend
    (app/) talks to this; Vite proxies /api → :PORT in dev. */
 
-import { connect } from "./db.ts";
 import { env } from "./env.ts";
 import * as repo from "./repo.ts";
 import type { NumberFormat } from "./repo-shared.ts";
@@ -22,6 +21,7 @@ import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { getAdapter } from "./warehouse/registry.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": env.origin,
@@ -46,8 +46,13 @@ registerFactories({
   },
 });
 
-await connect();
-console.log("· connected (MotherDuck + Postgres attached)");
+const adapter = await getAdapter();
+const ok = await adapter.ping();
+if (!ok) {
+  console.error("✗ warehouse adapter ping failed");
+  process.exit(1);
+}
+console.log(`· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`);
 
 /* scheduler — every minute, if any wired source is due (per its 15m/hourly/
    daily cadence), run a full scanSources. scanSources handles all wired
