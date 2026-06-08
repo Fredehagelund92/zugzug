@@ -17,12 +17,14 @@ export function ConditionalFormatPopover<Row>({
   onChange,
   onClose,
   anchorRef,
+  anchorRect,
 }: {
   column: ColumnDef<Row>;
   rules: ConditionalRule[];
   onChange: (rules: ConditionalRule[]) => void;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  anchorRect?: DOMRect | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [local, setLocal] = useState<ConditionalRule[]>(rules);
@@ -30,12 +32,15 @@ export function ConditionalFormatPopover<Row>({
 
   useLayoutEffect(() => {
     const popover = ref.current;
-    const anchor = anchorRef.current;
-    if (!popover || !anchor) return;
+    if (!popover) return;
     const place = (): void => {
-      const a = anchor.getBoundingClientRect();
+      const a = anchorRect ?? anchorRef.current?.getBoundingClientRect() ?? null;
+      if (!a) return;
       const popH = popover.offsetHeight;
-      let left = a.right - MENU_WIDTH;
+      // Point-anchored (zero-size rect from a click): open at the cursor, expanding right + down.
+      // Element-anchored: align right edges and drop below the element.
+      const pointAnchored = a.width === 0 && a.height === 0;
+      let left = pointAnchored ? a.left : a.right - MENU_WIDTH;
       if (left < 8) left = 8;
       if (left + MENU_WIDTH > window.innerWidth - 8) left = window.innerWidth - MENU_WIDTH - 8;
       let top = a.bottom + GAP;
@@ -50,7 +55,7 @@ export function ConditionalFormatPopover<Row>({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [anchorRef, local.length]);
+  }, [anchorRef, anchorRect, local.length]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {

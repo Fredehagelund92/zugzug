@@ -4,19 +4,28 @@ import type { CellCtx, EditCtx } from "../types";
 const inputBase =
   "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 font-mono text-[12px] text-ink outline-none";
 
+// "example.com" without a scheme would otherwise resolve as a same-origin relative
+// path — normalise to https:// so the link goes outside. Existing schemes pass
+// through unchanged (http, https, mailto, tel, ftp, …); protocol-relative URLs
+// (//cdn.example.com) also pass through.
+function toHref(s: string): string {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s) || s.startsWith("//")) return s;
+  return `https://${s}`;
+}
+
 function Renderer<Row>({ value }: CellCtx<Row>) {
-  const href = typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-  if (!href) return <span className="font-mono text-[12px] text-ink-3">—</span>;
+  const raw = typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  if (!raw) return <span className="font-mono text-[12px] text-ink-3">—</span>;
   return (
     <a
-      href={href}
+      href={toHref(raw)}
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
       className="flex min-w-0 items-center gap-1 font-mono text-[12px] text-accent hover:underline"
     >
       <span className="shrink-0 text-[10px] text-ink-3">↗</span>
-      <span className="truncate">{href}</span>
+      <span className="truncate">{raw}</span>
     </a>
   );
 }

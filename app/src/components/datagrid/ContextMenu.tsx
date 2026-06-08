@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
 
 export interface MenuItem {
@@ -33,7 +34,7 @@ export function ContextMenu({
     setPos({ top, left });
   }, [x, y]);
 
-  return (
+  return createPortal(
     <div
       ref={ref}
       role="menu"
@@ -61,6 +62,7 @@ export function ContextMenu({
           </button>
         ),
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

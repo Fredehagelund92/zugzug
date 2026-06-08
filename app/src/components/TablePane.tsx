@@ -189,6 +189,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     variants: number;
   } | null>(null);
   const renameFlashTimer = useRef<number | null>(null);
+  const addInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [idOpt, setIdOpt] = useState<string | null>(null);
   const [nameOpt, setNameOpt] = useState<string | null>(null);
@@ -700,6 +701,25 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }
           onAddFieldClick={() => setAddOpen((v) => !v)}
           addFieldRef={addFieldRef as React.MutableRefObject<HTMLElement | null>}
+          onInsertRow={
+            external
+              ? undefined
+              : () => {
+                  addInputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  addInputRef.current?.focus();
+                }
+          }
+          onDeleteRow={
+            external
+              ? undefined
+              : (key) => {
+                  const target = list.find((c) => c.key === key);
+                  if (!target) return;
+                  if (window.confirm(`Delete "${target.label}"?`)) {
+                    void retire(key, target.label);
+                  }
+                }
+          }
         />
 
         {addOpen && (
@@ -734,6 +754,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         {!external && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <input
+              ref={addInputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
