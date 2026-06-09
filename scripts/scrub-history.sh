@@ -49,6 +49,22 @@ if [ ! -f "$REPLACEMENTS" ]; then
   exit 4
 fi
 
+# === Validate replacements.txt syntax ===
+# git-filter-repo treats every non-empty line in the file as a literal pattern.
+# Lines without `==>` are silently mapped to ***REMOVED***. This bit us once when
+# a stray `#` line redacted every `#` character in the codebase. Refuse to run
+# if any non-empty, non-blank line is missing the `==>` separator.
+BAD_LINES=$(grep -nE '.' "$REPLACEMENTS" | grep -vE '==>' || true)
+if [ -n "$BAD_LINES" ]; then
+  echo "ERROR: $REPLACEMENTS contains lines without '==>' separator:" >&2
+  echo "$BAD_LINES" >&2
+  echo "" >&2
+  echo "git-filter-repo redacts these to '***REMOVED***' silently, which corrupts" >&2
+  echo "every match in every blob. Remove the offending lines (move comments" >&2
+  echo "to scripts/README.md or a separate doc) before re-running." >&2
+  exit 5
+fi
+
 echo "==> Running git-filter-repo --replace-text + --replace-message $REPLACEMENTS"
 # --replace-text rewrites file content; --replace-message rewrites commit messages.
 # Both flags accept the same file format (<find>==><replace> per line).
