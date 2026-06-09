@@ -11,6 +11,7 @@
     "verify-datagrid": "bun run src/verify-datagrid.ts",
     "verify-tables": "bun run src/verify-tables.ts",
     "bootstrap": "bun run src/bootstrap.ts",
+    "reset-password": "bun run scripts/reset-password.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -26,6 +27,7 @@
     "@duckdb/node-api": "^1.5.3-r.3",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.3",
+    "openid-client": "^6.8.4",
     "postgres": "^3.4.9",
     "snowflake-sdk": "^2.4.3",
     "zod": "^4.4.3"

@@ -7,8 +7,6 @@ import * as repo from "./repo.ts";
 import type { NumberFormat } from "./repo-shared.ts";
 import {
   getSessionUser,
-  handleGoogleRedirect,
-  handleGoogleCallback,
   handleMe,
   handleLogout,
   handleAuthConfig,
@@ -112,17 +110,38 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
 
   if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
 
-  // Auth routes — no session required
+  // Auth routes — no session required for signup/login/logout/config/oidc/dev
   if (seg[1] === "auth") {
-    if (seg[2] === "google" && method === "GET") return handleGoogleRedirect(req);
-    if (seg[2] === "callback" && method === "GET") return handleGoogleCallback(req);
     if (seg[2] === "me" && method === "GET") return handleMe(req);
     if (seg[2] === "logout" && method === "POST") return handleLogout(req);
     if (seg[2] === "config" && method === "GET") return handleAuthConfig();
+
+    // Password mode (only meaningful when env.authMode === "password")
+    if (seg[2] === "signup" && method === "POST") {
+      const { handleSignup } = await import("./auth-password.ts");
+      return handleSignup(req);
+    }
+    if (seg[2] === "login" && method === "POST") {
+      const { handleLogin } = await import("./auth-password.ts");
+      return handleLogin(req);
+    }
+
+    // OIDC mode (only meaningful when env.authMode === "oidc")
+    if (seg[2] === "oidc" && seg[3] === "start" && method === "GET") {
+      const { handleOidcStart } = await import("./auth-oidc.ts");
+      return handleOidcStart(req);
+    }
+    if (seg[2] === "oidc" && seg[3] === "callback" && method === "GET") {
+      const { handleOidcCallback } = await import("./auth-oidc.ts");
+      return handleOidcCallback(req);
+    }
+
+    // Dev bypass — local testing only
     if (seg[2] === "dev" && method === "GET") {
       if (!env.devBypassAuth) return json({ error: "not found" }, 404);
       return handleDevLogin();
     }
+
     return json({ error: "not found" }, 404);
   }
 
@@ -130,6 +149,10 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   let sessionUser;
   try {
     sessionUser = await getSessionUser(req);
+    if (!sessionUser) {
+      const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+      sessionUser = await getApiTokenUser(req);
+    }
   } catch (e) {
     return err(e, 503);
   }
@@ -138,6 +161,28 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   setUid(me);
 
   try {
+    // POST /api/auth/change-password (authenticated)
+    if (seg[1] === "auth" && seg[2] === "change-password" && method === "POST") {
+      const { handleChangePassword } = await import("./auth-password.ts");
+      return handleChangePassword(req, me);
+    }
+
+    // API token management (authenticated; session-required not bearer-required)
+    if (seg[1] === "tokens") {
+      if (seg.length === 2 && method === "GET") {
+        const { handleListTokens } = await import("./auth-api-tokens.ts");
+        return handleListTokens(me);
+      }
+      if (seg.length === 2 && method === "POST") {
+        const { handleCreateToken } = await import("./auth-api-tokens.ts");
+        return handleCreateToken(req, me);
+      }
+      if (seg.length === 3 && method === "DELETE") {
+        const { handleRevokeToken } = await import("./auth-api-tokens.ts");
+        return handleRevokeToken(seg[2], me);
+      }
+    }
+
     // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
       if (method === "GET") return json(await repo.getPreferences());
@@ -191,7 +236,6 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
         warehouseDb: env.warehouseDb || null,
         defaultEngineerMode: env.defaultEngineerMode,
-        allowedDomain: env.allowedDomain || null,
       });
     }
 
