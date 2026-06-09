@@ -15,14 +15,21 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 REPLACEMENTS="$REPO_ROOT/scripts/replacements.txt"
 
-# === Safety check: refuse to rewrite the live source-of-truth repo ===
+# === Safety check: refuse to rewrite the live source-of-truth working tree ===
+#
+# A `--mirror` clone is bare (no working tree); that's the safe place to scrub.
+# A normal checkout of the source-of-truth is the dangerous place. The origin
+# URL alone can't tell them apart (both point at the same upstream), so we
+# combine it with `git rev-parse --is-bare-repository`.
 ORIGIN_URL=$(git config --get remote.origin.url || echo "")
-if [[ "$ORIGIN_URL" == *"Fredehagelund92/zugzug"* ]] && [[ "$ORIGIN_URL" != *"-mirror"* ]]; then
-  echo "REFUSING to scrub the live upstream repo." >&2
-  echo "remote.origin.url = $ORIGIN_URL" >&2
+IS_BARE=$(git rev-parse --is-bare-repository 2>/dev/null || echo "")
+if [ "$IS_BARE" != "true" ] && [[ "$ORIGIN_URL" == *"Fredehagelund92/zugzug"* ]]; then
+  echo "REFUSING to scrub a non-bare checkout of the upstream repo." >&2
+  echo "  remote.origin.url = $ORIGIN_URL" >&2
+  echo "  is_bare_repository = $IS_BARE" >&2
   echo "" >&2
   echo "To run a scrub safely:" >&2
-  echo "  1. Clone to a fresh working dir: git clone --mirror <upstream> zugzug-mirror" >&2
+  echo "  1. Clone as a bare mirror: git clone --mirror <upstream> zugzug-mirror" >&2
   echo "  2. cd zugzug-mirror" >&2
   echo "  3. Re-invoke this script" >&2
   exit 2
@@ -42,8 +49,10 @@ if [ ! -f "$REPLACEMENTS" ]; then
   exit 4
 fi
 
-echo "==> Running git-filter-repo --replace-text $REPLACEMENTS"
-git-filter-repo --replace-text "$REPLACEMENTS"
+echo "==> Running git-filter-repo --replace-text + --replace-message $REPLACEMENTS"
+# --replace-text rewrites file content; --replace-message rewrites commit messages.
+# Both flags accept the same file format (<find>==><replace> per line).
+git-filter-repo --replace-text "$REPLACEMENTS" --replace-message "$REPLACEMENTS"
 
 echo ""
 echo "==> Rewrite complete. Re-running audit..."

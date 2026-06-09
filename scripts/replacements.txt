@@ -8,5 +8,6 @@
 @bettercollective.com==>@example.com
 bettercollective.com==>example.com
 Better Collective==>Zugzug
+better collective==>zugzug
 trust-me-bro==>zugzug
 sentry.io/1234567==>sentry.io/REDACTED

@@ -10,8 +10,9 @@
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$REPO_ROOT"
+# Audit operates on the CURRENT git repo (the directory you invoke from).
+# Do NOT cd to the script's own location — that would force every audit to
+# scan the original repo even when run against a mirror clone by scrub-history.sh.
 
 PASS=0
 FAIL=0
