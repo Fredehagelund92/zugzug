@@ -14,6 +14,7 @@ import {
   currentUser,
   scanSources,
   useWorkspaceInfo,
+  useAuthConfig,
   useDimensions,
   useAudit,
 } from "../store";
@@ -273,8 +274,8 @@ function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
 }
 
 function TeamSection() {
-  const wsInfo = useWorkspaceInfo();
-  const allowedDomain = wsInfo?.allowedDomain ? "@" + wsInfo.allowedDomain : null;
+  const authConfig = useAuthConfig();
+  const allowedDomain = authConfig?.allowedDomain ? "@" + authConfig.allowedDomain : null;
   const [members, setMembers] = useState<Member[]>([]);
   const [chips, setChips] = useState<Chip[]>([]);
   const [buffer, setBuffer] = useState("");

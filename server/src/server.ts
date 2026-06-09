@@ -236,7 +236,6 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
         warehouseDb: env.warehouseDb || null,
         defaultEngineerMode: env.defaultEngineerMode,
-        allowedDomain: env.allowedDomain || null,
       });
     }
 
