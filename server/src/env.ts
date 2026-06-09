@@ -17,6 +17,12 @@ export const env = {
   motherduckToken: required("MOTHERDUCK_TOKEN"),
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse: process.env.ATTACH_WAREHOUSE?.trim() === "true",
+  /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
+   *  Off by default; flip to `true` only when MotherDuck token has write access. */
+  motherduckWritable: process.env.MOTHERDUCK_WRITABLE?.trim() === "true",
+  /** Default value of the engineer-mode toggle for users who haven't set a
+   *  preference yet. OSS default: true. BC override: DEFAULT_ENGINEER_MODE=false. */
+  defaultEngineerMode: process.env.DEFAULT_ENGINEER_MODE?.trim() !== "false",
   canonicalSchema: process.env.ZUGZUG_DB?.trim() || "zugzug",
   oltpCatalog: "oltp",
   appSchema: "zugzug_app",
