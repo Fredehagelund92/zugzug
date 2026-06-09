@@ -47,10 +47,16 @@ Queued behind Now. Start when Phase 1 closes.
 
 Planned but not committed. Re-estimate at the mid-cycle review.
 
-### Phase 4 — Strip BC-isms (weeks 9–10)
-- **Why here:** Cosmetic and policy refactor; only worth doing once the adapter abstraction has cleared its gate.
-- **Children:** Auth refactor (argon2 local password + `openid-client` OIDC plugin + API tokens); engineer-mode default flip; workspace UI gating behind `ZUGZUG_MULTI_TENANT`; seed-data scrub; copy sweep.
-- **Verification gate:** clean self-host walkthrough works on a fresh machine.
+### Phase 4 — Strip BC-isms + MotherDuck-writable (weeks 9–10)
+- **Why here:** Cosmetic and policy refactor; only worth doing once the adapter abstraction has cleared its gate. MotherDuck-writable folded in here (2026-06-09) because it shares the credentials surface and is itself a BC-ism removal — the hard-coded `ReadOnlyWarehouseAdapter` constraint on DuckDB was a relic of BC's read-only MotherDuck token.
+- **Children:**
+  - Auth refactor (argon2 local password + `openid-client` OIDC plugin + API tokens)
+  - Engineer-mode default flip
+  - Workspace UI gating behind `ZUGZUG_MULTI_TENANT`
+  - Seed-data scrub (BC-specific dimensions → generic examples)
+  - Copy sweep (remove "Better Collective" / BC jargon from UI)
+  - **MotherDuck-writable adapter**: drop hard-coded read-only; add `writable?: boolean` to `DuckDbCredentials`; implement `ensureCanonicalTables` + `commitCanonical` for DuckDB/MotherDuck (the Master records card already flips automatically when the capability changes).
+- **Verification gate:** clean self-host walkthrough works on a fresh machine; `📦 Kept in this workspace` flips to `Saved to MotherDuck` when a writable token is configured.
 - **Blocker:** Phase 3.
 
 ### Phase 5 — Legal + scrub (week 11)
