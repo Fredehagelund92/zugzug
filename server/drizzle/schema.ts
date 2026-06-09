@@ -93,15 +93,34 @@ export const auditLog = app.table("audit_log", {
 export const users = app.table(
   "users",
   {
-    id:         varchar("id").primaryKey(),
-    name:       varchar("name").notNull(),
-    initials:   varchar("initials").notNull(),
-    email:      varchar("email"),
-    google_sub: varchar("google_sub"),
+    id:            varchar("id").primaryKey(),
+    name:          varchar("name").notNull(),
+    initials:      varchar("initials").notNull(),
+    email:         varchar("email"),
+    google_sub:    varchar("google_sub"),
+    password_hash: varchar("password_hash"),
+    auth_provider: varchar("auth_provider").notNull().default("password"),
   },
   (t) => [
     uniqueIndex("users_email_unique").on(t.email).where(sql`email IS NOT NULL`),
     uniqueIndex("users_google_sub_unique").on(t.google_sub).where(sql`google_sub IS NOT NULL`),
+  ],
+);
+
+export const apiTokens = app.table(
+  "api_tokens",
+  {
+    id:           varchar("id").primaryKey(),
+    user_id:      varchar("user_id").notNull(),
+    name:         varchar("name").notNull(),
+    token_hash:   varchar("token_hash").notNull(),
+    created_at:   timestamp("created_at").notNull(),
+    last_used_at: timestamp("last_used_at"),
+    revoked_at:   timestamp("revoked_at"),
+  },
+  (t) => [
+    uniqueIndex("api_tokens_token_hash_unique").on(t.token_hash),
+    index("api_tokens_user_id_idx").on(t.user_id),
   ],
 );
 

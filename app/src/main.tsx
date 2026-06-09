@@ -11,6 +11,7 @@ import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
+import { Signup } from "./routes/Signup";
 import { Dashboard } from "./routes/Dashboard";
 import { Triage } from "./routes/Triage";
 import { Sources } from "./routes/Sources";
@@ -49,6 +50,7 @@ createRoot(root).render(
       <Routes>
         {/* Public — no session required */}
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/design" element={<Showcase />} />
 
         {/* Protected — BootGate checks /api/auth/me and redirects to /login on 401 */}
