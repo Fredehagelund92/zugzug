@@ -1,0 +1,63 @@
+name: Add an adapter for X
+description: |
+  Request or propose a new warehouse adapter. Adapter implementations should follow the structure of
+  server/src/warehouse/snowflake/ as a reference. The contract is the WarehouseAdapter interface in
+  server/src/warehouse/adapter.ts.
+title: "[Adapter]: "
+labels: ["adapter", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template to request or propose support for a new warehouse adapter. If you're willing to contribute the implementation, mention that below — it significantly increases the chances of this getting picked up.
+
+  - type: input
+    id: adapter-name
+    attributes:
+      label: Adapter name
+      description: The warehouse or engine this adapter would connect to.
+      placeholder: "BigQuery, Redshift, Postgres-as-warehouse, Databricks, ..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Read-only vs writable scope
+      description: Should the adapter only scan values, or should it also be able to commit dim_/map_ tables back to the warehouse?
+      options:
+        - Read-only only
+        - Read + write
+    validations:
+      required: true
+
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication mechanism
+      description: |
+        How does this warehouse authenticate? Include all mechanisms you need to support.
+        Examples: IAM role, password, key-pair / JWT, OAuth2 / SSO, service account JSON, access key + secret.
+    validations:
+      required: true
+
+  - type: textarea
+    id: volume
+    attributes:
+      label: Volume estimate
+      description: |
+        How many rows are typical in the tables you'd scan? How many distinct values per column?
+        This helps design the scan path (streaming, pagination, APPROX_COUNT_DISTINCT, etc.).
+    validations:
+      required: false
+
+  - type: dropdown
+    id: willing-to-contribute
+    attributes:
+      label: Are you willing to contribute the implementation?
+      options:
+        - "Yes"
+        - "No"
+        - "Maybe with guidance"
+    validations:
+      required: true

@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a new feature or a change to existing behavior.
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a feature request, a quick check: does the roadmap in the docs already cover this? Scope creep is real and the maintainers appreciate issues that are grounded in a specific problem.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem you're trying to solve
+      description: What are you trying to do that you can't do today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-current
+    attributes:
+      label: Why current functionality doesn't work for this
+      description: Have you tried a workaround? Why does it fall short?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd propose
+      description: A rough sketch is fine. UI mockup, API shape, config option — whatever helps explain the idea.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: roadmap-check
+    attributes:
+      label: Have you checked the roadmap?
+      description: docs/superpowers/plans/ and the open issues give a sense of what's already planned.
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true

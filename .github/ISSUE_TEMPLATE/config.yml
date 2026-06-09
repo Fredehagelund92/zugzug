@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Fredehagelund92/zugzug/security/advisories/new
+    about: Report security issues via GitHub Security Advisories (private disclosure)
+  - name: Question / discussion
+    url: https://github.com/Fredehagelund92/zugzug/discussions
+    about: For open-ended questions or design discussion
