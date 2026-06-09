@@ -146,6 +146,10 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   let sessionUser;
   try {
     sessionUser = await getSessionUser(req);
+    if (!sessionUser) {
+      const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+      sessionUser = await getApiTokenUser(req);
+    }
   } catch (e) {
     return err(e, 503);
   }
