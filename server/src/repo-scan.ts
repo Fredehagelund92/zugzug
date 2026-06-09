@@ -319,22 +319,36 @@ export async function topUnmapped(
 export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
   let sched: string | null;
   let lastScan: Date | null;
+  let unscannedCount: number;
   try {
-    const row = await pgGet<{ scan_schedule: string | null; last_scan: string | null }>(
+    const row = await pgGet<{
+      scan_schedule: string | null;
+      last_scan: string | null;
+      unscanned_count: number;
+    }>(
       `SELECT p.scan_schedule,
               (SELECT max(st.scanned_at)::text
-               FROM ${pg("source_stat")} st) AS last_scan
+               FROM ${pg("source_stat")} st) AS last_scan,
+              (SELECT count(*)::int FROM ${pg("dimension_source")} ds
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM ${pg("source_stat")} st2
+                 WHERE st2.dim_id = ds.dim_id
+                   AND st2.source_table = ds.source_table
+                   AND st2.source_column = ds.source_column
+               )) AS unscanned_count
        FROM ${pg("preferences")} p WHERE p.id = 1`,
     );
     if (!row) return false;
     sched = row.scan_schedule;
     lastScan = row.last_scan ? new Date(row.last_scan) : null;
+    unscannedCount = row.unscanned_count;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/relation.*zugzug_app.*does not exist/i.test(msg)) return false;
     throw e;
   }
   if (!sched) return false;
+  if (unscannedCount > 0) return true; // unscanned registered source → due immediately
   if (!lastScan) return true; // never scanned → run immediately
   const dueMs = sched === "15m" ? 15 * 60_000 : sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
   return now.getTime() - lastScan.getTime() >= dueMs;
