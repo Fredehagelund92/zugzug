@@ -299,6 +299,14 @@ export function useCurrentUser(): CurrentUser | null {
   );
 }
 
+/** Convenience: true when the current user may mutate state (not a viewer).
+ *  Defaults to false during the brief initial-load window where currentUser is null. */
+export function useCanEdit(): boolean {
+  const user = useCurrentUser();
+  if (!user) return false;
+  return user.role !== "viewer";
+}
+
 export async function setPreferences(p: Preferences): Promise<void> {
   await api("/preferences", { method: "PUT", body: JSON.stringify(p) });
   await refreshPreferences();

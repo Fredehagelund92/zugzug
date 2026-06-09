@@ -524,7 +524,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = useCallback(
     async (rk: string, field: string, value: unknown) => {
-      await onCommit(rk, field, value);
+      if (onCommit) await onCommit(rk, field, value);
     },
     [onCommit],
   );

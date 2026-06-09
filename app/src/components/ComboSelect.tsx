@@ -33,7 +33,7 @@ interface ComboSelectProps {
   placeholder?: string;
   allowCreate?: boolean;
   disabled?: boolean;
-  onPick: (v: string) => void;
+  onPick?: (v: string) => void;
 }
 
 const DROPDOWN_W = 240; // px — matches original w-60
@@ -153,7 +153,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
   }, [highlight]);
 
   const choose = (v: string) => {
-    onPick(v);
+    onPick?.(v);
     setOpen(false);
     setQ("");
     triggerRef.current?.focus();

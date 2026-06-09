@@ -23,6 +23,8 @@ interface LedgerRowProps {
   /** Stable key used by the cursor scroll-into-view query (`data-row-key`).
    *  Format: `${dimId}::${table}::${column}`. */
   rowKey?: string;
+  /** When false, the import-records (wand) button is disabled. */
+  canEdit?: boolean;
 }
 
 export function LedgerRow({
@@ -33,6 +35,7 @@ export function LedgerRow({
   hideStandingBar,
   focused,
   rowKey,
+  canEdit = true,
 }: LedgerRowProps) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
   const coverage =
@@ -124,12 +127,13 @@ export function LedgerRow({
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
+            disabled={!canEdit}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onDerive();
             }}
-            className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink"
+            className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <IconWand className="h-3 w-3" />
           </button>
@@ -180,12 +184,13 @@ export function LedgerRow({
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
+            disabled={!canEdit}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               onDerive();
             }}
-            className="grid min-h-[44px] w-11 place-items-center text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink"
+            className="grid min-h-[44px] w-11 place-items-center text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <IconWand className="h-3.5 w-3.5" />
           </button>

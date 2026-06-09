@@ -121,8 +121,9 @@ export interface DataGridProps<Row> {
   rowKey: (row: Row) => string;
   columns: ColumnDef<Row>[];
   selection?: { selected: string[]; onChange: (next: string[]) => void };
-  /** Cell-value mutation. Implementations push an undo entry themselves. */
-  onCommit: (rowKey: string, field: string, value: unknown) => Promise<void>;
+  /** Cell-value mutation. Implementations push an undo entry themselves. When
+   *  undefined, cells are read-only (no edit affordances). */
+  onCommit?: (rowKey: string, field: string, value: unknown) => Promise<void>;
   /** Triggered when the user invokes the header menu's "delete column" item. */
   onDeleteColumn?: (field: string) => void;
   /** Header menu: rename label */

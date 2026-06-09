@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
 import { TablePane } from "../components/TablePane";
-import { useDimensions, useSources } from "../store";
+import { useDimensions, useSources, useCanEdit } from "../store";
 import { useOpenTabs, dimIdFromTabId } from "../lib/open-tabs";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import { availableModes, type Mode } from "../lib/available-modes";
@@ -20,6 +20,7 @@ export function MasterTables() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { tabs, activeId: activeTabId, openTab } = useOpenTabs();
   const create = useCreateTableModal();
+  const canEdit = useCanEdit();
 
   // Mount-only URL → state fold. Honors legacy ?dimId=<id> from old palette
   // links + bookmarks. New contract is ?open=a,b,c&active=<dimId>.
@@ -128,14 +129,14 @@ export function MasterTables() {
   if (dims.length === 0) {
     return (
       <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
-        <NoTablesYet from="tables" onCreateRequested={create.open} />
+        <NoTablesYet from="tables" onCreateRequested={canEdit ? create.open : undefined} />
       </div>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <TableTabStrip onCreateRequested={create.open} />
+      <TableTabStrip onCreateRequested={canEdit ? create.open : undefined} />
 
       <div className="relative flex-1 min-h-0">
         {tabs.map((tab) => {

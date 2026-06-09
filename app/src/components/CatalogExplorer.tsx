@@ -3,7 +3,7 @@ import { Button } from "./Button";
 import { ComboSelect } from "./ComboSelect";
 import { IconSearch, IconX, IconChevron, IconArrowRight } from "./Icons";
 import { cx } from "../lib/cx";
-import { searchCatalog, deriveCanonical, type CatalogTable } from "../store";
+import { searchCatalog, deriveCanonical, useCanEdit, type CatalogTable } from "../store";
 import type { MappingDimension } from "../data";
 
 /* CatalogExplorer — browse/search the warehouse catalog (the 1000+ tables) and
@@ -20,6 +20,7 @@ export function CatalogExplorer({
   dims: MappingDimension[];
   onClose: () => void;
 }) {
+  const canEdit = useCanEdit();
   const [q, setQ] = useState("");
   const [schema, setSchema] = useState<string | null>(null);
   const [rows, setRows] = useState<CatalogTable[]>([]);
@@ -239,7 +240,8 @@ export function CatalogExplorer({
                                 options={dimOptions}
                                 value={null}
                                 placeholder="add to table…"
-                                onPick={(d) => wire(t.table, c, d)}
+                                onPick={canEdit ? (d) => wire(t.table, c, d) : undefined}
+                                disabled={!canEdit}
                               />
                             )}
                           </div>

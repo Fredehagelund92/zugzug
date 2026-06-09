@@ -16,6 +16,7 @@ import {
   commit,
   dkey,
   useWorkspaceInfo,
+  useCanEdit,
 } from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
@@ -78,6 +79,7 @@ function TriageInner() {
   const allDrafts = useDrafts();
   const undo = useUndoStack();
   const wsInfo = useWorkspaceInfo();
+  const canEdit = useCanEdit();
 
   // URL ?filter= state — round-trips; "new" is the default and is omitted.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -345,6 +347,7 @@ function TriageInner() {
         undo={undo}
         aiHint={aiHint}
         wsInfo={wsInfo}
+        canEdit={canEdit}
       />
     </div>
   );
@@ -374,6 +377,7 @@ interface CrossDimInboxProps {
   undo: ReturnType<typeof useUndoStack>;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   wsInfo: WorkspaceInfo | null;
+  canEdit: boolean;
 }
 
 function CrossDimInbox(p: CrossDimInboxProps) {
@@ -415,12 +419,12 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           return;
         }
         if (!p.cursor) return;
-        if (e.key === "a" || e.key === "A") {
+        if (p.canEdit && (e.key === "a" || e.key === "A")) {
           e.preventDefault();
           p.accept(p.cursor.dimId, p.cursor.raw);
           return;
         }
-        if (e.key === "s" || e.key === "S") {
+        if (p.canEdit && (e.key === "s" || e.key === "S")) {
           e.preventDefault();
           p.skip(p.cursor.dimId, p.cursor.raw);
           return;
@@ -433,12 +437,12 @@ function CrossDimInbox(p: CrossDimInboxProps) {
         // M opens the focused row's ComboSelect for manual pick — matches the
         // single-dim workbench's M binding. Uses the focused row's imperative
         // handle (set by ref attachment below), not DOM querying.
-        if (e.key === "m" || e.key === "M") {
+        if (p.canEdit && (e.key === "m" || e.key === "M")) {
           e.preventDefault();
           focusedComboRef.current?.open();
           return;
         }
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
           e.preventDefault();
           p.commitAll();
           return;
@@ -558,7 +562,8 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                     value={r.target}
                     suggestion={r.suggestion ?? undefined}
                     allowCreate={!external}
-                    onPick={(t) => p.pick(r.dimId, r.raw, t)}
+                    onPick={p.canEdit ? (t) => p.pick(r.dimId, r.raw, t) : undefined}
+                    disabled={!p.canEdit}
                   />
                   <div>
                     {r.confidence > 0 ? (
@@ -649,12 +654,13 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                         value={r.target}
                         suggestion={r.suggestion ?? undefined}
                         allowCreate={!external}
-                        onPick={(t) => p.pick(r.dimId, r.raw, t)}
+                        onPick={p.canEdit ? (t) => p.pick(r.dimId, r.raw, t) : undefined}
+                        disabled={!p.canEdit}
                       />
                     </div>
                   </div>
                   {/* row 4: inline action buttons — only on focused row */}
-                  {focused && (
+                  {focused && p.canEdit && (
                     <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
                       <Button
                         size="sm"
@@ -747,9 +753,11 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
             <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>
               Dismiss
             </Button>
-            <Button size="sm" onClick={() => p.commitAll()}>
-              Retry
-            </Button>
+            {p.canEdit && (
+              <Button size="sm" onClick={() => p.commitAll()}>
+                Retry
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -790,15 +798,17 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
                           </span>
                           <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
                           <span className="shrink-0 text-ink-2 tabular-nums">{d.at}</span>
-                          <button
-                            type="button"
-                            onClick={() => p.discard(d.dimId, d.raw)}
-                            title="Discard this draft"
-                            aria-label="Discard draft"
-                            className="shrink-0 text-ink-3 transition-colors hover:text-danger"
-                          >
-                            <IconX className="h-3.5 w-3.5" />
-                          </button>
+                          {p.canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => p.discard(d.dimId, d.raw)}
+                              title="Discard this draft"
+                              aria-label="Discard draft"
+                              className="shrink-0 text-ink-3 transition-colors hover:text-danger"
+                            >
+                              <IconX className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -862,7 +872,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
           <div className="flex flex-col items-end gap-1">
             <Button
               size="sm"
-              disabled={stagedCount === 0}
+              disabled={stagedCount === 0 || !p.canEdit}
               loading={p.committing}
               onClick={() => p.commitAll()}
             >
