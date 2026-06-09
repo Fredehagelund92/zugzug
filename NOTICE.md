@@ -62,7 +62,6 @@ Generated: 2026-06-09
 | @dabh/diagnostics | 2.0.8 | MIT |
 | @duckdb/node-api | 1.5.3-r.3 | MIT |
 | @duckdb/node-bindings | 1.5.3-r.3 | MIT |
-| @duckdb/node-bindings-darwin-arm64 | 1.5.3-r.3 | MIT |
 | @nodable/entities | 2.1.1 | MIT |
 | @smithy/core | 3.24.6 | Apache-2.0 |
 | @smithy/credential-provider-imds | 4.3.8 | Apache-2.0 |

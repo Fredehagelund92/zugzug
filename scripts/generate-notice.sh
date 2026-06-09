@@ -15,12 +15,27 @@ generate_section() {
   echo "|---------|---------|---------|"
   (cd "$workspace" && npx --yes license-checker --json --production --excludePrivatePackages) \
     | node -e "
+      // Platform-specific native bindings vary by host (darwin-arm64 vs
+      // linux-x64 vs win32-ia32...). Listing only the host-platform variant
+      // makes NOTICE.md flap whenever CI runs on a different platform than
+      // the contributor. Strip platform-suffixed binding subpackages; their
+      // parent package is still listed and attributes them by inheritance.
+      const PLATFORM_TOKENS = ['darwin', 'linux', 'win32', 'freebsd', 'android'];
+      const ARCH_TOKENS = ['x64', 'arm64', 'ia32', 'arm', 'x86', 'ppc64', 'riscv64'];
+      const LIBC_TOKENS = ['musl', 'gnu', 'msvc'];
+      function isPlatformBinding(name) {
+        // Match a token like '-darwin-arm64', '-linux-x64-musl' anywhere in the name.
+        const ptn = new RegExp('-(' + PLATFORM_TOKENS.join('|') + ')(-(' + ARCH_TOKENS.join('|') + '))?(-(' + LIBC_TOKENS.join('|') + '))?($|/)');
+        return ptn.test(name);
+      }
+
       const data = JSON.parse(require('fs').readFileSync(0,'utf8'));
       const rows = Object.entries(data)
         .map(([k,v]) => {
           const m = k.match(/^(.+)@([^@]+)$/);
           return { name: m[1], version: m[2], license: v.licenses };
         })
+        .filter((r) => !isPlatformBinding(r.name))
         .sort((a,b) => a.name.localeCompare(b.name));
       for (const r of rows) {
         const lic = Array.isArray(r.license) ? r.license.join(' OR ') : (r.license || 'UNKNOWN');
