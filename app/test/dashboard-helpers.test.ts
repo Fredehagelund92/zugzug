@@ -7,6 +7,7 @@ import {
   urgencyScore,
   coverageColor,
   lastAuditForDim,
+  warehouseSyncStatusByDim,
   applyFilter,
   applySort,
 } from "../src/routes/dashboard-helpers";
@@ -179,5 +180,36 @@ describe("applySort", () => {
     const input = [cleanDim, dirtyDim];
     applySort(input, "urgency");
     expect(input[0].id).toBe("post_type");
+  });
+});
+
+describe("warehouseSyncStatusByDim", () => {
+  test("latest event per dim wins", () => {
+    const audits: AuditEntry[] = [
+      // newest first
+      { id: "1", at: "now", user: { id: "u", name: "U", initials: "U" }, action: "Warehouse sync failed", detail: "1 → zugzug.map_country: timeout" },
+      { id: "2", at: "1m", user: { id: "u", name: "U", initials: "U" }, action: "Warehouse synced", detail: "5 → zugzug.map_partner" },
+      { id: "3", at: "2m", user: { id: "u", name: "U", initials: "U" }, action: "Warehouse synced", detail: "3 → zugzug.map_country" },
+    ];
+    const dims = [
+      { id: "country", mapTable: "zugzug.map_country" },
+      { id: "partner", mapTable: "zugzug.map_partner" },
+      { id: "channel", mapTable: "zugzug.map_channel" }, // no events
+    ];
+    expect(warehouseSyncStatusByDim(audits, dims)).toEqual({
+      country: "failed",
+      partner: "synced",
+      channel: "unknown",
+    });
+  });
+
+  test("no warehouse events leaves all dims unknown", () => {
+    const audits: AuditEntry[] = [
+      { id: "1", at: "now", user: { id: "u", name: "U", initials: "U" }, action: "Committed", detail: "1 value → zugzug.map_country" },
+    ];
+    const dims = [{ id: "country", mapTable: "zugzug.map_country" }];
+    expect(warehouseSyncStatusByDim(audits, dims)).toEqual({
+      country: "unknown",
+    });
   });
 });
