@@ -26,6 +26,7 @@
     "@duckdb/node-api": "^1.5.3-r.3",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.3",
+    "openid-client": "^6.8.4",
     "postgres": "^3.4.9",
     "snowflake-sdk": "^2.4.3",
     "zod": "^4.4.3"
