@@ -50,6 +50,13 @@
       "when": 1780991923305,
       "tag": "0006_curious_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781028677849,
+      "tag": "0007_talented_the_hood",
+      "breakpoints": true
     }
   ]
 }
