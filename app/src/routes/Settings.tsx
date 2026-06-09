@@ -624,16 +624,16 @@ export function Settings() {
           title="Connections"
           hint={
             engineer
-              ? `Reads your warehouse (${adapterLabel}); canonical destination depends on the adapter's writability; app state lives in Postgres.`
-              : "Where Zug Zug is connected."
+              ? `Reads source values from your warehouse (${adapterLabel}); master records live where the adapter's writability allows; team state lives in Postgres.`
+              : "Where Zug Zug reads from and where your work is kept."
           }
         >
-          {/* Warehouse */}
+          {/* Warehouse — where source values come from */}
           <div className="rounded-sm border border-line bg-surface-2 p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
-                <Badge>{wsInfo ? (wsInfo.writable ? "read-write" : "read-only") : "…"}</Badge>
+                <Badge>{adapterLabel}</Badge>
               </div>
               <Badge tone="ok" dot>
                 connected
@@ -641,14 +641,12 @@ export function Settings() {
             </div>
             {engineer ? (
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                <span>{adapterLabel}</span>
                 {wsInfo?.warehouseDb && (
                   <>
-                    <span>·</span>
                     <span>{wsInfo.warehouseDb}</span>
+                    <span>·</span>
                   </>
                 )}
-                <span>·</span>
                 <span>
                   {wsInfo?.writable
                     ? "scanned for source values & writes canonical via MERGE"
@@ -657,38 +655,36 @@ export function Settings() {
               </div>
             ) : (
               <div className="mt-1 text-[12.5px] text-ink-2">
-                {wsInfo?.writable
-                  ? `Reading from and writing canonical to ${adapterLabel}.`
-                  : `Reading from your warehouse — read-only.`}
+                Where Zug Zug looks for new values that need a master record.
               </div>
             )}
           </div>
 
-          {/* Canonical destination */}
+          {/* Master records — where the cleaned-up records get committed */}
           <div className="rounded-sm border border-line bg-surface-2 p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <span className="font-display text-[14px] font-semibold text-ink">
-                  Canonical destination
+                  Master records
                 </span>
                 <Badge tone={wsInfo?.writable ? "ok" : undefined}>
                   {wsInfo
                     ? wsInfo.writable
-                      ? `${adapterLabel} (warehouse)`
-                      : "Postgres + Parquet export"
+                      ? `Saved to ${adapterLabel}`
+                      : "Kept in this workspace"
                     : "…"}
                 </Badge>
               </div>
               {failedSyncCount > 0 ? (
                 <Badge tone="warn" dot>
-                  {failedSyncCount} need{failedSyncCount === 1 ? "s" : ""} resync
+                  {failedSyncCount} not yet saved to warehouse
                 </Badge>
               ) : wsInfo?.writable ? (
                 <Badge tone="ok" dot>
                   in sync
                 </Badge>
               ) : (
-                <Badge dot>local only</Badge>
+                <Badge dot>downloadable</Badge>
               )}
             </div>
             {engineer ? (
@@ -702,17 +698,19 @@ export function Settings() {
             ) : (
               <div className="mt-1 text-[12.5px] text-ink-2">
                 {wsInfo?.writable
-                  ? "Each commit also writes records to your warehouse."
-                  : "Each commit stays in this workspace; download a Parquet snapshot from any table to ship it elsewhere."}
+                  ? "Each commit also writes the master records back to your warehouse."
+                  : "Each commit stays in this workspace. Download a snapshot from any table to ship the records elsewhere (e.g. to dbt)."}
               </div>
             )}
           </div>
 
-          {/* App state */}
+          {/* Drafts & team — the collaborative layer */}
           <div className="rounded-sm border border-line bg-surface-2 p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="font-display text-[14px] font-semibold text-ink">App state</span>
+                <span className="font-display text-[14px] font-semibold text-ink">
+                  Drafts &amp; team
+                </span>
                 <Badge tone="accent">Postgres</Badge>
               </div>
               <Badge tone="ok" dot>
