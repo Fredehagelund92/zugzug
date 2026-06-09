@@ -196,16 +196,16 @@ interface Chip {
 }
 
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ALLOWED_DOMAIN = "@example.com";
 
 function validateChip(
   email: string,
   membersByEmail: Set<string>,
   prevChips: Chip[],
+  allowedDomain: string | null, // null means any domain is allowed
 ): { ok: true } | { ok: false; reason: string } {
   if (!EMAIL_RX.test(email)) return { ok: false, reason: "Doesn't look like an email" };
-  if (!email.endsWith(ALLOWED_DOMAIN))
-    return { ok: false, reason: `Must be a ${ALLOWED_DOMAIN} email` };
+  if (allowedDomain !== null && !email.endsWith(allowedDomain))
+    return { ok: false, reason: `Must be a ${allowedDomain} email` };
   if (membersByEmail.has(email)) return { ok: false, reason: "Already on the team" };
   if (prevChips.some((c) => c.email === email && (c.status === "valid" || c.status === "inviting")))
     return { ok: false, reason: "Already in the list" };
@@ -273,6 +273,8 @@ function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
 }
 
 function TeamSection() {
+  const wsInfo = useWorkspaceInfo();
+  const allowedDomain = wsInfo?.allowedDomain ? "@" + wsInfo.allowedDomain : null;
   const [members, setMembers] = useState<Member[]>([]);
   const [chips, setChips] = useState<Chip[]>([]);
   const [buffer, setBuffer] = useState("");
@@ -310,14 +312,14 @@ function TeamSection() {
       const email = raw.trim().toLowerCase();
       if (!email) return;
       setChips((prev) => {
-        const res = validateChip(email, membersByEmail, prev);
+        const res = validateChip(email, membersByEmail, prev, allowedDomain);
         const chip: Chip = res.ok
           ? { id: newId(), email, status: "valid" }
           : { id: newId(), email, status: "invalid", reason: res.reason };
         return [...prev, chip];
       });
     },
-    [membersByEmail],
+    [membersByEmail, allowedDomain],
   );
 
   const removeChip = (id: string) => setChips((prev) => prev.filter((c) => c.id !== id));
@@ -326,7 +328,7 @@ function TeamSection() {
     let working = chips;
     if (buffer.trim()) {
       const email = buffer.trim().toLowerCase();
-      const res = validateChip(email, membersByEmail, chips);
+      const res = validateChip(email, membersByEmail, chips, allowedDomain);
       const chip: Chip = res.ok
         ? { id: newId(), email, status: "valid" }
         : { id: newId(), email, status: "invalid", reason: res.reason };
@@ -351,7 +353,10 @@ function TeamSection() {
           body: JSON.stringify({ email: c.email }),
         });
         if (res.status === 409) throw new Error("Already on the team");
-        if (res.status === 400) throw new Error(`Must be a ${ALLOWED_DOMAIN} email`);
+        if (res.status === 400)
+          throw new Error(
+            allowedDomain ? `Must be a ${allowedDomain} email` : "Email domain not allowed",
+          );
         if (!res.ok) throw new Error("Couldn't add — try again");
         return c.id;
       }),
@@ -459,7 +464,9 @@ function TeamSection() {
             className="min-w-[160px] flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
             placeholder={
               chips.length === 0
-                ? "colleague@example.com, another@example.com…"
+                ? allowedDomain
+                  ? `colleague@${allowedDomain.slice(1)}, another@${allowedDomain.slice(1)}…`
+                  : "colleague@example.com, another@example.com…"
                 : ""
             }
             value={buffer}

@@ -9,7 +9,7 @@ import { pg } from "./env.ts";
 import * as repo from "./repo.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
-import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 
@@ -28,7 +28,7 @@ const note = (name: string, detail: string) => {
 
 console.log("\nZug Zug — polish verification\n");
 registerFactories({
-  duckdb: async (creds) => new DuckDbAdapter(creds),
+  duckdb: async (creds) => createDuckDbAdapter(creds),
   snowflake: async (creds) => new SnowflakeAdapter(creds),
 });
 await getAdapter(); // warm the adapter

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Mark } from "../components/Mark";
 
 const ERROR_MESSAGES: Record<string, string> = {
-  domain: "Only @example.com accounts can access this app.",
+  domain: "Your email domain is not allowed on this instance. Contact your admin.",
   not_allowed: "Your account hasn't been added yet. Ask a team member to add you in Settings.",
   token: "Authentication failed — please try again.",
   state: "Session expired — please try again.",
@@ -41,7 +41,7 @@ export function Login() {
         <div>
           <h1 className="font-display text-2xl font-bold">Sign in</h1>
           <p className="mt-1 text-[13px]" style={{ color: "var(--ink-2)" }}>
-            Master data reconciliation · Zugzug.
+            Master data reconciliation.
           </p>
         </div>
 
