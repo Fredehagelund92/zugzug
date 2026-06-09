@@ -1,0 +1,78 @@
+name: Bug report
+description: Something is broken or behaving unexpectedly.
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Fill in as much as you can — adapter type and logs go a long way.
+
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Warehouse adapter
+      description: Which adapter were you using when the bug occurred?
+      options:
+        - DuckDB (read-only)
+        - DuckDB / MotherDuck (writable)
+        - Snowflake
+        - Other / not applicable
+    validations:
+      required: true
+
+  - type: input
+    id: bun-version
+    attributes:
+      label: Bun version
+      description: Output of `bun --version`
+      placeholder: "1.x.x"
+    validations:
+      required: true
+
+  - type: input
+    id: postgres-version
+    attributes:
+      label: Postgres version
+      description: Output of `psql --version` or your managed Postgres provider's version string
+      placeholder: "PostgreSQL 16.x"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: What actually happened? Include any error messages shown in the UI.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal sequence of steps that reliably produces the bug.
+      placeholder: |
+        1. Configure adapter as ...
+        2. Navigate to ...
+        3. Click ...
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Paste relevant server or browser console output. Wrap long output in a details block if needed.
+      render: shell
+    validations:
+      required: false

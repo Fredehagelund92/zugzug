@@ -15,10 +15,12 @@ When you submit an advisory, we'll:
 
 ***REMOVED******REMOVED*** Supported versions
 
-| Version | Supported |
-|---------|-----------|
-| 1.x     | Yes       |
-| < 1.0   | No        |
+Zugzug is pre-1.0 (currently 0.x). Only the latest minor release is supported with security fixes.
+
+| Version       | Supported |
+|---------------|-----------|
+| Latest 0.x    | Yes       |
+| Older 0.x     | No        |
 
 ***REMOVED******REMOVED*** Out of scope
 

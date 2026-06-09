@@ -178,6 +178,7 @@ Generated: 2026-06-09
 | one-time | 1.0.0 | MIT |
 | open | 10.2.0 | MIT |
 | open | 7.4.2 | MIT |
+| openid-client | 6.8.4 | MIT |
 | parse-passwd | 1.0.0 | MIT |
 | path-expression-matcher | 1.5.0 | MIT |
 | postgres | 3.4.9 | Unlicense |
