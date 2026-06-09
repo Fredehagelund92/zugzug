@@ -23,6 +23,7 @@ export interface SessionUser {
   name: string;
   email: string;
   initials: string;
+  role: Role;
 }
 
 export type Role = "admin" | "editor" | "viewer";
@@ -99,9 +100,10 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     await run(`DELETE FROM ${pg("sessions")} WHERE id = $1`, [sid]);
     return null;
   }
-  return get<SessionUser>(`SELECT id, name, email, initials FROM ${pg("users")} WHERE id = $1`, [
-    session.user_id,
-  ]);
+  return get<SessionUser>(
+    `SELECT id, name, email, initials, role FROM ${pg("users")} WHERE id = $1`,
+    [session.user_id],
+  );
 }
 
 /** Create a session row for the user and return the matching Set-Cookie header.

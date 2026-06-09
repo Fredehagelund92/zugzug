@@ -11,6 +11,9 @@ import {
   handleLogout,
   handleAuthConfig,
   handleDevLogin,
+  canMutate,
+  type SessionUser,
+  type Operation,
 } from "./auth.ts";
 import * as team from "./team.ts";
 import * as tables from "./tables.ts";
@@ -39,6 +42,14 @@ const json = (data: unknown, status = 200) =>
 const noContent = () => new Response(null, { status: 204, headers: corsHeaders });
 const err = (e: unknown, status = 500) =>
   json({ error: e instanceof Error ? e.message : String(e) }, status);
+
+/** Returns a 403 Response if the user's role cannot perform op; null otherwise. */
+function gateOrJson(user: SessionUser, op: Operation): Response | null {
+  if (!canMutate(user.role, op)) {
+    return json({ error: "forbidden", reason: `role '${user.role}' cannot ${op}` }, 403);
+  }
+  return null;
+}
 
 registerFactories({
   duckdb: async (creds) => createDuckDbAdapter(creds),
@@ -174,6 +185,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     if (seg[1] === "preferences" && seg.length === 2) {
       if (method === "GET") return json(await repo.getPreferences());
       if (method === "PUT") {
+        const denied = gateOrJson(sessionUser, "manage_adapter");
+        if (denied) return denied;
         const p = (await req.json()) as {
           publishThreshold: number;
           suggestThreshold: number;
@@ -240,8 +253,11 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         return json(await repo.sourceFacets());
       if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
         return json(await repo.scanStatus());
-      if (seg[2] === "scan" && seg.length === 3 && method === "POST")
+      if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "manage_adapter");
+        if (denied) return denied;
         return json({ scanned: await repo.scanSources() });
+      }
       // GET /api/sources/unmapped?dimId=&table=&column=&limit=
       if (seg[2] === "unmapped" && seg.length === 3 && method === "GET") {
         const dimId = url.searchParams.get("dimId") ?? "";
@@ -269,6 +285,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       if (method === "GET")
         return json(await repo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
       if (method === "POST") {
+        const denied = gateOrJson(sessionUser, "curate");
+        if (denied) return denied;
         const { action, detail } = (await req.json()) as { action: string; detail: string };
         await repo.appendAuditAs(me, action, detail);
         return noContent();
@@ -288,6 +306,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
 
     if (seg[1] === "tables") {
       if (seg.length === 2 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "manage_adapter");
+        if (denied) return denied;
         try {
           const input = (await req.json()) as tables.CreateTableInput;
           const result = await tables.createTable(input, me);
@@ -317,6 +337,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return json(await repo.listDimensions());
         }
         if (method === "POST") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           const { name, keyKind } = (await req.json()) as {
             name: string;
             keyKind?: "slug" | "external_id";
@@ -334,6 +356,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
         if (seg.length === 4 && method === "GET") return json(await repo.listDrafts(id));
         if (seg.length === 4 && method === "PUT") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           const b = (await req.json()) as {
             raw: string;
             status: "mapped" | "skipped";
@@ -344,18 +368,24 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return noContent();
         }
         if (seg.length === 5 && method === "DELETE") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           await repo.discardDraft(id, decodeURIComponent(seg[4]!), me);
           return noContent();
         }
       }
       // POST /api/dimensions/:id/sources {table, column} — wire a warehouse column
       if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "manage_adapter");
+        if (denied) return denied;
         const { table, column } = (await req.json()) as { table: string; column: string };
         await repo.addSource(id, table, column);
         return noContent();
       }
       // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
       if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "curate");
+        if (denied) return denied;
         const { table, column, nameColumn } = (await req.json()) as {
           table: string;
           column: string;
@@ -365,6 +395,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
       // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "curate");
+        if (denied) return denied;
         const { label, type, options, numberFormat, ratingMax, referencedDimId, displayFields } =
           (await req.json()) as {
             label: string;
@@ -388,6 +420,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
       // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
       if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "curate");
+        if (denied) return denied;
         const field = decodeURIComponent(seg[4]!);
         const { label, color } = (await req.json()) as { label: string; color?: string | null };
         const res = await repo.addColumnOption(
@@ -404,6 +438,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       if (seg[3] === "fields" && seg.length === 5) {
         const field = decodeURIComponent(seg[4]!);
         if (method === "PUT") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           const body = (await req.json()) as {
             label?: string;
             type?: string;
@@ -429,6 +465,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return noContent();
         }
         if (method === "PATCH") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           const body = (await req.json()) as {
             description?: string | null;
             field_config?: string | null;
@@ -441,16 +479,24 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           );
           return noContent();
         }
-        if (method === "DELETE") return json(await repo.deleteColumn(id, field, me));
+        if (method === "DELETE") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
+          return json(await repo.deleteColumn(id, field, me));
+        }
       }
       // canonical record management
       if (seg[3] === "canonical") {
         if (seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           const { label, key } = (await req.json()) as { label: string; key?: string };
           await repo.addCanonicalOne(id, label, key, me);
           return noContent();
         }
         if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           if (url.searchParams.get("confirm") !== "true") {
             throw new AppError("CONFIRMATION_REQUIRED", "merge requires ?confirm=true", 400);
           }
@@ -462,22 +508,33 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return json(await repo.listVariants(id, ck));
         // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
         if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
           const { value } = (await req.json()) as { value: string | null };
           await repo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
           return noContent();
         }
         if (seg.length === 5 && ck) {
           if (method === "PUT") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
             const { label } = (await req.json()) as { label: string };
             await repo.renameCanonical(id, ck, label, me);
             return noContent();
           }
-          if (method === "DELETE") return json(await repo.retireCanonical(id, ck, me));
+          if (method === "DELETE") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            return json(await repo.retireCanonical(id, ck, me));
+          }
         }
       }
       // POST /api/dimensions/:id/commit
-      if (seg[3] === "commit" && seg.length === 4 && method === "POST")
+      if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "commit");
+        if (denied) return denied;
         return json(await repo.commit(id, me));
+      }
       // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
       if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
         const dimId = seg[2]!;
@@ -506,6 +563,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     if (seg[1] === "team" && seg[2] === "members") {
       if (seg.length === 3 && method === "GET") return json(await team.listMembers());
       if (seg.length === 3 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "manage_team");
+        if (denied) return denied;
         const { email } = (await req.json()) as { email: string };
         try {
           await team.addMember(email, me);
@@ -520,6 +579,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         }
       }
       if (seg.length === 4 && method === "DELETE") {
+        const denied = gateOrJson(sessionUser, "manage_team");
+        if (denied) return denied;
         const email = decodeURIComponent(seg[3]!);
         try {
           await team.removeMember(email, me);

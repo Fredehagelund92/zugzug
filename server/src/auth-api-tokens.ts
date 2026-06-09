@@ -122,7 +122,7 @@ export async function getApiTokenUser(req: Request): Promise<SessionUser | null>
         cand.id,
       ]).catch(() => {});
       const user = await pgGet<SessionUser>(
-        `SELECT id, name, email, initials FROM ${pg("users")} WHERE id = $1`,
+        `SELECT id, name, email, initials, role FROM ${pg("users")} WHERE id = $1`,
         [cand.user_id],
       );
       return user;
