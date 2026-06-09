@@ -119,6 +119,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     if (seg[2] === "me" && method === "GET") return handleMe(req);
     if (seg[2] === "logout" && method === "POST") return handleLogout(req);
     if (seg[2] === "config" && method === "GET") return handleAuthConfig();
+    if (seg[2] === "signup" && method === "POST") {
+      const { handleSignup } = await import("./auth-password.ts");
+      return handleSignup(req);
+    }
+    if (seg[2] === "login" && method === "POST") {
+      const { handleLogin } = await import("./auth-password.ts");
+      return handleLogin(req);
+    }
     if (seg[2] === "dev" && method === "GET") {
       if (!env.devBypassAuth) return json({ error: "not found" }, 404);
       return handleDevLogin();
@@ -138,6 +146,12 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   setUid(me);
 
   try {
+    // POST /api/auth/change-password (authenticated)
+    if (seg[1] === "auth" && seg[2] === "change-password" && method === "POST") {
+      const { handleChangePassword } = await import("./auth-password.ts");
+      return handleChangePassword(req, me);
+    }
+
     // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
       if (method === "GET") return json(await repo.getPreferences());

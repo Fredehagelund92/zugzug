@@ -76,6 +76,19 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
   ]);
 }
 
+/** Create a session row for the user and return the matching Set-Cookie header.
+ *  Used by both password (signup, login) and OIDC (callback) handlers. */
+export async function issueSession(userId: string): Promise<{ sessionId: string; cookie: string }> {
+  const sessionId = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
+  await run(`INSERT INTO ${pg("sessions")} (id, user_id, expires_at) VALUES ($1, $2, $3)`, [
+    sessionId,
+    userId,
+    expiresAt.toISOString(),
+  ]);
+  return { sessionId, cookie: cookie(SID, sessionId, SESSION_SECONDS) };
+}
+
 // ---- route handlers --------------------------------------------------------
 
 /** GET /api/auth/google — kick off the OAuth2 redirect. */
