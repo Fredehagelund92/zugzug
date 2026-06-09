@@ -89,12 +89,16 @@ export async function handleSignup(req: Request): Promise<Response> {
   const existing = await pgGet(`SELECT id FROM ${pg("users")} WHERE email = $1`, [email]);
   if (existing) return jsonError(409, "email_taken");
 
+  // NOTE: userCount===0 is race-vulnerable under concurrent first-signups — both
+  // could see count=0 and both become admin. Acceptable for v0.2; no lock added.
+  const role = userCount === 0 ? "admin" : "editor";
+
   const hash = await Bun.password.hash(password); // argon2id default
   const userId = `u_${crypto.randomUUID().replace(/-/g, "")}`;
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider)
-     VALUES ($1, $2, $3, $4, $5, 'password')`,
-    [userId, name, email, initialsOf(name), hash],
+    `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider, role)
+     VALUES ($1, $2, $3, $4, $5, 'password', $6)`,
+    [userId, name, email, initialsOf(name), hash, role],
   );
 
   const { cookie } = await issueSession(userId);

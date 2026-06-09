@@ -7,6 +7,8 @@ process.env.ALLOWED_DOMAIN = ""; // no domain restriction by default
 import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "./setup.ts";
 import { handleSignup, handleLogin, handleChangePassword } from "../src/auth-password.ts";
+import { pgGet, pgRun } from "../src/pg.ts";
+import { pg } from "../src/env.ts";
 
 beforeEach(async () => {
   await resetDb();
@@ -133,4 +135,32 @@ test("change-password — short new password returns 400", async () => {
     userId,
   );
   expect(res.status).toBe(400);
+});
+
+test("signup — first user gets role='admin'", async () => {
+  const res = await handleSignup(
+    jsonReq({ email: "first@example.com", password: "longenoughpw12", name: "Admin" }),
+  );
+  expect(res.status).toBe(200);
+  const userId = ((await res.json()) as { id: string }).id;
+  const row = await pgGet<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [userId]);
+  expect(row?.role).toBe("admin");
+});
+
+test("signup — second user gets role='editor'", async () => {
+  // First signup (becomes admin + bootstraps allowlist)
+  await handleSignup(jsonReq({ email: "admin@example.com", password: "longenoughpw12", name: "Admin" }));
+  // Add second to allowlist
+  await pgRun(
+    `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at)
+     VALUES ('second@example.com', 'admin', current_timestamp)
+     ON CONFLICT DO NOTHING`,
+  );
+  const res = await handleSignup(
+    jsonReq({ email: "second@example.com", password: "longenoughpw12", name: "Second" }),
+  );
+  expect(res.status).toBe(200);
+  const userId = ((await res.json()) as { id: string }).id;
+  const row = await pgGet<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [userId]);
+  expect(row?.role).toBe("editor");
 });

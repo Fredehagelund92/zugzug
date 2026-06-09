@@ -15,7 +15,7 @@ import {
   setOidcConfigFactory,
   _resetOidcConfig,
 } from "../src/auth-oidc.ts";
-import { pgGet } from "../src/pg.ts";
+import { pgGet, pgRun } from "../src/pg.ts";
 import { pg } from "../src/env.ts";
 
 // Fake Configuration — openid-client v6 functional API doesn't introspect
@@ -161,4 +161,103 @@ test("oidc callback — upserts existing user by sub", async () => {
   );
   expect(user?.name).toBe("New Name");
   expect(user?.auth_provider).toBe("oidc");
+});
+
+// ---------------------------------------------------------------------------
+// Test 6: first OIDC user gets role='admin'
+// ---------------------------------------------------------------------------
+
+test("oidc callback — first user gets role='admin'", async () => {
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-admin", email: "admin@example.com", name: "Admin User" }),
+  };
+  const res = await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+  expect(res.status).toBe(302);
+  const user = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-admin'`,
+  );
+  expect(user?.role).toBe("admin");
+});
+
+// ---------------------------------------------------------------------------
+// Test 7: second OIDC user gets role='editor'
+// ---------------------------------------------------------------------------
+
+test("oidc callback — second user gets role='editor'", async () => {
+  // First user (becomes admin + bootstraps allowlist)
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-first", email: "first@example.com", name: "First User" }),
+  };
+  await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+
+  // Add second user to allowlist
+  await pgRun(
+    `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at)
+     VALUES ('second@example.com', 'admin', current_timestamp)
+     ON CONFLICT DO NOTHING`,
+  );
+
+  // Second user
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-second", email: "second@example.com", name: "Second User" }),
+  };
+  const res = await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=def&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+  expect(res.status).toBe(302);
+  const user = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-second'`,
+  );
+  expect(user?.role).toBe("editor");
+});
+
+// ---------------------------------------------------------------------------
+// Test 8: returning OIDC user does NOT have role overwritten by ON CONFLICT
+// ---------------------------------------------------------------------------
+
+test("oidc callback — re-login does not overwrite existing role", async () => {
+  // First login (creates user as admin)
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-stays-admin", email: "stays@example.com", name: "Stays Admin" }),
+  };
+  await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+
+  // Manually promote to verify by checking initial state, then simulate a second
+  // user existing so the re-login would compute role='editor' if it re-ran the logic.
+  // Insert a second user to make userCount > 0 for the re-login.
+  await pgRun(
+    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider, role)
+     VALUES ('u_dummy', 'Dummy', 'dummy@example.com', 'DU', 'oidc', 'editor')`,
+  );
+
+  // Re-login for the same user — userCount is now 2, so role computed as 'editor'.
+  // The ON CONFLICT path must NOT update role.
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-stays-admin", email: "stays@example.com", name: "Stays Admin" }),
+  };
+  await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=xyz&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+
+  // Role must still be admin despite re-login when userCount > 0
+  const user = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-stays-admin'`,
+  );
+  expect(user?.role).toBe("admin");
 });

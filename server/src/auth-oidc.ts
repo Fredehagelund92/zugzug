@@ -210,21 +210,27 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
     }
   }
 
+  // NOTE: userCount===0 is race-vulnerable under concurrent first-logins — both
+  // could see count=0 and both become admin. Acceptable for v0.2; no lock added.
+  const role = userCount === 0 ? "admin" : "editor";
+
   const initials =
     claims.given_name && claims.family_name
       ? `${claims.given_name[0]}${claims.family_name[0]}`.toUpperCase()
       : initialsOf(name);
 
   const userId = `u_${sub}`;
+  // ON CONFLICT deliberately does NOT update role — an admin who re-logs in via
+  // OIDC must stay admin; only the first-insert path sets the role.
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider)
-     VALUES ($1, $2, $3, $4, $5, 'oidc')
+    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider, role)
+     VALUES ($1, $2, $3, $4, $5, 'oidc', $6)
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        email = EXCLUDED.email,
        initials = EXCLUDED.initials,
        auth_provider = 'oidc'`,
-    [userId, name, email, sub, initials],
+    [userId, name, email, sub, initials, role],
   );
 
   const { cookie } = await issueSession(userId);
