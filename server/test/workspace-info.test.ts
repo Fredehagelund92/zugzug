@@ -18,9 +18,8 @@ test("env.defaultEngineerMode is boolean (defaults true when DEFAULT_ENGINEER_MO
   expect(env.defaultEngineerMode).toBe(true);
 });
 
-test("env.allowedDomain returns expected value (pre-Task-11 default: 'bettercollective.com')", () => {
-  // ALLOWED_DOMAIN is not set in the test harness; default is 'bettercollective.com'.
-  // Task 11 will flip this default to '' → null; update assertion then.
+test("env.allowedDomain returns expected value (Task-11 default: '' → null)", () => {
+  // ALLOWED_DOMAIN is not set in the test harness; default flipped to '' in Task 11.
   const body = {
     adapter: "duckdb" as const,
     writable: false,
@@ -31,7 +30,7 @@ test("env.allowedDomain returns expected value (pre-Task-11 default: 'bettercoll
   };
 
   expect(body.defaultEngineerMode).toBe(true); // env default when DEFAULT_ENGINEER_MODE not set
-  expect(body.allowedDomain).toBe("bettercollective.com"); // pre-Task-11 default
+  expect(body.allowedDomain).toBeNull(); // env default flipped to "" in Task 11 → server returns null
 });
 
 test("workspace/info response shape includes all required fields", () => {

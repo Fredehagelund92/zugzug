@@ -32,8 +32,10 @@ export const env = {
   // Google OAuth2
   googleClientId: required("GOOGLE_CLIENT_ID"),
   googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
-  /** Email domain allowed to log in (e.g. "bettercollective.com"). */
-  allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || "bettercollective.com",
+  /** Email domain restriction for signups. Empty string = unrestricted.
+   *  Set ALLOWED_DOMAIN=example.com (or, in PR 2, OIDC_ALLOWED_DOMAIN=example.com)
+   *  to require all users' emails to belong to that domain. */
+  allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || "",
   /** Public origin of this app — used to build the OAuth redirect_uri.
    *  In dev: http://localhost:5173 (Vite proxies /api). In prod: https://yourapp.com */
   origin: (process.env.ORIGIN?.trim() || "http://localhost:5173").replace(/\/$/, ""),
