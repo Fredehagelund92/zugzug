@@ -8,7 +8,16 @@ import { SegControl } from "../components/SegControl";
 import { ThresholdRange } from "../components/ThresholdRange";
 import { cx } from "../lib/cx";
 import { useEngineerMode } from "../lib/engineer-mode";
-import { usePreferences, setPreferences, currentUser, scanSources } from "../store";
+import {
+  usePreferences,
+  setPreferences,
+  currentUser,
+  scanSources,
+  useWorkspaceInfo,
+  useDimensions,
+  useAudit,
+} from "../store";
+import { warehouseSyncStatusByDim } from "./dashboard-helpers";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -572,6 +581,15 @@ function TeamSection() {
 export function Settings() {
   const { engineer, setEngineer } = useEngineerMode();
   const prefs = usePreferences();
+  const wsInfo = useWorkspaceInfo();
+  const dims = useDimensions();
+  const audit = useAudit();
+  const failedSyncCount = useMemo(() => {
+    if (!wsInfo?.writable || dims.length === 0) return 0;
+    const status = warehouseSyncStatusByDim(audit, dims);
+    return Object.values(status).filter((s) => s === "failed").length;
+  }, [wsInfo?.writable, dims, audit]);
+  const adapterLabel = wsInfo ? wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1) : "…";
 
   return (
     <div className="mx-auto w-full max-w-[var(--wide)] space-y-4 p-4 md:space-y-6 md:p-8">
@@ -606,110 +624,111 @@ export function Settings() {
           title="Connections"
           hint={
             engineer
-              ? "Reads your warehouse (MotherDuck), writes records to its own MotherDuck database, and keeps multi-user app state in Postgres."
+              ? `Reads your warehouse (${adapterLabel}); canonical destination depends on the adapter's writability; app state lives in Postgres.`
               : "Where Zug Zug is connected."
           }
         >
-          {engineer ? (
-            <>
-              <div className="rounded-sm border border-line bg-surface-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-[14px] font-semibold text-ink">
-                      Warehouse
-                    </span>
-                    <Badge>read-only</Badge>
-                  </div>
-                  <Badge tone="ok" dot>
-                    connected
-                  </Badge>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                  <span className="text-ink-2">md:analytics</span>
-                  <span>·</span>
-                  <span>attached &amp; scanned for source values — never written to</span>
-                </div>
+          {/* Warehouse */}
+          <div className="rounded-sm border border-line bg-surface-2 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
+                <Badge>{wsInfo ? (wsInfo.writable ? "read-write" : "read-only") : "…"}</Badge>
               </div>
-              <div className="rounded-sm border border-line bg-surface-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-[14px] font-semibold text-ink">
-                      Master store
-                    </span>
-                    <Badge>MotherDuck</Badge>
-                  </div>
-                  <Badge tone="ok" dot>
-                    connected
-                  </Badge>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                  <span className="text-ink-2">md:zugzug</span>
-                  <span>·</span>
-                  <span>its own database — every dim_* master + map_* lookup dbt joins</span>
-                </div>
+              <Badge tone="ok" dot>
+                connected
+              </Badge>
+            </div>
+            {engineer ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
+                <span>{adapterLabel}</span>
+                {wsInfo?.warehouseDb && (
+                  <>
+                    <span>·</span>
+                    <span>{wsInfo.warehouseDb}</span>
+                  </>
+                )}
+                <span>·</span>
+                <span>
+                  {wsInfo?.writable
+                    ? "scanned for source values & writes canonical via MERGE"
+                    : "scanned for source values — never written to"}
+                </span>
               </div>
-              <div className="rounded-sm border border-line bg-surface-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="font-display text-[14px] font-semibold text-ink">
-                      App state
-                    </span>
-                    <Badge tone="accent">Postgres</Badge>
-                  </div>
-                  <Badge tone="ok" dot>
-                    connected
-                  </Badge>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-                  <span className="text-ink-2">postgres://zugzug</span>
-                  <span>·</span>
-                  <span>drafts, audit log, users &amp; presence — the multi-user layer</span>
-                </div>
+            ) : (
+              <div className="mt-1 text-[12.5px] text-ink-2">
+                {wsInfo?.writable
+                  ? `Reading from and writing canonical to ${adapterLabel}.`
+                  : `Reading from your warehouse — read-only.`}
               </div>
-              <p className="font-mono text-[10.5px] leading-relaxed text-ink-3">
-                DuckDB <span className="text-ink-2">ATTACH … (TYPE postgres)</span> bridges them — a
-                single scan can join live drafts ⋈ master ⋈ warehouse.
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="rounded-sm border border-line bg-surface-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
-                  <Badge tone="ok" dot>
-                    connected
-                  </Badge>
-                </div>
-                <div className="mt-1 text-[12.5px] text-ink-2">
-                  Reading from your warehouse — read-only.
-                </div>
+            )}
+          </div>
+
+          {/* Canonical destination */}
+          <div className="rounded-sm border border-line bg-surface-2 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[14px] font-semibold text-ink">
+                  Canonical destination
+                </span>
+                <Badge tone={wsInfo?.writable ? "ok" : undefined}>
+                  {wsInfo
+                    ? wsInfo.writable
+                      ? `${adapterLabel} (warehouse)`
+                      : "Postgres + Parquet export"
+                    : "…"}
+                </Badge>
               </div>
-              <div className="rounded-sm border border-line bg-surface-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[14px] font-semibold text-ink">
-                    Master store
-                  </span>
-                  <Badge tone="ok" dot>
-                    connected
-                  </Badge>
-                </div>
-                <div className="mt-1 text-[12.5px] text-ink-2">
-                  Stores every table — this is what downstream models pick up.
-                </div>
+              {failedSyncCount > 0 ? (
+                <Badge tone="warn" dot>
+                  {failedSyncCount} need{failedSyncCount === 1 ? "s" : ""} resync
+                </Badge>
+              ) : wsInfo?.writable ? (
+                <Badge tone="ok" dot>
+                  in sync
+                </Badge>
+              ) : (
+                <Badge dot>local only</Badge>
+              )}
+            </div>
+            {engineer ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
+                <span>
+                  {wsInfo?.writable
+                    ? `dim_* / map_* committed to ${wsInfo.warehouseDb ?? "warehouse"} via MERGE INTO`
+                    : "dim_* / map_* live in Postgres; download Parquet on demand"}
+                </span>
               </div>
-              <div className="rounded-sm border border-line bg-surface-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-display text-[14px] font-semibold text-ink">Workspace</span>
-                  <Badge tone="ok" dot>
-                    connected
-                  </Badge>
-                </div>
-                <div className="mt-1 text-[12.5px] text-ink-2">
-                  Drafts, history, and your team — the collaborative layer.
-                </div>
+            ) : (
+              <div className="mt-1 text-[12.5px] text-ink-2">
+                {wsInfo?.writable
+                  ? "Each commit also writes records to your warehouse."
+                  : "Each commit stays in this workspace; download a Parquet snapshot from any table to ship it elsewhere."}
               </div>
-            </>
-          )}
+            )}
+          </div>
+
+          {/* App state */}
+          <div className="rounded-sm border border-line bg-surface-2 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-display text-[14px] font-semibold text-ink">App state</span>
+                <Badge tone="accent">Postgres</Badge>
+              </div>
+              <Badge tone="ok" dot>
+                connected
+              </Badge>
+            </div>
+            {engineer ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
+                <span>drafts · audit log · users · sessions · preferences</span>
+              </div>
+            ) : (
+              <div className="mt-1 text-[12.5px] text-ink-2">
+                Drafts, history, and your team — the collaborative layer.
+              </div>
+            )}
+          </div>
         </Section>
       </div>
 
