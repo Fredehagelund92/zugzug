@@ -18,11 +18,11 @@ Zugzug is a self-hosted web app that sits between your warehouse and your dbt mo
 
 **Why not just X?** If X is "write it in dbt with seeds and tests," that works until you have 50 dimensions and non-technical people who need to approve changes. If X is Tamr or Stibo, they're not self-hostable and not priced for a 5-person data team.
 
-**Architecture:** Bun + TypeScript backend, React 18 frontend, `WarehouseAdapter` interface. DuckDB/MotherDuck and Snowflake (key-pair auth) ship in v1.0. Postgres-as-warehouse, BigQuery, and Databricks are roadmapped. App state (drafts, audit log, users) in Postgres. Canonical results default to Postgres, exportable as Parquet; or write back to your warehouse if you have a writable adapter. Auth is password by default or OIDC for SSO.
+**Architecture:** Bun + TypeScript backend, React 18 frontend, `WarehouseAdapter` interface. DuckDB/MotherDuck and Snowflake (key-pair auth) ship in v0.1. Postgres-as-warehouse, BigQuery, and Databricks are roadmapped. App state (drafts, audit log, users) in Postgres. Canonical results default to Postgres, exportable as Parquet; or write back to your warehouse if you have a writable adapter. Auth is password by default or OIDC for SSO.
 
 Self-host requirements: Bun, Postgres 14+, read access to your warehouse. `bun run bootstrap -- --seed` sets up a demo warehouse to explore without connecting a real one.
 
-MIT licensed. v1.0.0, so rough edges exist.
+MIT licensed. v0.1.0 — early release; rough edges exist and breaking changes between minor versions are likely until v1.0.
 
 https://github.com/Fredehagelund92/zugzug
 

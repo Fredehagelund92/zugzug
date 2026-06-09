@@ -2,6 +2,8 @@
 
 > The missing curation UI for the dbt stack.
 
+**Status: v0.1 — early release.** Expect rough edges and breaking changes between minor versions until v1.0.
+
 Your warehouse accumulates raw strings that nobody agrees on: "BCG", "B.C.G.", "Boston Consulting Group". dbt has no primitive to reconcile them. Existing MDM tools (Tamr, Stibo, Reltio) are enterprise-priced and closed-source. Zugzug is the gap between "messy values land in the warehouse" and "dbt models join clean dimensions." A team curates raw values to canonical IDs via a browser UI; results land in `dim_<x>` / `map_<x>` tables dbt can join directly.
 
 ```

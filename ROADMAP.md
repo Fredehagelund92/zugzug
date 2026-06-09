@@ -5,7 +5,7 @@
 
 **Last review:** 2026-06-08 — OSS pivot cycle kickoff (supersedes Q3 2026 BC cycle, paused)
 **Stakeholder:** OSS contributors + BC data team (BC's deployment continues, but BC-specific features are paused until post-v1.0)
-**North star for this cycle:** Ship v1.0 as an open-source curation UI for the dbt stack, with DuckDB/MotherDuck + Snowflake adapter support.
+**North star for this cycle:** Ship v0.1 as an open-source curation UI for the dbt stack, with DuckDB/MotherDuck + Snowflake adapter support. v1.0 is a future milestone once the API stabilizes.
 
 **Pivot context:** see `docs/superpowers/specs/2026-06-08-oss-pivot-design.md` for the full design and rationale.
 
@@ -71,9 +71,9 @@ Planned but not committed. Re-estimate at the mid-cycle review.
   - `scripts/audit-history.sh` (gitleaks + project-string grep)
   - `scripts/scrub-history.sh` (dry-runnable git-filter-repo with safety refusal against live repo)
 - **Design spec:** `docs/superpowers/specs/2026-06-09-phase5-legal-scrub-prep-design.md`
-- **Blocked on Phase 6:** actual scrub execution, `<COPYRIGHT_HOLDER>` swap, public repo creation, force-push, v1.0.0 tag.
+- **Blocked on Phase 6:** actual scrub execution, `<COPYRIGHT_HOLDER>` swap, public repo creation, force-push, v0.1.0 tag.
 
-### Phase 6 — Public push + v1.0 tag (week 12)
+### Phase 6 — Public push + v0.1 tag (week 12)
 - **Status:** BLOCKED on BC legal sign-off.
 - **Pre-flight checklist** (resolve before Phase 6 starts):
   - [ ] BC legal sign-off on IP assignment + MIT release (written)
@@ -81,8 +81,8 @@ Planned but not committed. Re-estimate at the mid-cycle review.
   - [ ] Decision: public GitHub destination — `Fredehagelund92/zugzug` vs new org
   - [ ] Confirmation: `trust-me-bro` rewrite scope (CLAUDE.md, internal-process docs)
   - [ ] Specific Sentry org URL to scrub (if any) — Phase 5 audit found only example/placeholder URLs (e.g. `sentry.io/1234567` from plan docs); confirm no real project IDs need adding.
-- **Runbook:** `scripts/README.md` — clone mirror, run scrub, swap `<COPYRIGHT_HOLDER>`, point at public remote, force-push, tag v1.0.0.
-- **Children:** Force-push scrubbed history to fresh public repo; tag `v1.0.0`; launch posts (HN, dbt Slack, r/dataengineering); issue templates for "add adapter for X."
+- **Runbook:** `scripts/README.md` — clone mirror, run scrub, swap `<COPYRIGHT_HOLDER>`, point at public remote, force-push, tag v0.1.0.
+- **Children:** Force-push scrubbed history to fresh public repo; tag `v0.1.0`; launch posts (HN, dbt Slack, r/dataengineering); issue templates for "add adapter for X."
 - **Verification gate:** docs render; install works on clean machine in <10 min; contributor can scaffold a new adapter from the example.
 - **Blocker:** Phase 5 (completed); legal checklist (outstanding).
 
