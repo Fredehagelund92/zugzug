@@ -1,0 +1,8 @@
+# .gitleaksignore — one fingerprint per line. Each fingerprint allow-lists
+# a specific finding by its <commit-sha>:<path>:<rule-id>:<line-number> shape.
+#
+# Add a comment above each entry explaining why it's safe to ignore.
+# Format: lines starting with # are comments.
+#
+# Test fixtures with intentionally-fake tokens should be the only entries
+# here. Real leaked credentials must be revoked + rewritten, not ignored.
