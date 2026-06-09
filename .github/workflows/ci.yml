@@ -56,3 +56,11 @@ jobs:
           GOOGLE_CLIENT_ID: dummy
           GOOGLE_CLIENT_SECRET: dummy
           ATTACH_WAREHOUSE: "false"
+
+  license-placeholder-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check LICENSE placeholder
+        run: bash scripts/check-license-placeholder.sh
