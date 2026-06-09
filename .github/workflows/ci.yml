@@ -20,6 +20,10 @@ jobs:
       - run: bun run lint
       - run: bun run format:check
       - run: bun run test
+      - name: License check (app deps)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash scripts/run-license-check.sh app
 
   server:
     runs-on: ubuntu-latest
@@ -56,3 +60,33 @@ jobs:
           GOOGLE_CLIENT_ID: dummy
           GOOGLE_CLIENT_SECRET: dummy
           ATTACH_WAREHOUSE: "false"
+      - name: License check (server deps)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash scripts/run-license-check.sh server
+
+  license-placeholder-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check LICENSE placeholder
+        run: bash scripts/check-license-placeholder.sh
+
+  notice-up-to-date:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps (server)
+        working-directory: server
+        run: bun install --frozen-lockfile
+      - name: Install deps (app)
+        working-directory: app
+        run: bun install --frozen-lockfile
+      - name: Regenerate NOTICE.md
+        run: bash scripts/generate-notice.sh
+      - name: Check NOTICE.md is current
+        run: git diff --exit-code NOTICE.md

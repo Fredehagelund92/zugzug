@@ -60,16 +60,31 @@ Planned but not committed. Re-estimate at the mid-cycle review.
 - **Blocker:** Phase 3.
 
 ### Phase 5 — Legal + scrub (week 11)
-- **Why here:** Must happen before public push; legal sign-off has indeterminate timing so start parallel conversations early.
-- **Children:** BC legal sign-off on IP assignment + MIT release; `git-filter-repo` history scrub; LICENSE (MIT) + NOTICE + CONTRIBUTING.md (DCO) + SECURITY.md; GitHub repo rename; `license-checker` in CI with GPL/AGPL/SSPL deny-list.
-- **Verification gate:** secrets grep returns nothing; license audit clean; legal sign-off in writing.
-- **Blocker:** Phase 4. (Legal conversation should start in parallel during Phase 1.)
+- **Status:** DONE 2026-06-09
+- **Shipped:**
+  - LICENSE (MIT with `<COPYRIGHT_HOLDER>` placeholder)
+  - NOTICE.md (auto-generated)
+  - CONTRIBUTING.md (DCO)
+  - SECURITY.md (GHSA)
+  - CODE_OF_CONDUCT.md (Contributor Covenant 2.1)
+  - license-checker CI per workspace (deny GPL/AGPL/LGPL/SSPL + UNKNOWN)
+  - `scripts/audit-history.sh` (gitleaks + project-string grep)
+  - `scripts/scrub-history.sh` (dry-runnable git-filter-repo with safety refusal against live repo)
+- **Design spec:** `docs/superpowers/specs/2026-06-09-phase5-legal-scrub-prep-design.md`
+- **Blocked on Phase 6:** actual scrub execution, `<COPYRIGHT_HOLDER>` swap, public repo creation, force-push, v1.0.0 tag.
 
 ### Phase 6 — Public push + v1.0 tag (week 12)
-- **Why here:** The launch itself.
+- **Status:** BLOCKED on BC legal sign-off.
+- **Pre-flight checklist** (resolve before Phase 6 starts):
+  - [ ] BC legal sign-off on IP assignment + MIT release (written)
+  - [ ] Decision: copyright holder — `Zugzug A/S and contributors` vs `Frederik Hagelund and contributors` vs both
+  - [ ] Decision: public GitHub destination — `Fredehagelund92/zugzug` vs new org
+  - [ ] Confirmation: `zugzug` rewrite scope (CLAUDE.md, internal-process docs)
+  - [ ] Specific Sentry org URL to scrub (if any) — Phase 5 audit found only example/placeholder URLs (e.g. `sentry.io/REDACTED` from plan docs); confirm no real project IDs need adding.
+- **Runbook:** `scripts/README.md` — clone mirror, run scrub, swap `<COPYRIGHT_HOLDER>`, point at public remote, force-push, tag v1.0.0.
 - **Children:** Force-push scrubbed history to fresh public repo; tag `v1.0.0`; launch posts (HN, dbt Slack, r/dataengineering); issue templates for "add adapter for X."
 - **Verification gate:** docs render; install works on clean machine in <10 min; contributor can scaffold a new adapter from the example.
-- **Blocker:** Phase 5.
+- **Blocker:** Phase 5 (completed); legal checklist (outstanding).
 
 ---
 

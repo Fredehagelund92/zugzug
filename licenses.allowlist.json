@@ -1,0 +1,7 @@
+{
+  "$schema": "Curated list of license exceptions. Each entry needs a rationale.",
+  "allowedLicenseAdditions": [
+    "MPL-2.0"
+  ],
+  "perPackageExceptions": {}
+}

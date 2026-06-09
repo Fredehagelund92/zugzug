@@ -1,0 +1,13 @@
+# git-filter-repo --replace-text format: one pattern per line.
+# Syntax: <find>==><replace>
+# Lines starting with # are comments.
+#
+# These mappings rewrite BC-internal strings to generic equivalents.
+# Adjust before Phase 6 if specific strings need different replacements.
+
+@example.com==>@example.com
+example.com==>example.com
+Zugzug==>Zugzug
+zugzug==>zugzug
+zugzug==>zugzug
+sentry.io/REDACTED==>sentry.io/REDACTED
