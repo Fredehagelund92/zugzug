@@ -93,3 +93,21 @@ test("scan_run — failure in middle job doesn't prevent subsequent jobs from be
   expect(rows).toHaveLength(3);
   expect(rows.map((r) => r.status)).toEqual(["ok", "error", "ok"]);
 });
+
+test("scan failure emits scan_failed audit log entry", async () => {
+  const scheduler = createScheduler({
+    tickIntervalMs: 999_999,
+    jobs: [makeJob("test-fail-audit", async () => { throw new Error("boom"); })],
+  });
+  await scheduler._tick();
+  // Fire-and-forget audit emission needs a moment to settle.
+  await new Promise((r) => setTimeout(r, 50));
+  const audits = await pgAll<{ action: string; detail: string }>(
+    `SELECT action, detail FROM zugzug_app.audit_log WHERE action = 'scan_failed'`,
+  );
+  expect(audits.length).toBeGreaterThanOrEqual(1);
+  const found = audits.some(
+    (a) => a.detail.includes("test-fail-audit") && a.detail.includes("boom"),
+  );
+  expect(found).toBe(true);
+});

@@ -3,6 +3,7 @@
 
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
+import { appendAuditAs } from "./repo-meta.ts";
 
 export interface SchedulerJob {
   /** Stable name for logging + scan_run.source_id; e.g., "scan-sources" */
@@ -60,6 +61,10 @@ async function recordScanRun(jobName: string, fn: () => Promise<JobResult>): Pro
         error_message = $2, duration_ms = $3 WHERE id = $4`,
       [new Date(), errorMessage, durationMs, runId],
     ).catch((e) => console.error(`scheduler: scan_run UPDATE failed for ${runId}:`, e));
+    // Fire-and-forget: surface failure in the audit feed without blocking the scheduler.
+    appendAuditAs("u_system", "scan_failed", `${jobName} — ${errorMessage} (run: ${runId})`).catch(
+      (e) => console.error(`scheduler: audit emission failed for ${runId}:`, e),
+    );
     console.error(`scheduler job '${jobName}' failed:`, jobErr);
   }
 }
