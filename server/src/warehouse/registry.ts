@@ -25,7 +25,7 @@ function envCredentials(): WarehouseCredentials {
     path: env.duckPath,
     database: env.warehouseDb,
     attached: env.attachWarehouse,
-    writable: false,
+    writable: env.motherduckWritable,
   };
 }
 
