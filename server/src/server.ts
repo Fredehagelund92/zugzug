@@ -593,6 +593,43 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
     }
 
+    // GET /api/team/users — list all users with roles (any authenticated user)
+    if (seg[1] === "team" && seg[2] === "users" && seg.length === 3 && method === "GET") {
+      const users = await team.listTeamUsers();
+      return json({ users });
+    }
+
+    // PUT /api/team/users/:id/role — change a user's role (admin only)
+    if (
+      seg[1] === "team" &&
+      seg[2] === "users" &&
+      seg.length === 5 &&
+      seg[4] === "role" &&
+      method === "PUT"
+    ) {
+      const denied = gateOrJson(sessionUser, "manage_team");
+      if (denied) return denied;
+
+      const targetId = seg[3]!;
+      const body = (await req.json().catch(() => null)) as { role?: string } | null;
+      const newRole = body?.role;
+      if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") {
+        return json({ error: "invalid_role" }, 400);
+      }
+
+      try {
+        await team.updateUserRole(targetId, newRole);
+        return noContent();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg === "last_admin") {
+          const reason = (e as { reason?: string }).reason ?? "Cannot demote the last admin.";
+          return json({ error: "last_admin", reason }, 400);
+        }
+        throw e;
+      }
+    }
+
     return json({ error: `no route for ${method} ${pathname}` }, 404);
   } catch (e) {
     if (e instanceof AppError) {

@@ -37,3 +37,42 @@ export async function removeMember(email: string, requesterId: string): Promise<
     throw Object.assign(new Error("cannot_remove_self"), { status: 400 });
   await run(`DELETE FROM ${pg("allowed_emails")} WHERE email = $1`, [email]);
 }
+
+// ---------------------------------------------------------------------------
+// Team users with roles
+// ---------------------------------------------------------------------------
+
+export interface TeamUser {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+}
+
+export async function listTeamUsers(): Promise<TeamUser[]> {
+  return all<TeamUser>(`SELECT id, name, email, role FROM ${pg("users")} ORDER BY name ASC`);
+}
+
+export async function updateUserRole(targetId: string, newRole: string): Promise<void> {
+  if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") {
+    throw Object.assign(new Error("invalid_role"), { status: 400 });
+  }
+  // Last-admin guard: if we're demoting an admin, ensure another admin exists
+  if (newRole !== "admin") {
+    const target = await get<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [
+      targetId,
+    ]);
+    if (target?.role === "admin") {
+      const adminCount = await get<{ n: string }>(
+        `SELECT COUNT(*) AS n FROM ${pg("users")} WHERE role = 'admin'`,
+      );
+      if (Number(adminCount?.n ?? 0) <= 1) {
+        throw Object.assign(new Error("last_admin"), {
+          status: 400,
+          reason: "Cannot demote the last admin.",
+        });
+      }
+    }
+  }
+  await run(`UPDATE ${pg("users")} SET role = $1 WHERE id = $2`, [newRole, targetId]);
+}
