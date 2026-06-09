@@ -127,6 +127,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       const { handleLogin } = await import("./auth-password.ts");
       return handleLogin(req);
     }
+    if (seg[2] === "oidc" && seg[3] === "start" && method === "GET") {
+      const { handleOidcStart } = await import("./auth-oidc.ts");
+      return handleOidcStart(req);
+    }
+    if (seg[2] === "oidc" && seg[3] === "callback" && method === "GET") {
+      const { handleOidcCallback } = await import("./auth-oidc.ts");
+      return handleOidcCallback(req);
+    }
     if (seg[2] === "dev" && method === "GET") {
       if (!env.devBypassAuth) return json({ error: "not found" }, 404);
       return handleDevLogin();
