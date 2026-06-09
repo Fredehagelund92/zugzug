@@ -657,6 +657,39 @@ export async function setFieldValue(
   emit();
 }
 
+export interface ApiToken {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface CreatedApiToken extends ApiToken {
+  value: string; // shown once at creation
+}
+
+export async function listApiTokens(): Promise<ApiToken[]> {
+  const r = await fetch("/api/tokens");
+  if (!r.ok) throw new Error(`list_tokens_${r.status}`);
+  const body = (await r.json()) as { tokens: ApiToken[] };
+  return body.tokens;
+}
+
+export async function createApiToken(name: string): Promise<CreatedApiToken> {
+  const r = await fetch("/api/tokens", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!r.ok) throw new Error(`create_token_${r.status}`);
+  return (await r.json()) as CreatedApiToken;
+}
+
+export async function revokeApiToken(id: string): Promise<void> {
+  const r = await fetch(`/api/tokens/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`revoke_token_${r.status}`);
+}
+
 export interface CatalogTable {
   schema: string;
   table: string;
