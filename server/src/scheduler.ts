@@ -78,9 +78,28 @@ export function createScheduler(opts: {
   let drainResolve: (() => void) | null = null;
   let drainPromise: Promise<void> | null = null;
   let abortController = new AbortController();
+  let lastTickActual: number | null = null;
 
   async function _tick(): Promise<void> {
-    if (tickInFlight) return;
+    const tickStart = Date.now();
+
+    if (tickInFlight) {
+      console.error(
+        `scheduler: tick skipped — previous tick still running after ${tickIntervalMs}ms`,
+      );
+      return;
+    }
+
+    // Track drift: actual tick time vs expected interval
+    if (lastTickActual !== null) {
+      const drift = tickStart - lastTickActual - tickIntervalMs;
+      if (drift > tickIntervalMs / 2) {
+        console.warn(
+          `scheduler: tick drifted by ${drift}ms (expected ${tickIntervalMs}ms; actual ${tickStart - lastTickActual}ms)`,
+        );
+      }
+    }
+    lastTickActual = tickStart;
     tickInFlight = true; // set synchronously before any awaits
 
     // Set up drain tracking

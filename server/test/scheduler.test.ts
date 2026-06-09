@@ -112,3 +112,48 @@ test("scheduler — shouldRun() returning false skips the tick", async () => {
   await scheduler._tick();
   expect(jobCalls).toBe(0);
 });
+
+test("scheduler — logs warning on drift > tickIntervalMs/2", async () => {
+  const warns: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: unknown[]) => { warns.push(args.map(String).join(" ")); };
+
+  try {
+    const scheduler = createScheduler({
+      tickIntervalMs: 50,
+      jobs: [makeJob("fast", async () => ({}))],
+    });
+    scheduler.start();
+    await new Promise((r) => setTimeout(r, 30));
+    // Simulate drift by blocking the event loop briefly before next tick
+    const blockUntil = Date.now() + 60;
+    while (Date.now() < blockUntil) {/* block */}
+    await new Promise((r) => setTimeout(r, 100));
+    await scheduler.stop();
+    expect(warns.some((w) => w.includes("scheduler: tick drifted"))).toBe(true);
+  } finally {
+    console.warn = origWarn;
+  }
+});
+
+test("scheduler — logs error when tick is skipped due to in-flight previous", async () => {
+  const errors: string[] = [];
+  const origError = console.error;
+  console.error = (...args: unknown[]) => { errors.push(args.map(String).join(" ")); };
+
+  try {
+    const scheduler = createScheduler({
+      tickIntervalMs: 20,
+      jobs: [makeJob("slow", async () => {
+        await new Promise((r) => setTimeout(r, 150)); // way longer than interval
+        return {};
+      })],
+    });
+    scheduler.start();
+    await new Promise((r) => setTimeout(r, 200));
+    await scheduler.stop();
+    expect(errors.some((e) => e.includes("tick skipped — previous tick still running"))).toBe(true);
+  } finally {
+    console.error = origError;
+  }
+});
