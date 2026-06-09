@@ -18,6 +18,7 @@ import { pgAll, pgEnd } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { createScheduler } from "./scheduler.ts";
+import { scanSourcesJob, autoStageJob, autoCommitJob } from "./scheduler-jobs.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
@@ -57,16 +58,7 @@ console.log(
 const scheduler = createScheduler({
   tickIntervalMs: 60_000,
   shouldRun: () => repo.anyScanDue(new Date()),
-  jobs: [
-    {
-      name: "scan-sources",
-      run: async () => {
-        const n = await repo.scanSources();
-        console.log(`· scheduler: scanned ${n} source${n === 1 ? "" : "s"}`);
-        return { rowsScanned: n };
-      },
-    },
-  ],
+  jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
 });
 scheduler.start();
 console.log("· scheduler started (1m tick)");

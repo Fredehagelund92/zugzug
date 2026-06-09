@@ -20,8 +20,8 @@ import {
   parseSourceTable,
 } from "./repo-shared.ts";
 import { getAdapter } from "./warehouse/registry.ts";
-import { appendAuditAs, getPreferences } from "./repo-meta.ts";
-import { saveDraft, commit } from "./repo-drafts.ts";
+import { appendAuditAs } from "./repo-meta.ts";
+import { saveDraft } from "./repo-drafts.ts";
 
 export interface UnmappedSample {
   raw: string;
@@ -185,22 +185,16 @@ export async function scanSources(): Promise<number> {
     );
   }
 
-  // automation: for every dimension, find raw values that case-insensitively
-  // match an existing canonical label (confidence=100 exact match). Stage them
-  // as drafts, then auto-commit when 100 >= publishThreshold (true for the
-  // default of 95 — user raises the slider to require manual review instead).
-  if (env.attachWarehouse) {
-    const prefs = await getPreferences();
-    const dimIds = [...new Set(regs.map((r) => r.dimId))];
-    for (const id of dimIds) {
-      const staged = await autoStageExactMatches(id);
-      if (staged > 0 && prefs.publishThreshold <= 100) {
-        await commit(id, "u_system");
-      }
-    }
-  }
-
   return regs.length;
+}
+
+/** List dimension IDs that have at least one wired source. Used by the
+ *  auto-stage scheduler job to know which dimensions to process per tick. */
+export async function dimensionsWithWiredSources(): Promise<string[]> {
+  const rows = await pgAll<{ dimId: string }>(
+    `SELECT DISTINCT dim_id AS "dimId" FROM ${pg("dimension_source")}`,
+  );
+  return rows.map((r) => r.dimId);
 }
 
 /** Auto-stage a draft (owned by u_system) for every warehouse raw value that
