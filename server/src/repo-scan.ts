@@ -20,8 +20,8 @@ import {
   parseSourceTable,
 } from "./repo-shared.ts";
 import { getAdapter } from "./warehouse/registry.ts";
-import { appendAuditAs, getPreferences } from "./repo-meta.ts";
-import { saveDraft, commit } from "./repo-drafts.ts";
+import { appendAuditAs } from "./repo-meta.ts";
+import { saveDraft } from "./repo-drafts.ts";
 
 export interface UnmappedSample {
   raw: string;
@@ -185,22 +185,16 @@ export async function scanSources(): Promise<number> {
     );
   }
 
-  // automation: for every dimension, find raw values that case-insensitively
-  // match an existing canonical label (confidence=100 exact match). Stage them
-  // as drafts, then auto-commit when 100 >= publishThreshold (true for the
-  // default of 95 — user raises the slider to require manual review instead).
-  if (env.attachWarehouse) {
-    const prefs = await getPreferences();
-    const dimIds = [...new Set(regs.map((r) => r.dimId))];
-    for (const id of dimIds) {
-      const staged = await autoStageExactMatches(id);
-      if (staged > 0 && prefs.publishThreshold <= 100) {
-        await commit(id, "u_system");
-      }
-    }
-  }
-
   return regs.length;
+}
+
+/** List dimension IDs that have at least one wired source. Used by the
+ *  auto-stage scheduler job to know which dimensions to process per tick. */
+export async function dimensionsWithWiredSources(): Promise<string[]> {
+  const rows = await pgAll<{ dimId: string }>(
+    `SELECT DISTINCT dim_id AS "dimId" FROM ${pg("dimension_source")}`,
+  );
+  return rows.map((r) => r.dimId);
 }
 
 /** Auto-stage a draft (owned by u_system) for every warehouse raw value that
@@ -319,22 +313,36 @@ export async function topUnmapped(
 export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
   let sched: string | null;
   let lastScan: Date | null;
+  let unscannedCount: number;
   try {
-    const row = await pgGet<{ scan_schedule: string | null; last_scan: string | null }>(
+    const row = await pgGet<{
+      scan_schedule: string | null;
+      last_scan: string | null;
+      unscanned_count: number;
+    }>(
       `SELECT p.scan_schedule,
               (SELECT max(st.scanned_at)::text
-               FROM ${pg("source_stat")} st) AS last_scan
+               FROM ${pg("source_stat")} st) AS last_scan,
+              (SELECT count(*)::int FROM ${pg("dimension_source")} ds
+               WHERE NOT EXISTS (
+                 SELECT 1 FROM ${pg("source_stat")} st2
+                 WHERE st2.dim_id = ds.dim_id
+                   AND st2.source_table = ds.source_table
+                   AND st2.source_column = ds.source_column
+               )) AS unscanned_count
        FROM ${pg("preferences")} p WHERE p.id = 1`,
     );
     if (!row) return false;
     sched = row.scan_schedule;
     lastScan = row.last_scan ? new Date(row.last_scan) : null;
+    unscannedCount = row.unscanned_count;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/relation.*zugzug_app.*does not exist/i.test(msg)) return false;
     throw e;
   }
   if (!sched) return false;
+  if (unscannedCount > 0) return true; // unscanned registered source → due immediately
   if (!lastScan) return true; // never scanned → run immediately
   const dueMs = sched === "15m" ? 15 * 60_000 : sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
   return now.getTime() - lastScan.getTime() >= dueMs;

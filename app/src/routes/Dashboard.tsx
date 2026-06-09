@@ -468,6 +468,37 @@ export function Dashboard() {
           </tbody>
         </table>
       </div>
+
+      {/* Scan failure feed — only rendered when scheduler has emitted scan_failed events */}
+      <ScanFailureFeed auditLog={auditLog} />
+    </div>
+  );
+}
+
+/** Renders the most recent scan_failed audit entries (up to 5). Hidden when empty. */
+function ScanFailureFeed({ auditLog }: { auditLog: import("../store").AuditEntry[] }) {
+  const failures = auditLog.filter((e) => e.action === "scan_failed");
+  if (failures.length === 0) return null;
+
+  return (
+    <div className="zz-rise rounded-sm border border-line bg-surface-2">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+        <span className="font-display text-[13px] font-semibold text-ink">Scan failures</span>
+        <span className="font-mono text-[10px] text-warn">{failures.length}</span>
+      </div>
+      <ul className="divide-y divide-line">
+        {failures.slice(0, 5).map((e) => (
+          <li key={e.id} className="flex items-start gap-3 px-4 py-2.5">
+            <span className="mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-pill bg-warn-soft font-mono text-[7px] font-semibold text-warn">
+              {e.user.initials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <span className="font-mono text-[11px] text-warn">{e.detail}</span>
+            </div>
+            <span className="shrink-0 font-mono text-[10px] text-ink-3">{e.at}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

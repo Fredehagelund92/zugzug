@@ -17,6 +17,8 @@ import * as tables from "./tables.ts";
 import { pgAll, pgEnd } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
+import { createScheduler } from "./scheduler.ts";
+import { scanSourcesJob, autoStageJob, autoCommitJob } from "./scheduler-jobs.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
@@ -53,27 +55,12 @@ console.log(
   `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
 );
 
-/* scheduler — every minute, if any wired source is due (per its 15m/hourly/
-   daily cadence), run a full scanSources. scanSources handles all wired
-   sources, so a coarse trigger is fine at this scale. Single in-flight guard
-   prevents overlap if a scan takes longer than the tick. */
-let scanInFlight = false;
-async function scheduleTick(): Promise<void> {
-  if (scanInFlight) return;
-  try {
-    if (!(await repo.anyScanDue(new Date()))) return;
-    scanInFlight = true;
-    const n = await repo.scanSources();
-    console.log(`· scheduler: scanned ${n} source${n === 1 ? "" : "s"}`);
-  } catch (e) {
-    console.error("· scheduler tick failed:", e);
-  } finally {
-    scanInFlight = false;
-  }
-}
-setInterval(() => {
-  void scheduleTick();
-}, 60_000);
+const scheduler = createScheduler({
+  tickIntervalMs: 60_000,
+  shouldRun: () => repo.anyScanDue(new Date()),
+  jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
+});
+scheduler.start();
 console.log("· scheduler started (1m tick)");
 
 async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
@@ -596,11 +583,16 @@ const server = Bun.serve({
 
 console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
 
+const SHUTDOWN_TIMEOUT_MS = 30_000;
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`· ${signal} received — draining…`);
+  // Drain in-flight scheduler job before closing. 30s is the safety-net timeout;
+  // v0.2 jobs don't honor the abort signal but future jobs can via ctx.signal.
+  await scheduler.stop(SHUTDOWN_TIMEOUT_MS);
+  console.log("· scheduler drained; closing server");
   server.stop(false); // stop accepting new connections (Bun has no await-drain API)
   await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
   await Promise.race([

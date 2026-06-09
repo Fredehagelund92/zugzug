@@ -9,6 +9,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  text,
 } from "drizzle-orm/pg-core";
 
 const app = pgSchema("zugzug_app");
@@ -34,7 +35,6 @@ export const dimensionSource = app.table(
     dim_id:        varchar("dim_id").notNull(),
     source_table:  varchar("source_table").notNull(),
     source_column: varchar("source_column").notNull(),
-    schedule:      varchar("schedule"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
 );
@@ -179,5 +179,23 @@ export const aiHintCache = app.table(
   (t) => [
     primaryKey({ columns: [t.dim_id, t.raw] }),
     index("ai_hint_cache_dim_id_idx").on(t.dim_id),
+  ],
+);
+
+export const scanRuns = app.table(
+  "scan_run",
+  {
+    id:            varchar("id").primaryKey(),
+    source_id:     varchar("source_id").notNull(),
+    started_at:    timestamp("started_at").notNull(),
+    ended_at:      timestamp("ended_at"),
+    status:        varchar("status").notNull(),
+    rows_scanned:  integer("rows_scanned"),
+    duration_ms:   integer("duration_ms"),
+    error_message: text("error_message"),
+  },
+  (t) => [
+    index("scan_run_source_id_idx").on(t.source_id),
+    index("scan_run_started_at_idx").on(t.started_at),
   ],
 );
