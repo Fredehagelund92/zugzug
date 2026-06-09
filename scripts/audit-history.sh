@@ -1,9 +1,12 @@
-#!/opt/homebrew/bin/bash
+#!/usr/bin/env bash
 # Manual audit of git history for:
 #   1. Credentials (via gitleaks)
 #   2. BC-internal strings (via grep)
 #
 # Run before any public push. Does not modify the repo.
+#
+# Works on bash 3.2+ (stock macOS) — uses parallel arrays instead of
+# associative arrays so no `declare -A` dependency.
 
 set -uo pipefail
 
@@ -34,16 +37,19 @@ echo ""
 echo "==> Audit: project-specific strings (full history)"
 
 # Each pattern is described inline so the script is self-documenting.
-declare -A PATTERNS=(
-  ["bc_email"]='@bettercollective\.com'
-  ["bc_hostname"]='\bbettercollective\.com\b'
-  ["bc_name"]='Better Collective'
-  ["repo_codename"]='trust-me-bro'
-  ["sentry_org_url"]='sentry\.io/[0-9]+'
+# Parallel arrays (portable across bash 3.2 = stock macOS bash).
+PATTERN_KEYS=("bc_email" "bc_hostname" "bc_name" "repo_codename" "sentry_org_url")
+PATTERN_REGEX=(
+  '@bettercollective\.com'
+  '\bbettercollective\.com\b'
+  'Better Collective'
+  'trust-me-bro'
+  'sentry\.io/[0-9]+'
 )
 
-for key in "${!PATTERNS[@]}"; do
-  pattern="${PATTERNS[$key]}"
+for i in "${!PATTERN_KEYS[@]}"; do
+  key="${PATTERN_KEYS[$i]}"
+  pattern="${PATTERN_REGEX[$i]}"
   count=$(git log --all -p --no-color 2>/dev/null | grep -ciE "$pattern" || true)
   if [ "$count" -eq 0 ]; then
     echo "  PASS: $key ($pattern) — zero matches"
