@@ -7,8 +7,6 @@ import * as repo from "./repo.ts";
 import type { NumberFormat } from "./repo-shared.ts";
 import {
   getSessionUser,
-  handleGoogleRedirect,
-  handleGoogleCallback,
   handleMe,
   handleLogout,
   handleAuthConfig,
@@ -112,13 +110,13 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
 
   if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
 
-  // Auth routes — no session required
+  // Auth routes — no session required for signup/login/logout/config/oidc/dev
   if (seg[1] === "auth") {
-    if (seg[2] === "google" && method === "GET") return handleGoogleRedirect(req);
-    if (seg[2] === "callback" && method === "GET") return handleGoogleCallback(req);
     if (seg[2] === "me" && method === "GET") return handleMe(req);
     if (seg[2] === "logout" && method === "POST") return handleLogout(req);
     if (seg[2] === "config" && method === "GET") return handleAuthConfig();
+
+    // Password mode (only meaningful when env.authMode === "password")
     if (seg[2] === "signup" && method === "POST") {
       const { handleSignup } = await import("./auth-password.ts");
       return handleSignup(req);
@@ -127,6 +125,8 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       const { handleLogin } = await import("./auth-password.ts");
       return handleLogin(req);
     }
+
+    // OIDC mode (only meaningful when env.authMode === "oidc")
     if (seg[2] === "oidc" && seg[3] === "start" && method === "GET") {
       const { handleOidcStart } = await import("./auth-oidc.ts");
       return handleOidcStart(req);
@@ -135,10 +135,13 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       const { handleOidcCallback } = await import("./auth-oidc.ts");
       return handleOidcCallback(req);
     }
+
+    // Dev bypass — local testing only
     if (seg[2] === "dev" && method === "GET") {
       if (!env.devBypassAuth) return json({ error: "not found" }, 404);
       return handleDevLogin();
     }
+
     return json({ error: "not found" }, 404);
   }
 
