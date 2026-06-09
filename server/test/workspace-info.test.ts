@@ -18,30 +18,15 @@ test("env.defaultEngineerMode is boolean (defaults true when DEFAULT_ENGINEER_MO
   expect(env.defaultEngineerMode).toBe(true);
 });
 
-test("env.allowedDomain returns expected value (Task-11 default: '' → null)", () => {
-  // ALLOWED_DOMAIN is not set in the test harness; default flipped to '' in Task 11.
-  const body = {
-    adapter: "duckdb" as const,
-    writable: false,
-    canonicalMode: "postgres-export" as const,
-    warehouseDb: env.warehouseDb || null,
-    defaultEngineerMode: env.defaultEngineerMode,
-    allowedDomain: env.allowedDomain || null,
-  };
-
-  expect(body.defaultEngineerMode).toBe(true); // env default when DEFAULT_ENGINEER_MODE not set
-  expect(body.allowedDomain).toBeNull(); // env default flipped to "" in Task 11 → server returns null
-});
-
 test("workspace/info response shape includes all required fields", () => {
   // Validates the shape of the object returned by the /api/workspace/info handler.
+  // Note: allowedDomain has moved to /api/auth/config (Task 10).
   const body = {
     adapter: "duckdb" as const,
     writable: false,
     canonicalMode: "postgres-export" as const,
     warehouseDb: env.warehouseDb || null,
     defaultEngineerMode: env.defaultEngineerMode,
-    allowedDomain: env.allowedDomain || null,
   };
 
   expect(body).toMatchObject({
@@ -50,7 +35,6 @@ test("workspace/info response shape includes all required fields", () => {
     canonicalMode: expect.any(String),
     defaultEngineerMode: expect.any(Boolean),
   });
-  // warehouseDb and allowedDomain are nullable strings
+  // warehouseDb is a nullable string
   expect(body.warehouseDb === null || typeof body.warehouseDb === "string").toBe(true);
-  expect(body.allowedDomain === null || typeof body.allowedDomain === "string").toBe(true);
 });

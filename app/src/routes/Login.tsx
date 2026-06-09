@@ -1,16 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Mark } from "../components/Mark";
+import { useAuthConfig } from "../store";
 
 const ERROR_MESSAGES: Record<string, string> = {
   domain: "Your email domain is not allowed on this instance. Contact your admin.",
-  not_allowed: "Your account hasn't been added yet. Ask a team member to add you in Settings.",
+  not_allowed: "Your account hasn't been added yet. Ask an existing user to add you in Settings.",
   token: "Authentication failed — please try again.",
   state: "Session expired — please try again.",
   no_code: "Login was cancelled.",
+  no_email: "Your provider didn't return an email — please check your account settings.",
+  invalid_credentials: "Invalid email or password.",
 };
 
 export function Login() {
   const error = new URLSearchParams(window.location.search).get("error");
+  const authConfig = useAuthConfig();
   const [devBypass, setDevBypass] = useState(false);
 
   useEffect(() => {
@@ -58,13 +63,15 @@ export function Login() {
           </p>
         )}
 
-        <a
-          href="/api/auth/google"
-          className="flex w-full items-center justify-center gap-2.5 rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-4 py-2.5 text-[13px] font-medium transition-colors hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          <GoogleIcon />
-          Sign in with Google
-        </a>
+        {authConfig?.mode === "password" && (
+          <PasswordForm allowedDomain={authConfig.allowedDomain} />
+        )}
+        {authConfig?.mode === "oidc" && (
+          <OidcSection
+            label={authConfig.oidcLabel ?? "SSO"}
+            allowedDomain={authConfig.allowedDomain}
+          />
+        )}
 
         {devBypass && (
           <a
@@ -79,25 +86,98 @@ export function Login() {
   );
 }
 
-function GoogleIcon() {
+function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.status === 200) {
+        window.location.href = "/app";
+        return;
+      }
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setFormError(ERROR_MESSAGES[body?.error ?? "invalid_credentials"] ?? "Login failed.");
+    } catch {
+      setFormError("Could not reach the server.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"
-      />
-      <path
-        fill="#34A853"
-        d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2.01c-.72.48-1.63.77-2.7.77-2.08 0-3.84-1.4-4.47-3.29H1.83v2.07A8 8 0 0 0 8.98 17z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M4.51 10.53A4.8 4.8 0 0 1 4.26 9c0-.53.09-1.04.25-1.53V5.4H1.83A8 8 0 0 0 .98 9c0 1.29.31 2.51.85 3.6l2.68-2.07z"
-      />
-      <path
-        fill="#EA4335"
-        d="M8.98 3.58c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.51 7.47c.63-1.89 2.39-3.89 4.47-3.89z"
-      />
-    </svg>
+    <form className="space-y-3" onSubmit={onSubmit}>
+      <label className="block text-[12px]" style={{ color: "var(--ink-2)" }}>
+        Email
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="mt-1 block w-full rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-3 py-2 text-[13px] text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        />
+      </label>
+      <label className="block text-[12px]" style={{ color: "var(--ink-2)" }}>
+        Password
+        <input
+          type="password"
+          required
+          minLength={12}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="mt-1 block w-full rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-3 py-2 text-[13px] text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        />
+      </label>
+      {formError && (
+        <p className="text-[12px]" style={{ color: "var(--warn)" }}>
+          {formError}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="flex w-full items-center justify-center rounded-sm border border-[var(--line-2)] bg-[var(--accent)] px-4 py-2.5 text-[13px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {submitting ? "Signing in…" : "Sign in"}
+      </button>
+      <p className="text-center text-[12px]" style={{ color: "var(--ink-3)" }}>
+        <Link to="/signup" className="text-[var(--accent)] hover:underline">
+          No account? Sign up →
+        </Link>
+      </p>
+      {allowedDomain && (
+        <p className="text-center text-[11px]" style={{ color: "var(--ink-3)" }}>
+          Only @{allowedDomain} accounts can sign up here.
+        </p>
+      )}
+    </form>
+  );
+}
+
+function OidcSection({ label, allowedDomain }: { label: string; allowedDomain: string | null }) {
+  return (
+    <div className="space-y-3">
+      <a
+        href="/api/auth/oidc/start"
+        className="flex w-full items-center justify-center gap-2.5 rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-4 py-2.5 text-[13px] font-medium transition-colors hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      >
+        Sign in with {label}
+      </a>
+      {allowedDomain && (
+        <p className="text-center text-[11px]" style={{ color: "var(--ink-3)" }}>
+          Only @{allowedDomain} accounts can sign in here.
+        </p>
+      )}
+    </div>
   );
 }

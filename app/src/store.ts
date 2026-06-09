@@ -75,7 +75,6 @@ export interface WorkspaceInfo {
   canonicalMode: "warehouse" | "postgres-export";
   warehouseDb: string | null;
   defaultEngineerMode: boolean;
-  allowedDomain: string | null;
 }
 
 let _workspaceInfoCache: WorkspaceInfo | null = null;
@@ -89,9 +88,47 @@ function isWorkspaceInfo(x: unknown): x is WorkspaceInfo {
     typeof o.writable === "boolean" &&
     (o.canonicalMode === "warehouse" || o.canonicalMode === "postgres-export") &&
     (o.warehouseDb === null || typeof o.warehouseDb === "string") &&
-    typeof o.defaultEngineerMode === "boolean" &&
-    (o.allowedDomain === null || typeof o.allowedDomain === "string")
+    typeof o.defaultEngineerMode === "boolean"
   );
+}
+
+export interface AuthConfig {
+  mode: "password" | "oidc";
+  signupOpen: boolean;
+  allowedDomain: string | null;
+  oidcLabel?: string;
+}
+
+let _authConfigCache: AuthConfig | null = null;
+let _authConfigPromise: Promise<AuthConfig | null> | null = null;
+
+function isAuthConfig(x: unknown): x is AuthConfig {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  if (o.mode !== "password" && o.mode !== "oidc") return false;
+  if (typeof o.signupOpen !== "boolean") return false;
+  if (o.allowedDomain !== null && typeof o.allowedDomain !== "string") return false;
+  if (o.oidcLabel !== undefined && typeof o.oidcLabel !== "string") return false;
+  return true;
+}
+
+export function useAuthConfig(): AuthConfig | null {
+  const [cfg, setCfg] = useState<AuthConfig | null>(_authConfigCache);
+  useEffect(() => {
+    if (_authConfigCache) return;
+    if (!_authConfigPromise) {
+      _authConfigPromise = (async () => {
+        const r = await fetch("/api/auth/config");
+        if (!r.ok) return null;
+        const data: unknown = await r.json().catch(() => null);
+        if (!isAuthConfig(data)) return null;
+        _authConfigCache = data;
+        return data;
+      })();
+    }
+    _authConfigPromise.then((data) => setCfg(data));
+  }, []);
+  return cfg;
 }
 
 export function useWorkspaceInfo(): WorkspaceInfo | null {
@@ -618,6 +655,39 @@ export async function setFieldValue(
   );
   await refreshDim(dimId);
   emit();
+}
+
+export interface ApiToken {
+  id: string;
+  name: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface CreatedApiToken extends ApiToken {
+  value: string; // shown once at creation
+}
+
+export async function listApiTokens(): Promise<ApiToken[]> {
+  const r = await fetch("/api/tokens");
+  if (!r.ok) throw new Error(`list_tokens_${r.status}`);
+  const body = (await r.json()) as { tokens: ApiToken[] };
+  return body.tokens;
+}
+
+export async function createApiToken(name: string): Promise<CreatedApiToken> {
+  const r = await fetch("/api/tokens", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!r.ok) throw new Error(`create_token_${r.status}`);
+  return (await r.json()) as CreatedApiToken;
+}
+
+export async function revokeApiToken(id: string): Promise<void> {
+  const r = await fetch(`/api/tokens/${id}`, { method: "DELETE" });
+  if (!r.ok) throw new Error(`revoke_token_${r.status}`);
 }
 
 export interface CatalogTable {
