@@ -72,3 +72,21 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check LICENSE placeholder
         run: bash scripts/check-license-placeholder.sh
+
+  notice-up-to-date:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps (server)
+        working-directory: server
+        run: bun install --frozen-lockfile
+      - name: Install deps (app)
+        working-directory: app
+        run: bun install --frozen-lockfile
+      - name: Regenerate NOTICE.md
+        run: bash scripts/generate-notice.sh
+      - name: Check NOTICE.md is current
+        run: git diff --exit-code NOTICE.md
