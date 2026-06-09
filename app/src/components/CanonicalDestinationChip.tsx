@@ -11,7 +11,11 @@ export function CanonicalDestinationChip() {
   const audit = useAudit();
   const { engineer } = useEngineerMode();
 
-  if (!wsInfo) return null;
+  // Defensive: `useWorkspaceInfo` may return null (loading) or a partial shape
+  // if the /api/workspace/info endpoint returned an error/404 (e.g. stale server).
+  if (!wsInfo || typeof wsInfo.adapter !== "string" || wsInfo.adapter.length === 0) {
+    return null;
+  }
 
   const adapterLabel = wsInfo.adapter[0].toUpperCase() + wsInfo.adapter.slice(1);
   const modeLabel = wsInfo.writable ? `🟢 ${adapterLabel} — writable` : "📦 Local + export";
