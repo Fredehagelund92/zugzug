@@ -1,19 +1,18 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { warehouseSyncStatusByDim } from "../src/routes/dashboard-helpers";
 import { render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 
 const stubDim = {
-  id: "d1",
+  id: "country",
   dimension: "Country",
-  mapTable: "map_country",
+  mapTable: "zugzug.map_country",
   rows: 100,
   color: null,
   canonical: [],
   values: [],
 };
 
-describe("Dashboard canonical-destination badge", () => {
+describe("CanonicalDestinationChip", () => {
   beforeEach(() => {
     vi.resetModules();
   });
@@ -31,15 +30,12 @@ describe("Dashboard canonical-destination badge", () => {
         }),
         useDimensions: () => [stubDim],
         useAudit: () => [],
-        useDrafts: () => ({}),
       };
     });
-    const { Dashboard } = await import("../src/routes/Dashboard");
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+    const { CanonicalDestinationChip } = await import(
+      "../src/components/CanonicalDestinationChip"
     );
+    render(<CanonicalDestinationChip />);
     await waitFor(() => {
       expect(screen.getByText(/Local \+ export/i)).toBeInTheDocument();
     });
@@ -58,18 +54,97 @@ describe("Dashboard canonical-destination badge", () => {
         }),
         useDimensions: () => [stubDim],
         useAudit: () => [],
-        useDrafts: () => ({}),
       };
     });
-    const { Dashboard } = await import("../src/routes/Dashboard");
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
+    const { CanonicalDestinationChip } = await import(
+      "../src/components/CanonicalDestinationChip"
     );
+    render(<CanonicalDestinationChip />);
     await waitFor(() => {
       expect(screen.getByText(/Snowflake.*writable/i)).toBeInTheDocument();
     });
+  });
+
+  test("renders sync rollup when writable mode has failed dim(s)", async () => {
+    vi.doMock("../src/store", async (orig) => {
+      const real = await orig<typeof import("../src/store")>();
+      return {
+        ...real,
+        useWorkspaceInfo: () => ({
+          adapter: "snowflake",
+          writable: true,
+          canonicalMode: "warehouse",
+          warehouseDb: "ANALYTICS",
+        }),
+        useDimensions: () => [stubDim],
+        useAudit: () => [
+          {
+            id: "1",
+            at: "now",
+            user: { id: "u", name: "U", initials: "U" },
+            action: "Warehouse sync failed",
+            detail: "1 → zugzug.map_country: timeout",
+          },
+        ],
+      };
+    });
+    const { CanonicalDestinationChip } = await import(
+      "../src/components/CanonicalDestinationChip"
+    );
+    render(<CanonicalDestinationChip />);
+    await waitFor(() => {
+      expect(screen.getByText(/1 needs resync/i)).toBeInTheDocument();
+    });
+  });
+
+  test("does not render sync rollup in read-only mode (postgres-export)", async () => {
+    vi.doMock("../src/store", async (orig) => {
+      const real = await orig<typeof import("../src/store")>();
+      return {
+        ...real,
+        useWorkspaceInfo: () => ({
+          adapter: "duckdb",
+          writable: false,
+          canonicalMode: "postgres-export",
+          warehouseDb: "analytics",
+        }),
+        useDimensions: () => [stubDim],
+        useAudit: () => [
+          {
+            id: "1",
+            at: "now",
+            user: { id: "u", name: "U", initials: "U" },
+            action: "Warehouse sync failed",
+            detail: "1 → zugzug.map_country: timeout",
+          },
+        ],
+      };
+    });
+    const { CanonicalDestinationChip } = await import(
+      "../src/components/CanonicalDestinationChip"
+    );
+    render(<CanonicalDestinationChip />);
+    await waitFor(() => {
+      expect(screen.getByText(/Local \+ export/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/need.*resync/i)).not.toBeInTheDocument();
+  });
+
+  test("renders nothing while workspace info is loading", async () => {
+    vi.doMock("../src/store", async (orig) => {
+      const real = await orig<typeof import("../src/store")>();
+      return {
+        ...real,
+        useWorkspaceInfo: () => null,
+        useDimensions: () => [],
+        useAudit: () => [],
+      };
+    });
+    const { CanonicalDestinationChip } = await import(
+      "../src/components/CanonicalDestinationChip"
+    );
+    const { container } = render(<CanonicalDestinationChip />);
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

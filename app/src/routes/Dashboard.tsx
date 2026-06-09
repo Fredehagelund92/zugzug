@@ -136,20 +136,6 @@ export function Dashboard() {
       delta: rowsAtRisk > 0 ? "unmapped warehouse rows" : undefined,
       dir: rowsAtRisk > 0 ? "warn" : undefined,
     },
-    {
-      label: "Canonical destination",
-      value: wsInfo
-        ? wsInfo.writable
-          ? `🟢 ${wsInfo.adapter[0].toUpperCase() + wsInfo.adapter.slice(1)} — writable`
-          : "📦 Local + export"
-        : "…",
-      delta: wsInfo
-        ? wsInfo.writable
-          ? `Commits MERGE into ${wsInfo.warehouseDb ?? "warehouse"}`
-          : "Postgres canonical; download Parquet on demand"
-        : undefined,
-      dir: "up" as const,
-    },
   ];
 
   if (dims.length === 0) {
