@@ -29,13 +29,23 @@ export const env = {
   duckPath: process.env.DUCK_PATH?.trim() || ":memory:",
   port: Number(process.env.PORT?.trim() || 8787),
 
-  // Google OAuth2
-  googleClientId: required("GOOGLE_CLIENT_ID"),
-  googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
-  /** Email domain restriction for signups. Empty string = unrestricted.
-   *  Set ALLOWED_DOMAIN=example.com (or, in PR 2, OIDC_ALLOWED_DOMAIN=example.com)
-   *  to require all users' emails to belong to that domain. */
-  allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || "",
+  // Auth mode resolution. If OIDC_ISSUER_URL is set, OIDC is the only auth path
+  // (the Login page shows "Sign in with SSO"). Otherwise, password is the only
+  // auth path (Login shows email + password fields). One-or-the-other per deployment.
+  oidcIssuerUrl: process.env.OIDC_ISSUER_URL?.trim() || "",
+  oidcClientId: process.env.OIDC_CLIENT_ID?.trim() || "",
+  oidcClientSecret: process.env.OIDC_CLIENT_SECRET?.trim() || "",
+  oidcAllowedDomain: process.env.OIDC_ALLOWED_DOMAIN?.trim() || "",
+  oidcLabel: process.env.OIDC_LABEL?.trim() || "",
+  get authMode(): "password" | "oidc" {
+    return this.oidcIssuerUrl ? "oidc" : "password";
+  },
+  /** Email domain restriction — applied in BOTH modes. Empty = unrestricted. */
+  allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || process.env.OIDC_ALLOWED_DOMAIN?.trim() || "",
+  /** @deprecated — replaced by OIDC_CLIENT_ID. Kept as optional for transition; not read by new code. */
+  googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || "",
+  /** @deprecated — replaced by OIDC_CLIENT_SECRET. */
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() || "",
   /** Public origin of this app — used to build the OAuth redirect_uri.
    *  In dev: http://localhost:5173 (Vite proxies /api). In prod: https://yourapp.com */
   origin: (process.env.ORIGIN?.trim() || "http://localhost:5173").replace(/\/$/, ""),
