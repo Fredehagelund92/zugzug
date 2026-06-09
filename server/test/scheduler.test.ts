@@ -136,6 +136,30 @@ test("scheduler — logs warning on drift > tickIntervalMs/2", async () => {
   }
 });
 
+test("scheduler — stop() aborts the signal passed to in-flight jobs", async () => {
+  let signalSeenAborted = false;
+  const scheduler = createScheduler({
+    tickIntervalMs: 50,
+    jobs: [{
+      name: "signal-watcher",
+      run: async (ctx) => {
+        // Wait until aborted OR 500ms
+        await new Promise<void>((resolve) => {
+          if (ctx.signal.aborted) { signalSeenAborted = true; return resolve(); }
+          const onAbort = () => { signalSeenAborted = true; resolve(); };
+          ctx.signal.addEventListener("abort", onAbort, { once: true });
+          setTimeout(() => resolve(), 500);
+        });
+        return {};
+      },
+    }],
+  });
+  scheduler.start();
+  await new Promise((r) => setTimeout(r, 20)); // let the job start
+  await scheduler.stop(200);
+  expect(signalSeenAborted).toBe(true);
+});
+
 test("scheduler — logs error when tick is skipped due to in-flight previous", async () => {
   const errors: string[] = [];
   const origError = console.error;

@@ -62,7 +62,6 @@ const scheduler = createScheduler({
 });
 scheduler.start();
 console.log("· scheduler started (1m tick)");
-// TODO(A8): wire scheduler.stop() into the SIGTERM handler for graceful shutdown.
 
 async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
   const url = new URL(req.url);
@@ -584,11 +583,16 @@ const server = Bun.serve({
 
 console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
 
+const SHUTDOWN_TIMEOUT_MS = 30_000;
 let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`· ${signal} received — draining…`);
+  // Drain in-flight scheduler job before closing. 30s is the safety-net timeout;
+  // v0.2 jobs don't honor the abort signal but future jobs can via ctx.signal.
+  await scheduler.stop(SHUTDOWN_TIMEOUT_MS);
+  console.log("· scheduler drained; closing server");
   server.stop(false); // stop accepting new connections (Bun has no await-drain API)
   await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
   await Promise.race([
