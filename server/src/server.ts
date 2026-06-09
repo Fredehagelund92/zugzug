@@ -160,6 +160,22 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       return handleChangePassword(req, me);
     }
 
+    // API token management (authenticated; session-required not bearer-required)
+    if (seg[1] === "tokens") {
+      if (seg.length === 2 && method === "GET") {
+        const { handleListTokens } = await import("./auth-api-tokens.ts");
+        return handleListTokens(me);
+      }
+      if (seg.length === 2 && method === "POST") {
+        const { handleCreateToken } = await import("./auth-api-tokens.ts");
+        return handleCreateToken(req, me);
+      }
+      if (seg.length === 3 && method === "DELETE") {
+        const { handleRevokeToken } = await import("./auth-api-tokens.ts");
+        return handleRevokeToken(seg[2], me);
+      }
+    }
+
     // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
       if (method === "GET") return json(await repo.getPreferences());
