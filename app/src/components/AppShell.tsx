@@ -4,6 +4,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
+import { CanonicalDestinationChip } from "./CanonicalDestinationChip";
 import { CommandPalette, type Command } from "./CommandPalette";
 import {
   IconDashboard,
@@ -564,6 +565,7 @@ export function AppShell() {
           </button>
 
           <div className="ml-auto flex items-center gap-3">
+            <CanonicalDestinationChip />
             <ThemeToggle />
             <UserMenu />
           </div>
