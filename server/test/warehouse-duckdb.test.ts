@@ -177,3 +177,37 @@ test("distinctValuesWithProvenance merges multiple sources and tags sourceIndex"
   expect(fromCountries.length).toBe(2); // US, EU
   expect(fromPartners.find((r) => r.value === "EU")?.count).toBe(2);
 });
+
+import { DuckDbWritableAdapter } from "../src/warehouse/duckdb/index.ts";
+
+test("DuckDbWritableAdapter: ensureCanonicalTables creates dim_ and map_ idempotently", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // Need a schema to host the tables (default catalog is "memory" for :memory: db)
+  // @ts-expect-error — private connect()
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+
+  await a.ensureCanonicalTables({
+    dimId: "country",
+    dimTable: "zugzug.dim_country",
+    mapTable: "zugzug.map_country",
+    keyCol: "country_code",
+  });
+
+  // Tables exist; calling again is a no-op (no error).
+  await a.ensureCanonicalTables({
+    dimId: "country",
+    dimTable: "zugzug.dim_country",
+    mapTable: "zugzug.map_country",
+    keyCol: "country_code",
+  });
+
+  // Insert sample row to confirm the schema accepted the CREATEs
+  await c.run(`INSERT INTO zugzug.dim_country ("country_code", label) VALUES ('US', 'United States')`);
+  await c.run(`INSERT INTO zugzug.map_country (raw, "country_code") VALUES ('USA', 'US')`);
+
+  const dimRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country`);
+  expect(dimRows.getRowObjects()).toEqual([{ country_code: "US", label: "United States" }]);
+  const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country`);
+  expect(mapRows.getRowObjects()).toEqual([{ raw: "USA", country_code: "US" }]);
+});
