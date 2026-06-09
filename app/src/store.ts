@@ -77,19 +77,32 @@ export interface WorkspaceInfo {
 }
 
 let _workspaceInfoCache: WorkspaceInfo | null = null;
-let _workspaceInfoPromise: Promise<WorkspaceInfo> | null = null;
+let _workspaceInfoPromise: Promise<WorkspaceInfo | null> | null = null;
+
+function isWorkspaceInfo(x: unknown): x is WorkspaceInfo {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    (o.adapter === "duckdb" || o.adapter === "snowflake") &&
+    typeof o.writable === "boolean" &&
+    (o.canonicalMode === "warehouse" || o.canonicalMode === "postgres-export") &&
+    (o.warehouseDb === null || typeof o.warehouseDb === "string")
+  );
+}
 
 export function useWorkspaceInfo(): WorkspaceInfo | null {
   const [info, setInfo] = useState<WorkspaceInfo | null>(_workspaceInfoCache);
   useEffect(() => {
     if (_workspaceInfoCache) return;
     if (!_workspaceInfoPromise) {
-      _workspaceInfoPromise = fetch("/api/workspace/info")
-        .then((r) => r.json() as Promise<WorkspaceInfo>)
-        .then((data) => {
-          _workspaceInfoCache = data;
-          return data;
-        });
+      _workspaceInfoPromise = (async () => {
+        const r = await fetch("/api/workspace/info");
+        if (!r.ok) return null;
+        const data: unknown = await r.json().catch(() => null);
+        if (!isWorkspaceInfo(data)) return null;
+        _workspaceInfoCache = data;
+        return data;
+      })();
     }
     _workspaceInfoPromise.then((data) => setInfo(data));
   }, []);
