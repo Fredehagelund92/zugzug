@@ -5,10 +5,10 @@ process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect } from "bun:test";
-import { DuckDbAdapter } from "../src/warehouse/duckdb/index.ts";
+import { DuckDbReadOnlyAdapter } from "../src/warehouse/duckdb/index.ts";
 
 test("quoteIdentifier escapes embedded double quotes", () => {
-  const a = new DuckDbAdapter({
+  const a = new DuckDbReadOnlyAdapter({
     type: "duckdb",
     path: ":memory:",
     database: "analytics",
@@ -19,7 +19,7 @@ test("quoteIdentifier escapes embedded double quotes", () => {
 });
 
 test("qualifyRef builds catalog.schema.table when database set", () => {
-  const a = new DuckDbAdapter({
+  const a = new DuckDbReadOnlyAdapter({
     type: "duckdb",
     path: ":memory:",
     database: "analytics",
@@ -31,30 +31,30 @@ test("qualifyRef builds catalog.schema.table when database set", () => {
 });
 
 test("qualifyRef builds schema.table when no database", () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.qualifyRef({ schema: "main", table: "t" })).toBe('"main"."t"');
 });
 
 test("castToString wraps in CAST(... AS VARCHAR)", () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.castToString('"col"')).toBe('CAST("col" AS VARCHAR)');
 });
 
 test("capabilities are read-only DuckDB defaults when not attached", () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.capabilities.id).toBe("duckdb");
   expect(a.capabilities.writable).toBe(false);
   expect(a.capabilities.identifierCase).toBe("preserve");
 });
 
 test("ping returns true with in-memory connection", async () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   await expect(a.ping()).resolves.toBe(true);
 });
 
 // Set up a small in-memory dataset shared across query tests.
-async function withFixture(): Promise<DuckDbAdapter> {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+async function withFixture(): Promise<DuckDbReadOnlyAdapter> {
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   // @ts-expect-error — test reaches into private connect() via a trampoline
   const c = await a["connect"]();
   await c.run(`CREATE SCHEMA raw`);
@@ -121,7 +121,7 @@ test("nameResolution returns id→name Map", async () => {
 });
 
 test("nameResolution: duplicate ids — last-write-wins, but caller gets a value", async () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   // @ts-expect-error — private connect()
   const c = await a["connect"]();
   await c.run(`CREATE TABLE dupes (code VARCHAR, label VARCHAR)`);
@@ -133,7 +133,7 @@ test("nameResolution: duplicate ids — last-write-wins, but caller gets a value
 });
 
 test("nameResolution: null ids are filtered, not present as a null Map key", async () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   // @ts-expect-error — private connect()
   const c = await a["connect"]();
   await c.run(`CREATE TABLE has_nulls (code VARCHAR, label VARCHAR)`);

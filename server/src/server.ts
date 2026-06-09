@@ -20,7 +20,7 @@ import { pgAll, pgEnd } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
-import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 
@@ -41,7 +41,7 @@ const err = (e: unknown, status = 500) =>
   json({ error: e instanceof Error ? e.message : String(e) }, status);
 
 registerFactories({
-  duckdb: async (creds) => new DuckDbAdapter(creds),
+  duckdb: async (creds) => createDuckDbAdapter(creds),
   snowflake: async (creds) => new SnowflakeAdapter(creds),
 });
 

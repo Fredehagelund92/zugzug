@@ -7,14 +7,14 @@ import { runMigrations } from "../drizzle/migrate.ts";
 import { seedDemo } from "./seed.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
-import { DuckDbAdapter } from "./warehouse/duckdb/index.ts";
+import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 
 const seed = process.argv.includes("--seed");
 
 registerFactories({
-  duckdb: async (creds) => new DuckDbAdapter(creds),
+  duckdb: async (creds) => createDuckDbAdapter(creds),
   snowflake: async (creds) => new SnowflakeAdapter(creds),
 });
 

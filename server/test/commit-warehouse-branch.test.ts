@@ -9,7 +9,7 @@ import { resetDb } from "./setup.ts";
 import * as repo from "../src/repo.ts";
 import { registerFactories } from "../src/warehouse/credentials.ts";
 import { _resetAdapterCache } from "../src/warehouse/registry.ts";
-import { DuckDbAdapter } from "../src/warehouse/duckdb/index.ts";
+import { createDuckDbAdapter } from "../src/warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "../src/warehouse/snowflake/index.ts";
 import type {
   WritableWarehouseAdapter,
@@ -133,7 +133,7 @@ test("commit with no approved drafts: returns early; no warehouse call attempted
 // Cleanup: restore real factories at end of file so subsequent test files see DuckDB
 afterAll(async () => {
   registerFactories({
-    duckdb: async (creds) => new DuckDbAdapter(creds),
+    duckdb: async (creds) => createDuckDbAdapter(creds),
     snowflake: async (creds) => new SnowflakeAdapter(creds),
   });
   _resetAdapterCache();
