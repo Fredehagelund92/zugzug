@@ -20,6 +20,28 @@ export interface User {
   initials: string;
   email?: string;
 }
+
+/** The signed-in user with RBAC role. Returned by /api/auth/me and exposed via
+ *  useCurrentUser(). Distinct from User (collaborator shape) which lacks role. */
+export interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+  role: "admin" | "editor" | "viewer";
+}
+
+function isCurrentUser(x: unknown): x is CurrentUser {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.name === "string" &&
+    typeof o.email === "string" &&
+    typeof o.initials === "string" &&
+    (o.role === "admin" || o.role === "editor" || o.role === "viewer")
+  );
+}
 export interface Draft {
   dimId: string;
   raw: string;
@@ -62,6 +84,8 @@ export const dkey = (dimId: string, raw: string) => `${dimId}::${raw}`;
 /* ---- session identity (populated by initStore before first render) ---- */
 export let currentUser: User = { id: "u_ada", name: "Ada Berg", initials: "AB" };
 export let collaborators: User[] = [currentUser];
+/** Full session user including role. Populated by initStore via /api/auth/me. */
+let currentUserFull: CurrentUser | null = null;
 
 export interface Preferences {
   publishThreshold: number;
@@ -217,9 +241,15 @@ async function refreshPreferences(): Promise<void> {
  *  iterates the dims it just fetched. Cold boot drops from 6 sequential RTTs
  *  to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
-  const u = await api<{ currentUser: User; collaborators: User[] }>("/users");
+  const [u, meRaw] = await Promise.all([
+    api<{ currentUser: User; collaborators: User[] }>("/users"),
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+  ]);
   currentUser = u.currentUser;
   collaborators = u.collaborators;
+  if (isCurrentUser(meRaw)) currentUserFull = meRaw;
   await Promise.all([refreshDims(), refreshSources(), refreshAudit(), refreshPreferences()]);
   await refreshDrafts();
   emit();
@@ -259,6 +289,13 @@ export function usePreferences(): Preferences {
     subscribe,
     () => preferences,
     () => preferences,
+  );
+}
+export function useCurrentUser(): CurrentUser | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => currentUserFull,
+    () => currentUserFull,
   );
 }
 

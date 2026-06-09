@@ -18,7 +18,8 @@ import {
   IconMenu,
   IconX,
 } from "./Icons";
-import { useDimensions, currentUser } from "../store";
+import { useDimensions, currentUser, useCurrentUser } from "../store";
+import { RoleBadge } from "./RoleBadge";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
 import { SidebarTableTree } from "./SidebarTableTree";
@@ -178,6 +179,7 @@ function UserMenu() {
 
 export function AppShell() {
   const dims = useDimensions();
+  const me = useCurrentUser();
   const { engineer } = useEngineerMode();
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -565,6 +567,7 @@ export function AppShell() {
 
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
+            {me && <RoleBadge role={me.role} />}
             <UserMenu />
           </div>
         </header>
