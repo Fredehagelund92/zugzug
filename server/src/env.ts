@@ -41,7 +41,8 @@ export const env = {
     return this.oidcIssuerUrl ? "oidc" : "password";
   },
   /** Email domain restriction — applied in BOTH modes. Empty = unrestricted. */
-  allowedDomain: process.env.ALLOWED_DOMAIN?.trim() || process.env.OIDC_ALLOWED_DOMAIN?.trim() || "",
+  allowedDomain:
+    process.env.ALLOWED_DOMAIN?.trim() || process.env.OIDC_ALLOWED_DOMAIN?.trim() || "",
   /** @deprecated — replaced by OIDC_CLIENT_ID. Kept as optional for transition; not read by new code. */
   googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || "",
   /** @deprecated — replaced by OIDC_CLIENT_SECRET. */

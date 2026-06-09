@@ -225,9 +225,37 @@ export async function handleMe(req: Request): Promise<Response> {
   });
 }
 
+export interface AuthConfigBody {
+  mode: "password" | "oidc";
+  signupOpen: boolean;
+  allowedDomain: string | null;
+  oidcLabel?: string;
+}
+
+export function buildAuthConfig(input: {
+  authMode: "password" | "oidc";
+  allowedDomain: string;
+  oidcLabel: string;
+}): AuthConfigBody {
+  const body: AuthConfigBody = {
+    mode: input.authMode,
+    signupOpen: false, // Reserved for v1.1 OPEN_SIGNUP=true env flag.
+    allowedDomain: input.allowedDomain || null,
+  };
+  if (input.authMode === "oidc" && input.oidcLabel) {
+    body.oidcLabel = input.oidcLabel;
+  }
+  return body;
+}
+
 /** GET /api/auth/config — public config for the login page. */
 export function handleAuthConfig(): Response {
-  return new Response(JSON.stringify({}), {
+  const body = buildAuthConfig({
+    authMode: env.authMode,
+    allowedDomain: env.allowedDomain,
+    oidcLabel: env.oidcLabel,
+  });
+  return new Response(JSON.stringify(body), {
     headers: { "content-type": "application/json", ...cors },
   });
 }
