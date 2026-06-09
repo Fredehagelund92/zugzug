@@ -17,6 +17,7 @@ import * as tables from "./tables.ts";
 import { pgAll, pgEnd } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
+import { createScheduler } from "./scheduler.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
@@ -53,28 +54,23 @@ console.log(
   `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
 );
 
-/* scheduler — every minute, if any wired source is due (per its 15m/hourly/
-   daily cadence), run a full scanSources. scanSources handles all wired
-   sources, so a coarse trigger is fine at this scale. Single in-flight guard
-   prevents overlap if a scan takes longer than the tick. */
-let scanInFlight = false;
-async function scheduleTick(): Promise<void> {
-  if (scanInFlight) return;
-  try {
-    if (!(await repo.anyScanDue(new Date()))) return;
-    scanInFlight = true;
-    const n = await repo.scanSources();
-    console.log(`· scheduler: scanned ${n} source${n === 1 ? "" : "s"}`);
-  } catch (e) {
-    console.error("· scheduler tick failed:", e);
-  } finally {
-    scanInFlight = false;
-  }
-}
-setInterval(() => {
-  void scheduleTick();
-}, 60_000);
+const scheduler = createScheduler({
+  tickIntervalMs: 60_000,
+  shouldRun: () => repo.anyScanDue(new Date()),
+  jobs: [
+    {
+      name: "scan-sources",
+      run: async () => {
+        const n = await repo.scanSources();
+        console.log(`· scheduler: scanned ${n} source${n === 1 ? "" : "s"}`);
+        return { rowsScanned: n };
+      },
+    },
+  ],
+});
+scheduler.start();
 console.log("· scheduler started (1m tick)");
+// TODO(A8): wire scheduler.stop() into the SIGTERM handler for graceful shutdown.
 
 async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
   const url = new URL(req.url);
