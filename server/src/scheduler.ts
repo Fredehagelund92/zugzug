@@ -1,6 +1,9 @@
 /* scheduler.ts — generic tick scheduler with in-flight guard and clean stop().
    Extracted from the inline block that was in server.ts. */
 
+import { pgRun } from "./pg.ts";
+import { pg } from "./env.ts";
+
 export interface SchedulerJob {
   /** Stable name for logging + scan_run.source_id; e.g., "scan-sources" */
   name: string;
@@ -21,6 +24,44 @@ export interface Scheduler {
   stop(drainTimeoutMs?: number): Promise<void>;
   /** Test hook: trigger one tick synchronously without waiting for the interval. */
   _tick(): Promise<void>;
+}
+
+async function recordScanRun(jobName: string, fn: () => Promise<JobResult>): Promise<void> {
+  const runId = `run_${crypto.randomUUID().replace(/-/g, "")}`;
+  const startedAt = new Date();
+  try {
+    await pgRun(
+      `INSERT INTO ${pg("scan_run")} (id, source_id, started_at, status)
+       VALUES ($1, $2, $3, 'running')`,
+      [runId, jobName, startedAt],
+    );
+  } catch (e) {
+    // Don't let scan_run persistence failure block the job — log and proceed.
+    console.error(`scheduler: scan_run INSERT failed for ${jobName}:`, e);
+    await fn().catch((jobErr) => {
+      console.error(`scheduler job '${jobName}' failed:`, jobErr);
+    });
+    return;
+  }
+
+  try {
+    const result = await fn();
+    const durationMs = Date.now() - startedAt.getTime();
+    await pgRun(
+      `UPDATE ${pg("scan_run")} SET ended_at = $1, status = 'ok',
+        rows_scanned = $2, duration_ms = $3 WHERE id = $4`,
+      [new Date(), result.rowsScanned ?? null, durationMs, runId],
+    ).catch((e) => console.error(`scheduler: scan_run UPDATE failed for ${runId}:`, e));
+  } catch (jobErr) {
+    const durationMs = Date.now() - startedAt.getTime();
+    const errorMessage = jobErr instanceof Error ? jobErr.message : String(jobErr);
+    await pgRun(
+      `UPDATE ${pg("scan_run")} SET ended_at = $1, status = 'error',
+        error_message = $2, duration_ms = $3 WHERE id = $4`,
+      [new Date(), errorMessage, durationMs, runId],
+    ).catch((e) => console.error(`scheduler: scan_run UPDATE failed for ${runId}:`, e));
+    console.error(`scheduler job '${jobName}' failed:`, jobErr);
+  }
 }
 
 export function createScheduler(opts: {
@@ -61,11 +102,7 @@ export function createScheduler(opts: {
 
       const ctx: JobContext = { signal: abortController.signal };
       for (const job of jobs) {
-        try {
-          await job.run(ctx);
-        } catch (e) {
-          console.error(`· scheduler: job "${job.name}" failed:`, e);
-        }
+        await recordScanRun(job.name, () => job.run(ctx));
       }
     } finally {
       tickInFlight = false;
