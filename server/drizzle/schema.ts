@@ -100,6 +100,7 @@ export const users = app.table(
     google_sub:    varchar("google_sub"),
     password_hash: varchar("password_hash"),
     auth_provider: varchar("auth_provider").notNull().default("password"),
+    role:          varchar("role").notNull().default("editor"),
   },
   (t) => [
     uniqueIndex("users_email_unique").on(t.email).where(sql`email IS NOT NULL`),
