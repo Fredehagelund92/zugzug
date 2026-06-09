@@ -25,6 +25,24 @@ export interface SessionUser {
   initials: string;
 }
 
+export type Role = "admin" | "editor" | "viewer";
+
+export type Operation =
+  | "curate" // create/update drafts
+  | "commit" // commit drafts to canonical
+  | "manage_team" // change roles, manage allowlist
+  | "manage_adapter"; // configure warehouse credentials
+
+/** Static permission matrix. Returns true if the given role may perform op. */
+export function canMutate(role: Role, op: Operation): boolean {
+  const matrix: Record<Role, Operation[]> = {
+    admin: ["curate", "commit", "manage_team", "manage_adapter"],
+    editor: ["curate", "commit"],
+    viewer: [],
+  };
+  return matrix[role].includes(op);
+}
+
 const SID = "zz_sid";
 const SESSION_SECONDS = 30 * 86_400;
 const isSecure = env.origin.startsWith("https://");
