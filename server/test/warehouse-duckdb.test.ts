@@ -211,3 +211,82 @@ test("DuckDbWritableAdapter: ensureCanonicalTables creates dim_ and map_ idempot
   const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country`);
   expect(mapRows.getRowObjects()).toEqual([{ raw: "USA", country_code: "US" }]);
 });
+
+test("DuckDbWritableAdapter: commitCanonical empty drafts returns rowsWritten=0 with no SQL", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // @ts-expect-error
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+  await a.ensureCanonicalTables({
+    dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code",
+  });
+
+  const result = await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    [],
+  );
+  expect(result.rowsWritten).toBe(0);
+
+  const rows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.dim_country`);
+  expect(rows.getRowObjects()).toEqual([{ n: 0n }]);
+});
+
+test("DuckDbWritableAdapter: commitCanonical writes dim + map rows via MERGE", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // @ts-expect-error
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+  await a.ensureCanonicalTables({
+    dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code",
+  });
+
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    [
+      { raw: "USA", key: "US", label: "United States" },
+      { raw: "U.S.", key: "US", label: "United States" },
+      { raw: "United Kingdom", key: "GB", label: "United Kingdom" },
+    ],
+  );
+
+  // dim_country: deduped by key (2 unique keys: US, GB)
+  const dimRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country ORDER BY "country_code"`);
+  expect(dimRows.getRowObjects()).toEqual([
+    { country_code: "GB", label: "United Kingdom" },
+    { country_code: "US", label: "United States" },
+  ]);
+
+  // map_country: one row per draft (3 rows)
+  const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country ORDER BY raw`);
+  expect(mapRows.getRowObjects()).toEqual([
+    { raw: "U.S.", country_code: "US" },
+    { raw: "USA", country_code: "US" },
+    { raw: "United Kingdom", country_code: "GB" },
+  ]);
+});
+
+test("DuckDbWritableAdapter: commitCanonical is idempotent on repeat", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // @ts-expect-error
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+  await a.ensureCanonicalTables({
+    dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code",
+  });
+
+  const drafts = [{ raw: "USA", key: "US", label: "United States" }];
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    drafts,
+  );
+  // Calling again with the same drafts is a no-op (MERGE only inserts on no match).
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    drafts,
+  );
+
+  const dimRows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.dim_country`);
+  expect(dimRows.getRowObjects()).toEqual([{ n: 1n }]);
+  const mapRows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.map_country`);
+  expect(mapRows.getRowObjects()).toEqual([{ n: 1n }]);
+});
