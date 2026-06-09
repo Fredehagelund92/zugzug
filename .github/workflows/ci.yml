@@ -20,6 +20,10 @@ jobs:
       - run: bun run lint
       - run: bun run format:check
       - run: bun run test
+      - name: License check (app deps)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash scripts/run-license-check.sh app
 
   server:
     runs-on: ubuntu-latest
@@ -56,6 +60,10 @@ jobs:
           GOOGLE_CLIENT_ID: dummy
           GOOGLE_CLIENT_SECRET: dummy
           ATTACH_WAREHOUSE: "false"
+      - name: License check (server deps)
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash scripts/run-license-check.sh server
 
   license-placeholder-check:
     runs-on: ubuntu-latest
