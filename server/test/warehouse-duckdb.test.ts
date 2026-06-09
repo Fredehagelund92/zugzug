@@ -5,10 +5,10 @@ process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect } from "bun:test";
-import { DuckDbAdapter } from "../src/warehouse/duckdb/index.ts";
+import { DuckDbReadOnlyAdapter } from "../src/warehouse/duckdb/index.ts";
 
 test("quoteIdentifier escapes embedded double quotes", () => {
-  const a = new DuckDbAdapter({
+  const a = new DuckDbReadOnlyAdapter({
     type: "duckdb",
     path: ":memory:",
     database: "analytics",
@@ -19,7 +19,7 @@ test("quoteIdentifier escapes embedded double quotes", () => {
 });
 
 test("qualifyRef builds catalog.schema.table when database set", () => {
-  const a = new DuckDbAdapter({
+  const a = new DuckDbReadOnlyAdapter({
     type: "duckdb",
     path: ":memory:",
     database: "analytics",
@@ -31,30 +31,30 @@ test("qualifyRef builds catalog.schema.table when database set", () => {
 });
 
 test("qualifyRef builds schema.table when no database", () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.qualifyRef({ schema: "main", table: "t" })).toBe('"main"."t"');
 });
 
 test("castToString wraps in CAST(... AS VARCHAR)", () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.castToString('"col"')).toBe('CAST("col" AS VARCHAR)');
 });
 
 test("capabilities are read-only DuckDB defaults when not attached", () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.capabilities.id).toBe("duckdb");
   expect(a.capabilities.writable).toBe(false);
   expect(a.capabilities.identifierCase).toBe("preserve");
 });
 
 test("ping returns true with in-memory connection", async () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   await expect(a.ping()).resolves.toBe(true);
 });
 
 // Set up a small in-memory dataset shared across query tests.
-async function withFixture(): Promise<DuckDbAdapter> {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+async function withFixture(): Promise<DuckDbReadOnlyAdapter> {
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   // @ts-expect-error — test reaches into private connect() via a trampoline
   const c = await a["connect"]();
   await c.run(`CREATE SCHEMA raw`);
@@ -121,7 +121,7 @@ test("nameResolution returns id→name Map", async () => {
 });
 
 test("nameResolution: duplicate ids — last-write-wins, but caller gets a value", async () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   // @ts-expect-error — private connect()
   const c = await a["connect"]();
   await c.run(`CREATE TABLE dupes (code VARCHAR, label VARCHAR)`);
@@ -133,7 +133,7 @@ test("nameResolution: duplicate ids — last-write-wins, but caller gets a value
 });
 
 test("nameResolution: null ids are filtered, not present as a null Map key", async () => {
-  const a = new DuckDbAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   // @ts-expect-error — private connect()
   const c = await a["connect"]();
   await c.run(`CREATE TABLE has_nulls (code VARCHAR, label VARCHAR)`);
@@ -176,4 +176,117 @@ test("distinctValuesWithProvenance merges multiple sources and tags sourceIndex"
   expect(fromPartners.length).toBe(3); // US, us, EU
   expect(fromCountries.length).toBe(2); // US, EU
   expect(fromPartners.find((r) => r.value === "EU")?.count).toBe(2);
+});
+
+import { DuckDbWritableAdapter } from "../src/warehouse/duckdb/index.ts";
+
+test("DuckDbWritableAdapter: ensureCanonicalTables creates dim_ and map_ idempotently", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // Need a schema to host the tables (default catalog is "memory" for :memory: db)
+  // @ts-expect-error — private connect()
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+
+  await a.ensureCanonicalTables({
+    dimId: "country",
+    dimTable: "zugzug.dim_country",
+    mapTable: "zugzug.map_country",
+    keyCol: "country_code",
+  });
+
+  // Tables exist; calling again is a no-op (no error).
+  await a.ensureCanonicalTables({
+    dimId: "country",
+    dimTable: "zugzug.dim_country",
+    mapTable: "zugzug.map_country",
+    keyCol: "country_code",
+  });
+
+  // Insert sample row to confirm the schema accepted the CREATEs
+  await c.run(`INSERT INTO zugzug.dim_country ("country_code", label) VALUES ('US', 'United States')`);
+  await c.run(`INSERT INTO zugzug.map_country (raw, "country_code") VALUES ('USA', 'US')`);
+
+  const dimRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country`);
+  expect(dimRows.getRowObjects()).toEqual([{ country_code: "US", label: "United States" }]);
+  const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country`);
+  expect(mapRows.getRowObjects()).toEqual([{ raw: "USA", country_code: "US" }]);
+});
+
+test("DuckDbWritableAdapter: commitCanonical empty drafts returns rowsWritten=0 with no SQL", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // @ts-expect-error
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+  await a.ensureCanonicalTables({
+    dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code",
+  });
+
+  const result = await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    [],
+  );
+  expect(result.rowsWritten).toBe(0);
+
+  const rows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.dim_country`);
+  expect(rows.getRowObjects()).toEqual([{ n: 0n }]);
+});
+
+test("DuckDbWritableAdapter: commitCanonical writes dim + map rows via MERGE", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // @ts-expect-error
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+  await a.ensureCanonicalTables({
+    dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code",
+  });
+
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    [
+      { raw: "USA", key: "US", label: "United States" },
+      { raw: "U.S.", key: "US", label: "United States" },
+      { raw: "United Kingdom", key: "GB", label: "United Kingdom" },
+    ],
+  );
+
+  // dim_country: deduped by key (2 unique keys: US, GB)
+  const dimRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country ORDER BY "country_code"`);
+  expect(dimRows.getRowObjects()).toEqual([
+    { country_code: "GB", label: "United Kingdom" },
+    { country_code: "US", label: "United States" },
+  ]);
+
+  // map_country: one row per draft (3 rows)
+  const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country ORDER BY raw`);
+  expect(mapRows.getRowObjects()).toEqual([
+    { raw: "U.S.", country_code: "US" },
+    { raw: "USA", country_code: "US" },
+    { raw: "United Kingdom", country_code: "GB" },
+  ]);
+});
+
+test("DuckDbWritableAdapter: commitCanonical is idempotent on repeat", async () => {
+  const a = new DuckDbWritableAdapter({ type: "duckdb", path: ":memory:", attached: false, writable: true });
+  // @ts-expect-error
+  const c = await a["connect"]();
+  await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
+  await a.ensureCanonicalTables({
+    dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code",
+  });
+
+  const drafts = [{ raw: "USA", key: "US", label: "United States" }];
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    drafts,
+  );
+  // Calling again with the same drafts is a no-op (MERGE only inserts on no match).
+  await a.commitCanonical(
+    { dimId: "country", dimTable: "zugzug.dim_country", mapTable: "zugzug.map_country", keyCol: "country_code" },
+    drafts,
+  );
+
+  const dimRows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.dim_country`);
+  expect(dimRows.getRowObjects()).toEqual([{ n: 1n }]);
+  const mapRows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.map_country`);
+  expect(mapRows.getRowObjects()).toEqual([{ n: 1n }]);
 });

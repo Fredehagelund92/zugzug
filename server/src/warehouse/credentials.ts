@@ -11,6 +11,10 @@ export const DuckDbCredentials = z.object({
   // When true, the adapter scans the warehouse; when false, scan methods return [].
   // Mirrors today's ATTACH_WAREHOUSE flag.
   attached: z.boolean().default(false),
+  // When true, the adapter implements WritableWarehouseAdapter — commit() writes
+  // canonical dim_*/map_* into the MotherDuck database via MERGE INTO. Off by
+  // default; safe to flip on only when the MotherDuck token has write access.
+  writable: z.boolean().default(false),
 });
 
 export const SnowflakeCredentials = z.object({

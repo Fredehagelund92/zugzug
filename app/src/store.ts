@@ -74,6 +74,8 @@ export interface WorkspaceInfo {
   writable: boolean;
   canonicalMode: "warehouse" | "postgres-export";
   warehouseDb: string | null;
+  defaultEngineerMode: boolean;
+  allowedDomain: string | null;
 }
 
 let _workspaceInfoCache: WorkspaceInfo | null = null;
@@ -86,7 +88,9 @@ function isWorkspaceInfo(x: unknown): x is WorkspaceInfo {
     (o.adapter === "duckdb" || o.adapter === "snowflake") &&
     typeof o.writable === "boolean" &&
     (o.canonicalMode === "warehouse" || o.canonicalMode === "postgres-export") &&
-    (o.warehouseDb === null || typeof o.warehouseDb === "string")
+    (o.warehouseDb === null || typeof o.warehouseDb === "string") &&
+    typeof o.defaultEngineerMode === "boolean" &&
+    (o.allowedDomain === null || typeof o.allowedDomain === "string")
   );
 }
 
