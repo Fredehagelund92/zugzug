@@ -340,7 +340,7 @@ function TeamSection() {
     });
     try {
       await updateUserRole(userId, newRole);
-      void load();
+      void loadTeamUsers();
     } catch (err) {
       setRoleError(err instanceof Error ? err.message : "Could not change role.");
     } finally {
