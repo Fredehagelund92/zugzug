@@ -28,6 +28,7 @@ import {
   type TeamMember,
 } from "../store";
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -682,6 +683,7 @@ export function ApiTokensSection() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdToken, setCreatedToken] = useState<CreatedApiToken | null>(null);
   const [copied, setCopied] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -793,7 +795,7 @@ export function ApiTokensSection() {
               </span>
               <button
                 type="button"
-                onClick={() => void handleRevoke(tok.id)}
+                onClick={() => setRevokeTarget({ id: tok.id, name: tok.name })}
                 className="shrink-0 rounded-sm text-[11px] text-ink-3 transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 Revoke
@@ -848,6 +850,26 @@ export function ApiTokensSection() {
           <Button onClick={() => setShowForm(true)}>Create token</Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        title="Revoke this token?"
+        body={
+          revokeTarget && (
+            <>
+              Token <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">{revokeTarget.name}</code> will stop working immediately. Anything using it (dbt, CI, scripts) will break until you generate a new one.
+            </>
+          )
+        }
+        confirmLabel="Revoke"
+        danger
+        onConfirm={async () => {
+          if (!revokeTarget) return;
+          await handleRevoke(revokeTarget.id);
+          setRevokeTarget(null);
+        }}
+        onCancel={() => setRevokeTarget(null)}
+      />
     </Section>
   );
 }
