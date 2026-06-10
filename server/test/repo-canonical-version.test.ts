@@ -130,3 +130,53 @@ test("retireCanonical returns ok:false when variants still map (no version bump)
   );
   expect(v?.version).toBe(1);
 });
+
+test("mergeCanonical with correct expectedVersions merges and bumps each row", async () => {
+  await addCanonicalOne(DIM, "Finland", "fi", "u_canon_actor");
+  await addCanonicalOne(DIM, "FinlandAlt", "fi_alt", "u_canon_actor");
+  await pgRun(`INSERT INTO "zugzug_app"."map_d_canon_test" (raw, ${KEY_COL}) VALUES ('Finland Alt', 'fi_alt')`);
+  const merged = await mergeCanonical(
+    DIM,
+    "fi",
+    ["fi_alt"],
+    "u_canon_actor",
+    { fi: 1, fi_alt: 1 },
+  );
+  expect(merged).toBe(1);
+  const survivor = await pgGet<{ version: number }>(
+    `SELECT version FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = $1 AND key = 'fi'`,
+    [DIM],
+  );
+  expect(survivor?.version).toBe(2);
+  const loserDim = await pgGet<{ key: string }>(
+    `SELECT ${KEY_COL} AS key FROM "zugzug_app"."dim_d_canon_test" WHERE ${KEY_COL} = 'fi_alt'`,
+  );
+  expect(loserDim).toBeNull();
+});
+
+test("mergeCanonical with one stale expectedVersion throws CONFLICT listing it", async () => {
+  await addCanonicalOne(DIM, "Estonia", "ee", "u_canon_actor");
+  await addCanonicalOne(DIM, "EstoniaAlt", "ee_alt", "u_canon_actor");
+  // Bump ee_alt out of band so its expectedVersion is stale.
+  await renameCanonical(DIM, "ee_alt", "EstoniaAlt2", "u_canon_actor", 1);
+  let thrown: AppError | null = null;
+  try {
+    await mergeCanonical(
+      DIM,
+      "ee",
+      ["ee_alt"],
+      "u_canon_actor",
+      { ee: 1, ee_alt: 1 },  // ee_alt is now at 2
+    );
+  } catch (e) {
+    thrown = e as AppError;
+  }
+  expect(thrown?.code).toBe("CONFLICT");
+  const details = thrown!.details as { conflictedKeys: string[] };
+  expect(details.conflictedKeys).toContain("ee_alt");
+  const stillThere = await pgGet<{ key: string }>(
+    `SELECT ${KEY_COL} AS key FROM "zugzug_app"."dim_d_canon_test" WHERE ${KEY_COL} = 'ee_alt'`,
+  );
+  expect(stillThere?.key).toBe("ee_alt");
+});

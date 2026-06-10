@@ -521,6 +521,7 @@ export async function mergeCanonical(
   survivor: string,
   losers: string[],
   userId: string,
+  expectedVersions: Record<string, number>,
 ): Promise<number> {
   const m = await dimMeta(dimId);
   if (!m) return 0;
@@ -528,12 +529,73 @@ export async function mergeCanonical(
   const real = losers.filter((l) => l && l !== survivor);
   if (real.length === 0) return 0;
 
+  const allKeys = [survivor, ...real];
+
   await pgTx(async (tx) => {
-    await tx.run(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`, [
-      survivor,
-      real,
-    ]);
-    await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`, [real]);
+    // Bulk version-bump via VALUES list. Returns the set of keys actually bumped.
+    // We compare against allKeys to detect stale-version misses.
+    const valuesSql = allKeys.map((_, i) => `($${i * 2 + 2}, $${i * 2 + 3}::int)`).join(", ");
+    const params: unknown[] = [userId];
+    for (const k of allKeys) {
+      params.push(k, expectedVersions[k] ?? -1);
+    }
+    const bumped = await tx.all<{ key: string }>(
+      `WITH expected(key, expected_version) AS (
+         VALUES ${valuesSql}
+       )
+       UPDATE "zugzug_app"."canonical_version" cv
+          SET version = cv.version + 1, updated_at = now(), updated_by = $1
+         FROM expected e
+        WHERE cv.dim_id = '${dimId.replace(/'/g, "''")}'
+          AND cv.key = e.key
+          AND cv.version = e.expected_version
+       RETURNING cv.key`,
+      params,
+    );
+    const bumpedSet = new Set(bumped.map((b) => b.key));
+    const missed = allKeys.filter((k) => !bumpedSet.has(k));
+    if (missed.length > 0) {
+      const cur = await tx.get<{
+        version: number;
+        updated_at: Date;
+        updated_by: string;
+        name: string | null;
+        initials: string | null;
+      }>(
+        `SELECT cv.version, cv.updated_at, cv.updated_by, u.name, u.initials
+           FROM "zugzug_app"."canonical_version" cv
+           LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
+          WHERE cv.dim_id = $1 AND cv.key = $2`,
+        [dimId, missed[0]!],
+      );
+      throw new AppError("CONFLICT", "One or more records were modified by another user", 409, {
+        current: cur && {
+          version: cur.version,
+          updatedAt: cur.updated_at.toISOString(),
+          updatedBy: {
+            id: cur.updated_by,
+            name: cur.name ?? cur.updated_by,
+            initials: cur.initials ?? "??",
+          },
+        },
+        conflictedKeys: missed,
+      });
+    }
+
+    // All version checks passed — execute the merge.
+    await tx.run(
+      `UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`,
+      [survivor, real],
+    );
+    await tx.run(
+      `DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`,
+      [real],
+    );
+    await tx.run(
+      `DELETE FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND key = ANY($2::text[])`,
+      [dimId, real],
+    );
   });
 
   await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`);
