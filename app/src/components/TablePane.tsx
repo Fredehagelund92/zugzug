@@ -26,6 +26,7 @@ import {
   updateFieldDescription,
   getGridLayout,
   setGridLayout,
+  useCanEdit,
   type GridLayoutConfig,
 } from "../store";
 import { useEngineerMode } from "../lib/engineer-mode";
@@ -176,6 +177,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const sources = useSources();
   const allDims = useDimensions();
   const { engineer } = useEngineerMode();
+  const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
   const undo = useUndoStack();
@@ -232,7 +234,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         label: "Record",
         config: { type: "text" },
         pinnedLeft: true,
-        editable: !external,
+        editable: !external && canEdit,
         render: (c) =>
           c.unresolved ? (
             <span className="flex min-w-0 items-center gap-2">
@@ -283,7 +285,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               displayFields: f.displayFields ?? ["label"],
               candidates,
             },
-            editable: true,
+            editable: canEdit,
           };
           const lookupCols: ColumnDef<CanonicalValue>[] = (f.displayFields ?? ["label"]).map(
             (df) => {
@@ -303,7 +305,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             field: f.field,
             label: f.label,
             config: fieldDefToColumnConfig(f),
-            editable: true,
+            editable: canEdit,
             rules: f.rules,
             description: f.description,
           },
@@ -490,7 +492,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           >
             ↓ Download snapshot
           </a>
-          {sourceOpts.length > 0 && !external && (
+          {sourceOpts.length > 0 && !external && canEdit && (
             <div className="w-full md:w-56">
               <ComboSelect
                 options={sourceOpts}
@@ -500,7 +502,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               />
             </div>
           )}
-          {external && sourceOpts.length > 0 && (
+          {external && sourceOpts.length > 0 && canEdit && (
             <div className="flex flex-wrap items-center gap-2 max-md:w-full">
               <div className="w-full md:w-40">
                 <ComboSelect
@@ -563,7 +565,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       )}
 
       <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
-        {sel.length > 0 ? (
+        {sel.length > 0 && canEdit ? (
           <div className="flex flex-wrap items-center gap-3 border-b border-accent/30 bg-accent-wash px-5 py-2.5">
             <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear selection" />
             <span className="font-mono text-[12px] font-medium text-accent">
@@ -633,68 +635,97 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           columns={columns}
           showRowNumbers
           selection={{ selected: sel, onChange: setSel }}
-          onCommit={async (rowKey, field, value) => {
-            if (field === "label") {
-              const prev = list.find((c) => c.key === rowKey)?.label;
-              if (typeof value !== "string" || !value.trim() || value === prev) return;
-              await renameCanonical(activeId, rowKey, value);
-              if (prev) {
-                undo.push({
-                  label: `rename "${prev}" → "${value}"`,
-                  surface: "Records",
-                  apply: () => renameCanonical(activeId, rowKey, value),
-                  inverse: () => renameCanonical(activeId, rowKey, prev),
-                });
-                void fetchVariants(activeId, rowKey).then((vs) => {
-                  setRenameFlash({ prev, next: value, variants: vs.length });
-                  if (renameFlashTimer.current) window.clearTimeout(renameFlashTimer.current);
-                  renameFlashTimer.current = window.setTimeout(() => setRenameFlash(null), 8000);
-                });
-              }
-              return;
-            }
-            const v = value == null ? null : String(value);
-            const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
-            await setFieldValue(activeId, rowKey, field, v);
-            if (prev !== v)
-              undo.push({
-                label: `edit ${field} on "${rowKey}"`,
-                surface: "Records",
-                apply: () => setFieldValue(activeId, rowKey, field, v),
-                inverse: () => setFieldValue(activeId, rowKey, field, prev),
-              });
-          }}
-          onAddColumnOption={(field, label, color) =>
-            addColumnOption(activeId, field, label, color ?? null)
+          onCommit={
+            canEdit
+              ? async (rowKey, field, value) => {
+                  if (field === "label") {
+                    const prev = list.find((c) => c.key === rowKey)?.label;
+                    if (typeof value !== "string" || !value.trim() || value === prev) return;
+                    await renameCanonical(activeId, rowKey, value);
+                    if (prev) {
+                      undo.push({
+                        label: `rename "${prev}" → "${value}"`,
+                        surface: "Records",
+                        apply: () => renameCanonical(activeId, rowKey, value),
+                        inverse: () => renameCanonical(activeId, rowKey, prev),
+                      });
+                      void fetchVariants(activeId, rowKey).then((vs) => {
+                        setRenameFlash({ prev, next: value, variants: vs.length });
+                        if (renameFlashTimer.current) window.clearTimeout(renameFlashTimer.current);
+                        renameFlashTimer.current = window.setTimeout(
+                          () => setRenameFlash(null),
+                          8000,
+                        );
+                      });
+                    }
+                    return;
+                  }
+                  const v = value == null ? null : String(value);
+                  const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
+                  await setFieldValue(activeId, rowKey, field, v);
+                  if (prev !== v)
+                    undo.push({
+                      label: `edit ${field} on "${rowKey}"`,
+                      surface: "Records",
+                      apply: () => setFieldValue(activeId, rowKey, field, v),
+                      inverse: () => setFieldValue(activeId, rowKey, field, prev),
+                    });
+                }
+              : undefined
           }
-          onRenameColumn={(field, label) => {
-            if (field.includes("__")) return;
-            void renameColumn(activeId, field, label);
-          }}
-          onChangeColumnType={(field, newConfig, opts) => {
-            if (field.includes("__")) return Promise.resolve({ ok: false });
-            return changeColumnType(
-              activeId,
-              field,
-              newConfig.type,
-              newConfig.type === "select" ? newConfig.options : undefined,
-              opts?.coerceInvalidToNull ?? false,
-              newConfig.type === "number" ? newConfig.numberFormat : undefined,
-              newConfig.type === "rating" ? newConfig.ratingMax : undefined,
-            );
-          }}
-          onDeleteColumn={(field) => {
-            if (field.includes("__")) return;
-            void deleteColumn(activeId, field);
-          }}
-          onSaveColumnRules={(field, rules) => {
-            if (field.includes("__")) return;
-            void updateFieldRules(activeId, field, rules);
-          }}
-          onSaveColumnDescription={(field, description) => {
-            if (field.includes("__")) return;
-            void updateFieldDescription(activeId, field, description);
-          }}
+          onAddColumnOption={
+            canEdit
+              ? (field, label, color) => addColumnOption(activeId, field, label, color ?? null)
+              : undefined
+          }
+          onRenameColumn={
+            canEdit
+              ? (field, label) => {
+                  if (field.includes("__")) return;
+                  void renameColumn(activeId, field, label);
+                }
+              : undefined
+          }
+          onChangeColumnType={
+            canEdit
+              ? (field, newConfig, opts) => {
+                  if (field.includes("__")) return Promise.resolve({ ok: false });
+                  return changeColumnType(
+                    activeId,
+                    field,
+                    newConfig.type,
+                    newConfig.type === "select" ? newConfig.options : undefined,
+                    opts?.coerceInvalidToNull ?? false,
+                    newConfig.type === "number" ? newConfig.numberFormat : undefined,
+                    newConfig.type === "rating" ? newConfig.ratingMax : undefined,
+                  );
+                }
+              : undefined
+          }
+          onDeleteColumn={
+            canEdit
+              ? (field) => {
+                  if (field.includes("__")) return;
+                  void deleteColumn(activeId, field);
+                }
+              : undefined
+          }
+          onSaveColumnRules={
+            canEdit
+              ? (field, rules) => {
+                  if (field.includes("__")) return;
+                  void updateFieldRules(activeId, field, rules);
+                }
+              : undefined
+          }
+          onSaveColumnDescription={
+            canEdit
+              ? (field, description) => {
+                  if (field.includes("__")) return;
+                  void updateFieldDescription(activeId, field, description);
+                }
+              : undefined
+          }
           onLayoutChange={(partial) => {
             setLayout((cur) => {
               const next = { ...cur, ...partial };
@@ -707,10 +738,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               no records yet — import from a source above, or add one below
             </div>
           }
-          onAddFieldClick={() => setAddOpen((v) => !v)}
+          onAddFieldClick={canEdit ? () => setAddOpen((v) => !v) : undefined}
           addFieldRef={addFieldRef as React.MutableRefObject<HTMLElement | null>}
           onInsertRow={
-            external
+            external || !canEdit
               ? undefined
               : () => {
                   addInputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -718,7 +749,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 }
           }
           onDeleteRow={
-            external
+            external || !canEdit
               ? undefined
               : (key) => {
                   const target = list.find((c) => c.key === key);
@@ -730,7 +761,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }
         />
 
-        {addOpen && (
+        {addOpen && canEdit && (
           <AddFieldPopover
             anchorRef={addFieldRef as React.RefObject<HTMLElement | null>}
             onClose={() => setAddOpen(false)}
@@ -759,7 +790,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           />
         )}
 
-        {!external && (
+        {!external && canEdit && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <input
               ref={addInputRef}

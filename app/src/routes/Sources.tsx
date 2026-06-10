@@ -7,7 +7,14 @@ import { LedgerRow } from "../components/sources/LedgerRow";
 import { ago } from "../components/sources/utils";
 import { IconSearch, IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useDimensions, useSources, scanSources, deriveCanonical, type SourceInfo } from "../store";
+import {
+  useDimensions,
+  useSources,
+  scanSources,
+  deriveCanonical,
+  useCanEdit,
+  type SourceInfo,
+} from "../store";
 import { useSourcesCursor } from "./use-sources-cursor";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
@@ -54,6 +61,7 @@ interface SchemaGroup {
 export function Sources() {
   const sources = useSources();
   const dims = useDimensions();
+  const canEdit = useCanEdit();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQ = searchParams.get("q") ?? "";
   const initialStatus = ((): Status => {
@@ -378,7 +386,7 @@ export function Sources() {
                   )
                 }
                 onClick={scan}
-                disabled={scanning}
+                disabled={scanning || !canEdit}
               >
                 {scanning ? "Scanning…" : flash !== null ? `✓ scanned ${flash}` : "Scan all"}
               </Button>
@@ -386,6 +394,7 @@ export function Sources() {
                 size="sm"
                 icon={<IconArrowRight className="h-3.5 w-3.5" />}
                 onClick={() => setCatalog(true)}
+                disabled={!canEdit}
               >
                 Browse warehouse
               </Button>
@@ -534,6 +543,7 @@ export function Sources() {
                 focusedRowKey={cursor.cursor}
                 onRowClick={cursor.setCursor}
                 onDerive={derive}
+                canEdit={canEdit}
               />
             ))}
 
@@ -599,6 +609,7 @@ function SchemaSection({
   onDerive,
   focusedRowKey,
   onRowClick,
+  canEdit,
 }: {
   group: SchemaGroup;
   open: boolean;
@@ -608,6 +619,7 @@ function SchemaSection({
   onDerive: (r: SourceInfo) => void;
   focusedRowKey?: string | null;
   onRowClick?: (key: string) => void;
+  canEdit?: boolean;
 }) {
   return (
     <div className="border-b border-line last:border-b-0">
@@ -662,6 +674,7 @@ function SchemaSection({
                   setExpanded(expanded === key ? null : key);
                 }}
                 onDerive={() => onDerive(r)}
+                canEdit={canEdit}
               />
             );
           })}

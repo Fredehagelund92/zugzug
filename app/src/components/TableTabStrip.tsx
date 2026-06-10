@@ -55,7 +55,7 @@ function AddTabPopover({
   openIds: Set<string>;
   onPick: (id: string) => void;
   onClose: () => void;
-  onCreate: () => void;
+  onCreate?: () => void;
 }) {
   const [q, setQ] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -160,16 +160,18 @@ function AddTabPopover({
           <li className="px-3 py-2 font-mono text-[12px] text-ink-3">no match</li>
         )}
       </ul>
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          onCreate();
-        }}
-        className="flex w-full items-center gap-2 border-t border-line px-3 py-2 font-mono text-[12px] text-accent transition-colors hover:bg-accent-wash"
-      >
-        <IconPlus className="h-3.5 w-3.5" /> New table
-      </button>
+      {onCreate && (
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onCreate();
+          }}
+          className="flex w-full items-center gap-2 border-t border-line px-3 py-2 font-mono text-[12px] text-accent transition-colors hover:bg-accent-wash"
+        >
+          <IconPlus className="h-3.5 w-3.5" /> New table
+        </button>
+      )}
     </div>,
     document.body,
   );
@@ -241,7 +243,7 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
   );
 }
 
-export function TableTabStrip({ onCreateRequested }: { onCreateRequested: () => void }) {
+export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () => void }) {
   const dims = useDimensions();
   const drafts = useDrafts();
   const { tabs, activeId, focusTab, closeTab, openTab } = useOpenTabs();

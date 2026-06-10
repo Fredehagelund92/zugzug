@@ -19,6 +19,7 @@ import {
   listDrafts,
   saveDraft,
   useDrafts,
+  useCanEdit,
 } from "../../store";
 
 /* MatchModeBody — the per-tab single-dim Match workbench. Lifted from the
@@ -83,6 +84,7 @@ interface MatchModeBodyProps {
 export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const allDrafts = useDrafts();
   const { engineer } = useEngineerMode();
+  const canEdit = useCanEdit();
   const [searchParams, setSearchParams] = useSearchParams();
   const undo = useUndoStack();
 
@@ -378,7 +380,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   return (
     <div className="flex flex-1 flex-col min-h-0">
       {/* small left-aligned toolbar above the body — owns Auto-match per spec § 1 */}
-      {counts.new > 0 && (
+      {counts.new > 0 && canEdit && (
         <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2">
           <Button
             size="sm"
@@ -405,22 +407,22 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           if (!cursor.cursor) return;
           const cur = cursor.cursor;
           if (cur.editing) return;
-          if (e.key === "a" || e.key === "A") {
+          if (canEdit && (e.key === "a" || e.key === "A")) {
             e.preventDefault();
             accept(cur.rowKey);
             return;
           }
-          if (e.key === "s" || e.key === "S") {
+          if (canEdit && (e.key === "s" || e.key === "S")) {
             e.preventDefault();
             skip(cur.rowKey);
             return;
           }
-          if (e.key === "r" || e.key === "R") {
+          if (canEdit && (e.key === "r" || e.key === "R")) {
             e.preventDefault();
             reset(cur.rowKey);
             return;
           }
-          if (e.key === "m" || e.key === "M") {
+          if (canEdit && (e.key === "m" || e.key === "M")) {
             e.preventDefault();
             cursor.startEdit();
             return;
@@ -430,7 +432,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             advanceToNextNew(cur.rowKey);
             return;
           }
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          if (canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
             e.preventDefault();
             void approveAndCommit();
             return;
@@ -439,7 +441,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
       >
         {/* toolbar / bulk bar */}
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
-          {sel.length === 0 ? (
+          {sel.length === 0 || !canEdit ? (
             <>
               <Checkbox
                 state={headState}
@@ -605,7 +607,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                         value={row.target}
                         suggestion={r.suggestion}
                         allowCreate={!external}
-                        onPick={(t) => pick(r.value, t)}
+                        onPick={canEdit ? (t) => pick(r.value, t) : undefined}
+                        disabled={!canEdit}
                       />
                     </div>
                   </div>
@@ -616,7 +619,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       value={row.target}
                       suggestion={r.suggestion}
                       allowCreate={!external}
-                      onPick={(t) => pick(r.value, t)}
+                      onPick={canEdit ? (t) => pick(r.value, t) : undefined}
+                      disabled={!canEdit}
                     />
                   </div>
                   <div className="max-md:hidden">
@@ -788,9 +792,11 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 <Button variant="ghost" size="sm" onClick={() => setCommitError(null)}>
                   Dismiss
                 </Button>
-                <Button size="sm" onClick={() => void approveAndCommit()}>
-                  Retry
-                </Button>
+                {canEdit && (
+                  <Button size="sm" onClick={() => void approveAndCommit()}>
+                    Retry
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -863,7 +869,11 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   {showSql ? "Hide SQL" : "Preview SQL"}
                 </Button>
               )}
-              <Button size="sm" disabled={staged.length === 0} onClick={approveAndCommit}>
+              <Button
+                size="sm"
+                disabled={staged.length === 0 || !canEdit}
+                onClick={approveAndCommit}
+              >
                 {engineer
                   ? `Approve & commit ${staged.length}`
                   : `Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}

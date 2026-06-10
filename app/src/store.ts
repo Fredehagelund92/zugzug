@@ -20,6 +20,28 @@ export interface User {
   initials: string;
   email?: string;
 }
+
+/** The signed-in user with RBAC role. Returned by /api/auth/me and exposed via
+ *  useCurrentUser(). Distinct from User (collaborator shape) which lacks role. */
+export interface CurrentUser {
+  id: string;
+  name: string;
+  email: string;
+  initials: string;
+  role: "admin" | "editor" | "viewer";
+}
+
+function isCurrentUser(x: unknown): x is CurrentUser {
+  if (!x || typeof x !== "object") return false;
+  const o = x as Record<string, unknown>;
+  return (
+    typeof o.id === "string" &&
+    typeof o.name === "string" &&
+    typeof o.email === "string" &&
+    typeof o.initials === "string" &&
+    (o.role === "admin" || o.role === "editor" || o.role === "viewer")
+  );
+}
 export interface Draft {
   dimId: string;
   raw: string;
@@ -62,6 +84,8 @@ export const dkey = (dimId: string, raw: string) => `${dimId}::${raw}`;
 /* ---- session identity (populated by initStore before first render) ---- */
 export let currentUser: User = { id: "u_ada", name: "Ada Berg", initials: "AB" };
 export let collaborators: User[] = [currentUser];
+/** Full session user including role. Populated by initStore via /api/auth/me. */
+let currentUserFull: CurrentUser | null = null;
 
 export interface Preferences {
   publishThreshold: number;
@@ -217,9 +241,15 @@ async function refreshPreferences(): Promise<void> {
  *  iterates the dims it just fetched. Cold boot drops from 6 sequential RTTs
  *  to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
-  const u = await api<{ currentUser: User; collaborators: User[] }>("/users");
+  const [u, meRaw] = await Promise.all([
+    api<{ currentUser: User; collaborators: User[] }>("/users"),
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+  ]);
   currentUser = u.currentUser;
   collaborators = u.collaborators;
+  if (isCurrentUser(meRaw)) currentUserFull = meRaw;
   await Promise.all([refreshDims(), refreshSources(), refreshAudit(), refreshPreferences()]);
   await refreshDrafts();
   emit();
@@ -260,6 +290,21 @@ export function usePreferences(): Preferences {
     () => preferences,
     () => preferences,
   );
+}
+export function useCurrentUser(): CurrentUser | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => currentUserFull,
+    () => currentUserFull,
+  );
+}
+
+/** Convenience: true when the current user may mutate state (not a viewer).
+ *  Defaults to false during the brief initial-load window where currentUser is null. */
+export function useCanEdit(): boolean {
+  const user = useCurrentUser();
+  if (!user) return false;
+  return user.role !== "viewer";
 }
 
 export async function setPreferences(p: Preferences): Promise<void> {
@@ -712,4 +757,36 @@ export async function searchCatalog(
   qs.set("limit", String(opts.limit ?? 50));
   qs.set("offset", String(opts.offset ?? 0));
   return api<CatalogResult>(`/catalog?${qs.toString()}`);
+}
+
+// ---------------------------------------------------------------------------
+// Team user management (role picker)
+// ---------------------------------------------------------------------------
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  email: string | null;
+  role: "admin" | "editor" | "viewer";
+}
+
+/** List all workspace users with their roles. Any authenticated user may call this. */
+export async function listTeamMembers(): Promise<TeamMember[]> {
+  const r = await fetch("/api/team/users");
+  if (!r.ok) throw new Error(`list_team_members_${r.status}`);
+  const body = (await r.json()) as { users: TeamMember[] };
+  return body.users;
+}
+
+/** Change a user's role. Admin only — the server enforces the gate + last-admin guard. */
+export async function updateUserRole(userId: string, role: TeamMember["role"]): Promise<void> {
+  const r = await fetch(`/api/team/users/${userId}/role`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ role }),
+  });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => null)) as { error?: string; reason?: string } | null;
+    throw new Error(body?.reason ?? body?.error ?? `update_role_${r.status}`);
+  }
 }

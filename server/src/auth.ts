@@ -23,6 +23,25 @@ export interface SessionUser {
   name: string;
   email: string;
   initials: string;
+  role: Role;
+}
+
+export type Role = "admin" | "editor" | "viewer";
+
+export type Operation =
+  | "curate" // create/update drafts
+  | "commit" // commit drafts to canonical
+  | "manage_team" // change roles, manage allowlist
+  | "manage_adapter"; // configure warehouse credentials
+
+/** Static permission matrix. Returns true if the given role may perform op. */
+export function canMutate(role: Role, op: Operation): boolean {
+  const matrix: Record<Role, Operation[]> = {
+    admin: ["curate", "commit", "manage_team", "manage_adapter"],
+    editor: ["curate", "commit"],
+    viewer: [],
+  };
+  return matrix[role].includes(op);
 }
 
 const SID = "zz_sid";
@@ -81,9 +100,10 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     await run(`DELETE FROM ${pg("sessions")} WHERE id = $1`, [sid]);
     return null;
   }
-  return get<SessionUser>(`SELECT id, name, email, initials FROM ${pg("users")} WHERE id = $1`, [
-    session.user_id,
-  ]);
+  return get<SessionUser>(
+    `SELECT id, name, email, initials, role FROM ${pg("users")} WHERE id = $1`,
+    [session.user_id],
+  );
 }
 
 /** Create a session row for the user and return the matching Set-Cookie header.

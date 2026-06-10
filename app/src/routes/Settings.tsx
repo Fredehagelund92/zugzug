@@ -12,6 +12,7 @@ import {
   usePreferences,
   setPreferences,
   currentUser,
+  useCurrentUser,
   scanSources,
   useWorkspaceInfo,
   useAuthConfig,
@@ -20,8 +21,11 @@ import {
   listApiTokens,
   createApiToken,
   revokeApiToken,
+  listTeamMembers,
+  updateUserRole,
   type ApiToken,
   type CreatedApiToken,
+  type TeamMember,
 } from "../store";
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
 
@@ -280,8 +284,12 @@ function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
 
 function TeamSection() {
   const authConfig = useAuthConfig();
+  const currentUserData = useCurrentUser();
+  const isAdmin = currentUserData?.role === "admin";
   const allowedDomain = authConfig?.allowedDomain ? "@" + authConfig.allowedDomain : null;
   const [members, setMembers] = useState<Member[]>([]);
+  const [teamUsers, setTeamUsers] = useState<TeamMember[]>([]);
+  const [roleError, setRoleError] = useState<string | null>(null);
   const [chips, setChips] = useState<Chip[]>([]);
   const [buffer, setBuffer] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -291,6 +299,14 @@ function TeamSection() {
   const inputRef = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
   const newId = () => `c${idCounter.current++}`;
+
+  const loadTeamUsers = useCallback(async () => {
+    try {
+      setTeamUsers(await listTeamMembers());
+    } catch {
+      // non-critical — role table is supplementary
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -307,6 +323,20 @@ function TeamSection() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadTeamUsers();
+  }, [loadTeamUsers]);
+
+  const handleRoleChange = async (userId: string, newRole: TeamMember["role"]) => {
+    setRoleError(null);
+    try {
+      await updateUserRole(userId, newRole);
+      void loadTeamUsers();
+    } catch (e) {
+      setRoleError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const membersByEmail = useMemo(
     () => new Set(members.map((m) => m.email.toLowerCase())),
@@ -419,6 +449,53 @@ function TeamSection() {
       title="Team"
       hint="Only people on this list can log in. Any team member can add or remove others."
     >
+      {/* Team members with roles */}
+      {teamUsers.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">
+            Members &amp; roles
+          </h3>
+          {roleError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+              <span>{roleError}</span>
+              <Button variant="ghost" size="sm" onClick={() => setRoleError(null)}>
+                Dismiss
+              </Button>
+            </div>
+          )}
+          <ul className="divide-y divide-line rounded-sm border border-line">
+            {teamUsers.map((u) => (
+              <li key={u.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">
+                  {u.name}
+                </span>
+                <span className="hidden shrink-0 font-mono text-[11px] text-ink-3 sm:inline">
+                  {u.email ?? "—"}
+                </span>
+                {isAdmin ? (
+                  <select
+                    value={u.role}
+                    onChange={(e) =>
+                      void handleRoleChange(u.id, e.target.value as TeamMember["role"])
+                    }
+                    className="shrink-0 rounded-sm border border-line-2 bg-bg px-2 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/40"
+                  >
+                    <option value="admin">admin</option>
+                    <option value="editor">editor</option>
+                    <option value="viewer">viewer</option>
+                  </select>
+                ) : (
+                  <span className="shrink-0 rounded-sm border border-line bg-surface-2 px-2 py-0.5 font-mono text-[11.5px] text-ink-2">
+                    {u.role}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Allowed-emails management */}
       {loadError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>Couldn&rsquo;t load the team — {loadError}</span>
@@ -901,13 +978,11 @@ export function Settings() {
             )}
           </div>
 
-          {/* Drafts & team — the collaborative layer */}
+          {/* App — the collaborative layer (drafts, history, team) */}
           <div className="rounded-sm border border-line bg-surface-2 p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <span className="font-display text-[14px] font-semibold text-ink">
-                  Drafts &amp; team
-                </span>
+                <span className="font-display text-[14px] font-semibold text-ink">App</span>
                 <Badge tone="accent">Postgres</Badge>
               </div>
               <Badge tone="ok" dot>
