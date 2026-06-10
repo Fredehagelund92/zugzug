@@ -250,7 +250,13 @@ export async function initStore(): Promise<void> {
   currentUser = u.currentUser;
   collaborators = u.collaborators;
   if (isCurrentUser(meRaw)) currentUserFull = meRaw;
-  await Promise.all([refreshDims(), refreshSources(), refreshAudit(), refreshPreferences()]);
+  await Promise.all([
+    refreshDims(),
+    refreshSources(),
+    refreshAudit(),
+    refreshPreferences(),
+    refreshConnectionHealth(),
+  ]);
   await refreshDrafts();
   emit();
 }
@@ -768,6 +774,30 @@ export interface TeamMember {
   name: string;
   email: string | null;
   role: "admin" | "editor" | "viewer";
+}
+
+/* ---- connection health ---- */
+export interface ConnectionHealth {
+  warehouse: { status: "ok" | "error" | "disabled"; lastCheckedAt: string; error?: string };
+  postgres: { status: "ok" | "error"; lastCheckedAt: string; error?: string };
+}
+
+let connectionHealth: ConnectionHealth | null = null;
+
+export async function refreshConnectionHealth(opts: { force?: boolean } = {}): Promise<void> {
+  const url = opts.force ? "/api/health/connections?force=1" : "/api/health/connections";
+  const res = await fetch(url);
+  if (!res.ok) return; // fail quiet; UI shows last known state
+  connectionHealth = (await res.json()) as ConnectionHealth;
+  emit();
+}
+
+export function useConnectionHealth(): ConnectionHealth | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => connectionHealth,
+    () => connectionHealth,
+  );
 }
 
 /** List all workspace users with their roles. Any authenticated user may call this. */

@@ -23,12 +23,16 @@ import {
   revokeApiToken,
   listTeamMembers,
   updateUserRole,
+  useConnectionHealth,
+  refreshConnectionHealth,
   type ApiToken,
   type CreatedApiToken,
   type TeamMember,
+  type ConnectionHealth,
 } from "../store";
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { useAsyncAction } from "../hooks/useAsyncAction";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -553,7 +557,10 @@ function TeamSection() {
         title="Remove this member?"
         body={
           <>
-            <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">{removeTarget}</code> will lose access immediately. They can be re-invited from this screen if needed.
+            <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+              {removeTarget}
+            </code>{" "}
+            will lose access immediately. They can be re-invited from this screen if needed.
           </>
         }
         confirmLabel="Remove"
@@ -892,7 +899,12 @@ export function ApiTokensSection() {
         body={
           revokeTarget && (
             <>
-              Token <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">{revokeTarget.name}</code> will stop working immediately. Anything using it (dbt, CI, scripts) will break until you generate a new one.
+              Token{" "}
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {revokeTarget.name}
+              </code>{" "}
+              will stop working immediately. Anything using it (dbt, CI, scripts) will break until
+              you generate a new one.
             </>
           )
         }
@@ -909,6 +921,36 @@ export function ApiTokensSection() {
   );
 }
 
+function ago(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+function HealthBadge({ state }: { state?: ConnectionHealth["warehouse"] }) {
+  if (!state) {
+    return <Badge dot>checking…</Badge>;
+  }
+  if (state.status === "disabled") {
+    return <Badge dot>disabled</Badge>;
+  }
+  if (state.status === "error") {
+    return (
+      <span title={state.error}>
+        <Badge tone="warn" dot>
+          error · {ago(state.lastCheckedAt)}
+        </Badge>
+      </span>
+    );
+  }
+  return (
+    <Badge tone="ok" dot>
+      ok · {ago(state.lastCheckedAt)}
+    </Badge>
+  );
+}
+
 export function Settings() {
   const { engineer, setEngineer } = useEngineerMode();
   const prefs = usePreferences();
@@ -921,6 +963,10 @@ export function Settings() {
     return Object.values(status).filter((s) => s === "failed").length;
   }, [wsInfo?.writable, dims, audit]);
   const adapterLabel = wsInfo ? wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1) : "…";
+  const health = useConnectionHealth();
+  const refreshHealth = useAsyncAction(async () => {
+    await refreshConnectionHealth({ force: true });
+  });
 
   return (
     <div className="mx-auto w-full max-w-[var(--wide)] space-y-4 p-4 md:space-y-6 md:p-8">
@@ -959,6 +1005,17 @@ export function Settings() {
               : "Where Zug Zug reads from and where your work is kept."
           }
         >
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={refreshHealth.isPending}
+              onClick={() => void refreshHealth.run()}
+            >
+              Refresh
+            </Button>
+          </div>
+
           {/* Warehouse — where source values come from */}
           <div className="rounded-sm border border-line bg-surface-2 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -966,9 +1023,7 @@ export function Settings() {
                 <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
                 <Badge>{adapterLabel}</Badge>
               </div>
-              <Badge tone="ok" dot>
-                connected
-              </Badge>
+              <HealthBadge state={health?.warehouse} />
             </div>
             {engineer ? (
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
@@ -1042,9 +1097,7 @@ export function Settings() {
                 <span className="font-display text-[14px] font-semibold text-ink">App</span>
                 <Badge tone="accent">Postgres</Badge>
               </div>
-              <Badge tone="ok" dot>
-                connected
-              </Badge>
+              <HealthBadge state={health?.postgres} />
             </div>
             {engineer ? (
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
