@@ -28,6 +28,7 @@ export const dimension = app.table("dimension", {
   name_col:    varchar("name_col"),
   description: varchar("description"),
   color:       varchar("color"),
+  tenant_id:   varchar("tenant_id").default("default"),
 });
 
 export const dimensionSource = app.table(
@@ -36,6 +37,7 @@ export const dimensionSource = app.table(
     dim_id:        varchar("dim_id").notNull(),
     source_table:  varchar("source_table").notNull(),
     source_column: varchar("source_column").notNull(),
+    tenant_id:     varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
 );
@@ -50,6 +52,7 @@ export const dimensionField = app.table(
     created_at:   timestamp("created_at").notNull(),
     field_config: varchar("field_config"),
     description:  varchar("description"),
+    tenant_id:    varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.field] })],
 );
@@ -65,6 +68,7 @@ export const sourceStat = app.table(
     distinct_values: bigint("distinct_values", { mode: "number" }).notNull(),
     unmapped:        bigint("unmapped", { mode: "number" }).notNull(),
     scanned_at:      timestamp("scanned_at").notNull(),
+    tenant_id:       varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
 );
@@ -79,6 +83,7 @@ export const draft = app.table(
     target_key:   varchar("target_key"),
     user_id:      varchar("user_id").notNull(),
     created_at:   timestamp("created_at").notNull(),
+    tenant_id:    varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.raw, t.user_id] })],
 );
@@ -93,6 +98,7 @@ export const auditLog = app.table(
     detail:     varchar("detail").notNull(),
     table_id:   varchar("table_id"),
     row_key:    varchar("row_key"),
+    tenant_id:  varchar("tenant_id").default("default"),
   },
   (t) => [
     index("audit_log_table_row_recency_idx")
@@ -111,7 +117,8 @@ export const users = app.table(
     google_sub:    varchar("google_sub"),
     password_hash: varchar("password_hash"),
     auth_provider: varchar("auth_provider").notNull().default("password"),
-    role:          varchar("role").notNull().default("editor"),
+    role:           varchar("role").notNull().default("editor"),
+    is_super_admin: boolean("is_super_admin").notNull().default(false),
   },
   (t) => [
     uniqueIndex("users_email_unique").on(t.email).where(sql`email IS NOT NULL`),
@@ -139,6 +146,7 @@ export const apiTokens = app.table(
 export const activeSessions = app.table("active_sessions", {
   user_id:   varchar("user_id").primaryKey(),
   last_seen: timestamp("last_seen").notNull(),
+  tenant_id: varchar("tenant_id").default("default"),
 });
 
 export const allowedEmails = app.table("allowed_emails", {
@@ -163,6 +171,7 @@ export const preferences = app.table("preferences", {
   suggest_threshold: integer("suggest_threshold").notNull(),
   scan_schedule:     varchar("scan_schedule", { length: 10 }),
   updated_at:        timestamp("updated_at").notNull(),
+  tenant_id:         varchar("tenant_id").default("default"),
 });
 
 export const userGridLayout = app.table(
@@ -187,6 +196,7 @@ export const aiHintCache = app.table(
     model:      varchar("model").notNull(),
     created_at: timestamp("created_at").notNull(),
     hits:       integer("hits").notNull().default(sql`0`),
+    tenant_id:  varchar("tenant_id").default("default"),
   },
   (t) => [
     primaryKey({ columns: [t.dim_id, t.raw] }),
@@ -205,6 +215,7 @@ export const scanRuns = app.table(
     rows_scanned:  integer("rows_scanned"),
     duration_ms:   integer("duration_ms"),
     error_message: text("error_message"),
+    tenant_id:     varchar("tenant_id").default("default"),
   },
   (t) => [
     index("scan_run_source_id_idx").on(t.source_id),
@@ -222,6 +233,7 @@ export const canonicalVersion = app.table(
     /** Semantically users.id. No FK constraint — matches existing convention
      *  (repo-canonical.ts uses userId strings without enforced FKs). */
     updated_by: varchar("updated_by").notNull(),
+    tenant_id:  varchar("tenant_id").default("default"),
   },
   (t) => [
     primaryKey({ columns: [t.dim_id, t.key] }),
