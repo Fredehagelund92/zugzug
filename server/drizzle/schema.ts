@@ -10,6 +10,7 @@ import {
   index,
   uniqueIndex,
   text,
+  check,
 } from "drizzle-orm/pg-core";
 
 const app = pgSchema("zugzug_app");
@@ -225,5 +226,57 @@ export const canonicalVersion = app.table(
   (t) => [
     primaryKey({ columns: [t.dim_id, t.key] }),
     index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
+  ],
+);
+
+/* ---------- Multi-tenant (PR 1 of 5) ---------- */
+
+export const tenant = app.table(
+  "tenant",
+  {
+    id:           varchar("id").primaryKey(),
+    slug:         varchar("slug").notNull(),
+    label:        varchar("label").notNull(),
+    warehouse_id: varchar("warehouse_id").notNull(),
+    created_at:   timestamp("created_at").notNull(),
+    deleted_at:   timestamp("deleted_at"),
+  },
+  (t) => [
+    // 21-char cap on id keeps room for dim_${tenantId}_${dimSlug} under Postgres's
+    // 63-byte identifier limit (4 + 21 + 1 + 37 = 63).
+    check("tenant_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_]{0,20}$'`),
+    // slug is the URL segment; same constraint shape.
+    check("tenant_slug_format", sql`${t.slug} ~ '^[a-z][a-z0-9_]{0,20}$'`),
+  ],
+);
+
+export const tenantMember = app.table(
+  "tenant_member",
+  {
+    tenant_id:  varchar("tenant_id").notNull(),
+    user_id:    varchar("user_id").notNull(),
+    role:       varchar("role").notNull(),
+    created_at: timestamp("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.user_id] }),
+    index("tenant_member_user_idx").on(t.user_id),
+    check("tenant_member_role_chk", sql`${t.role} IN ('admin', 'editor', 'viewer')`),
+  ],
+);
+
+export const tenantInvite = app.table(
+  "tenant_invite",
+  {
+    tenant_id:  varchar("tenant_id").notNull(),
+    email:      varchar("email").notNull(),
+    role:       varchar("role").notNull(),
+    invited_by: varchar("invited_by").notNull(),
+    invited_at: timestamp("invited_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.email] }),
+    index("tenant_invite_email_idx").on(t.email),
+    check("tenant_invite_role_chk", sql`${t.role} IN ('admin', 'editor', 'viewer')`),
   ],
 );
