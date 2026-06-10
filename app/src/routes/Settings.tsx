@@ -297,6 +297,7 @@ function TeamSection() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [rolePending, setRolePending] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
@@ -332,11 +333,22 @@ function TeamSection() {
 
   const handleRoleChange = async (userId: string, newRole: TeamMember["role"]) => {
     setRoleError(null);
+    setRolePending((prev) => {
+      const next = new Set(prev);
+      next.add(userId);
+      return next;
+    });
     try {
       await updateUserRole(userId, newRole);
-      void loadTeamUsers();
-    } catch (e) {
-      setRoleError(e instanceof Error ? e.message : String(e));
+      void load();
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Could not change role.");
+    } finally {
+      setRolePending((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
@@ -477,10 +489,14 @@ function TeamSection() {
                 {isAdmin ? (
                   <select
                     value={u.role}
+                    disabled={rolePending.has(u.id)}
                     onChange={(e) =>
                       void handleRoleChange(u.id, e.target.value as TeamMember["role"])
                     }
-                    className="shrink-0 rounded-sm border border-line-2 bg-bg px-2 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/40"
+                    className={cx(
+                      "shrink-0 rounded-sm border border-line-2 bg-bg px-2 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/40",
+                      rolePending.has(u.id) && "opacity-60",
+                    )}
                   >
                     <option value="admin">admin</option>
                     <option value="editor">editor</option>
