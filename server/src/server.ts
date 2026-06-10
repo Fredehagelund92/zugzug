@@ -336,6 +336,17 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           throw e;
         }
       }
+      // GET /api/tables/:id/row-activity?since=<iso>
+      if (seg.length === 4 && seg[3] === "row-activity" && method === "GET") {
+        const tableId = decodeURIComponent(seg[2]!);
+        const sinceParam = url.searchParams.get("since");
+        const since = sinceParam ? new Date(sinceParam) : new Date(Date.now() - 86_400_000);
+        if (Number.isNaN(since.getTime())) {
+          throw new AppError("VALIDATION_FAILED", "invalid `since` query param", 400);
+        }
+        const entries = await repo.getRowActivitySince(tableId, since);
+        return json({ entries, serverTime: new Date().toISOString() });
+      }
       return json({ error: "not found" }, 404);
     }
 
