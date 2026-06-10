@@ -609,22 +609,31 @@ export async function retireCanonical(
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
 
-  // Governance check first — refusal does NOT bump the version (no edit happened).
-  const v = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`,
-    [key],
-  );
-  const variants = Number(v?.n ?? 0);
-  if (variants > 0) return { ok: false, variants };
+  // Variant check inside the tx so it sees the same snapshot as the delete —
+  // closes the race where a concurrent map insert lands between the check and
+  // the dim_X DELETE (map_X has no FK to dim_X, so the dangling reference would
+  // not error). map_X gains no row lock from a SELECT, so a concurrent INSERT
+  // after this read is still possible in READ COMMITTED — but the same tx then
+  // executes the DELETE in the same snapshot, so we either see 0 variants and
+  // delete cleanly, or see variants and refuse without bumping the version.
+  const result = await pgTx<{ ok: boolean; variants: number }>(async (tx) => {
+    const v = await tx.get<{ n: number }>(
+      `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`,
+      [key],
+    );
+    const variants = Number(v?.n ?? 0);
+    if (variants > 0) return { ok: false, variants };
 
-  await pgTx(async (tx) => {
     await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
     await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
     await deleteVersionRow(tx, dimId, key);
+    return { ok: true, variants: 0 };
   });
 
-  await appendAuditAs(userId, "Retired canonical", key);
-  return { ok: true, variants: 0 };
+  if (result.ok) {
+    await appendAuditAs(userId, "Retired canonical", key);
+  }
+  return result;
 }
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */
