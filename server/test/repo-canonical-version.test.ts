@@ -1,0 +1,52 @@
+// Env must be set before ANY module imports — env.ts reads DATABASE_URL via
+// required() at module load time, so setting it afterward is too late.
+process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
+process.env.ATTACH_WAREHOUSE = "false";
+process.env.MOTHERDUCK_TOKEN = "test-stub";
+process.env.GOOGLE_CLIENT_ID = "test-stub";
+process.env.GOOGLE_CLIENT_SECRET = "test-stub";
+
+import { test, expect, beforeAll } from "bun:test";
+import { pgRun, pgGet } from "../src/pg.ts";
+import { addCanonicalOne } from "../src/repo-canonical.ts";
+
+const DIM = "d_canon_test";
+// Store unquoted identifiers — cq() will add quotes when building SQL
+const DIM_TABLE = "zugzug_app.dim_d_canon_test";
+const MAP_TABLE = "zugzug_app.map_d_canon_test";
+const KEY_COL = "country_id";
+
+beforeAll(async () => {
+  await pgRun(
+    `INSERT INTO "zugzug_app"."dimension"
+       (id, label, dim_table, map_table, key_col, created_at)
+     VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, dim_table = EXCLUDED.dim_table, map_table = EXCLUDED.map_table, key_col = EXCLUDED.key_col`,
+    [DIM, "Canon Test", DIM_TABLE, MAP_TABLE, KEY_COL],
+  );
+  await pgRun(
+    `CREATE TABLE IF NOT EXISTS "zugzug_app"."dim_d_canon_test" (${KEY_COL} varchar PRIMARY KEY, label varchar)`,
+  );
+  await pgRun(
+    `CREATE TABLE IF NOT EXISTS "zugzug_app"."map_d_canon_test" (raw varchar, ${KEY_COL} varchar)`,
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."dim_d_canon_test"`);
+  await pgRun(`DELETE FROM "zugzug_app"."map_d_canon_test"`);
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1`, [DIM]);
+  await pgRun(
+    `INSERT INTO "zugzug_app"."users" (id, name, initials)
+     VALUES ('u_canon_actor', 'Canon Actor', 'CA')
+     ON CONFLICT (id) DO NOTHING`,
+  );
+});
+
+test("addCanonicalOne seeds canonical_version row at version=1", async () => {
+  await addCanonicalOne(DIM, "Denmark", "dk", "u_canon_actor");
+  const v = await pgGet<{ version: number; updated_by: string }>(
+    `SELECT version, updated_by FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = $1 AND key = $2`,
+    [DIM, "dk"],
+  );
+  expect(v?.version).toBe(1);
+  expect(v?.updated_by).toBe("u_canon_actor");
+});

@@ -32,6 +32,92 @@ import {
 } from "./repo-shared.ts";
 import type { ValueProvenance } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
+import { AppError } from "./errors.ts";
+
+/** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */
+type TxLike = {
+  all: <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T[]>;
+  get: <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T | null>;
+  run: (q: string, p?: unknown[]) => Promise<void>;
+};
+
+interface CurrentVersionRow {
+  version: number;
+  updated_at: Date;
+  updated_by: string;
+  name: string | null;
+  initials: string | null;
+}
+
+interface ConflictCurrent {
+  version: number;
+  updatedAt: string;
+  updatedBy: { id: string; name: string; initials: string };
+}
+
+/** Inside an existing pgTx, attempt to bump the version row for (dim_id, key).
+ *  On success: returns the new version.
+ *  On expected-version mismatch: throws AppError CONFLICT with details.current. */
+async function bumpVersionOrThrow(
+  tx: TxLike,
+  dimId: string,
+  key: string,
+  expectedVersion: number,
+  userId: string,
+): Promise<number> {
+  const rows = await tx.all<{ version: number }>(
+    `UPDATE "zugzug_app"."canonical_version"
+        SET version = version + 1, updated_at = now(), updated_by = $1
+      WHERE dim_id = $2 AND key = $3 AND version = $4
+    RETURNING version`,
+    [userId, dimId, key, expectedVersion],
+  );
+  if (rows.length === 1) return rows[0]!.version;
+
+  const cur = await tx.get<CurrentVersionRow>(
+    `SELECT cv.version, cv.updated_at, cv.updated_by,
+            u.name, u.initials
+       FROM "zugzug_app"."canonical_version" cv
+       LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
+      WHERE cv.dim_id = $1 AND cv.key = $2`,
+    [dimId, key],
+  );
+  if (!cur) throw new AppError("NOT_FOUND", `canonical ${dimId}/${key} not found`, 404);
+
+  const current: ConflictCurrent = {
+    version: cur.version,
+    updatedAt: cur.updated_at.toISOString(),
+    updatedBy: {
+      id: cur.updated_by,
+      name: cur.name ?? cur.updated_by,
+      initials: cur.initials ?? "??",
+    },
+  };
+  throw new AppError("CONFLICT", "Record was modified by another user", 409, { current });
+}
+
+/** New canonical → version row at version=1 owned by userId. Use inside an existing tx. */
+async function seedVersionRow(
+  tx: TxLike,
+  dimId: string,
+  key: string,
+  userId: string,
+): Promise<void> {
+  await tx.run(
+    `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by)
+     VALUES ($1, $2, 1, now(), $3)
+     ON CONFLICT (dim_id, key) DO NOTHING`,
+    [dimId, key, userId],
+  );
+}
+
+/** Delete the version row after a canonical is retired. Use inside an existing tx. */
+async function deleteVersionRow(tx: TxLike, dimId: string, key: string): Promise<void> {
+  await tx.run(
+    `DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1 AND key = $2`,
+    [dimId, key],
+  );
+}
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
 // to PG): Postgres has no DOUBLE, so number → NUMERIC.
@@ -375,11 +461,14 @@ export async function addCanonicalOne(
   if (!m) return;
   const k = (key && slug(key)) || slug(label);
   if (!k) return;
-  await pgRun(
-    `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
-     ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
-    [k, label],
-  );
+  await pgTx(async (tx) => {
+    await tx.run(
+      `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
+       ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+      [k, label],
+    );
+    await seedVersionRow(tx, dimId, k, userId);
+  });
   await appendAuditAs(userId, "Added canonical", `${label} (${k})`);
 }
 
