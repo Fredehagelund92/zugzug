@@ -6,7 +6,7 @@ import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useFlash, type Flash } from "../hooks/useFlash";
+import { useFlash } from "../hooks/useFlash";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
 import {
@@ -363,7 +363,6 @@ function TriageInner() {
         setCommitError={setCommitError}
         draftError={draftError}
         setDraftError={setDraftError}
-        flash={flash}
         undo={undo}
         aiHint={aiHint}
         wsInfo={wsInfo}
@@ -393,7 +392,6 @@ interface CrossDimInboxProps {
   setCommitError: (e: string | null) => void;
   draftError: string | null;
   setDraftError: (e: string | null) => void;
-  flash: Flash;
   undo: ReturnType<typeof useUndoStack>;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   wsInfo: WorkspaceInfo | null;
