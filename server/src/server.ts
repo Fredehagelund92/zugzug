@@ -715,7 +715,7 @@ const server = Bun.serve<PresenceWsData>({
     if (url.pathname.startsWith("/ws/presence/")) {
       const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
       if (!tableId) return new Response("missing tableId", { status: 400 });
-      let session: SessionUser | null = null;
+      let session: SessionUser | null;
       try {
         session = await getSessionUser(req);
         if (!session) {

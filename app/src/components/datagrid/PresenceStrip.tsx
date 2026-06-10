@@ -35,9 +35,7 @@ export function PresenceStrip({ peers }: { peers: PeerState[] }) {
           {initials(p.displayName)}
         </span>
       ))}
-      {overflow > 0 && (
-        <span className="font-mono text-[10px] text-ink-3">+{overflow}</span>
-      )}
+      {overflow > 0 && <span className="font-mono text-[10px] text-ink-3">+{overflow}</span>}
     </div>
   );
 }

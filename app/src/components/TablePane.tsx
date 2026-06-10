@@ -190,10 +190,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const activeId = dim.id;
   const activity = useRowActivity(activeId);
   const currentUser = useCurrentUser();
-  const presence = usePresence(
-    currentUser ? activeId : null,
-    { userId: currentUser?.id ?? "", displayName: currentUser?.name ?? "" },
-  );
+  const presence = usePresence(currentUser ? activeId : null, {
+    userId: currentUser?.id ?? "",
+    displayName: currentUser?.name ?? "",
+  });
   const undo = useUndoStack();
 
   const [sel, setSel] = useState<string[]>([]);

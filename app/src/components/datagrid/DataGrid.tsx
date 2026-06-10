@@ -1761,7 +1761,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             cellRect={(row, col) => {
               const container = cursor.ref.current;
               if (!container) return null;
-              const rowEl = container.querySelector<HTMLElement>(`[data-row="${sortedRows[row] ? rowKey(sortedRows[row]!) : ""}"]`);
+              const rowEl = container.querySelector<HTMLElement>(
+                `[data-row="${sortedRows[row] ? rowKey(sortedRows[row]!) : ""}"]`,
+              );
               if (!rowEl) return null;
               const cellEl = rowEl.querySelectorAll<HTMLElement>("[data-cell]")[col] ?? null;
               if (!cellEl) return null;
