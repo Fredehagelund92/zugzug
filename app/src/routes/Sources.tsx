@@ -16,6 +16,8 @@ import {
   type SourceInfo,
 } from "../store";
 import { useSourcesCursor } from "./use-sources-cursor";
+import { useAsyncAction } from "../hooks/useAsyncAction";
+import { useFlash } from "../hooks/useFlash";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
    tomorrow.
@@ -77,11 +79,25 @@ export function Sources() {
   const [status, setStatus] = useState<Status>(initialStatus);
   const [sort, setSort] = useState<Sort>(initialSort);
   const [shown, setShown] = useState(PAGE);
-  const [scanning, setScanning] = useState(false);
-  const [flash, setFlash] = useState<number | null>(null);
   const [catalog, setCatalog] = useState(false);
-  const [derived, setDerived] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null); // expanded column drill
+  const flash = useFlash();
+  const scanAction = useAsyncAction(async () => {
+    try {
+      const n = await scanSources();
+      flash.show(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+    } catch (e) {
+      flash.show(e instanceof Error ? e.message : "Scan failed.", "error");
+    }
+  });
+  const deriveAction = useAsyncAction(async (s: SourceInfo) => {
+    const n = await deriveCanonical(s.dimId, s.table, s.column);
+    flash.show(
+      n > 0
+        ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}`
+        : `${s.table}.${s.column} has no rows to import`,
+    );
+  });
   const [openSchemas, setOpenSchemas] = useState<Set<string>>(new Set());
   const [openInit, setOpenInit] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -307,22 +323,6 @@ export function Sources() {
   }, [cursor.cursor]);
 
   /* ---- actions ---- */
-  const scan = async () => {
-    setScanning(true);
-    const n = await scanSources();
-    setScanning(false);
-    setFlash(n);
-    setTimeout(() => setFlash(null), 2600);
-  };
-  const derive = async (s: SourceInfo) => {
-    const n = await deriveCanonical(s.dimId, s.table, s.column);
-    setDerived(
-      n > 0
-        ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}`
-        : `${s.table}.${s.column} has no rows to import`,
-    );
-    setTimeout(() => setDerived(null), 3200);
-  };
   const toggleSchema = (k: string) => {
     setOpenSchemas((s) => {
       const next = new Set(s);
@@ -376,7 +376,7 @@ export function Sources() {
                 variant="ghost"
                 size="sm"
                 icon={
-                  scanning ? (
+                  scanAction.isPending ? (
                     <span
                       aria-hidden
                       className="block h-3.5 w-3.5 animate-spin rounded-pill border-2 border-line-2 border-t-accent"
@@ -385,10 +385,10 @@ export function Sources() {
                     <IconWand className="h-3.5 w-3.5" />
                   )
                 }
-                onClick={scan}
-                disabled={scanning || !canEdit}
+                onClick={() => void scanAction.run()}
+                disabled={scanAction.isPending || !canEdit}
               >
-                {scanning ? "Scanning…" : flash !== null ? `✓ scanned ${flash}` : "Scan all"}
+                {scanAction.isPending ? "Scanning…" : "Scan all"}
               </Button>
               <Button
                 size="sm"
@@ -403,9 +403,16 @@ export function Sources() {
         />
       </div>
 
-      {derived && (
-        <div className="mb-3 shrink-0 border-l-2 border-accent bg-accent-wash px-4 py-2 text-[12px] text-accent md:text-[12.5px]">
-          {derived}
+      {flash.message && (
+        <div
+          className={cx(
+            "mb-3 shrink-0 rounded-sm px-3 py-2 font-mono text-[11.5px]",
+            flash.variant === "error"
+              ? "border border-danger/40 bg-danger-soft text-danger"
+              : "border border-accent/40 bg-accent-wash text-accent",
+          )}
+        >
+          {flash.message}
         </div>
       )}
 
@@ -542,7 +549,8 @@ export function Sources() {
                 setExpanded={setExpanded}
                 focusedRowKey={cursor.cursor}
                 onRowClick={cursor.setCursor}
-                onDerive={derive}
+                onDerive={(s) => void deriveAction.run(s)}
+                busy={deriveAction.isPending}
                 canEdit={canEdit}
               />
             ))}
@@ -607,6 +615,7 @@ function SchemaSection({
   expanded,
   setExpanded,
   onDerive,
+  busy,
   focusedRowKey,
   onRowClick,
   canEdit,
@@ -617,6 +626,7 @@ function SchemaSection({
   expanded: string | null;
   setExpanded: (next: string | null) => void;
   onDerive: (r: SourceInfo) => void;
+  busy?: boolean;
   focusedRowKey?: string | null;
   onRowClick?: (key: string) => void;
   canEdit?: boolean;
@@ -674,6 +684,7 @@ function SchemaSection({
                   setExpanded(expanded === key ? null : key);
                 }}
                 onDerive={() => onDerive(r)}
+                busy={busy}
                 canEdit={canEdit}
               />
             );

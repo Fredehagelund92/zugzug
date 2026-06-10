@@ -13,7 +13,7 @@ interface LedgerRowProps {
   row: SourceInfo;
   expanded: boolean;
   onToggle: () => void;
-  onDerive: () => void;
+  onDerive?: () => void;
   /** Drop the coverage-encoded standing bar at the bottom edge. The bar earns
    *  its place in the full Sources ledger (long, dense list, the % readout is
    *  load-bearing) but turns to chartjunk in a per-table panel of 1–3 rows. */
@@ -25,6 +25,8 @@ interface LedgerRowProps {
   rowKey?: string;
   /** When false, the import-records (wand) button is disabled. */
   canEdit?: boolean;
+  /** When true, the import-records (wand) button is disabled while an import is in flight. */
+  busy?: boolean;
 }
 
 export function LedgerRow({
@@ -36,6 +38,7 @@ export function LedgerRow({
   focused,
   rowKey,
   canEdit = true,
+  busy,
 }: LedgerRowProps) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
   const coverage =
@@ -127,11 +130,11 @@ export function LedgerRow({
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
-            disabled={!canEdit}
+            disabled={!canEdit || !!busy}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onDerive();
+              onDerive?.();
             }}
             className="grid h-6 w-6 place-items-center rounded-sm border border-line-2 text-ink-3 transition-colors hover:border-ink-3 hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
           >
@@ -184,11 +187,11 @@ export function LedgerRow({
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
-            disabled={!canEdit}
+            disabled={!canEdit || !!busy}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onDerive();
+              onDerive?.();
             }}
             className="grid min-h-[44px] w-11 place-items-center text-ink-3 transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
           >

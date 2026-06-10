@@ -37,6 +37,7 @@ import { ModeStrip } from "./modes/ModeStrip";
 import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
@@ -197,6 +198,16 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [nameOpt, setNameOpt] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const addFieldRef = useRef<HTMLButtonElement | null>(null);
+
+  const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState<{ count: number } | null>(null);
+  const [singleDeleteConfirm, setSingleDeleteConfirm] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
+  const [mergeConfirm, setMergeConfirm] = useState<{
+    survivorLabel: string;
+    loserCount: number;
+  } | null>(null);
 
   const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
   const [layout, setLayout] = useState<GridLayoutConfig>({});
@@ -430,6 +441,22 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     );
   };
 
+  const performBulkRemove = async () => {
+    const targets = sel
+      .map((k) => list.find((x) => x.key === k))
+      .filter((c): c is NonNullable<typeof c> => c != null);
+    if (targets.length === 0) return;
+    setSel([]);
+    const label =
+      targets.length === 1 ? `remove "${targets[0].label}"` : `remove ${targets.length} records`;
+    undo.beginTransaction(label);
+    try {
+      await Promise.all(targets.map((c) => retire(c.key, c.label)));
+    } finally {
+      undo.endTransaction();
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
@@ -585,30 +612,20 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
                 value={null}
                 placeholder={sel.length < 2 ? "select 2+ to merge" : "merge into…"}
-                onPick={merge}
+                onPick={(survivorLabel) => {
+                  if (sel.length >= 5) {
+                    setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
+                  } else {
+                    void merge(survivorLabel);
+                  }
+                }}
               />
             </div>
             <Button
               size="sm"
               variant="secondary"
               icon={<IconX className="h-3.5 w-3.5" />}
-              onClick={async () => {
-                const targets = sel
-                  .map((k) => list.find((x) => x.key === k))
-                  .filter((c): c is NonNullable<typeof c> => c != null);
-                if (targets.length === 0) return;
-                setSel([]);
-                const label =
-                  targets.length === 1
-                    ? `remove "${targets[0].label}"`
-                    : `remove ${targets.length} records`;
-                undo.beginTransaction(label);
-                try {
-                  await Promise.all(targets.map((c) => retire(c.key, c.label)));
-                } finally {
-                  undo.endTransaction();
-                }
-              }}
+              onClick={() => setBulkRemoveConfirm({ count: sel.length })}
               disabled={busy}
             >
               Remove
@@ -754,9 +771,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               : (key) => {
                   const target = list.find((c) => c.key === key);
                   if (!target) return;
-                  if (window.confirm(`Delete "${target.label}"?`)) {
-                    void retire(key, target.label);
-                  }
+                  setSingleDeleteConfirm({ key, label: target.label });
                 }
           }
         />
@@ -818,6 +833,73 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={bulkRemoveConfirm !== null}
+        title="Remove these records?"
+        body={
+          bulkRemoveConfirm && (
+            <>
+              {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be
+              retired. Mapped raw values will lose their target. Use Undo if you change your mind.
+            </>
+          )
+        }
+        confirmLabel={`Remove ${bulkRemoveConfirm?.count ?? 0}`}
+        danger
+        onConfirm={async () => {
+          await performBulkRemove();
+          setBulkRemoveConfirm(null);
+        }}
+        onCancel={() => setBulkRemoveConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={singleDeleteConfirm !== null}
+        title="Delete this record?"
+        body={
+          singleDeleteConfirm && (
+            <>
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {singleDeleteConfirm.label}
+              </code>{" "}
+              will be retired. Use Undo if you change your mind.
+            </>
+          )
+        }
+        confirmLabel="Delete"
+        danger
+        onConfirm={async () => {
+          if (!singleDeleteConfirm) return;
+          await retire(singleDeleteConfirm.key, singleDeleteConfirm.label);
+          setSingleDeleteConfirm(null);
+        }}
+        onCancel={() => setSingleDeleteConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={mergeConfirm !== null}
+        title={`Merge into "${mergeConfirm?.survivorLabel ?? ""}"?`}
+        body={
+          mergeConfirm && (
+            <>
+              {mergeConfirm.loserCount} record{mergeConfirm.loserCount === 1 ? "" : "s"} will be
+              merged into{" "}
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {mergeConfirm.survivorLabel}
+              </code>
+              . Their raw values will be re-pointed. Use Undo if you change your mind.
+            </>
+          )
+        }
+        confirmLabel="Merge"
+        onConfirm={async () => {
+          if (!mergeConfirm) return;
+          await merge(mergeConfirm.survivorLabel);
+          setMergeConfirm(null);
+        }}
+        onCancel={() => setMergeConfirm(null)}
+      />
     </div>
   );
 }

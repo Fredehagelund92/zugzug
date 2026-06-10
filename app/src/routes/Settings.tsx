@@ -23,11 +23,17 @@ import {
   revokeApiToken,
   listTeamMembers,
   updateUserRole,
+  useConnectionHealth,
+  refreshConnectionHealth,
   type ApiToken,
   type CreatedApiToken,
   type TeamMember,
+  type ConnectionHealth,
 } from "../store";
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { useAsyncAction } from "../hooks/useAsyncAction";
+import { useFlash } from "../hooks/useFlash";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -76,9 +82,7 @@ function relativeTime(iso: string | null): string {
 function ScansSection() {
   const prefs = usePreferences();
   const [status, setStatus] = useState<ScanStatus | null>(null);
-  const [scanning, setScanning] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
 
   const loadStatus = useCallback(async () => {
     setStatusError(null);
@@ -95,24 +99,22 @@ function ScansSection() {
     void loadStatus();
   }, [loadStatus]);
 
+  const flash = useFlash();
+  const scanNow = useAsyncAction(async () => {
+    try {
+      const n = await scanSources();
+      await loadStatus();
+      flash.show(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+    } catch (e) {
+      flash.show(e instanceof Error ? e.message : "Scan failed.", "error");
+    }
+  });
+
   const handleScheduleChange = (next: string | null) => {
     void setPreferences({
       ...prefs,
       scanSchedule: next as "15m" | "hourly" | "daily" | null,
     });
-  };
-
-  const handleScanNow = async () => {
-    setScanning(true);
-    setScanError(null);
-    try {
-      await scanSources();
-      await loadStatus();
-    } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Scan failed.");
-    } finally {
-      setScanning(false);
-    }
   };
 
   const scheduleOptions = [
@@ -135,6 +137,19 @@ function ScansSection() {
         />
       </FormField>
 
+      {flash.message && (
+        <div
+          className={cx(
+            "rounded-sm px-3 py-2 font-mono text-[11.5px]",
+            flash.variant === "error"
+              ? "border border-danger/40 bg-danger-soft text-danger"
+              : "border border-accent/40 bg-accent-wash text-accent",
+          )}
+        >
+          {flash.message}
+        </div>
+      )}
+
       {status && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface-2 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -155,7 +170,7 @@ function ScansSection() {
               )}
             </span>
           </div>
-          <Button onClick={() => void handleScanNow()} loading={scanning}>
+          <Button onClick={() => void scanNow.run()} loading={scanNow.isPending}>
             Scan now
           </Button>
         </div>
@@ -171,20 +186,6 @@ function ScansSection() {
           <Button variant="ghost" size="sm" onClick={() => void loadStatus()}>
             Retry
           </Button>
-        </div>
-      )}
-
-      {scanError && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-          <span>Scan failed — {scanError}</span>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setScanError(null)}>
-              Dismiss
-            </Button>
-            <Button size="sm" onClick={() => void handleScanNow()} loading={scanning}>
-              Retry
-            </Button>
-          </div>
         </div>
       )}
     </Section>
@@ -295,6 +296,8 @@ function TeamSection() {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [rolePending, setRolePending] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
@@ -330,11 +333,22 @@ function TeamSection() {
 
   const handleRoleChange = async (userId: string, newRole: TeamMember["role"]) => {
     setRoleError(null);
+    setRolePending((prev) => {
+      const next = new Set(prev);
+      next.add(userId);
+      return next;
+    });
     try {
       await updateUserRole(userId, newRole);
       void loadTeamUsers();
-    } catch (e) {
-      setRoleError(e instanceof Error ? e.message : String(e));
+    } catch (err) {
+      setRoleError(err instanceof Error ? err.message : "Could not change role.");
+    } finally {
+      setRolePending((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
@@ -475,10 +489,14 @@ function TeamSection() {
                 {isAdmin ? (
                   <select
                     value={u.role}
+                    disabled={rolePending.has(u.id)}
                     onChange={(e) =>
                       void handleRoleChange(u.id, e.target.value as TeamMember["role"])
                     }
-                    className="shrink-0 rounded-sm border border-line-2 bg-bg px-2 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/40"
+                    className={cx(
+                      "shrink-0 rounded-sm border border-line-2 bg-bg px-2 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/40",
+                      rolePending.has(u.id) && "opacity-60",
+                    )}
                   >
                     <option value="admin">admin</option>
                     <option value="editor">editor</option>
@@ -520,7 +538,7 @@ function TeamSection() {
             {m.email !== myEmail && (
               <button
                 type="button"
-                onClick={() => remove(m.email)}
+                onClick={() => setRemoveTarget(m.email)}
                 className="shrink-0 rounded-sm text-[11px] text-ink-3 transition-colors hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 Remove
@@ -529,6 +547,27 @@ function TeamSection() {
           </li>
         ))}
       </ul>
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title="Remove this member?"
+        body={
+          <>
+            <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+              {removeTarget}
+            </code>{" "}
+            will lose access immediately. They can be re-invited from this screen if needed.
+          </>
+        }
+        confirmLabel="Remove"
+        danger
+        onConfirm={async () => {
+          if (!removeTarget) return;
+          await remove(removeTarget);
+          setRemoveTarget(null);
+        }}
+        onCancel={() => setRemoveTarget(null)}
+      />
 
       <div className="space-y-2">
         <div
@@ -682,6 +721,7 @@ export function ApiTokensSection() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdToken, setCreatedToken] = useState<CreatedApiToken | null>(null);
   const [copied, setCopied] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -793,7 +833,7 @@ export function ApiTokensSection() {
               </span>
               <button
                 type="button"
-                onClick={() => void handleRevoke(tok.id)}
+                onClick={() => setRevokeTarget({ id: tok.id, name: tok.name })}
                 className="shrink-0 rounded-sm text-[11px] text-ink-3 transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 Revoke
@@ -848,7 +888,62 @@ export function ApiTokensSection() {
           <Button onClick={() => setShowForm(true)}>Create token</Button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        title="Revoke this token?"
+        body={
+          revokeTarget && (
+            <>
+              Token{" "}
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {revokeTarget.name}
+              </code>{" "}
+              will stop working immediately. Anything using it (dbt, CI, scripts) will break until
+              you generate a new one.
+            </>
+          )
+        }
+        confirmLabel="Revoke"
+        danger
+        onConfirm={async () => {
+          if (!revokeTarget) return;
+          await handleRevoke(revokeTarget.id);
+          setRevokeTarget(null);
+        }}
+        onCancel={() => setRevokeTarget(null)}
+      />
     </Section>
+  );
+}
+
+function ago(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  return `${Math.floor(s / 3600)}h ago`;
+}
+
+function HealthBadge({ state }: { state?: ConnectionHealth["warehouse"] }) {
+  if (!state) {
+    return <Badge dot>checking…</Badge>;
+  }
+  if (state.status === "disabled") {
+    return <Badge dot>disabled</Badge>;
+  }
+  if (state.status === "error") {
+    return (
+      <span title={state.error}>
+        <Badge tone="warn" dot>
+          error · {ago(state.lastCheckedAt)}
+        </Badge>
+      </span>
+    );
+  }
+  return (
+    <Badge tone="ok" dot>
+      ok · {ago(state.lastCheckedAt)}
+    </Badge>
   );
 }
 
@@ -864,6 +959,10 @@ export function Settings() {
     return Object.values(status).filter((s) => s === "failed").length;
   }, [wsInfo?.writable, dims, audit]);
   const adapterLabel = wsInfo ? wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1) : "…";
+  const health = useConnectionHealth();
+  const refreshHealth = useAsyncAction(async () => {
+    await refreshConnectionHealth({ force: true });
+  });
 
   return (
     <div className="mx-auto w-full max-w-[var(--wide)] space-y-4 p-4 md:space-y-6 md:p-8">
@@ -902,6 +1001,17 @@ export function Settings() {
               : "Where Zug Zug reads from and where your work is kept."
           }
         >
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={refreshHealth.isPending}
+              onClick={() => void refreshHealth.run()}
+            >
+              Refresh
+            </Button>
+          </div>
+
           {/* Warehouse — where source values come from */}
           <div className="rounded-sm border border-line bg-surface-2 p-4">
             <div className="flex items-center justify-between gap-3">
@@ -909,9 +1019,7 @@ export function Settings() {
                 <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
                 <Badge>{adapterLabel}</Badge>
               </div>
-              <Badge tone="ok" dot>
-                connected
-              </Badge>
+              <HealthBadge state={health?.warehouse} />
             </div>
             {engineer ? (
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
@@ -985,9 +1093,7 @@ export function Settings() {
                 <span className="font-display text-[14px] font-semibold text-ink">App</span>
                 <Badge tone="accent">Postgres</Badge>
               </div>
-              <Badge tone="ok" dot>
-                connected
-              </Badge>
+              <HealthBadge state={health?.postgres} />
             </div>
             {engineer ? (
               <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">

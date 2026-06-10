@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 describe("ApiTokensSection", () => {
   beforeEach(() => {
@@ -78,7 +78,7 @@ describe("ApiTokensSection", () => {
     });
   });
 
-  test("revoke calls revokeApiToken with the token id", async () => {
+  test("revoke shows confirm dialog; confirm calls revokeApiToken with the token id", async () => {
     const mockRevoke = vi.fn(async () => undefined);
 
     vi.doMock("../src/store", async (importOriginal) => {
@@ -105,10 +105,54 @@ describe("ApiTokensSection", () => {
       expect(screen.getByText("to be revoked")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /revoke/i }));
+    // Click Revoke — dialog should appear, API not yet called
+    fireEvent.click(screen.getByRole("button", { name: /^revoke$/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(mockRevoke).not.toHaveBeenCalled();
+
+    // Confirm inside the dialog — API should be called
+    fireEvent.click(within(dialog).getByRole("button", { name: /^revoke$/i }));
 
     await waitFor(() => {
       expect(mockRevoke).toHaveBeenCalledWith("tok_del");
     });
+  });
+
+  test("Revoke shows confirm dialog; cancel does not call API", async () => {
+    const mockRevoke = vi.fn(async () => undefined);
+
+    vi.doMock("../src/store", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/store")>();
+      return {
+        ...actual,
+        listApiTokens: vi.fn(async () => [
+          {
+            id: "tok_cancel",
+            name: "cancel me",
+            created_at: "2026-01-01T00:00:00Z",
+            last_used_at: null,
+          },
+        ]),
+        createApiToken: vi.fn(),
+        revokeApiToken: mockRevoke,
+      };
+    });
+
+    const { ApiTokensSection } = await import("../src/routes/Settings");
+    render(<ApiTokensSection />);
+
+    await waitFor(() => {
+      expect(screen.getByText("cancel me")).toBeInTheDocument();
+    });
+
+    // Click Revoke — dialog should appear
+    fireEvent.click(screen.getByRole("button", { name: /^revoke$/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Click Cancel — dialog should close, API not called
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(mockRevoke).not.toHaveBeenCalled();
   });
 });

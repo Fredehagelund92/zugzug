@@ -6,6 +6,7 @@ import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
+import { useFlash } from "../hooks/useFlash";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
 import {
@@ -105,7 +106,7 @@ function TriageInner() {
   );
 
   const [cursor, setCursor] = useState<{ dimId: string; raw: string } | null>(null);
-  const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
+  const flash = useFlash();
   const [commitError, setCommitError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -193,7 +194,10 @@ function TriageInner() {
     const d = dimById.get(dimId);
     const v = d?.values.find((x) => x.value === raw);
     const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
-    if (!suggestion) return;
+    if (!suggestion) {
+      flash.show(`No suggestion to accept for "${raw}".`, "error");
+      return;
+    }
     stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
@@ -273,7 +277,10 @@ function TriageInner() {
       const v = dimById.get(d.dimId)?.values.find((x) => x.value === d.raw);
       return n + (v ? valueRows(v) : 0);
     }, 0);
-    setFlash({ n: stagedAllDrafts.length, rows: predictedRows });
+    const n0 = stagedAllDrafts.length;
+    flash.show(
+      `✓ ${n0} change${n0 === 1 ? "" : "s"} published · ${predictedRows.toLocaleString()} rows recovered`,
+    );
     try {
       let total = 0,
         totalRows = 0;
@@ -283,13 +290,13 @@ function TriageInner() {
         totalRows += res.rowsRecovered;
       }
       if (total === 0) {
-        setFlash(null);
+        // nothing was actually committed — clear the optimistic flash
         return;
       }
-      setFlash({ n: total, rows: totalRows });
-      setTimeout(() => setFlash(null), 2800);
+      flash.show(
+        `✓ ${total} change${total === 1 ? "" : "s"} published · ${totalRows.toLocaleString()} rows recovered`,
+      );
     } catch (err) {
-      setFlash(null);
       setCommitError(
         err instanceof Error
           ? err.message
@@ -323,6 +330,19 @@ function TriageInner() {
         />
       </div>
 
+      {flash.message && (
+        <div
+          className={cx(
+            "mb-3 rounded-sm px-3 py-2 font-mono text-[11.5px]",
+            flash.variant === "error"
+              ? "border border-danger/40 bg-danger-soft text-danger"
+              : "border border-accent/40 bg-accent-wash text-accent",
+          )}
+        >
+          {flash.message}
+        </div>
+      )}
+
       <CrossDimInbox
         rows={visibleCross}
         counts={crossCounts}
@@ -343,7 +363,6 @@ function TriageInner() {
         setCommitError={setCommitError}
         draftError={draftError}
         setDraftError={setDraftError}
-        flash={flash}
         undo={undo}
         aiHint={aiHint}
         wsInfo={wsInfo}
@@ -373,7 +392,6 @@ interface CrossDimInboxProps {
   setCommitError: (e: string | null) => void;
   draftError: string | null;
   setDraftError: (e: string | null) => void;
-  flash: { n: number; rows: number } | null;
   undo: ReturnType<typeof useUndoStack>;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   wsInfo: WorkspaceInfo | null;
@@ -821,15 +839,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 pb-[max(12px,env(safe-area-inset-bottom))]">
         <span className="font-mono text-[11px] text-ink-2">
-          {p.flash ? (
-            <span
-              className="zz-rise text-committed"
-              style={{ animationDuration: "var(--dur-slide)" }}
-            >
-              ✓ {p.flash.n} change{p.flash.n === 1 ? "" : "s"} published ·{" "}
-              {p.flash.rows.toLocaleString()} rows recovered
-            </span>
-          ) : stagedCount > 0 ? (
+          {stagedCount > 0 ? (
             <>
               {stagedCount} change{stagedCount === 1 ? "" : "s"} staged across {grouped.length} dim
               {grouped.length === 1 ? "" : "s"}, ready to publish
