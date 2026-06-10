@@ -324,7 +324,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return json(result, 201);
         } catch (e) {
           if (e instanceof AppError) {
-            return json({ error: e.message, code: e.code }, e.status);
+            return json(
+              {
+                error: e.message,
+                code: e.code,
+                ...(e.details ? { details: e.details } : {}),
+              },
+              e.status,
+            );
           }
           throw e;
         }
@@ -510,8 +517,17 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           if (url.searchParams.get("confirm") !== "true") {
             throw new AppError("CONFIRMATION_REQUIRED", "merge requires ?confirm=true", 400);
           }
-          const { survivor, losers } = (await req.json()) as { survivor: string; losers: string[] };
-          return json({ merged: await repo.mergeCanonical(id, survivor, losers, me) });
+          const { survivor, losers, expectedVersions } = (await req.json()) as {
+            survivor: string;
+            losers: string[];
+            expectedVersions?: Record<string, number>;
+          };
+          if (!expectedVersions || typeof expectedVersions !== "object") {
+            throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
+          }
+          return json({
+            merged: await repo.mergeCanonical(id, survivor, losers, me, expectedVersions),
+          });
         }
         const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
         if (seg[5] === "variants" && seg.length === 6 && method === "GET")
@@ -528,14 +544,25 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           if (method === "PUT") {
             const denied = gateOrJson(sessionUser, "curate");
             if (denied) return denied;
-            const { label } = (await req.json()) as { label: string };
-            await repo.renameCanonical(id, ck, label, me);
-            return noContent();
+            const { label, expectedVersion } = (await req.json()) as {
+              label: string;
+              expectedVersion?: number;
+            };
+            if (typeof expectedVersion !== "number") {
+              throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
+            }
+            const result = await repo.renameCanonical(id, ck, label, me, expectedVersion);
+            return json(result);
           }
           if (method === "DELETE") {
             const denied = gateOrJson(sessionUser, "curate");
             if (denied) return denied;
-            return json(await repo.retireCanonical(id, ck, me));
+            const ev = url.searchParams.get("expectedVersion");
+            const expectedVersion = ev !== null ? Number(ev) : NaN;
+            if (!Number.isFinite(expectedVersion)) {
+              throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
+            }
+            return json(await repo.retireCanonical(id, ck, me, expectedVersion));
           }
         }
       }
@@ -643,7 +670,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     return json({ error: `no route for ${method} ${pathname}` }, 404);
   } catch (e) {
     if (e instanceof AppError) {
-      return json({ error: e.message, code: e.code }, e.status);
+      return json(
+        {
+          error: e.message,
+          code: e.code,
+          ...(e.details ? { details: e.details } : {}),
+        },
+        e.status,
+      );
     }
     console.error(`✗ ${method} ${pathname}:`, e);
     return err(e);

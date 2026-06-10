@@ -200,3 +200,20 @@ export const scanRuns = app.table(
     index("scan_run_started_at_idx").on(t.started_at),
   ],
 );
+
+export const canonicalVersion = app.table(
+  "canonical_version",
+  {
+    dim_id:     varchar("dim_id").notNull(),
+    key:        varchar("key").notNull(),
+    version:    integer("version").notNull(),
+    updated_at: timestamp("updated_at").notNull(),
+    /** Semantically users.id. No FK constraint — matches existing convention
+     *  (repo-canonical.ts uses userId strings without enforced FKs). */
+    updated_by: varchar("updated_by").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.dim_id, t.key] }),
+    index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
+  ],
+);

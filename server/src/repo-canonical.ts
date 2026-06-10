@@ -32,6 +32,92 @@ import {
 } from "./repo-shared.ts";
 import type { ValueProvenance } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
+import { AppError } from "./errors.ts";
+
+/** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */
+type TxLike = {
+  all: <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T[]>;
+  get: <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T | null>;
+  run: (q: string, p?: unknown[]) => Promise<void>;
+};
+
+interface CurrentVersionRow {
+  version: number;
+  updated_at: Date;
+  updated_by: string;
+  name: string | null;
+  initials: string | null;
+}
+
+interface ConflictCurrent {
+  version: number;
+  updatedAt: string;
+  updatedBy: { id: string; name: string; initials: string };
+}
+
+/** Inside an existing pgTx, attempt to bump the version row for (dim_id, key).
+ *  On success: returns the new version.
+ *  On expected-version mismatch: throws AppError CONFLICT with details.current. */
+async function bumpVersionOrThrow(
+  tx: TxLike,
+  dimId: string,
+  key: string,
+  expectedVersion: number,
+  userId: string,
+): Promise<number> {
+  const rows = await tx.all<{ version: number }>(
+    `UPDATE "zugzug_app"."canonical_version"
+        SET version = version + 1, updated_at = now(), updated_by = $1
+      WHERE dim_id = $2 AND key = $3 AND version = $4
+    RETURNING version`,
+    [userId, dimId, key, expectedVersion],
+  );
+  if (rows.length === 1) return rows[0]!.version;
+
+  const cur = await tx.get<CurrentVersionRow>(
+    `SELECT cv.version, cv.updated_at, cv.updated_by,
+            u.name, u.initials
+       FROM "zugzug_app"."canonical_version" cv
+       LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
+      WHERE cv.dim_id = $1 AND cv.key = $2`,
+    [dimId, key],
+  );
+  if (!cur) throw new AppError("NOT_FOUND", `canonical ${dimId}/${key} not found`, 404);
+
+  const current: ConflictCurrent = {
+    version: cur.version,
+    updatedAt: cur.updated_at.toISOString(),
+    updatedBy: {
+      id: cur.updated_by,
+      name: cur.name ?? cur.updated_by,
+      initials: cur.initials ?? "??",
+    },
+  };
+  throw new AppError("CONFLICT", "Record was modified by another user", 409, { current });
+}
+
+/** New canonical → version row at version=1 owned by userId. Use inside an existing tx. */
+async function seedVersionRow(
+  tx: TxLike,
+  dimId: string,
+  key: string,
+  userId: string,
+): Promise<void> {
+  await tx.run(
+    `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by)
+     VALUES ($1, $2, 1, now(), $3)
+     ON CONFLICT (dim_id, key) DO NOTHING`,
+    [dimId, key, userId],
+  );
+}
+
+/** Delete the version row after a canonical is retired. Use inside an existing tx. */
+async function deleteVersionRow(tx: TxLike, dimId: string, key: string): Promise<void> {
+  await tx.run(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1 AND key = $2`, [
+    dimId,
+    key,
+  ]);
+}
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
 // to PG): Postgres has no DOUBLE, so number → NUMERIC.
@@ -375,11 +461,14 @@ export async function addCanonicalOne(
   if (!m) return;
   const k = (key && slug(key)) || slug(label);
   if (!k) return;
-  await pgRun(
-    `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
-     ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
-    [k, label],
-  );
+  await pgTx(async (tx) => {
+    await tx.run(
+      `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
+       ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+      [k, label],
+    );
+    await seedVersionRow(tx, dimId, k, userId);
+  });
   await appendAuditAs(userId, "Added canonical", `${label} (${k})`);
 }
 
@@ -389,17 +478,26 @@ export async function renameCanonical(
   key: string,
   label: string,
   userId: string,
-): Promise<void> {
+  expectedVersion: number,
+): Promise<{ version: number }> {
   const m = await dimMeta(dimId);
-  if (!m) return;
+  if (!m) throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
 
-  // Fetch old label before overwriting — needed for cache sync below.
+  // Fetch old label before overwriting — needed for ai_hint_cache sync below.
   const oldRow = await pgGet<{ label: string }>(
     `SELECT label FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`,
     [key],
   ).catch(() => null);
 
-  await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
+  const newVersion = await pgTx(async (tx) => {
+    const v = await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
+    await tx.run(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [
+      label,
+      key,
+    ]);
+    return v;
+  });
+
   await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`);
 
   // Keep ai_hint_cache consistent: update any hint that was pointing at the old label.
@@ -412,6 +510,8 @@ export async function renameCanonical(
       /* table may not exist in older deploys */
     });
   }
+
+  return { version: newVersion };
 }
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
@@ -421,6 +521,7 @@ export async function mergeCanonical(
   survivor: string,
   losers: string[],
   userId: string,
+  expectedVersions: Record<string, number>,
 ): Promise<number> {
   const m = await dimMeta(dimId);
   if (!m) return 0;
@@ -428,12 +529,70 @@ export async function mergeCanonical(
   const real = losers.filter((l) => l && l !== survivor);
   if (real.length === 0) return 0;
 
+  const allKeys = [survivor, ...real];
+
   await pgTx(async (tx) => {
+    // Bulk version-bump via VALUES list. Returns the set of keys actually bumped.
+    // We compare against allKeys to detect stale-version misses.
+    const valuesSql = allKeys.map((_, i) => `($${i * 2 + 2}, $${i * 2 + 3}::int)`).join(", ");
+    const params: unknown[] = [userId];
+    for (const k of allKeys) {
+      params.push(k, expectedVersions[k] ?? -1);
+    }
+    const bumped = await tx.all<{ key: string }>(
+      `WITH expected(key, expected_version) AS (
+         VALUES ${valuesSql}
+       )
+       UPDATE "zugzug_app"."canonical_version" cv
+          SET version = cv.version + 1, updated_at = now(), updated_by = $1
+         FROM expected e
+        WHERE cv.dim_id = '${dimId.replace(/'/g, "''")}'
+          AND cv.key = e.key
+          AND cv.version = e.expected_version
+       RETURNING cv.key`,
+      params,
+    );
+    const bumpedSet = new Set(bumped.map((b) => b.key));
+    const missed = allKeys.filter((k) => !bumpedSet.has(k));
+    if (missed.length > 0) {
+      const cur = await tx.get<{
+        version: number;
+        updated_at: Date;
+        updated_by: string;
+        name: string | null;
+        initials: string | null;
+      }>(
+        `SELECT cv.version, cv.updated_at, cv.updated_by, u.name, u.initials
+           FROM "zugzug_app"."canonical_version" cv
+           LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
+          WHERE cv.dim_id = $1 AND cv.key = $2`,
+        [dimId, missed[0]!],
+      );
+      throw new AppError("CONFLICT", "One or more records were modified by another user", 409, {
+        current: cur && {
+          version: cur.version,
+          updatedAt: cur.updated_at.toISOString(),
+          updatedBy: {
+            id: cur.updated_by,
+            name: cur.name ?? cur.updated_by,
+            initials: cur.initials ?? "??",
+          },
+        },
+        conflictedKeys: missed,
+      });
+    }
+
+    // All version checks passed — execute the merge.
     await tx.run(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`, [
       survivor,
       real,
     ]);
     await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`, [real]);
+    await tx.run(
+      `DELETE FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND key = ANY($2::text[])`,
+      [dimId, real],
+    );
   });
 
   await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`);
@@ -445,18 +604,36 @@ export async function retireCanonical(
   dimId: string,
   key: string,
   userId: string,
+  expectedVersion: number,
 ): Promise<{ ok: boolean; variants: number }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
-  const v = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`,
-    [key],
-  );
-  const variants = Number(v?.n ?? 0);
-  if (variants > 0) return { ok: false, variants };
-  await pgRun(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
-  await appendAuditAs(userId, "Retired canonical", key);
-  return { ok: true, variants: 0 };
+
+  // Variant check inside the tx so it sees the same snapshot as the delete —
+  // closes the race where a concurrent map insert lands between the check and
+  // the dim_X DELETE (map_X has no FK to dim_X, so the dangling reference would
+  // not error). map_X gains no row lock from a SELECT, so a concurrent INSERT
+  // after this read is still possible in READ COMMITTED — but the same tx then
+  // executes the DELETE in the same snapshot, so we either see 0 variants and
+  // delete cleanly, or see variants and refuse without bumping the version.
+  const result = await pgTx<{ ok: boolean; variants: number }>(async (tx) => {
+    const v = await tx.get<{ n: number }>(
+      `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`,
+      [key],
+    );
+    const variants = Number(v?.n ?? 0);
+    if (variants > 0) return { ok: false, variants };
+
+    await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
+    await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
+    await deleteVersionRow(tx, dimId, key);
+    return { ok: true, variants: 0 };
+  });
+
+  if (result.ok) {
+    await appendAuditAs(userId, "Retired canonical", key);
+  }
+  return result;
 }
 
 /* ---- enrichment fields (attribute columns on dim_) ---- */

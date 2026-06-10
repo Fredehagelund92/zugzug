@@ -64,6 +64,13 @@
       "when": 1781031234739,
       "tag": "0008_v02_rbac",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781092294260,
+      "tag": "0009_e2_canonical_version",
+      "breakpoints": true
     }
   ]
 }

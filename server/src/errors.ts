@@ -6,6 +6,7 @@ export type ErrorCode =
   | "WRONG_DOMAIN"
   | "ALREADY_EXISTS"
   | "CANNOT_REMOVE_SELF"
+  | "CONFLICT"
   | "INTERNAL";
 
 export class AppError extends Error {
@@ -13,6 +14,9 @@ export class AppError extends Error {
     public code: ErrorCode,
     message: string,
     public status: number = 400,
+    /** Structured payload included verbatim in the JSON response body under "details".
+     *  Used by CONFLICT to carry { current, conflictedKeys? } for optimistic concurrency. */
+    public details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "AppError";

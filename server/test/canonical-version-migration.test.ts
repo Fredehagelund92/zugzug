@@ -1,0 +1,94 @@
+process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
+process.env.ATTACH_WAREHOUSE = "false";
+process.env.MOTHERDUCK_TOKEN = "test-stub";
+
+import { test, expect, beforeAll } from "bun:test";
+import { pgAll, pgRun, pgGet } from "../src/pg.ts";
+
+beforeAll(async () => {
+  // Provision a fake dimension + dim_X table the backfill DO-block can find.
+  // Note: the dimension table has no "dimension" column — label holds the name.
+  await pgRun(
+    `INSERT INTO "zugzug_app"."dimension"
+       (id, label, dim_table, map_table, key_col, created_at)
+     VALUES
+       ('d_test_e2', 'Test E2', '"zugzug_app"."dim_test_e2"', '"zugzug_app"."map_test_e2"',
+        'country_id', now())
+     ON CONFLICT (id) DO NOTHING`,
+  );
+  await pgRun(
+    `CREATE TABLE IF NOT EXISTS "zugzug_app"."dim_test_e2" (country_id varchar PRIMARY KEY, label varchar)`,
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."dim_test_e2"`);
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = 'd_test_e2'`);
+  await pgRun(
+    `INSERT INTO "zugzug_app"."dim_test_e2" (country_id, label)
+     VALUES ('dk', 'Denmark'), ('no', 'Norway'), ('se', 'Sweden')`,
+  );
+});
+
+test("canonical_version table exists and is empty for the test dim before backfill", async () => {
+  // (The migration already ran in db:migrate above; for this test we re-run
+  //  just the backfill block to simulate "what if a new dim was added later".)
+  await pgRun(
+    `DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = 'd_test_e2'`,
+  );
+  const empty = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "zugzug_app"."canonical_version" WHERE dim_id = 'd_test_e2'`,
+  );
+  expect(empty?.n).toBe(0);
+});
+
+test("backfill seeds version=1 for every existing dim row", async () => {
+  // Apply the same DO-block the migration uses (idempotent).
+  await pgRun(`
+    DO $$
+    DECLARE d record; sql_stmt text;
+    BEGIN
+      FOR d IN SELECT id, dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2' LOOP
+        sql_stmt := format(
+          'INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by)
+           SELECT %L, %I, 1, now(), %L FROM %s
+           ON CONFLICT (dim_id, key) DO NOTHING',
+          d.id, d.key_col, 'u_system', d.dim_table
+        );
+        EXECUTE sql_stmt;
+      END LOOP;
+    END $$;
+  `);
+  const rows = await pgAll<{ key: string; version: number }>(
+    `SELECT key, version FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = 'd_test_e2' ORDER BY key`,
+  );
+  expect(rows.map((r) => r.key)).toEqual(["dk", "no", "se"]);
+  expect(rows.every((r) => r.version === 1)).toBe(true);
+});
+
+test("backfill is idempotent — re-running does not duplicate or bump version", async () => {
+  // Manually bump one row's version to prove ON CONFLICT DO NOTHING preserves it.
+  await pgRun(
+    `UPDATE "zugzug_app"."canonical_version" SET version = 7
+       WHERE dim_id = 'd_test_e2' AND key = 'dk'`,
+  );
+  // Re-run the same backfill block.
+  await pgRun(`
+    DO $$
+    DECLARE d record; sql_stmt text;
+    BEGIN
+      FOR d IN SELECT id, dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2' LOOP
+        sql_stmt := format(
+          'INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by)
+           SELECT %L, %I, 1, now(), %L FROM %s
+           ON CONFLICT (dim_id, key) DO NOTHING',
+          d.id, d.key_col, 'u_system', d.dim_table
+        );
+        EXECUTE sql_stmt;
+      END LOOP;
+    END $$;
+  `);
+  const dk = await pgGet<{ version: number }>(
+    `SELECT version FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = 'd_test_e2' AND key = 'dk'`,
+  );
+  expect(dk?.version).toBe(7);
+});

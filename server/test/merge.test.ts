@@ -26,7 +26,7 @@ test("mergeCanonical re-points crosswalk rows and deletes losers", async () => {
   await repo.saveDraft(dimId, "acme corp variant", "mapped", "Acme Corp", "acme_corp", userId);
   await repo.commit(dimId, userId);
 
-  const merged = await repo.mergeCanonical(dimId, "acme", ["acme_corp"], userId);
+  const merged = await repo.mergeCanonical(dimId, "acme", ["acme_corp"], userId, { acme: 1, acme_corp: 1 });
   expect(merged).toBe(1);
 
   const dim = await repo.getDimension(dimId);
@@ -36,7 +36,7 @@ test("mergeCanonical re-points crosswalk rows and deletes losers", async () => {
 test("mergeCanonical with empty losers is a no-op", async () => {
   const userId = "u_test";
   const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId);
-  const n = await repo.mergeCanonical(dimId, "acme", [], userId);
+  const n = await repo.mergeCanonical(dimId, "acme", [], userId, {});
   expect(n).toBe(0);
 });
 
@@ -45,6 +45,6 @@ test("mergeCanonical filters out survivor from losers list", async () => {
   const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId);
   await repo.addCanonicalOne(dimId, "Acme", undefined, userId);
   // Survivor appearing in losers should be filtered out (no-op for that entry).
-  const n = await repo.mergeCanonical(dimId, "acme", ["acme"], userId);
+  const n = await repo.mergeCanonical(dimId, "acme", ["acme"], userId, { acme: 1 });
   expect(n).toBe(0);
 });
