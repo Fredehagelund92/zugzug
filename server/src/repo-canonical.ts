@@ -545,16 +545,28 @@ export async function retireCanonical(
   dimId: string,
   key: string,
   userId: string,
+  expectedVersion: number,
 ): Promise<{ ok: boolean; variants: number }> {
   const m = await dimMeta(dimId);
   if (!m) return { ok: false, variants: 0 };
+
+  // Governance check first — refusal does NOT bump the version (no edit happened).
   const v = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${cq(m.mapTable)} WHERE ${qid(m.keyCol)} = $1`,
     [key],
   );
   const variants = Number(v?.n ?? 0);
   if (variants > 0) return { ok: false, variants };
-  await pgRun(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
+
+  await pgTx(async (tx) => {
+    await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
+    await tx.run(
+      `DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`,
+      [key],
+    );
+    await deleteVersionRow(tx, dimId, key);
+  });
+
   await appendAuditAs(userId, "Retired canonical", key);
   return { ok: true, variants: 0 };
 }

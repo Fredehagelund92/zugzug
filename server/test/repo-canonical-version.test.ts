@@ -87,3 +87,46 @@ test("renameCanonical with stale expectedVersion throws CONFLICT", async () => {
   );
   expect(label?.label).toBe("Danmark");
 });
+
+test("retireCanonical with correct expectedVersion deletes row + version", async () => {
+  await addCanonicalOne(DIM, "Norway", "no", "u_canon_actor");
+  const res = await retireCanonical(DIM, "no", "u_canon_actor", 1);
+  expect(res.ok).toBe(true);
+  const stillThere = await pgGet<{ key: string }>(
+    `SELECT key FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = $1 AND key = $2`,
+    [DIM, "no"],
+  );
+  expect(stillThere).toBeNull();
+});
+
+test("retireCanonical with stale expectedVersion throws CONFLICT", async () => {
+  await addCanonicalOne(DIM, "Sweden", "se", "u_canon_actor");
+  await renameCanonical(DIM, "se", "Sverige", "u_canon_actor", 1);
+  // Now version=2. Try to retire with version=1.
+  let thrown: AppError | null = null;
+  try {
+    await retireCanonical(DIM, "se", "u_canon_actor", 1);
+  } catch (e) {
+    thrown = e as AppError;
+  }
+  expect(thrown?.code).toBe("CONFLICT");
+  const row = await pgGet<{ key: string }>(
+    `SELECT ${KEY_COL} AS key FROM "zugzug_app"."dim_d_canon_test" WHERE ${KEY_COL} = 'se'`,
+  );
+  expect(row?.key).toBe("se");
+});
+
+test("retireCanonical returns ok:false when variants still map (no version bump)", async () => {
+  await addCanonicalOne(DIM, "Iceland", "is", "u_canon_actor");
+  await pgRun(`INSERT INTO "zugzug_app"."map_d_canon_test" (raw, ${KEY_COL}) VALUES ('IS', 'is')`);
+  const res = await retireCanonical(DIM, "is", "u_canon_actor", 1);
+  expect(res.ok).toBe(false);
+  expect(res.variants).toBe(1);
+  const v = await pgGet<{ version: number }>(
+    `SELECT version FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = $1 AND key = $2`,
+    [DIM, "is"],
+  );
+  expect(v?.version).toBe(1);
+});
