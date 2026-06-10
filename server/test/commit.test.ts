@@ -27,3 +27,33 @@ test("commit folds approved drafts into canonical", async () => {
   const drafts = await repo.listDrafts(dimId);
   expect(drafts).toHaveLength(0);
 });
+
+test("commit writes one per-row audit entry per committed key + one rollup", async () => {
+  const userId = "u_test_audit";
+  const dimId = await repo.addDimension("AuditBrand", [], { keyKind: "slug" }, userId);
+
+  await repo.addCanonicalOne(dimId, "Acme", undefined, userId);
+  await repo.addCanonicalOne(dimId, "Globex", undefined, userId);
+  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId);
+  await repo.saveDraft(dimId, "acme inc.", "mapped", "Acme", "acme", userId);
+  await repo.saveDraft(dimId, "Globex Corp", "mapped", "Globex", "globex", userId);
+
+  const before = new Date();
+  await repo.commit(dimId, userId);
+
+  const audit = await repo.pgAll<{ action: string; table_id: string | null; row_key: string | null }>(
+    `SELECT action, table_id, row_key FROM "zugzug_app"."audit_log"
+     WHERE user_id = $1 AND created_at >= $2
+     ORDER BY created_at DESC`,
+    [userId, before],
+  );
+
+  const perRow = audit.filter((a) => a.action === "Committed mapping");
+  const rollup = audit.filter((a) => a.action === "Committed");
+
+  // Two distinct target_keys (acme + globex) → two per-row entries
+  expect(perRow.length).toBeGreaterThanOrEqual(2);
+  expect(rollup.length).toBeGreaterThanOrEqual(1);
+  // Every per-row entry should carry table_id = dimId and a non-null row_key
+  expect(perRow.every((a) => a.table_id === dimId && a.row_key !== null)).toBe(true);
+});

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type React from "react";
 import type { OptionDef, NumberFormat } from "../../data";
 import type { PaletteName } from "../../lib/palette";
+import type { RowActivityEntry } from "../../lib/use-row-activity";
 export type { NumberFormat };
 
 export interface RuleStyle {
@@ -169,4 +170,7 @@ export interface DataGridProps<Row> {
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
   /** Save a plain-text description for a column (persisted in dimension_field.description). */
   onSaveColumnDescription?: (field: string, description: string | null) => void;
+  /** Optional per-row activity map (rowKey → latest audit entry).
+   *  When present, each row gets a left-edge pip + hover-revealed badge. */
+  activity?: Map<string, RowActivityEntry>;
 }

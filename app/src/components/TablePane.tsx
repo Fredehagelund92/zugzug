@@ -33,6 +33,7 @@ import {
 } from "../store";
 import { ConflictBanner } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
+import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
 import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
@@ -184,6 +185,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
+  const activity = useRowActivity(activeId);
   const undo = useUndoStack();
 
   const [sel, setSel] = useState<string[]>([]);
@@ -872,6 +874,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   setSingleDeleteConfirm({ key, label: target.label });
                 }
           }
+          activity={activity}
         />
 
         {addOpen && canEdit && (

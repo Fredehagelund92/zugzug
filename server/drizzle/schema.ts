@@ -82,13 +82,23 @@ export const draft = app.table(
   (t) => [primaryKey({ columns: [t.dim_id, t.raw, t.user_id] })],
 );
 
-export const auditLog = app.table("audit_log", {
-  id:         varchar("id").primaryKey(),
-  created_at: timestamp("created_at").notNull(),
-  user_id:    varchar("user_id").notNull(),
-  action:     varchar("action").notNull(),
-  detail:     varchar("detail").notNull(),
-});
+export const auditLog = app.table(
+  "audit_log",
+  {
+    id:         varchar("id").primaryKey(),
+    created_at: timestamp("created_at").notNull(),
+    user_id:    varchar("user_id").notNull(),
+    action:     varchar("action").notNull(),
+    detail:     varchar("detail").notNull(),
+    table_id:   varchar("table_id"),
+    row_key:    varchar("row_key"),
+  },
+  (t) => [
+    index("audit_log_table_row_recency_idx")
+      .on(t.table_id, t.row_key, t.created_at.desc())
+      .where(sql`${t.table_id} IS NOT NULL`),
+  ],
+);
 
 export const users = app.table(
   "users",

@@ -71,6 +71,13 @@
       "when": 1781092294260,
       "tag": "0009_e2_canonical_version",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781095590335,
+      "tag": "0010_e1_audit_log_row_columns",
+      "breakpoints": true
     }
   ]
 }
