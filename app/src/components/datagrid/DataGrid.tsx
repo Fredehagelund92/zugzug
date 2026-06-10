@@ -56,6 +56,8 @@ import { useConditionalFormatting, type RowEvaluation } from "./useConditionalFo
 import type { DataGridProps, CellType, ColumnDef, FilterSet, RuleStyle } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
+import type { RowActivityEntry } from "../../lib/use-row-activity";
+import { RowActivityBadge } from "./RowActivityBadge";
 
 // ── GridRow — memoized per-row component ────────────────────────────────────
 interface GridRowProps<Row> {
@@ -89,6 +91,9 @@ interface GridRowProps<Row> {
     | undefined;
   onRowNumPointerDown?: (e: React.PointerEvent, rk: string) => void;
   evaluation: RowEvaluation;
+  /** Latest audit entry for this row, if any. When present, renders the
+   *  activity pip + hover badge inside the row wrapper. */
+  activityEntry?: RowActivityEntry;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -120,18 +125,20 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     onAddColumnOption,
     onRowNumPointerDown,
     evaluation,
+    activityEntry,
   } = props;
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 2}
       className={cx(
-        "relative grid items-stretch border-b border-line transition-colors",
+        "relative group grid items-stretch border-b border-line transition-colors",
         selected ? "bg-surface-2" : "hover:bg-hover",
       )}
       style={gridStyle}
       data-row={rk}
     >
+      {activityEntry && <RowActivityBadge entry={activityEntry} />}
       {evaluation.rowStripe && (
         <span
           aria-hidden
@@ -389,7 +396,7 @@ function FillHandle({
 }
 
 export function DataGrid<Row>(props: DataGridProps<Row>) {
-  const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef } = props;
+  const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef, activity } = props;
   const visible = columns.filter((c) => !c.hidden);
   const selectionCol = !!selection;
   const showRowNumbers = !!props.showRowNumbers;
@@ -1718,6 +1725,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                         onAddColumnOption={props.onAddColumnOption}
                         onRowNumPointerDown={onRowNumPointerDown}
                         evaluation={evaluation}
+                        activityEntry={activity?.get(rk)}
                       />
                     );
                   })}
