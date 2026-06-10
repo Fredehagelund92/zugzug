@@ -73,7 +73,9 @@ jobs:
       - name: Check LICENSE placeholder
         run: bash scripts/check-license-placeholder.sh
 
+  # On PRs: fail the check if NOTICE.md is stale — contributors fix it themselves.
   notice-up-to-date:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,3 +92,39 @@ jobs:
         run: bash scripts/generate-notice.sh
       - name: Check NOTICE.md is current
         run: git diff --exit-code NOTICE.md
+
+  # On push to main: auto-regenerate NOTICE.md and commit if it drifted.
+  # Avoids contributors having to update NOTICE in a follow-up PR after their
+  # dependency change merged. Skips itself when the bot is the committer.
+  notice-auto-regen:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need full history + a writable token so we can push back.
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install deps (server)
+        working-directory: server
+        run: bun install --frozen-lockfile
+      - name: Install deps (app)
+        working-directory: app
+        run: bun install --frozen-lockfile
+      - name: Regenerate NOTICE.md
+        run: bash scripts/generate-notice.sh
+      - name: Commit if changed
+        run: |
+          if [ -n "$(git status --porcelain NOTICE.md)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add NOTICE.md
+            git commit -m "chore(notice): auto-regen after dependency change"
+            git push
+          else
+            echo "NOTICE.md already up to date."
+          fi
