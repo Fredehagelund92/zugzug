@@ -26,6 +26,8 @@ import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
+import { presence } from "./realtime/presence-room.ts";
+import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
 import { checkHealth } from "./health.ts"; // used by the /api/health/connections route below
@@ -695,11 +697,41 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   }
 }
 
-const server = Bun.serve({
+interface PresenceWsData {
+  tableId: string;
+  userId: string;
+  displayName: string;
+}
+
+const server = Bun.serve<PresenceWsData>({
   port: env.port,
   idleTimeout: 120,
   maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
-  async fetch(req) {
+  async fetch(req, srv) {
+    // WebSocket upgrade for presence rooms — must run before HTTP routing.
+    // We authenticate via the same session helper used by /api/* routes so that
+    // anonymous clients can't observe presence. Auth FIRST, upgrade SECOND.
+    const url = new URL(req.url);
+    if (url.pathname.startsWith("/ws/presence/")) {
+      const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
+      if (!tableId) return new Response("missing tableId", { status: 400 });
+      let session: SessionUser | null = null;
+      try {
+        session = await getSessionUser(req);
+        if (!session) {
+          const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+          session = await getApiTokenUser(req);
+        }
+      } catch {
+        return new Response("auth error", { status: 503 });
+      }
+      if (!session) return new Response("unauthorized", { status: 401 });
+      const ok = srv.upgrade(req, {
+        data: { tableId, userId: session.id, displayName: session.name } satisfies PresenceWsData,
+      });
+      return ok ? undefined : new Response("upgrade failed", { status: 500 });
+    }
+
     const reqId = crypto.randomUUID();
     const start = performance.now();
     let userId: string | undefined;
@@ -731,6 +763,38 @@ const server = Bun.serve({
         userId,
       });
     }
+  },
+  websocket: {
+    // Stewards may sit on a page for 30+ min between cursor moves; disable Bun's
+    // idle timeout (0 = never close due to inactivity). Yjs awareness has its
+    // own liveness model on top.
+    idleTimeout: 0,
+    open(ws) {
+      const { tableId } = ws.data;
+      // Cast: presence.join/leave/broadcast are typed for ServerWebSocket<undefined>
+      // (the Bun default). They never read .data — they only fan out frames.
+      presence.join(tableId, ws as unknown as ServerWebSocket);
+    },
+    message(ws, msg) {
+      const { tableId } = ws.data;
+      // The yjs awareness envelope is binary. Bun hands us either a Buffer
+      // (Uint8Array subclass) or a string. Strings would only come from
+      // app-level heartbeats. Normalize to Uint8Array and relay verbatim —
+      // the server never decodes the y-protocols frame.
+      let payload: Uint8Array;
+      if (typeof msg === "string") {
+        payload = new TextEncoder().encode(msg);
+      } else if (msg instanceof Uint8Array) {
+        payload = msg;
+      } else {
+        payload = new Uint8Array(msg as ArrayBuffer);
+      }
+      presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket);
+    },
+    close(ws) {
+      const { tableId } = ws.data;
+      presence.leave(tableId, ws as unknown as ServerWebSocket);
+    },
   },
 });
 
