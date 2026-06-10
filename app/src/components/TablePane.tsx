@@ -27,10 +27,12 @@ import {
   getGridLayout,
   setGridLayout,
   useCanEdit,
+  useCurrentUser,
   ConflictError,
   refreshDimAndNotify,
   type GridLayoutConfig,
 } from "../store";
+import { usePresence } from "../lib/use-presence";
 import { ConflictBanner } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
@@ -186,6 +188,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
   const activity = useRowActivity(activeId);
+  const currentUser = useCurrentUser();
+  const presence = usePresence(
+    currentUser ? activeId : null,
+    { userId: currentUser?.id ?? "", displayName: currentUser?.name ?? "" },
+  );
   const undo = useUndoStack();
 
   const [sel, setSel] = useState<string[]>([]);
@@ -875,6 +882,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 }
           }
           activity={activity}
+          presence={presence}
         />
 
         {addOpen && canEdit && (
