@@ -33,7 +33,7 @@ import {
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { useFlash } from "../hooks/useFlash";
+import { toast } from "../components/Toast";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -99,14 +99,13 @@ function ScansSection() {
     void loadStatus();
   }, [loadStatus]);
 
-  const flash = useFlash();
   const scanNow = useAsyncAction(async () => {
     try {
       const n = await scanSources();
       await loadStatus();
-      flash.show(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+      toast(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
     } catch (e) {
-      flash.show(e instanceof Error ? e.message : "Scan failed.", "error");
+      toast(e instanceof Error ? e.message : "Scan failed.", "error");
     }
   });
 
@@ -136,19 +135,6 @@ function ScansSection() {
           onChange={handleScheduleChange}
         />
       </FormField>
-
-      {flash.message && (
-        <div
-          className={cx(
-            "rounded-sm px-3 py-2 font-mono text-[11.5px]",
-            flash.variant === "error"
-              ? "border border-danger/40 bg-danger-soft text-danger"
-              : "border border-accent/40 bg-accent-wash text-accent",
-          )}
-        >
-          {flash.message}
-        </div>
-      )}
 
       {status && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface-2 px-4 py-3">

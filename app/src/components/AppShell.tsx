@@ -24,6 +24,7 @@ import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
 import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
+import { ToastStack } from "./Toast";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -576,6 +577,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <ToastStack />
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <CommandPalette
         open={paletteOpen}

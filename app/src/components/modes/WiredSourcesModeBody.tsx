@@ -8,7 +8,7 @@ import { PALETTE } from "../../lib/palette";
 import { cx } from "../../lib/cx";
 import { deriveCanonical, useSources, useCanEdit } from "../../store";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
-import { useFlash } from "../../hooks/useFlash";
+import { toast } from "../Toast";
 import type { MappingDimension } from "../../data";
 
 /* WiredSourcesModeBody — third mode for a per-table workbench tab. A console
@@ -27,10 +27,9 @@ export function WiredSourcesModeBody({ dim }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
   const canEdit = useCanEdit();
-  const flash = useFlash();
   const deriveAction = useAsyncAction(async (dimId: string, table: string, column: string) => {
     const n = await deriveCanonical(dimId, table, column);
-    flash.show(
+    toast(
       n > 0
         ? `Imported ${n} record${n === 1 ? "" : "s"} from ${table}.${column}`
         : `${table}.${column} has no rows to import`,
@@ -96,18 +95,6 @@ export function WiredSourcesModeBody({ dim }: Props) {
 
   return (
     <div className="zz-rise flex flex-1 flex-col min-h-0">
-      {flash.message && (
-        <div
-          className={cx(
-            "mb-2 rounded-sm px-3 py-2 font-mono text-[11.5px]",
-            flash.variant === "error"
-              ? "border border-danger/40 bg-danger-soft text-danger"
-              : "border border-accent/40 bg-accent-wash text-accent",
-          )}
-        >
-          {flash.message}
-        </div>
-      )}
       {/* Per-dim color stripe on the left edge — the workbench signature for
           "which table am I looking at". The container itself is transparent so
           the canvas grid bleeds through below the last row; the hero header

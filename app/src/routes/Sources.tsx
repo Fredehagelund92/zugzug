@@ -17,7 +17,7 @@ import {
 } from "../store";
 import { useSourcesCursor } from "./use-sources-cursor";
 import { useAsyncAction } from "../hooks/useAsyncAction";
-import { useFlash } from "../hooks/useFlash";
+import { toast } from "../components/Toast";
 
 /* Sources — the Operator's Ledger, built to scale from 9 schemas today to 100+
    tomorrow.
@@ -81,18 +81,17 @@ export function Sources() {
   const [shown, setShown] = useState(PAGE);
   const [catalog, setCatalog] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null); // expanded column drill
-  const flash = useFlash();
   const scanAction = useAsyncAction(async () => {
     try {
       const n = await scanSources();
-      flash.show(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+      toast(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
     } catch (e) {
-      flash.show(e instanceof Error ? e.message : "Scan failed.", "error");
+      toast(e instanceof Error ? e.message : "Scan failed.", "error");
     }
   });
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {
     const n = await deriveCanonical(s.dimId, s.table, s.column);
-    flash.show(
+    toast(
       n > 0
         ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}`
         : `${s.table}.${s.column} has no rows to import`,
@@ -402,19 +401,6 @@ export function Sources() {
           }
         />
       </div>
-
-      {flash.message && (
-        <div
-          className={cx(
-            "mb-3 shrink-0 rounded-sm px-3 py-2 font-mono text-[11.5px]",
-            flash.variant === "error"
-              ? "border border-danger/40 bg-danger-soft text-danger"
-              : "border border-accent/40 bg-accent-wash text-accent",
-          )}
-        >
-          {flash.message}
-        </div>
-      )}
 
       {/* ─────────── LEDGER SURFACE (paper) ─────────── */}
       <section

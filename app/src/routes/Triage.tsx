@@ -6,7 +6,7 @@ import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useFlash } from "../hooks/useFlash";
+import { toast } from "../components/Toast";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
 import {
@@ -106,7 +106,6 @@ function TriageInner() {
   );
 
   const [cursor, setCursor] = useState<{ dimId: string; raw: string } | null>(null);
-  const flash = useFlash();
   const [commitError, setCommitError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -195,7 +194,7 @@ function TriageInner() {
     const v = d?.values.find((x) => x.value === raw);
     const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
     if (!suggestion) {
-      flash.show(`No suggestion to accept for "${raw}".`, "error");
+      toast(`No suggestion to accept for "${raw}".`, "error");
       return;
     }
     stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
@@ -278,7 +277,7 @@ function TriageInner() {
       return n + (v ? valueRows(v) : 0);
     }, 0);
     const n0 = stagedAllDrafts.length;
-    flash.show(
+    toast(
       `✓ ${n0} change${n0 === 1 ? "" : "s"} published · ${predictedRows.toLocaleString()} rows recovered`,
     );
     try {
@@ -293,7 +292,7 @@ function TriageInner() {
         // nothing was actually committed — clear the optimistic flash
         return;
       }
-      flash.show(
+      toast(
         `✓ ${total} change${total === 1 ? "" : "s"} published · ${totalRows.toLocaleString()} rows recovered`,
       );
     } catch (err) {
@@ -329,19 +328,6 @@ function TriageInner() {
           lede="Sorted by blast radius. Press ⌘↵ to publish."
         />
       </div>
-
-      {flash.message && (
-        <div
-          className={cx(
-            "mb-3 rounded-sm px-3 py-2 font-mono text-[11.5px]",
-            flash.variant === "error"
-              ? "border border-danger/40 bg-danger-soft text-danger"
-              : "border border-accent/40 bg-accent-wash text-accent",
-          )}
-        >
-          {flash.message}
-        </div>
-      )}
 
       <CrossDimInbox
         rows={visibleCross}
