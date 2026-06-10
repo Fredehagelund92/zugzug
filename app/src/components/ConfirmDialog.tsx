@@ -39,9 +39,8 @@ export function ConfirmDialog({
       }
       if (e.key === "Tab") {
         // Trap focus between cancel and confirm buttons inside the dialog.
-        const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button:not([disabled])',
-        );
+        const focusables =
+          dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
         if (!focusables || focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
@@ -77,10 +76,7 @@ export function ConfirmDialog({
         className="w-full max-w-sm rounded-lg border border-line bg-surface-elevated p-5 shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2
-          id="confirm-dialog-title"
-          className="font-display text-base font-bold text-ink"
-        >
+        <h2 id="confirm-dialog-title" className="font-display text-base font-bold text-ink">
           {title}
         </h2>
         {body && <div className="mt-2 text-[13px] text-ink-2">{body}</div>}

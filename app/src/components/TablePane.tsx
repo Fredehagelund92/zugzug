@@ -200,8 +200,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const addFieldRef = useRef<HTMLButtonElement | null>(null);
 
   const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState<{ count: number } | null>(null);
-  const [singleDeleteConfirm, setSingleDeleteConfirm] = useState<{ key: string; label: string } | null>(null);
-  const [mergeConfirm, setMergeConfirm] = useState<{ survivorLabel: string; loserCount: number } | null>(null);
+  const [singleDeleteConfirm, setSingleDeleteConfirm] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
+  const [mergeConfirm, setMergeConfirm] = useState<{
+    survivorLabel: string;
+    loserCount: number;
+  } | null>(null);
 
   const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
   const [layout, setLayout] = useState<GridLayoutConfig>({});
@@ -442,9 +448,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     if (targets.length === 0) return;
     setSel([]);
     const label =
-      targets.length === 1
-        ? `remove "${targets[0].label}"`
-        : `remove ${targets.length} records`;
+      targets.length === 1 ? `remove "${targets[0].label}"` : `remove ${targets.length} records`;
     undo.beginTransaction(label);
     try {
       await Promise.all(targets.map((c) => retire(c.key, c.label)));
@@ -836,7 +840,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         body={
           bulkRemoveConfirm && (
             <>
-              {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be retired. Mapped raw values will lose their target. Use Undo if you change your mind.
+              {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be
+              retired. Mapped raw values will lose their target. Use Undo if you change your mind.
             </>
           )
         }
@@ -855,7 +860,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         body={
           singleDeleteConfirm && (
             <>
-              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">{singleDeleteConfirm.label}</code> will be retired. Use Undo if you change your mind.
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {singleDeleteConfirm.label}
+              </code>{" "}
+              will be retired. Use Undo if you change your mind.
             </>
           )
         }
@@ -875,8 +883,12 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         body={
           mergeConfirm && (
             <>
-              {mergeConfirm.loserCount} record{mergeConfirm.loserCount === 1 ? "" : "s"} will be merged into{" "}
-              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">{mergeConfirm.survivorLabel}</code>. Their raw values will be re-pointed. Use Undo if you change your mind.
+              {mergeConfirm.loserCount} record{mergeConfirm.loserCount === 1 ? "" : "s"} will be
+              merged into{" "}
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {mergeConfirm.survivorLabel}
+              </code>
+              . Their raw values will be re-pointed. Use Undo if you change your mind.
             </>
           )
         }

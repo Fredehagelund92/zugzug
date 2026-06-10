@@ -26,9 +26,12 @@ export function useFlash(): Flash {
     timerRef.current = setTimeout(() => setMessage(null), FLASH_DURATION_MS);
   }, []);
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   return { message, variant, show };
 }
