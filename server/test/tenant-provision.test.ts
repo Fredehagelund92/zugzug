@@ -7,14 +7,19 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { pgGet, pgAll, pgRun } from "../src/pg.ts";
 import { provisionTenant, listTenants } from "../src/tenant.ts";
+import { promoteSuperAdmin } from "../src/admin.ts";
 
 const TEST_TENANT_IDS = ["tprov_a", "tprov_b", "tprov_dup"];
+const TEST_USER_EMAILS = ["promo@example.com"];
 
 beforeEach(async () => {
   for (const id of TEST_TENANT_IDS) {
     await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [id]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE tenant_id = $1`, [id]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [id]);
+  }
+  for (const email of TEST_USER_EMAILS) {
+    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE email = $1`, [email]);
   }
 });
 
@@ -23,6 +28,9 @@ afterAll(async () => {
     await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [id]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE tenant_id = $1`, [id]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [id]);
+  }
+  for (const email of TEST_USER_EMAILS) {
+    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE email = $1`, [email]);
   }
 });
 
@@ -73,4 +81,32 @@ test("listTenants returns the default tenant plus any provisioned ones", async (
   expect(ids).toContain("default");
   expect(ids).toContain("tprov_a");
   expect(ids).toContain("tprov_b");
+});
+
+test("promoteSuperAdmin sets users.is_super_admin = true for an existing user", async () => {
+  // Provision a fresh user row to mutate. The users table is global, no tenant_id.
+  await pgRun(
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
+     VALUES ('u_promo_test', 'Promo Test', 'PT', 'promo@example.com', 'editor')
+     ON CONFLICT (id) DO UPDATE SET is_super_admin = false`,
+  );
+
+  await promoteSuperAdmin("promo@example.com");
+
+  const row = await pgGet<{ is_super_admin: boolean }>(
+    `SELECT is_super_admin FROM "zugzug_app"."users" WHERE email = $1`,
+    ["promo@example.com"],
+  );
+  expect(row?.is_super_admin).toBe(true);
+});
+
+test("promoteSuperAdmin rejects when the email does not match any user", async () => {
+  let thrown: Error | null = null;
+  try {
+    await promoteSuperAdmin("noone@example.com");
+  } catch (e) {
+    thrown = e as Error;
+  }
+  expect(thrown).not.toBeNull();
+  expect(thrown!.message.toLowerCase()).toContain("not found");
 });
