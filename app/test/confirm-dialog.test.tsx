@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConfirmDialog } from "../src/components/ConfirmDialog";
 
@@ -129,15 +129,16 @@ describe("ConfirmDialog", () => {
     );
     const cancel = screen.getByRole("button", { name: /cancel/i });
     const confirm = screen.getByRole("button", { name: /^delete$/i });
-    // Focus starts on cancel (autofocus). Tab → confirm.
     confirm.focus();
     expect(document.activeElement).toBe(confirm);
-    // Tab from confirm should wrap to cancel.
-    await userEvent.tab();
+    // Tab from confirm (last focusable) wraps to cancel (first).
+    // fireEvent.keyDown dispatches directly to the document listener — no
+    // userEvent focus arbitration to race with our handler's preventDefault.
+    fireEvent.keyDown(document, { key: "Tab" });
     expect(document.activeElement).toBe(cancel);
   });
 
-  test("Shift+Tab from cancel button wraps to confirm", async () => {
+  test("Shift+Tab from cancel button wraps to confirm", () => {
     render(
       <ConfirmDialog
         open
@@ -150,7 +151,7 @@ describe("ConfirmDialog", () => {
     const cancel = screen.getByRole("button", { name: /cancel/i });
     const confirm = screen.getByRole("button", { name: /^delete$/i });
     cancel.focus();
-    await userEvent.tab({ shift: true });
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(confirm);
   });
 });
