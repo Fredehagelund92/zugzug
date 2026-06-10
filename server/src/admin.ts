@@ -24,10 +24,7 @@ export async function promoteSuperAdmin(email: string): Promise<{ id: string; em
     );
   }
 
-  await pgRun(
-    `UPDATE "zugzug_app"."users" SET is_super_admin = true WHERE id = $1`,
-    [row.id],
-  );
+  await pgRun(`UPDATE "zugzug_app"."users" SET is_super_admin = true WHERE id = $1`, [row.id]);
   return row;
 }
 
@@ -40,9 +37,6 @@ export async function demoteSuperAdmin(email: string): Promise<{ id: string; ema
   if (!row) {
     throw new AppError("NOT_FOUND", `user with email '${email}' not found`, 404);
   }
-  await pgRun(
-    `UPDATE "zugzug_app"."users" SET is_super_admin = false WHERE id = $1`,
-    [row.id],
-  );
+  await pgRun(`UPDATE "zugzug_app"."users" SET is_super_admin = false WHERE id = $1`, [row.id]);
   return row;
 }
