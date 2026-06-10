@@ -2,7 +2,7 @@ process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
-import { test, expect, beforeEach } from "bun:test";
+import { test, expect, beforeEach, spyOn } from "bun:test";
 import { resetDb } from "./setup.ts";
 import { createScheduler, type SchedulerJob } from "../src/scheduler.ts";
 import { pgAll } from "../src/pg.ts";
@@ -80,34 +80,58 @@ test("scan_run — multiple jobs per tick produce one row each in order", async 
 });
 
 test("scan_run — failure in middle job doesn't prevent subsequent jobs from being recorded", async () => {
-  const scheduler = createScheduler({
-    tickIntervalMs: 999_999,
-    jobs: [
-      makeJob("first", async () => ({})),
-      makeJob("crash", async () => { throw new Error("middle failure"); }),
-      makeJob("last", async () => ({})),
-    ],
-  });
-  await scheduler._tick();
-  const rows = await listScanRuns();
-  expect(rows).toHaveLength(3);
-  expect(rows.map((r) => r.status)).toEqual(["ok", "error", "ok"]);
+  // Silence the scheduler's expected error log so the suite stays quiet on
+  // green. We assert below that the log fired with the expected payload, so
+  // a future refactor that drops the log surfaces here.
+  const errSpy = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const scheduler = createScheduler({
+      tickIntervalMs: 999_999,
+      jobs: [
+        makeJob("first", async () => ({})),
+        makeJob("crash", async () => {
+          throw new Error("middle failure");
+        }),
+        makeJob("last", async () => ({})),
+      ],
+    });
+    await scheduler._tick();
+    const rows = await listScanRuns();
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.status)).toEqual(["ok", "error", "ok"]);
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining("scheduler job 'crash' failed"),
+      expect.any(Error),
+    );
+  } finally {
+    errSpy.mockRestore();
+  }
 });
 
 test("scan failure emits scan_failed audit log entry", async () => {
-  const scheduler = createScheduler({
-    tickIntervalMs: 999_999,
-    jobs: [makeJob("test-fail-audit", async () => { throw new Error("boom"); })],
-  });
-  await scheduler._tick();
-  // Fire-and-forget audit emission needs a moment to settle.
-  await new Promise((r) => setTimeout(r, 50));
-  const audits = await pgAll<{ action: string; detail: string }>(
-    `SELECT action, detail FROM zugzug_app.audit_log WHERE action = 'scan_failed'`,
-  );
-  expect(audits.length).toBeGreaterThanOrEqual(1);
-  const found = audits.some(
-    (a) => a.detail.includes("test-fail-audit") && a.detail.includes("boom"),
-  );
-  expect(found).toBe(true);
+  const errSpy = spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const scheduler = createScheduler({
+      tickIntervalMs: 999_999,
+      jobs: [
+        makeJob("test-fail-audit", async () => {
+          throw new Error("boom");
+        }),
+      ],
+    });
+    await scheduler._tick();
+    // Fire-and-forget audit emission needs a moment to settle.
+    await new Promise((r) => setTimeout(r, 50));
+    const audits = await pgAll<{ action: string; detail: string }>(
+      `SELECT action, detail FROM zugzug_app.audit_log WHERE action = 'scan_failed'`,
+    );
+    expect(audits.length).toBeGreaterThanOrEqual(1);
+    const found = audits.some(
+      (a) => a.detail.includes("test-fail-audit") && a.detail.includes("boom"),
+    );
+    expect(found).toBe(true);
+    expect(errSpy).toHaveBeenCalled();
+  } finally {
+    errSpy.mockRestore();
+  }
 });

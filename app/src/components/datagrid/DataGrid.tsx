@@ -58,6 +58,7 @@ import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
 import type { RowActivityEntry } from "../../lib/use-row-activity";
 import { RowActivityBadge } from "./RowActivityBadge";
+import { CursorOverlay } from "./CursorOverlay";
 
 // ── GridRow — memoized per-row component ────────────────────────────────────
 interface GridRowProps<Row> {
@@ -406,6 +407,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     onAddFieldClick,
     addFieldRef,
     activity,
+    presence,
   } = props;
   const visible = columns.filter((c) => !c.hidden);
   const selectionCol = !!selection;
@@ -696,6 +698,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor.cursor?.rowKey, cursor.cursor?.field]);
+
+  // ── Publish self cursor position to presence when cursor moves ────────────
+  useEffect(() => {
+    if (!presence || !cursor.cursor) return;
+    const rowIdx = rowIndexMap.get(cursor.cursor.rowKey);
+    const colIdx = colIndexMap.get(cursor.cursor.field);
+    if (rowIdx != null && colIdx != null) {
+      presence.setCell(rowIdx, colIdx);
+    }
+  }, [presence, cursor.cursor, rowIndexMap, colIndexMap]);
 
   // Keep range anchor in sync when cursor moves without shift (range collapses)
   // We handle this explicitly in the key handler below, not via useEffect, to
@@ -1743,6 +1755,29 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 </>
               );
             })()}
+        {presence && (
+          <CursorOverlay
+            peers={presence.peers}
+            cellRect={(row, col) => {
+              const container = cursor.ref.current;
+              if (!container) return null;
+              const rowEl = container.querySelector<HTMLElement>(
+                `[data-row="${sortedRows[row] ? rowKey(sortedRows[row]!) : ""}"]`,
+              );
+              if (!rowEl) return null;
+              const cellEl = rowEl.querySelectorAll<HTMLElement>("[data-cell]")[col] ?? null;
+              if (!cellEl) return null;
+              const grid = container.getBoundingClientRect();
+              const cell = cellEl.getBoundingClientRect();
+              return {
+                top: cell.top - grid.top + container.scrollTop,
+                left: cell.left - grid.left + container.scrollLeft,
+                width: cell.width,
+                height: cell.height,
+              };
+            }}
+          />
+        )}
       </div>
       {statusAgg && <StatusBar agg={statusAgg} />}
       {contextMenu && (

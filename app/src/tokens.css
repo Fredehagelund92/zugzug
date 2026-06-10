@@ -48,6 +48,9 @@
   --tint-indigo: #6e63e0;
   --tint-violet: #a24ee0;
   --tint-slate: #6b7a95;
+  --tint-coral: #e8523a;
+  --tint-sky: #2280d2;
+  --tint-lime: #6ab04c;
 }
 [data-theme="light"] {
   --bg: #f4f6fc;
@@ -82,6 +85,9 @@
   --tint-indigo: #5a50c7;
   --tint-violet: #8a3fba;
   --tint-slate: #57637c;
+  --tint-coral: #c64432;
+  --tint-sky: #1b6ca8;
+  --tint-lime: #58963f;
 }
 
 /* Z-index layers:

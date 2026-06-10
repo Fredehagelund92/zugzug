@@ -1,8 +1,18 @@
-/* palette.ts — curated 7-tint palette used for per-table monograms and per-option
+/* palette.ts — curated 10-tint palette used for per-table monograms and per-option
    chips. The hex values live in tokens.css; this file is the typed surface React
    code consumes. Adding a tint = new entry here + matching --tint-* in tokens.css. */
 
-export type PaletteName = "rose" | "amber" | "mint" | "teal" | "indigo" | "violet" | "slate";
+export type PaletteName =
+  | "rose"
+  | "amber"
+  | "mint"
+  | "teal"
+  | "indigo"
+  | "violet"
+  | "slate"
+  | "coral"
+  | "sky"
+  | "lime";
 
 export const PALETTE_NAMES: PaletteName[] = [
   "rose",
@@ -12,6 +22,9 @@ export const PALETTE_NAMES: PaletteName[] = [
   "indigo",
   "violet",
   "slate",
+  "coral",
+  "sky",
+  "lime",
 ];
 
 interface TintEntry {
@@ -67,6 +80,24 @@ export const PALETTE: Record<PaletteName, TintEntry> = {
     border: "color-mix(in srgb,var(--tint-slate) 35%,transparent)",
     wash: "color-mix(in srgb,var(--tint-slate) 18%,transparent)",
     fg: "var(--tint-slate)",
+  },
+  coral: {
+    bg: "var(--tint-coral)",
+    border: "color-mix(in srgb,var(--tint-coral) 35%,transparent)",
+    wash: "color-mix(in srgb,var(--tint-coral) 18%,transparent)",
+    fg: "var(--tint-coral)",
+  },
+  sky: {
+    bg: "var(--tint-sky)",
+    border: "color-mix(in srgb,var(--tint-sky) 35%,transparent)",
+    wash: "color-mix(in srgb,var(--tint-sky) 18%,transparent)",
+    fg: "var(--tint-sky)",
+  },
+  lime: {
+    bg: "var(--tint-lime)",
+    border: "color-mix(in srgb,var(--tint-lime) 35%,transparent)",
+    wash: "color-mix(in srgb,var(--tint-lime) 18%,transparent)",
+    fg: "var(--tint-lime)",
   },
 };
 

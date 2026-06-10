@@ -278,6 +278,18 @@
   }
 }
 
+/* peer cursor label: fades out after 1.8 s of no movement; re-appears on hover */
+.zz-peer-label {
+  opacity: 1;
+  transition: opacity 400ms ease-out;
+}
+.zz-peer-label[data-stale="true"] {
+  opacity: 0;
+}
+.zz-peer-cell:hover .zz-peer-label {
+  opacity: 1 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .zz-canvas {
     background-attachment: scroll;

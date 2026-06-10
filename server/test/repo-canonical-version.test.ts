@@ -6,7 +6,7 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
-import { test, expect, beforeAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet } from "../src/pg.ts";
 import { addCanonicalOne, renameCanonical, retireCanonical, mergeCanonical } from "../src/repo-canonical.ts";
 import { AppError } from "../src/errors.ts";
@@ -39,6 +39,14 @@ beforeAll(async () => {
      VALUES ('u_canon_actor', 'Canon Actor', 'CA')
      ON CONFLICT (id) DO NOTHING`,
   );
+});
+
+afterAll(async () => {
+  // Remove the dimension row so /api/dimensions doesn't return a phantom test
+  // dim against a shared dev/test DB. dim_X/map_X tables stay orphaned but
+  // invisible without the registry entry.
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1`, [DIM]);
+  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM]);
 });
 
 test("addCanonicalOne seeds canonical_version row at version=1", async () => {

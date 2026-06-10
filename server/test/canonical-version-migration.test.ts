@@ -2,19 +2,26 @@ process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
-import { test, expect, beforeAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { pgAll, pgRun, pgGet } from "../src/pg.ts";
 
 beforeAll(async () => {
   // Provision a fake dimension + dim_X table the backfill DO-block can find.
-  // Note: the dimension table has no "dimension" column — label holds the name.
+  // dim_table / map_table are stored UNQUOTED — cq() splits on . and quotes each
+  // half. A previously-stored quoted form ("zugzug_app"."dim_test_e2") would
+  // round-trip as a single broken identifier. ON CONFLICT DO UPDATE self-heals
+  // any polluted row from earlier test runs that stored the bad format.
   await pgRun(
     `INSERT INTO "zugzug_app"."dimension"
        (id, label, dim_table, map_table, key_col, created_at)
      VALUES
-       ('d_test_e2', 'Test E2', '"zugzug_app"."dim_test_e2"', '"zugzug_app"."map_test_e2"',
+       ('d_test_e2', 'Test E2', 'zugzug_app.dim_test_e2', 'zugzug_app.map_test_e2',
         'country_id', now())
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (id) DO UPDATE SET
+       label = EXCLUDED.label,
+       dim_table = EXCLUDED.dim_table,
+       map_table = EXCLUDED.map_table,
+       key_col = EXCLUDED.key_col`,
   );
   await pgRun(
     `CREATE TABLE IF NOT EXISTS "zugzug_app"."dim_test_e2" (country_id varchar PRIMARY KEY, label varchar)`,
@@ -25,6 +32,14 @@ beforeAll(async () => {
     `INSERT INTO "zugzug_app"."dim_test_e2" (country_id, label)
      VALUES ('dk', 'Denmark'), ('no', 'Norway'), ('se', 'Sweden')`,
   );
+});
+
+afterAll(async () => {
+  // Clean up so the API and the next test run don't see a phantom dim. The
+  // dim_X/map_X tables can stay — they're orphaned but invisible without the
+  // registry entry.
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = 'd_test_e2'`);
+  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2'`);
 });
 
 test("canonical_version table exists and is empty for the test dim before backfill", async () => {

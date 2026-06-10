@@ -3,6 +3,7 @@ import type React from "react";
 import type { OptionDef, NumberFormat } from "../../data";
 import type { PaletteName } from "../../lib/palette";
 import type { RowActivityEntry } from "../../lib/use-row-activity";
+import type { PeerState } from "../../lib/use-presence";
 export type { NumberFormat };
 
 export interface RuleStyle {
@@ -173,4 +174,10 @@ export interface DataGridProps<Row> {
   /** Optional per-row activity map (rowKey → latest audit entry).
    *  When present, each row gets a left-edge pip + hover-revealed badge. */
   activity?: Map<string, RowActivityEntry>;
+  /** When present, renders a CursorOverlay with peer cell highlights and
+   *  invokes `presence.setCell(row, col)` on cell focus to publish self. */
+  presence?: {
+    peers: PeerState[];
+    setCell: (row: number, col: number) => void;
+  };
 }

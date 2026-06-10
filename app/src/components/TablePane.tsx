@@ -27,10 +27,12 @@ import {
   getGridLayout,
   setGridLayout,
   useCanEdit,
+  useCurrentUser,
   ConflictError,
   refreshDimAndNotify,
   type GridLayoutConfig,
 } from "../store";
+import { usePresence } from "../lib/use-presence";
 import { ConflictBanner } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
@@ -42,6 +44,7 @@ import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PresenceStrip } from "./datagrid/PresenceStrip";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
@@ -186,6 +189,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
   const activity = useRowActivity(activeId);
+  const currentUser = useCurrentUser();
+  const presence = usePresence(currentUser ? activeId : null, {
+    userId: currentUser?.id ?? "",
+    displayName: currentUser?.name ?? "",
+  });
   const undo = useUndoStack();
 
   const [sel, setSel] = useState<string[]>([]);
@@ -548,6 +556,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
+          <PresenceStrip peers={presence.peers} />
           <Button
             variant="ghost"
             size="sm"
@@ -875,6 +884,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 }
           }
           activity={activity}
+          presence={presence}
         />
 
         {addOpen && canEdit && (

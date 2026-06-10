@@ -4,7 +4,7 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
-import { test, expect, beforeAll } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun } from "../src/pg.ts";
 import * as repo from "../src/repo-canonical.ts";
 
@@ -33,6 +33,11 @@ beforeAll(async () => {
      ON CONFLICT (id) DO NOTHING`,
   );
   await repo.addCanonicalOne(DIM, "Denmark", "dk", "u_route_actor");
+});
+
+afterAll(async () => {
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1`, [DIM]);
+  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM]);
 });
 
 test("renameCanonical with stale version throws AppError with details.current shape", async () => {
