@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cx } from "../lib/cx";
 
 /* Button — Tailwind conversion of the kit's `.ak-btn` (see reference/app-kit.css
@@ -52,19 +52,15 @@ const spinnerMd = (
   </svg>
 );
 
-export function Button({
-  variant = "primary",
-  size = "md",
-  icon,
-  loading = false,
-  className,
-  children,
-  ...rest
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "primary", size = "md", icon, loading = false, className, children, ...rest },
+  ref,
+) {
   const spinner = size === "sm" ? spinnerSm : spinnerMd;
   const leadingNode = loading ? spinner : icon;
   return (
     <button
+      ref={ref}
       className={cx(base, variants[variant], sizes[size], className)}
       disabled={loading || rest.disabled}
       {...rest}
@@ -73,4 +69,4 @@ export function Button({
       {children}
     </button>
   );
-}
+});
