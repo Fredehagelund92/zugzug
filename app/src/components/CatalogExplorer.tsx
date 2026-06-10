@@ -97,6 +97,17 @@ export function CatalogExplorer({
 
   const dimOptions = dims.map((d) => d.dimension);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-2 backdrop-blur-sm sm:p-8"
