@@ -27,6 +27,9 @@ import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 
+export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
+import { checkHealth } from "./health.ts"; // used by the /api/health/connections route below
+
 const corsHeaders = {
   "access-control-allow-origin": env.origin,
   "access-control-allow-credentials": "true",
@@ -237,6 +240,13 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         warehouseDb: env.warehouseDb || null,
         defaultEngineerMode: env.defaultEngineerMode,
       });
+    }
+
+    // GET /api/health/connections — postgres + warehouse liveness (5s cache)
+    if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
+      const force = url.searchParams.get("force") === "1";
+      const snapshot = await checkHealth({ force });
+      return json(snapshot);
     }
 
     // /api/sources — registered source columns (cached); /facets; /scan
