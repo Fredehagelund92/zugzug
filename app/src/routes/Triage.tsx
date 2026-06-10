@@ -180,7 +180,7 @@ function TriageInner() {
     const prev = allDrafts[dkey(dimId, raw)];
     undo.push({
       label: `match "${raw}" → ${label}`,
-      surface: "Triage",
+      surface: "Review",
       apply: () => saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label)),
       inverse: () =>
         prev
@@ -205,7 +205,7 @@ function TriageInner() {
     const prev = allDrafts[dkey(dimId, raw)];
     undo.push({
       label: `skip "${raw}"`,
-      surface: "Triage",
+      surface: "Review",
       apply: () => saveDraft(dimId, raw, "skipped", null, null),
       inverse: () =>
         prev
@@ -231,7 +231,7 @@ function TriageInner() {
     if (!prev) return;
     undo.push({
       label: `discard "${raw}"`,
-      surface: "Triage",
+      surface: "Review",
       apply: () => discardDraft(dimId, raw),
       inverse: () => saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey),
     });
@@ -299,7 +299,7 @@ function TriageInner() {
       setCommitError(
         err instanceof Error
           ? err.message
-          : "Commit failed across dimensions — check your connection and try again.",
+          : "Publish failed across dimensions — check your connection and try again.",
       );
     } finally {
       setCommitting(false);
@@ -319,7 +319,7 @@ function TriageInner() {
           kicker="WORKFLOW"
           title={
             <>
-              Triage{" "}
+              Review{" "}
               <span className="font-mono text-[14px] text-ink-3">
                 · {crossCounts.new} across {dimsWithWork} table{dimsWithWork === 1 ? "" : "s"}
               </span>
@@ -502,7 +502,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
             {p.filter === "new" && (
               <div className="px-4 py-12 text-center">
                 <div className="font-display text-[18px] font-semibold text-ink">
-                  Nothing to triage today. 🎯
+                  Nothing to review today. 🎯
                 </div>
                 <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
                   Curate records in{" "}
@@ -872,7 +872,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
               loading={p.committing}
               onClick={() => p.commitAll()}
             >
-              {p.wsInfo?.writable ? "Approve & commit to warehouse" : "Approve & save"}
+              {p.wsInfo?.writable ? "Publish to warehouse" : "Publish"}
               <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
             </Button>
             {p.wsInfo && !p.wsInfo.writable && p.stagedDrafts[0] && (

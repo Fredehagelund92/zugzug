@@ -257,7 +257,7 @@ export function AppShell() {
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
     { to: "/app", label: "Home", Icon: IconDashboard, end: true },
-    { to: "/app/triage", label: "Triage", Icon: IconMapping, count: totalNew },
+    { to: "/app/triage", label: "Review", Icon: IconMapping, count: totalNew },
     {
       to: "/app/sources",
       label: "Sources",
@@ -286,11 +286,11 @@ export function AppShell() {
     out.push({
       id: "nav:triage",
       group: "Navigate",
-      label: "Triage",
+      label: "Review",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
       action: () => navigate("/app/triage"),
-      keywords: "inbox queue match reconcile mapping",
+      keywords: "inbox queue match reconcile mapping triage",
       priority: true,
     });
     out.push({

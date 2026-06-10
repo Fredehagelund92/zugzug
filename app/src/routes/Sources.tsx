@@ -449,7 +449,7 @@ export function Sources() {
                 className="shrink-0"
               >
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
-                  Resolve
+                  Match values
                 </Button>
               </Link>
             </div>
