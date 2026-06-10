@@ -25,6 +25,8 @@ interface LedgerRowProps {
   rowKey?: string;
   /** When false, the import-records (wand) button is disabled. */
   canEdit?: boolean;
+  /** When true, the import-records (wand) button is disabled while an import is in flight. */
+  busy?: boolean;
 }
 
 export function LedgerRow({
@@ -36,6 +38,7 @@ export function LedgerRow({
   focused,
   rowKey,
   canEdit = true,
+  busy,
 }: LedgerRowProps) {
   const tableName = row.table.split(".").slice(1).join(".") || row.table;
   const coverage =
@@ -127,7 +130,7 @@ export function LedgerRow({
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
-            disabled={!canEdit}
+            disabled={!canEdit || !!busy}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -184,7 +187,7 @@ export function LedgerRow({
             type="button"
             aria-label={`Import records from ${row.table}.${row.column}`}
             title="Import records from this column"
-            disabled={!canEdit}
+            disabled={!canEdit || !!busy}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
