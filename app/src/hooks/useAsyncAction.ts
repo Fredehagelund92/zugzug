@@ -11,7 +11,11 @@ export interface AsyncAction<TArgs extends unknown[]> {
 
 /** Wraps an async function with pending-state, error capture, and re-entry guard.
  *  Use as the canonical pattern for any user-triggered async action whose UI must
- *  reflect in-flight state (spinner) or surface failures (flash / inline error). */
+ *  reflect in-flight state (spinner) or surface failures (flash / inline error).
+ *
+ *  `fn` is a `useCallback` dependency — pass a stable reference (defined inline
+ *  during render is fine if the component re-renders rarely; otherwise wrap in
+ *  `useCallback` at the call site) to avoid recreating `run` on every render. */
 export function useAsyncAction<TArgs extends unknown[]>(
   fn: (...args: TArgs) => Promise<unknown>,
 ): AsyncAction<TArgs> {
