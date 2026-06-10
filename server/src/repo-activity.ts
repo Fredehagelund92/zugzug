@@ -2,41 +2,35 @@
 
 import { pgAll, pg } from "./repo-shared.ts";
 
-export type AuditOp =
-  | "rename"
-  | "create"
-  | "archive"
-  | "field-write"
-  | "merge"
-  | "commit";
+export type AuditOp = "rename" | "create" | "archive" | "field-write" | "merge" | "commit";
 
 export type RowActivityEntry = {
-  rowKey:      string;
-  userId:      string;
+  rowKey: string;
+  userId: string;
   displayName: string;
-  op:          AuditOp;
-  at:          Date;
+  op: AuditOp;
+  at: Date;
 };
 
 const ACTION_TO_OP: Record<string, AuditOp> = {
-  "Added canonical":   "create",
+  "Added canonical": "create",
   "Renamed canonical": "rename",
-  "Merged canonical":  "merge",
+  "Merged canonical": "merge",
   "Retired canonical": "archive",
-  "Set field value":   "field-write",
+  "Set field value": "field-write",
   "Committed mapping": "commit",
 };
 
 export async function getRowActivitySince(
   tableId: string,
-  since:   Date,
+  since: Date,
 ): Promise<RowActivityEntry[]> {
   const rows = await pgAll<{
-    row_key:  string;
-    user_id:  string;
-    name:     string | null;
-    action:   string;
-    created:  Date;
+    row_key: string;
+    user_id: string;
+    name: string | null;
+    action: string;
+    created: Date;
   }>(
     `SELECT DISTINCT ON (a.row_key)
        a.row_key, a.user_id, u.name, a.action, a.created_at AS created
@@ -50,10 +44,10 @@ export async function getRowActivitySince(
   );
 
   return rows.map((r) => ({
-    rowKey:      r.row_key,
-    userId:      r.user_id,
+    rowKey: r.row_key,
+    userId: r.user_id,
     displayName: r.name ?? "Unknown",
-    op:          ACTION_TO_OP[r.action] ?? "field-write",
-    at:          r.created,
+    op: ACTION_TO_OP[r.action] ?? "field-write",
+    at: r.created,
   }));
 }

@@ -396,7 +396,17 @@ function FillHandle({
 }
 
 export function DataGrid<Row>(props: DataGridProps<Row>) {
-  const { rows, rowKey, columns, selection, onCommit, empty, onAddFieldClick, addFieldRef, activity } = props;
+  const {
+    rows,
+    rowKey,
+    columns,
+    selection,
+    onCommit,
+    empty,
+    onAddFieldClick,
+    addFieldRef,
+    activity,
+  } = props;
   const visible = columns.filter((c) => !c.hidden);
   const selectionCol = !!selection;
   const showRowNumbers = !!props.showRowNumbers;

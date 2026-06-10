@@ -157,12 +157,10 @@ export async function commit(
   // Per-row audit: one entry per distinct target_key so each canonical row
   // gets a "Mia · 3m ago" badge in the activity feed.
   for (const row of committedRows) {
-    await appendAuditAs(
-      userId,
-      "Committed mapping",
-      `→ ${row.target_key}`,
-      { tableId: dimId, rowKey: row.target_key },
-    );
+    await appendAuditAs(userId, "Committed mapping", `→ ${row.target_key}`, {
+      tableId: dimId,
+      rowKey: row.target_key,
+    });
   }
 
   await appendAuditAs(

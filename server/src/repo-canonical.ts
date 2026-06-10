@@ -498,7 +498,10 @@ export async function renameCanonical(
     return v;
   });
 
-  await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`, { tableId: dimId, rowKey: key });
+  await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`, {
+    tableId: dimId,
+    rowKey: key,
+  });
 
   // Keep ai_hint_cache consistent: update any hint that was pointing at the old label.
   if (oldRow?.label) {
@@ -595,7 +598,10 @@ export async function mergeCanonical(
     );
   });
 
-  await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`, { tableId: dimId, rowKey: survivor });
+  await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`, {
+    tableId: dimId,
+    rowKey: survivor,
+  });
   return real.length;
 }
 
