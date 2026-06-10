@@ -672,59 +672,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       )}
 
       <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
-        {sel.length > 0 && canEdit ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-accent/30 bg-accent-wash px-5 py-2.5">
-            <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear selection" />
-            <span className="font-mono text-[12px] font-medium text-accent">
-              {sel.length} record{sel.length === 1 ? "" : "s"} selected
-            </span>
-            {sel.length < list.length && (
-              <button
-                type="button"
-                onClick={() => setSel(list.map((c) => c.key))}
-                className="font-mono text-[11px] text-accent underline underline-offset-2 hover:opacity-80"
-              >
-                Select all {list.length}
-              </button>
-            )}
-            <div className="w-56">
-              <ComboSelect
-                options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
-                value={null}
-                placeholder={sel.length < 2 ? "select 2+ to merge" : "merge into…"}
-                onPick={(survivorLabel) => {
-                  if (sel.length >= 5) {
-                    setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
-                  } else {
-                    void merge(survivorLabel);
-                  }
-                }}
-              />
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<IconX className="h-3.5 w-3.5" />}
-              onClick={() => setBulkRemoveConfirm({ count: sel.length })}
-              disabled={busy}
-            >
-              Remove
-            </Button>
-            <button
-              type="button"
-              onClick={() => setSel([])}
-              className="ml-auto font-mono text-[11px] text-accent/60 hover:text-accent"
-            >
-              clear
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
-            <span className="font-mono text-[11.5px] text-ink-3">
-              {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
-            </span>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
+          <span className="font-mono text-[11.5px] text-ink-3">
+            {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
+          </span>
+        </div>
 
         {conflicts.size > 0 && (
           <div className="flex flex-col gap-1 px-5 pt-2 pb-3">
@@ -945,6 +897,53 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               className="ml-auto"
             >
               Add record
+            </Button>
+          </div>
+        )}
+
+        {/* Floating bulk-action bar — sticky so it stays visible at the bottom
+            of the pane viewport regardless of scroll position. */}
+        {sel.length > 0 && canEdit && (
+          <div className="zz-pop-in sticky bottom-4 z-30 mx-auto my-3 flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-sm border border-accent/40 bg-[var(--surface-elevated)] px-4 py-2.5 shadow-lg">
+            <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear selection" />
+            <span className="font-mono text-[12px] font-medium text-accent">
+              {sel.length} record{sel.length === 1 ? "" : "s"} selected
+            </span>
+            {sel.length < list.length && (
+              <button
+                type="button"
+                onClick={() => setSel(list.map((c) => c.key))}
+                className="font-mono text-[11px] text-accent underline underline-offset-2 hover:opacity-80"
+              >
+                Select all {list.length}
+              </button>
+            )}
+            <span className="h-5 w-px bg-line-2" aria-hidden />
+            <label className="flex items-center gap-2 font-mono text-[11.5px] text-ink-2">
+              Merge into
+              <span className="w-48">
+                <ComboSelect
+                  options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
+                  value={null}
+                  placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
+                  onPick={(survivorLabel) => {
+                    if (sel.length >= 5) {
+                      setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
+                    } else {
+                      void merge(survivorLabel);
+                    }
+                  }}
+                />
+              </span>
+            </label>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconX className="h-3.5 w-3.5" />}
+              onClick={() => setBulkRemoveConfirm({ count: sel.length })}
+              disabled={busy}
+            >
+              Remove
             </Button>
           </div>
         )}
