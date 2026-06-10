@@ -21,11 +21,16 @@ export async function listUsers(): Promise<User[]> {
 }
 
 /* ---- audit (Postgres, append-only) ---- */
-export async function appendAuditAs(userId: string, action: string, detail: string): Promise<void> {
+export async function appendAuditAs(
+  userId: string,
+  action: string,
+  detail: string,
+  ctx: { tableId?: string; rowKey?: string } = {},
+): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail)
-     VALUES ($1, current_timestamp, $2, $3, $4)`,
-    [randomUUID(), userId, action, detail],
+    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key)
+     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6)`,
+    [randomUUID(), userId, action, detail, ctx.tableId ?? null, ctx.rowKey ?? null],
   );
 }
 
