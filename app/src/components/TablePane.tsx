@@ -25,6 +25,7 @@ import {
   updateFieldRules,
   updateFieldDescription,
   getGridLayout,
+  getCachedGridLayout,
   setGridLayout,
   useCanEdit,
   useCurrentUser,
@@ -248,9 +249,13 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   }, []);
 
   const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
-  const [layout, setLayout] = useState<GridLayoutConfig>({});
+  const [layout, setLayout] = useState<GridLayoutConfig>(
+    () => getCachedGridLayout(activeId) ?? {},
+  );
   useEffect(() => {
-    void getGridLayout(activeId).then(setLayout);
+    const cached = getCachedGridLayout(activeId);
+    if (cached) setLayout(cached);
+    else void getGridLayout(activeId).then(setLayout);
   }, [activeId]);
 
   // ?focus=<key> — scroll the focused record into view (only when this pane is
