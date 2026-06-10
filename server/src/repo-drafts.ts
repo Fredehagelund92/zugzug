@@ -120,6 +120,14 @@ export async function commit(
 
   const rowsRecovered = await rowsForUnmappedDrafts(dimId, meta.mapTable);
 
+  // Capture distinct target_keys BEFORE the tx so they're available after
+  // the draft rows are deleted inside the transaction.
+  const committedRows = await pgAll<{ target_key: string }>(
+    `SELECT DISTINCT target_key FROM ${DRAFT}
+     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId],
+  );
+
   // Snapshot approved drafts BEFORE the tx so we can pass them to the
   // warehouse adapter after the Postgres commit succeeds.
   const approvedDrafts = await pgAll<{ raw: string; key: string; label: string | null }>(
@@ -145,6 +153,17 @@ export async function commit(
     );
     await run(`DELETE FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped'`, [dimId]);
   });
+
+  // Per-row audit: one entry per distinct target_key so each canonical row
+  // gets a "Mia · 3m ago" badge in the activity feed.
+  for (const row of committedRows) {
+    await appendAuditAs(
+      userId,
+      "Committed mapping",
+      `→ ${row.target_key}`,
+      { tableId: dimId, rowKey: row.target_key },
+    );
+  }
 
   await appendAuditAs(
     userId,
