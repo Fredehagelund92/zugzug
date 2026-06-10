@@ -33,6 +33,7 @@ import {
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useAsyncAction } from "../hooks/useAsyncAction";
+import { useFlash } from "../hooks/useFlash";
 
 /* Every control on this page persists on change — there is no Save button. */
 
@@ -81,9 +82,7 @@ function relativeTime(iso: string | null): string {
 function ScansSection() {
   const prefs = usePreferences();
   const [status, setStatus] = useState<ScanStatus | null>(null);
-  const [scanning, setScanning] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [scanError, setScanError] = useState<string | null>(null);
 
   const loadStatus = useCallback(async () => {
     setStatusError(null);
@@ -100,24 +99,22 @@ function ScansSection() {
     void loadStatus();
   }, [loadStatus]);
 
+  const flash = useFlash();
+  const scanNow = useAsyncAction(async () => {
+    try {
+      const n = await scanSources();
+      await loadStatus();
+      flash.show(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+    } catch (e) {
+      flash.show(e instanceof Error ? e.message : "Scan failed.", "error");
+    }
+  });
+
   const handleScheduleChange = (next: string | null) => {
     void setPreferences({
       ...prefs,
       scanSchedule: next as "15m" | "hourly" | "daily" | null,
     });
-  };
-
-  const handleScanNow = async () => {
-    setScanning(true);
-    setScanError(null);
-    try {
-      await scanSources();
-      await loadStatus();
-    } catch (err) {
-      setScanError(err instanceof Error ? err.message : "Scan failed.");
-    } finally {
-      setScanning(false);
-    }
   };
 
   const scheduleOptions = [
@@ -140,6 +137,19 @@ function ScansSection() {
         />
       </FormField>
 
+      {flash.message && (
+        <div
+          className={cx(
+            "rounded-sm px-3 py-2 font-mono text-[11.5px]",
+            flash.variant === "error"
+              ? "border border-danger/40 bg-danger-soft text-danger"
+              : "border border-accent/40 bg-accent-wash text-accent",
+          )}
+        >
+          {flash.message}
+        </div>
+      )}
+
       {status && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface-2 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -160,7 +170,7 @@ function ScansSection() {
               )}
             </span>
           </div>
-          <Button onClick={() => void handleScanNow()} loading={scanning}>
+          <Button onClick={() => void scanNow.run()} loading={scanNow.isPending}>
             Scan now
           </Button>
         </div>
@@ -179,19 +189,7 @@ function ScansSection() {
         </div>
       )}
 
-      {scanError && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-          <span>Scan failed — {scanError}</span>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setScanError(null)}>
-              Dismiss
-            </Button>
-            <Button size="sm" onClick={() => void handleScanNow()} loading={scanning}>
-              Retry
-            </Button>
-          </div>
-        </div>
-      )}
+
     </Section>
   );
 }
