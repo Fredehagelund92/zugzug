@@ -324,7 +324,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           return json(result, 201);
         } catch (e) {
           if (e instanceof AppError) {
-            return json({ error: e.message, code: e.code }, e.status);
+            return json(
+              {
+                error: e.message,
+                code: e.code,
+                ...(e.details ? { details: e.details } : {}),
+              },
+              e.status,
+            );
           }
           throw e;
         }
@@ -643,7 +650,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     return json({ error: `no route for ${method} ${pathname}` }, 404);
   } catch (e) {
     if (e instanceof AppError) {
-      return json({ error: e.message, code: e.code }, e.status);
+      return json(
+        {
+          error: e.message,
+          code: e.code,
+          ...(e.details ? { details: e.details } : {}),
+        },
+        e.status,
+      );
     }
     console.error(`✗ ${method} ${pathname}:`, e);
     return err(e);
