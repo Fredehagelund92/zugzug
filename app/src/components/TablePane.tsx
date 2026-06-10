@@ -44,6 +44,7 @@ import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PresenceStrip } from "./datagrid/PresenceStrip";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
@@ -555,6 +556,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
+          <PresenceStrip peers={presence.peers} />
           <Button
             variant="ghost"
             size="sm"
