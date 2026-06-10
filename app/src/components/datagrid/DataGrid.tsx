@@ -72,8 +72,10 @@ interface GridRowProps<Row> {
   editingField: string | null;
   /** Passed through to editors for type-to-edit seeding. */
   cursorInitial: string | undefined;
-  /** Returns true when (this row, field) is inside the current range selection. */
-  cellInRange: (field: string) => boolean;
+  /** Returns true when (rowKey, field) is inside the current range selection.
+   *  Takes the row key so the stable callback can be passed straight through
+   *  without a per-row closure (which would defeat React.memo on GridRow). */
+  cellInRange: (rk: string, field: string) => boolean;
   selected: boolean;
   selectionCol: boolean;
   showRowNumbers: boolean;
@@ -172,7 +174,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
       {columns.map((c, idx) => {
         const focused = focusedField === c.field;
         const editing = editingField === c.field;
-        const inRangeCell = cellInRange(c.field);
+        const inRangeCell = cellInRange(rk, c.field);
         const value = getValue(row, c.field);
         const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
         const isLastCol = idx === columns.length - 1;
@@ -679,6 +681,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     overscan: 5,
   });
 
+  // Pointer-driven cursor moves must NOT auto-scroll: the clicked cell is
+  // already visible, and scrollToIndex (estimated row sizes) can shift the
+  // grid under the pointer — the second click of a double-click then lands
+  // on a different row. Timestamp instead of a boolean so a set-but-unfired
+  // flag can't swallow a later keyboard-driven scroll.
+  const pointerCursorAt = useRef(0);
+
   // Scroll the cursor row into view when it changes.
   // Step 1: bring the row into the virtualiser's render window (vertical).
   // Step 2 (rAF): once React has rendered the row, scroll the cell for
@@ -687,6 +696,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     const rk = cursor.cursor?.rowKey;
     const field = cursor.cursor?.field;
     if (!rk) return;
+    if (performance.now() - pointerCursorAt.current < 100) return;
     const idx = rowIndexMap.get(rk);
     if (idx == null) return;
     virtualizer.scrollToIndex(idx, { align: "auto" });
@@ -1233,6 +1243,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     (rk: string, field: string) => {
       const col = orderedVisible.find((c) => c.field === field);
       if (col?.editable === false) return;
+      pointerCursorAt.current = performance.now();
       cursor.setCursor({ rowKey: rk, field, editing: true });
       setRange(null);
     },
@@ -1245,7 +1256,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const onRowNumPointerDown = useCallback(
     (e: React.PointerEvent, rk: string) => {
       if (e.button !== 0) return;
-      cursor.ref.current?.focus();
+      cursor.ref.current?.focus({ preventScroll: true });
       const firstCol = orderedVisible[0];
       const lastCol = orderedVisible[orderedVisible.length - 1];
       if (!firstCol || !lastCol) return;
@@ -1257,6 +1268,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           focus: { rowKey: rk, field: lastCol.field },
         });
       }
+      pointerCursorAt.current = performance.now();
       cursor.setCursor({ rowKey: rk, field: firstCol.field, editing: false });
       e.preventDefault();
     },
@@ -1272,7 +1284,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
       // Focus the workbench so ⌘C / ⌘V / ⌘A / arrow keys reach handleKeyDown.
       // tabIndex={0} makes the div focusable but click-on-child doesn't auto-focus.
-      cursor.ref.current?.focus();
+      cursor.ref.current?.focus({ preventScroll: true });
 
       if (e.shiftKey && cursor.cursor) {
         // Shift+click: extend range from existing anchor
@@ -1282,6 +1294,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         };
         const newFocus = { rowKey: rk, field };
         setRange({ anchor: currentAnchor, focus: newFocus });
+        pointerCursorAt.current = performance.now();
         cursor.setCursor({ rowKey: rk, field, editing: false });
         e.preventDefault();
         return;
@@ -1294,6 +1307,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       // Start a new range at the clicked cell
       const corner = { rowKey: rk, field };
       setRange({ anchor: corner, focus: corner });
+      pointerCursorAt.current = performance.now();
       cursor.setCursor({ rowKey: rk, field, editing: false });
       draggingRange.current = true;
 
@@ -1461,7 +1475,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       const elapsed = Date.now() - startTime;
                       if (!moved && elapsed < 200 && !dragRef.current) {
                         // Plain click — select whole column
-                        cursor.ref.current?.focus();
+                        cursor.ref.current?.focus({ preventScroll: true });
                         const firstRow = sortedRows[0];
                         const lastRow = sortedRows[sortedRows.length - 1];
                         if (firstRow && lastRow) {
@@ -1730,7 +1744,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                           cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null
                         }
                         cursorInitial={cursorOnThisRow?.initial}
-                        cellInRange={(field) => inRange(rk, field)}
+                        cellInRange={inRange}
                         selected={isSelected(rk)}
                         selectionCol={selectionCol}
                         showRowNumbers={showRowNumbers}
