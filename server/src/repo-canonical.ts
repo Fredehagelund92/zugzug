@@ -478,17 +478,26 @@ export async function renameCanonical(
   key: string,
   label: string,
   userId: string,
-): Promise<void> {
+  expectedVersion: number,
+): Promise<{ version: number }> {
   const m = await dimMeta(dimId);
-  if (!m) return;
+  if (!m) throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
 
-  // Fetch old label before overwriting — needed for cache sync below.
+  // Fetch old label before overwriting — needed for ai_hint_cache sync below.
   const oldRow = await pgGet<{ label: string }>(
     `SELECT label FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`,
     [key],
   ).catch(() => null);
 
-  await pgRun(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [label, key]);
+  const newVersion = await pgTx(async (tx) => {
+    const v = await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
+    await tx.run(
+      `UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`,
+      [label, key],
+    );
+    return v;
+  });
+
   await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`);
 
   // Keep ai_hint_cache consistent: update any hint that was pointing at the old label.
@@ -501,6 +510,8 @@ export async function renameCanonical(
       /* table may not exist in older deploys */
     });
   }
+
+  return { version: newVersion };
 }
 
 /** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the

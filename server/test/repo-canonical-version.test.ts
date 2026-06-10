@@ -8,7 +8,8 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect, beforeAll } from "bun:test";
 import { pgRun, pgGet } from "../src/pg.ts";
-import { addCanonicalOne } from "../src/repo-canonical.ts";
+import { addCanonicalOne, renameCanonical, retireCanonical, mergeCanonical } from "../src/repo-canonical.ts";
+import { AppError } from "../src/errors.ts";
 
 const DIM = "d_canon_test";
 // Store unquoted identifiers — cq() will add quotes when building SQL
@@ -49,4 +50,40 @@ test("addCanonicalOne seeds canonical_version row at version=1", async () => {
   );
   expect(v?.version).toBe(1);
   expect(v?.updated_by).toBe("u_canon_actor");
+});
+
+test("renameCanonical with correct expectedVersion bumps to 2", async () => {
+  // 'dk' was added at version=1 by the addCanonicalOne test above.
+  await renameCanonical(DIM, "dk", "Danmark", "u_canon_actor", 1);
+  const v = await pgGet<{ version: number }>(
+    `SELECT version FROM "zugzug_app"."canonical_version"
+     WHERE dim_id = $1 AND key = $2`,
+    [DIM, "dk"],
+  );
+  expect(v?.version).toBe(2);
+  const label = await pgGet<{ label: string }>(
+    `SELECT label FROM "zugzug_app"."dim_d_canon_test" WHERE ${KEY_COL} = 'dk'`,
+  );
+  expect(label?.label).toBe("Danmark");
+});
+
+test("renameCanonical with stale expectedVersion throws CONFLICT", async () => {
+  // 'dk' is now at version=2. Try to rename with version=1.
+  let thrown: AppError | null = null;
+  try {
+    await renameCanonical(DIM, "dk", "DenmarkAgain", "u_canon_actor", 1);
+  } catch (e) {
+    thrown = e as AppError;
+  }
+  expect(thrown).not.toBeNull();
+  expect(thrown!.code).toBe("CONFLICT");
+  expect(thrown!.status).toBe(409);
+  const details = thrown!.details as { current: { version: number; updatedBy: { id: string } } };
+  expect(details.current.version).toBe(2);
+  expect(details.current.updatedBy.id).toBe("u_canon_actor");
+  // Confirm dim_X label was NOT updated (rollback worked).
+  const label = await pgGet<{ label: string }>(
+    `SELECT label FROM "zugzug_app"."dim_d_canon_test" WHERE ${KEY_COL} = 'dk'`,
+  );
+  expect(label?.label).toBe("Danmark");
 });
