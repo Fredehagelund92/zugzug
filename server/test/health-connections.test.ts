@@ -28,7 +28,8 @@ test("checkHealth caches results for 5 seconds", async () => {
 test("checkHealth({ force: true }) bypasses cache", async () => {
   _resetHealthCache();
   const a = await checkHealth();
-  await new Promise((r) => setTimeout(r, 10));
-  const b = await checkHealth({ force: true });
-  expect(b.postgres.lastCheckedAt).not.toBe(a.postgres.lastCheckedAt);
+  const b = await checkHealth();
+  expect(b).toBe(a); // same snapshot — cache hit
+  const c = await checkHealth({ force: true });
+  expect(c === a).toBe(false); // different snapshot — cache busted
 });
