@@ -296,6 +296,7 @@ function TeamSection() {
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
@@ -521,7 +522,7 @@ function TeamSection() {
             {m.email !== myEmail && (
               <button
                 type="button"
-                onClick={() => remove(m.email)}
+                onClick={() => setRemoveTarget(m.email)}
                 className="shrink-0 rounded-sm text-[11px] text-ink-3 transition-colors hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               >
                 Remove
@@ -530,6 +531,24 @@ function TeamSection() {
           </li>
         ))}
       </ul>
+
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title="Remove this member?"
+        body={
+          <>
+            <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">{removeTarget}</code> will lose access immediately. They can be re-invited from this screen if needed.
+          </>
+        }
+        confirmLabel="Remove"
+        danger
+        onConfirm={async () => {
+          if (!removeTarget) return;
+          await remove(removeTarget);
+          setRemoveTarget(null);
+        }}
+        onCancel={() => setRemoveTarget(null)}
+      />
 
       <div className="space-y-2">
         <div
