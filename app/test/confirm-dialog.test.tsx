@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConfirmDialog } from "../src/components/ConfirmDialog";
 
@@ -103,7 +103,7 @@ describe("ConfirmDialog", () => {
     expect(confirmBtn.className).toMatch(/danger/);
   });
 
-  test("autofocus lands on cancel button (so Enter doesn't accidentally confirm)", () => {
+  test("autofocus lands on cancel button (so Enter doesn't accidentally confirm)", async () => {
     render(
       <ConfirmDialog
         open
@@ -112,6 +112,45 @@ describe("ConfirmDialog", () => {
         onCancel={() => undefined}
       />,
     );
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: /cancel/i }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: /cancel/i })),
+    );
+  });
+
+  test("Tab from confirm button wraps back to cancel (focus trap)", async () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Delete?"
+        confirmLabel="Delete"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    const cancel = screen.getByRole("button", { name: /cancel/i });
+    const confirm = screen.getByRole("button", { name: /^delete$/i });
+    // Focus starts on cancel (autofocus). Tab → confirm.
+    confirm.focus();
+    expect(document.activeElement).toBe(confirm);
+    // Tab from confirm should wrap to cancel.
+    await userEvent.tab();
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  test("Shift+Tab from cancel button wraps to confirm", async () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Delete?"
+        confirmLabel="Delete"
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    const cancel = screen.getByRole("button", { name: /cancel/i });
+    const confirm = screen.getByRole("button", { name: /^delete$/i });
+    cancel.focus();
+    await userEvent.tab({ shift: true });
+    expect(document.activeElement).toBe(confirm);
   });
 });
