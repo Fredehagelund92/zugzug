@@ -188,8 +188,6 @@ function ScansSection() {
           </Button>
         </div>
       )}
-
-
     </Section>
   );
 }

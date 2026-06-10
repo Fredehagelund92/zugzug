@@ -404,12 +404,14 @@ export function Sources() {
       </div>
 
       {flash.message && (
-        <div className={cx(
-          "mb-3 shrink-0 rounded-sm px-3 py-2 font-mono text-[11.5px]",
-          flash.variant === "error"
-            ? "border border-danger/40 bg-danger-soft text-danger"
-            : "border border-accent/40 bg-accent-wash text-accent",
-        )}>
+        <div
+          className={cx(
+            "mb-3 shrink-0 rounded-sm px-3 py-2 font-mono text-[11.5px]",
+            flash.variant === "error"
+              ? "border border-danger/40 bg-danger-soft text-danger"
+              : "border border-accent/40 bg-accent-wash text-accent",
+          )}
+        >
           {flash.message}
         </div>
       )}
