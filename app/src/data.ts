@@ -13,6 +13,7 @@ export type { PaletteName } from "./lib/palette";
 export interface CanonicalValue {
   key: string;
   label: string;
+  version: number; // server-managed; client passes it back on mutations
   variants?: number;
   fields?: Record<string, string | null>;
   unresolved?: boolean;
@@ -89,15 +90,15 @@ export const mappingSeeds: MappingDimension[] = [
     keyCol: "country_code",
     rows: 4421,
     canonical: [
-      { key: "US", label: "United States" },
-      { key: "GB", label: "United Kingdom" },
-      { key: "NO", label: "Norway" },
-      { key: "SE", label: "Sweden" },
-      { key: "DE", label: "Germany" },
-      { key: "FR", label: "France" },
-      { key: "NL", label: "Netherlands" },
-      { key: "BD", label: "Bangladesh" },
-      { key: "GP", label: "Guadeloupe" },
+      { key: "US", label: "United States", version: 1 },
+      { key: "GB", label: "United Kingdom", version: 1 },
+      { key: "NO", label: "Norway", version: 1 },
+      { key: "SE", label: "Sweden", version: 1 },
+      { key: "DE", label: "Germany", version: 1 },
+      { key: "FR", label: "France", version: 1 },
+      { key: "NL", label: "Netherlands", version: 1 },
+      { key: "BD", label: "Bangladesh", version: 1 },
+      { key: "GP", label: "Guadeloupe", version: 1 },
     ],
     values: [
       {
@@ -195,13 +196,13 @@ export const mappingSeeds: MappingDimension[] = [
     keyCol: "state_code",
     rows: 76,
     canonical: [
-      { key: "CA", label: "California" },
-      { key: "AK", label: "Alaska" },
-      { key: "AZ", label: "Arizona" },
-      { key: "AR", label: "Arkansas" },
-      { key: "AL", label: "Alabama" },
-      { key: "NY", label: "New York" },
-      { key: "BC", label: "Baja California" },
+      { key: "CA", label: "California", version: 1 },
+      { key: "AK", label: "Alaska", version: 1 },
+      { key: "AZ", label: "Arizona", version: 1 },
+      { key: "AR", label: "Arkansas", version: 1 },
+      { key: "AL", label: "Alabama", version: 1 },
+      { key: "NY", label: "New York", version: 1 },
+      { key: "BC", label: "Baja California", version: 1 },
     ],
     values: [
       {
@@ -278,13 +279,13 @@ export const mappingSeeds: MappingDimension[] = [
     keyCol: "post_type",
     rows: 44,
     canonical: [
-      { key: "tweet", label: "Tweet" },
-      { key: "retweet", label: "Retweet" },
-      { key: "twitter_mention", label: "Twitter Mention" },
-      { key: "fb_post", label: "Regular FB Post" },
-      { key: "ig_media", label: "IG Media" },
-      { key: "tiktok_video", label: "Tiktok Video" },
-      { key: "story", label: "Story" },
+      { key: "tweet", label: "Tweet", version: 1 },
+      { key: "retweet", label: "Retweet", version: 1 },
+      { key: "twitter_mention", label: "Twitter Mention", version: 1 },
+      { key: "fb_post", label: "Regular FB Post", version: 1 },
+      { key: "ig_media", label: "IG Media", version: 1 },
+      { key: "tiktok_video", label: "Tiktok Video", version: 1 },
+      { key: "story", label: "Story", version: 1 },
     ],
     values: [
       {

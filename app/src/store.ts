@@ -2,6 +2,22 @@ import { useSyncExternalStore, useState, useEffect } from "react";
 import type { MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
 import type { ConditionalRule } from "./components/datagrid/types";
 
+/** Thrown by client mutation helpers on HTTP 409 from the server.
+ *  Callers (TablePane) inspect `current` to render the inline conflict banner. */
+export class ConflictError extends Error {
+  constructor(
+    public current: {
+      version: number;
+      updatedAt: string;
+      updatedBy: { id: string; name: string; initials: string };
+    },
+    public conflictedKeys?: string[],
+  ) {
+    super("Record was modified by another user");
+    this.name = "ConflictError";
+  }
+}
+
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
    The three stores from ARCHITECTURE.md live behind this seam: canonical dim_/map_
@@ -194,10 +210,22 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
     ...opts,
     headers: { "content-type": "application/json", ...opts?.headers },
   });
-  if (!res.ok)
+  if (!res.ok) {
+    if (res.status === 409) {
+      const body = (await res.json().catch(() => ({}))) as {
+        details?: {
+          current?: ConflictError["current"];
+          conflictedKeys?: string[];
+        };
+      };
+      if (body.details?.current) {
+        throw new ConflictError(body.details.current, body.details.conflictedKeys);
+      }
+    }
     throw new Error(
       `${opts?.method ?? "GET"} ${path} → ${res.status} ${await res.text().catch(() => "")}`,
     );
+  }
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
 }
 
@@ -497,23 +525,36 @@ export async function addCanonical(dimId: string, label: string, key?: string): 
   await refreshAudit();
   emit();
 }
-export async function renameCanonical(dimId: string, key: string, label: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`, {
-    method: "PUT",
-    body: JSON.stringify({ label }),
-  });
+export async function renameCanonical(
+  dimId: string,
+  key: string,
+  label: string,
+  expectedVersion: number,
+): Promise<number> {
+  const { version } = await api<{ version: number }>(
+    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ label, expectedVersion }),
+    },
+  );
   await refreshDim(dimId);
   await refreshAudit();
   emit();
+  return version;
 }
 export async function mergeCanonical(
   dimId: string,
   survivor: string,
   losers: string[],
+  expectedVersions: Record<string, number>,
 ): Promise<number> {
   const { merged } = await api<{ merged: number }>(
     `/dimensions/${encodeURIComponent(dimId)}/canonical/merge?confirm=true`,
-    { method: "POST", body: JSON.stringify({ survivor, losers }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ survivor, losers, expectedVersions }),
+    },
   );
   await refreshDim(dimId);
   await refreshSources();
@@ -525,9 +566,10 @@ export async function mergeCanonical(
 export async function retireCanonical(
   dimId: string,
   key: string,
+  expectedVersion: number,
 ): Promise<{ ok: boolean; variants: number }> {
   const res = await api<{ ok: boolean; variants: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`,
+    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
     { method: "DELETE" },
   );
   if (res.ok) {

@@ -361,27 +361,45 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       label: `add "${label}"`,
       surface: "Records",
       apply: () => addCanonical(activeId, label),
-      inverse: () => retireCanonical(activeId, slug(label)).then(() => undefined),
+      inverse: () => {
+        const addedKey = slug(label);
+        const row = list.find((c) => c.key === addedKey);
+        return retireCanonical(activeId, addedKey, row?.version ?? 1).then(() => undefined);
+      },
     });
     setBusy(false);
     setDraft("");
   };
 
   const merge = async (survivorLabel: string) => {
-    const survivor = list.find((c) => c.label === survivorLabel)?.key;
+    const survivorRow = list.find((c) => c.label === survivorLabel);
+    const survivor = survivorRow?.key;
     if (!survivor) return;
     const losers = sel.filter((k) => k !== survivor);
     if (!losers.length) return;
-    const snapshot = list
-      .filter((c) => losers.includes(c.key))
-      .map((c) => ({ key: c.key, label: c.label, fields: c.fields }));
+    const loserRows = list.filter((c) => losers.includes(c.key));
+    const snapshot = loserRows.map((c) => ({ key: c.key, label: c.label, fields: c.fields }));
+    const expectedVersions = Object.fromEntries(
+      [survivorRow, ...loserRows].map((r) => [r.key, r.version]),
+    );
 
     setBusy(true);
-    const n = await mergeCanonical(activeId, survivor, losers);
+    const n = await mergeCanonical(activeId, survivor, losers, expectedVersions);
     undo.push({
       label: `merge ${losers.length} into "${survivorLabel}"`,
       surface: "Records",
-      apply: () => mergeCanonical(activeId, survivor, losers).then(() => undefined),
+      apply: () => {
+        const currentSurvivorRow = list.find((c) => c.key === survivor);
+        const currentLoserRows = list.filter((c) => losers.includes(c.key));
+        const currentExpectedVersions = Object.fromEntries(
+          [currentSurvivorRow, ...currentLoserRows]
+            .filter((r): r is CanonicalValue => r !== undefined)
+            .map((r) => [r.key, r.version]),
+        );
+        return mergeCanonical(activeId, survivor, losers, currentExpectedVersions).then(
+          () => undefined,
+        );
+      },
       inverse: async () => {
         for (const s of snapshot) await addCanonical(activeId, s.label);
       },
@@ -392,9 +410,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   };
 
   const retire = async (key: string, label: string) => {
+    const row = list.find((c) => c.key === key);
+    const version = row?.version ?? 1;
     setBusy(true);
     try {
-      const r = await retireCanonical(activeId, key);
+      const r = await retireCanonical(activeId, key, version);
       if (!r.ok) {
         flash(
           `Can't remove "${label}" — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
@@ -404,7 +424,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       undo.push({
         label: `remove "${label}"`,
         surface: "Records",
-        apply: () => retireCanonical(activeId, key).then(() => undefined),
+        apply: () => {
+          const currentRow = list.find((c) => c.key === key);
+          return retireCanonical(activeId, key, currentRow?.version ?? 1).then(() => undefined);
+        },
         inverse: () => addCanonical(activeId, label),
       });
     } catch (err) {
@@ -656,15 +679,26 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             canEdit
               ? async (rowKey, field, value) => {
                   if (field === "label") {
-                    const prev = list.find((c) => c.key === rowKey)?.label;
+                    const currentRow = list.find((c) => c.key === rowKey);
+                    const prev = currentRow?.label;
                     if (typeof value !== "string" || !value.trim() || value === prev) return;
-                    await renameCanonical(activeId, rowKey, value);
+                    await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
                     if (prev) {
                       undo.push({
                         label: `rename "${prev}" → "${value}"`,
                         surface: "Records",
-                        apply: () => renameCanonical(activeId, rowKey, value),
-                        inverse: () => renameCanonical(activeId, rowKey, prev),
+                        apply: () => {
+                          const r = list.find((c) => c.key === rowKey);
+                          return renameCanonical(activeId, rowKey, value, r?.version ?? 1).then(
+                            () => undefined,
+                          );
+                        },
+                        inverse: () => {
+                          const r = list.find((c) => c.key === rowKey);
+                          return renameCanonical(activeId, rowKey, prev, r?.version ?? 1).then(
+                            () => undefined,
+                          );
+                        },
                       });
                       void fetchVariants(activeId, rowKey).then((vs) => {
                         setRenameFlash({ prev, next: value, variants: vs.length });
