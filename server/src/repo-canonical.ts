@@ -254,9 +254,18 @@ export async function getDimension(id: string): Promise<MappingDimension | null>
     ...linkedFields.flatMap((f) => (f.displayFields ?? ["label"]).map((df) => `${f.field}__${df}`)),
   ];
 
+  // Without this the client can't supply the right expectedVersion and every
+  // second rename of a record 409s against the optimistic-concurrency check.
+  const versionRows = await pgAll<{ key: string; version: number }>(
+    `SELECT key, version FROM ${pg("canonical_version")} WHERE dim_id = $1`,
+    [id],
+  );
+  const versions = new Map(versionRows.map((r) => [r.key, Number(r.version)]));
+
   const canonical = canonRows.map((r) => ({
     key: String(r.key),
     label: r.label == null ? String(r.key) : String(r.label),
+    version: versions.get(String(r.key)) ?? 1,
     unresolved: !!r.unresolved,
     variants: Number(r.variants),
     fields: Object.fromEntries(
