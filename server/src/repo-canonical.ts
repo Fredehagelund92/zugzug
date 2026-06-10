@@ -113,10 +113,10 @@ async function seedVersionRow(
 
 /** Delete the version row after a canonical is retired. Use inside an existing tx. */
 async function deleteVersionRow(tx: TxLike, dimId: string, key: string): Promise<void> {
-  await tx.run(
-    `DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1 AND key = $2`,
-    [dimId, key],
-  );
+  await tx.run(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1 AND key = $2`, [
+    dimId,
+    key,
+  ]);
 }
 
 // types must be valid in BOTH DuckDB and the attached Postgres (DDL is forwarded
@@ -491,10 +491,10 @@ export async function renameCanonical(
 
   const newVersion = await pgTx(async (tx) => {
     const v = await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
-    await tx.run(
-      `UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`,
-      [label, key],
-    );
+    await tx.run(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [
+      label,
+      key,
+    ]);
     return v;
   });
 
@@ -583,14 +583,11 @@ export async function mergeCanonical(
     }
 
     // All version checks passed — execute the merge.
-    await tx.run(
-      `UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`,
-      [survivor, real],
-    );
-    await tx.run(
-      `DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`,
-      [real],
-    );
+    await tx.run(`UPDATE ${cq(m.mapTable)} SET ${key} = $1 WHERE ${key} = ANY($2::text[])`, [
+      survivor,
+      real,
+    ]);
+    await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`, [real]);
     await tx.run(
       `DELETE FROM "zugzug_app"."canonical_version"
         WHERE dim_id = $1 AND key = ANY($2::text[])`,
@@ -622,10 +619,7 @@ export async function retireCanonical(
 
   await pgTx(async (tx) => {
     await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId);
-    await tx.run(
-      `DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`,
-      [key],
-    );
+    await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
     await deleteVersionRow(tx, dimId, key);
   });
 

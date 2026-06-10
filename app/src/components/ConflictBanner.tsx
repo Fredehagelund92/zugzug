@@ -41,8 +41,8 @@ export function ConflictBanner({
       role="alert"
     >
       <span>
-        This record was modified by <strong>{conflict.updatedBy.name}</strong> {ago(conflict.updatedAt)}.{" "}
-        Your changes weren't saved.
+        This record was modified by <strong>{conflict.updatedBy.name}</strong>{" "}
+        {ago(conflict.updatedAt)}. Your changes weren&apos;t saved.
         {tail && <em className="not-italic text-warn/80">{tail}</em>}
       </span>
       <div className="flex items-center gap-2">

@@ -525,7 +525,9 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
           if (!expectedVersions || typeof expectedVersions !== "object") {
             throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
           }
-          return json({ merged: await repo.mergeCanonical(id, survivor, losers, me, expectedVersions) });
+          return json({
+            merged: await repo.mergeCanonical(id, survivor, losers, me, expectedVersions),
+          });
         }
         const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
         if (seg[5] === "variants" && seg.length === 6 && method === "GET")

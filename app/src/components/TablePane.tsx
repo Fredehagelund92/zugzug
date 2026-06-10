@@ -418,9 +418,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     } catch (e) {
       setBusy(false);
       const anchor =
-        e instanceof ConflictError && e.conflictedKeys?.length
-          ? e.conflictedKeys[0]!
-          : survivor;
+        e instanceof ConflictError && e.conflictedKeys?.length ? e.conflictedKeys[0]! : survivor;
       if (!surfaceConflict(anchor, e)) throw e;
       return;
     }
