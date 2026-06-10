@@ -236,9 +236,15 @@
   }
 }
 @keyframes zz-rise {
+  /* Settle downward (negative Y): overflow above the content top never
+     extends the scroll range, so the entrance can't leave phantom scroll
+     space behind. With translateY(+16) Chrome cached the first-frame
+     overflow and only recomputed on the next structural relayout — the
+     first cell click — making the pane visibly jump 16px and flash the
+     scrollbar. */
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(-16px);
   }
   to {
     opacity: 1;
