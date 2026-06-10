@@ -434,6 +434,8 @@ export async function createTable(input: CreateTableInput): Promise<string> {
   return id;
 }
 
+/** Stage a draft. Optimistic: the row flips in the same frame; the server echo
+ *  (authoritative `at`/`user`) reconciles via a background drafts refresh. */
 export async function saveDraft(
   dimId: string,
   raw: string,
@@ -441,20 +443,50 @@ export async function saveDraft(
   targetLabel: string | null,
   targetKey: string | null,
 ): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/drafts`, {
-    method: "PUT",
-    body: JSON.stringify({ raw, status, targetLabel, targetKey }),
-  });
-  await refreshDrafts(dimId);
+  const k = dkey(dimId, raw);
+  const prev = draftsFlat[k];
+  draftsFlat = {
+    ...draftsFlat,
+    [k]: { dimId, raw, status, targetLabel, targetKey, user: currentUser, at: new Date().toISOString() },
+  };
   emit();
+  try {
+    await api(`/dimensions/${encodeURIComponent(dimId)}/drafts`, {
+      method: "PUT",
+      body: JSON.stringify({ raw, status, targetLabel, targetKey }),
+    });
+  } catch (e) {
+    const next = { ...draftsFlat };
+    if (prev) next[k] = prev;
+    else delete next[k];
+    draftsFlat = next;
+    emit();
+    throw e;
+  }
+  void refreshDrafts(dimId).then(emit);
 }
 
 export async function discardDraft(dimId: string, raw: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/${encodeURIComponent(raw)}`, {
-    method: "DELETE",
-  });
-  await refreshDrafts(dimId);
-  emit();
+  const k = dkey(dimId, raw);
+  const prev = draftsFlat[k];
+  if (prev) {
+    const next = { ...draftsFlat };
+    delete next[k];
+    draftsFlat = next;
+    emit();
+  }
+  try {
+    await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/${encodeURIComponent(raw)}`, {
+      method: "DELETE",
+    });
+  } catch (e) {
+    if (prev) {
+      draftsFlat = { ...draftsFlat, [k]: prev };
+      emit();
+    }
+    throw e;
+  }
+  void refreshDrafts(dimId).then(emit);
 }
 
 /** All staged edits for a dimension (sync read of the cache). */
