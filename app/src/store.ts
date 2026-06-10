@@ -238,6 +238,13 @@ async function refreshDim(dimId: string): Promise<void> {
   const dim = await api<MappingDimension>(`/dimensions/${encodeURIComponent(dimId)}`);
   dims = dims.map((d) => (d.id === dim.id ? dim : d));
 }
+/** Re-fetch a single dimension from the server and notify subscribers.
+ *  Used by ConflictBanner's "Refresh row" button to pull the latest version
+ *  after a 409 conflict without reloading the whole workspace. */
+export async function refreshDimAndNotify(dimId: string): Promise<void> {
+  await refreshDim(dimId);
+  emit();
+}
 async function refreshDrafts(dimId?: string): Promise<void> {
   if (dimId) {
     const list = await api<Draft[]>(`/dimensions/${encodeURIComponent(dimId)}/drafts`);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
@@ -27,8 +27,11 @@ import {
   getGridLayout,
   setGridLayout,
   useCanEdit,
+  ConflictError,
+  refreshDimAndNotify,
   type GridLayoutConfig,
 } from "../store";
+import { ConflictBanner } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
@@ -209,6 +212,31 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     loserCount: number;
   } | null>(null);
 
+  const [conflicts, setConflicts] = useState<
+    Map<string, { current: ConflictError["current"]; conflictedKeys?: string[] }>
+  >(new Map());
+
+  const surfaceConflict = useCallback((rowKey: string, err: unknown) => {
+    if (err instanceof ConflictError) {
+      setConflicts((prev) => {
+        const next = new Map(prev);
+        next.set(rowKey, { current: err.current, conflictedKeys: err.conflictedKeys });
+        return next;
+      });
+      return true;
+    }
+    return false;
+  }, []);
+
+  const dismissConflict = useCallback((rowKey: string) => {
+    setConflicts((prev) => {
+      if (!prev.has(rowKey)) return prev;
+      const next = new Map(prev);
+      next.delete(rowKey);
+      return next;
+    });
+  }, []);
+
   const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
   const [layout, setLayout] = useState<GridLayoutConfig>({});
   useEffect(() => {
@@ -384,7 +412,18 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     );
 
     setBusy(true);
-    const n = await mergeCanonical(activeId, survivor, losers, expectedVersions);
+    let n: number;
+    try {
+      n = await mergeCanonical(activeId, survivor, losers, expectedVersions);
+    } catch (e) {
+      setBusy(false);
+      const anchor =
+        e instanceof ConflictError && e.conflictedKeys?.length
+          ? e.conflictedKeys[0]!
+          : survivor;
+      if (!surfaceConflict(anchor, e)) throw e;
+      return;
+    }
     undo.push({
       label: `merge ${losers.length} into "${survivorLabel}"`,
       surface: "Records",
@@ -406,6 +445,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     });
     setBusy(false);
     setSel([]);
+    for (const k of [survivor, ...losers]) dismissConflict(k);
     flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — raw values re-pointed.`);
   };
 
@@ -421,6 +461,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         );
         return;
       }
+      dismissConflict(key);
       undo.push({
         label: `remove "${label}"`,
         surface: "Records",
@@ -431,7 +472,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         inverse: () => addCanonical(activeId, label),
       });
     } catch (err) {
-      flash(`Remove failed — ${err instanceof Error ? err.message : "network error"}`);
+      if (!surfaceConflict(key, err)) {
+        flash(`Remove failed — ${err instanceof Error ? err.message : "network error"}`);
+      }
     } finally {
       setBusy(false);
     }
@@ -669,6 +712,23 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           </div>
         )}
 
+        {conflicts.size > 0 && (
+          <div className="flex flex-col gap-1 px-5 pt-2 pb-3">
+            {Array.from(conflicts.entries()).map(([rowKey, c]) => (
+              <ConflictBanner
+                key={rowKey}
+                conflict={c.current}
+                conflictedKeys={c.conflictedKeys}
+                onRefresh={async () => {
+                  await refreshDimAndNotify(activeId);
+                  dismissConflict(rowKey);
+                }}
+                onKeepEditing={() => dismissConflict(rowKey)}
+              />
+            ))}
+          </div>
+        )}
+
         <DataGrid<CanonicalValue>
           rows={rowsForGrid}
           rowKey={(c) => c.key}
@@ -682,7 +742,13 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                     const currentRow = list.find((c) => c.key === rowKey);
                     const prev = currentRow?.label;
                     if (typeof value !== "string" || !value.trim() || value === prev) return;
-                    await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
+                    try {
+                      await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
+                      dismissConflict(rowKey);
+                    } catch (e) {
+                      if (!surfaceConflict(rowKey, e)) throw e;
+                      return;
+                    }
                     if (prev) {
                       undo.push({
                         label: `rename "${prev}" → "${value}"`,
