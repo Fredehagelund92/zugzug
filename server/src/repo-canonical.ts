@@ -469,7 +469,7 @@ export async function addCanonicalOne(
     );
     await seedVersionRow(tx, dimId, k, userId);
   });
-  await appendAuditAs(userId, "Added canonical", `${label} (${k})`);
+  await appendAuditAs(userId, "Added canonical", `${label} (${k})`, { tableId: dimId, rowKey: k });
 }
 
 /** Rename a canonical's display label (the key is stable). */
@@ -498,7 +498,7 @@ export async function renameCanonical(
     return v;
   });
 
-  await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`);
+  await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`, { tableId: dimId, rowKey: key });
 
   // Keep ai_hint_cache consistent: update any hint that was pointing at the old label.
   if (oldRow?.label) {
@@ -595,7 +595,7 @@ export async function mergeCanonical(
     );
   });
 
-  await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`);
+  await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`, { tableId: dimId, rowKey: survivor });
   return real.length;
 }
 
@@ -631,7 +631,7 @@ export async function retireCanonical(
   });
 
   if (result.ok) {
-    await appendAuditAs(userId, "Retired canonical", key);
+    await appendAuditAs(userId, "Retired canonical", key, { tableId: dimId, rowKey: key });
   }
   return result;
 }
