@@ -66,15 +66,18 @@ export async function listAudit(limit = 30): Promise<AuditEntry[]> {
   }));
 }
 
-/* --- workspace-global preferences (single row, id=1) --- */
-export async function getPreferences(): Promise<Preferences> {
+/* --- workspace-global preferences (one row per tenant) --- */
+export async function getPreferences(tenantId: string = "default"): Promise<Preferences> {
   const row = await pgGet<{
     publish_threshold: number;
     suggest_threshold: number;
     scan_schedule: string | null;
   }>(
     `SELECT publish_threshold, suggest_threshold, scan_schedule
-     FROM ${pg("preferences")} WHERE id = 1`,
+     FROM ${pg("preferences")}
+     WHERE tenant_id = $1
+     ORDER BY id LIMIT 1`,
+    [tenantId],
   );
   const validSchedule = ["15m", "hourly", "daily"] as const;
   const sched = row?.scan_schedule ?? null;
@@ -87,16 +90,30 @@ export async function getPreferences(): Promise<Preferences> {
   };
 }
 
-export async function setPreferences(p: Preferences): Promise<void> {
+export async function setPreferences(
+  p: Preferences,
+  tenantId: string = "default",
+): Promise<void> {
   const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
   if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
-  await pgRun(
+
+  // Try UPDATE first; if no row exists for this tenant, INSERT one.
+  const rows = await pgAll(
     `UPDATE ${pg("preferences")}
-     SET publish_threshold = $1, suggest_threshold = $2,
-         scan_schedule = $3, updated_at = current_timestamp
-     WHERE id = 1`,
-    [p.publishThreshold, p.suggestThreshold, p.scanSchedule],
+       SET publish_threshold = $1, suggest_threshold = $2,
+           scan_schedule = $3, updated_at = current_timestamp
+     WHERE tenant_id = $4
+     RETURNING id`,
+    [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
   );
+  if (rows.length === 0) {
+    await pgRun(
+      `INSERT INTO ${pg("preferences")}
+         (id, publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
+       VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM ${pg("preferences")}), $1, $2, $3, current_timestamp, $4)`,
+      [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
+    );
+  }
 }
 
 /* ---- per-user grid layout (column widths / order / hidden) ---- */
