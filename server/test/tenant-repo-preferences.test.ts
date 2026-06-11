@@ -83,7 +83,9 @@ test("super-admin bypasses the role check even with role='viewer'", async () => 
 });
 
 test("default tenant getPreferences returns hardcoded fallback when no preferences row exists", async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = 'default' OR tenant_id IS NULL`);
+  await pgRun(
+    `DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = 'default' OR tenant_id IS NULL`,
+  );
   const defaultRepo = new TenantRepo("default", "admin");
   const prefs = await defaultRepo.getPreferences();
   expect(prefs.publishThreshold).toBe(95);

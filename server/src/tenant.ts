@@ -138,10 +138,7 @@ export interface AcceptedInvite {
  *  row for `userId`. Returns the accepted invites. Idempotent: if a membership
  *  already exists (e.g. invite was already accepted in a concurrent login), the
  *  invite is still removed and no error is raised. */
-export async function acceptInvitesFor(
-  userId: string,
-  email: string,
-): Promise<AcceptedInvite[]> {
+export async function acceptInvitesFor(userId: string, email: string): Promise<AcceptedInvite[]> {
   const normalized = email.trim().toLowerCase();
   return pgTxRaw(async (tx) => {
     const invites = await tx.all<{ tenant_id: string; role: "admin" | "editor" | "viewer" }>(
@@ -161,10 +158,7 @@ export async function acceptInvitesFor(
        ON CONFLICT (tenant_id, user_id) DO NOTHING`,
       [userId, normalized],
     );
-    await tx.run(
-      `DELETE FROM "zugzug_app"."tenant_invite" WHERE lower(email) = $1`,
-      [normalized],
-    );
+    await tx.run(`DELETE FROM "zugzug_app"."tenant_invite" WHERE lower(email) = $1`, [normalized]);
     return invites;
   });
 }

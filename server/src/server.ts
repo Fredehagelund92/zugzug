@@ -161,9 +161,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     tenantCtx = { tenantId: "*", role: "admin", isSuperAdmin: true };
   } else {
     try {
-      const pathnameForCtx = tenantSlugFromPath
-        ? `/api/t/${tenantSlugFromPath}/_`
-        : pathname;
+      const pathnameForCtx = tenantSlugFromPath ? `/api/t/${tenantSlugFromPath}/_` : pathname;
       tenantCtx = await resolveTenantContext({
         pathname: pathnameForCtx,
         user: sessionUser,
@@ -775,99 +773,99 @@ if (import.meta.main) {
   }
 
   const server = Bun.serve<PresenceWsData>({
-  port: env.port,
-  idleTimeout: 120,
-  maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
-  async fetch(req, srv) {
-    // WebSocket upgrade for presence rooms — must run before HTTP routing.
-    // We authenticate via the same session helper used by /api/* routes so that
-    // anonymous clients can't observe presence. Auth FIRST, upgrade SECOND.
-    const url = new URL(req.url);
-    if (url.pathname.startsWith("/ws/presence/")) {
-      const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
-      if (!tableId) return new Response("missing tableId", { status: 400 });
-      let session: SessionUser | null;
-      try {
-        session = await getSessionUser(req);
-        if (!session) {
-          const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-          session = await getApiTokenUser(req);
+    port: env.port,
+    idleTimeout: 120,
+    maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
+    async fetch(req, srv) {
+      // WebSocket upgrade for presence rooms — must run before HTTP routing.
+      // We authenticate via the same session helper used by /api/* routes so that
+      // anonymous clients can't observe presence. Auth FIRST, upgrade SECOND.
+      const url = new URL(req.url);
+      if (url.pathname.startsWith("/ws/presence/")) {
+        const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
+        if (!tableId) return new Response("missing tableId", { status: 400 });
+        let session: SessionUser | null;
+        try {
+          session = await getSessionUser(req);
+          if (!session) {
+            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+            session = await getApiTokenUser(req);
+          }
+        } catch {
+          return new Response("auth error", { status: 503 });
         }
-      } catch {
-        return new Response("auth error", { status: 503 });
+        if (!session) return new Response("unauthorized", { status: 401 });
+        const ok = srv.upgrade(req, {
+          data: { tableId, userId: session.id, displayName: session.name } satisfies PresenceWsData,
+        });
+        return ok ? undefined : new Response("upgrade failed", { status: 500 });
       }
-      if (!session) return new Response("unauthorized", { status: 401 });
-      const ok = srv.upgrade(req, {
-        data: { tableId, userId: session.id, displayName: session.name } satisfies PresenceWsData,
-      });
-      return ok ? undefined : new Response("upgrade failed", { status: 500 });
-    }
 
-    const reqId = crypto.randomUUID();
-    const start = performance.now();
-    let userId: string | undefined;
-    let status = 500;
-    try {
-      const res = await handle(req, (uid) => {
-        userId = uid;
-      });
-      status = res.status;
-      const headers = new Headers(res.headers);
-      headers.set("x-request-id", reqId);
-      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-    } catch (e) {
-      console.error(`✗ ${req.method} ${new URL(req.url).pathname}:`, e);
-      status = 500;
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
-        status: 500,
-        headers: { "content-type": "application/json", "x-request-id": reqId, ...corsHeaders },
-      });
-    } finally {
-      log({
-        level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
-        msg: "request",
-        reqId,
-        method: req.method,
-        path: new URL(req.url).pathname,
-        status,
-        ms: Math.round(performance.now() - start),
-        userId,
-      });
-    }
-  },
-  websocket: {
-    // Stewards may sit on a page for 30+ min between cursor moves; disable Bun's
-    // idle timeout (0 = never close due to inactivity). Yjs awareness has its
-    // own liveness model on top.
-    idleTimeout: 0,
-    open(ws) {
-      const { tableId } = ws.data;
-      // Cast: presence.join/leave/broadcast are typed for ServerWebSocket<undefined>
-      // (the Bun default). They never read .data — they only fan out frames.
-      presence.join(tableId, ws as unknown as ServerWebSocket);
-    },
-    message(ws, msg) {
-      const { tableId } = ws.data;
-      // The yjs awareness envelope is binary. Bun hands us either a Buffer
-      // (Uint8Array subclass) or a string. Strings would only come from
-      // app-level heartbeats. Normalize to Uint8Array and relay verbatim —
-      // the server never decodes the y-protocols frame.
-      let payload: Uint8Array;
-      if (typeof msg === "string") {
-        payload = new TextEncoder().encode(msg);
-      } else if (msg instanceof Uint8Array) {
-        payload = msg;
-      } else {
-        payload = new Uint8Array(msg as ArrayBuffer);
+      const reqId = crypto.randomUUID();
+      const start = performance.now();
+      let userId: string | undefined;
+      let status = 500;
+      try {
+        const res = await handle(req, (uid) => {
+          userId = uid;
+        });
+        status = res.status;
+        const headers = new Headers(res.headers);
+        headers.set("x-request-id", reqId);
+        return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+      } catch (e) {
+        console.error(`✗ ${req.method} ${new URL(req.url).pathname}:`, e);
+        status = 500;
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+          status: 500,
+          headers: { "content-type": "application/json", "x-request-id": reqId, ...corsHeaders },
+        });
+      } finally {
+        log({
+          level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
+          msg: "request",
+          reqId,
+          method: req.method,
+          path: new URL(req.url).pathname,
+          status,
+          ms: Math.round(performance.now() - start),
+          userId,
+        });
       }
-      presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket);
     },
-    close(ws) {
-      const { tableId } = ws.data;
-      presence.leave(tableId, ws as unknown as ServerWebSocket);
+    websocket: {
+      // Stewards may sit on a page for 30+ min between cursor moves; disable Bun's
+      // idle timeout (0 = never close due to inactivity). Yjs awareness has its
+      // own liveness model on top.
+      idleTimeout: 0,
+      open(ws) {
+        const { tableId } = ws.data;
+        // Cast: presence.join/leave/broadcast are typed for ServerWebSocket<undefined>
+        // (the Bun default). They never read .data — they only fan out frames.
+        presence.join(tableId, ws as unknown as ServerWebSocket);
+      },
+      message(ws, msg) {
+        const { tableId } = ws.data;
+        // The yjs awareness envelope is binary. Bun hands us either a Buffer
+        // (Uint8Array subclass) or a string. Strings would only come from
+        // app-level heartbeats. Normalize to Uint8Array and relay verbatim —
+        // the server never decodes the y-protocols frame.
+        let payload: Uint8Array;
+        if (typeof msg === "string") {
+          payload = new TextEncoder().encode(msg);
+        } else if (msg instanceof Uint8Array) {
+          payload = msg;
+        } else {
+          payload = new Uint8Array(msg as ArrayBuffer);
+        }
+        presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket);
+      },
+      close(ws) {
+        const { tableId } = ws.data;
+        presence.leave(tableId, ws as unknown as ServerWebSocket);
+      },
     },
-  },
-});
+  });
 
   console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
 

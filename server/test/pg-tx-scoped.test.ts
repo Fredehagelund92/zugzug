@@ -16,11 +16,13 @@ test("pgTxScoped exposes app.tenant_id via current_setting inside the tx", async
 });
 
 test("pgTxScoped isolates settings between transactions (SET LOCAL semantics)", async () => {
-  const a = await pgTxScoped("tprov_a_setting", async (tx) =>
-    (await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
+  const a = await pgTxScoped(
+    "tprov_a_setting",
+    async (tx) => (await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
   );
-  const b = await pgTxScoped("tprov_b_setting", async (tx) =>
-    (await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
+  const b = await pgTxScoped(
+    "tprov_b_setting",
+    async (tx) => (await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
   );
   expect(a).toBe("tprov_a_setting");
   expect(b).toBe("tprov_b_setting");
@@ -45,10 +47,9 @@ test("pgTxScoped rolls back if fn throws", async () => {
   expect(thrown?.message).toBe("rollback me");
 
   // Re-check outside the tx — row must not exist.
-  const row = await pgGet<{ id: string }>(
-    `SELECT id FROM "zugzug_app"."audit_log" WHERE id = $1`,
-    [probeId],
-  );
+  const row = await pgGet<{ id: string }>(`SELECT id FROM "zugzug_app"."audit_log" WHERE id = $1`, [
+    probeId,
+  ]);
   expect(row).toBeNull();
 });
 
