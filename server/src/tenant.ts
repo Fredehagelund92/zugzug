@@ -5,7 +5,7 @@
  * super-admin /api/admin/tenants route in PR 2). The CLI script in
  * scripts/admin.ts also calls in here for PR 1 bootstrap. */
 
-import { pgGet, pgAll } from "./pg.ts";
+import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
 import { AppError } from "./errors.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
@@ -73,4 +73,98 @@ export async function listTenants(): Promise<TenantRecord[]> {
       WHERE deleted_at IS NULL
       ORDER BY id`,
   );
+}
+
+export interface Membership {
+  tenant: TenantRecord;
+  role: "admin" | "editor" | "viewer";
+}
+
+export async function tenantBySlug(slug: string): Promise<TenantRecord | null> {
+  return pgGet<TenantRecord>(
+    `SELECT id, slug, label, warehouse_id, created_at
+       FROM "zugzug_app"."tenant"
+      WHERE slug = $1 AND deleted_at IS NULL`,
+    [slug],
+  );
+}
+
+export async function listMembershipsForUser(userId: string): Promise<Membership[]> {
+  const rows = await pgAll<{
+    tid: string;
+    slug: string;
+    label: string;
+    warehouse_id: string;
+    created_at: Date;
+    role: "admin" | "editor" | "viewer";
+  }>(
+    `SELECT t.id AS tid, t.slug, t.label, t.warehouse_id, t.created_at, tm.role
+       FROM "zugzug_app"."tenant_member" tm
+       JOIN "zugzug_app"."tenant" t ON t.id = tm.tenant_id
+      WHERE tm.user_id = $1 AND t.deleted_at IS NULL
+      ORDER BY t.label`,
+    [userId],
+  );
+  return rows.map((r) => ({
+    tenant: {
+      id: r.tid,
+      slug: r.slug,
+      label: r.label,
+      warehouse_id: r.warehouse_id,
+      created_at: r.created_at,
+    },
+    role: r.role,
+  }));
+}
+
+export async function memberRole(
+  tenantId: string,
+  userId: string,
+): Promise<"admin" | "editor" | "viewer" | null> {
+  const row = await pgGet<{ role: "admin" | "editor" | "viewer" }>(
+    `SELECT role FROM "zugzug_app"."tenant_member"
+      WHERE tenant_id = $1 AND user_id = $2`,
+    [tenantId, userId],
+  );
+  return row?.role ?? null;
+}
+
+export interface AcceptedInvite {
+  tenant_id: string;
+  role: "admin" | "editor" | "viewer";
+}
+
+/** Atomically convert every pending tenant_invite for `email` into a tenant_member
+ *  row for `userId`. Returns the accepted invites. Idempotent: if a membership
+ *  already exists (e.g. invite was already accepted in a concurrent login), the
+ *  invite is still removed and no error is raised. */
+export async function acceptInvitesFor(
+  userId: string,
+  email: string,
+): Promise<AcceptedInvite[]> {
+  const normalized = email.trim().toLowerCase();
+  return pgTxRaw(async (tx) => {
+    const invites = await tx.all<{ tenant_id: string; role: "admin" | "editor" | "viewer" }>(
+      `SELECT tenant_id, role
+         FROM "zugzug_app"."tenant_invite"
+        WHERE lower(email) = $1
+        FOR UPDATE`,
+      [normalized],
+    );
+    if (invites.length === 0) return [];
+
+    await tx.run(
+      `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
+       SELECT tenant_id, $1, role, now()
+         FROM "zugzug_app"."tenant_invite"
+        WHERE lower(email) = $2
+       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+      [userId, normalized],
+    );
+    await tx.run(
+      `DELETE FROM "zugzug_app"."tenant_invite" WHERE lower(email) = $1`,
+      [normalized],
+    );
+    return invites;
+  });
 }
