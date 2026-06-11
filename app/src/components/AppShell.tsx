@@ -20,11 +20,12 @@ import {
 } from "./Icons";
 import { useDimensions, currentUser, useCurrentUser } from "../store";
 import { RoleBadge } from "./RoleBadge";
+import { SyncPill } from "./SyncPill";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
 import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
-import { ToastStack } from "./Toast";
+import { ToastStack, toast } from "./Toast";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -222,6 +223,43 @@ export function AppShell() {
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+
+  // Background auto-publish visibility: the scheduler commits as u_system with
+  // no client signal. Poll scan-status once a minute while the tab is visible
+  // and toast when the last-auto-publish timestamp advances past what this
+  // session has already seen (seeded on first poll so old runs don't toast).
+  const lastAutoSeen = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    let stop = false;
+    const tick = async () => {
+      if (stop || document.visibilityState !== "visible") return;
+      try {
+        const r = await fetch("/api/sources/scan-status");
+        if (!r.ok) return;
+        const s = (await r.json()) as {
+          lastAutoPublishAt: string | null;
+          lastAutoPublishDetail: string | null;
+        };
+        if (stop) return;
+        if (lastAutoSeen.current === undefined) {
+          lastAutoSeen.current = s.lastAutoPublishAt;
+          return;
+        }
+        if (s.lastAutoPublishAt && s.lastAutoPublishAt !== lastAutoSeen.current) {
+          lastAutoSeen.current = s.lastAutoPublishAt;
+          toast(`⚡ Auto-published ${s.lastAutoPublishDetail ?? "changes"}`);
+        }
+      } catch {
+        /* offline — the BootGate/health surfaces handle connectivity */
+      }
+    };
+    void tick();
+    const id = setInterval(() => void tick(), 60_000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -568,6 +606,7 @@ export function AppShell() {
 
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
+            <SyncPill />
             {me && <RoleBadge role={me.role} />}
             <UserMenu />
           </div>

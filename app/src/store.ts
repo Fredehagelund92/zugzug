@@ -210,8 +210,59 @@ const subscribe = (l: () => void) => {
 };
 const emit = () => listeners.forEach((l) => l());
 
+/* ---- sync status (own listener channel — NOT the global emit() bus, which
+   would re-render every store subscriber on every write start/settle) ---- */
+export type SyncStatus = "idle" | "saving" | "saved";
+let pendingWrites = 0;
+let syncStatus: SyncStatus = "idle";
+let savedDecayTimer: ReturnType<typeof setTimeout> | null = null;
+const syncListeners = new Set<() => void>();
+const emitSync = () => syncListeners.forEach((l) => l());
+
+function writeStarted(): void {
+  pendingWrites++;
+  if (savedDecayTimer) clearTimeout(savedDecayTimer);
+  if (syncStatus !== "saving") {
+    syncStatus = "saving";
+    emitSync();
+  }
+}
+function writeSettled(): void {
+  pendingWrites--;
+  if (pendingWrites > 0) return;
+  syncStatus = "saved";
+  emitSync();
+  savedDecayTimer = setTimeout(() => {
+    syncStatus = "idle";
+    emitSync();
+  }, 1500);
+}
+
+const subscribeSync = (l: () => void) => {
+  syncListeners.add(l);
+  return () => syncListeners.delete(l);
+};
+
+export function useSyncStatus(): SyncStatus {
+  return useSyncExternalStore(
+    subscribeSync,
+    () => syncStatus,
+    () => syncStatus,
+  );
+}
+
 /* ---- fetch helper (Vite proxies /api → the Bun server) ---- */
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
+  const isWrite = !!opts?.method && opts.method !== "GET";
+  if (isWrite) writeStarted();
+  try {
+    return await apiInner<T>(path, opts);
+  } finally {
+    if (isWrite) writeSettled();
+  }
+}
+
+async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...opts,
     headers: { "content-type": "application/json", ...opts?.headers },
