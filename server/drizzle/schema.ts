@@ -15,21 +15,25 @@ import {
 
 const app = pgSchema("zugzug_app");
 
-export const dimension = app.table("dimension", {
-  id:          varchar("id").primaryKey(),
-  label:       varchar("label").notNull(),
-  dim_table:   varchar("dim_table").notNull(),
-  map_table:   varchar("map_table").notNull(),
-  key_col:     varchar("key_col").notNull(),
-  created_at:  timestamp("created_at").notNull(),
-  key_kind:    varchar("key_kind"),
-  name_table:  varchar("name_table"),
-  name_id_col: varchar("name_id_col"),
-  name_col:    varchar("name_col"),
-  description: varchar("description"),
-  color:       varchar("color"),
-  tenant_id:   varchar("tenant_id").default("default"),
-});
+export const dimension = app.table(
+  "dimension",
+  {
+    id:          varchar("id").primaryKey(),
+    label:       varchar("label").notNull(),
+    dim_table:   varchar("dim_table").notNull(),
+    map_table:   varchar("map_table").notNull(),
+    key_col:     varchar("key_col").notNull(),
+    created_at:  timestamp("created_at").notNull(),
+    key_kind:    varchar("key_kind"),
+    name_table:  varchar("name_table"),
+    name_id_col: varchar("name_id_col"),
+    name_col:    varchar("name_col"),
+    description: varchar("description"),
+    color:       varchar("color"),
+    tenant_id:   varchar("tenant_id").default("default"),
+  },
+  (t) => [index("dimension_tenant_idx").on(t.tenant_id)],
+);
 
 export const dimensionSource = app.table(
   "dimension_source",
@@ -85,7 +89,10 @@ export const draft = app.table(
     created_at:   timestamp("created_at").notNull(),
     tenant_id:    varchar("tenant_id").default("default"),
   },
-  (t) => [primaryKey({ columns: [t.dim_id, t.raw, t.user_id] })],
+  (t) => [
+    primaryKey({ columns: [t.dim_id, t.raw, t.user_id] }),
+    index("draft_tenant_idx").on(t.tenant_id),
+  ],
 );
 
 export const auditLog = app.table(
@@ -104,6 +111,7 @@ export const auditLog = app.table(
     index("audit_log_table_row_recency_idx")
       .on(t.table_id, t.row_key, t.created_at.desc())
       .where(sql`${t.table_id} IS NOT NULL`),
+    index("audit_log_tenant_time_idx").on(t.tenant_id, t.created_at.desc()),
   ],
 );
 
@@ -254,6 +262,8 @@ export const tenant = app.table(
     deleted_at:   timestamp("deleted_at"),
   },
   (t) => [
+    // slug is the URL segment — must be globally unique to route to one tenant.
+    uniqueIndex("tenant_slug_unique").on(t.slug),
     // 21-char cap on id keeps room for dim_${tenantId}_${dimSlug} under Postgres's
     // 63-byte identifier limit (4 + 21 + 1 + 37 = 63).
     check("tenant_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_]{0,20}$'`),

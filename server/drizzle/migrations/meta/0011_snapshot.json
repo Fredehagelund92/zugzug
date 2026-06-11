@@ -1,5 +1,5 @@
 {
-  "id": "ea5a7627-6758-4609-80b5-ba19f0db4c68",
+  "id": "edf9b2a9-3831-4836-be0e-3e079ee7ce6f",
   "prevId": "d8a3d967-32c9-4053-84d1-dfe524f6cc9f",
   "version": "7",
   "dialect": "postgresql",
@@ -328,6 +328,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "audit_log_tenant_time_idx": {
+          "name": "audit_log_tenant_time_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
@@ -501,7 +522,23 @@
           "default": "'default'"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "dimension_tenant_idx": {
+          "name": "dimension_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -680,7 +717,23 @@
           "default": "'default'"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "draft_tenant_idx": {
+          "name": "draft_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {
         "draft_dim_id_raw_user_id_pk": {
@@ -1011,7 +1064,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "tenant_slug_unique": {
+          "name": "tenant_slug_unique",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
