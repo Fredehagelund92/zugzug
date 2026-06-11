@@ -132,19 +132,20 @@ export async function getAiHint(
   raw: string,
   canonicalLabels: string[],
   dim: DimContext,
+  tenantId: string,
 ): Promise<AiHintResult> {
   // 1. Postgres cache hit
   const cached = await pgGet<CacheRow>(
     `SELECT suggestion, confidence, reasoning
      FROM ${pg("ai_hint_cache")}
-     WHERE dim_id = $1 AND raw = $2`,
-    [dimId, raw],
+     WHERE dim_id = $1 AND raw = $2 AND tenant_id = $3`,
+    [dimId, raw, tenantId],
   );
   if (cached) {
     void pgRun(
       `UPDATE ${pg("ai_hint_cache")} SET hits = hits + 1
-       WHERE dim_id = $1 AND raw = $2`,
-      [dimId, raw],
+       WHERE dim_id = $1 AND raw = $2 AND tenant_id = $3`,
+      [dimId, raw, tenantId],
     );
     return { ...cached, cached: true };
   }
@@ -170,8 +171,8 @@ export async function getAiHint(
   // 5. Store in cache
   await pgRun(
     `INSERT INTO ${pg("ai_hint_cache")}
-       (dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
-     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, 0)
+       (dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, 0, $7)
      ON CONFLICT (dim_id, raw) DO UPDATE
        SET suggestion  = EXCLUDED.suggestion,
            confidence  = EXCLUDED.confidence,
@@ -185,6 +186,7 @@ export async function getAiHint(
       result.confidence,
       result.reasoning,
       "claude-haiku-4-5-20251001",
+      tenantId,
     ],
   );
 
