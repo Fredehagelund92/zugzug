@@ -75,6 +75,9 @@ interface Opts<Row> {
   onRedo?: () => void;
   onShortcuts?: () => void; // '?' → open shortcuts overlay
   onFocusFilter?: () => void; // '/' → focus toolbar filter
+  /** Disable type-to-edit (printable char enters edit mode). Off when the host
+   *  owns single-key actions via DataGrid's onCellKeyDown. Default true. */
+  typeToEdit?: boolean;
 }
 
 export function useGridCursor<Row>({
@@ -89,6 +92,7 @@ export function useGridCursor<Row>({
   onRedo,
   onShortcuts,
   onFocusFilter,
+  typeToEdit = true,
 }: Opts<Row>) {
   const [cursor, setCursor] = useState<Cursor | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -279,7 +283,8 @@ export function useGridCursor<Row>({
       }
       // Type-to-edit: any printable single character (no modifier) enters edit
       // mode with that character as the seed value. Standard spreadsheet feel.
-      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Skipped when the host owns printable keys (DataGrid onCellKeyDown).
+      if (typeToEdit && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         startEdit(e.key);
         return;
@@ -301,6 +306,7 @@ export function useGridCursor<Row>({
       navCols,
       rowKey,
       getValue,
+      typeToEdit,
     ],
   );
 
