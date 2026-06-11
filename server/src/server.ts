@@ -27,6 +27,8 @@ import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { presence } from "./realtime/presence-room.ts";
+import { resolveTenantContext } from "./tenant-middleware.ts";
+import { TenantRepo } from "./tenant-repo.ts";
 import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
@@ -161,7 +163,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       const pathnameForCtx = tenantSlugFromPath
         ? `/api/t/${tenantSlugFromPath}/_`
         : pathname;
-      tenantCtx = await (await import("./tenant-middleware.ts")).resolveTenantContext({
+      tenantCtx = await resolveTenantContext({
         pathname: pathnameForCtx,
         user: sessionUser,
         isSuperAdmin: sessionUser.isSuperAdmin,
@@ -173,7 +175,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       throw e;
     }
   }
-  const { TenantRepo } = await import("./tenant-repo.ts");
   const reqRepo = new TenantRepo(tenantCtx.tenantId, tenantCtx.role, tenantCtx.isSuperAdmin);
 
   try {
@@ -208,14 +209,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           suggestThreshold: number;
           scanSchedule: "15m" | "hourly" | "daily" | null;
         };
-        try {
-          await reqRepo.setPreferences(p);
-        } catch (e) {
-          if (e instanceof AppError) {
-            return json({ error: e.message, code: e.code }, e.status);
-          }
-          throw e;
-        }
+        await reqRepo.setPreferences(p);
         return noContent();
       }
     }
@@ -316,14 +310,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json(await reqRepo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
       if (method === "POST") {
         const { action, detail } = (await req.json()) as { action: string; detail: string };
-        try {
-          await reqRepo.appendAudit(me, action, detail);
-        } catch (e) {
-          if (e instanceof AppError) {
-            return json({ error: e.message, code: e.code }, e.status);
-          }
-          throw e;
-        }
+        await reqRepo.appendAudit(me, action, detail);
         return noContent();
       }
     }

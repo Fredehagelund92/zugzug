@@ -9,6 +9,7 @@ process.env.ALLOWED_DOMAIN = "example.com";
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { pgRun } from "../src/pg.ts";
 import { provisionTenant } from "../src/tenant.ts";
+import { AppError } from "../src/errors.ts";
 
 const T_IDS = ["troute_a", "troute_b"];
 const U_IDS = ["u_route_member"];
@@ -38,7 +39,10 @@ async function setupUserWithMembership(opts: {
     [opts.userId, `${opts.userId}@example.com`],
   );
   for (const t of opts.tenants) {
-    await provisionTenant({ id: t.id, label: t.label }).catch(() => {});
+    await provisionTenant({ id: t.id, label: t.label }).catch((e) => {
+      if (e instanceof AppError && e.code === "ALREADY_EXISTS") return;
+      throw e;
+    });
     await pgRun(
       `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
        VALUES ($1, $2, $3, now())
@@ -79,7 +83,10 @@ test("GET /api/t/:slug/preferences for a workspace the user does not belong to â
     userId: "u_route_member",
     tenants: [{ id: "troute_a", label: "A", role: "admin" }],
   });
-  await provisionTenant({ id: "troute_b", label: "B" }).catch(() => {});
+  await provisionTenant({ id: "troute_b", label: "B" }).catch((e) => {
+    if (e instanceof AppError && e.code === "ALREADY_EXISTS") return;
+    throw e;
+  });
 
   const { handle } = await import("../src/server.ts");
   const req = new Request("http://localhost/api/t/troute_b/preferences", {
