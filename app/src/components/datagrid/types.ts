@@ -186,7 +186,12 @@ export interface DataGridProps<Row> {
    *  type-to-edit behavior is disabled so printable keys reach the host. */
   onCellKeyDown?: (
     e: React.KeyboardEvent,
-    ctx: { cursor: { rowKey: string; field: string } | null; startEdit: () => void },
+    ctx: {
+      cursor: { rowKey: string; field: string } | null;
+      /** Opens the editor on the cursor cell; `seed` pre-fills the typed
+       *  character so hosts can reconstruct type-to-edit selectively. */
+      startEdit: (seed?: string) => void;
+    },
   ) => void;
   /** Full-width detail row rendered beneath a data row when this returns
    *  non-null. The host owns which row is open (return null for the rest).

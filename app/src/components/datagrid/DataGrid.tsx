@@ -1216,7 +1216,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (!e.defaultPrevented && props.onCellKeyDown) {
         props.onCellKeyDown(e, {
           cursor: cur ? { rowKey: cur.rowKey, field: cur.field } : null,
-          startEdit: () => cursor.startEdit(),
+          startEdit: (seed?: string) => cursor.startEdit(seed),
         });
       }
     },

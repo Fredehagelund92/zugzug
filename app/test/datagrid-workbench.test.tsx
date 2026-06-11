@@ -124,6 +124,10 @@ describe("DataGrid renderRowDetail", () => {
     const pos = details[0]!.compareDocumentPosition(rowB!);
     // detail precedes row b
     expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // …and row a precedes the detail (detail can't render above its own row)
+    expect(
+      rowA!.compareDocumentPosition(details[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(container.textContent).toContain("Beta");
   });
 });
