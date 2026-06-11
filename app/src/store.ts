@@ -828,6 +828,22 @@ export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
     }, 400),
   );
 }
+/** Bulk CSV import: creates new records, updates field values on existing
+ *  keys (never renames labels). Returns server counts. */
+export async function importRows(
+  dimId: string,
+  rows: Array<{ key?: string; label?: string; fields?: Record<string, string | null> }>,
+): Promise<{ created: number; updated: number; skipped: number }> {
+  const res = await api<{ created: number; updated: number; skipped: number }>(
+    `/dimensions/${encodeURIComponent(dimId)}/import`,
+    { method: "POST", body: JSON.stringify({ rows }) },
+  );
+  await refreshDim(dimId);
+  await refreshAudit();
+  emit();
+  return res;
+}
+
 /** Set an enrichment field value on a canonical record. Applies optimistically
  *  (the cell flips in the same frame), then PUTs. The server normalises some
  *  types (number parsing, date casts, linked-key validation), so those types

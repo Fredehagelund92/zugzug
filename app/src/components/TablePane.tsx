@@ -13,6 +13,7 @@ import {
   addCanonical,
   renameCanonical,
   getCanonical,
+  importRows,
   mergeCanonical,
   retireCanonical,
   fetchVariants,
@@ -46,6 +47,8 @@ import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { toast } from "./Toast";
+import { prepareImport, type ParsedImport } from "../lib/csv";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
@@ -258,6 +261,21 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     if (cached) setLayout(cached);
     else void getGridLayout(activeId).then(setLayout);
   }, [activeId]);
+
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<ParsedImport | null>(null);
+  const onImportFile = async (file: File | null, input: HTMLInputElement) => {
+    input.value = ""; // allow re-picking the same file
+    if (!file) return;
+    const text = await file.text();
+    try {
+      setPendingImport(
+        prepareImport(text, { keyCol: dim.keyCol, dimension: dim.dimension, fields }),
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't parse that CSV.", "error");
+    }
+  };
 
   // ?focus=<key> — scroll the focused record into view (only when this pane is
   // the active one at mount; inactive panes are display:none so scrollIntoView
@@ -590,6 +608,20 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             <Button variant="ghost" size="sm" onClick={() => exportToCSV(dim)}>
               ↓ Export CSV
             </Button>
+          )}
+          {canEdit && (
+            <>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => void onImportFile(e.target.files?.[0] ?? null, e.target)}
+              />
+              <Button variant="ghost" size="sm" onClick={() => importFileRef.current?.click()}>
+                ↑ Import CSV
+              </Button>
+            </>
           )}
           <a
             href={`/api/dimensions/${dim.id}/snapshot.parquet`}
@@ -944,6 +976,38 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingImport !== null}
+        title={`Import into ${dim.dimension}?`}
+        body={
+          pendingImport && (
+            <ul className="flex flex-col gap-1 font-mono text-[12px]">
+              {pendingImport.summary.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+              <li className="mt-1 text-ink-3">
+                New keys are created; existing keys get field updates. Labels are never renamed.
+              </li>
+            </ul>
+          )
+        }
+        confirmLabel="Import"
+        onConfirm={async () => {
+          if (!pendingImport) return;
+          const toImport = pendingImport.rows;
+          setPendingImport(null);
+          try {
+            const r = await importRows(activeId, toImport);
+            toast(
+              `Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`,
+            );
+          } catch (err) {
+            toast(err instanceof Error ? err.message : "Import failed.", "error");
+          }
+        }}
+        onCancel={() => setPendingImport(null)}
+      />
 
       <ConfirmDialog
         open={bulkRemoveConfirm !== null}

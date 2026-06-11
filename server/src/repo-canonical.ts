@@ -481,6 +481,76 @@ export async function addCanonicalOne(
   await appendAuditAs(userId, "Added canonical", `${label} (${k})`, { tableId: dimId, rowKey: k });
 }
 
+export interface ImportRow {
+  key?: string;
+  label?: string;
+  fields?: Record<string, string | null>;
+}
+
+/** Bulk CSV import. New keys are created (with label + field values); existing
+ *  keys get field-value updates only — labels are never renamed here, so the
+ *  optimistic-concurrency version machinery stays out of the bulk path. */
+export async function importCanonical(
+  dimId: string,
+  rows: ImportRow[],
+  userId: string,
+): Promise<{ created: number; updated: number; skipped: number }> {
+  const m = await dimMeta(dimId);
+  if (!m) throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
+  const defs = await listFields(dimId);
+  const validFields = new Set(defs.map((f) => f.field));
+  const existing = new Set(
+    (
+      await pgAll<{ k: string }>(`SELECT ${qid(m.keyCol)} AS k FROM ${cq(m.dimTable)}`)
+    ).map((r) => String(r.k)),
+  );
+  let created = 0,
+    updated = 0,
+    skipped = 0;
+  for (const row of rows) {
+    const label = row.label?.trim() ?? "";
+    // Keys are preserved verbatim (they may be external warehouse IDs);
+    // only label-derived keys go through slug().
+    const key = row.key?.trim() || (label ? slug(label) : "");
+    if (!key) {
+      skipped++;
+      continue;
+    }
+    const fieldEntries = Object.entries(row.fields ?? {}).filter(([f]) => validFields.has(f));
+    if (existing.has(key)) {
+      if (fieldEntries.length === 0) {
+        skipped++;
+        continue;
+      }
+      for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v);
+      updated++;
+    } else {
+      if (!label) {
+        skipped++;
+        continue;
+      }
+      await pgTx(async (tx) => {
+        await tx.run(
+          `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
+           ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+          [key, label],
+        );
+        await seedVersionRow(tx, dimId, key, userId);
+      });
+      for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v);
+      existing.add(key);
+      created++;
+    }
+  }
+  await appendAuditAs(
+    userId,
+    "Imported CSV",
+    `${created} created · ${updated} updated · ${skipped} skipped`,
+    { tableId: dimId },
+  );
+  return { created, updated, skipped };
+}
+
 /** Rename a canonical's display label (the key is stable). */
 export async function renameCanonical(
   dimId: string,

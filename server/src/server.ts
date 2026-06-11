@@ -423,6 +423,19 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         };
         return json(await repo.deriveCanonical(id, table, column, nameColumn, {}, me));
       }
+      // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
+      if (seg[3] === "import" && seg.length === 4 && method === "POST") {
+        const denied = gateOrJson(sessionUser, "curate");
+        if (denied) return denied;
+        const { rows } = (await req.json()) as { rows: repo.ImportRow[] };
+        if (!Array.isArray(rows)) {
+          throw new AppError("VALIDATION_FAILED", "rows must be an array", 400);
+        }
+        if (rows.length > 10_000) {
+          throw new AppError("VALIDATION_FAILED", "too many rows (max 10000)", 400);
+        }
+        return json(await repo.importCanonical(id, rows, me));
+      }
       // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
         const denied = gateOrJson(sessionUser, "curate");
