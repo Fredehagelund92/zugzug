@@ -166,3 +166,134 @@ export function matchColumns(opts: {
     },
   ];
 }
+
+/** Structural row shape consumed by `crossDimColumns` — Triage's `CrossRow`
+ *  satisfies this without importing from a route file. */
+export interface CrossRowLike {
+  dimId: string;
+  dimName: string;
+  raw: string;
+  suggestion: string | null;
+  confidence: number;
+  status: "mapped" | "new" | "skipped";
+  target: string | null;
+  dimRows: number;
+}
+
+function TargetEditorCross({
+  row,
+  ctx,
+  options,
+}: {
+  row: CrossRowLike;
+  ctx: EditCtx<CrossRowLike>;
+  options: string[];
+}) {
+  const handle = useRef<ComboSelectHandle>(null);
+  const committedRef = useRef(false);
+  useEffect(() => {
+    handle.current?.open();
+  }, []);
+  return (
+    <ComboSelect
+      ref={handle}
+      options={options}
+      value={row.target}
+      suggestion={row.suggestion}
+      onPick={(t) => {
+        committedRef.current = true;
+        ctx.commit(t);
+      }}
+      onClose={() => {
+        if (!committedRef.current) ctx.cancel();
+      }}
+    />
+  );
+}
+
+export function crossDimColumns(opts: {
+  optionsFor: (dimId: string) => string[];
+  canEdit: boolean;
+}): ColumnDef<CrossRowLike>[] {
+  const { optionsFor, canEdit } = opts;
+  return [
+    {
+      field: "dimName",
+      label: "Table",
+      config: { type: "text" },
+      editable: false,
+      width: 130,
+      render: (r) => <Chip label={r.dimName} bucket="chip-3" />,
+    },
+    {
+      field: "raw",
+      label: "Source value",
+      config: { type: "text" },
+      editable: false,
+      pinnedLeft: true,
+      render: (r) => (
+        <span className="min-w-0">
+          <span className="block truncate font-mono text-[13px] text-ink">{r.raw}</span>
+          <span className="block font-mono text-[10px] text-ink-2 tabular-nums">
+            {r.dimRows.toLocaleString()} rows in warehouse
+          </span>
+        </span>
+      ),
+    },
+    {
+      field: "target",
+      label: "record",
+      config: { type: "text" },
+      editable: canEdit,
+      render: (r) =>
+        r.target ? (
+          <span className="truncate font-display text-[13px] text-ink">{r.target}</span>
+        ) : r.suggestion ? (
+          <span className="truncate font-mono text-[12px] text-ink-3">
+            {r.suggestion} <span className="text-accent">(suggested)</span>
+          </span>
+        ) : (
+          <span className="font-mono text-[12px] text-ink-3">—</span>
+        ),
+      edit: (r, ctx) => <TargetEditorCross row={r} ctx={ctx} options={optionsFor(r.dimId)} />,
+    },
+    {
+      field: "confidence",
+      label: "Confidence",
+      config: { type: "text" },
+      editable: false,
+      width: 110,
+      render: (r) =>
+        r.confidence > 0 ? (
+          <span className="flex items-center gap-2">
+            <span className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+              <span
+                className={cx("block h-full rounded-pill", confBar(r.confidence))}
+                style={{ width: `${r.confidence}%` }}
+              />
+            </span>
+            <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>
+              {r.confidence}
+            </span>
+          </span>
+        ) : (
+          <span className="font-mono text-[11px] text-ink-2">—</span>
+        ),
+    },
+    {
+      field: "status",
+      label: "Status",
+      config: { type: "text" },
+      editable: false,
+      width: 96,
+      render: (r) =>
+        r.status === "mapped" ? (
+          <Chip label="Mapped" bucket="chip-1" dot />
+        ) : r.status === "skipped" ? (
+          <Chip label="Skipped" bucket="chip-5" />
+        ) : (
+          <Chip label="New" bucket="chip-2" dot />
+        ),
+    },
+  ];
+}

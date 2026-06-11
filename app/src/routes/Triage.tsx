@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
-import { ComboSelect, type ComboSelectHandle } from "../components/ComboSelect";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
@@ -20,7 +19,8 @@ import {
   useCanEdit,
 } from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
-import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
+import { UndoStackProvider, useUndoStack, DataGrid, Chip } from "../components/datagrid";
+import { crossDimColumns } from "../components/modes/match-columns";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import { useAiHint, type AiHint } from "../lib/use-ai-hint";
 import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
@@ -44,11 +44,6 @@ type CrossRow = {
   status: RStatus;
   target: string | null;
 };
-
-const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
-const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
-const COLS_CROSS =
-  "grid grid-cols-[120px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
 // Escape a string for use inside a double-quoted CSS attribute selector.
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -385,111 +380,42 @@ interface CrossDimInboxProps {
 }
 
 function CrossDimInbox(p: CrossDimInboxProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Imperative handle attached to the focused row's ComboSelect so the M
-  // keybinding can open the picker without DOM querySelectoring. Only the
-  // currently-focused row receives this ref, so there's exactly one live
-  // attachment at any time.
-  const focusedComboRef = useRef<ComboSelectHandle | null>(null);
   const FILTERS: { k: Filter; label: string; n: number }[] = [
     { k: "new", label: "Needs review", n: p.counts.new },
     { k: "all", label: "All", n: p.counts.all },
     { k: "mapped", label: "Mapped", n: p.counts.mapped },
   ];
-  const curKey = p.cursor ? `${p.cursor.dimId}::${p.cursor.raw}` : null;
-  const curIdx = curKey ? p.rows.findIndex((r) => `${r.dimId}::${r.raw}` === curKey) : -1;
 
-  const moveTo = (idx: number) => {
-    if (p.rows.length === 0) return;
-    const clamped = Math.max(0, Math.min(p.rows.length - 1, idx));
-    const r = p.rows[clamped];
-    p.setCursor({ dimId: r.dimId, raw: r.raw });
-    // keyboard-driven moves keep the row in view — same contract as DataGrid
-    requestAnimationFrame(() => {
-      containerRef.current
-        ?.querySelector(`[data-row-key="${attrEsc(`${r.dimId}::${r.raw}`)}"]`)
-        ?.scrollIntoView({ block: "nearest" });
-    });
-  };
-  const move = (delta: number) => moveTo(curIdx < 0 ? 0 : curIdx + delta);
+  // Per-dim option list — DataGrid asks for it per-row via the factory closure
+  const columns = useMemo(
+    () =>
+      crossDimColumns({
+        optionsFor: (dimId) => p.dimById.get(dimId)?.canonical.map((c) => c.label) ?? [],
+        canEdit: p.canEdit,
+      }),
+    [p.dimById, p.canEdit],
+  );
+
+  // Bridge DataGrid's internal cursor to p.cursor so the parent's useAiHint
+  // (keyed off the focused row's dimId+raw) still fires on arrow navigation.
+  const onCursorChange = useCallback(
+    (c: { rowKey: string; field: string } | null) => {
+      if (!c) {
+        p.setCursor(null);
+        return;
+      }
+      const [dimId, ...rest] = c.rowKey.split("::");
+      // raw values can contain "::"; rejoin everything after the first delim.
+      if (!dimId) return;
+      p.setCursor({ dimId, raw: rest.join("::") });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [p.setCursor],
+  );
 
   return (
     <div
-      ref={containerRef}
-      tabIndex={0}
-      className="zz-rise flex min-h-0 flex-1 flex-col rounded-lg border border-line bg-surface outline-none focus:ring-1 focus:ring-accent/40"
-      onKeyDown={(e) => {
-        if (e.key === "ArrowDown" || e.key === "j") {
-          e.preventDefault();
-          move(1);
-          return;
-        }
-        if (e.key === "ArrowUp" || e.key === "k") {
-          e.preventDefault();
-          move(-1);
-          return;
-        }
-        // DataGrid-parity navigation so shortcuts learned in Records work here
-        if (e.key === "Home") {
-          e.preventDefault();
-          moveTo(0);
-          return;
-        }
-        if (e.key === "End") {
-          e.preventDefault();
-          moveTo(p.rows.length - 1);
-          return;
-        }
-        if (e.key === "PageDown") {
-          e.preventDefault();
-          move(10);
-          return;
-        }
-        if (e.key === "PageUp") {
-          e.preventDefault();
-          move(-10);
-          return;
-        }
-        if (!p.cursor) return;
-        if (e.key === "Escape") {
-          e.preventDefault();
-          p.setCursor(null);
-          return;
-        }
-        if (p.canEdit && e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
-          e.preventDefault();
-          focusedComboRef.current?.open();
-          return;
-        }
-        if (p.canEdit && (e.key === "a" || e.key === "A")) {
-          e.preventDefault();
-          p.accept(p.cursor.dimId, p.cursor.raw);
-          return;
-        }
-        if (p.canEdit && (e.key === "s" || e.key === "S")) {
-          e.preventDefault();
-          p.skip(p.cursor.dimId, p.cursor.raw);
-          return;
-        }
-        if (e.key === "n" || e.key === "N") {
-          e.preventDefault();
-          p.advanceNext(p.cursor.dimId, p.cursor.raw);
-          return;
-        }
-        // M opens the focused row's ComboSelect for manual pick — matches the
-        // single-dim workbench's M binding. Uses the focused row's imperative
-        // handle (set by ref attachment below), not DOM querying.
-        if (p.canEdit && (e.key === "m" || e.key === "M")) {
-          e.preventDefault();
-          focusedComboRef.current?.open();
-          return;
-        }
-        if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
-          e.preventDefault();
-          p.commitAll();
-          return;
-        }
-      }}
+      className="zz-rise flex min-h-0 flex-1 flex-col rounded-lg border border-line bg-surface"
       style={{ animationDelay: "150ms" }}
     >
       {/* toolbar — sticky filter chips */}
@@ -512,29 +438,13 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           ))}
         </div>
         <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
-          ranked by impact · ↑↓/J/K navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
+          ranked by impact · ↑↓ navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
         </span>
       </div>
 
-      {/* scroll region — column header sticks to its top, rows flow, footer
-          (CrossDimFooter below) is pinned at the panel bottom. */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* column header — hidden on mobile, shown on md+ */}
-        <div
-          className={cx(
-            COLS_CROSS,
-            "sticky top-0 z-10 hidden border-b border-line bg-surface px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 backdrop-blur-sm md:grid",
-          )}
-        >
-          <span>Dimension</span>
-          <span>Source value</span>
-          <span />
-          <span>Record</span>
-          <span>Confidence</span>
-          <span>Status</span>
-        </div>
-
-        {/* rows */}
+      {/* scroll region — DataGrid owns its own virtualization + sticky header;
+          CrossDimFooter pins to the panel bottom. */}
+      <div className="flex min-h-0 flex-1 flex-col">
         {p.rows.length === 0 ? (
           <>
             {p.filter === "new" && (
@@ -570,169 +480,71 @@ function CrossDimInbox(p: CrossDimInboxProps) {
             )}
           </>
         ) : (
-          p.rows.slice(0, 500).map((r) => {
-            const key = `${r.dimId}::${r.raw}`;
-            const focused = curKey === key;
-            const dim = p.dimById.get(r.dimId);
-            const options = dim?.canonical.map((c) => c.label) ?? [];
-            const external = dim?.keyKind === "external_id";
-            return (
-              <div
-                key={key}
-                data-row-key={key}
-                className={cx(
-                  "border-b border-line px-4 transition-colors hover:bg-hover",
-                  focused && "ring-2 ring-inset ring-accent bg-accent-wash/40",
-                )}
-                onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
-              >
-                {/* Desktop row — 6-col grid */}
-                <div className={cx(COLS_CROSS, "hidden py-2.5 md:grid")}>
-                  <span>
-                    <Chip label={r.dimName} bucket="chip-3" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate font-mono text-[13px] text-ink">{r.raw}</div>
-                    <div className="font-mono text-[10px] text-ink-2 tabular-nums">
-                      {r.dimRows.toLocaleString()} rows in warehouse
-                    </div>
-                  </div>
-                  <IconArrowRight className="h-4 w-4 text-ink-3" />
-                  <ComboSelect
-                    ref={focused ? focusedComboRef : undefined}
-                    options={options}
-                    value={r.target}
-                    suggestion={r.suggestion ?? undefined}
-                    allowCreate={!external}
-                    onPick={p.canEdit ? (t) => p.pick(r.dimId, r.raw, t) : undefined}
-                    disabled={!p.canEdit}
-                  />
-                  <div>
-                    {r.confidence > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
-                          <div
-                            className={cx("h-full rounded-pill", confBar(r.confidence))}
-                            style={{ width: `${r.confidence}%` }}
-                          />
-                        </div>
-                        <span
-                          className={cx(
-                            "font-mono text-[11px] tabular-nums",
-                            confText(r.confidence),
-                          )}
-                          title={
-                            focused && p.aiHint.hint?.reasoning
-                              ? `${r.confidence}% · ${p.aiHint.hint.reasoning}`
-                              : `${r.confidence}%`
-                          }
-                        >
-                          {r.confidence}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="font-mono text-[11px] text-ink-2">—</span>
-                    )}
-                  </div>
-                  <div>
-                    {r.status === "mapped" ? (
-                      <Chip label="Mapped" bucket="chip-1" dot />
-                    ) : r.status === "skipped" ? (
-                      <Chip label="Skipped" bucket="chip-5" />
-                    ) : (
-                      <Chip label="New" bucket="chip-2" dot />
-                    )}
-                  </div>
-                </div>
-
-                {/* Mobile card — stacked layout */}
-                <div className="flex flex-col gap-2 py-3 md:hidden">
-                  {/* row 1: dim chip + status badge */}
-                  <div className="flex items-center justify-between gap-2">
-                    <Chip label={r.dimName} bucket="chip-3" />
-                    <div className="shrink-0">
-                      {r.status === "mapped" ? (
-                        <Chip label="Mapped" bucket="chip-1" dot />
-                      ) : r.status === "skipped" ? (
-                        <Chip label="Skipped" bucket="chip-5" />
-                      ) : (
-                        <Chip label="New" bucket="chip-2" dot />
-                      )}
-                    </div>
-                  </div>
-                  {/* row 2: raw value + warehouse row count */}
-                  <div className="min-w-0">
-                    <div className="break-all font-mono text-[13px] text-ink">{r.raw}</div>
-                    <div className="font-mono text-[10px] text-ink-2 tabular-nums">
-                      {r.dimRows.toLocaleString()} rows in warehouse
-                    </div>
-                  </div>
-                  {/* row 3: confidence bar + combo target picker */}
-                  <div className="flex items-center gap-3">
-                    {r.confidence > 0 ? (
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
-                          <div
-                            className={cx("h-full rounded-pill", confBar(r.confidence))}
-                            style={{ width: `${r.confidence}%` }}
-                          />
-                        </div>
-                        <span
-                          className={cx(
-                            "font-mono text-[11px] tabular-nums",
-                            confText(r.confidence),
-                          )}
-                        >
-                          {r.confidence}%
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="shrink-0 font-mono text-[11px] text-ink-2">—</span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <ComboSelect
-                        ref={focused ? focusedComboRef : undefined}
-                        options={options}
-                        value={r.target}
-                        suggestion={r.suggestion ?? undefined}
-                        allowCreate={!external}
-                        onPick={p.canEdit ? (t) => p.pick(r.dimId, r.raw, t) : undefined}
-                        disabled={!p.canEdit}
-                      />
-                    </div>
-                  </div>
-                  {/* row 4: inline action buttons — only on focused row */}
-                  {focused && p.canEdit && (
-                    <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        disabled={!r.suggestion && !p.aiHint.hint?.suggestion}
-                        onClick={() => p.accept(r.dimId, r.raw)}
-                      >
-                        Accept
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => p.skip(r.dimId, r.raw)}>
-                        Skip
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {focused && !r.target && (
-                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
-                )}
+          <DataGrid<CrossRow>
+            rows={p.rows}
+            rowKey={(r) => `${r.dimId}::${r.raw}`}
+            columns={columns}
+            getValue={(r, field) => (r as unknown as Record<string, unknown>)[field]}
+            onCursorChange={onCursorChange}
+            onCommit={
+              p.canEdit
+                ? async (rowKey, field, value) => {
+                    if (field !== "target" || typeof value !== "string" || !value) return;
+                    const [dimId, ...rest] = rowKey.split("::");
+                    if (!dimId) return;
+                    p.pick(dimId, rest.join("::"), value);
+                  }
+                : undefined
+            }
+            onCellKeyDown={(e, ctx) => {
+              if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                p.commitAll();
+                return;
+              }
+              const rk = ctx.cursor?.rowKey;
+              if (!rk) return;
+              const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+              if (!plain) return;
+              const [dimId, ...rest] = rk.split("::");
+              if (!dimId) return;
+              const raw = rest.join("::");
+              const k = e.key.toLowerCase();
+              if (p.canEdit && k === "a") {
+                e.preventDefault();
+                p.accept(dimId, raw);
+              } else if (p.canEdit && k === "s") {
+                e.preventDefault();
+                p.skip(dimId, raw);
+              } else if (p.canEdit && k === "m") {
+                e.preventDefault();
+                ctx.startEdit();
+              } else if (k === "n") {
+                e.preventDefault();
+                p.advanceNext(dimId, raw);
+              }
+            }}
+            renderRowDetail={(r) => {
+              const key = `${r.dimId}::${r.raw}`;
+              const isCursor = p.cursor && `${p.cursor.dimId}::${p.cursor.raw}` === key;
+              if (!isCursor || r.target) return null;
+              return <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />;
+            }}
+            empty={
+              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+                no values in this view
               </div>
-            );
-          })
+            }
+          />
         )}
       </div>
       {/* /scroll region */}
 
-      {/* footer — multi-dim commit */}
       <CrossDimFooter p={p} />
     </div>
   );
 }
+
 
 // Footer + expandable review panel. Split out so the review panel state is
 // scoped tightly and the cross-dim grid body stays readable.

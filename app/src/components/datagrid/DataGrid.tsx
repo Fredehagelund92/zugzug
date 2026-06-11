@@ -712,6 +712,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor.cursor?.rowKey, cursor.cursor?.field]);
 
+  // ── Cursor mirror for hosts that key features off the focused row ─────────
+  const onCursorChange = props.onCursorChange;
+  useEffect(() => {
+    if (!onCursorChange) return;
+    onCursorChange(
+      cursor.cursor ? { rowKey: cursor.cursor.rowKey, field: cursor.cursor.field } : null,
+    );
+  }, [cursor.cursor?.rowKey, cursor.cursor?.field, onCursorChange]);
+
   // ── Publish self cursor position to presence when cursor moves ────────────
   useEffect(() => {
     if (!presence || !cursor.cursor) return;
