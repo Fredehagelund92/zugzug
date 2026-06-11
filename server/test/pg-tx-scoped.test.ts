@@ -5,7 +5,7 @@ process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect } from "bun:test";
-import { pgTxScoped } from "../src/pg.ts";
+import { pgTxScoped, pgGet } from "../src/pg.ts";
 
 test("pgTxScoped exposes app.tenant_id via current_setting inside the tx", async () => {
   const seen = await pgTxScoped("default", async (tx) => {
@@ -45,7 +45,6 @@ test("pgTxScoped rolls back if fn throws", async () => {
   expect(thrown?.message).toBe("rollback me");
 
   // Re-check outside the tx — row must not exist.
-  const { pgGet } = await import("../src/pg.ts");
   const row = await pgGet<{ id: string }>(
     `SELECT id FROM "zugzug_app"."audit_log" WHERE id = $1`,
     [probeId],
