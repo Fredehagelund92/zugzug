@@ -238,12 +238,14 @@ function writeSettled(): void {
   }, 1500);
 }
 
+const subscribeSync = (l: () => void) => {
+  syncListeners.add(l);
+  return () => syncListeners.delete(l);
+};
+
 export function useSyncStatus(): SyncStatus {
   return useSyncExternalStore(
-    (l) => {
-      syncListeners.add(l);
-      return () => syncListeners.delete(l);
-    },
+    subscribeSync,
     () => syncStatus,
     () => syncStatus,
   );
