@@ -10,24 +10,30 @@ import {
   index,
   uniqueIndex,
   text,
+  check,
 } from "drizzle-orm/pg-core";
 
 const app = pgSchema("zugzug_app");
 
-export const dimension = app.table("dimension", {
-  id:          varchar("id").primaryKey(),
-  label:       varchar("label").notNull(),
-  dim_table:   varchar("dim_table").notNull(),
-  map_table:   varchar("map_table").notNull(),
-  key_col:     varchar("key_col").notNull(),
-  created_at:  timestamp("created_at").notNull(),
-  key_kind:    varchar("key_kind"),
-  name_table:  varchar("name_table"),
-  name_id_col: varchar("name_id_col"),
-  name_col:    varchar("name_col"),
-  description: varchar("description"),
-  color:       varchar("color"),
-});
+export const dimension = app.table(
+  "dimension",
+  {
+    id:          varchar("id").primaryKey(),
+    label:       varchar("label").notNull(),
+    dim_table:   varchar("dim_table").notNull(),
+    map_table:   varchar("map_table").notNull(),
+    key_col:     varchar("key_col").notNull(),
+    created_at:  timestamp("created_at").notNull(),
+    key_kind:    varchar("key_kind"),
+    name_table:  varchar("name_table"),
+    name_id_col: varchar("name_id_col"),
+    name_col:    varchar("name_col"),
+    description: varchar("description"),
+    color:       varchar("color"),
+    tenant_id:   varchar("tenant_id").default("default"),
+  },
+  (t) => [index("dimension_tenant_idx").on(t.tenant_id)],
+);
 
 export const dimensionSource = app.table(
   "dimension_source",
@@ -35,6 +41,7 @@ export const dimensionSource = app.table(
     dim_id:        varchar("dim_id").notNull(),
     source_table:  varchar("source_table").notNull(),
     source_column: varchar("source_column").notNull(),
+    tenant_id:     varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
 );
@@ -49,6 +56,7 @@ export const dimensionField = app.table(
     created_at:   timestamp("created_at").notNull(),
     field_config: varchar("field_config"),
     description:  varchar("description"),
+    tenant_id:    varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.field] })],
 );
@@ -64,6 +72,7 @@ export const sourceStat = app.table(
     distinct_values: bigint("distinct_values", { mode: "number" }).notNull(),
     unmapped:        bigint("unmapped", { mode: "number" }).notNull(),
     scanned_at:      timestamp("scanned_at").notNull(),
+    tenant_id:       varchar("tenant_id").default("default"),
   },
   (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
 );
@@ -78,8 +87,12 @@ export const draft = app.table(
     target_key:   varchar("target_key"),
     user_id:      varchar("user_id").notNull(),
     created_at:   timestamp("created_at").notNull(),
+    tenant_id:    varchar("tenant_id").default("default"),
   },
-  (t) => [primaryKey({ columns: [t.dim_id, t.raw, t.user_id] })],
+  (t) => [
+    primaryKey({ columns: [t.dim_id, t.raw, t.user_id] }),
+    index("draft_tenant_idx").on(t.tenant_id),
+  ],
 );
 
 export const auditLog = app.table(
@@ -92,11 +105,13 @@ export const auditLog = app.table(
     detail:     varchar("detail").notNull(),
     table_id:   varchar("table_id"),
     row_key:    varchar("row_key"),
+    tenant_id:  varchar("tenant_id").default("default"),
   },
   (t) => [
     index("audit_log_table_row_recency_idx")
       .on(t.table_id, t.row_key, t.created_at.desc())
       .where(sql`${t.table_id} IS NOT NULL`),
+    index("audit_log_tenant_time_idx").on(t.tenant_id, t.created_at.desc()),
   ],
 );
 
@@ -110,7 +125,8 @@ export const users = app.table(
     google_sub:    varchar("google_sub"),
     password_hash: varchar("password_hash"),
     auth_provider: varchar("auth_provider").notNull().default("password"),
-    role:          varchar("role").notNull().default("editor"),
+    role:           varchar("role").notNull().default("editor"),
+    is_super_admin: boolean("is_super_admin").notNull().default(false),
   },
   (t) => [
     uniqueIndex("users_email_unique").on(t.email).where(sql`email IS NOT NULL`),
@@ -138,6 +154,7 @@ export const apiTokens = app.table(
 export const activeSessions = app.table("active_sessions", {
   user_id:   varchar("user_id").primaryKey(),
   last_seen: timestamp("last_seen").notNull(),
+  tenant_id: varchar("tenant_id").default("default"),
 });
 
 export const allowedEmails = app.table("allowed_emails", {
@@ -162,6 +179,7 @@ export const preferences = app.table("preferences", {
   suggest_threshold: integer("suggest_threshold").notNull(),
   scan_schedule:     varchar("scan_schedule", { length: 10 }),
   updated_at:        timestamp("updated_at").notNull(),
+  tenant_id:         varchar("tenant_id").default("default"),
 });
 
 export const userGridLayout = app.table(
@@ -186,6 +204,7 @@ export const aiHintCache = app.table(
     model:      varchar("model").notNull(),
     created_at: timestamp("created_at").notNull(),
     hits:       integer("hits").notNull().default(sql`0`),
+    tenant_id:  varchar("tenant_id").default("default"),
   },
   (t) => [
     primaryKey({ columns: [t.dim_id, t.raw] }),
@@ -204,6 +223,7 @@ export const scanRuns = app.table(
     rows_scanned:  integer("rows_scanned"),
     duration_ms:   integer("duration_ms"),
     error_message: text("error_message"),
+    tenant_id:     varchar("tenant_id").default("default"),
   },
   (t) => [
     index("scan_run_source_id_idx").on(t.source_id),
@@ -221,9 +241,64 @@ export const canonicalVersion = app.table(
     /** Semantically users.id. No FK constraint — matches existing convention
      *  (repo-canonical.ts uses userId strings without enforced FKs). */
     updated_by: varchar("updated_by").notNull(),
+    tenant_id:  varchar("tenant_id").default("default"),
   },
   (t) => [
     primaryKey({ columns: [t.dim_id, t.key] }),
     index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
+  ],
+);
+
+/* ---------- Multi-tenant (PR 1 of 5) ---------- */
+
+export const tenant = app.table(
+  "tenant",
+  {
+    id:           varchar("id").primaryKey(),
+    slug:         varchar("slug").notNull(),
+    label:        varchar("label").notNull(),
+    warehouse_id: varchar("warehouse_id").notNull(),
+    created_at:   timestamp("created_at").notNull(),
+    deleted_at:   timestamp("deleted_at"),
+  },
+  (t) => [
+    // slug is the URL segment — must be globally unique to route to one tenant.
+    uniqueIndex("tenant_slug_unique").on(t.slug),
+    // 21-char cap on id keeps room for dim_${tenantId}_${dimSlug} under Postgres's
+    // 63-byte identifier limit (4 + 21 + 1 + 37 = 63).
+    check("tenant_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_]{0,20}$'`),
+    // slug is the URL segment; same constraint shape.
+    check("tenant_slug_format", sql`${t.slug} ~ '^[a-z][a-z0-9_]{0,20}$'`),
+  ],
+);
+
+export const tenantMember = app.table(
+  "tenant_member",
+  {
+    tenant_id:  varchar("tenant_id").notNull(),
+    user_id:    varchar("user_id").notNull(),
+    role:       varchar("role").notNull(),
+    created_at: timestamp("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.user_id] }),
+    index("tenant_member_user_idx").on(t.user_id),
+    check("tenant_member_role_chk", sql`${t.role} IN ('admin', 'editor', 'viewer')`),
+  ],
+);
+
+export const tenantInvite = app.table(
+  "tenant_invite",
+  {
+    tenant_id:  varchar("tenant_id").notNull(),
+    email:      varchar("email").notNull(),
+    role:       varchar("role").notNull(),
+    invited_by: varchar("invited_by").notNull(),
+    invited_at: timestamp("invited_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.email] }),
+    index("tenant_invite_email_idx").on(t.email),
+    check("tenant_invite_role_chk", sql`${t.role} IN ('admin', 'editor', 'viewer')`),
   ],
 );
