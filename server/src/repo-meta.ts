@@ -108,7 +108,11 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
   const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
   if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
 
-  // Try UPDATE first; if no row exists for this tenant, INSERT one.
+  // Race window: two concurrent setPreferences calls for a tenant with no existing
+  // row can both fall through to the INSERT and collide on the PK (or both succeed
+  // with last-writer-wins). PR2b adds UNIQUE(tenant_id) + ON CONFLICT DO UPDATE.
+  // Acceptable for PR2a — two simultaneous admin saves for one workspace is
+  // vanishingly rare in an internal tool.
   const rows = await pgAll(
     `UPDATE ${pg("preferences")}
        SET publish_threshold = $1, suggest_threshold = $2,
