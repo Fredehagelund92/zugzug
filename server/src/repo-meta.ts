@@ -104,31 +104,27 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
   };
 }
 
-export async function setPreferences(p: Preferences, tenantId: string = "default"): Promise<void> {
+export async function setPreferences(
+  p: Preferences,
+  tenantId: string = "default",
+): Promise<void> {
   const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
   if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
 
-  // Race window: two concurrent setPreferences calls for a tenant with no existing
-  // row can both fall through to the INSERT and collide on the PK (or both succeed
-  // with last-writer-wins). PR2b adds UNIQUE(tenant_id) + ON CONFLICT DO UPDATE.
-  // Acceptable for PR2a — two simultaneous admin saves for one workspace is
-  // vanishingly rare in an internal tool.
-  const rows = await pgAll(
-    `UPDATE ${pg("preferences")}
-       SET publish_threshold = $1, suggest_threshold = $2,
-           scan_schedule = $3, updated_at = current_timestamp
-     WHERE tenant_id = $4
-     RETURNING id`,
+  await pgRun(
+    `INSERT INTO ${pg("preferences")}
+       (id, publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
+     VALUES (
+       (SELECT COALESCE(MAX(id), 0) + 1 FROM ${pg("preferences")}),
+       $1, $2, $3, current_timestamp, $4
+     )
+     ON CONFLICT (tenant_id) DO UPDATE
+       SET publish_threshold = EXCLUDED.publish_threshold,
+           suggest_threshold = EXCLUDED.suggest_threshold,
+           scan_schedule     = EXCLUDED.scan_schedule,
+           updated_at        = EXCLUDED.updated_at`,
     [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
   );
-  if (rows.length === 0) {
-    await pgRun(
-      `INSERT INTO ${pg("preferences")}
-         (id, publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
-       VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM ${pg("preferences")}), $1, $2, $3, current_timestamp, $4)`,
-      [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
-    );
-  }
 }
 
 /* ---- per-user grid layout (column widths / order / hidden) ---- */
