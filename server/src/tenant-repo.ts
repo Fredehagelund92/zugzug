@@ -364,12 +364,7 @@ export class TenantRepo {
     return this.withClearCtx(() => repoScan.scanStatus(scope));
   }
 
-  searchCatalog(opts: {
-    q?: string;
-    schema?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<{
+  searchCatalog(opts: { q?: string; schema?: string; limit?: number; offset?: number }): Promise<{
     rows: CatalogTable[];
     total: number;
     schemas: { schema: string; tables: number }[];
