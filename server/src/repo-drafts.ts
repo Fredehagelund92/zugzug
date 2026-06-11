@@ -25,7 +25,7 @@ import { isWritable } from "./warehouse/adapter.ts";
 import type { ValueProvenance } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
-export async function listDrafts(dimId: string): Promise<Draft[]> {
+export async function listDrafts(dimId: string, tenantId: string): Promise<Draft[]> {
   const rows = await pgAll<{
     dimId: string;
     raw: string;
@@ -39,8 +39,8 @@ export async function listDrafts(dimId: string): Promise<Draft[]> {
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
-     FROM ${pg("draft")} WHERE dim_id = $1 ORDER BY created_at DESC`,
-    [dimId],
+     FROM ${pg("draft")} WHERE dim_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
+    [dimId, tenantId],
   );
   if (rows.length === 0) return [];
 
@@ -70,23 +70,30 @@ export async function saveDraft(
   targetLabel: string | null,
   targetKey: string | null,
   userId: string,
+  tenantId: string,
 ): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("draft")} (dim_id, raw, status, target_label, target_key, user_id, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp)
+    `INSERT INTO ${pg("draft")} (dim_id, raw, status, target_label, target_key, user_id, created_at, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7)
      ON CONFLICT (dim_id, raw, user_id) DO UPDATE
        SET status = EXCLUDED.status, target_label = EXCLUDED.target_label,
-           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at`,
-    [dimId, raw, status, targetLabel, targetKey, userId],
+           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at,
+           tenant_id = EXCLUDED.tenant_id`,
+    [dimId, raw, status, targetLabel, targetKey, userId, tenantId],
   );
 }
 
-export async function discardDraft(dimId: string, raw: string, userId: string): Promise<void> {
-  await pgRun(`DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3`, [
-    dimId,
-    raw,
-    userId,
-  ]);
+export async function discardDraft(
+  dimId: string,
+  raw: string,
+  userId: string,
+  tenantId: string,
+): Promise<void> {
+  await pgRun(
+    `DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4`,
+    [dimId, raw, userId, tenantId],
+  );
+  await appendAuditAs(userId, "discard_draft", `${dimId}: ${raw}`, { tenantId });
 }
 
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
@@ -94,6 +101,7 @@ export async function discardDraft(dimId: string, raw: string, userId: string): 
 export async function commit(
   dimId: string,
   userId: string,
+  tenantId: string,
 ): Promise<{
   committed: number;
   rowsRecovered: number;
@@ -101,8 +109,8 @@ export async function commit(
 }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label
-     FROM ${pg("dimension")} WHERE id = $1`,
-    [dimId],
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
   );
   if (!meta) return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
   const key = qid(meta.keyCol);
@@ -112,46 +120,52 @@ export async function commit(
 
   const approved = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${DRAFT}
-     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId],
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId, tenantId],
   );
   const committed = Number(approved?.n ?? 0);
   if (!committed) return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
-  const rowsRecovered = await rowsForUnmappedDrafts(dimId, meta.mapTable);
+  const rowsRecovered = await rowsForUnmappedDrafts(dimId, tenantId, meta.mapTable);
 
   // Capture distinct target_keys BEFORE the tx so they're available after
   // the draft rows are deleted inside the transaction.
   const committedRows = await pgAll<{ target_key: string }>(
     `SELECT DISTINCT target_key FROM ${DRAFT}
-     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId],
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId, tenantId],
   );
 
   // Snapshot approved drafts BEFORE the tx so we can pass them to the
   // warehouse adapter after the Postgres commit succeeds.
   const approvedDrafts = await pgAll<{ raw: string; key: string; label: string | null }>(
     `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
-     WHERE dim_id = $1 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId],
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId, tenantId],
   );
 
+  // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
+  // stays per-tenant-implicit (dim ids are globally unique → effectively
+  // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
   await pgTx(async ({ run }) => {
     await run(
       `INSERT INTO ${DIMT} (${key}, label)
        SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
-       WHERE d.dim_id = $1 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+       WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)`,
-      [dimId],
+      [dimId, tenantId],
     );
     await run(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT d.raw, d.target_key FROM ${DRAFT} d
-       WHERE d.dim_id = $1 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+       WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`,
-      [dimId],
+      [dimId, tenantId],
     );
-    await run(`DELETE FROM ${DRAFT} WHERE dim_id = $1 AND status = 'mapped'`, [dimId]);
+    await run(
+      `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
+      [dimId, tenantId],
+    );
   });
 
   // Per-row audit: one entry per distinct target_key so each canonical row
@@ -160,6 +174,7 @@ export async function commit(
     await appendAuditAs(userId, "Committed mapping", `→ ${row.target_key}`, {
       tableId: dimId,
       rowKey: row.target_key,
+      tenantId,
     });
   }
 
@@ -167,6 +182,7 @@ export async function commit(
     userId,
     "Committed",
     `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
+    { tenantId },
   );
 
   // After Postgres commit: if the warehouse adapter is writable, attempt the
@@ -183,7 +199,9 @@ export async function commit(
     try {
       await adapter.ensureCanonicalTables(dimSpec);
       await adapter.commitCanonical(dimSpec, approvedDrafts);
-      await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`);
+      await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`, {
+        tenantId,
+      });
       warehouseSynced = "synced";
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -191,6 +209,7 @@ export async function commit(
         userId,
         "Warehouse sync failed",
         `${committed} → ${meta.mapTable}: ${msg}`,
+        { tenantId },
       );
       warehouseSynced = "failed";
     }
@@ -216,8 +235,12 @@ export async function commit(
 }
 
 /** Warehouse rows for raws that have a mapped draft but aren't yet in the map. */
-async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<number> {
-  const sources = await liveSources(dimId);
+async function rowsForUnmappedDrafts(
+  dimId: string,
+  tenantId: string,
+  mapTable: string,
+): Promise<number> {
+  const sources = await liveSources(dimId, tenantId);
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values with per-source row counts.
@@ -232,8 +255,8 @@ async function rowsForUnmappedDrafts(dimId: string, mapTable: string): Promise<n
 
   // Postgres: draft raws for this dimension with status=mapped
   const draftRows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${pg("draft")} WHERE dim_id = $1 AND status = 'mapped'`,
-    [dimId],
+    `SELECT raw FROM ${pg("draft")} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
+    [dimId, tenantId],
   );
   const draftSet = new Set(draftRows.map((r) => r.raw.toLowerCase()));
 
