@@ -88,6 +88,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
   }
 
+  // /api/t/:slug/... strip the /t/:slug prefix so the existing route table matches.
+  // We capture the slug to thread into tenant resolution after the session gate.
+  let tenantSlugFromPath: string | null = null;
+  if (seg[0] === "api" && seg[1] === "t" && seg.length >= 3) {
+    tenantSlugFromPath = decodeURIComponent(seg[2]!);
+    seg.splice(1, 2); // remove "t" and the slug
+  }
+
   if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
 
   // Auth routes — no session required for signup/login/logout/config/oidc/dev
@@ -140,6 +148,34 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   const me = sessionUser.id;
   setUid(me);
 
+  // Resolve the tenant context for this request. /api/admin/* and /api/auth/*
+  // bypass this — admin handles its own auth, auth routes ran earlier.
+  let tenantCtx: { tenantId: string; role: import("./auth.ts").Role; isSuperAdmin: boolean };
+  if (seg[1] === "admin") {
+    if (!sessionUser.isSuperAdmin) {
+      return json({ error: "forbidden", reason: "super_admin_required" }, 403);
+    }
+    tenantCtx = { tenantId: "*", role: "admin", isSuperAdmin: true };
+  } else {
+    try {
+      const pathnameForCtx = tenantSlugFromPath
+        ? `/api/t/${tenantSlugFromPath}/_`
+        : pathname;
+      tenantCtx = await (await import("./tenant-middleware.ts")).resolveTenantContext({
+        pathname: pathnameForCtx,
+        user: sessionUser,
+        isSuperAdmin: sessionUser.isSuperAdmin,
+      });
+    } catch (e) {
+      if (e instanceof AppError) {
+        return json({ error: e.message, code: e.code }, e.status);
+      }
+      throw e;
+    }
+  }
+  const { TenantRepo } = await import("./tenant-repo.ts");
+  const reqRepo = new TenantRepo(tenantCtx.tenantId, tenantCtx.role, tenantCtx.isSuperAdmin);
+
   try {
     // POST /api/auth/change-password (authenticated)
     if (seg[1] === "auth" && seg[2] === "change-password" && method === "POST") {
@@ -165,16 +201,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
-      if (method === "GET") return json(await repo.getPreferences());
+      if (method === "GET") return json(await reqRepo.getPreferences());
       if (method === "PUT") {
-        const denied = gateOrJson(sessionUser, "manage_adapter");
-        if (denied) return denied;
         const p = (await req.json()) as {
           publishThreshold: number;
           suggestThreshold: number;
           scanSchedule: "15m" | "hourly" | "daily" | null;
         };
-        await repo.setPreferences(p);
+        try {
+          await reqRepo.setPreferences(p);
+        } catch (e) {
+          if (e instanceof AppError) {
+            return json({ error: e.message, code: e.code }, e.status);
+          }
+          throw e;
+        }
         return noContent();
       }
     }
@@ -272,12 +313,17 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     // GET /api/audit ; POST /api/audit {action, detail}
     if (seg[1] === "audit" && seg.length === 2) {
       if (method === "GET")
-        return json(await repo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
+        return json(await reqRepo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
       if (method === "POST") {
-        const denied = gateOrJson(sessionUser, "curate");
-        if (denied) return denied;
         const { action, detail } = (await req.json()) as { action: string; detail: string };
-        await repo.appendAuditAs(me, action, detail);
+        try {
+          await reqRepo.appendAudit(me, action, detail);
+        } catch (e) {
+          if (e instanceof AppError) {
+            return json({ error: e.message, code: e.code }, e.status);
+          }
+          throw e;
+        }
         return noContent();
       }
     }
