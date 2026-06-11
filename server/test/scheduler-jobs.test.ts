@@ -4,10 +4,30 @@ process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
-import { test, expect } from "bun:test";
+import "./setup.ts";
+import { test, expect, beforeAll, afterAll } from "bun:test";
+import { pgRun } from "../src/pg.ts";
+import { provisionTenant } from "../src/tenant.ts";
+import { TenantRepo } from "../src/tenant-repo.ts";
 import { scanSourcesJob, autoStageJob, autoCommitJob } from "../src/scheduler-jobs.ts";
 
-const ctx = { signal: new AbortController().signal };
+const T_ID = "tsjobs";
+async function cleanup(): Promise<void> {
+  await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T_ID]);
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T_ID]);
+}
+
+beforeAll(async () => {
+  await cleanup();
+  await provisionTenant({ id: T_ID, label: "Jobs" });
+});
+afterAll(cleanup);
+
+const ctx = {
+  signal: new AbortController().signal,
+  tenantId: T_ID,
+  repo: new TenantRepo(T_ID, "admin", true),
+};
 
 test("scanSourcesJob.run() returns rowsScanned: 0 on empty DB", async () => {
   const result = await scanSourcesJob.run(ctx);

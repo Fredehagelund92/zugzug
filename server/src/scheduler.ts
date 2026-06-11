@@ -1,9 +1,21 @@
 /* scheduler.ts — generic tick scheduler with in-flight guard and clean stop().
-   Extracted from the inline block that was in server.ts. */
+   Extracted from the inline block that was in server.ts.
 
-import { pgRun } from "./pg.ts";
+   PR2b (multi-tenant): each tick iterates every active tenant; for each tenant
+   the scheduler opens a pgTxScoped tx (SET LOCAL app.tenant_id) and constructs
+   a TenantRepo with role=admin/isSuperAdmin=true that's passed to every job
+   via ctx.repo. shouldRun(tenantId) gates per-tenant.
+
+   NOTE: pgTxScoped's SET LOCAL is currently belt-and-suspenders for the future
+   RLS rollout (PR5). TenantRepo's forwarders pull a fresh pool connection per
+   call rather than reusing the in-tx connection — that mismatch is acceptable
+   in PR2b because the tenant_id filter lives in the SQL WHERE clauses; PR5 will
+   tighten this when RLS lands. */
+
+import { pgAll, pgRun, pgTxScoped } from "./pg.ts";
 import { pg } from "./env.ts";
 import { appendAuditAs } from "./repo-meta.ts";
+import type { TenantRepo } from "./tenant-repo.ts";
 
 export interface SchedulerJob {
   /** Stable name for logging + scan_run.source_id; e.g., "scan-sources" */
@@ -14,6 +26,8 @@ export interface SchedulerJob {
 
 export interface JobContext {
   signal: AbortSignal; // honored later by Task A8 graceful shutdown
+  tenantId: string;
+  repo: TenantRepo;
 }
 
 export interface JobResult {
@@ -27,7 +41,11 @@ export interface Scheduler {
   _tick(): Promise<void>;
 }
 
-async function recordScanRun(jobName: string, fn: () => Promise<JobResult>): Promise<void> {
+async function recordScanRun(
+  jobName: string,
+  tenantId: string,
+  fn: () => Promise<JobResult>,
+): Promise<void> {
   const runId = `run_${crypto.randomUUID().replace(/-/g, "")}`;
   const startedAt = new Date();
   try {
@@ -62,20 +80,31 @@ async function recordScanRun(jobName: string, fn: () => Promise<JobResult>): Pro
       [new Date(), errorMessage, durationMs, runId],
     ).catch((e) => console.error(`scheduler: scan_run UPDATE failed for ${runId}:`, e));
     // Fire-and-forget: surface failure in the audit feed without blocking the scheduler.
-    appendAuditAs("u_system", "scan_failed", `${jobName} — ${errorMessage} (run: ${runId})`).catch(
-      (e) => console.error(`scheduler: audit emission failed for ${runId}:`, e),
-    );
+    appendAuditAs("u_system", "scan_failed", `${jobName} — ${errorMessage} (run: ${runId})`, {
+      tenantId,
+    }).catch((e) => console.error(`scheduler: audit emission failed for ${runId}:`, e));
     console.error(`scheduler job '${jobName}' failed:`, jobErr);
   }
 }
 
-export function createScheduler(opts: {
+async function defaultListTenants(): Promise<Array<{ id: string }>> {
+  return pgAll<{ id: string }>(
+    `SELECT id FROM ${pg("tenant")} WHERE deleted_at IS NULL ORDER BY id`,
+  );
+}
+
+export interface CreateSchedulerOpts {
   tickIntervalMs: number;
   jobs: SchedulerJob[];
-  /** Called when a job tick should be skipped (e.g., not due). Default: always run. */
-  shouldRun?: () => Promise<boolean>;
-}): Scheduler {
+  /** Per-tenant gate: called once per tenant per tick. Default: always run. */
+  shouldRun?: (tenantId: string) => Promise<boolean>;
+  /** Returns the tenants to iterate this tick. Default: SELECT id FROM tenant WHERE deleted_at IS NULL. */
+  listTenants?: () => Promise<Array<{ id: string }>>;
+}
+
+export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
   const { tickIntervalMs, jobs, shouldRun } = opts;
+  const listTenants = opts.listTenants ?? defaultListTenants;
 
   let intervalHandle: ReturnType<typeof setInterval> | null = null;
   let tickInFlight = false;
@@ -113,20 +142,45 @@ export function createScheduler(opts: {
     });
 
     try {
-      if (shouldRun !== undefined) {
-        let due: boolean;
-        try {
-          due = await shouldRun();
-        } catch (e) {
-          console.error("· scheduler: shouldRun check failed:", e);
-          return;
-        }
-        if (!due) return;
+      let tenants: Array<{ id: string }>;
+      try {
+        tenants = await listTenants();
+      } catch (e) {
+        console.error("· scheduler: listTenants failed:", e);
+        return;
       }
 
-      const ctx: JobContext = { signal: abortController.signal };
-      for (const job of jobs) {
-        await recordScanRun(job.name, () => job.run(ctx));
+      // Lazy import to dodge any circular module load between scheduler.ts and
+      // tenant-repo.ts → repo-* modules.
+      const { TenantRepo } = await import("./tenant-repo.ts");
+
+      for (const t of tenants) {
+        if (shouldRun !== undefined) {
+          let due: boolean;
+          try {
+            due = await shouldRun(t.id);
+          } catch (e) {
+            console.error(`· scheduler: shouldRun(${t.id}) check failed:`, e);
+            continue;
+          }
+          if (!due) continue;
+        }
+
+        try {
+          await pgTxScoped(t.id, async () => {
+            const repo = new TenantRepo(t.id, "admin", true);
+            const ctx: JobContext = {
+              signal: abortController.signal,
+              tenantId: t.id,
+              repo,
+            };
+            for (const job of jobs) {
+              await recordScanRun(`${t.id}:${job.name}`, t.id, () => job.run(ctx));
+            }
+          });
+        } catch (e) {
+          console.error(`· scheduler: tenant '${t.id}' tick failed:`, e);
+        }
       }
     } finally {
       tickInFlight = false;

@@ -73,6 +73,7 @@ function validate(input: CreateTableInput): void {
 export async function createTable(
   input: CreateTableInput,
   userId: string,
+  tenantId: string = "default",
 ): Promise<{ id: string }> {
   validate(input);
   const name = input.name.trim();
@@ -87,7 +88,7 @@ export async function createTable(
   // primitive uses pgRun freely. We still drive every subsequent write through
   // pgTx for atomicity of the description/source/field/audit fold.
   const keyKind = input.mode === "external_id" ? "external_id" : "slug";
-  await repo.addDimension(name, [], { keyKind, silent: true }, userId);
+  await repo.addDimension(name, [], { keyKind, silent: true }, userId, tenantId);
 
   let fieldCount = 0;
   let derivedCount = 0;
@@ -132,6 +133,7 @@ export async function createTable(
         c.options,
         { silent: true, numberFormat: c.numberFormat, ratingMax: c.ratingMax },
         userId,
+        tenantId,
       );
       fieldCount++;
     }
@@ -146,6 +148,7 @@ export async function createTable(
       undefined,
       { silent: true },
       userId,
+      tenantId,
     );
     derivedCount = r.derived;
   }
@@ -157,6 +160,7 @@ export async function createTable(
       input.external.nameColumn,
       { silent: true },
       userId,
+      tenantId,
     );
     derivedCount = r.derived;
   }
@@ -168,7 +172,7 @@ export async function createTable(
       : input.mode === "source"
         ? `${name} · from ${input.source!.table}.${input.source!.column} · derived ${derivedCount}`
         : `${name} · from IDs ${input.external!.table}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
-  await repo.appendAuditAs(userId, "Created table", detail);
+  await repo.appendAuditAs(userId, "Created table", detail, { tenantId });
 
   return { id };
 }

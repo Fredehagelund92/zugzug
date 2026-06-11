@@ -65,9 +65,11 @@ check(
   ["key_kind", "name_table", "name_id_col", "name_col"].filter((c) => have.has(c)).join(", "),
 );
 
+const TENANT = "default";
+
 // 2. create an external-ID dimension → key_kind persisted + nullable-label dim_
-await repo.addDimension(NAME, [], { keyKind: "external_id" }, "u_verify");
-const dims = await repo.listDimensions();
+await repo.addDimension(NAME, [], { keyKind: "external_id" }, "u_verify", TENANT);
+const dims = await repo.listDimensions(TENANT);
 const d = dims.find((x) => x.id === DIM_ID);
 check(
   "addDimension: external-ID dimension registered with key_kind",
@@ -89,7 +91,7 @@ const T = process.env.EID_TABLE?.trim(),
   IDC = process.env.EID_ID_COL?.trim(),
   NMC = process.env.EID_NAME_COL?.trim();
 if (env.attachWarehouse && T && IDC && NMC) {
-  const res = await repo.deriveCanonical(DIM_ID, T, IDC, NMC, {}, "u_verify");
+  const res = await repo.deriveCanonical(DIM_ID, T, IDC, NMC, {}, "u_verify", "default");
   check(
     "derive: external-ID keys seeded from master table",
     res.derived > 0,
@@ -103,7 +105,7 @@ if (env.attachWarehouse && T && IDC && NMC) {
     bind?.name_table === T && bind?.name_col === NMC,
     `${bind?.name_table}.${bind?.name_col}`,
   );
-  const full = await repo.getDimension(DIM_ID);
+  const full = await repo.getDimension(DIM_ID, TENANT);
   const resolved = full?.canonical.filter((c) => !c.unresolved && c.label !== c.key) ?? [];
   check(
     "getDimension: at least one name resolved live",
@@ -122,7 +124,7 @@ if (env.attachWarehouse && T && IDC && NMC) {
   );
   // unresolved fallback IS testable without a binding: seed an ID by hand, read it back
   await pgRun(`INSERT INTO ${DIMT} (${KEYCOL}) VALUES ('P-001') ON CONFLICT DO NOTHING`);
-  const full = await repo.getDimension(DIM_ID);
+  const full = await repo.getDimension(DIM_ID, TENANT);
   const row = full?.canonical.find((c) => c.key === "P-001");
   check(
     "getDimension: no binding → row unresolved, label falls back to key",

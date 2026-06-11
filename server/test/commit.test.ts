@@ -16,30 +16,30 @@ beforeEach(async () => {
 
 test("commit folds approved drafts into canonical", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId);
+  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
 
-  await repo.addCanonicalOne(dimId, "Acme", undefined, userId);
-  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId);
+  await repo.addCanonicalOne(dimId, "Acme", undefined, userId, "default");
+  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
 
-  const result = await repo.commit(dimId, userId);
+  const result = await repo.commit(dimId, userId, "default");
   expect(result.committed).toBe(1);
 
-  const drafts = await repo.listDrafts(dimId);
+  const drafts = await repo.listDrafts(dimId, "default");
   expect(drafts).toHaveLength(0);
 });
 
 test("commit writes one per-row audit entry per committed key + one rollup", async () => {
   const userId = "u_test_audit";
-  const dimId = await repo.addDimension("AuditBrand", [], { keyKind: "slug" }, userId);
+  const dimId = await repo.addDimension("AuditBrand", [], { keyKind: "slug" }, userId, "default");
 
-  await repo.addCanonicalOne(dimId, "Acme", undefined, userId);
-  await repo.addCanonicalOne(dimId, "Globex", undefined, userId);
-  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId);
-  await repo.saveDraft(dimId, "acme inc.", "mapped", "Acme", "acme", userId);
-  await repo.saveDraft(dimId, "Globex Corp", "mapped", "Globex", "globex", userId);
+  await repo.addCanonicalOne(dimId, "Acme", undefined, userId, "default");
+  await repo.addCanonicalOne(dimId, "Globex", undefined, userId, "default");
+  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
+  await repo.saveDraft(dimId, "acme inc.", "mapped", "Acme", "acme", userId, "default");
+  await repo.saveDraft(dimId, "Globex Corp", "mapped", "Globex", "globex", userId, "default");
 
   const before = new Date();
-  await repo.commit(dimId, userId);
+  await repo.commit(dimId, userId, "default");
 
   const audit = await repo.pgAll<{ action: string; table_id: string | null; row_key: string | null }>(
     `SELECT action, table_id, row_key FROM "zugzug_app"."audit_log"

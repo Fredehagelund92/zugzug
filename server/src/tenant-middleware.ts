@@ -1,5 +1,6 @@
 import { AppError } from "./errors.ts";
 import { tenantBySlug, memberRole } from "./tenant.ts";
+import { pgGet } from "./pg.ts";
 import type { SessionUser } from "./auth.ts";
 
 export interface TenantContext {
@@ -13,6 +14,8 @@ export interface ResolveOpts {
   user: SessionUser;
   /** Carried from auth.ts after PR1's users.is_super_admin column. Defaults false. */
   isSuperAdmin?: boolean;
+  /** When set + isSuperAdmin, legacy /api/* paths resolve to this tenant. */
+  impersonatingTenantId?: string | null;
 }
 
 const TENANT_PATH_RE = /^\/api\/t\/([^/]+)\//;
@@ -43,6 +46,16 @@ export async function resolveTenantContext(opts: ResolveOpts): Promise<TenantCon
       return { tenantId: tenant.id, role: "admin", isSuperAdmin: true };
     }
     throw new AppError("FORBIDDEN", `not a member of workspace '${slug}'`, 403);
+  }
+
+  // Super-admin impersonation: legacy /api/* requests resolve to the
+  // impersonated tenant. Explicit /api/t/:slug/* wins above and is not affected.
+  if (opts.isSuperAdmin && opts.impersonatingTenantId) {
+    const row = await pgGet<{ id: string }>(
+      `SELECT id FROM "zugzug_app"."tenant" WHERE id = $1 AND deleted_at IS NULL`,
+      [opts.impersonatingTenantId],
+    );
+    if (row) return { tenantId: row.id, role: "admin", isSuperAdmin: true };
   }
 
   // Legacy /api/* path → default tenant. The role comes from the user's

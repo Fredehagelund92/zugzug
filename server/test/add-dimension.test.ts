@@ -22,16 +22,16 @@ beforeEach(async () => {
 // be converted to a plain `test(...)` once addDimension throws on collision.
 test.failing("addDimension rejects duplicate names", async () => {
   const userId = "u_test";
-  await repo.addDimension("Brand", [], { keyKind: "slug" }, userId);
+  await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
   await expect(
-    repo.addDimension("Brand", [], { keyKind: "slug" }, userId),
+    repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default"),
   ).rejects.toThrow(/exists|duplicate|unique|taken/i);
 });
 
 test("addDimension creates registry row that getDimension can read", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Channel", [], { keyKind: "slug" }, userId);
-  const dim = await repo.getDimension(dimId);
+  const dimId = await repo.addDimension("Channel", [], { keyKind: "slug" }, userId, "default");
+  const dim = await repo.getDimension(dimId, "default");
   expect(dim).not.toBeNull();
   expect(dim?.dimension).toBe("Channel");
 });

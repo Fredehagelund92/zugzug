@@ -15,14 +15,14 @@ beforeEach(async () => {
 
 test("getRowActivitySince returns latest entry per row_key within window", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, userId);
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, userId, "default");
 
-  await repo.addCanonicalOne(dimId, "United States", undefined, userId);
-  await repo.addCanonicalOne(dimId, "Germany",       undefined, userId);
-  await repo.renameCanonical(dimId, "united_states", "USA", userId, 1);
+  await repo.addCanonicalOne(dimId, "United States", undefined, userId, "default");
+  await repo.addCanonicalOne(dimId, "Germany",       undefined, userId, "default");
+  await repo.renameCanonical(dimId, "united_states", "USA", userId, 1, "default");
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const entries = await getRowActivitySince(dimId, since);
+  const entries = await getRowActivitySince(dimId, since, "default");
 
   expect(entries).toHaveLength(2);
   const usa = entries.find((e) => e.rowKey === "united_states");
@@ -32,24 +32,24 @@ test("getRowActivitySince returns latest entry per row_key within window", async
 
 test("getRowActivitySince ignores entries older than `since`", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId);
-  await repo.addCanonicalOne(dimId, "Acme", undefined, userId);
+  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
+  await repo.addCanonicalOne(dimId, "Acme", undefined, userId, "default");
 
   const future = new Date(Date.now() + 60_000);
-  const entries = await getRowActivitySince(dimId, future);
+  const entries = await getRowActivitySince(dimId, future, "default");
   expect(entries).toHaveLength(0);
 });
 
 test("getRowActivitySince filters by tableId", async () => {
   const userId = "u_test";
-  const dimA = await repo.addDimension("A", [], { keyKind: "slug" }, userId);
-  const dimB = await repo.addDimension("B", [], { keyKind: "slug" }, userId);
-  await repo.addCanonicalOne(dimA, "x", undefined, userId);
-  await repo.addCanonicalOne(dimB, "y", undefined, userId);
+  const dimA = await repo.addDimension("A", [], { keyKind: "slug" }, userId, "default");
+  const dimB = await repo.addDimension("B", [], { keyKind: "slug" }, userId, "default");
+  await repo.addCanonicalOne(dimA, "x", undefined, userId, "default");
+  await repo.addCanonicalOne(dimB, "y", undefined, userId, "default");
 
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const a = await getRowActivitySince(dimA, since);
-  const b = await getRowActivitySince(dimB, since);
+  const a = await getRowActivitySince(dimA, since, "default");
+  const b = await getRowActivitySince(dimB, since, "default");
   expect(a).toHaveLength(1);
   expect(b).toHaveLength(1);
   expect(a[0]?.rowKey).not.toBe(b[0]?.rowKey);

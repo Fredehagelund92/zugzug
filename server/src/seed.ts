@@ -57,13 +57,15 @@ const CUSTOMER_SEGMENT_CANONICAL = [
   { key: "enterprise", label: "Enterprise" },
 ];
 
+const T = "default";
+
 export async function seedDemo(): Promise<void> {
-  await addDimension("Country", COUNTRY_SOURCES, {}, "u_verify");
-  await addCanonical("country", COUNTRY_CANONICAL);
+  await addDimension("Country", COUNTRY_SOURCES, {}, "u_verify", T);
+  await addCanonical("country", COUNTRY_CANONICAL, T);
 
-  await addDimension("Product Category", PRODUCT_CATEGORY_SOURCES, {}, "u_verify");
-  await addCanonical("product_category", PRODUCT_CATEGORY_CANONICAL);
+  await addDimension("Product Category", PRODUCT_CATEGORY_SOURCES, {}, "u_verify", T);
+  await addCanonical("product_category", PRODUCT_CATEGORY_CANONICAL, T);
 
-  await addDimension("Customer Segment", CUSTOMER_SEGMENT_SOURCES, {}, "u_verify");
-  await addCanonical("customer_segment", CUSTOMER_SEGMENT_CANONICAL);
+  await addDimension("Customer Segment", CUSTOMER_SEGMENT_SOURCES, {}, "u_verify", T);
+  await addCanonical("customer_segment", CUSTOMER_SEGMENT_CANONICAL, T);
 }

@@ -13,4 +13,22 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  {
+    files: ["src/server.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "warn",
+        {
+          patterns: [
+            {
+              group: ["./repo.ts", "./repo-*.ts"],
+              message:
+                "server.ts must not import repo modules directly — use req.repo (TenantRepo). Type-only imports from repo-canonical are allowed via `import type`.",
+              allowTypeImports: true,
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

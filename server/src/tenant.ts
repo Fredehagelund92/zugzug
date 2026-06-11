@@ -66,6 +66,50 @@ export async function provisionTenant(opts: {
   return row;
 }
 
+/** Hard-delete every row owned by `tenantId` across the scoped tables and drop
+ *  the dynamic `dim_<id>` / `map_<id>` tables it owns. The tenant row itself is
+ *  soft-deleted (deleted_at = now()). Refuses to act on the 'default' tenant. */
+export async function teardownTenant(tenantId: string): Promise<void> {
+  if (tenantId === "default") {
+    throw new AppError("VALIDATION_FAILED", "cannot teardown the default tenant", 400);
+  }
+  await pgTxRaw(async (tx) => {
+    // Capture dynamic dim_/map_ table names BEFORE deleting registry rows.
+    // The values were INSERTed by addDimension() with safe construction
+    // (schema-qualified, regex-validated identifiers), so splicing them
+    // straight into DROP TABLE is sound.
+    const dims = await tx.all<{ dim_table: string; map_table: string }>(
+      `SELECT dim_table, map_table FROM "zugzug_app"."dimension" WHERE tenant_id = $1`,
+      [tenantId],
+    );
+    for (const d of dims) {
+      await tx.run(`DROP TABLE IF EXISTS ${d.dim_table}`);
+      await tx.run(`DROP TABLE IF EXISTS ${d.map_table}`);
+    }
+
+    const scoped = [
+      "draft",
+      "audit_log",
+      "ai_hint_cache",
+      "canonical_version",
+      "scan_run",
+      "source_stat",
+      "dimension_field",
+      "dimension_source",
+      "dimension",
+      "active_sessions",
+      "preferences",
+      "tenant_member",
+      "tenant_invite",
+    ];
+    for (const tbl of scoped) {
+      await tx.run(`DELETE FROM "zugzug_app"."${tbl}" WHERE tenant_id = $1`, [tenantId]);
+    }
+
+    await tx.run(`UPDATE "zugzug_app"."tenant" SET deleted_at = now() WHERE id = $1`, [tenantId]);
+  });
+}
+
 export async function listTenants(): Promise<TenantRecord[]> {
   return pgAll<TenantRecord>(
     `SELECT id, slug, label, warehouse_id, created_at

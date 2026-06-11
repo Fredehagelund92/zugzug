@@ -32,9 +32,7 @@ export function useLinkedCandidates(
 
   const p = prev.current;
   const unchanged =
-    p !== null &&
-    p.refs.length === refs.length &&
-    p.refs.every((d, i) => d === refs[i]);
+    p !== null && p.refs.length === refs.length && p.refs.every((d, i) => d === refs[i]);
   if (unchanged) return p.out;
 
   const out = new Map<string, LinkedTarget>();

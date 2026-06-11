@@ -34,10 +34,10 @@ test("anyScanDue returns false when most-recent scan is within cadence window", 
   );
 
   const userId = "u_test";
-  const dimId = await repo.addDimension("Partner", [], { keyKind: "slug" }, userId);
+  const dimId = await repo.addDimension("Partner", [], { keyKind: "slug" }, userId, "default");
 
   // Register a source
-  await addSource(dimId, "public.partners", "partner_id");
+  await addSource(dimId, "public.partners", "partner_id", "default");
 
   // Insert a source_stat row scanned 10 minutes ago (within hourly window)
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
@@ -65,11 +65,11 @@ test("anyScanDue returns true when a newly-registered source has never been scan
   );
 
   const userId = "u_test";
-  const dimId = await repo.addDimension("Partner", [], { keyKind: "slug" }, userId);
+  const dimId = await repo.addDimension("Partner", [], { keyKind: "slug" }, userId, "default");
 
   // Register TWO sources
-  await addSource(dimId, "public.partners", "partner_id");
-  await addSource(dimId, "public.accounts", "account_id");
+  await addSource(dimId, "public.partners", "partner_id", "default");
+  await addSource(dimId, "public.accounts", "account_id", "default");
 
   // Only the FIRST source has been scanned (10 min ago, within hourly window)
   // The SECOND source has never been scanned (no source_stat row)

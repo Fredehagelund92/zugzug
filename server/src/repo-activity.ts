@@ -21,10 +21,18 @@ const ACTION_TO_OP: Record<string, AuditOp> = {
   "Committed mapping": "commit",
 };
 
+/** Per-row activity since `since` for a given canonical table. Scoped to the
+ *  caller's tenant; pass `tenantId === "*"` from a super-admin context to read
+ *  across all tenants (cross-tenant feed). */
 export async function getRowActivitySince(
   tableId: string,
   since: Date,
+  tenantId: string,
 ): Promise<RowActivityEntry[]> {
+  const isCrossTenant = tenantId === "*";
+  const tenantFilter = isCrossTenant ? "" : " AND a.tenant_id = $3";
+  const params: unknown[] = isCrossTenant ? [tableId, since] : [tableId, since, tenantId];
+
   const rows = await pgAll<{
     row_key: string;
     user_id: string;
@@ -38,9 +46,9 @@ export async function getRowActivitySince(
      LEFT JOIN ${pg("users")} u ON u.id = a.user_id
      WHERE a.table_id = $1
        AND a.row_key IS NOT NULL
-       AND a.created_at > $2
+       AND a.created_at > $2${tenantFilter}
      ORDER BY a.row_key, a.created_at DESC`,
-    [tableId, since],
+    params,
   );
 
   return rows.map((r) => ({

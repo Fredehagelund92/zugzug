@@ -1,5 +1,23 @@
 import postgres from "postgres";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { env } from "./env.ts";
+
+interface PgContext {
+  insideTenantRepo: boolean;
+}
+export const pgContext = new AsyncLocalStorage<PgContext>();
+
+/** Throws if executing inside a TenantRepo-gated route ctx and the caller bypassed
+ *  TenantRepo to call pg.* directly. No-op in production. */
+export function assertNotInsideTenantRepo(fnName: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  const ctx = pgContext.getStore();
+  if (ctx?.insideTenantRepo) {
+    throw new Error(
+      `pg.${fnName} called from inside a TenantRepo route context — use req.repo.* instead`,
+    );
+  }
+}
 
 const pool = postgres(env.databaseUrl, {
   max: Number(process.env.PG_POOL_MAX) || 5,
@@ -16,6 +34,7 @@ export async function pgAll<T = Record<string, unknown>>(
   query: string,
   params: unknown[] = [],
 ): Promise<T[]> {
+  assertNotInsideTenantRepo("pgAll");
   const rows = await pool.unsafe(query, params as postgres.ParameterOrJSON<never>[]);
   return rows as unknown as T[];
 }
@@ -24,11 +43,13 @@ export async function pgGet<T = Record<string, unknown>>(
   query: string,
   params: unknown[] = [],
 ): Promise<T | null> {
-  const rows = await pgAll<T>(query, params);
-  return rows[0] ?? null;
+  assertNotInsideTenantRepo("pgGet");
+  const rows = await pool.unsafe(query, params as postgres.ParameterOrJSON<never>[]);
+  return (rows as unknown as T[])[0] ?? null;
 }
 
 export async function pgRun(query: string, params: unknown[] = []): Promise<void> {
+  assertNotInsideTenantRepo("pgRun");
   await pool.unsafe(query, params as postgres.ParameterOrJSON<never>[]);
 }
 
@@ -39,6 +60,7 @@ export type TxHelpers = {
 };
 
 export function pgTxRaw<T>(fn: (tx: TxHelpers) => Promise<T>): Promise<T> {
+  assertNotInsideTenantRepo("pgTxRaw");
   return pool.begin(async (txSql) => {
     const helpers: TxHelpers = {
       all: async <U = Record<string, unknown>>(q: string, p: unknown[] = []): Promise<U[]> => {

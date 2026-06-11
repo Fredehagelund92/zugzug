@@ -16,30 +16,30 @@ beforeEach(async () => {
 
 test("field description round-trip", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("DescTest", [], {}, userId);
+  const dimId = await repo.addDimension("DescTest", [], {}, userId, "default");
 
-  await repo.addField(dimId, "X", "text", undefined, { silent: true }, userId);
+  await repo.addField(dimId, "X", "text", undefined, { silent: true }, userId, "default");
 
   // Set a description
-  await repo.updateField(dimId, "x", { description: "an explanation" }, userId);
-  const dim = await repo.getDimension(dimId);
+  await repo.updateField(dimId, "x", { description: "an explanation" }, userId, "default");
+  const dim = await repo.getDimension(dimId, "default");
   expect(dim?.fields.find((f) => f.field === "x")?.description).toBe("an explanation");
 
   // Clear the description
-  await repo.updateField(dimId, "x", { description: null }, userId);
-  const dim2 = await repo.getDimension(dimId);
+  await repo.updateField(dimId, "x", { description: null }, userId, "default");
+  const dim2 = await repo.getDimension(dimId, "default");
   expect(dim2?.fields.find((f) => f.field === "x")?.description).toBeUndefined();
 });
 
 test("updateField with undefined description is a no-op", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("DescNoOp", [], {}, userId);
+  const dimId = await repo.addDimension("DescNoOp", [], {}, userId, "default");
 
-  await repo.addField(dimId, "Y", "text", undefined, { silent: true }, userId);
-  await repo.updateField(dimId, "y", { description: "original" }, userId);
+  await repo.addField(dimId, "Y", "text", undefined, { silent: true }, userId, "default");
+  await repo.updateField(dimId, "y", { description: "original" }, userId, "default");
 
   // Passing undefined should leave description unchanged
-  await repo.updateField(dimId, "y", {}, userId);
-  const dim = await repo.getDimension(dimId);
+  await repo.updateField(dimId, "y", {}, userId, "default");
+  const dim = await repo.getDimension(dimId, "default");
   expect(dim?.fields.find((f) => f.field === "y")?.description).toBe("original");
 });

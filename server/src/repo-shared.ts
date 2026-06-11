@@ -297,10 +297,10 @@ export interface DimMeta {
   keyCol: string;
 }
 
-export async function sourcesOf(dimId: string): Promise<SourceDef[]> {
+export async function sourcesOf(dimId: string, tenantId: string): Promise<SourceDef[]> {
   return pgAll<SourceDef>(
-    `SELECT source_table AS "table", source_column AS column FROM ${pg("dimension_source")} WHERE dim_id = $1 ORDER BY 1,2`,
-    [dimId],
+    `SELECT source_table AS "table", source_column AS column FROM ${pg("dimension_source")} WHERE dim_id = $1 AND tenant_id = $2 ORDER BY 1,2`,
+    [dimId, tenantId],
   );
 }
 
@@ -315,11 +315,11 @@ export function parseSourceTable(stored: string): Ref {
 /** Keep only sources whose warehouse table actually resolves — a dimension
  *  registered against tables absent in this WAREHOUSE_DB (e.g. raw_dev vs
  *  raw_prod) still scans the rest instead of throwing. */
-export async function liveSources(dimId: string): Promise<SourceDef[]> {
+export async function liveSources(dimId: string, tenantId: string): Promise<SourceDef[]> {
   const { getAdapter } = await import("./warehouse/registry.ts");
   const adapter = await getAdapter();
   const out: SourceDef[] = [];
-  for (const s of await sourcesOf(dimId)) {
+  for (const s of await sourcesOf(dimId, tenantId)) {
     const ref = parseSourceTable(s.table);
     try {
       if (await adapter.tableExists(ref)) {
@@ -334,11 +334,11 @@ export async function liveSources(dimId: string): Promise<SourceDef[]> {
   return out;
 }
 
-export async function dimMeta(dimId: string): Promise<DimMeta | null> {
+export async function dimMeta(dimId: string, tenantId: string): Promise<DimMeta | null> {
   return pgGet<DimMeta>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol"
-     FROM ${pg("dimension")} WHERE id = $1`,
-    [dimId],
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
   );
 }
 
