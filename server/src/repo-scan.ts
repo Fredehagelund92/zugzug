@@ -352,6 +352,8 @@ export interface ScanStatusResult {
   lastScanAt: string | null;
   sourceCount: number;
   unmappedCount: number;
+  lastAutoPublishAt: string | null;
+  lastAutoPublishDetail: string | null;
 }
 
 export async function scanStatus(): Promise<ScanStatusResult> {
@@ -369,10 +371,19 @@ export async function scanStatus(): Promise<ScanStatusResult> {
        AND st.source_table  = s.source_table
        AND st.source_column = s.source_column`,
   ).catch(() => null);
+  const lastAuto = await pgGet<{ at: string; detail: string }>(
+    `SELECT created_at AS at, detail
+       FROM ${pg("audit_log")}
+      WHERE user_id = 'u_system' AND action = 'Committed'
+      ORDER BY created_at DESC
+      LIMIT 1`,
+  ).catch(() => null);
   return {
     lastScanAt: row?.last_scan ?? null,
     sourceCount: Number(row?.sources ?? 0),
     unmappedCount: Number(row?.unmapped ?? 0),
+    lastAutoPublishAt: lastAuto?.at ?? null,
+    lastAutoPublishDetail: lastAuto?.detail ?? null,
   };
 }
 
