@@ -7,3 +7,21 @@ DELETE FROM "zugzug_app"."preferences" a
 USING "zugzug_app"."preferences" b
 WHERE a.tenant_id = b.tenant_id
   AND a.id > b.id;
+--> statement-breakpoint
+-- Add tenant_id to existing dynamic dim_/map_ tables. We discover them via the
+-- dimension registry; each row gives us the canonical schema path + owning tenant.
+DO $$
+DECLARE
+  d RECORD;
+BEGIN
+  FOR d IN SELECT id, dim_table, map_table, tenant_id FROM "zugzug_app"."dimension" LOOP
+    EXECUTE format(
+      'ALTER TABLE %s ADD COLUMN IF NOT EXISTS tenant_id VARCHAR NOT NULL DEFAULT %L',
+      d.dim_table, d.tenant_id
+    );
+    EXECUTE format(
+      'ALTER TABLE %s ADD COLUMN IF NOT EXISTS tenant_id VARCHAR NOT NULL DEFAULT %L',
+      d.map_table, d.tenant_id
+    );
+  END LOOP;
+END $$;

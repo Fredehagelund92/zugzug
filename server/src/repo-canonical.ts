@@ -429,17 +429,27 @@ export async function addDimension(
   // Existence check stays unscoped so we don't double-create the dim_/map_
   // tables, but the INSERT below carries tenant_id so the dimension row is
   // owned by the calling tenant.
+  const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
+  if (!TENANT_ID_RE.test(tenantId)) {
+    throw new Error(`addDimension: invalid tenant_id ${tenantId}`);
+  }
+  const tenantLit = `'${tenantId}'`;
   const existing = await pgGet(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
   if (!existing) {
     const labelDdl = keyKind === "external_id" ? "label VARCHAR" : "label VARCHAR NOT NULL";
-    // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
-    // stays per-tenant-implicit (dim ids are globally unique → effectively
-    // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
     await pgRun(
-      `CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (${qid(keyCol)} VARCHAR PRIMARY KEY, ${labelDdl})`,
+      `CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (
+         ${qid(keyCol)} VARCHAR PRIMARY KEY,
+         ${labelDdl},
+         tenant_id VARCHAR NOT NULL DEFAULT ${tenantLit}
+       )`,
     );
     await pgRun(
-      `CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (raw VARCHAR PRIMARY KEY, ${qid(keyCol)} VARCHAR NOT NULL)`,
+      `CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (
+         raw VARCHAR PRIMARY KEY,
+         ${qid(keyCol)} VARCHAR NOT NULL,
+         tenant_id VARCHAR NOT NULL DEFAULT ${tenantLit}
+       )`,
     );
     await pgRun(
       `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at, tenant_id)
