@@ -5,7 +5,7 @@
  * super-admin /api/admin/tenants route in PR 2). The CLI script in
  * scripts/admin.ts also calls in here for PR 1 bootstrap. */
 
-import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
+import { pgGet, pgAll, pgTxRaw } from "./pg.ts";
 import { AppError } from "./errors.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
