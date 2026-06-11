@@ -545,7 +545,6 @@ function CrossDimInbox(p: CrossDimInboxProps) {
   );
 }
 
-
 // Footer + expandable review panel. Split out so the review panel state is
 // scoped tightly and the cross-dim grid body stays readable.
 function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {

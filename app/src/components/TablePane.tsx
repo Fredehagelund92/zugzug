@@ -254,9 +254,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   }, []);
 
   const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
-  const [layout, setLayout] = useState<GridLayoutConfig>(
-    () => getCachedGridLayout(activeId) ?? {},
-  );
+  const [layout, setLayout] = useState<GridLayoutConfig>(() => getCachedGridLayout(activeId) ?? {});
   useEffect(() => {
     const cached = getCachedGridLayout(activeId);
     if (cached) setLayout(cached);
@@ -999,9 +997,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           setPendingImport(null);
           try {
             const r = await importRows(activeId, toImport);
-            toast(
-              `Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`,
-            );
+            toast(`Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`);
           } catch (err) {
             toast(err instanceof Error ? err.message : "Import failed.", "error");
           }

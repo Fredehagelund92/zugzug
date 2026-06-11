@@ -407,18 +407,14 @@ function MemberRow({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-[12.5px] font-medium text-ink">
-            {member.name}
-          </span>
+          <span className="truncate text-[12.5px] font-medium text-ink">{member.name}</span>
           {isMe && (
             <span className="shrink-0 rounded-sm border border-line bg-bg px-1 font-mono text-[9.5px] uppercase tracking-wider text-ink-3">
               you
             </span>
           )}
         </div>
-        <div className="truncate font-mono text-[10.5px] text-ink-3">
-          {member.email ?? "—"}
-        </div>
+        <div className="truncate font-mono text-[10.5px] text-ink-3">{member.email ?? "—"}</div>
       </div>
       <MemberRoleControl
         member={member}
@@ -563,12 +559,11 @@ function TeamRoster({
       {/* Roster body */}
       {visible === 0 ? (
         <div className="rounded-sm border border-dashed border-line py-8 text-center font-mono text-[11.5px] text-ink-3">
-          no matches{query && (
+          no matches
+          {query && (
             <>
-              {" "}for{" "}
-              <code className="rounded-sm bg-surface-2 px-1 py-0.5 text-ink-2">
-                {query}
-              </code>
+              {" "}
+              for <code className="rounded-sm bg-surface-2 px-1 py-0.5 text-ink-2">{query}</code>
             </>
           )}
           {(query || filter !== "all") && (
@@ -722,10 +717,7 @@ function AllowedEmailsList({
           </span>
           <svg
             viewBox="0 0 8 6"
-            className={cx(
-              "h-2 w-2.5 text-ink-3 transition-transform",
-              open && "rotate-180",
-            )}
+            className={cx("h-2 w-2.5 text-ink-3 transition-transform", open && "rotate-180")}
             aria-hidden
           >
             <path d="M0 1 L4 5 L8 1" stroke="currentColor" strokeWidth="1.5" fill="none" />
