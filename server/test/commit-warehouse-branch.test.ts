@@ -52,9 +52,9 @@ function makeWritableMock(opts: { failCommit?: boolean } = {}) {
 }
 
 test("commit in postgres-export mode (DuckDB read-only): warehouseSynced=n/a; no adapter writes", async () => {
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test");
-  const result = await repo.commit(dimId, "u_test");
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
+  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const result = await repo.commit(dimId, "u_test", "default");
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("n/a");
 });
@@ -67,9 +67,9 @@ test("commit in writable mode (success): warehouseSynced=synced; audit event emi
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test");
-  const result = await repo.commit(dimId, "u_test");
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
+  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const result = await repo.commit(dimId, "u_test", "default");
 
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("synced");
@@ -93,18 +93,18 @@ test("commit in writable mode (warehouse fails): Postgres committed; warehouseSy
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test");
-  const result = await repo.commit(dimId, "u_test");
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
+  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const result = await repo.commit(dimId, "u_test", "default");
 
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("failed");
 
-  // Postgres canonical SHOULD reflect the commit (drafts cleared, dim/map rows present).
-  const drafts = await repo.listDrafts(dimId);
+  // Postgres canonical SHOULD reflect the commit (drafts cleared, dim/map rows present, "default").
+  const drafts = await repo.listDrafts(dimId, "default");
   expect(drafts).toHaveLength(0);
 
-  const dim = await repo.getDimension(dimId);
+  const dim = await repo.getDimension(dimId, "default");
   expect(dim?.canonical.some((c) => c.key === "us")).toBe(true);
 
   const audits = await repo.listAudit(10);
@@ -121,9 +121,9 @@ test("commit with no approved drafts: returns early; no warehouse call attempted
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test");
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
   // No drafts saved.
-  const result = await repo.commit(dimId, "u_test");
+  const result = await repo.commit(dimId, "u_test", "default");
   expect(result.committed).toBe(0);
   expect(result.warehouseSynced).toBe("n/a"); // nothing to sync
   expect(ensured).toHaveLength(0);
@@ -153,10 +153,10 @@ test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-en
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test");
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
+  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
 
-  const result = await repo.commit(dimId, "u_test");
+  const result = await repo.commit(dimId, "u_test", "default");
 
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("synced");

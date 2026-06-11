@@ -15,10 +15,10 @@ beforeEach(async () => {
 
 test("getRowActivitySince integration: dim with rows returns activity entries", async () => {
   const userId = "u_route_test";
-  const dimId = await repo.addDimension("RouteTest", [], { keyKind: "slug" }, userId);
-  await repo.addCanonicalOne(dimId, "Item", undefined, userId);
+  const dimId = await repo.addDimension("RouteTest", [], { keyKind: "slug" }, userId, "default");
+  await repo.addCanonicalOne(dimId, "Item", undefined, userId, "default");
   const since = new Date(Date.now() - 60_000);
-  const entries = await getRowActivitySince(dimId, since);
+  const entries = await getRowActivitySince(dimId, since, "default");
   expect(entries.length).toBeGreaterThanOrEqual(1);
   expect(entries[0]?.rowKey).toBe("item");
   expect(entries[0]?.op).toBe("create");

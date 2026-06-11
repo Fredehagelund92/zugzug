@@ -32,7 +32,7 @@ beforeAll(async () => {
      VALUES ('u_route_actor', 'Route Actor', 'RA')
      ON CONFLICT (id) DO NOTHING`,
   );
-  await repo.addCanonicalOne(DIM, "Denmark", "dk", "u_route_actor");
+  await repo.addCanonicalOne(DIM, "Denmark", "dk", "u_route_actor", "default");
 });
 
 afterAll(async () => {
@@ -42,10 +42,10 @@ afterAll(async () => {
 
 test("renameCanonical with stale version throws AppError with details.current shape", async () => {
   // Bump out of band so the next call is stale.
-  await repo.renameCanonical(DIM, "dk", "Danmark", "u_route_actor", 1);
+  await repo.renameCanonical(DIM, "dk", "Danmark", "u_route_actor", 1, "default");
   let thrown: { code?: string; status?: number; details?: { current?: { version?: number; updatedBy?: { id?: string; name?: string; initials?: string } } } } = {};
   try {
-    await repo.renameCanonical(DIM, "dk", "DenmarkAgain", "u_route_actor", 1);
+    await repo.renameCanonical(DIM, "dk", "DenmarkAgain", "u_route_actor", 1, "default");
   } catch (e) {
     thrown = e as typeof thrown;
   }

@@ -12,6 +12,7 @@ import { addCanonicalOne, renameCanonical, retireCanonical, mergeCanonical } fro
 import { AppError } from "../src/errors.ts";
 
 const DIM = "d_canon_test";
+const T = "default";
 // Store unquoted identifiers — cq() will add quotes when building SQL
 const DIM_TABLE = "zugzug_app.dim_d_canon_test";
 const MAP_TABLE = "zugzug_app.map_d_canon_test";
@@ -50,7 +51,7 @@ afterAll(async () => {
 });
 
 test("addCanonicalOne seeds canonical_version row at version=1", async () => {
-  await addCanonicalOne(DIM, "Denmark", "dk", "u_canon_actor");
+  await addCanonicalOne(DIM, "Denmark", "dk", "u_canon_actor", T);
   const v = await pgGet<{ version: number; updated_by: string }>(
     `SELECT version, updated_by FROM "zugzug_app"."canonical_version"
      WHERE dim_id = $1 AND key = $2`,
@@ -62,7 +63,7 @@ test("addCanonicalOne seeds canonical_version row at version=1", async () => {
 
 test("renameCanonical with correct expectedVersion bumps to 2", async () => {
   // 'dk' was added at version=1 by the addCanonicalOne test above.
-  await renameCanonical(DIM, "dk", "Danmark", "u_canon_actor", 1);
+  await renameCanonical(DIM, "dk", "Danmark", "u_canon_actor", 1, T);
   const v = await pgGet<{ version: number }>(
     `SELECT version FROM "zugzug_app"."canonical_version"
      WHERE dim_id = $1 AND key = $2`,
@@ -79,7 +80,7 @@ test("renameCanonical with stale expectedVersion throws CONFLICT", async () => {
   // 'dk' is now at version=2. Try to rename with version=1.
   let thrown: AppError | null = null;
   try {
-    await renameCanonical(DIM, "dk", "DenmarkAgain", "u_canon_actor", 1);
+    await renameCanonical(DIM, "dk", "DenmarkAgain", "u_canon_actor", 1, T);
   } catch (e) {
     thrown = e as AppError;
   }
@@ -97,8 +98,8 @@ test("renameCanonical with stale expectedVersion throws CONFLICT", async () => {
 });
 
 test("retireCanonical with correct expectedVersion deletes row + version", async () => {
-  await addCanonicalOne(DIM, "Norway", "no", "u_canon_actor");
-  const res = await retireCanonical(DIM, "no", "u_canon_actor", 1);
+  await addCanonicalOne(DIM, "Norway", "no", "u_canon_actor", T);
+  const res = await retireCanonical(DIM, "no", "u_canon_actor", 1, T);
   expect(res.ok).toBe(true);
   const stillThere = await pgGet<{ key: string }>(
     `SELECT key FROM "zugzug_app"."canonical_version"
@@ -109,12 +110,12 @@ test("retireCanonical with correct expectedVersion deletes row + version", async
 });
 
 test("retireCanonical with stale expectedVersion throws CONFLICT", async () => {
-  await addCanonicalOne(DIM, "Sweden", "se", "u_canon_actor");
-  await renameCanonical(DIM, "se", "Sverige", "u_canon_actor", 1);
+  await addCanonicalOne(DIM, "Sweden", "se", "u_canon_actor", T);
+  await renameCanonical(DIM, "se", "Sverige", "u_canon_actor", 1, T);
   // Now version=2. Try to retire with version=1.
   let thrown: AppError | null = null;
   try {
-    await retireCanonical(DIM, "se", "u_canon_actor", 1);
+    await retireCanonical(DIM, "se", "u_canon_actor", 1, T);
   } catch (e) {
     thrown = e as AppError;
   }
@@ -126,9 +127,9 @@ test("retireCanonical with stale expectedVersion throws CONFLICT", async () => {
 });
 
 test("retireCanonical returns ok:false when variants still map (no version bump)", async () => {
-  await addCanonicalOne(DIM, "Iceland", "is", "u_canon_actor");
+  await addCanonicalOne(DIM, "Iceland", "is", "u_canon_actor", T);
   await pgRun(`INSERT INTO "zugzug_app"."map_d_canon_test" (raw, ${KEY_COL}) VALUES ('IS', 'is')`);
-  const res = await retireCanonical(DIM, "is", "u_canon_actor", 1);
+  const res = await retireCanonical(DIM, "is", "u_canon_actor", 1, T);
   expect(res.ok).toBe(false);
   expect(res.variants).toBe(1);
   const v = await pgGet<{ version: number }>(
@@ -140,8 +141,8 @@ test("retireCanonical returns ok:false when variants still map (no version bump)
 });
 
 test("mergeCanonical with correct expectedVersions merges and bumps each row", async () => {
-  await addCanonicalOne(DIM, "Finland", "fi", "u_canon_actor");
-  await addCanonicalOne(DIM, "FinlandAlt", "fi_alt", "u_canon_actor");
+  await addCanonicalOne(DIM, "Finland", "fi", "u_canon_actor", T);
+  await addCanonicalOne(DIM, "FinlandAlt", "fi_alt", "u_canon_actor", T);
   await pgRun(`INSERT INTO "zugzug_app"."map_d_canon_test" (raw, ${KEY_COL}) VALUES ('Finland Alt', 'fi_alt')`);
   const merged = await mergeCanonical(
     DIM,
@@ -149,6 +150,7 @@ test("mergeCanonical with correct expectedVersions merges and bumps each row", a
     ["fi_alt"],
     "u_canon_actor",
     { fi: 1, fi_alt: 1 },
+    T,
   );
   expect(merged).toBe(1);
   const survivor = await pgGet<{ version: number }>(
@@ -164,10 +166,10 @@ test("mergeCanonical with correct expectedVersions merges and bumps each row", a
 });
 
 test("mergeCanonical with one stale expectedVersion throws CONFLICT listing it", async () => {
-  await addCanonicalOne(DIM, "Estonia", "ee", "u_canon_actor");
-  await addCanonicalOne(DIM, "EstoniaAlt", "ee_alt", "u_canon_actor");
+  await addCanonicalOne(DIM, "Estonia", "ee", "u_canon_actor", T);
+  await addCanonicalOne(DIM, "EstoniaAlt", "ee_alt", "u_canon_actor", T);
   // Bump ee_alt out of band so its expectedVersion is stale.
-  await renameCanonical(DIM, "ee_alt", "EstoniaAlt2", "u_canon_actor", 1);
+  await renameCanonical(DIM, "ee_alt", "EstoniaAlt2", "u_canon_actor", 1, T);
   let thrown: AppError | null = null;
   try {
     await mergeCanonical(
@@ -176,6 +178,7 @@ test("mergeCanonical with one stale expectedVersion throws CONFLICT listing it",
       ["ee_alt"],
       "u_canon_actor",
       { ee: 1, ee_alt: 1 },  // ee_alt is now at 2
+      T,
     );
   } catch (e) {
     thrown = e as AppError;
