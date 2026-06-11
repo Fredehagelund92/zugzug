@@ -399,12 +399,19 @@ function CrossDimInbox(p: CrossDimInboxProps) {
   const curKey = p.cursor ? `${p.cursor.dimId}::${p.cursor.raw}` : null;
   const curIdx = curKey ? p.rows.findIndex((r) => `${r.dimId}::${r.raw}` === curKey) : -1;
 
-  const move = (delta: 1 | -1) => {
+  const moveTo = (idx: number) => {
     if (p.rows.length === 0) return;
-    const next = curIdx < 0 ? 0 : Math.max(0, Math.min(p.rows.length - 1, curIdx + delta));
-    const r = p.rows[next];
+    const clamped = Math.max(0, Math.min(p.rows.length - 1, idx));
+    const r = p.rows[clamped];
     p.setCursor({ dimId: r.dimId, raw: r.raw });
+    // keyboard-driven moves keep the row in view — same contract as DataGrid
+    requestAnimationFrame(() => {
+      containerRef.current
+        ?.querySelector(`[data-row-key="${attrEsc(`${r.dimId}::${r.raw}`)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    });
   };
+  const move = (delta: number) => moveTo(curIdx < 0 ? 0 : curIdx + delta);
 
   return (
     <div
@@ -422,7 +429,38 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           move(-1);
           return;
         }
+        // DataGrid-parity navigation so shortcuts learned in Records work here
+        if (e.key === "Home") {
+          e.preventDefault();
+          moveTo(0);
+          return;
+        }
+        if (e.key === "End") {
+          e.preventDefault();
+          moveTo(p.rows.length - 1);
+          return;
+        }
+        if (e.key === "PageDown") {
+          e.preventDefault();
+          move(10);
+          return;
+        }
+        if (e.key === "PageUp") {
+          e.preventDefault();
+          move(-10);
+          return;
+        }
         if (!p.cursor) return;
+        if (e.key === "Escape") {
+          e.preventDefault();
+          p.setCursor(null);
+          return;
+        }
+        if (p.canEdit && e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          focusedComboRef.current?.open();
+          return;
+        }
         if (p.canEdit && (e.key === "a" || e.key === "A")) {
           e.preventDefault();
           p.accept(p.cursor.dimId, p.cursor.raw);
@@ -474,7 +512,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           ))}
         </div>
         <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
-          ranked by impact · J/K navigate · A accept · M pick · S skip · N next · ⌘↵ publish
+          ranked by impact · ↑↓/J/K navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
         </span>
       </div>
 
@@ -544,7 +582,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                 data-row-key={key}
                 className={cx(
                   "border-b border-line px-4 transition-colors hover:bg-hover",
-                  focused && "ring-1 ring-accent/60 bg-accent-wash/40",
+                  focused && "ring-2 ring-inset ring-accent bg-accent-wash/40",
                 )}
                 onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
               >

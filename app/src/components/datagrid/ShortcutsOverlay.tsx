@@ -39,13 +39,15 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "Match · Triage",
+    title: "Match · Review",
     rows: [
+      ["↑↓ / J K", "move cursor"],
       ["A", "accept suggestion"],
-      ["M", "pick master record"],
+      ["↵ / M", "pick master record"],
       ["S", "skip"],
       ["R", "reset draft"],
       ["N", "jump to next new"],
+      ["Esc", "clear cursor"],
       ["⌘↵", "publish staged drafts"],
     ],
   },
