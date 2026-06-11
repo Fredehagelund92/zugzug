@@ -211,6 +211,565 @@ function validateChip(
   return { ok: true };
 }
 
+// — Team roster bits —————————————————————————————————————————————————————
+
+type RoleKey = TeamMember["role"];
+
+const ROLE_META: Record<
+  RoleKey,
+  { label: string; chip: string; ring: string; glyph: string; order: number }
+> = {
+  admin: {
+    label: "admin",
+    chip: "border-accent/40 bg-accent/10 text-accent",
+    ring: "ring-2 ring-accent/30",
+    glyph: "◼",
+    order: 0,
+  },
+  editor: {
+    label: "editor",
+    chip: "border-line-2 bg-surface-2 text-ink",
+    ring: "ring-1 ring-line-2",
+    glyph: "◇",
+    order: 1,
+  },
+  viewer: {
+    label: "viewer",
+    chip: "border-line bg-bg text-ink-3",
+    ring: "ring-1 ring-line",
+    glyph: "·",
+    order: 2,
+  },
+};
+
+function userInitials(name: string, email?: string | null): string {
+  const base = (name || email || "?").trim();
+  const parts = base.split(/\s+/);
+  if (parts.length >= 2) {
+    return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+  }
+  // Single token (likely email): first two non-symbol chars
+  const clean = parts[0]!.replace(/[^a-zA-Z0-9]/g, "");
+  return (clean.slice(0, 2) || "??").toUpperCase();
+}
+
+function RolePopover({
+  current,
+  pending,
+  onPick,
+  onClose,
+}: {
+  current: RoleKey;
+  pending: boolean;
+  onPick: (role: RoleKey) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (ref.current?.contains(e.target as Node)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      className="zz-pop-in absolute right-0 top-[calc(100%+4px)] z-20 min-w-[10rem] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-[0_18px_40px_-12px_rgba(0,0,0,0.35)]"
+    >
+      {(Object.keys(ROLE_META) as RoleKey[]).map((r) => {
+        const meta = ROLE_META[r];
+        const active = r === current;
+        return (
+          <button
+            key={r}
+            type="button"
+            disabled={pending || active}
+            onClick={() => {
+              onPick(r);
+              onClose();
+            }}
+            className={cx(
+              "flex w-full items-center gap-2 px-3 py-1.5 text-left font-mono text-[11.5px] transition-colors",
+              active
+                ? "cursor-default bg-surface-2 text-ink"
+                : "text-ink-2 hover:bg-hover hover:text-ink",
+            )}
+          >
+            <span aria-hidden className="w-3 text-center text-ink-3">
+              {meta.glyph}
+            </span>
+            <span className="flex-1">{meta.label}</span>
+            {active && <span className="text-[10px] text-ink-3">current</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MemberRoleControl({
+  member,
+  isAdmin,
+  pending,
+  onChange,
+}: {
+  member: TeamMember;
+  isAdmin: boolean;
+  pending: boolean;
+  onChange: (role: RoleKey) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const meta = ROLE_META[member.role];
+
+  if (!isAdmin) {
+    return (
+      <span
+        className={cx(
+          "shrink-0 rounded-sm border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide",
+          meta.chip,
+        )}
+      >
+        <span aria-hidden className="mr-1 opacity-70">
+          {meta.glyph}
+        </span>
+        {meta.label}
+      </span>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={cx(
+          "shrink-0 inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide transition-colors",
+          meta.chip,
+          "hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+          pending && "opacity-60",
+        )}
+      >
+        <span aria-hidden className="opacity-70">
+          {meta.glyph}
+        </span>
+        <span>{meta.label}</span>
+        <svg viewBox="0 0 8 6" className="h-1.5 w-2 opacity-70" aria-hidden>
+          <path d="M0 1 L4 5 L8 1" stroke="currentColor" strokeWidth="1.5" fill="none" />
+        </svg>
+      </button>
+      {open && (
+        <RolePopover
+          current={member.role}
+          pending={pending}
+          onPick={onChange}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function MemberRow({
+  member,
+  isAdmin,
+  isMe,
+  pending,
+  onRoleChange,
+}: {
+  member: TeamMember;
+  isAdmin: boolean;
+  isMe: boolean;
+  pending: boolean;
+  onRoleChange: (role: RoleKey) => void;
+}) {
+  return (
+    <div className="group/row flex items-center gap-3 px-3 py-2 transition-colors hover:bg-hover/60">
+      <span
+        className={cx(
+          "grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[10px] text-ink-2",
+          ROLE_META[member.role].ring,
+        )}
+        aria-hidden
+      >
+        {userInitials(member.name, member.email)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <span className="truncate text-[12.5px] font-medium text-ink">{member.name}</span>
+          {isMe && (
+            <span className="shrink-0 rounded-sm border border-line bg-bg px-1 font-mono text-[9.5px] uppercase tracking-wider text-ink-3">
+              you
+            </span>
+          )}
+        </div>
+        <div className="truncate font-mono text-[10.5px] text-ink-3">{member.email ?? "—"}</div>
+      </div>
+      <MemberRoleControl
+        member={member}
+        isAdmin={isAdmin}
+        pending={pending}
+        onChange={onRoleChange}
+      />
+    </div>
+  );
+}
+
+function TeamRoster({
+  users,
+  isAdmin,
+  currentEmail,
+  rolePending,
+  onRoleChange,
+}: {
+  users: TeamMember[];
+  isAdmin: boolean;
+  currentEmail: string;
+  rolePending: Set<string>;
+  onRoleChange: (userId: string, role: RoleKey) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | RoleKey>("all");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const counts = useMemo(() => {
+    const c = { admin: 0, editor: 0, viewer: 0 };
+    for (const u of users) c[u.role]++;
+    return c;
+  }, [users]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return users.filter((u) => {
+      if (filter !== "all" && u.role !== filter) return false;
+      if (!q) return true;
+      return (
+        u.name.toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
+        u.role.includes(q)
+      );
+    });
+  }, [users, query, filter]);
+
+  const bucketed = useMemo(() => {
+    const groups: Record<RoleKey, TeamMember[]> = { admin: [], editor: [], viewer: [] };
+    for (const u of filtered) groups[u.role].push(u);
+    for (const k of Object.keys(groups) as RoleKey[]) {
+      groups[k].sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return groups;
+  }, [filtered]);
+
+  const showBuckets = filter === "all" && !query;
+  const total = users.length;
+  const visible = filtered.length;
+
+  return (
+    <div className="space-y-2.5">
+      {/* Section sub-header: title + count */}
+      <div className="flex items-baseline justify-between">
+        <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+          Members <span className="text-ink-3/60">·</span> roles
+        </h3>
+        <span className="font-mono text-[10.5px] tabular-nums text-ink-3">
+          {visible === total ? (
+            <>{total} total</>
+          ) : (
+            <>
+              <span className="text-ink-2">{visible}</span>
+              <span className="text-ink-3/60"> / </span>
+              {total}
+            </>
+          )}
+        </span>
+      </div>
+
+      {/* Search + role filter chips */}
+      <div className="space-y-2">
+        <div className="relative">
+          <svg
+            viewBox="0 0 16 16"
+            aria-hidden
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+          >
+            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M11 11 L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter by name, email, or role…"
+            className="w-full rounded-sm border border-line-2 bg-bg py-1.5 pl-8 pr-16 font-mono text-[12px] text-ink placeholder:text-ink-3 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                searchRef.current?.focus();
+              }}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 hover:bg-hover hover:text-ink"
+            >
+              clear
+            </button>
+          ) : (
+            <span
+              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-ink-3 sm:inline"
+              aria-hidden
+            >
+              ⌘ K
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-1">
+          <RoleFilterPill
+            label="all"
+            count={total}
+            active={filter === "all"}
+            onClick={() => setFilter("all")}
+          />
+          {(["admin", "editor", "viewer"] as RoleKey[]).map((r) => (
+            <RoleFilterPill
+              key={r}
+              label={r}
+              glyph={ROLE_META[r].glyph}
+              count={counts[r]}
+              active={filter === r}
+              onClick={() => setFilter(filter === r ? "all" : r)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Roster body */}
+      {visible === 0 ? (
+        <div className="rounded-sm border border-dashed border-line py-8 text-center font-mono text-[11.5px] text-ink-3">
+          no matches
+          {query && (
+            <>
+              {" "}
+              for <code className="rounded-sm bg-surface-2 px-1 py-0.5 text-ink-2">{query}</code>
+            </>
+          )}
+          {(query || filter !== "all") && (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setFilter("all");
+                }}
+                className="rounded-sm border border-line bg-bg px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-ink-2 hover:bg-hover"
+              >
+                reset
+              </button>
+            </div>
+          )}
+        </div>
+      ) : showBuckets ? (
+        <div className="overflow-hidden rounded-sm border border-line">
+          {(["admin", "editor", "viewer"] as RoleKey[])
+            .filter((r) => bucketed[r].length > 0)
+            .map((r, i) => (
+              <div key={r} className={cx(i > 0 && "border-t border-line")}>
+                <div className="sticky top-0 z-10 flex items-baseline justify-between bg-surface-2 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+                  <span className="flex items-center gap-1.5">
+                    <span aria-hidden className="opacity-60">
+                      {ROLE_META[r].glyph}
+                    </span>
+                    {r}
+                  </span>
+                  <span className="tabular-nums">{bucketed[r].length}</span>
+                </div>
+                <div className="divide-y divide-line/70">
+                  {bucketed[r].map((u) => (
+                    <MemberRow
+                      key={u.id}
+                      member={u}
+                      isAdmin={isAdmin}
+                      isMe={u.email === currentEmail}
+                      pending={rolePending.has(u.id)}
+                      onRoleChange={(role) => onRoleChange(u.id, role)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden divide-y divide-line/70 rounded-sm border border-line">
+          {filtered
+            .slice()
+            .sort((a, b) => {
+              const ro = ROLE_META[a.role].order - ROLE_META[b.role].order;
+              if (ro !== 0) return ro;
+              return a.name.localeCompare(b.name);
+            })
+            .map((u) => (
+              <MemberRow
+                key={u.id}
+                member={u}
+                isAdmin={isAdmin}
+                isMe={u.email === currentEmail}
+                pending={rolePending.has(u.id)}
+                onRoleChange={(role) => onRoleChange(u.id, role)}
+              />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RoleFilterPill({
+  label,
+  count,
+  active,
+  glyph,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  glyph?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wider transition-colors",
+        active
+          ? "border-accent/50 bg-accent/10 text-accent"
+          : "border-line bg-bg text-ink-3 hover:border-line-2 hover:text-ink-2",
+      )}
+    >
+      {glyph && (
+        <span aria-hidden className="opacity-70">
+          {glyph}
+        </span>
+      )}
+      <span>{label}</span>
+      <span
+        className={cx(
+          "rounded-sm px-1 tabular-nums",
+          active ? "bg-accent/15 text-accent" : "bg-surface-2 text-ink-3",
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function AllowedEmailsList({
+  members,
+  loaded,
+  loadError,
+  onRetry,
+  myEmail,
+  onRemove,
+}: {
+  members: Member[];
+  loaded: boolean;
+  loadError: string | null;
+  onRetry: () => void;
+  myEmail: string;
+  onRemove: (email: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-sm border border-line">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-hover/60"
+      >
+        <div className="min-w-0">
+          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">
+            Email allowlist
+          </div>
+          <div className="mt-0.5 text-[11.5px] text-ink-3">
+            Addresses cleared to sign in. People sign in here and become members above.
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums text-ink-3">
+            {members.length}
+          </span>
+          <svg
+            viewBox="0 0 8 6"
+            className={cx("h-2 w-2.5 text-ink-3 transition-transform", open && "rotate-180")}
+            aria-hidden
+          >
+            <path d="M0 1 L4 5 L8 1" stroke="currentColor" strokeWidth="1.5" fill="none" />
+          </svg>
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-line">
+          {loadError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-danger-soft px-3 py-2 font-mono text-[11px] text-danger">
+              <span>Couldn&rsquo;t load — {loadError}</span>
+              <Button variant="ghost" size="sm" onClick={onRetry}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {loaded && members.length === 0 ? (
+            <div className="px-3 py-3 font-mono text-[11.5px] text-ink-3">
+              The allowlist is empty.
+            </div>
+          ) : (
+            <ul className="divide-y divide-line/70">
+              {members.map((m) => (
+                <li
+                  key={m.email}
+                  className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-hover/60"
+                >
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-2">
+                    {m.email}
+                  </span>
+                  <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-wider text-ink-3 sm:inline">
+                    by {m.addedBy === "bootstrap" ? "bootstrap" : m.addedBy}
+                  </span>
+                  {m.email !== myEmail && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(m.email)}
+                      className="shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-ink-3 hover:bg-warn/10 hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                    >
+                      remove
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
   const tone =
     chip.status === "valid"
@@ -451,12 +1010,9 @@ function TeamSection() {
       title="Team"
       hint="Only people on this list can log in. Any team member can add or remove others."
     >
-      {/* Team members with roles */}
+      {/* Team members with roles — searchable, role-bucketed roster */}
       {teamUsers.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-ink-3">
-            Members &amp; roles
-          </h3>
           {roleError && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
               <span>{roleError}</span>
@@ -465,76 +1021,25 @@ function TeamSection() {
               </Button>
             </div>
           )}
-          <ul className="divide-y divide-line rounded-sm border border-line">
-            {teamUsers.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 px-4 py-2.5">
-                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">
-                  {u.name}
-                </span>
-                <span className="hidden shrink-0 font-mono text-[11px] text-ink-3 sm:inline">
-                  {u.email ?? "—"}
-                </span>
-                {isAdmin ? (
-                  <select
-                    value={u.role}
-                    disabled={rolePending.has(u.id)}
-                    onChange={(e) =>
-                      void handleRoleChange(u.id, e.target.value as TeamMember["role"])
-                    }
-                    className={cx(
-                      "shrink-0 rounded-sm border border-line-2 bg-bg px-2 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/40",
-                      rolePending.has(u.id) && "opacity-60",
-                    )}
-                  >
-                    <option value="admin">admin</option>
-                    <option value="editor">editor</option>
-                    <option value="viewer">viewer</option>
-                  </select>
-                ) : (
-                  <span className="shrink-0 rounded-sm border border-line bg-surface-2 px-2 py-0.5 font-mono text-[11.5px] text-ink-2">
-                    {u.role}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+          <TeamRoster
+            users={teamUsers}
+            isAdmin={isAdmin}
+            currentEmail={myEmail ?? ""}
+            rolePending={rolePending}
+            onRoleChange={(userId, role) => void handleRoleChange(userId, role)}
+          />
         </div>
       )}
 
-      {/* Allowed-emails management */}
-      {loadError && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-          <span>Couldn&rsquo;t load the team — {loadError}</span>
-          <Button variant="ghost" size="sm" onClick={() => void load()}>
-            Retry
-          </Button>
-        </div>
-      )}
-
-      <ul className="divide-y divide-line rounded-sm border border-line">
-        {loaded && members.length === 0 && (
-          <li className="px-4 py-3 text-[13px] text-ink-3">No members yet.</li>
-        )}
-        {members.map((m) => (
-          <li key={m.email} className="flex items-center gap-3 px-4 py-2.5">
-            <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">
-              {m.email}
-            </span>
-            <span className="hidden shrink-0 text-[11px] text-ink-3 sm:inline">
-              added by {m.addedBy === "bootstrap" ? "bootstrap" : m.addedBy}
-            </span>
-            {m.email !== myEmail && (
-              <button
-                type="button"
-                onClick={() => setRemoveTarget(m.email)}
-                className="shrink-0 rounded-sm text-[11px] text-ink-3 transition-colors hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-              >
-                Remove
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+      {/* Allowed-emails — collapsed by default; secondary to the roster above */}
+      <AllowedEmailsList
+        members={members}
+        loaded={loaded}
+        loadError={loadError}
+        onRetry={() => void load()}
+        myEmail={myEmail ?? ""}
+        onRemove={(email) => setRemoveTarget(email)}
+      />
 
       <ConfirmDialog
         open={removeTarget !== null}
