@@ -82,8 +82,11 @@ test("super-admin bypasses the role check even with role='viewer'", async () => 
   expect((await sa.getPreferences()).publishThreshold).toBe(50);
 });
 
-test("default tenant getPreferences still returns the legacy id=1 row when no tenant_id row exists", async () => {
+test("default tenant getPreferences returns hardcoded fallback when no preferences row exists", async () => {
+  await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = 'default' OR tenant_id IS NULL`);
   const defaultRepo = new TenantRepo("default", "admin");
   const prefs = await defaultRepo.getPreferences();
-  expect(prefs.publishThreshold).toBeGreaterThanOrEqual(0);
+  expect(prefs.publishThreshold).toBe(95);
+  expect(prefs.suggestThreshold).toBe(80);
+  expect(prefs.scanSchedule).toBeNull();
 });
