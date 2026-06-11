@@ -56,30 +56,7 @@ function gateOrJson(user: SessionUser, op: Operation): Response | null {
   return null;
 }
 
-registerFactories({
-  duckdb: async (creds) => createDuckDbAdapter(creds),
-  snowflake: async (creds) => new SnowflakeAdapter(creds),
-});
-
-const adapter = await getAdapter();
-const ok = await adapter.ping();
-if (!ok) {
-  console.error("✗ warehouse adapter ping failed");
-  process.exit(1);
-}
-console.log(
-  `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
-);
-
-const scheduler = createScheduler({
-  tickIntervalMs: 60_000,
-  shouldRun: () => repo.anyScanDue(new Date()),
-  jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
-});
-scheduler.start();
-console.log("· scheduler started (1m tick)");
-
-async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
+export async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
   const url = new URL(req.url);
   const { pathname } = url;
   const seg = pathname.split("/").filter(Boolean); // ["api","dimensions",":id",...]
@@ -710,13 +687,37 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   }
 }
 
-interface PresenceWsData {
-  tableId: string;
-  userId: string;
-  displayName: string;
-}
+if (import.meta.main) {
+  registerFactories({
+    duckdb: async (creds) => createDuckDbAdapter(creds),
+    snowflake: async (creds) => new SnowflakeAdapter(creds),
+  });
 
-const server = Bun.serve<PresenceWsData>({
+  const adapter = await getAdapter();
+  const ok = await adapter.ping();
+  if (!ok) {
+    console.error("✗ warehouse adapter ping failed");
+    process.exit(1);
+  }
+  console.log(
+    `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
+  );
+
+  const scheduler = createScheduler({
+    tickIntervalMs: 60_000,
+    shouldRun: () => repo.anyScanDue(new Date()),
+    jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
+  });
+  scheduler.start();
+  console.log("· scheduler started (1m tick)");
+
+  interface PresenceWsData {
+    tableId: string;
+    userId: string;
+    displayName: string;
+  }
+
+  const server = Bun.serve<PresenceWsData>({
   port: env.port,
   idleTimeout: 120,
   maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
@@ -811,26 +812,27 @@ const server = Bun.serve<PresenceWsData>({
   },
 });
 
-console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
+  console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
 
-const SHUTDOWN_TIMEOUT_MS = 30_000;
-let shuttingDown = false;
-async function shutdown(signal: string): Promise<void> {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`· ${signal} received — draining…`);
-  // Drain in-flight scheduler job before closing. 30s is the safety-net timeout;
-  // v0.2 jobs don't honor the abort signal but future jobs can via ctx.signal.
-  await scheduler.stop(SHUTDOWN_TIMEOUT_MS);
-  console.log("· scheduler drained; closing server");
-  server.stop(false); // stop accepting new connections (Bun has no await-drain API)
-  await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
-  await Promise.race([
-    pgEnd(),
-    new Promise<void>((_, reject) => setTimeout(() => reject(new Error("pgEnd timeout")), 5000)),
-  ]).catch((e) => console.error("pgEnd failed:", e));
-  console.log("· shutdown complete");
-  process.exit(0);
+  const SHUTDOWN_TIMEOUT_MS = 30_000;
+  let shuttingDown = false;
+  async function shutdown(signal: string): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`· ${signal} received — draining…`);
+    // Drain in-flight scheduler job before closing. 30s is the safety-net timeout;
+    // v0.2 jobs don't honor the abort signal but future jobs can via ctx.signal.
+    await scheduler.stop(SHUTDOWN_TIMEOUT_MS);
+    console.log("· scheduler drained; closing server");
+    server.stop(false); // stop accepting new connections (Bun has no await-drain API)
+    await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
+    await Promise.race([
+      pgEnd(),
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error("pgEnd timeout")), 5000)),
+    ]).catch((e) => console.error("pgEnd failed:", e));
+    console.log("· shutdown complete");
+    process.exit(0);
+  }
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
