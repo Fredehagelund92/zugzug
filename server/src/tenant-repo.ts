@@ -43,4 +43,20 @@ export class TenantRepo {
     this.assertRole("manage_adapter");
     return repoMeta.setPreferences(p, this.tenantId);
   }
+
+  // --- audit ----------------------------------------------------------------
+  listAudit(limit = 30): Promise<import("./repo-shared.ts").AuditEntry[]> {
+    const scope = this.isSuperAdmin && this.tenantId === "*" ? "*" : this.tenantId;
+    return repoMeta.listAudit(limit, scope);
+  }
+
+  appendAudit(
+    userId: string,
+    action: string,
+    detail: string,
+    ctx: { tableId?: string; rowKey?: string } = {},
+  ): Promise<void> {
+    this.assertRole("curate");
+    return repoMeta.appendAuditAs(userId, action, detail, { ...ctx, tenantId: this.tenantId });
+  }
 }

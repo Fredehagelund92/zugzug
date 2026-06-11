@@ -25,16 +25,28 @@ export async function appendAuditAs(
   userId: string,
   action: string,
   detail: string,
-  ctx: { tableId?: string; rowKey?: string } = {},
+  ctx: { tableId?: string; rowKey?: string; tenantId?: string } = {},
 ): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key)
-     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6)`,
-    [randomUUID(), userId, action, detail, ctx.tableId ?? null, ctx.rowKey ?? null],
+    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key, tenant_id)
+     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6, $7)`,
+    [
+      randomUUID(),
+      userId,
+      action,
+      detail,
+      ctx.tableId ?? null,
+      ctx.rowKey ?? null,
+      ctx.tenantId ?? "default",
+    ],
   );
 }
 
-export async function listAudit(limit = 30): Promise<AuditEntry[]> {
+export async function listAudit(limit = 30, tenantId: string = "default"): Promise<AuditEntry[]> {
+  // tenantId === '*' is the super-admin cross-tenant feed.
+  const where = tenantId === "*" ? "" : "WHERE tenant_id = $1";
+  const params = tenantId === "*" ? [] : [tenantId];
+  const cappedLimit = Math.max(1, Math.min(200, limit));
   const rows = await pgAll<{
     id: string;
     uid: string;
@@ -44,8 +56,10 @@ export async function listAudit(limit = 30): Promise<AuditEntry[]> {
   }>(
     `SELECT id, user_id AS uid, action, detail,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
-     FROM ${pg("audit_log")} ORDER BY created_at DESC
-     LIMIT ${Math.max(1, Math.min(200, limit))}`,
+     FROM ${pg("audit_log")} ${where}
+     ORDER BY created_at DESC
+     LIMIT ${cappedLimit}`,
+    params,
   );
   if (rows.length === 0) return [];
 
