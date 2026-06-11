@@ -500,9 +500,9 @@ export async function importCanonical(
   const defs = await listFields(dimId);
   const validFields = new Set(defs.map((f) => f.field));
   const existing = new Set(
-    (
-      await pgAll<{ k: string }>(`SELECT ${qid(m.keyCol)} AS k FROM ${cq(m.dimTable)}`)
-    ).map((r) => String(r.k)),
+    (await pgAll<{ k: string }>(`SELECT ${qid(m.keyCol)} AS k FROM ${cq(m.dimTable)}`)).map((r) =>
+      String(r.k),
+    ),
   );
   let created = 0,
     updated = 0,
