@@ -29,6 +29,7 @@ import { getAdapter } from "./warehouse/registry.ts";
 import { presence } from "./realtime/presence-room.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { TenantRepo } from "./tenant-repo.ts";
+import { provisionTenant, listTenants } from "./tenant.ts";
 import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
@@ -197,6 +198,29 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg.length === 3 && method === "DELETE") {
         const { handleRevokeToken } = await import("./auth-api-tokens.ts");
         return handleRevokeToken(seg[2], me);
+      }
+    }
+
+    // /api/admin/tenants — super-admin only; tenantCtx.isSuperAdmin verified at the top of handle().
+    if (seg[1] === "admin" && seg[2] === "tenants") {
+      if (seg.length === 3 && method === "GET") {
+        const tenants = await listTenants();
+        return json({ tenants });
+      }
+      if (seg.length === 3 && method === "POST") {
+        const body = (await req.json()) as {
+          id: string;
+          label: string;
+          slug?: string;
+          warehouseId?: string;
+        };
+        const tenant = await provisionTenant({
+          id: body.id,
+          label: body.label,
+          slug: body.slug,
+          warehouseId: body.warehouseId,
+        });
+        return json(tenant, 201);
       }
     }
 
