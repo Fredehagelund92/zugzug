@@ -20,6 +20,7 @@ import {
 } from "./Icons";
 import { useDimensions, currentUser, useCurrentUser } from "../store";
 import { RoleBadge } from "./RoleBadge";
+import { SyncPill } from "./SyncPill";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
 import { SidebarTableTree } from "./SidebarTableTree";
@@ -568,6 +569,7 @@ export function AppShell() {
 
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
+            <SyncPill />
             {me && <RoleBadge role={me.role} />}
             <UserMenu />
           </div>
