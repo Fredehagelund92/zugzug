@@ -5,7 +5,7 @@
  * super-admin /api/admin/tenants route in PR 2). The CLI script in
  * scripts/admin.ts also calls in here for PR 1 bootstrap. */
 
-import { pgRun, pgGet, pgAll } from "./pg.ts";
+import { pgGet, pgAll } from "./pg.ts";
 import { AppError } from "./errors.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
@@ -49,27 +49,19 @@ export async function provisionTenant(opts: {
     throw new AppError("VALIDATION_FAILED", `tenant label cannot be empty`, 400);
   }
 
-  const existing = await pgGet<{ id: string }>(
-    `SELECT id FROM "zugzug_app"."tenant" WHERE id = $1`,
-    [id],
-  );
-  if (existing) {
-    throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists`, 409);
-  }
-
-  await pgRun(
+  // Single atomic statement — no check-then-insert race. ON CONFLICT DO
+  // NOTHING (no target) absorbs any unique violation: the id PK and the
+  // tenant_slug_unique index. No row back ⇒ somebody (possibly a concurrent
+  // call) already owns that id or slug.
+  const row = await pgGet<TenantRecord>(
     `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $2, $3, $4, now())`,
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT DO NOTHING
+     RETURNING id, slug, label, warehouse_id, created_at`,
     [id, slug, label, warehouseId],
   );
-
-  const row = await pgGet<TenantRecord>(
-    `SELECT id, slug, label, warehouse_id, created_at
-       FROM "zugzug_app"."tenant" WHERE id = $1`,
-    [id],
-  );
   if (!row) {
-    throw new AppError("INTERNAL", `tenant '${id}' disappeared after insert`, 500);
+    throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists (id or slug taken)`, 409);
   }
   return row;
 }
