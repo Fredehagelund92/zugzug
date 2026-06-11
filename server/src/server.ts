@@ -17,7 +17,7 @@ import {
 } from "./auth.ts";
 import * as team from "./team.ts";
 import * as tables from "./tables.ts";
-import { pgAll, pgEnd } from "./pg.ts";
+import { pgAll, pgEnd, pgContext } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { createScheduler } from "./scheduler.ts";
@@ -199,6 +199,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
+    return await pgContext.run({ insideTenantRepo: true }, async () => {
     // /api/admin/tenants — super-admin only; tenantCtx.isSuperAdmin verified at the top of handle().
     if (seg[1] === "admin" && seg[2] === "tenants") {
       if (seg.length === 3 && method === "GET") {
@@ -726,6 +727,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     return json({ error: `no route for ${method} ${pathname}` }, 404);
+    });
   } catch (e) {
     if (e instanceof AppError) {
       return json(
