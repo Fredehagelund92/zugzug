@@ -16,7 +16,6 @@ import {
 
 const T_IDS = ["tmem_a", "tmem_b"];
 const U_IDS = ["u_member_a", "u_member_b", "u_invitee"];
-const EMAILS = ["invitee@example.com"];
 
 async function cleanup(): Promise<void> {
   for (const t of T_IDS) {
