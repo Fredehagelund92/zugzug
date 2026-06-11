@@ -29,7 +29,7 @@ import { getAdapter } from "./warehouse/registry.ts";
 import { presence } from "./realtime/presence-room.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { TenantRepo } from "./tenant-repo.ts";
-import { provisionTenant, listTenants } from "./tenant.ts";
+import { provisionTenant, listTenants, tenantBySlug, memberRole } from "./tenant.ts";
 import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
@@ -774,6 +774,7 @@ if (import.meta.main) {
 
   interface PresenceWsData {
     tableId: string;
+    tenantId: string;
     userId: string;
     displayName: string;
   }
@@ -787,6 +788,44 @@ if (import.meta.main) {
       // We authenticate via the same session helper used by /api/* routes so that
       // anonymous clients can't observe presence. Auth FIRST, upgrade SECOND.
       const url = new URL(req.url);
+
+      // Tenant-scoped path: /ws/t/:slug/presence/:tableId
+      if (url.pathname.startsWith("/ws/t/")) {
+        const m = /^\/ws\/t\/([^/]+)\/presence\/(.+)$/.exec(url.pathname);
+        if (!m) return new Response("bad ws path", { status: 400 });
+        const slug = decodeURIComponent(m[1]!);
+        const tableId = decodeURIComponent(m[2]!);
+        if (!tableId) return new Response("missing tableId", { status: 400 });
+
+        let session: SessionUser | null;
+        try {
+          session = await getSessionUser(req);
+          if (!session) {
+            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+            session = await getApiTokenUser(req);
+          }
+        } catch {
+          return new Response("auth error", { status: 503 });
+        }
+        if (!session) return new Response("unauthorized", { status: 401 });
+
+        const tenant = await tenantBySlug(slug);
+        if (!tenant) return new Response("workspace not found", { status: 404 });
+        const role = await memberRole(tenant.id, session.id);
+        if (!role && !session.isSuperAdmin) return new Response("forbidden", { status: 403 });
+
+        const ok = srv.upgrade(req, {
+          data: {
+            tableId,
+            tenantId: tenant.id,
+            userId: session.id,
+            displayName: session.name,
+          } satisfies PresenceWsData,
+        });
+        return ok ? undefined : new Response("upgrade failed", { status: 500 });
+      }
+
+      // Legacy /ws/presence/:tableId — default-tenant fallback (one-release deprecation).
       if (url.pathname.startsWith("/ws/presence/")) {
         const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
         if (!tableId) return new Response("missing tableId", { status: 400 });
@@ -802,7 +841,12 @@ if (import.meta.main) {
         }
         if (!session) return new Response("unauthorized", { status: 401 });
         const ok = srv.upgrade(req, {
-          data: { tableId, userId: session.id, displayName: session.name } satisfies PresenceWsData,
+          data: {
+            tableId,
+            tenantId: "default",
+            userId: session.id,
+            displayName: session.name,
+          } satisfies PresenceWsData,
         });
         return ok ? undefined : new Response("upgrade failed", { status: 500 });
       }
@@ -845,13 +889,13 @@ if (import.meta.main) {
       // own liveness model on top.
       idleTimeout: 0,
       open(ws) {
-        const { tableId } = ws.data;
+        const { tableId, tenantId } = ws.data;
         // Cast: presence.join/leave/broadcast are typed for ServerWebSocket<undefined>
         // (the Bun default). They never read .data — they only fan out frames.
-        presence.join(tableId, ws as unknown as ServerWebSocket);
+        presence.join(tableId, ws as unknown as ServerWebSocket, tenantId);
       },
       message(ws, msg) {
-        const { tableId } = ws.data;
+        const { tableId, tenantId } = ws.data;
         // The yjs awareness envelope is binary. Bun hands us either a Buffer
         // (Uint8Array subclass) or a string. Strings would only come from
         // app-level heartbeats. Normalize to Uint8Array and relay verbatim —
@@ -864,11 +908,11 @@ if (import.meta.main) {
         } else {
           payload = new Uint8Array(msg as ArrayBuffer);
         }
-        presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket);
+        presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket, tenantId);
       },
       close(ws) {
-        const { tableId } = ws.data;
-        presence.leave(tableId, ws as unknown as ServerWebSocket);
+        const { tableId, tenantId } = ws.data;
+        presence.leave(tableId, ws as unknown as ServerWebSocket, tenantId);
       },
     },
   });
