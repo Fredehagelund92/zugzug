@@ -101,6 +101,13 @@ export async function handleSignup(req: Request): Promise<Response> {
     [userId, name, email, initialsOf(name), hash, role],
   );
 
+  try {
+    const { acceptInvitesFor } = await import("./tenant.ts");
+    await acceptInvitesFor(userId, email);
+  } catch (e) {
+    console.error("acceptInvitesFor failed:", e);
+  }
+
   const { cookie } = await issueSession(userId);
   const headers = new Headers({ "content-type": "application/json" });
   headers.append("Set-Cookie", cookie);
@@ -138,6 +145,13 @@ export async function handleLogin(req: Request): Promise<Response> {
 
   const ok = await Bun.password.verify(password, user.password_hash);
   if (!ok) return genericFail;
+
+  try {
+    const { acceptInvitesFor } = await import("./tenant.ts");
+    await acceptInvitesFor(user.id, email);
+  } catch (e) {
+    console.error("acceptInvitesFor failed:", e);
+  }
 
   const { cookie } = await issueSession(user.id);
   const headers = new Headers({ "content-type": "application/json" });

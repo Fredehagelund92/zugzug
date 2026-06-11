@@ -233,6 +233,13 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
     [userId, name, email, sub, initials, role],
   );
 
+  try {
+    const { acceptInvitesFor } = await import("./tenant.ts");
+    await acceptInvitesFor(userId, email);
+  } catch (e) {
+    console.error("acceptInvitesFor failed:", e);
+  }
+
   const { cookie } = await issueSession(userId);
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", clearState);
