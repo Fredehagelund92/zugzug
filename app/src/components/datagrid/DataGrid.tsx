@@ -411,7 +411,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     activity,
     presence,
   } = props;
-  const visible = columns.filter((c) => !c.hidden);
+  // Memoized so a stable `columns` identity from the host actually preserves
+  // GridRow memoization downstream — a fresh array here cascades into
+  // orderedVisible/gridStyle and defeats React.memo on every row.
+  const visible = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
   const selectionCol = !!selection;
   const showRowNumbers = !!props.showRowNumbers;
   const compact = props.density === "compact";

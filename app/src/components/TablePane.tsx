@@ -36,6 +36,7 @@ import {
   type GridLayoutConfig,
 } from "../store";
 import { usePresence } from "../lib/use-presence";
+import { useLinkedCandidates } from "../lib/use-linked-candidates";
 import { ConflictBanner } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
@@ -296,6 +297,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
 
   const list = dim.canonical;
   const fields = useMemo(() => dim.fields ?? [], [dim.fields]);
+  const linkedTargets = useLinkedCandidates(fields, allDims);
   const external = dim.keyKind === "external_id";
   const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
   const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
@@ -346,9 +348,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       },
       ...fields.flatMap<ColumnDef<CanonicalValue>>((f) => {
         if (f.type === "linked") {
-          const targetDim = allDims.find((d) => d.id === f.referencedDimId);
-          const candidates =
-            targetDim?.canonical.map((c) => ({ key: c.key, label: c.label })) ?? [];
+          const target = f.referencedDimId ? linkedTargets.get(f.referencedDimId) : undefined;
+          const candidates = target?.candidates ?? [];
           const fkCol: ColumnDef<CanonicalValue> = {
             field: f.field,
             label: f.label,
@@ -362,10 +363,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           };
           const lookupCols: ColumnDef<CanonicalValue>[] = (f.displayFields ?? ["label"]).map(
             (df) => {
-              const targetField = targetDim?.fields?.find((tf) => tf.field === df);
               return {
                 field: `${f.field}__${df}`,
-                label: `↳ ${targetField?.label ?? df}`,
+                label: `↳ ${target?.fieldLabels.get(df) ?? df}`,
                 config: { type: "text" } as const,
                 editable: false,
               };
@@ -401,7 +401,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         return ai - bi;
       });
     return ordered;
-  }, [fields, engineer, dim.keyCol, external, layout, allDims]);
+  }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
 
   const rowsForGrid = useMemo(
     () =>
