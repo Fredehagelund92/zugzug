@@ -140,12 +140,36 @@ export function useGridCursor<Row>({
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [cursor?.rowKey, cursor?.field]);
 
-  // When the host's rows change (filter toggle, async save), drop the cursor if
-  // its row vanished — prevents an orphan focus ring on a dead key.
+  // When the host's rows change (filter toggle, async save), the cursor may
+  // point at a row that no longer exists. Instead of dropping focus (which
+  // would break the workbench A/A/A triage loop — accept → row leaves → next
+  // A is a no-op), move the cursor to whatever row now occupies the same
+  // index. Same UX as Linear archiving in a list. Tracked via lastIndexRef so
+  // we know where the cursor *was* before the row vanished.
+  const lastIndexRef = useRef(-1);
   useEffect(() => {
-    if (!cursor) return;
-    const present = rows.some((r) => rowKey(r) === cursor.rowKey);
-    if (!present) setCursor(null);
+    if (!cursor) {
+      lastIndexRef.current = -1;
+      return;
+    }
+    const present = rows.findIndex((r) => rowKey(r) === cursor.rowKey);
+    if (present >= 0) {
+      lastIndexRef.current = present;
+      return;
+    }
+    if (rows.length === 0) {
+      setCursor(null);
+      lastIndexRef.current = -1;
+      return;
+    }
+    const targetIdx = Math.max(0, Math.min(lastIndexRef.current, rows.length - 1));
+    const targetRow = rows[targetIdx];
+    if (!targetRow) {
+      setCursor(null);
+      return;
+    }
+    setCursor({ rowKey: rowKey(targetRow), field: cursor.field, editing: false });
+    lastIndexRef.current = targetIdx;
   }, [rows, cursor, rowKey]);
 
   const onKeyDown = useCallback(

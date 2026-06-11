@@ -15,7 +15,9 @@ export interface MatchRowState {
 }
 
 /** ComboSelect as a DataGrid edit cell: opens on mount, commits the pick,
- *  cancels when the popover closes without one. */
+ *  cancels when the popover closes without one (Escape, outside click) —
+ *  the cancel is critical, otherwise DataGrid stays in edit mode and silently
+ *  swallows subsequent clicks. */
 function TargetEditor({
   row,
   ctx,
@@ -30,6 +32,7 @@ function TargetEditor({
   current: string | null;
 }) {
   const handle = useRef<ComboSelectHandle>(null);
+  const committedRef = useRef(false);
   useEffect(() => {
     handle.current?.open();
   }, []);
@@ -40,7 +43,13 @@ function TargetEditor({
       value={current}
       suggestion={row.suggestion}
       allowCreate={allowCreate}
-      onPick={(t) => ctx.commit(t)}
+      onPick={(t) => {
+        committedRef.current = true;
+        ctx.commit(t);
+      }}
+      onClose={() => {
+        if (!committedRef.current) ctx.cancel();
+      }}
     />
   );
 }

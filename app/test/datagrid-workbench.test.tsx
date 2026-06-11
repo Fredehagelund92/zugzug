@@ -106,6 +106,91 @@ describe("DataGrid onCellKeyDown", () => {
   });
 });
 
+describe("DataGrid cursor survives row removal", () => {
+  test("cursor moves to the row now at the same index when its row vanishes", async () => {
+    const rows3: Row[] = [
+      { id: "a", name: "Alpha" },
+      { id: "b", name: "Beta" },
+      { id: "c", name: "Gamma" },
+    ];
+    const onCellKeyDown = vi.fn();
+    const { container, rerender } = render(
+      <UndoStackProvider>
+        <DataGrid
+          rows={rows3}
+          columns={columns}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+          onCellKeyDown={onCellKeyDown}
+        />
+      </UndoStackProvider>,
+    );
+    const grid = container.querySelector('[role="grid"]') as HTMLElement;
+
+    clickCellByText(container, "Beta");
+
+    await act(async () => {
+      rerender(
+        <UndoStackProvider>
+          <DataGrid
+            rows={[rows3[0]!, rows3[2]!]}
+            columns={columns}
+            rowKey={(r) => r.id}
+            onCommit={async () => {}}
+            onCellKeyDown={onCellKeyDown}
+          />
+        </UndoStackProvider>,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(grid, { key: "s", bubbles: true, cancelable: true });
+    });
+
+    const lastCall = onCellKeyDown.mock.calls.at(-1)!;
+    expect(lastCall[1].cursor).toEqual({ rowKey: "c", field: "name" });
+  });
+
+  test("cursor clears when rows becomes empty", async () => {
+    const rows1: Row[] = [{ id: "a", name: "Alpha" }];
+    const onCellKeyDown = vi.fn();
+    const { container, rerender } = render(
+      <UndoStackProvider>
+        <DataGrid
+          rows={rows1}
+          columns={columns}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+          onCellKeyDown={onCellKeyDown}
+        />
+      </UndoStackProvider>,
+    );
+    const grid = container.querySelector('[role="grid"]') as HTMLElement;
+    clickCellByText(container, "Alpha");
+
+    await act(async () => {
+      rerender(
+        <UndoStackProvider>
+          <DataGrid
+            rows={[]}
+            columns={columns}
+            rowKey={(r) => r.id}
+            onCommit={async () => {}}
+            onCellKeyDown={onCellKeyDown}
+          />
+        </UndoStackProvider>,
+      );
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(grid, { key: "s", bubbles: true, cancelable: true });
+    });
+
+    const lastCall = onCellKeyDown.mock.calls.at(-1);
+    if (lastCall) expect(lastCall[1].cursor).toBeNull();
+  });
+});
+
 describe("DataGrid renderRowDetail", () => {
   test("renders beneath the matching row only", () => {
     const { container, queryAllByTestId } = renderGrid({

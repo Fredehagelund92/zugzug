@@ -254,8 +254,21 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const initialUrlValueRef = useRef<string | null>(isActive ? searchParams.get("value") : null);
   useEffect(() => {
     const pinned = initialUrlValueRef.current;
-    if (!pinned || !dim.values.some((r) => r.value === pinned)) return;
+    if (!pinned) return;
+    const targetRow = dim.values.find((r) => r.value === pinned);
+    if (!targetRow) return;
+    // If the deep-linked row exists but is filtered out (e.g. already-mapped
+    // value under the default "new" lens), widen the filter first so the next
+    // pass actually finds it in `visible`. Don't consume the ref until the
+    // row is renderable.
+    if (!visible.some((r) => r.value === pinned)) {
+      setFilter("all");
+      return;
+    }
     initialUrlValueRef.current = null;
+    // Note: rows below the virtualization window have no [data-row] yet —
+    // querySelector returns null, scroll no-ops. Same limitation as
+    // RecordsBody's ?focus=. Acceptable for the common case.
     requestAnimationFrame(() => {
       document
         .querySelector<HTMLElement>(`[data-row="${attrEsc(pinned)}"]`)
@@ -263,7 +276,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     });
     flashRow(`[data-row="${attrEsc(pinned)}"]`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dim.id]);
+  }, [dim.id, visible, setFilter]);
 
   // the staged drafts awaiting commit (incl. teammates' work) — the review
   // set. Scoped to still-uncommitted (new) values, matching what commit()
@@ -446,7 +459,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           columns={columns}
           selection={{ selected: sel, onChange: setSel }}
           getValue={(r, field) =>
-            field === "target" ? (state[r.value]?.target ?? "") : (r as never)[field]
+            field === "target"
+              ? (state[r.value]?.target ?? "")
+              : (r as unknown as Record<string, unknown>)[field]
           }
           onCommit={
             canEdit
@@ -464,6 +479,10 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               return;
             }
             if (!v) return;
+            // Plain letter shortcuts must NOT fire with modifiers — ⌘R must
+            // keep meaning "reload", ⌘S "save page", etc.
+            const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+            if (!plain) return;
             const k = e.key.toLowerCase();
             if (canEdit && k === "a") {
               e.preventDefault();

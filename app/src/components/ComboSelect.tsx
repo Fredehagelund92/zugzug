@@ -34,6 +34,9 @@ interface ComboSelectProps {
   allowCreate?: boolean;
   disabled?: boolean;
   onPick?: (v: string) => void;
+  /** Fires when the popover closes WITHOUT a pick (Escape, outside-click,
+   *  trigger toggle, Tab). Used by edit-cell hosts to call ctx.cancel(). */
+  onClose?: () => void;
 }
 
 const DROPDOWN_W = 240; // px — matches original w-60
@@ -47,6 +50,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
     allowCreate = false,
     disabled = false,
     onPick,
+    onClose,
   },
   imperativeRef,
 ) {
@@ -111,11 +115,13 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
       if (wrapperRef.current?.contains(target)) return;
       if (dropdownRef.current?.contains(target)) return;
       setOpen(false);
+      onClose?.();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setOpen(false);
         triggerRef.current?.focus();
+        onClose?.();
       }
     };
     document.addEventListener("mousedown", onDown);
@@ -169,7 +175,13 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={() => {
+          if (disabled) return;
+          setOpen((o) => {
+            if (o) onClose?.();
+            return !o;
+          });
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-disabled={disabled}
@@ -217,6 +229,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
                   } else if (e.key === "Tab") {
                     setOpen(false);
                     triggerRef.current?.focus();
+                    onClose?.();
                     // intentional: don't preventDefault — let the natural Tab move to next focusable
                   }
                 }}
