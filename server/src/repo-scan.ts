@@ -32,10 +32,10 @@ export interface UnmappedSample {
  *  refreshes them) so this is instant regardless of source count. Supports search
  *  (q), schema filter, and a status filter; ranked by unmapped (rows at risk). */
 export async function listSources(
-  opts: { q?: string; schema?: string; status?: string } = {},
+  opts: { q?: string; schema?: string; status?: string; tenantId: string },
 ): Promise<SourceInfo[]> {
-  const params: unknown[] = [];
-  const where: string[] = [];
+  const params: unknown[] = [opts.tenantId];
+  const where: string[] = [`s.tenant_id = $1`];
   if (opts.q) {
     params.push(`%${opts.q}%`);
     const p = `$${params.length}`;
@@ -70,10 +70,11 @@ export async function listSources(
             (st.scanned_at IS NOT NULL) AS scanned,
             st.scanned_at::text AS "scannedAt"
      FROM ${pg("dimension_source")} s
-     JOIN ${pg("dimension")} d ON d.id = s.dim_id
+     JOIN ${pg("dimension")} d ON d.id = s.dim_id AND d.tenant_id = s.tenant_id
      LEFT JOIN ${pg("source_stat")} st
        ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
-     ${where.length ? "WHERE " + where.join(" AND ") : ""}
+       AND st.tenant_id = s.tenant_id
+     WHERE ${where.join(" AND ")}
      ORDER BY COALESCE(st.unmapped, 0) DESC, s.source_table, s.source_column
      LIMIT 1000`,
     params,
@@ -93,7 +94,7 @@ export async function listSources(
 }
 
 /** Per-schema rollup for the facet rail — turns N source columns into ~systems. */
-export async function sourceFacets(): Promise<SchemaFacet[]> {
+export async function sourceFacets(tenantId: string): Promise<SchemaFacet[]> {
   const rows = await pgAll<{ schema: string; columns: number; unmapped: number; missing: number }>(
     `SELECT split_part(s.source_table, '.', 1) AS schema,
             count(*)::int AS columns,
@@ -102,7 +103,10 @@ export async function sourceFacets(): Promise<SchemaFacet[]> {
      FROM ${pg("dimension_source")} s
      LEFT JOIN ${pg("source_stat")} st
        ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
+       AND st.tenant_id = s.tenant_id
+     WHERE s.tenant_id = $1
      GROUP BY 1 ORDER BY unmapped DESC, schema`,
+    [tenantId],
   );
   return rows.map((r) => ({
     schema: r.schema,
@@ -114,10 +118,13 @@ export async function sourceFacets(): Promise<SchemaFacet[]> {
 
 /** Refresh the cached stats for every registered source (the expensive scan,
  *  run explicitly). Returns how many sources were scanned. */
-export async function scanSources(): Promise<number> {
+export async function scanSources(tenantId: string): Promise<number> {
   const regs = await pgAll<{ dimId: string; table: string; column: string; mapTable: string }>(
     `SELECT s.dim_id AS "dimId", s.source_table AS "table", s.source_column AS column, d.map_table AS "mapTable"
-     FROM ${pg("dimension_source")} s JOIN ${pg("dimension")} d ON d.id = s.dim_id`,
+     FROM ${pg("dimension_source")} s
+     JOIN ${pg("dimension")} d ON d.id = s.dim_id AND d.tenant_id = s.tenant_id
+     WHERE s.tenant_id = $1`,
+    [tenantId],
   );
   const SCAN_TIMEOUT_MS = 30_000;
   const adapter = await getAdapter();
@@ -175,13 +182,13 @@ export async function scanSources(): Promise<number> {
     }
     await pgRun(
       `INSERT INTO ${pg("source_stat")}
-         (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, current_timestamp)
+         (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, current_timestamp, $8)
        ON CONFLICT (dim_id, source_table, source_column) DO UPDATE SET
          present = EXCLUDED.present, rows = EXCLUDED.rows,
          distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
          scanned_at = EXCLUDED.scanned_at`,
-      [r.dimId, r.table, r.column, present, rows, distinct, unmapped],
+      [r.dimId, r.table, r.column, present, rows, distinct, unmapped, tenantId],
     );
   }
 
@@ -190,9 +197,10 @@ export async function scanSources(): Promise<number> {
 
 /** List dimension IDs that have at least one wired source. Used by the
  *  auto-stage scheduler job to know which dimensions to process per tick. */
-export async function dimensionsWithWiredSources(): Promise<string[]> {
+export async function dimensionsWithWiredSources(tenantId: string): Promise<string[]> {
   const rows = await pgAll<{ dimId: string }>(
-    `SELECT DISTINCT dim_id AS "dimId" FROM ${pg("dimension_source")}`,
+    `SELECT DISTINCT dim_id AS "dimId" FROM ${pg("dimension_source")} WHERE tenant_id = $1`,
+    [tenantId],
   );
   return rows.map((r) => r.dimId);
 }
@@ -201,17 +209,17 @@ export async function dimensionsWithWiredSources(): Promise<string[]> {
  *  case-insensitively matches an existing canonical label and is not yet in
  *  the dimension's lookup table. The match is deterministic — no AI, no fuzzy
  *  — so it always lands above any reasonable publish threshold. */
-export async function autoStageExactMatches(dimId: string): Promise<number> {
+export async function autoStageExactMatches(dimId: string, tenantId: string): Promise<number> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
             COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1`,
-    [dimId],
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
   );
   if (!meta) return 0;
   if (meta.keyKind === "external_id") return 0;
 
-  const sources = await liveSources(dimId);
+  const sources = await liveSources(dimId, tenantId);
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values
@@ -247,12 +255,13 @@ export async function autoStageExactMatches(dimId: string): Promise<number> {
 
   if (!matches.length) return 0;
   for (const m of matches) {
-    await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system");
+    await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system", tenantId);
   }
   await appendAuditAs(
     "u_system",
     "Auto-matched",
     `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`,
+    { tenantId },
   );
   return matches.length;
 }
@@ -262,13 +271,14 @@ export async function addSource(
   dimId: string,
   table: string,
   column: string,
+  tenantId: string,
   opts: { silent?: boolean } = {},
 ): Promise<void> {
   void opts;
   await pgRun(
-    `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
-     VALUES ($1, $2, $3) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
-    [dimId, table, column],
+    `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
+     VALUES ($1, $2, $3, $4) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
+    [dimId, table, column, tenantId],
   );
 }
 
@@ -280,10 +290,11 @@ export async function topUnmapped(
   table: string,
   column: string,
   limit = 5,
+  tenantId: string,
 ): Promise<UnmappedSample[]> {
   const meta = await pgGet<{ mapTable: string }>(
-    `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1`,
-    [dimId],
+    `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
@@ -309,8 +320,65 @@ export async function topUnmapped(
  *  and the last scanned_at timestamp. The scheduler uses this as a cheap
  *  is-anything-pending check before triggering scanSources (which scans them all).
  *  Returns false (silently) if the app-state schema hasn't been provisioned yet —
- *  the scheduler tick should no-op on a fresh DB, not spam the logs. */
-export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
+ *  the scheduler tick should no-op on a fresh DB, not spam the logs.
+ *
+ *  Pass `tenantId === "*"` from the super-admin scheduler to ask "is ANY tenant
+ *  due?" in a single query. */
+export async function anyScanDue(
+  now: Date = new Date(),
+  tenantId: string = "default",
+): Promise<boolean> {
+  if (tenantId === "*") {
+    // Cross-tenant: true iff at least one tenant has a non-null scan_schedule
+    // and either (a) has unscanned registered sources, or (b) the latest scan
+    // for that tenant is older than the cadence window. Cheap proxy: any tenant
+    // with scan_schedule set AND (no source_stat OR stale max scanned_at).
+    try {
+      const row = await pgGet<{ due: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM ${pg("preferences")} p
+           WHERE p.scan_schedule IS NOT NULL
+             AND (
+               EXISTS (
+                 SELECT 1 FROM ${pg("dimension_source")} ds
+                 WHERE ds.tenant_id = p.tenant_id
+                   AND NOT EXISTS (
+                     SELECT 1 FROM ${pg("source_stat")} st
+                     WHERE st.dim_id = ds.dim_id
+                       AND st.source_table = ds.source_table
+                       AND st.source_column = ds.source_column
+                       AND st.tenant_id = ds.tenant_id
+                   )
+               )
+               OR NOT EXISTS (
+                 SELECT 1 FROM ${pg("source_stat")} st2
+                 WHERE st2.tenant_id = p.tenant_id
+               )
+               OR (
+                 SELECT max(st3.scanned_at)
+                   FROM ${pg("source_stat")} st3
+                  WHERE st3.tenant_id = p.tenant_id
+               ) < (
+                 $1::timestamp - (
+                   CASE p.scan_schedule
+                     WHEN '15m'    THEN INTERVAL '15 minutes'
+                     WHEN 'hourly' THEN INTERVAL '1 hour'
+                     ELSE INTERVAL '1 day'
+                   END
+                 )
+               )
+             )
+         ) AS due`,
+        [now],
+      );
+      return row?.due ?? false;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/relation.*zugzug_app.*does not exist/i.test(msg)) return false;
+      throw e;
+    }
+  }
+
   let sched: string | null;
   let lastScan: Date | null;
   let unscannedCount: number;
@@ -322,15 +390,19 @@ export async function anyScanDue(now: Date = new Date()): Promise<boolean> {
     }>(
       `SELECT p.scan_schedule,
               (SELECT max(st.scanned_at)::text
-               FROM ${pg("source_stat")} st) AS last_scan,
+               FROM ${pg("source_stat")} st
+               WHERE st.tenant_id = $1) AS last_scan,
               (SELECT count(*)::int FROM ${pg("dimension_source")} ds
-               WHERE NOT EXISTS (
+               WHERE ds.tenant_id = $1
+                 AND NOT EXISTS (
                  SELECT 1 FROM ${pg("source_stat")} st2
                  WHERE st2.dim_id = ds.dim_id
                    AND st2.source_table = ds.source_table
                    AND st2.source_column = ds.source_column
+                   AND st2.tenant_id = ds.tenant_id
                )) AS unscanned_count
-       FROM ${pg("preferences")} p WHERE p.id = 1`,
+       FROM ${pg("preferences")} p WHERE p.tenant_id = $1`,
+      [tenantId],
     );
     if (!row) return false;
     sched = row.scan_schedule;
@@ -356,7 +428,12 @@ export interface ScanStatusResult {
   lastAutoPublishDetail: string | null;
 }
 
-export async function scanStatus(): Promise<ScanStatusResult> {
+export async function scanStatus(tenantId: string = "default"): Promise<ScanStatusResult> {
+  const isCrossTenant = tenantId === "*";
+  const tenantFilterSources = isCrossTenant ? "" : "WHERE s.tenant_id = $1";
+  const tenantFilterAudit = isCrossTenant ? "" : "AND tenant_id = $1";
+  const params = isCrossTenant ? [] : [tenantId];
+
   const [row, lastAuto] = await Promise.all([
     pgGet<{ last_scan: string | null; sources: number; unmapped: number }>(
       `SELECT max(st.scanned_at)::text                   AS last_scan,
@@ -366,14 +443,19 @@ export async function scanStatus(): Promise<ScanStatusResult> {
        LEFT JOIN ${pg("source_stat")} st
          ON  st.dim_id = s.dim_id
          AND st.source_table  = s.source_table
-         AND st.source_column = s.source_column`,
+         AND st.source_column = s.source_column
+         AND st.tenant_id = s.tenant_id
+       ${tenantFilterSources}`,
+      params,
     ).catch(() => null),
     pgGet<{ at: string; detail: string }>(
       `SELECT created_at::text AS at, detail
          FROM ${pg("audit_log")}
         WHERE user_id = 'u_system' AND action = 'Committed'
+        ${tenantFilterAudit}
         ORDER BY created_at DESC
         LIMIT 1`,
+      params,
     ).catch(() => null),
   ]);
   return {
@@ -388,8 +470,9 @@ export async function scanStatus(): Promise<ScanStatusResult> {
 /** Browse/search the warehouse catalog (the 1000+ tables) — server-side search +
  *  schema facets + pagination, metadata only (no row counts). The scale surface. */
 export async function searchCatalog(
-  opts: { q?: string; schema?: string; limit?: number; offset?: number } = {},
+  opts: { q?: string; schema?: string; limit?: number; offset?: number; tenantId: string },
 ): Promise<{ rows: CatalogTable[]; total: number; schemas: { schema: string; tables: number }[] }> {
+  void opts.tenantId; // catalog browse is global (warehouse view); tenant accepted for parity / future filtering
   if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
   const adapter = await getAdapter();
   const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
@@ -457,16 +540,17 @@ export async function deriveCanonical(
   nameColumn: string | undefined,
   opts: { silent?: boolean } = {},
   userId: string,
+  tenantId: string,
 ): Promise<{ derived: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1`,
-    [dimId],
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
   );
   if (!meta) return { derived: 0 };
-  await addSource(dimId, table, column);
+  await addSource(dimId, table, column, tenantId);
   const external = meta.keyKind === "external_id";
-  if (external && nameColumn) await addSource(dimId, table, nameColumn);
+  if (external && nameColumn) await addSource(dimId, table, nameColumn, tenantId);
 
   const adapter = await getAdapter();
   const vals = await adapter
@@ -490,8 +574,9 @@ export async function deriveCanonical(
     );
     if (nameColumn) {
       await pgRun(
-        `UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
-        [table, column, nameColumn, dimId],
+        `UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3
+         WHERE id = $4 AND tenant_id = $5`,
+        [table, column, nameColumn, dimId, tenantId],
       );
     }
     if (!opts.silent)
@@ -499,6 +584,7 @@ export async function deriveCanonical(
         userId,
         "Derived canonical",
         `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`,
+        { tenantId },
       );
     return { derived: ids.length };
   }
@@ -525,6 +611,7 @@ export async function deriveCanonical(
       userId,
       "Derived canonical",
       `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
+      { tenantId },
     );
   return { derived: dimByKey.size };
 }
