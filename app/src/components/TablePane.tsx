@@ -401,7 +401,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         return ai - bi;
       });
     return ordered;
-  }, [fields, engineer, dim.keyCol, external, layout, linkedTargets]);
+  }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
 
   const rowsForGrid = useMemo(
     () =>
