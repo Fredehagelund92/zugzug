@@ -173,14 +173,18 @@ export const sessions = app.table(
   (t) => [index("sessions_user_id_idx").on(t.user_id)],
 );
 
-export const preferences = app.table("preferences", {
-  id:                integer("id").primaryKey(),
-  publish_threshold: integer("publish_threshold").notNull(),
-  suggest_threshold: integer("suggest_threshold").notNull(),
-  scan_schedule:     varchar("scan_schedule", { length: 10 }),
-  updated_at:        timestamp("updated_at").notNull(),
-  tenant_id:         varchar("tenant_id").default("default"),
-});
+export const preferences = app.table(
+  "preferences",
+  {
+    id:                integer("id").primaryKey(),
+    publish_threshold: integer("publish_threshold").notNull(),
+    suggest_threshold: integer("suggest_threshold").notNull(),
+    scan_schedule:     varchar("scan_schedule", { length: 10 }),
+    updated_at:        timestamp("updated_at").notNull(),
+    tenant_id:         varchar("tenant_id").default("default"),
+  },
+  (t) => [uniqueIndex("preferences_tenant_unique").on(t.tenant_id)],
+);
 
 export const userGridLayout = app.table(
   "user_grid_layout",
@@ -209,6 +213,7 @@ export const aiHintCache = app.table(
   (t) => [
     primaryKey({ columns: [t.dim_id, t.raw] }),
     index("ai_hint_cache_dim_id_idx").on(t.dim_id),
+    index("ai_hint_cache_tenant_dim_idx").on(t.tenant_id, t.dim_id),
   ],
 );
 
@@ -246,6 +251,7 @@ export const canonicalVersion = app.table(
   (t) => [
     primaryKey({ columns: [t.dim_id, t.key] }),
     index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
+    index("canonical_version_tenant_dim_idx").on(t.tenant_id, t.dim_id),
   ],
 );
 
