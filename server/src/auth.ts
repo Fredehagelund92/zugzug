@@ -24,6 +24,7 @@ export interface SessionUser {
   email: string;
   initials: string;
   role: Role;
+  isSuperAdmin: boolean;
 }
 
 export type Role = "admin" | "editor" | "viewer";
@@ -101,7 +102,8 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     return null;
   }
   return get<SessionUser>(
-    `SELECT id, name, email, initials, role FROM ${pg("users")} WHERE id = $1`,
+    `SELECT id, name, email, initials, role, is_super_admin AS "isSuperAdmin"
+       FROM ${pg("users")} WHERE id = $1`,
     [session.user_id],
   );
 }

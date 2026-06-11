@@ -25,16 +25,28 @@ export async function appendAuditAs(
   userId: string,
   action: string,
   detail: string,
-  ctx: { tableId?: string; rowKey?: string } = {},
+  ctx: { tableId?: string; rowKey?: string; tenantId?: string } = {},
 ): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key)
-     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6)`,
-    [randomUUID(), userId, action, detail, ctx.tableId ?? null, ctx.rowKey ?? null],
+    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key, tenant_id)
+     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6, $7)`,
+    [
+      randomUUID(),
+      userId,
+      action,
+      detail,
+      ctx.tableId ?? null,
+      ctx.rowKey ?? null,
+      ctx.tenantId ?? "default",
+    ],
   );
 }
 
-export async function listAudit(limit = 30): Promise<AuditEntry[]> {
+export async function listAudit(limit = 30, tenantId: string = "default"): Promise<AuditEntry[]> {
+  // tenantId === '*' is the super-admin cross-tenant feed.
+  const where = tenantId === "*" ? "" : "WHERE tenant_id = $1";
+  const params = tenantId === "*" ? [] : [tenantId];
+  const cappedLimit = Math.max(1, Math.min(200, limit));
   const rows = await pgAll<{
     id: string;
     uid: string;
@@ -44,8 +56,10 @@ export async function listAudit(limit = 30): Promise<AuditEntry[]> {
   }>(
     `SELECT id, user_id AS uid, action, detail,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
-     FROM ${pg("audit_log")} ORDER BY created_at DESC
-     LIMIT ${Math.max(1, Math.min(200, limit))}`,
+     FROM ${pg("audit_log")} ${where}
+     ORDER BY created_at DESC
+     LIMIT ${cappedLimit}`,
+    params,
   );
   if (rows.length === 0) return [];
 
@@ -66,15 +80,18 @@ export async function listAudit(limit = 30): Promise<AuditEntry[]> {
   }));
 }
 
-/* --- workspace-global preferences (single row, id=1) --- */
-export async function getPreferences(): Promise<Preferences> {
+/* --- workspace-global preferences (one row per tenant) --- */
+export async function getPreferences(tenantId: string = "default"): Promise<Preferences> {
   const row = await pgGet<{
     publish_threshold: number;
     suggest_threshold: number;
     scan_schedule: string | null;
   }>(
     `SELECT publish_threshold, suggest_threshold, scan_schedule
-     FROM ${pg("preferences")} WHERE id = 1`,
+     FROM ${pg("preferences")}
+     WHERE tenant_id = $1
+     ORDER BY id LIMIT 1`,
+    [tenantId],
   );
   const validSchedule = ["15m", "hourly", "daily"] as const;
   const sched = row?.scan_schedule ?? null;
@@ -87,16 +104,31 @@ export async function getPreferences(): Promise<Preferences> {
   };
 }
 
-export async function setPreferences(p: Preferences): Promise<void> {
+export async function setPreferences(p: Preferences, tenantId: string = "default"): Promise<void> {
   const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
   if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
-  await pgRun(
+
+  // Race window: two concurrent setPreferences calls for a tenant with no existing
+  // row can both fall through to the INSERT and collide on the PK (or both succeed
+  // with last-writer-wins). PR2b adds UNIQUE(tenant_id) + ON CONFLICT DO UPDATE.
+  // Acceptable for PR2a — two simultaneous admin saves for one workspace is
+  // vanishingly rare in an internal tool.
+  const rows = await pgAll(
     `UPDATE ${pg("preferences")}
-     SET publish_threshold = $1, suggest_threshold = $2,
-         scan_schedule = $3, updated_at = current_timestamp
-     WHERE id = 1`,
-    [p.publishThreshold, p.suggestThreshold, p.scanSchedule],
+       SET publish_threshold = $1, suggest_threshold = $2,
+           scan_schedule = $3, updated_at = current_timestamp
+     WHERE tenant_id = $4
+     RETURNING id`,
+    [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
   );
+  if (rows.length === 0) {
+    await pgRun(
+      `INSERT INTO ${pg("preferences")}
+         (id, publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
+       VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM ${pg("preferences")}), $1, $2, $3, current_timestamp, $4)`,
+      [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
+    );
+  }
 }
 
 /* ---- per-user grid layout (column widths / order / hidden) ---- */

@@ -5,6 +5,8 @@
 import { env, pg } from "./env.ts";
 import { pgRun, pgAll, pgGet } from "./pg.ts";
 import { issueSession } from "./auth.ts";
+import { acceptInvitesFor } from "./tenant.ts";
+import { log } from "./log.ts";
 
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 12;
@@ -101,6 +103,12 @@ export async function handleSignup(req: Request): Promise<Response> {
     [userId, name, email, initialsOf(name), hash, role],
   );
 
+  try {
+    await acceptInvitesFor(userId, email);
+  } catch (e) {
+    log({ level: "error", msg: "accept-invites-failed", userId, err: String(e) });
+  }
+
   const { cookie } = await issueSession(userId);
   const headers = new Headers({ "content-type": "application/json" });
   headers.append("Set-Cookie", cookie);
@@ -138,6 +146,12 @@ export async function handleLogin(req: Request): Promise<Response> {
 
   const ok = await Bun.password.verify(password, user.password_hash);
   if (!ok) return genericFail;
+
+  try {
+    await acceptInvitesFor(user.id, email);
+  } catch (e) {
+    log({ level: "error", msg: "accept-invites-failed", userId: user.id, err: String(e) });
+  }
 
   const { cookie } = await issueSession(user.id);
   const headers = new Headers({ "content-type": "application/json" });

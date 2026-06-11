@@ -27,6 +27,9 @@ import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { presence } from "./realtime/presence-room.ts";
+import { resolveTenantContext } from "./tenant-middleware.ts";
+import { TenantRepo } from "./tenant-repo.ts";
+import { provisionTenant, listTenants } from "./tenant.ts";
 import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
@@ -56,30 +59,7 @@ function gateOrJson(user: SessionUser, op: Operation): Response | null {
   return null;
 }
 
-registerFactories({
-  duckdb: async (creds) => createDuckDbAdapter(creds),
-  snowflake: async (creds) => new SnowflakeAdapter(creds),
-});
-
-const adapter = await getAdapter();
-const ok = await adapter.ping();
-if (!ok) {
-  console.error("✗ warehouse adapter ping failed");
-  process.exit(1);
-}
-console.log(
-  `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
-);
-
-const scheduler = createScheduler({
-  tickIntervalMs: 60_000,
-  shouldRun: () => repo.anyScanDue(new Date()),
-  jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
-});
-scheduler.start();
-console.log("· scheduler started (1m tick)");
-
-async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
+export async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
   const url = new URL(req.url);
   const { pathname } = url;
   const seg = pathname.split("/").filter(Boolean); // ["api","dimensions",":id",...]
@@ -109,6 +89,14 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
         headers: { "content-type": "application/json" },
       });
     }
+  }
+
+  // /api/t/:slug/... strip the /t/:slug prefix so the existing route table matches.
+  // We capture the slug to thread into tenant resolution after the session gate.
+  let tenantSlugFromPath: string | null = null;
+  if (seg[0] === "api" && seg[1] === "t" && seg.length >= 3) {
+    tenantSlugFromPath = decodeURIComponent(seg[2]!);
+    seg.splice(1, 2); // remove "t" and the slug
   }
 
   if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
@@ -163,6 +151,31 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   const me = sessionUser.id;
   setUid(me);
 
+  // Resolve the tenant context for this request. /api/admin/* and /api/auth/*
+  // bypass this — admin handles its own auth, auth routes ran earlier.
+  let tenantCtx: { tenantId: string; role: import("./auth.ts").Role; isSuperAdmin: boolean };
+  if (seg[1] === "admin") {
+    if (!sessionUser.isSuperAdmin) {
+      return json({ error: "forbidden", reason: "super_admin_required" }, 403);
+    }
+    tenantCtx = { tenantId: "*", role: "admin", isSuperAdmin: true };
+  } else {
+    try {
+      const pathnameForCtx = tenantSlugFromPath ? `/api/t/${tenantSlugFromPath}/_` : pathname;
+      tenantCtx = await resolveTenantContext({
+        pathname: pathnameForCtx,
+        user: sessionUser,
+        isSuperAdmin: sessionUser.isSuperAdmin,
+      });
+    } catch (e) {
+      if (e instanceof AppError) {
+        return json({ error: e.message, code: e.code }, e.status);
+      }
+      throw e;
+    }
+  }
+  const reqRepo = new TenantRepo(tenantCtx.tenantId, tenantCtx.role, tenantCtx.isSuperAdmin);
+
   try {
     // POST /api/auth/change-password (authenticated)
     if (seg[1] === "auth" && seg[2] === "change-password" && method === "POST") {
@@ -186,18 +199,39 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
       }
     }
 
+    // /api/admin/tenants — super-admin only; tenantCtx.isSuperAdmin verified at the top of handle().
+    if (seg[1] === "admin" && seg[2] === "tenants") {
+      if (seg.length === 3 && method === "GET") {
+        const tenants = await listTenants();
+        return json({ tenants });
+      }
+      if (seg.length === 3 && method === "POST") {
+        const body = (await req.json()) as {
+          id: string;
+          label: string;
+          slug?: string;
+          warehouseId?: string;
+        };
+        const tenant = await provisionTenant({
+          id: body.id,
+          label: body.label,
+          slug: body.slug,
+          warehouseId: body.warehouseId,
+        });
+        return json(tenant, 201);
+      }
+    }
+
     // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
-      if (method === "GET") return json(await repo.getPreferences());
+      if (method === "GET") return json(await reqRepo.getPreferences());
       if (method === "PUT") {
-        const denied = gateOrJson(sessionUser, "manage_adapter");
-        if (denied) return denied;
         const p = (await req.json()) as {
           publishThreshold: number;
           suggestThreshold: number;
           scanSchedule: "15m" | "hourly" | "daily" | null;
         };
-        await repo.setPreferences(p);
+        await reqRepo.setPreferences(p);
         return noContent();
       }
     }
@@ -295,12 +329,10 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
     // GET /api/audit ; POST /api/audit {action, detail}
     if (seg[1] === "audit" && seg.length === 2) {
       if (method === "GET")
-        return json(await repo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
+        return json(await reqRepo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
       if (method === "POST") {
-        const denied = gateOrJson(sessionUser, "curate");
-        if (denied) return denied;
         const { action, detail } = (await req.json()) as { action: string; detail: string };
-        await repo.appendAuditAs(me, action, detail);
+        await reqRepo.appendAudit(me, action, detail);
         return noContent();
       }
     }
@@ -710,127 +742,152 @@ async function handle(req: Request, setUid: (uid: string) => void): Promise<Resp
   }
 }
 
-interface PresenceWsData {
-  tableId: string;
-  userId: string;
-  displayName: string;
-}
+if (import.meta.main) {
+  registerFactories({
+    duckdb: async (creds) => createDuckDbAdapter(creds),
+    snowflake: async (creds) => new SnowflakeAdapter(creds),
+  });
 
-const server = Bun.serve<PresenceWsData>({
-  port: env.port,
-  idleTimeout: 120,
-  maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
-  async fetch(req, srv) {
-    // WebSocket upgrade for presence rooms — must run before HTTP routing.
-    // We authenticate via the same session helper used by /api/* routes so that
-    // anonymous clients can't observe presence. Auth FIRST, upgrade SECOND.
-    const url = new URL(req.url);
-    if (url.pathname.startsWith("/ws/presence/")) {
-      const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
-      if (!tableId) return new Response("missing tableId", { status: 400 });
-      let session: SessionUser | null;
-      try {
-        session = await getSessionUser(req);
-        if (!session) {
-          const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-          session = await getApiTokenUser(req);
+  const adapter = await getAdapter();
+  const ok = await adapter.ping();
+  if (!ok) {
+    console.error("✗ warehouse adapter ping failed");
+    process.exit(1);
+  }
+  console.log(
+    `· connected (${adapter.capabilities.id}${adapter.capabilities.writable ? ", writable" : ", read-only"})`,
+  );
+
+  const scheduler = createScheduler({
+    tickIntervalMs: 60_000,
+    shouldRun: () => repo.anyScanDue(new Date()),
+    jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
+  });
+  scheduler.start();
+  console.log("· scheduler started (1m tick)");
+
+  interface PresenceWsData {
+    tableId: string;
+    userId: string;
+    displayName: string;
+  }
+
+  const server = Bun.serve<PresenceWsData>({
+    port: env.port,
+    idleTimeout: 120,
+    maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
+    async fetch(req, srv) {
+      // WebSocket upgrade for presence rooms — must run before HTTP routing.
+      // We authenticate via the same session helper used by /api/* routes so that
+      // anonymous clients can't observe presence. Auth FIRST, upgrade SECOND.
+      const url = new URL(req.url);
+      if (url.pathname.startsWith("/ws/presence/")) {
+        const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
+        if (!tableId) return new Response("missing tableId", { status: 400 });
+        let session: SessionUser | null;
+        try {
+          session = await getSessionUser(req);
+          if (!session) {
+            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+            session = await getApiTokenUser(req);
+          }
+        } catch {
+          return new Response("auth error", { status: 503 });
         }
-      } catch {
-        return new Response("auth error", { status: 503 });
+        if (!session) return new Response("unauthorized", { status: 401 });
+        const ok = srv.upgrade(req, {
+          data: { tableId, userId: session.id, displayName: session.name } satisfies PresenceWsData,
+        });
+        return ok ? undefined : new Response("upgrade failed", { status: 500 });
       }
-      if (!session) return new Response("unauthorized", { status: 401 });
-      const ok = srv.upgrade(req, {
-        data: { tableId, userId: session.id, displayName: session.name } satisfies PresenceWsData,
-      });
-      return ok ? undefined : new Response("upgrade failed", { status: 500 });
-    }
 
-    const reqId = crypto.randomUUID();
-    const start = performance.now();
-    let userId: string | undefined;
-    let status = 500;
-    try {
-      const res = await handle(req, (uid) => {
-        userId = uid;
-      });
-      status = res.status;
-      const headers = new Headers(res.headers);
-      headers.set("x-request-id", reqId);
-      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
-    } catch (e) {
-      console.error(`✗ ${req.method} ${new URL(req.url).pathname}:`, e);
-      status = 500;
-      return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
-        status: 500,
-        headers: { "content-type": "application/json", "x-request-id": reqId, ...corsHeaders },
-      });
-    } finally {
-      log({
-        level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
-        msg: "request",
-        reqId,
-        method: req.method,
-        path: new URL(req.url).pathname,
-        status,
-        ms: Math.round(performance.now() - start),
-        userId,
-      });
-    }
-  },
-  websocket: {
-    // Stewards may sit on a page for 30+ min between cursor moves; disable Bun's
-    // idle timeout (0 = never close due to inactivity). Yjs awareness has its
-    // own liveness model on top.
-    idleTimeout: 0,
-    open(ws) {
-      const { tableId } = ws.data;
-      // Cast: presence.join/leave/broadcast are typed for ServerWebSocket<undefined>
-      // (the Bun default). They never read .data — they only fan out frames.
-      presence.join(tableId, ws as unknown as ServerWebSocket);
-    },
-    message(ws, msg) {
-      const { tableId } = ws.data;
-      // The yjs awareness envelope is binary. Bun hands us either a Buffer
-      // (Uint8Array subclass) or a string. Strings would only come from
-      // app-level heartbeats. Normalize to Uint8Array and relay verbatim —
-      // the server never decodes the y-protocols frame.
-      let payload: Uint8Array;
-      if (typeof msg === "string") {
-        payload = new TextEncoder().encode(msg);
-      } else if (msg instanceof Uint8Array) {
-        payload = msg;
-      } else {
-        payload = new Uint8Array(msg as ArrayBuffer);
+      const reqId = crypto.randomUUID();
+      const start = performance.now();
+      let userId: string | undefined;
+      let status = 500;
+      try {
+        const res = await handle(req, (uid) => {
+          userId = uid;
+        });
+        status = res.status;
+        const headers = new Headers(res.headers);
+        headers.set("x-request-id", reqId);
+        return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+      } catch (e) {
+        console.error(`✗ ${req.method} ${new URL(req.url).pathname}:`, e);
+        status = 500;
+        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
+          status: 500,
+          headers: { "content-type": "application/json", "x-request-id": reqId, ...corsHeaders },
+        });
+      } finally {
+        log({
+          level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
+          msg: "request",
+          reqId,
+          method: req.method,
+          path: new URL(req.url).pathname,
+          status,
+          ms: Math.round(performance.now() - start),
+          userId,
+        });
       }
-      presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket);
     },
-    close(ws) {
-      const { tableId } = ws.data;
-      presence.leave(tableId, ws as unknown as ServerWebSocket);
+    websocket: {
+      // Stewards may sit on a page for 30+ min between cursor moves; disable Bun's
+      // idle timeout (0 = never close due to inactivity). Yjs awareness has its
+      // own liveness model on top.
+      idleTimeout: 0,
+      open(ws) {
+        const { tableId } = ws.data;
+        // Cast: presence.join/leave/broadcast are typed for ServerWebSocket<undefined>
+        // (the Bun default). They never read .data — they only fan out frames.
+        presence.join(tableId, ws as unknown as ServerWebSocket);
+      },
+      message(ws, msg) {
+        const { tableId } = ws.data;
+        // The yjs awareness envelope is binary. Bun hands us either a Buffer
+        // (Uint8Array subclass) or a string. Strings would only come from
+        // app-level heartbeats. Normalize to Uint8Array and relay verbatim —
+        // the server never decodes the y-protocols frame.
+        let payload: Uint8Array;
+        if (typeof msg === "string") {
+          payload = new TextEncoder().encode(msg);
+        } else if (msg instanceof Uint8Array) {
+          payload = msg;
+        } else {
+          payload = new Uint8Array(msg as ArrayBuffer);
+        }
+        presence.broadcastAwareness(tableId, payload, ws as unknown as ServerWebSocket);
+      },
+      close(ws) {
+        const { tableId } = ws.data;
+        presence.leave(tableId, ws as unknown as ServerWebSocket);
+      },
     },
-  },
-});
+  });
 
-console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
+  console.log(`\nZug Zug API listening on http://localhost:${server.port}\n`);
 
-const SHUTDOWN_TIMEOUT_MS = 30_000;
-let shuttingDown = false;
-async function shutdown(signal: string): Promise<void> {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  console.log(`· ${signal} received — draining…`);
-  // Drain in-flight scheduler job before closing. 30s is the safety-net timeout;
-  // v0.2 jobs don't honor the abort signal but future jobs can via ctx.signal.
-  await scheduler.stop(SHUTDOWN_TIMEOUT_MS);
-  console.log("· scheduler drained; closing server");
-  server.stop(false); // stop accepting new connections (Bun has no await-drain API)
-  await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
-  await Promise.race([
-    pgEnd(),
-    new Promise<void>((_, reject) => setTimeout(() => reject(new Error("pgEnd timeout")), 5000)),
-  ]).catch((e) => console.error("pgEnd failed:", e));
-  console.log("· shutdown complete");
-  process.exit(0);
+  const SHUTDOWN_TIMEOUT_MS = 30_000;
+  let shuttingDown = false;
+  async function shutdown(signal: string): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`· ${signal} received — draining…`);
+    // Drain in-flight scheduler job before closing. 30s is the safety-net timeout;
+    // v0.2 jobs don't honor the abort signal but future jobs can via ctx.signal.
+    await scheduler.stop(SHUTDOWN_TIMEOUT_MS);
+    console.log("· scheduler drained; closing server");
+    server.stop(false); // stop accepting new connections (Bun has no await-drain API)
+    await new Promise<void>((resolve) => setTimeout(resolve, 250)); // best-effort 250ms drain window
+    await Promise.race([
+      pgEnd(),
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error("pgEnd timeout")), 5000)),
+    ]).catch((e) => console.error("pgEnd failed:", e));
+    console.log("· shutdown complete");
+    process.exit(0);
+  }
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
