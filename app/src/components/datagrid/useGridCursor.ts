@@ -251,7 +251,9 @@ export function useGridCursor<Row>({
         move(1, 0);
         return;
       }
-      if (e.key === "Enter") {
+      // Plain Enter starts editing; ⌘/Ctrl+Enter is left unhandled so it can
+      // reach the host's onCellKeyDown (e.g. Match's ⌘↵ publish binding).
+      if (e.key === "Enter" && !isCmd) {
         e.preventDefault();
         startEdit();
         return;

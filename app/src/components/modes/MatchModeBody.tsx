@@ -1,16 +1,16 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
 import { Checkbox } from "../Checkbox";
 import { ComboSelect } from "../ComboSelect";
-import { Chip, useGridCursor, useUndoStack } from "../datagrid";
-import type { ColumnDef } from "../datagrid";
-import { IconArrowRight, IconCheck, IconChevron, IconWand, IconX } from "../Icons";
+import { DataGrid, useUndoStack } from "../datagrid";
+import { IconArrowRight, IconCheck, IconWand, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
 import { useEngineerMode } from "../../lib/engineer-mode";
 import { valueRows } from "../../data";
 import type { MappingDimension, MappingValue } from "../../data";
+import { matchColumns } from "./match-columns";
 import {
   commit,
   currentUser,
@@ -30,11 +30,6 @@ import {
 type RStatus = "mapped" | "new" | "skipped";
 type ValueState = Record<string, { target: string | null; status: RStatus }>;
 type Filter = "new" | "all" | "mapped";
-
-const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
-const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
-const COLS =
-  "grid max-md:grid-cols-[28px_1fr] md:grid-cols-[28px_minmax(160px,1.3fr)_22px_minmax(160px,1.1fr)_88px_84px] items-center gap-3";
 
 // Escape a string for use inside a double-quoted CSS attribute selector.
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
@@ -76,8 +71,8 @@ function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T)
 interface MatchModeBodyProps {
   /** Fully resolved dimension. Parent guarantees non-null. */
   dim: MappingDimension;
-  /** Whether this pane is currently the active tab. Drives URL-mirroring of
-   *  focused row — only the active pane writes/reads ?value=. */
+  /** Whether this pane is currently the active tab. Only the active pane
+   *  consumes the ?value= deep link at mount. */
   isActive: boolean;
 }
 
@@ -85,7 +80,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const allDrafts = useDrafts();
   const { engineer } = useEngineerMode();
   const canEdit = useCanEdit();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const undo = useUndoStack();
 
   const [sel, setSel] = useState<string[]>([]);
@@ -104,7 +99,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const keyFor = (label: string) =>
     dim.canonical.find((c) => c.label === label)?.key ??
     label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  const options = dim.canonical.map((c) => c.label);
+  const options = useMemo(() => dim.canonical.map((c) => c.label), [dim.canonical]);
   const external = dim.keyKind === "external_id";
 
   // committed truth (dim) overlaid with each value's pending draft, if any
@@ -148,16 +143,14 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     if (!r.suggestion) return;
     void stageMap(v, r.suggestion);
     flashRow(`[data-row="${attrEsc(v)}"]`);
-    advanceToNextNew(v);
   };
   const pick = (v: string, t: string) => {
     void stageMap(v, t);
     flashRow(`[data-row="${attrEsc(v)}"]`);
-    advanceToNextNew(v);
   };
-  // Skip without advancing the cursor — bulkApply uses this so the cursor
-  // doesn't bounce when skipping a selection. The single-action `skip` below
-  // composes this + advanceToNextNew.
+  // Skip without the row flash — bulkApply uses this so a skipped selection
+  // doesn't fire N flash animations. The single-action `skip` below composes
+  // this + flashRow.
   const skipPersist = (v: string) => {
     const prev = allDrafts[dkey(dim.id, v)];
     undo.push({
@@ -174,7 +167,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const skip = (v: string) => {
     void skipPersist(v);
     flashRow(`[data-row="${attrEsc(v)}"]`);
-    advanceToNextNew(v);
   };
   const reset = (v: string) => {
     const prev = allDrafts[dkey(dim.id, v)];
@@ -236,85 +228,42 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const allSel = visIds.length > 0 && visIds.every((id) => sel.includes(id));
   const headState: "on" | "off" | "mixed" = allSel ? "on" : sel.length ? "mixed" : "off";
 
-  const visibleRows = visible; // alias for clarity
-  const COLS_FOR_CURSOR: ColumnDef<MappingValue>[] = [
-    { field: "value", label: "Source", config: { type: "text" }, editable: false },
-    { field: "target", label: "Record", config: { type: "text" }, editable: true },
-    { field: "status", label: "Status", config: { type: "text" }, editable: false },
-  ];
-  const cursor = useGridCursor<MappingValue>({
-    rows: visibleRows,
-    rowKey: (r) => r.value,
-    columns: COLS_FOR_CURSOR,
-    onSelectAll: () => setSel(visIds),
-    onUndo: () => void undo.undo(),
-    onRedo: () => void undo.redo(),
-    onFocusFilter: () => {
-      /* filter chips already global */
-    },
-  });
-
-  // advance the cursor to the next visible row whose status is "new",
-  // wrapping around once. used by accept/skip/pick/N to keep the user
-  // moving through the inbox without reaching for the mouse.
-  const advanceToNextNew = useCallback(
-    (fromRowKey: string | null) => {
-      const rows = visibleRows;
-      if (rows.length === 0) return;
-      const idx = fromRowKey ? rows.findIndex((r) => r.value === fromRowKey) : -1;
-      for (let i = 1; i <= rows.length; i++) {
-        const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
-        if (state[rows[j].value]?.status === "new") {
-          cursor.setCursor({ rowKey: rows[j].value, field: "value", editing: false });
-          return;
-        }
-      }
-    },
-    [visibleRows, state, cursor],
+  // Columns for the DataGrid — value+provenance (with drill toggle), target
+  // (ComboSelect editor), confidence, status. The grid owns cursor + keyboard
+  // navigation; Match-specific single-key actions arrive via onCellKeyDown.
+  const columns = useMemo(
+    () =>
+      matchColumns({
+        dimensionLabel: dim.dimension,
+        options,
+        state,
+        external,
+        canEdit,
+        onToggleDrill: (v) => setOpen((cur) => (cur === v ? null : v)),
+        openDrill: open,
+      }),
+    [dim.dimension, options, state, external, canEdit, open],
   );
 
   // ── Deep-linking ─────────────────────────────────────────────────────────
-  // URL ?value=… pins the focused row so a teammate can Slack a link to a
-  // specific mapping decision. Consumed once on the first dim where it
-  // matches, then cleared from the ref so subsequent dim switches auto-
-  // advance normally. Only fires when this pane is the active tab — inactive
-  // panes shouldn't pin the cursor based on a URL that belongs to another tab.
+  // URL ?value=… points at a specific row so a teammate can Slack a link to a
+  // mapping decision. The grid cursor is internal to DataGrid now, so instead
+  // of pinning a cursor we scroll the row into view + flash it (same pattern
+  // as RecordsBody's ?focus=). Consumed once; only when this pane is the
+  // active tab. Cursor→URL mirroring is gone with the host-owned cursor.
   const initialUrlValueRef = useRef<string | null>(isActive ? searchParams.get("value") : null);
-
-  // on mount and every dim change, drop the cursor on the first unmapped row
-  // — unless the URL pinned a value present in this dim. Lets a user open
-  // Match and start pressing A/M/S without clicking.
-  const focusedDimRef = useRef<string | null>(null);
   useEffect(() => {
-    if (focusedDimRef.current === dim.id) return;
-    focusedDimRef.current = dim.id;
     const pinned = initialUrlValueRef.current;
-    if (pinned && dim.values.some((r) => r.value === pinned)) {
-      cursor.setCursor({ rowKey: pinned, field: "target", editing: false });
-      initialUrlValueRef.current = null;
-      return;
-    }
-    advanceToNextNew(null);
-  }, [dim.id, dim.values, cursor, advanceToNextNew]);
-
-  // Mirror the focused row to URL ?value=… while this pane is active. When
-  // inactive we leave the URL alone so we don't clobber another tab's value
-  // (the URL contract: ?value= belongs to the active match-mode tab).
-  useEffect(() => {
-    if (!isActive) return;
-    const want = cursor.cursor?.rowKey ?? null;
-    setSearchParams(
-      (prev) => {
-        const have = prev.get("value");
-        if (want == null && have == null) return prev;
-        if (want === have) return prev;
-        if (want == null) prev.delete("value");
-        else prev.set("value", want);
-        return prev;
-      },
-      { replace: true },
-    );
-  }, [isActive, cursor.cursor?.rowKey, setSearchParams]);
+    if (!pinned || !dim.values.some((r) => r.value === pinned)) return;
+    initialUrlValueRef.current = null;
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLElement>(`[data-row="${attrEsc(pinned)}"]`)
+        ?.scrollIntoView({ block: "center" });
+    });
+    flashRow(`[data-row="${attrEsc(pinned)}"]`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dim.id]);
 
   // the staged drafts awaiting commit (incl. teammates' work) — the review
   // set. Scoped to still-uncommitted (new) values, matching what commit()
@@ -366,7 +315,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     } catch (err) {
       setFlash(null);
       setCommitError(
-        err instanceof Error ? err.message : "Publish failed — check your connection and try again.",
+        err instanceof Error
+          ? err.message
+          : "Publish failed — check your connection and try again.",
       );
     }
   };
@@ -394,51 +345,10 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
         </div>
       )}
 
-      {/* workbench — single-dim mode */}
-      <div
-        className="flex flex-1 flex-col min-h-0 outline-none focus:ring-1 focus:ring-accent/40"
-        ref={cursor.ref}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          // grid bindings first
-          cursor.onKeyDown(e);
-          if (e.defaultPrevented) return;
-          // Match-specific shortcuts (single-key, not editing)
-          if (!cursor.cursor) return;
-          const cur = cursor.cursor;
-          if (cur.editing) return;
-          if (canEdit && (e.key === "a" || e.key === "A")) {
-            e.preventDefault();
-            accept(cur.rowKey);
-            return;
-          }
-          if (canEdit && (e.key === "s" || e.key === "S")) {
-            e.preventDefault();
-            skip(cur.rowKey);
-            return;
-          }
-          if (canEdit && (e.key === "r" || e.key === "R")) {
-            e.preventDefault();
-            reset(cur.rowKey);
-            return;
-          }
-          if (canEdit && (e.key === "m" || e.key === "M")) {
-            e.preventDefault();
-            cursor.startEdit();
-            return;
-          }
-          if (e.key === "n" || e.key === "N") {
-            e.preventDefault();
-            advanceToNextNew(cur.rowKey);
-            return;
-          }
-          if (canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
-            e.preventDefault();
-            void approveAndCommit();
-            return;
-          }
-        }}
-      >
+      {/* workbench — single-dim mode. DataGrid owns the cursor + keyboard
+          navigation; Match-specific single-key actions hook in below via
+          onCellKeyDown. */}
+      <div className="flex flex-1 flex-col min-h-0">
         {/* toolbar / bulk bar */}
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
           {sel.length === 0 || !canEdit ? (
@@ -529,238 +439,117 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           )}
         </div>
 
-        {/* column header */}
-        <div
-          className={cx(
-            COLS,
-            "border-b border-line px-4 py-2.5 font-mono text-[10px] uppercase tracking-wider text-ink-3",
-          )}
-        >
-          <span />
-          <span>Source value · where it&apos;s seen</span>
-          <span className="max-md:hidden" />
-          <span className="max-md:hidden">{dim.dimension.toLowerCase()} record</span>
-          <span className="max-md:hidden">Confidence</span>
-          <span className="max-md:hidden">Status</span>
-        </div>
-
-        {/* rows */}
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          {visible.map((r) => {
+        {/* rows — DataGrid owns cursor, range selection, copy/paste, header */}
+        <DataGrid<MappingValue>
+          rows={visible}
+          rowKey={(r) => r.value}
+          columns={columns}
+          selection={{ selected: sel, onChange: setSel }}
+          getValue={(r, field) =>
+            field === "target" ? (state[r.value]?.target ?? "") : (r as never)[field]
+          }
+          onCommit={
+            canEdit
+              ? async (rowKey, field, value) => {
+                  if (field !== "target" || typeof value !== "string" || !value) return;
+                  pick(rowKey, value);
+                }
+              : undefined
+          }
+          onCellKeyDown={(e, ctx) => {
+            const v = ctx.cursor?.rowKey;
+            if (canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              void approveAndCommit();
+              return;
+            }
+            if (!v) return;
+            const k = e.key.toLowerCase();
+            if (canEdit && k === "a") {
+              e.preventDefault();
+              accept(v);
+            } else if (canEdit && k === "s") {
+              e.preventDefault();
+              skip(v);
+            } else if (canEdit && k === "r") {
+              e.preventDefault();
+              reset(v);
+            } else if (canEdit && k === "m") {
+              e.preventDefault();
+              ctx.startEdit();
+            }
+          }}
+          renderRowDetail={(r) => {
+            if (open !== r.value) return null;
             const row = state[r.value];
-            const checked = sel.includes(r.value);
-            const isOpen = open === r.value;
-            const primary = r.sources[0];
-            const focused = cursor.cursor?.rowKey === r.value;
             return (
-              <Fragment key={r.value}>
-                <div
-                  className={cx(
-                    COLS,
-                    "border-b border-line px-4 py-2.5 transition-colors",
-                    checked ? "bg-accent-wash" : "hover:bg-hover",
-                    isOpen && "border-b-0",
-                    focused && "ring-1 ring-accent/60 bg-accent-wash/40",
-                  )}
-                  data-row={r.value}
-                  onClick={() =>
-                    cursor.setCursor({ rowKey: r.value, field: "target", editing: false })
-                  }
-                >
-                  <Checkbox
-                    state={checked ? "on" : "off"}
-                    onClick={() =>
-                      setSel((s) =>
-                        s.includes(r.value) ? s.filter((x) => x !== r.value) : [...s, r.value],
-                      )
-                    }
-                    aria-label={`Select ${r.value}`}
-                  />
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="truncate font-mono text-[13px] text-ink">{r.value}</div>
-                      <span className="md:hidden">
-                        {row.status === "mapped" ? (
-                          <Chip label="Mapped" bucket="chip-1" dot />
-                        ) : row.status === "skipped" ? (
-                          <Chip label="Skipped" bucket="chip-5" />
-                        ) : (
-                          <Chip label="New" bucket="chip-2" dot />
-                        )}
+              <div className="px-4 py-3 pl-[52px]">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                  appears in
+                </div>
+                <div className="mt-2 grid gap-1.5">
+                  {r.sources.map((o, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-4 font-mono text-[11.5px]"
+                    >
+                      <span className="text-ink-2">
+                        {o.table}
+                        <span className="text-ink-3">.{o.column}</span>
+                      </span>
+                      <span className="text-ink-3 tabular-nums">
+                        {o.rows.toLocaleString()} rows
+                        {r.firstSeen ? ` · seen ${r.firstSeen}` : ""}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setOpen(isOpen ? null : r.value)}
-                      className="flex items-center gap-1 font-mono text-[10px] text-ink-3 transition-colors hover:text-ink-2"
-                    >
-                      <IconChevron
-                        className={cx("h-3 w-3 transition-transform", isOpen && "rotate-180")}
-                      />
-                      {primary.table}.{primary.column}
-                      {r.sources.length > 1 ? ` +${r.sources.length - 1}` : ""} ·{" "}
-                      {valueRows(r).toLocaleString()} rows
-                    </button>
-                    <div className="mt-1.5 md:hidden">
-                      <ComboSelect
-                        options={options}
-                        value={row.target}
-                        suggestion={r.suggestion}
-                        allowCreate={!external}
-                        onPick={canEdit ? (t) => pick(r.value, t) : undefined}
-                        disabled={!canEdit}
-                      />
-                    </div>
-                  </div>
-                  <IconArrowRight className="max-md:hidden h-4 w-4 text-ink-3" />
-                  <div className="max-md:hidden">
-                    <ComboSelect
-                      options={options}
-                      value={row.target}
-                      suggestion={r.suggestion}
-                      allowCreate={!external}
-                      onPick={canEdit ? (t) => pick(r.value, t) : undefined}
-                      disabled={!canEdit}
-                    />
-                  </div>
-                  <div className="max-md:hidden">
-                    {r.confidence > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <div className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
-                          <div
-                            className={cx("h-full rounded-pill", confBar(r.confidence))}
-                            style={{ width: `${r.confidence}%` }}
-                          />
-                        </div>
-                        <span
-                          className={cx(
-                            "font-mono text-[11px] tabular-nums",
-                            confText(r.confidence),
-                          )}
-                        >
-                          {r.confidence}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="font-mono text-[11px] text-ink-2">—</span>
-                    )}
-                  </div>
-                  <div className="max-md:hidden">
-                    {row.status === "mapped" ? (
-                      <Chip label="Mapped" bucket="chip-1" dot />
-                    ) : row.status === "skipped" ? (
-                      <Chip label="Skipped" bucket="chip-5" />
-                    ) : (
-                      <Chip label="New" bucket="chip-2" dot />
-                    )}
-                  </div>
+                  ))}
                 </div>
-
-                {/* expandable provenance + write target */}
-                {isOpen && (
-                  <div className="border-b border-line bg-surface-2/40 px-4 py-3 pl-[52px]">
-                    <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                      appears in
+                <div className="mt-3 font-mono text-[10.5px] text-ink-3">
+                  {row.target ? (
+                    engineer ? (
+                      <>
+                        → writes{" "}
+                        <span className="text-accent">
+                          (&#39;{r.value}&#39;, &#39;{keyFor(row.target)}&#39;)
+                        </span>{" "}
+                        to {dim.mapTable}
+                      </>
+                    ) : (
+                      <>
+                        → will resolve to <span className="text-accent">{row.target}</span> in{" "}
+                        {dim.dimension}
+                      </>
+                    )
+                  ) : engineer ? (
+                    <>
+                      ⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently{" "}
+                      <span className="text-danger">LEFT JOIN to NULL</span>
+                    </>
+                  ) : (
+                    <>
+                      ⚠ <span className="text-danger">Unmapped</span> —{" "}
+                      {valueRows(r).toLocaleString()} downstream rows are missing this value
+                    </>
+                  )}
+                </div>
+                {(() => {
+                  const d = allDrafts[dkey(dim.id, r.value)];
+                  return d ? (
+                    <div className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ink-3">
+                      <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">
+                        {d.user.initials}
+                      </span>
+                      staged {d.status === "skipped" ? "(skipped) " : ""}by{" "}
+                      {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
+                      {engineer ? " · uncommitted draft" : " · awaiting publish"}
                     </div>
-                    <div className="mt-2 grid gap-1.5">
-                      {r.sources.map((o, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between gap-4 font-mono text-[11.5px]"
-                        >
-                          <span className="text-ink-2">
-                            {o.table}
-                            <span className="text-ink-3">.{o.column}</span>
-                          </span>
-                          <span className="text-ink-3 tabular-nums">
-                            {o.rows.toLocaleString()} rows
-                            {r.firstSeen ? ` · seen ${r.firstSeen}` : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3 font-mono text-[10.5px] text-ink-3">
-                      {row.target ? (
-                        engineer ? (
-                          <>
-                            → writes{" "}
-                            <span className="text-accent">
-                              (&#39;{r.value}&#39;, &#39;{keyFor(row.target)}&#39;)
-                            </span>{" "}
-                            to {dim.mapTable}
-                          </>
-                        ) : (
-                          <>
-                            → will resolve to <span className="text-accent">{row.target}</span> in{" "}
-                            {dim.dimension}
-                          </>
-                        )
-                      ) : engineer ? (
-                        <>
-                          ⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently{" "}
-                          <span className="text-danger">LEFT JOIN to NULL</span>
-                        </>
-                      ) : (
-                        <>
-                          ⚠ <span className="text-danger">Unmapped</span> —{" "}
-                          {valueRows(r).toLocaleString()} downstream rows are missing this value
-                        </>
-                      )}
-                    </div>
-                    {(() => {
-                      const d = allDrafts[dkey(dim.id, r.value)];
-                      return d ? (
-                        <div className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ink-3">
-                          <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">
-                            {d.user.initials}
-                          </span>
-                          staged {d.status === "skipped" ? "(skipped) " : ""}by{" "}
-                          {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
-                          {engineer ? " · uncommitted draft" : " · awaiting publish"}
-                        </div>
-                      ) : null;
-                    })()}
-                  </div>
-                )}
-                {focused && !isOpen && (
-                  <div className="border-b border-line bg-surface-2/40 px-4 py-1.5 pl-[52px] font-mono text-[10.5px] text-ink-3">
-                    <span className="mr-3">
-                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
-                        A
-                      </kbd>{" "}
-                      accept
-                    </span>
-                    <span className="mr-3">
-                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
-                        M
-                      </kbd>{" "}
-                      record
-                    </span>
-                    <span className="mr-3">
-                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
-                        S
-                      </kbd>{" "}
-                      skip
-                    </span>
-                    <span className="mr-3">
-                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
-                        R
-                      </kbd>{" "}
-                      reset
-                    </span>
-                    <span className="mr-3">
-                      <kbd className="rounded border border-line-2 bg-surface px-1 text-[10px] text-ink">
-                        ?
-                      </kbd>{" "}
-                      all shortcuts
-                    </span>
-                  </div>
-                )}
-              </Fragment>
+                  ) : null;
+                })()}
+              </div>
             );
-          })}
-          {visible.length === 0 &&
-            (filter === "new" ? (
+          }}
+          empty={
+            filter === "new" ? (
               <div className="px-4 py-10 text-center">
                 <div className="font-display text-[18px] font-semibold text-ink">
                   {dim.dimension} is fully matched 🎉
@@ -780,8 +569,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
                 no values in this view
               </div>
-            ))}
-        </div>
+            )
+          }
+        />
 
         {/* review & commit footer — drafts stage in Postgres, commit batch-MERGEs to DuckDB */}
         <div className="sticky bottom-0 z-10 border-t border-line bg-surface">
