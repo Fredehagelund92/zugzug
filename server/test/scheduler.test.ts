@@ -11,13 +11,18 @@ function makeJob(name: string, run: () => Promise<JobResult> = async () => ({}))
   return { name, run };
 }
 
+// PR2b: scheduler iterates tenants per tick. These tests don't care about tenant
+// behavior — they cover the tick lifecycle (drift, in-flight guard, abort signal,
+// shouldRun). Stub `listTenants` to a single fake tenant so jobs still fire.
+const FAKE_LIST_TENANTS = async (): Promise<Array<{ id: string }>> => [{ id: "tfaketest" }];
+
 test("scheduler — start() invokes each job once per tick", async () => {
   let callCount = 0;
   const job = makeJob("test-job", async () => {
     callCount++;
     return {};
   });
-  const scheduler = createScheduler({ tickIntervalMs: 50, jobs: [job] });
+  const scheduler = createScheduler({ tickIntervalMs: 50, listTenants: FAKE_LIST_TENANTS, jobs: [job] });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 175));
   await scheduler.stop();
@@ -29,6 +34,7 @@ test("scheduler — _tick() runs all jobs once and returns", async () => {
   const calls: string[] = [];
   const scheduler = createScheduler({
     tickIntervalMs: 999_999, // long enough not to auto-fire
+    listTenants: FAKE_LIST_TENANTS,
     jobs: [
       makeJob("a", async () => { calls.push("a"); return {}; }),
       makeJob("b", async () => { calls.push("b"); return {}; }),
@@ -47,7 +53,7 @@ test("scheduler — in-flight guard prevents overlap", async () => {
     finished++;
     return {};
   });
-  const scheduler = createScheduler({ tickIntervalMs: 20, jobs: [slowJob] });
+  const scheduler = createScheduler({ tickIntervalMs: 20, listTenants: FAKE_LIST_TENANTS, jobs: [slowJob] });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 250));
   await scheduler.stop();
@@ -60,6 +66,7 @@ test("scheduler — failing job logs but doesn't crash; subsequent jobs run", as
   const calls: string[] = [];
   const scheduler = createScheduler({
     tickIntervalMs: 999_999,
+    listTenants: FAKE_LIST_TENANTS,
     jobs: [
       makeJob("failing", async () => { calls.push("failing"); throw new Error("boom"); }),
       makeJob("after", async () => { calls.push("after"); return {}; }),
@@ -73,6 +80,7 @@ test("scheduler — stop() drains in-flight job", async () => {
   let finished = false;
   const scheduler = createScheduler({
     tickIntervalMs: 50,
+    listTenants: FAKE_LIST_TENANTS,
     jobs: [makeJob("slow", async () => {
       await new Promise((r) => setTimeout(r, 80));
       finished = true;
@@ -88,6 +96,7 @@ test("scheduler — stop() drains in-flight job", async () => {
 test("scheduler — stop(timeoutMs) returns within timeout even if job hangs", async () => {
   const scheduler = createScheduler({
     tickIntervalMs: 50,
+    listTenants: FAKE_LIST_TENANTS,
     jobs: [makeJob("hang", async (_ctx) => {
       // Ignore signal — simulate misbehaving job that doesn't honor abort
       await new Promise((r) => setTimeout(r, 5000));
@@ -106,6 +115,7 @@ test("scheduler — shouldRun() returning false skips the tick", async () => {
   let jobCalls = 0;
   const scheduler = createScheduler({
     tickIntervalMs: 999_999,
+    listTenants: FAKE_LIST_TENANTS,
     shouldRun: async () => false,
     jobs: [makeJob("counter", async () => { jobCalls++; return {}; })],
   });
@@ -121,6 +131,7 @@ test("scheduler — logs warning on drift > tickIntervalMs/2", async () => {
   try {
     const scheduler = createScheduler({
       tickIntervalMs: 50,
+      listTenants: FAKE_LIST_TENANTS,
       jobs: [makeJob("fast", async () => ({}))],
     });
     scheduler.start();
@@ -140,6 +151,7 @@ test("scheduler — stop() aborts the signal passed to in-flight jobs", async ()
   let signalSeenAborted = false;
   const scheduler = createScheduler({
     tickIntervalMs: 50,
+    listTenants: FAKE_LIST_TENANTS,
     jobs: [{
       name: "signal-watcher",
       run: async (ctx) => {
@@ -168,6 +180,7 @@ test("scheduler — logs error when tick is skipped due to in-flight previous", 
   try {
     const scheduler = createScheduler({
       tickIntervalMs: 20,
+      listTenants: FAKE_LIST_TENANTS,
       jobs: [makeJob("slow", async () => {
         await new Promise((r) => setTimeout(r, 150)); // way longer than interval
         return {};

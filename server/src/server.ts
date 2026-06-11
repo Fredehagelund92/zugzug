@@ -762,7 +762,11 @@ if (import.meta.main) {
 
   const scheduler = createScheduler({
     tickIntervalMs: 60_000,
-    shouldRun: () => repo.anyScanDue(new Date()),
+    shouldRun: async (tenantId) => {
+      // Per-tenant gate: only run jobs for tenants whose scan_run cadence is due.
+      const probe = new TenantRepo(tenantId, "admin", true);
+      return probe.anyScanDue(new Date());
+    },
     jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
   });
   scheduler.start();
