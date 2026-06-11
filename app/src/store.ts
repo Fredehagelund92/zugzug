@@ -210,8 +210,57 @@ const subscribe = (l: () => void) => {
 };
 const emit = () => listeners.forEach((l) => l());
 
+/* ---- sync status (own listener channel — NOT the global emit() bus, which
+   would re-render every store subscriber on every write start/settle) ---- */
+export type SyncStatus = "idle" | "saving" | "saved";
+let pendingWrites = 0;
+let syncStatus: SyncStatus = "idle";
+let savedDecayTimer: ReturnType<typeof setTimeout> | null = null;
+const syncListeners = new Set<() => void>();
+const emitSync = () => syncListeners.forEach((l) => l());
+
+function writeStarted(): void {
+  pendingWrites++;
+  if (savedDecayTimer) clearTimeout(savedDecayTimer);
+  if (syncStatus !== "saving") {
+    syncStatus = "saving";
+    emitSync();
+  }
+}
+function writeSettled(): void {
+  pendingWrites--;
+  if (pendingWrites > 0) return;
+  syncStatus = "saved";
+  emitSync();
+  savedDecayTimer = setTimeout(() => {
+    syncStatus = "idle";
+    emitSync();
+  }, 1500);
+}
+
+export function useSyncStatus(): SyncStatus {
+  return useSyncExternalStore(
+    (l) => {
+      syncListeners.add(l);
+      return () => syncListeners.delete(l);
+    },
+    () => syncStatus,
+    () => syncStatus,
+  );
+}
+
 /* ---- fetch helper (Vite proxies /api → the Bun server) ---- */
 async function api<T>(path: string, opts?: RequestInit): Promise<T> {
+  const isWrite = !!opts?.method && opts.method !== "GET";
+  if (isWrite) writeStarted();
+  try {
+    return await apiInner<T>(path, opts);
+  } finally {
+    if (isWrite) writeSettled();
+  }
+}
+
+async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...opts,
     headers: { "content-type": "application/json", ...opts?.headers },
@@ -271,6 +320,7 @@ export async function refreshDimAndNotify(dimId: string): Promise<void> {
 async function refreshDrafts(dimId?: string): Promise<void> {
   if (dimId) {
     const list = await api<Draft[]>(`/dimensions/${encodeURIComponent(dimId)}/drafts`);
+    if (!Array.isArray(list)) return;
     const next: Record<string, Draft> = {};
     for (const [k, d] of Object.entries(draftsFlat)) if (d.dimId !== dimId) next[k] = d;
     for (const d of list) next[dkey(d.dimId, d.raw)] = d;
@@ -281,7 +331,7 @@ async function refreshDrafts(dimId?: string): Promise<void> {
     dims.map((d) => api<Draft[]>(`/dimensions/${encodeURIComponent(d.id)}/drafts`)),
   );
   const flat: Record<string, Draft> = {};
-  for (const list of lists) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
+  for (const list of lists) if (Array.isArray(list)) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {
