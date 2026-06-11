@@ -782,10 +782,19 @@ export function getCachedGridLayout(dimId: string): GridLayoutConfig | undefined
   return layoutCache.get(dimId);
 }
 
-export async function getGridLayout(dimId: string): Promise<GridLayoutConfig> {
-  const layout = await api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(dimId)}`);
-  layoutCache.set(dimId, layout);
-  return layout;
+const layoutInflight = new Map<string, Promise<GridLayoutConfig>>();
+
+export function getGridLayout(dimId: string): Promise<GridLayoutConfig> {
+  const inflight = layoutInflight.get(dimId);
+  if (inflight) return inflight;
+  const p = api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(dimId)}`)
+    .then((layout) => {
+      layoutCache.set(dimId, layout);
+      return layout;
+    })
+    .finally(() => layoutInflight.delete(dimId));
+  layoutInflight.set(dimId, p);
+  return p;
 }
 
 // debounce key per dimension so concurrent edits to different dims don't
