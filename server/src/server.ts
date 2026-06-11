@@ -3,8 +3,13 @@
    (app/) talks to this; Vite proxies /api → :PORT in dev. */
 
 import { env } from "./env.ts";
-import * as repo from "./repo.ts";
-import type { NumberFormat } from "./repo-shared.ts";
+import type {
+  NumberFormat,
+  GridLayoutConfig,
+  OptionDef,
+  PaletteName,
+} from "./repo-shared.ts";
+import type { ImportRow } from "./repo-canonical.ts";
 import {
   getSessionUser,
   handleMe,
@@ -319,12 +324,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       const dimId = url.searchParams.get("dimId") ?? "";
       const raw = url.searchParams.get("raw") ?? "";
       if (!dimId || !raw) return err("dimId and raw required", 400);
-      const dim = await repo.getDimension(dimId);
+      const dim = await reqRepo.getDimension(dimId);
       if (!dim) return json({ error: "not found" }, 404);
       if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
       try {
         const canonicalLabels = dim.canonical.map((c) => c.label);
-        const hint = await repo.getAiHint(dimId, raw, canonicalLabels, { label: dim.dimension });
+        const hint = await reqRepo.getAiHint(dimId, raw, canonicalLabels, { label: dim.dimension });
         return json(hint);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -337,7 +342,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // GET /api/users → { currentUser, collaborators }
     if (seg[1] === "users" && seg.length === 2 && method === "GET") {
-      const users = await repo.listUsers();
+      const users = await reqRepo.listUsers();
       return json({
         currentUser: users.find((u) => u.id === me) ?? users[0],
         collaborators: users,
@@ -368,20 +373,20 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     if (seg[1] === "sources") {
       if (seg.length === 2 && method === "GET")
         return json(
-          await repo.listSources({
+          await reqRepo.listSources({
             q: url.searchParams.get("q") ?? undefined,
             schema: url.searchParams.get("schema") ?? undefined,
             status: url.searchParams.get("status") ?? undefined,
           }),
         );
       if (seg[2] === "facets" && seg.length === 3 && method === "GET")
-        return json(await repo.sourceFacets());
+        return json(await reqRepo.sourceFacets());
       if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
-        return json(await repo.scanStatus());
+        return json(await reqRepo.scanStatus());
       if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
         const denied = gateOrJson(sessionUser, "manage_adapter");
         if (denied) return denied;
-        return json({ scanned: await repo.scanSources() });
+        return json({ scanned: await reqRepo.scanSources() });
       }
       // GET /api/sources/unmapped?dimId=&table=&column=&limit=
       if (seg[2] === "unmapped" && seg.length === 3 && method === "GET") {
@@ -390,14 +395,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const column = url.searchParams.get("column") ?? "";
         const limit = Number(url.searchParams.get("limit") ?? 5);
         if (!dimId || !table || !column) return err("dimId, table, column required", 400);
-        return json(await repo.topUnmapped(dimId, table, column, limit));
+        return json(await reqRepo.topUnmapped(dimId, table, column, limit));
       }
     }
 
     // GET /api/catalog — browse/search the warehouse catalog (the 1000+ tables)
     if (seg[1] === "catalog" && seg.length === 2 && method === "GET")
       return json(
-        await repo.searchCatalog({
+        await reqRepo.searchCatalog({
           q: url.searchParams.get("q") ?? undefined,
           schema: url.searchParams.get("schema") ?? undefined,
           limit: Number(url.searchParams.get("limit") ?? 50),
@@ -419,10 +424,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
     if (seg[1] === "grid-layout" && seg.length === 3) {
       const dimId = decodeURIComponent(seg[2]!);
-      if (method === "GET") return json(await repo.getGridLayout(me, dimId));
+      if (method === "GET") return json(await reqRepo.getGridLayout(me, dimId));
       if (method === "PATCH") {
-        const body = (await req.json()) as repo.GridLayoutConfig;
-        await repo.setGridLayout(me, dimId, body);
+        const body = (await req.json()) as GridLayoutConfig;
+        await reqRepo.setGridLayout(me, dimId, body);
         return noContent();
       }
     }
@@ -457,7 +462,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (Number.isNaN(since.getTime())) {
           throw new AppError("VALIDATION_FAILED", "invalid `since` query param", 400);
         }
-        const entries = await repo.getRowActivitySince(tableId, since);
+        const entries = await reqRepo.getRowActivitySince(tableId, since);
         return json({ entries, serverTime: new Date().toISOString() });
       }
       return json({ error: "not found" }, 404);
@@ -471,11 +476,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg.length === 2) {
         if (method === "GET") {
           if (url.searchParams.get("full") === "true") {
-            const metas = await repo.listDimensions();
-            const fulls = await Promise.all(metas.map((m) => repo.getDimension(m.id)));
+            const metas = await reqRepo.listDimensions();
+            const fulls = await Promise.all(metas.map((m) => reqRepo.getDimension(m.id)));
             return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
           }
-          return json(await repo.listDimensions());
+          return json(await reqRepo.listDimensions());
         }
         if (method === "POST") {
           const denied = gateOrJson(sessionUser, "curate");
@@ -484,18 +489,18 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             name: string;
             keyKind?: "slug" | "external_id";
           };
-          return json({ id: await repo.addDimension(name, [], { keyKind }, me) }, 201);
+          return json({ id: await reqRepo.addDimension(name, [], { keyKind }, me) }, 201);
         }
       }
       const id = seg[2] ? decodeURIComponent(seg[2]) : "";
       // GET /api/dimensions/:id
       if (seg.length === 3 && id && method === "GET") {
-        const dim = await repo.getDimension(id);
+        const dim = await reqRepo.getDimension(id);
         return dim ? json(dim) : json({ error: "not found" }, 404);
       }
       if (seg[3] === "drafts") {
         // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
-        if (seg.length === 4 && method === "GET") return json(await repo.listDrafts(id));
+        if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
         if (seg.length === 4 && method === "PUT") {
           const denied = gateOrJson(sessionUser, "curate");
           if (denied) return denied;
@@ -505,13 +510,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             targetLabel: string | null;
             targetKey: string | null;
           };
-          await repo.saveDraft(id, b.raw, b.status, b.targetLabel ?? null, b.targetKey ?? null, me);
+          await reqRepo.saveDraft(id, b.raw, b.status, b.targetLabel ?? null, b.targetKey ?? null, me);
           return noContent();
         }
         if (seg.length === 5 && method === "DELETE") {
           const denied = gateOrJson(sessionUser, "curate");
           if (denied) return denied;
-          await repo.discardDraft(id, decodeURIComponent(seg[4]!), me);
+          await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
           return noContent();
         }
       }
@@ -520,7 +525,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const denied = gateOrJson(sessionUser, "manage_adapter");
         if (denied) return denied;
         const { table, column } = (await req.json()) as { table: string; column: string };
-        await repo.addSource(id, table, column);
+        await reqRepo.addSource(id, table, column);
         return noContent();
       }
       // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
@@ -532,20 +537,20 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           column: string;
           nameColumn?: string;
         };
-        return json(await repo.deriveCanonical(id, table, column, nameColumn, {}, me));
+        return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, {}, me));
       }
       // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
       if (seg[3] === "import" && seg.length === 4 && method === "POST") {
         const denied = gateOrJson(sessionUser, "curate");
         if (denied) return denied;
-        const { rows } = (await req.json()) as { rows: repo.ImportRow[] };
+        const { rows } = (await req.json()) as { rows: ImportRow[] };
         if (!Array.isArray(rows)) {
           throw new AppError("VALIDATION_FAILED", "rows must be an array", 400);
         }
         if (rows.length > 10_000) {
           throw new AppError("VALIDATION_FAILED", "too many rows (max 10000)", 400);
         }
-        return json(await repo.importCanonical(id, rows, me));
+        return json(await reqRepo.importCanonical(id, rows, me));
       }
       // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
       if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
@@ -562,11 +567,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             displayFields?: string[];
           };
         return json(
-          await repo.addField(
+          await reqRepo.addField(
             id,
             label,
             type,
-            options as repo.OptionDef[] | undefined,
+            options as OptionDef[] | undefined,
             { numberFormat, ratingMax, referencedDimId, displayFields },
             me,
           ),
@@ -578,11 +583,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (denied) return denied;
         const field = decodeURIComponent(seg[4]!);
         const { label, color } = (await req.json()) as { label: string; color?: string | null };
-        const res = await repo.addColumnOption(
+        const res = await reqRepo.addColumnOption(
           id,
           field,
           label,
-          (color ?? null) as repo.PaletteName | null,
+          (color ?? null) as PaletteName | null,
           {},
           me,
         );
@@ -603,12 +608,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             coerceInvalidToNull?: boolean;
           };
           if (body.label != null) {
-            await repo.renameColumn(id, field, body.label, me);
+            await reqRepo.renameColumn(id, field, body.label, me);
           }
           if (body.type != null) {
-            const res = await repo.changeColumnType(id, field, {
+            const res = await reqRepo.changeColumnType(id, field, {
               newType: body.type,
-              options: body.options as repo.OptionDef[] | undefined,
+              options: body.options as OptionDef[] | undefined,
               numberFormat: body.numberFormat,
               ratingMax: body.ratingMax,
               coerceInvalidToNull: body.coerceInvalidToNull ?? false,
@@ -625,7 +630,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             description?: string | null;
             field_config?: string | null;
           };
-          await repo.updateField(
+          await reqRepo.updateField(
             id,
             field,
             { description: body.description, fieldConfig: body.field_config },
@@ -636,7 +641,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (method === "DELETE") {
           const denied = gateOrJson(sessionUser, "curate");
           if (denied) return denied;
-          return json(await repo.deleteColumn(id, field, me));
+          return json(await reqRepo.deleteColumn(id, field, me));
         }
       }
       // canonical record management
@@ -645,7 +650,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(sessionUser, "curate");
           if (denied) return denied;
           const { label, key } = (await req.json()) as { label: string; key?: string };
-          await repo.addCanonicalOne(id, label, key, me);
+          await reqRepo.addCanonicalOne(id, label, key, me);
           return noContent();
         }
         if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
@@ -663,18 +668,18 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
           }
           return json({
-            merged: await repo.mergeCanonical(id, survivor, losers, me, expectedVersions),
+            merged: await reqRepo.mergeCanonical(id, survivor, losers, me, expectedVersions),
           });
         }
         const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
         if (seg[5] === "variants" && seg.length === 6 && method === "GET")
-          return json(await repo.listVariants(id, ck));
+          return json(await reqRepo.listVariants(id, ck));
         // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
         if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
           const denied = gateOrJson(sessionUser, "curate");
           if (denied) return denied;
           const { value } = (await req.json()) as { value: string | null };
-          await repo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
+          await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
           return noContent();
         }
         if (seg.length === 5 && ck) {
@@ -688,7 +693,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             if (typeof expectedVersion !== "number") {
               throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
             }
-            const result = await repo.renameCanonical(id, ck, label, me, expectedVersion);
+            const result = await reqRepo.renameCanonical(id, ck, label, me, expectedVersion);
             return json(result);
           }
           if (method === "DELETE") {
@@ -699,7 +704,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             if (!Number.isFinite(expectedVersion)) {
               throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
             }
-            return json(await repo.retireCanonical(id, ck, me, expectedVersion));
+            return json(await reqRepo.retireCanonical(id, ck, me, expectedVersion));
           }
         }
       }
@@ -707,12 +712,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
         const denied = gateOrJson(sessionUser, "commit");
         if (denied) return denied;
-        return json(await repo.commit(id, me));
+        return json(await reqRepo.commit(id, me));
       }
       // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
       if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
         const dimId = seg[2]!;
-        const dim = await repo.getDimension(dimId);
+        const dim = await reqRepo.getDimension(dimId);
         if (!dim) return json({ error: "not found" }, 404);
         const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
         const buf = await exportCanonicalToParquet({

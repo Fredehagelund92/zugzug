@@ -206,7 +206,7 @@ export class TenantRepo {
   addField(
     dimId: string,
     label: string,
-    type: string,
+    type: string | undefined,
     options: OptionDef[] | undefined,
     opts: {
       silent?: boolean;
