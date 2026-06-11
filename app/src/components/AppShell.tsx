@@ -240,6 +240,7 @@ export function AppShell() {
           lastAutoPublishAt: string | null;
           lastAutoPublishDetail: string | null;
         };
+        if (stop) return;
         if (lastAutoSeen.current === undefined) {
           lastAutoSeen.current = s.lastAutoPublishAt;
           return;
