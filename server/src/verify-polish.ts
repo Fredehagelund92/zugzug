@@ -83,7 +83,7 @@ if (process.env.POLISH_AUTOSTAGE === "1") {
       "POLISH_AUTOSTAGE=1 set but POLISH_DIM_ID missing — set it to the dim to exercise",
     );
   } else {
-    const n = await repo.autoStageExactMatches(dimId);
+    const n = await repo.autoStageExactMatches(dimId, "default");
     check(`autoStageExactMatches('${dimId}') returns a count`, Number.isFinite(n), `staged ${n}`);
   }
 } else {

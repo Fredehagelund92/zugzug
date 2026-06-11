@@ -5,10 +5,12 @@
 import { addField, addColumnOption, setFieldValue } from "./repo.ts";
 import type { OptionDef } from "./repo.ts";
 
+const T = "default";
+
 async function ensureField(dimId: string, label: string, type: string, options?: string[]) {
   try {
     const opts: OptionDef[] | undefined = options?.map((label) => ({ label, color: null }));
-    const r = await addField(dimId, label, type, opts, {}, "u_verify");
+    const r = await addField(dimId, label, type, opts, {}, "u_verify", T);
     return r?.field ?? label.toLowerCase().replace(/\s+/g, "_");
   } catch {
     return label.toLowerCase().replace(/\s+/g, "_");
@@ -17,7 +19,7 @@ async function ensureField(dimId: string, label: string, type: string, options?:
 
 async function ensureOption(dimId: string, field: string, label: string) {
   try {
-    await addColumnOption(dimId, field, label, null, {}, "u_verify");
+    await addColumnOption(dimId, field, label, null, {}, "u_verify", T);
   } catch {
     /* exists */
   }
@@ -146,13 +148,13 @@ for (const opt of new Set(Object.values(COUNTRY_CURRENCY)))
   await ensureOption("country", currencyField, opt);
 
 for (const [key, v] of Object.entries(COUNTRY_REGIONS))
-  await setFieldValue("country", key, regionField, v);
+  await setFieldValue("country", key, regionField, v, T);
 for (const [key, v] of Object.entries(COUNTRY_CURRENCY))
-  await setFieldValue("country", key, currencyField, v);
+  await setFieldValue("country", key, currencyField, v, T);
 for (const [key, v] of Object.entries(COUNTRY_TIER))
-  await setFieldValue("country", key, tierField, String(v));
+  await setFieldValue("country", key, tierField, String(v), T);
 for (const [key, v] of Object.entries(COUNTRY_GDPR))
-  await setFieldValue("country", key, gdprField, v ? "true" : "false");
+  await setFieldValue("country", key, gdprField, v ? "true" : "false", T);
 
 console.log("  Country: +Region (select), +Currency (select), +Tier (number), +GDPR (boolean)");
 
@@ -167,9 +169,9 @@ const paidField = await ensureField("channel", "Paid", "boolean");
 for (const opt of new Set(Object.values(CHANNEL_FUNNEL)))
   await ensureOption("channel", funnelField, opt);
 for (const [key, v] of Object.entries(CHANNEL_FUNNEL))
-  await setFieldValue("channel", key, funnelField, v);
+  await setFieldValue("channel", key, funnelField, v, T);
 for (const [key, v] of Object.entries(CHANNEL_PAID))
-  await setFieldValue("channel", key, paidField, v ? "true" : "false");
+  await setFieldValue("channel", key, paidField, v ? "true" : "false", T);
 
 console.log("  Channel: +Funnel stage (select), +Paid (boolean)");
 

@@ -438,7 +438,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (denied) return denied;
         try {
           const input = (await req.json()) as tables.CreateTableInput;
-          const result = await tables.createTable(input, me);
+          const result = await tables.createTable(input, me, tenantCtx.tenantId);
           return json(result, 201);
         } catch (e) {
           if (e instanceof AppError) {

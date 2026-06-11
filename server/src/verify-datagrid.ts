@@ -9,6 +9,8 @@ import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
 import { runMigrations } from "../drizzle/migrate.ts";
 
+const T = "default";
+
 const SCOPE = "dg_verify_" + Math.random().toString(36).slice(2, 8);
 
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -53,12 +55,12 @@ async function cleanup() {
   await step("clean prior scope rows", cleanup);
 
   const dimId = await step("create test dimension", async () => {
-    return await repo.addDimension(`${SCOPE} country`, [], {}, "u_verify");
+    return await repo.addDimension(`${SCOPE} country`, [], {}, "u_verify", T);
   });
   assert(dimId.startsWith(SCOPE), "dimId should start with scope");
 
   await step("addField(text)", async () => {
-    const r = await repo.addField(dimId, "Capital", "text", undefined, {}, "u_verify");
+    const r = await repo.addField(dimId, "Capital", "text", undefined, {}, "u_verify", T);
     assert(r?.field === "capital", `expected field 'capital', got ${r?.field}`);
   });
 
@@ -73,9 +75,10 @@ async function cleanup() {
       ],
       {},
       "u_verify",
+      T,
     );
     assert(r?.field === "region", `expected field 'region', got ${r?.field}`);
-    const fields = await repo.listFields(dimId);
+    const fields = await repo.listFields(dimId, T);
     const region = fields.find((f) => f.field === "region");
     assert(region?.type === "select", "region type is select");
     const labels = region?.options?.map((o) => o.label);
@@ -86,7 +89,7 @@ async function cleanup() {
   });
 
   await step("addColumnOption appends a new option", async () => {
-    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify");
+    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify", T);
     const labels = r?.options?.map((o) => o.label);
     assert(
       JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]),
@@ -95,7 +98,7 @@ async function cleanup() {
   });
 
   await step("addColumnOption is idempotent on duplicate label", async () => {
-    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify");
+    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify", T);
     const labels = r?.options?.map((o) => o.label);
     assert(
       JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]),
@@ -104,7 +107,7 @@ async function cleanup() {
   });
 
   await step("addColumnOption refuses non-select column", async () => {
-    const r = await repo.addColumnOption(dimId, "capital", "Berlin", null, {}, "u_verify");
+    const r = await repo.addColumnOption(dimId, "capital", "Berlin", null, {}, "u_verify", T);
     assert(r === null, `expected null for non-select column, got: ${JSON.stringify(r)}`);
   });
 
@@ -127,25 +130,25 @@ async function cleanup() {
   });
 
   await step("renameColumn updates the label", async () => {
-    await repo.renameColumn(dimId, "capital", "Capital city", "u_verify");
-    const fields = await repo.listFields(dimId);
+    await repo.renameColumn(dimId, "capital", "Capital city", "u_verify", T);
+    const fields = await repo.listFields(dimId, T);
     const cap = fields.find((f) => f.field === "capital");
     assert(cap?.label === "Capital city", `label: ${cap?.label}`);
   });
 
   await step("changeColumnType text → select seeds options from distinct values", async () => {
     // first, add a couple of canonical rows and set capital values
-    await repo.addCanonicalOne(dimId, "Denmark", "denmark", "u_verify");
-    await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify");
-    await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen");
-    await repo.setFieldValue(dimId, "germany", "capital", "Berlin");
+    await repo.addCanonicalOne(dimId, "Denmark", "denmark", "u_verify", T);
+    await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify", T);
+    await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen", T);
+    await repo.setFieldValue(dimId, "germany", "capital", "Berlin", T);
     const res = await repo.changeColumnType(dimId, "capital", {
       newType: "select",
       coerceInvalidToNull: false,
       userId: "u_verify",
-    });
+    }, T);
     assert(res.ok, `changeColumnType failed: ${JSON.stringify(res)}`);
-    const fields = await repo.listFields(dimId);
+    const fields = await repo.listFields(dimId, T);
     const cap = fields.find((f) => f.field === "capital");
     assert(cap?.type === "select", `type after change: ${cap?.type}`);
     const capLabels = cap?.options?.map((o) => o.label);
@@ -156,9 +159,9 @@ async function cleanup() {
   });
 
   await step("deleteColumn drops dim_field + cell values", async () => {
-    const r = await repo.deleteColumn(dimId, "capital", "u_verify");
+    const r = await repo.deleteColumn(dimId, "capital", "u_verify", T);
     assert(r.ok, "deleteColumn ok");
-    const fields = await repo.listFields(dimId);
+    const fields = await repo.listFields(dimId, T);
     assert(
       !fields.some((f) => f.field === "capital"),
       `capital still present: ${JSON.stringify(fields)}`,
@@ -175,13 +178,14 @@ async function cleanup() {
       undefined,
       { ratingMax: 5 },
       "u_verify",
+      T,
     );
     assert(result != null, "addField(rating) returned null");
     return result.field;
   });
 
   await step("listFields returns ratingMax", async () => {
-    const fields = await repo.listFields(dimId);
+    const fields = await repo.listFields(dimId, T);
     const f = fields.find((x) => x.field === ratingFieldId);
     assert(f != null, "rating field not found");
     assert(f.type === "rating", `expected type=rating, got ${f.type}`);
@@ -189,15 +193,15 @@ async function cleanup() {
   });
 
   await step("changeColumnType text → url (lossless relabel)", async () => {
-    const textField = await repo.addField(dimId, "Website", "text", undefined, {}, "u_verify");
+    const textField = await repo.addField(dimId, "Website", "text", undefined, {}, "u_verify", T);
     assert(textField != null, "addField(text) returned null");
     const res = await repo.changeColumnType(dimId, textField.field, {
       newType: "url",
       coerceInvalidToNull: false,
       userId: "u_verify",
-    });
+    }, T);
     assert(res.ok, "changeColumnType to url failed");
-    const fields = await repo.listFields(dimId);
+    const fields = await repo.listFields(dimId, T);
     assert(fields.find((x) => x.field === textField.field)?.type === "url", "type should be url");
   });
 

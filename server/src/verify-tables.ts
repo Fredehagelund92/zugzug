@@ -8,6 +8,8 @@ import * as repo from "./repo.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { pg } from "./env.ts";
 
+const T = "default";
+
 const SCOPE = "tbl_verify_" + Math.random().toString(36).slice(2, 8);
 
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -88,7 +90,7 @@ async function cleanup(): Promise<void> {
   });
 
   await step("blank dim has 2 fields with the new option shape", async () => {
-    const fields = await repo.listFields(blankId);
+    const fields = await repo.listFields(blankId, T);
     assert(fields.length === 2, `expected 2 fields, got ${fields.length}`);
     const sev = fields.find((f) => f.field === "severity");
     assert(sev?.type === "select", "severity is select");
@@ -150,14 +152,14 @@ async function cleanup(): Promise<void> {
   await step("legacy string[] options read as {label, color: null}", async () => {
     // Create a fresh dimension and a select field with empty options via the silent path
     const legacyName = `${SCOPE} legacy`;
-    const legacyId = await repo.addDimension(legacyName, [], { silent: true }, "u_verify");
-    await repo.addField(legacyId, "Status", "select", undefined, { silent: true }, "u_verify");
+    const legacyId = await repo.addDimension(legacyName, [], { silent: true }, "u_verify", T);
+    await repo.addField(legacyId, "Status", "select", undefined, { silent: true }, "u_verify", T);
     // Overwrite the options JSON with the LEGACY string[] shape to simulate pre-T5 data
     await pgRun(
       `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = 'status'`,
       [JSON.stringify(["open", "closed"]), legacyId],
     );
-    const fields = await repo.listFields(legacyId);
+    const fields = await repo.listFields(legacyId, T);
     const status = fields.find((f) => f.field === "status");
     assert(
       status?.options?.length === 2,
