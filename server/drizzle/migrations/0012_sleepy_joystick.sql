@@ -25,3 +25,5 @@ BEGIN
     );
   END LOOP;
 END $$;
+--> statement-breakpoint
+ALTER TABLE "zugzug_app"."active_sessions" ADD COLUMN IF NOT EXISTS "impersonating_tenant_id" VARCHAR;

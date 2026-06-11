@@ -155,6 +155,7 @@ export const activeSessions = app.table("active_sessions", {
   user_id:   varchar("user_id").primaryKey(),
   last_seen: timestamp("last_seen").notNull(),
   tenant_id: varchar("tenant_id").default("default"),
+  impersonating_tenant_id: varchar("impersonating_tenant_id"),
 });
 
 export const allowedEmails = app.table("allowed_emails", {

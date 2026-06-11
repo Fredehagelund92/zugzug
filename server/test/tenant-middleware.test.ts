@@ -27,7 +27,7 @@ beforeEach(cleanup);
 afterAll(cleanup);
 
 function user(id: string): SessionUser {
-  return { id, name: id, email: `${id}@x`, initials: "XX", role: "editor", isSuperAdmin: false };
+  return { id, name: id, email: `${id}@x`, initials: "XX", role: "editor", isSuperAdmin: false, impersonatingTenantId: null };
 }
 
 async function makeUser(id: string, isSuperAdmin = false): Promise<void> {

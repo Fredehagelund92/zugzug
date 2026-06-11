@@ -25,6 +25,8 @@ export interface SessionUser {
   initials: string;
   role: Role;
   isSuperAdmin: boolean;
+  /** Set by POST /api/admin/impersonate; only honored when isSuperAdmin is true. */
+  impersonatingTenantId: string | null;
 }
 
 export type Role = "admin" | "editor" | "viewer";
@@ -102,8 +104,12 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     return null;
   }
   return get<SessionUser>(
-    `SELECT id, name, email, initials, role, is_super_admin AS "isSuperAdmin"
-       FROM ${pg("users")} WHERE id = $1`,
+    `SELECT u.id, u.name, u.email, u.initials, u.role,
+            u.is_super_admin AS "isSuperAdmin",
+            a.impersonating_tenant_id AS "impersonatingTenantId"
+       FROM ${pg("users")} u
+  LEFT JOIN ${pg("active_sessions")} a ON a.user_id = u.id
+      WHERE u.id = $1`,
     [session.user_id],
   );
 }

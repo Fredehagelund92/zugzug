@@ -29,7 +29,15 @@ import { getAdapter } from "./warehouse/registry.ts";
 import { presence } from "./realtime/presence-room.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { TenantRepo } from "./tenant-repo.ts";
-import { provisionTenant, listTenants, tenantBySlug, memberRole } from "./tenant.ts";
+import {
+  provisionTenant,
+  listTenants,
+  tenantBySlug,
+  memberRole,
+  teardownTenant,
+} from "./tenant.ts";
+import { pgRun } from "./pg.ts";
+import { pg } from "./env.ts";
 import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
@@ -151,28 +159,121 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   const me = sessionUser.id;
   setUid(me);
 
-  // Resolve the tenant context for this request. /api/admin/* and /api/auth/*
-  // bypass this — admin handles its own auth, auth routes ran earlier.
-  let tenantCtx: { tenantId: string; role: import("./auth.ts").Role; isSuperAdmin: boolean };
+  // Admin block — hoisted OUT of the pgContext.run wrapper because admin routes
+  // call pgAll/pgRun directly (via listTenants, teardownTenant, etc.) and would
+  // trip the TenantRepo runtime guard.
   if (seg[1] === "admin") {
     if (!sessionUser.isSuperAdmin) {
       return json({ error: "forbidden", reason: "super_admin_required" }, 403);
     }
-    tenantCtx = { tenantId: "*", role: "admin", isSuperAdmin: true };
-  } else {
     try {
-      const pathnameForCtx = tenantSlugFromPath ? `/api/t/${tenantSlugFromPath}/_` : pathname;
-      tenantCtx = await resolveTenantContext({
-        pathname: pathnameForCtx,
-        user: sessionUser,
-        isSuperAdmin: sessionUser.isSuperAdmin,
-      });
+      // /api/admin/tenants (GET list, POST provision)
+      if (seg[2] === "tenants" && seg.length === 3) {
+        if (method === "GET") return json({ tenants: await listTenants() });
+        if (method === "POST") {
+          const body = (await req.json()) as {
+            id: string;
+            label: string;
+            slug?: string;
+            warehouseId?: string;
+          };
+          const tenant = await provisionTenant({
+            id: body.id,
+            label: body.label,
+            slug: body.slug,
+            warehouseId: body.warehouseId,
+          });
+          return json(tenant, 201);
+        }
+      }
+
+      // POST /api/admin/tenants/:id/teardown
+      if (
+        seg[2] === "tenants" &&
+        seg.length === 5 &&
+        seg[4] === "teardown" &&
+        method === "POST"
+      ) {
+        const targetId = decodeURIComponent(seg[3]!);
+        if (targetId === "default") {
+          return json({ error: "cannot_teardown_default" }, 400);
+        }
+        await teardownTenant(targetId);
+        return json({ ok: true, teardown: targetId });
+      }
+
+      // GET /api/admin/audit[?tenant_id=…&limit=…]
+      if (seg[2] === "audit" && seg.length === 3 && method === "GET") {
+        const limit = Math.min(
+          200,
+          Math.max(1, Number(url.searchParams.get("limit") ?? 30)),
+        );
+        const filterTenant = url.searchParams.get("tenant_id");
+        const scope = filterTenant ?? "*";
+        const adminRepo = new TenantRepo(scope, "admin", true);
+        return json(await adminRepo.listAudit(limit));
+      }
+
+      // POST /api/admin/impersonate/:tenant_id (set) or /api/admin/impersonate (clear)
+      if (seg[2] === "impersonate" && method === "POST") {
+        const target = seg[3] ? decodeURIComponent(seg[3]) : null;
+        if (target) {
+          const t = await tenantBySlug(target);
+          if (!t) return json({ error: "tenant_not_found" }, 404);
+          await pgRun(
+            `INSERT INTO ${pg("active_sessions")} (user_id, last_seen, impersonating_tenant_id)
+             VALUES ($1, current_timestamp, $2)
+             ON CONFLICT (user_id) DO UPDATE
+               SET impersonating_tenant_id = EXCLUDED.impersonating_tenant_id,
+                   last_seen = current_timestamp`,
+            [sessionUser.id, t.id],
+          );
+          await new TenantRepo(t.id, "admin", true).appendAudit(
+            sessionUser.id,
+            "impersonate_start",
+            `super-admin → ${t.id}`,
+          );
+          return json({ ok: true, impersonating: t.id });
+        }
+        await pgRun(
+          `UPDATE ${pg("active_sessions")} SET impersonating_tenant_id = NULL WHERE user_id = $1`,
+          [sessionUser.id],
+        );
+        return json({ ok: true, impersonating: null });
+      }
+
+      return json({ error: `no route for ${method} ${pathname}` }, 404);
     } catch (e) {
       if (e instanceof AppError) {
-        return json({ error: e.message, code: e.code }, e.status);
+        return json(
+          {
+            error: e.message,
+            code: e.code,
+            ...(e.details ? { details: e.details } : {}),
+          },
+          e.status,
+        );
       }
-      throw e;
+      console.error(`✗ ${method} ${pathname}:`, e);
+      return err(e);
     }
+  }
+
+  // Resolve the tenant context for non-admin /api/* routes.
+  let tenantCtx: { tenantId: string; role: import("./auth.ts").Role; isSuperAdmin: boolean };
+  try {
+    const pathnameForCtx = tenantSlugFromPath ? `/api/t/${tenantSlugFromPath}/_` : pathname;
+    tenantCtx = await resolveTenantContext({
+      pathname: pathnameForCtx,
+      user: sessionUser,
+      isSuperAdmin: sessionUser.isSuperAdmin,
+      impersonatingTenantId: sessionUser.impersonatingTenantId,
+    });
+  } catch (e) {
+    if (e instanceof AppError) {
+      return json({ error: e.message, code: e.code }, e.status);
+    }
+    throw e;
   }
   const reqRepo = new TenantRepo(tenantCtx.tenantId, tenantCtx.role, tenantCtx.isSuperAdmin);
 
@@ -200,29 +301,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     return await pgContext.run({ insideTenantRepo: true }, async () => {
-    // /api/admin/tenants — super-admin only; tenantCtx.isSuperAdmin verified at the top of handle().
-    if (seg[1] === "admin" && seg[2] === "tenants") {
-      if (seg.length === 3 && method === "GET") {
-        const tenants = await listTenants();
-        return json({ tenants });
-      }
-      if (seg.length === 3 && method === "POST") {
-        const body = (await req.json()) as {
-          id: string;
-          label: string;
-          slug?: string;
-          warehouseId?: string;
-        };
-        const tenant = await provisionTenant({
-          id: body.id,
-          label: body.label,
-          slug: body.slug,
-          warehouseId: body.warehouseId,
-        });
-        return json(tenant, 201);
-      }
-    }
-
     // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
     if (seg[1] === "preferences" && seg.length === 2) {
       if (method === "GET") return json(await reqRepo.getPreferences());
