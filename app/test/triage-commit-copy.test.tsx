@@ -64,13 +64,13 @@ function setupMocks(writable: boolean) {
   }));
 }
 
-describe("Triage commit affordance copy", () => {
+describe("Review publish affordance copy", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
   });
 
-  test("writable mode: button says 'commit to warehouse'", async () => {
+  test("writable mode: button says 'Publish to warehouse'", async () => {
     setupMocks(true);
     const { Triage } = await import("../src/routes/Triage");
     render(
@@ -79,12 +79,11 @@ describe("Triage commit affordance copy", () => {
       </MemoryRouter>,
     );
     await waitFor(() => {
-      // Match the commit button text — "Approve & commit to warehouse"
-      expect(screen.getByText(/commit to warehouse/i)).toBeInTheDocument();
+      expect(screen.getByText(/publish to warehouse/i)).toBeInTheDocument();
     });
   });
 
-  test("postgres-export mode: button says 'save' + 'Download snapshot' link", async () => {
+  test("postgres-export mode: button says 'Publish' + 'Download snapshot' link", async () => {
     setupMocks(false);
     const { Triage } = await import("../src/routes/Triage");
     render(
@@ -93,7 +92,7 @@ describe("Triage commit affordance copy", () => {
       </MemoryRouter>,
     );
     await waitFor(() => {
-      expect(screen.getByText(/approve & save/i)).toBeInTheDocument();
+      expect(screen.getByText(/^Publish$/)).toBeInTheDocument();
       expect(screen.getByText(/download snapshot/i)).toBeInTheDocument();
     });
   });

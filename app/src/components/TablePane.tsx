@@ -12,6 +12,8 @@ import {
   useDimensions,
   addCanonical,
   renameCanonical,
+  getCanonical,
+  importRows,
   mergeCanonical,
   retireCanonical,
   fetchVariants,
@@ -25,6 +27,7 @@ import {
   updateFieldRules,
   updateFieldDescription,
   getGridLayout,
+  getCachedGridLayout,
   setGridLayout,
   useCanEdit,
   useCurrentUser,
@@ -44,6 +47,8 @@ import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { toast } from "./Toast";
+import { prepareImport, type ParsedImport } from "../lib/csv";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
@@ -248,10 +253,29 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   }, []);
 
   const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
-  const [layout, setLayout] = useState<GridLayoutConfig>({});
+  const [layout, setLayout] = useState<GridLayoutConfig>(
+    () => getCachedGridLayout(activeId) ?? {},
+  );
   useEffect(() => {
-    void getGridLayout(activeId).then(setLayout);
+    const cached = getCachedGridLayout(activeId);
+    if (cached) setLayout(cached);
+    else void getGridLayout(activeId).then(setLayout);
   }, [activeId]);
+
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [pendingImport, setPendingImport] = useState<ParsedImport | null>(null);
+  const onImportFile = async (file: File | null, input: HTMLInputElement) => {
+    input.value = ""; // allow re-picking the same file
+    if (!file) return;
+    const text = await file.text();
+    try {
+      setPendingImport(
+        prepareImport(text, { keyCol: dim.keyCol, dimension: dim.dimension, fields }),
+      );
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Couldn't parse that CSV.", "error");
+    }
+  };
 
   // ?focus=<key> — scroll the focused record into view (only when this pane is
   // the active one at mount; inactive panes are display:none so scrollIntoView
@@ -401,8 +425,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       apply: () => addCanonical(activeId, label),
       inverse: () => {
         const addedKey = slug(label);
-        const row = list.find((c) => c.key === addedKey);
-        return retireCanonical(activeId, addedKey, row?.version ?? 1).then(() => undefined);
+        const v = getCanonical(activeId, addedKey)?.version ?? 1;
+        return retireCanonical(activeId, addedKey, v).then(() => undefined);
       },
     });
     setBusy(false);
@@ -436,10 +460,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       label: `merge ${losers.length} into "${survivorLabel}"`,
       surface: "Records",
       apply: () => {
-        const currentSurvivorRow = list.find((c) => c.key === survivor);
-        const currentLoserRows = list.filter((c) => losers.includes(c.key));
         const currentExpectedVersions = Object.fromEntries(
-          [currentSurvivorRow, ...currentLoserRows]
+          [survivor, ...losers]
+            .map((k) => getCanonical(activeId, k))
             .filter((r): r is CanonicalValue => r !== undefined)
             .map((r) => [r.key, r.version]),
         );
@@ -474,8 +497,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         label: `remove "${label}"`,
         surface: "Records",
         apply: () => {
-          const currentRow = list.find((c) => c.key === key);
-          return retireCanonical(activeId, key, currentRow?.version ?? 1).then(() => undefined);
+          const v = getCanonical(activeId, key)?.version ?? 1;
+          return retireCanonical(activeId, key, v).then(() => undefined);
         },
         inverse: () => addCanonical(activeId, label),
       });
@@ -586,6 +609,20 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               ↓ Export CSV
             </Button>
           )}
+          {canEdit && (
+            <>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => void onImportFile(e.target.files?.[0] ?? null, e.target)}
+              />
+              <Button variant="ghost" size="sm" onClick={() => importFileRef.current?.click()}>
+                ↑ Import CSV
+              </Button>
+            </>
+          )}
           <a
             href={`/api/dimensions/${dim.id}/snapshot.parquet`}
             download={`${dim.id}-map.parquet`}
@@ -667,59 +704,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       )}
 
       <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
-        {sel.length > 0 && canEdit ? (
-          <div className="flex flex-wrap items-center gap-3 border-b border-accent/30 bg-accent-wash px-5 py-2.5">
-            <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear selection" />
-            <span className="font-mono text-[12px] font-medium text-accent">
-              {sel.length} record{sel.length === 1 ? "" : "s"} selected
-            </span>
-            {sel.length < list.length && (
-              <button
-                type="button"
-                onClick={() => setSel(list.map((c) => c.key))}
-                className="font-mono text-[11px] text-accent underline underline-offset-2 hover:opacity-80"
-              >
-                Select all {list.length}
-              </button>
-            )}
-            <div className="w-56">
-              <ComboSelect
-                options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
-                value={null}
-                placeholder={sel.length < 2 ? "select 2+ to merge" : "merge into…"}
-                onPick={(survivorLabel) => {
-                  if (sel.length >= 5) {
-                    setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
-                  } else {
-                    void merge(survivorLabel);
-                  }
-                }}
-              />
-            </div>
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<IconX className="h-3.5 w-3.5" />}
-              onClick={() => setBulkRemoveConfirm({ count: sel.length })}
-              disabled={busy}
-            >
-              Remove
-            </Button>
-            <button
-              type="button"
-              onClick={() => setSel([])}
-              className="ml-auto font-mono text-[11px] text-accent/60 hover:text-accent"
-            >
-              clear
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
-            <span className="font-mono text-[11.5px] text-ink-3">
-              {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
-            </span>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
+          <span className="font-mono text-[11.5px] text-ink-3">
+            {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
+          </span>
+        </div>
 
         {conflicts.size > 0 && (
           <div className="flex flex-col gap-1 px-5 pt-2 pb-3">
@@ -763,16 +752,12 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                         label: `rename "${prev}" → "${value}"`,
                         surface: "Records",
                         apply: () => {
-                          const r = list.find((c) => c.key === rowKey);
-                          return renameCanonical(activeId, rowKey, value, r?.version ?? 1).then(
-                            () => undefined,
-                          );
+                          const v = getCanonical(activeId, rowKey)?.version ?? 1;
+                          return renameCanonical(activeId, rowKey, value, v).then(() => undefined);
                         },
                         inverse: () => {
-                          const r = list.find((c) => c.key === rowKey);
-                          return renameCanonical(activeId, rowKey, prev, r?.version ?? 1).then(
-                            () => undefined,
-                          );
+                          const v = getCanonical(activeId, rowKey)?.version ?? 1;
+                          return renameCanonical(activeId, rowKey, prev, v).then(() => undefined);
                         },
                       });
                       void fetchVariants(activeId, rowKey).then((vs) => {
@@ -943,7 +928,86 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             </Button>
           </div>
         )}
+
+        {/* Floating bulk-action bar — sticky so it stays visible at the bottom
+            of the pane viewport regardless of scroll position. */}
+        {sel.length > 0 && canEdit && (
+          <div className="zz-pop-in sticky bottom-4 z-30 mx-auto my-3 flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-sm border border-accent/40 bg-[var(--surface-elevated)] px-4 py-2.5 shadow-lg">
+            <Checkbox state="mixed" onClick={() => setSel([])} aria-label="Clear selection" />
+            <span className="font-mono text-[12px] font-medium text-accent">
+              {sel.length} record{sel.length === 1 ? "" : "s"} selected
+            </span>
+            {sel.length < list.length && (
+              <button
+                type="button"
+                onClick={() => setSel(list.map((c) => c.key))}
+                className="font-mono text-[11px] text-accent underline underline-offset-2 hover:opacity-80"
+              >
+                Select all {list.length}
+              </button>
+            )}
+            <span className="h-5 w-px bg-line-2" aria-hidden />
+            <label className="flex items-center gap-2 font-mono text-[11.5px] text-ink-2">
+              Merge into
+              <span className="w-48">
+                <ComboSelect
+                  options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
+                  value={null}
+                  placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
+                  onPick={(survivorLabel) => {
+                    if (sel.length >= 5) {
+                      setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
+                    } else {
+                      void merge(survivorLabel);
+                    }
+                  }}
+                />
+              </span>
+            </label>
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<IconX className="h-3.5 w-3.5" />}
+              onClick={() => setBulkRemoveConfirm({ count: sel.length })}
+              disabled={busy}
+            >
+              Remove
+            </Button>
+          </div>
+        )}
       </div>
+
+      <ConfirmDialog
+        open={pendingImport !== null}
+        title={`Import into ${dim.dimension}?`}
+        body={
+          pendingImport && (
+            <ul className="flex flex-col gap-1 font-mono text-[12px]">
+              {pendingImport.summary.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+              <li className="mt-1 text-ink-3">
+                New keys are created; existing keys get field updates. Labels are never renamed.
+              </li>
+            </ul>
+          )
+        }
+        confirmLabel="Import"
+        onConfirm={async () => {
+          if (!pendingImport) return;
+          const toImport = pendingImport.rows;
+          setPendingImport(null);
+          try {
+            const r = await importRows(activeId, toImport);
+            toast(
+              `Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`,
+            );
+          } catch (err) {
+            toast(err instanceof Error ? err.message : "Import failed.", "error");
+          }
+        }}
+        onCancel={() => setPendingImport(null)}
+      />
 
       <ConfirmDialog
         open={bulkRemoveConfirm !== null}

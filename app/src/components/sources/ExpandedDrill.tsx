@@ -61,7 +61,7 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
           to={`/app/tables?open=${row.dimId}&active=${row.dimId}&mode=match`}
           className="text-accent hover:underline"
         >
-          Resolve in Match values →
+          Open in Match values →
         </Link>
         <span>→ {row.dimension}</span>
       </div>

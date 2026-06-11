@@ -8,9 +8,9 @@ import {
   type ReactNode,
 } from "react";
 
-/* UndoStack — last-50, in-memory, per-mount. Cleared on route change or
-   dimension switch (the consumer remounts the provider when the active
-   dimension changes). Not collaborative; not persisted. */
+/* UndoStack — last-50, in-memory, per scope. Stacks live in a module-level
+   map keyed by scopeKey so history survives provider unmounts (tab switches,
+   route changes); a session reload clears everything. Not collaborative. */
 
 export interface UndoEntry {
   apply: () => Promise<void>;
@@ -46,6 +46,20 @@ const UndoCtx = createContext<Ctx | null>(null);
 
 const LIMIT = 50;
 
+interface ScopeStacks {
+  undo: UndoEntry[];
+  redo: UndoEntry[];
+}
+const scopeStacks = new Map<string, ScopeStacks>();
+function stacksFor(key: string): ScopeStacks {
+  let s = scopeStacks.get(key);
+  if (!s) {
+    s = { undo: [], redo: [] };
+    scopeStacks.set(key, s);
+  }
+  return s;
+}
+
 export function UndoStackProvider({
   children,
   scopeKey,
@@ -53,21 +67,24 @@ export function UndoStackProvider({
   children: ReactNode;
   scopeKey?: string;
 }) {
-  const undoStack = useRef<UndoEntry[]>([]);
-  const redoStack = useRef<UndoEntry[]>([]);
+  const key = scopeKey ?? "default";
+  const undoStack = useRef<UndoEntry[]>(stacksFor(key).undo);
+  const redoStack = useRef<UndoEntry[]>(stacksFor(key).redo);
   // Open compound-undo group. While set, push() entries land here instead of
   // the main stack; endTransaction() flushes them as one combined entry.
+  // Per-mount on purpose: a transaction must not span an unmount.
   const txRef = useRef<{ label: string; entries: UndoEntry[] } | null>(null);
   const [version, setVersion] = useState(0); // bumped to re-render canUndo/canRedo flags
   const bump = () => setVersion((v) => v + 1);
 
-  // clear both stacks when the scope (dimension id) changes
+  // Re-point at the right scope's stacks when the scope changes (history is
+  // preserved per scope, never cleared — that's the point of the module map).
   useEffect(() => {
-    undoStack.current = [];
-    redoStack.current = [];
+    undoStack.current = stacksFor(key).undo;
+    redoStack.current = stacksFor(key).redo;
     txRef.current = null;
     bump();
-  }, [scopeKey]);
+  }, [key]);
 
   const push = useCallback((e: UndoEntry) => {
     if (txRef.current) {
@@ -76,7 +93,7 @@ export function UndoStackProvider({
     }
     undoStack.current.push(e);
     if (undoStack.current.length > LIMIT) undoStack.current.shift();
-    redoStack.current = []; // any new mutation invalidates the redo path
+    redoStack.current.length = 0; // any new mutation invalidates the redo path
     bump();
   }, []);
 
@@ -109,7 +126,7 @@ export function UndoStackProvider({
           };
     undoStack.current.push(combined);
     if (undoStack.current.length > LIMIT) undoStack.current.shift();
-    redoStack.current = [];
+    redoStack.current.length = 0;
     bump();
   }, []);
 

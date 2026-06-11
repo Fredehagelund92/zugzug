@@ -25,6 +25,10 @@ export function MasterTables() {
   // Mount-only URL → state fold. Honors legacy ?dimId=<id> from old palette
   // links + bookmarks. New contract is ?open=a,b,c&active=<dimId>.
   const didInitFromUrl = useRef(false);
+  // Whether the URL fold opened any tab. The blank-page fallback below runs in
+  // the same commit with a stale (pre-fold) `tabs` capture, so without this
+  // gate it would open dims[0] AFTER the fold and steal active from a deep link.
+  const urlOpenedTab = useRef(false);
   useEffect(() => {
     if (didInitFromUrl.current) return;
     didInitFromUrl.current = true;
@@ -33,15 +37,20 @@ export function MasterTables() {
     const activeParam = searchParams.get("active");
     if (legacyDim && dims.some((d) => d.id === legacyDim)) {
       openTab(legacyDim);
+      urlOpenedTab.current = true;
       return;
     }
     if (openParam) {
       for (const did of openParam.split(",").filter(Boolean)) {
-        if (dims.some((d) => d.id === did)) openTab(did);
+        if (dims.some((d) => d.id === did)) {
+          openTab(did);
+          urlOpenedTab.current = true;
+        }
       }
     }
     if (activeParam && dims.some((d) => d.id === activeParam)) {
       openTab(activeParam);
+      urlOpenedTab.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -49,30 +58,11 @@ export function MasterTables() {
   // Fallback so the page is never blank when the user has tables but no
   // session-restored tabs (first visit on a clean profile).
   useEffect(() => {
-    if (!didInitFromUrl.current) return;
+    if (!didInitFromUrl.current || urlOpenedTab.current) return;
     if (tabs.length === 0 && dims.length > 0) {
       openTab(dims[0].id);
     }
   }, [tabs.length, dims, openTab]);
-
-  useEffect(() => {
-    if (!didInitFromUrl.current) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete("dimId");
-    if (tabs.length > 0) {
-      next.set("open", tabs.map((t) => t.dimId).join(","));
-    } else {
-      next.delete("open");
-    }
-    if (activeTabId) {
-      next.set("active", dimIdFromTabId(activeTabId));
-    } else {
-      next.delete("active");
-    }
-    if (next.toString() !== searchParams.toString()) {
-      setSearchParams(next, { replace: true });
-    }
-  }, [tabs, activeTabId, searchParams, setSearchParams]);
 
   const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
 
@@ -101,30 +91,45 @@ export function MasterTables() {
     writeStoredMode(dimId, m);
   }, []);
 
-  // When the active tab changes (or its mode changes), sync ?mode= in the URL.
-  // Drop ?value= whenever we're not in match mode — value is only meaningful
-  // for the match body's cursor. Gate on the fold so we don't fire before
-  // foldUrlMode has populated perTabMode and accidentally strip a fresh ?value=
-  // from a deep-link before the cursor reads it.
+  // Single URL writer for every param this route manages (open/active/mode/
+  // value). react-router's functional setSearchParams still computes from the
+  // render-captured params, so two competing effect writers clobber each
+  // other's params — one writer that rewrites all of them from current state
+  // makes last-write-wins correct by construction. Drop ?value= whenever
+  // we're not in match mode; gate mode/value on the fold so a deep-link's
+  // fresh ?value= isn't stripped before the cursor reads it.
   useEffect(() => {
-    if (!activeTabId) return;
-    const dimId = dimIdFromTabId(activeTabId);
-    if (!foldedDimsRef.current.has(dimId)) return;
-    const dim = dimById.get(dimId);
-    if (!dim) return;
-    const modes = availableModes(dim, sources);
-    const mode = perTabMode[dimId] ?? readStoredMode(dimId, modes);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
+    if (!didInitFromUrl.current) return;
+    // Base on the live URL, not react-router's render-captured params — a
+    // stale capture from an earlier commit would silently drop params written
+    // by a more recent run of this same effect.
+    const next = new URLSearchParams(window.location.search);
+    next.delete("dimId");
+    if (tabs.length > 0) {
+      next.set("open", tabs.map((t) => t.dimId).join(","));
+    } else {
+      next.delete("open");
+    }
+    if (activeTabId) {
+      const dimId = dimIdFromTabId(activeTabId);
+      next.set("active", dimId);
+      const dim = dimById.get(dimId);
+      // Only manage ?mode/?value once the fold has landed in perTabMode —
+      // the fold's ref flips one commit before its setState applies, and
+      // falling back to readStoredMode in that gap wrote a stale mode.
+      const mode = perTabMode[dimId];
+      if (dim && mode !== undefined) {
         if (mode !== "records") next.set("mode", mode);
         else next.delete("mode");
         if (mode !== "match") next.delete("value");
-        return next;
-      },
-      { replace: true },
-    );
-  }, [activeTabId, perTabMode, dimById, sources, setSearchParams]);
+      }
+    } else {
+      next.delete("active");
+    }
+    if (next.toString() !== window.location.search.replace(/^\?/, "")) {
+      setSearchParams(next, { replace: true });
+    }
+  }, [tabs, activeTabId, perTabMode, dimById, setSearchParams]);
 
   if (dims.length === 0) {
     return (

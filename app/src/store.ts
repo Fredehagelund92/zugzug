@@ -1,5 +1,11 @@
 import { useSyncExternalStore, useState, useEffect } from "react";
-import type { MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
+import type {
+  CanonicalValue,
+  MappingDimension,
+  OptionDef,
+  PaletteName,
+  NumberFormat,
+} from "./data";
 import type { ConditionalRule } from "./components/datagrid/types";
 
 /** Thrown by client mutation helpers on HTTP 409 from the server.
@@ -238,6 +244,23 @@ async function refreshDim(dimId: string): Promise<void> {
   const dim = await api<MappingDimension>(`/dimensions/${encodeURIComponent(dimId)}`);
   dims = dims.map((d) => (d.id === dim.id ? dim : d));
 }
+/** Live read of one canonical record from the cache. Undo/redo closures use
+ *  this instead of a render-captured list — the captured snapshot's version
+ *  is always stale after the very mutation being undone. */
+export function getCanonical(dimId: string, key: string): CanonicalValue | undefined {
+  return dims.find((d) => d.id === dimId)?.canonical.find((c) => c.key === key);
+}
+
+/** Immutably patch one canonical record in the cache (optimistic updates). */
+function patchCanonical(
+  dimId: string,
+  key: string,
+  patch: (c: CanonicalValue) => CanonicalValue,
+): void {
+  dims = dims.map((d) =>
+    d.id !== dimId ? d : { ...d, canonical: d.canonical.map((c) => (c.key === key ? patch(c) : c)) },
+  );
+}
 /** Re-fetch a single dimension from the server and notify subscribers.
  *  Used by ConflictBanner's "Refresh row" button to pull the latest version
  *  after a 409 conflict without reloading the whole workspace. */
@@ -418,6 +441,8 @@ export async function createTable(input: CreateTableInput): Promise<string> {
   return id;
 }
 
+/** Stage a draft. Optimistic: the row flips in the same frame; the server echo
+ *  (authoritative `at`/`user`) reconciles via a background drafts refresh. */
 export async function saveDraft(
   dimId: string,
   raw: string,
@@ -425,20 +450,50 @@ export async function saveDraft(
   targetLabel: string | null,
   targetKey: string | null,
 ): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/drafts`, {
-    method: "PUT",
-    body: JSON.stringify({ raw, status, targetLabel, targetKey }),
-  });
-  await refreshDrafts(dimId);
+  const k = dkey(dimId, raw);
+  const prev = draftsFlat[k];
+  draftsFlat = {
+    ...draftsFlat,
+    [k]: { dimId, raw, status, targetLabel, targetKey, user: currentUser, at: new Date().toISOString() },
+  };
   emit();
+  try {
+    await api(`/dimensions/${encodeURIComponent(dimId)}/drafts`, {
+      method: "PUT",
+      body: JSON.stringify({ raw, status, targetLabel, targetKey }),
+    });
+  } catch (e) {
+    const next = { ...draftsFlat };
+    if (prev) next[k] = prev;
+    else delete next[k];
+    draftsFlat = next;
+    emit();
+    throw e;
+  }
+  void refreshDrafts(dimId).then(emit);
 }
 
 export async function discardDraft(dimId: string, raw: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/${encodeURIComponent(raw)}`, {
-    method: "DELETE",
-  });
-  await refreshDrafts(dimId);
-  emit();
+  const k = dkey(dimId, raw);
+  const prev = draftsFlat[k];
+  if (prev) {
+    const next = { ...draftsFlat };
+    delete next[k];
+    draftsFlat = next;
+    emit();
+  }
+  try {
+    await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/${encodeURIComponent(raw)}`, {
+      method: "DELETE",
+    });
+  } catch (e) {
+    if (prev) {
+      draftsFlat = { ...draftsFlat, [k]: prev };
+      emit();
+    }
+    throw e;
+  }
+  void refreshDrafts(dimId).then(emit);
 }
 
 /** All staged edits for a dimension (sync read of the cache). */
@@ -538,16 +593,27 @@ export async function renameCanonical(
   label: string,
   expectedVersion: number,
 ): Promise<number> {
-  const { version } = await api<{ version: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ label, expectedVersion }),
-    },
-  );
-  await refreshDim(dimId);
-  await refreshAudit();
+  patchCanonical(dimId, key, (c) => ({ ...c, label }));
   emit();
+  let version: number;
+  try {
+    ({ version } = await api<{ version: number }>(
+      `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ label, expectedVersion }),
+      },
+    ));
+  } catch (e) {
+    await refreshDim(dimId);
+    emit();
+    throw e;
+  }
+  patchCanonical(dimId, key, (c) => ({ ...c, version }));
+  emit();
+  // values[].current mirrors the label for mapped raws — reconcile off the critical path
+  void refreshDim(dimId).then(emit);
+  void refreshAudit().then(emit);
   return version;
 }
 export async function mergeCanonical(
@@ -715,8 +781,27 @@ export interface GridLayoutConfig {
   hidden?: string[];
 }
 
-export async function getGridLayout(dimId: string): Promise<GridLayoutConfig> {
-  return await api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(dimId)}`);
+// Layout cache so re-activating a tab renders with correct column widths
+// immediately instead of a zero-width flash while the GET round-trips.
+const layoutCache = new Map<string, GridLayoutConfig>();
+
+export function getCachedGridLayout(dimId: string): GridLayoutConfig | undefined {
+  return layoutCache.get(dimId);
+}
+
+const layoutInflight = new Map<string, Promise<GridLayoutConfig>>();
+
+export function getGridLayout(dimId: string): Promise<GridLayoutConfig> {
+  const inflight = layoutInflight.get(dimId);
+  if (inflight) return inflight;
+  const p = api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(dimId)}`)
+    .then((layout) => {
+      layoutCache.set(dimId, layout);
+      return layout;
+    })
+    .finally(() => layoutInflight.delete(dimId));
+  layoutInflight.set(dimId, p);
+  return p;
 }
 
 // debounce key per dimension so concurrent edits to different dims don't
@@ -725,6 +810,7 @@ const layoutTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingLayouts = new Map<string, GridLayoutConfig>();
 
 export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
+  layoutCache.set(dimId, { ...(layoutCache.get(dimId) ?? {}), ...partial });
   const merged = { ...(pendingLayouts.get(dimId) ?? {}), ...partial };
   pendingLayouts.set(dimId, merged);
   const t = layoutTimers.get(dimId);
@@ -742,19 +828,49 @@ export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
     }, 400),
   );
 }
-/** Set an enrichment field value on a canonical record. */
+/** Bulk CSV import: creates new records, updates field values on existing
+ *  keys (never renames labels). Returns server counts. */
+export async function importRows(
+  dimId: string,
+  rows: Array<{ key?: string; label?: string; fields?: Record<string, string | null> }>,
+): Promise<{ created: number; updated: number; skipped: number }> {
+  const res = await api<{ created: number; updated: number; skipped: number }>(
+    `/dimensions/${encodeURIComponent(dimId)}/import`,
+    { method: "POST", body: JSON.stringify({ rows }) },
+  );
+  await refreshDim(dimId);
+  await refreshAudit();
+  emit();
+  return res;
+}
+
+/** Set an enrichment field value on a canonical record. Applies optimistically
+ *  (the cell flips in the same frame), then PUTs. The server normalises some
+ *  types (number parsing, date casts, linked-key validation), so those types
+ *  reconcile with a background re-fetch; text/select are stored verbatim. */
 export async function setFieldValue(
   dimId: string,
   key: string,
   field: string,
   value: string | null,
 ): Promise<void> {
-  await api(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
-    { method: "PUT", body: JSON.stringify({ value }) },
-  );
-  await refreshDim(dimId);
+  const norm = value == null || value.trim() === "" ? null : value;
+  patchCanonical(dimId, key, (c) => ({ ...c, fields: { ...c.fields, [field]: norm } }));
   emit();
+  try {
+    await api(
+      `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
+      { method: "PUT", body: JSON.stringify({ value }) },
+    );
+  } catch (e) {
+    await refreshDim(dimId);
+    emit();
+    throw e;
+  }
+  const type = dims.find((d) => d.id === dimId)?.fields?.find((f) => f.field === field)?.type;
+  if (type === "number" || type === "date" || type === "linked") {
+    void refreshDim(dimId).then(emit);
+  }
 }
 
 export interface ApiToken {

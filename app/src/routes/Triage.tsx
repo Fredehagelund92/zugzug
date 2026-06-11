@@ -6,7 +6,7 @@ import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useFlash } from "../hooks/useFlash";
+import { toast } from "../components/Toast";
 import { valueRows } from "../data";
 import type { MappingDimension } from "../data";
 import {
@@ -106,7 +106,6 @@ function TriageInner() {
   );
 
   const [cursor, setCursor] = useState<{ dimId: string; raw: string } | null>(null);
-  const flash = useFlash();
   const [commitError, setCommitError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -181,7 +180,7 @@ function TriageInner() {
     const prev = allDrafts[dkey(dimId, raw)];
     undo.push({
       label: `match "${raw}" → ${label}`,
-      surface: "Triage",
+      surface: "Review",
       apply: () => saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label)),
       inverse: () =>
         prev
@@ -195,7 +194,7 @@ function TriageInner() {
     const v = d?.values.find((x) => x.value === raw);
     const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
     if (!suggestion) {
-      flash.show(`No suggestion to accept for "${raw}".`, "error");
+      toast(`No suggestion to accept for "${raw}".`, "error");
       return;
     }
     stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
@@ -206,7 +205,7 @@ function TriageInner() {
     const prev = allDrafts[dkey(dimId, raw)];
     undo.push({
       label: `skip "${raw}"`,
-      surface: "Triage",
+      surface: "Review",
       apply: () => saveDraft(dimId, raw, "skipped", null, null),
       inverse: () =>
         prev
@@ -232,7 +231,7 @@ function TriageInner() {
     if (!prev) return;
     undo.push({
       label: `discard "${raw}"`,
-      surface: "Triage",
+      surface: "Review",
       apply: () => discardDraft(dimId, raw),
       inverse: () => saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey),
     });
@@ -278,7 +277,7 @@ function TriageInner() {
       return n + (v ? valueRows(v) : 0);
     }, 0);
     const n0 = stagedAllDrafts.length;
-    flash.show(
+    toast(
       `✓ ${n0} change${n0 === 1 ? "" : "s"} published · ${predictedRows.toLocaleString()} rows recovered`,
     );
     try {
@@ -293,14 +292,14 @@ function TriageInner() {
         // nothing was actually committed — clear the optimistic flash
         return;
       }
-      flash.show(
+      toast(
         `✓ ${total} change${total === 1 ? "" : "s"} published · ${totalRows.toLocaleString()} rows recovered`,
       );
     } catch (err) {
       setCommitError(
         err instanceof Error
           ? err.message
-          : "Commit failed across dimensions — check your connection and try again.",
+          : "Publish failed across dimensions — check your connection and try again.",
       );
     } finally {
       setCommitting(false);
@@ -320,7 +319,7 @@ function TriageInner() {
           kicker="WORKFLOW"
           title={
             <>
-              Triage{" "}
+              Review{" "}
               <span className="font-mono text-[14px] text-ink-3">
                 · {crossCounts.new} across {dimsWithWork} table{dimsWithWork === 1 ? "" : "s"}
               </span>
@@ -329,19 +328,6 @@ function TriageInner() {
           lede="Sorted by blast radius. Press ⌘↵ to publish."
         />
       </div>
-
-      {flash.message && (
-        <div
-          className={cx(
-            "mb-3 rounded-sm px-3 py-2 font-mono text-[11.5px]",
-            flash.variant === "error"
-              ? "border border-danger/40 bg-danger-soft text-danger"
-              : "border border-accent/40 bg-accent-wash text-accent",
-          )}
-        >
-          {flash.message}
-        </div>
-      )}
 
       <CrossDimInbox
         rows={visibleCross}
@@ -413,12 +399,19 @@ function CrossDimInbox(p: CrossDimInboxProps) {
   const curKey = p.cursor ? `${p.cursor.dimId}::${p.cursor.raw}` : null;
   const curIdx = curKey ? p.rows.findIndex((r) => `${r.dimId}::${r.raw}` === curKey) : -1;
 
-  const move = (delta: 1 | -1) => {
+  const moveTo = (idx: number) => {
     if (p.rows.length === 0) return;
-    const next = curIdx < 0 ? 0 : Math.max(0, Math.min(p.rows.length - 1, curIdx + delta));
-    const r = p.rows[next];
+    const clamped = Math.max(0, Math.min(p.rows.length - 1, idx));
+    const r = p.rows[clamped];
     p.setCursor({ dimId: r.dimId, raw: r.raw });
+    // keyboard-driven moves keep the row in view — same contract as DataGrid
+    requestAnimationFrame(() => {
+      containerRef.current
+        ?.querySelector(`[data-row-key="${attrEsc(`${r.dimId}::${r.raw}`)}"]`)
+        ?.scrollIntoView({ block: "nearest" });
+    });
   };
+  const move = (delta: number) => moveTo(curIdx < 0 ? 0 : curIdx + delta);
 
   return (
     <div
@@ -436,7 +429,38 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           move(-1);
           return;
         }
+        // DataGrid-parity navigation so shortcuts learned in Records work here
+        if (e.key === "Home") {
+          e.preventDefault();
+          moveTo(0);
+          return;
+        }
+        if (e.key === "End") {
+          e.preventDefault();
+          moveTo(p.rows.length - 1);
+          return;
+        }
+        if (e.key === "PageDown") {
+          e.preventDefault();
+          move(10);
+          return;
+        }
+        if (e.key === "PageUp") {
+          e.preventDefault();
+          move(-10);
+          return;
+        }
         if (!p.cursor) return;
+        if (e.key === "Escape") {
+          e.preventDefault();
+          p.setCursor(null);
+          return;
+        }
+        if (p.canEdit && e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          focusedComboRef.current?.open();
+          return;
+        }
         if (p.canEdit && (e.key === "a" || e.key === "A")) {
           e.preventDefault();
           p.accept(p.cursor.dimId, p.cursor.raw);
@@ -488,7 +512,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
           ))}
         </div>
         <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
-          ranked by impact · J/K navigate · A accept · M pick · S skip · N next · ⌘↵ publish
+          ranked by impact · ↑↓/J/K navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
         </span>
       </div>
 
@@ -516,7 +540,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
             {p.filter === "new" && (
               <div className="px-4 py-12 text-center">
                 <div className="font-display text-[18px] font-semibold text-ink">
-                  Nothing to triage today. 🎯
+                  Nothing to review today. 🎯
                 </div>
                 <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
                   Curate records in{" "}
@@ -558,7 +582,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                 data-row-key={key}
                 className={cx(
                   "border-b border-line px-4 transition-colors hover:bg-hover",
-                  focused && "ring-1 ring-accent/60 bg-accent-wash/40",
+                  focused && "ring-2 ring-inset ring-accent bg-accent-wash/40",
                 )}
                 onClick={() => p.setCursor({ dimId: r.dimId, raw: r.raw })}
               >
@@ -886,7 +910,7 @@ function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
               loading={p.committing}
               onClick={() => p.commitAll()}
             >
-              {p.wsInfo?.writable ? "Approve & commit to warehouse" : "Approve & save"}
+              {p.wsInfo?.writable ? "Publish to warehouse" : "Publish"}
               <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
             </Button>
             {p.wsInfo && !p.wsInfo.writable && p.stagedDrafts[0] && (

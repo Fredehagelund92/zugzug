@@ -192,7 +192,7 @@ export function Dashboard() {
           totalNew > 0 ? (
             <Link to="/app/triage">
               <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
-                Resolve {totalNew} new
+                Review {totalNew} new
               </Button>
             </Link>
           ) : undefined
@@ -450,7 +450,7 @@ export function Dashboard() {
                     {filter === "attention"
                       ? "Every table is mapped or has its drafts published."
                       : filter === "clean"
-                        ? "Resolve the new values in your active tables to flip them clean."
+                        ? "Review the new values in your active tables to flip them clean."
                         : "Try a different filter."}
                   </p>
                   {filter !== "all" && (

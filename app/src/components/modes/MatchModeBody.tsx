@@ -366,7 +366,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     } catch (err) {
       setFlash(null);
       setCommitError(
-        err instanceof Error ? err.message : "Commit failed — check your connection and try again.",
+        err instanceof Error ? err.message : "Publish failed — check your connection and try again.",
       );
     }
   };
@@ -874,9 +874,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 disabled={staged.length === 0 || !canEdit}
                 onClick={approveAndCommit}
               >
-                {engineer
-                  ? `Approve & commit ${staged.length}`
-                  : `Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}
+                {`Publish ${staged.length} change${staged.length === 1 ? "" : "s"}`}
                 <span className="ml-2 font-mono text-[10px] opacity-60">⌘↵</span>
               </Button>
             </div>
