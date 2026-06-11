@@ -12,6 +12,7 @@ import {
   useDimensions,
   addCanonical,
   renameCanonical,
+  getCanonical,
   mergeCanonical,
   retireCanonical,
   fetchVariants,
@@ -406,8 +407,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       apply: () => addCanonical(activeId, label),
       inverse: () => {
         const addedKey = slug(label);
-        const row = list.find((c) => c.key === addedKey);
-        return retireCanonical(activeId, addedKey, row?.version ?? 1).then(() => undefined);
+        const v = getCanonical(activeId, addedKey)?.version ?? 1;
+        return retireCanonical(activeId, addedKey, v).then(() => undefined);
       },
     });
     setBusy(false);
@@ -441,10 +442,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       label: `merge ${losers.length} into "${survivorLabel}"`,
       surface: "Records",
       apply: () => {
-        const currentSurvivorRow = list.find((c) => c.key === survivor);
-        const currentLoserRows = list.filter((c) => losers.includes(c.key));
         const currentExpectedVersions = Object.fromEntries(
-          [currentSurvivorRow, ...currentLoserRows]
+          [survivor, ...losers]
+            .map((k) => getCanonical(activeId, k))
             .filter((r): r is CanonicalValue => r !== undefined)
             .map((r) => [r.key, r.version]),
         );
@@ -479,8 +479,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         label: `remove "${label}"`,
         surface: "Records",
         apply: () => {
-          const currentRow = list.find((c) => c.key === key);
-          return retireCanonical(activeId, key, currentRow?.version ?? 1).then(() => undefined);
+          const v = getCanonical(activeId, key)?.version ?? 1;
+          return retireCanonical(activeId, key, v).then(() => undefined);
         },
         inverse: () => addCanonical(activeId, label),
       });
@@ -720,16 +720,12 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                         label: `rename "${prev}" → "${value}"`,
                         surface: "Records",
                         apply: () => {
-                          const r = list.find((c) => c.key === rowKey);
-                          return renameCanonical(activeId, rowKey, value, r?.version ?? 1).then(
-                            () => undefined,
-                          );
+                          const v = getCanonical(activeId, rowKey)?.version ?? 1;
+                          return renameCanonical(activeId, rowKey, value, v).then(() => undefined);
                         },
                         inverse: () => {
-                          const r = list.find((c) => c.key === rowKey);
-                          return renameCanonical(activeId, rowKey, prev, r?.version ?? 1).then(
-                            () => undefined,
-                          );
+                          const v = getCanonical(activeId, rowKey)?.version ?? 1;
+                          return renameCanonical(activeId, rowKey, prev, v).then(() => undefined);
                         },
                       });
                       void fetchVariants(activeId, rowKey).then((vs) => {

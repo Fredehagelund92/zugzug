@@ -244,6 +244,13 @@ async function refreshDim(dimId: string): Promise<void> {
   const dim = await api<MappingDimension>(`/dimensions/${encodeURIComponent(dimId)}`);
   dims = dims.map((d) => (d.id === dim.id ? dim : d));
 }
+/** Live read of one canonical record from the cache. Undo/redo closures use
+ *  this instead of a render-captured list — the captured snapshot's version
+ *  is always stale after the very mutation being undone. */
+export function getCanonical(dimId: string, key: string): CanonicalValue | undefined {
+  return dims.find((d) => d.id === dimId)?.canonical.find((c) => c.key === key);
+}
+
 /** Immutably patch one canonical record in the cache (optimistic updates). */
 function patchCanonical(
   dimId: string,
