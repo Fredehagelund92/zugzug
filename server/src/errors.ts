@@ -2,6 +2,7 @@ export type ErrorCode =
   | "VALIDATION_FAILED"
   | "NAME_TAKEN"
   | "CONFIRMATION_REQUIRED"
+  | "FORBIDDEN"
   | "NOT_FOUND"
   | "WRONG_DOMAIN"
   | "ALREADY_EXISTS"
