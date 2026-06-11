@@ -142,11 +142,16 @@ async function cleanup() {
     await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify", T);
     await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen", T);
     await repo.setFieldValue(dimId, "germany", "capital", "Berlin", T);
-    const res = await repo.changeColumnType(dimId, "capital", {
-      newType: "select",
-      coerceInvalidToNull: false,
-      userId: "u_verify",
-    }, T);
+    const res = await repo.changeColumnType(
+      dimId,
+      "capital",
+      {
+        newType: "select",
+        coerceInvalidToNull: false,
+        userId: "u_verify",
+      },
+      T,
+    );
     assert(res.ok, `changeColumnType failed: ${JSON.stringify(res)}`);
     const fields = await repo.listFields(dimId, T);
     const cap = fields.find((f) => f.field === "capital");
@@ -195,11 +200,16 @@ async function cleanup() {
   await step("changeColumnType text → url (lossless relabel)", async () => {
     const textField = await repo.addField(dimId, "Website", "text", undefined, {}, "u_verify", T);
     assert(textField != null, "addField(text) returned null");
-    const res = await repo.changeColumnType(dimId, textField.field, {
-      newType: "url",
-      coerceInvalidToNull: false,
-      userId: "u_verify",
-    }, T);
+    const res = await repo.changeColumnType(
+      dimId,
+      textField.field,
+      {
+        newType: "url",
+        coerceInvalidToNull: false,
+        userId: "u_verify",
+      },
+      T,
+    );
     assert(res.ok, "changeColumnType to url failed");
     const fields = await repo.listFields(dimId, T);
     assert(fields.find((x) => x.field === textField.field)?.type === "url", "type should be url");

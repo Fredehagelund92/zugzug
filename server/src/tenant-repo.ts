@@ -243,14 +243,14 @@ export class TenantRepo {
     },
   ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
     this.assertRole("manage_adapter");
-    return this.withClearCtx(() => repoCanonical.changeColumnType(dimId, field, opts, this.tenantId));
+    return this.withClearCtx(() =>
+      repoCanonical.changeColumnType(dimId, field, opts, this.tenantId),
+    );
   }
 
   deleteColumn(dimId: string, field: string, userId: string): Promise<{ ok: boolean }> {
     this.assertRole("manage_adapter");
-    return this.withClearCtx(() =>
-      repoCanonical.deleteColumn(dimId, field, userId, this.tenantId),
-    );
+    return this.withClearCtx(() => repoCanonical.deleteColumn(dimId, field, userId, this.tenantId));
   }
 
   addColumnOption(
@@ -267,12 +267,7 @@ export class TenantRepo {
     );
   }
 
-  setFieldValue(
-    dimId: string,
-    key: string,
-    field: string,
-    value: string | null,
-  ): Promise<void> {
+  setFieldValue(dimId: string, key: string, field: string, value: string | null): Promise<void> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
       repoCanonical.setFieldValue(dimId, key, field, value, this.tenantId),
@@ -369,9 +364,16 @@ export class TenantRepo {
     return this.withClearCtx(() => repoScan.scanStatus(scope));
   }
 
-  searchCatalog(
-    opts: { q?: string; schema?: string; limit?: number; offset?: number },
-  ): Promise<{ rows: CatalogTable[]; total: number; schemas: { schema: string; tables: number }[] }> {
+  searchCatalog(opts: {
+    q?: string;
+    schema?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    rows: CatalogTable[];
+    total: number;
+    schemas: { schema: string; tables: number }[];
+  }> {
     return this.withClearCtx(() => repoScan.searchCatalog({ ...opts, tenantId: this.tenantId }));
   }
 

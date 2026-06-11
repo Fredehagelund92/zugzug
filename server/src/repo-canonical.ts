@@ -156,10 +156,7 @@ export async function listDimensions(tenantId: string): Promise<DimensionMeta[]>
   return metas.map((m, i) => ({ ...m, rows: Number(counts[i]?.n ?? 0) }));
 }
 
-export async function getDimension(
-  id: string,
-  tenantId: string,
-): Promise<MappingDimension | null> {
+export async function getDimension(id: string, tenantId: string): Promise<MappingDimension | null> {
   const meta = await pgGet<
     Omit<DimensionMeta, "rows"> & {
       nameTable: string | null;
@@ -548,9 +545,9 @@ export async function importCanonical(
   const defs = await listFields(dimId, tenantId);
   const validFields = new Set(defs.map((f) => f.field));
   const existing = new Set(
-    (
-      await pgAll<{ k: string }>(`SELECT ${qid(m.keyCol)} AS k FROM ${cq(m.dimTable)}`)
-    ).map((r) => String(r.k)),
+    (await pgAll<{ k: string }>(`SELECT ${qid(m.keyCol)} AS k FROM ${cq(m.dimTable)}`)).map((r) =>
+      String(r.k),
+    ),
   );
   let created = 0,
     updated = 0,

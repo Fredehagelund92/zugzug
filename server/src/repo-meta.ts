@@ -104,10 +104,7 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
   };
 }
 
-export async function setPreferences(
-  p: Preferences,
-  tenantId: string = "default",
-): Promise<void> {
+export async function setPreferences(p: Preferences, tenantId: string = "default"): Promise<void> {
   const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
   if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
 

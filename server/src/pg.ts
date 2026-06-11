@@ -45,7 +45,7 @@ export async function pgGet<T = Record<string, unknown>>(
 ): Promise<T | null> {
   assertNotInsideTenantRepo("pgGet");
   const rows = await pool.unsafe(query, params as postgres.ParameterOrJSON<never>[]);
-  return ((rows as unknown as T[])[0] ?? null);
+  return (rows as unknown as T[])[0] ?? null;
 }
 
 export async function pgRun(query: string, params: unknown[] = []): Promise<void> {

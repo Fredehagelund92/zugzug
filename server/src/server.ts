@@ -3,12 +3,7 @@
    (app/) talks to this; Vite proxies /api → :PORT in dev. */
 
 import { env } from "./env.ts";
-import type {
-  NumberFormat,
-  GridLayoutConfig,
-  OptionDef,
-  PaletteName,
-} from "./repo-shared.ts";
+import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
 import type { ImportRow } from "./repo-canonical.ts";
 import {
   getSessionUser,
@@ -193,12 +188,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
 
       // POST /api/admin/tenants/:id/teardown
-      if (
-        seg[2] === "tenants" &&
-        seg.length === 5 &&
-        seg[4] === "teardown" &&
-        method === "POST"
-      ) {
+      if (seg[2] === "tenants" && seg.length === 5 && seg[4] === "teardown" && method === "POST") {
         const targetId = decodeURIComponent(seg[3]!);
         if (targetId === "default") {
           return json({ error: "cannot_teardown_default" }, 400);
@@ -209,10 +199,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
       // GET /api/admin/audit[?tenant_id=…&limit=…]
       if (seg[2] === "audit" && seg.length === 3 && method === "GET") {
-        const limit = Math.min(
-          200,
-          Math.max(1, Number(url.searchParams.get("limit") ?? 30)),
-        );
+        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 30)));
         const filterTenant = url.searchParams.get("tenant_id");
         const scope = filterTenant ?? "*";
         const adminRepo = new TenantRepo(scope, "admin", true);
@@ -306,510 +293,519 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     return await pgContext.run({ insideTenantRepo: true }, async () => {
-    // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
-    if (seg[1] === "preferences" && seg.length === 2) {
-      if (method === "GET") return json(await reqRepo.getPreferences());
-      if (method === "PUT") {
-        const p = (await req.json()) as {
-          publishThreshold: number;
-          suggestThreshold: number;
-          scanSchedule: "15m" | "hourly" | "daily" | null;
-        };
-        await reqRepo.setPreferences(p);
-        return noContent();
-      }
-    }
-
-    if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
-      const dimId = url.searchParams.get("dimId") ?? "";
-      const raw = url.searchParams.get("raw") ?? "";
-      if (!dimId || !raw) return err("dimId and raw required", 400);
-      const dim = await reqRepo.getDimension(dimId);
-      if (!dim) return json({ error: "not found" }, 404);
-      if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
-      try {
-        const canonicalLabels = dim.canonical.map((c) => c.label);
-        const hint = await reqRepo.getAiHint(dimId, raw, canonicalLabels, { label: dim.dimension });
-        return json(hint);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (msg.includes("timeout") || msg.includes("AbortError")) {
-          return json({ error: "hint_timeout" }, 503);
+      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
+      if (seg[1] === "preferences" && seg.length === 2) {
+        if (method === "GET") return json(await reqRepo.getPreferences());
+        if (method === "PUT") {
+          const p = (await req.json()) as {
+            publishThreshold: number;
+            suggestThreshold: number;
+            scanSchedule: "15m" | "hourly" | "daily" | null;
+          };
+          await reqRepo.setPreferences(p);
+          return noContent();
         }
-        return json({ error: "hint_error" }, 502);
       }
-    }
 
-    // GET /api/users → { currentUser, collaborators }
-    if (seg[1] === "users" && seg.length === 2 && method === "GET") {
-      const users = await reqRepo.listUsers();
-      return json({
-        currentUser: users.find((u) => u.id === me) ?? users[0],
-        collaborators: users,
-      });
-    }
+      if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
+        const dimId = url.searchParams.get("dimId") ?? "";
+        const raw = url.searchParams.get("raw") ?? "";
+        if (!dimId || !raw) return err("dimId and raw required", 400);
+        const dim = await reqRepo.getDimension(dimId);
+        if (!dim) return json({ error: "not found" }, 404);
+        if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
+        try {
+          const canonicalLabels = dim.canonical.map((c) => c.label);
+          const hint = await reqRepo.getAiHint(dimId, raw, canonicalLabels, {
+            label: dim.dimension,
+          });
+          return json(hint);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (msg.includes("timeout") || msg.includes("AbortError")) {
+            return json({ error: "hint_timeout" }, 503);
+          }
+          return json({ error: "hint_error" }, 502);
+        }
+      }
 
-    // GET /api/workspace/info — adapter capability metadata for the frontend badge
-    if (seg[1] === "workspace" && seg[2] === "info" && seg.length === 3 && method === "GET") {
-      const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
-      const adapterInstance = await getAdapterFn();
-      return json({
-        adapter: adapterInstance.capabilities.id,
-        writable: adapterInstance.capabilities.writable,
-        canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
-        warehouseDb: env.warehouseDb || null,
-        defaultEngineerMode: env.defaultEngineerMode,
-      });
-    }
+      // GET /api/users → { currentUser, collaborators }
+      if (seg[1] === "users" && seg.length === 2 && method === "GET") {
+        const users = await reqRepo.listUsers();
+        return json({
+          currentUser: users.find((u) => u.id === me) ?? users[0],
+          collaborators: users,
+        });
+      }
 
-    // GET /api/health/connections — postgres + warehouse liveness (5s cache)
-    if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
-      const force = url.searchParams.get("force") === "1";
-      const snapshot = await checkHealth({ force });
-      return json(snapshot);
-    }
+      // GET /api/workspace/info — adapter capability metadata for the frontend badge
+      if (seg[1] === "workspace" && seg[2] === "info" && seg.length === 3 && method === "GET") {
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const adapterInstance = await getAdapterFn();
+        return json({
+          adapter: adapterInstance.capabilities.id,
+          writable: adapterInstance.capabilities.writable,
+          canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
+          warehouseDb: env.warehouseDb || null,
+          defaultEngineerMode: env.defaultEngineerMode,
+        });
+      }
 
-    // /api/sources — registered source columns (cached); /facets; /scan
-    if (seg[1] === "sources") {
-      if (seg.length === 2 && method === "GET")
+      // GET /api/health/connections — postgres + warehouse liveness (5s cache)
+      if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
+        const force = url.searchParams.get("force") === "1";
+        const snapshot = await checkHealth({ force });
+        return json(snapshot);
+      }
+
+      // /api/sources — registered source columns (cached); /facets; /scan
+      if (seg[1] === "sources") {
+        if (seg.length === 2 && method === "GET")
+          return json(
+            await reqRepo.listSources({
+              q: url.searchParams.get("q") ?? undefined,
+              schema: url.searchParams.get("schema") ?? undefined,
+              status: url.searchParams.get("status") ?? undefined,
+            }),
+          );
+        if (seg[2] === "facets" && seg.length === 3 && method === "GET")
+          return json(await reqRepo.sourceFacets());
+        if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
+          return json(await reqRepo.scanStatus());
+        if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "manage_adapter");
+          if (denied) return denied;
+          return json({ scanned: await reqRepo.scanSources() });
+        }
+        // GET /api/sources/unmapped?dimId=&table=&column=&limit=
+        if (seg[2] === "unmapped" && seg.length === 3 && method === "GET") {
+          const dimId = url.searchParams.get("dimId") ?? "";
+          const table = url.searchParams.get("table") ?? "";
+          const column = url.searchParams.get("column") ?? "";
+          const limit = Number(url.searchParams.get("limit") ?? 5);
+          if (!dimId || !table || !column) return err("dimId, table, column required", 400);
+          return json(await reqRepo.topUnmapped(dimId, table, column, limit));
+        }
+      }
+
+      // GET /api/catalog — browse/search the warehouse catalog (the 1000+ tables)
+      if (seg[1] === "catalog" && seg.length === 2 && method === "GET")
         return json(
-          await reqRepo.listSources({
+          await reqRepo.searchCatalog({
             q: url.searchParams.get("q") ?? undefined,
             schema: url.searchParams.get("schema") ?? undefined,
-            status: url.searchParams.get("status") ?? undefined,
+            limit: Number(url.searchParams.get("limit") ?? 50),
+            offset: Number(url.searchParams.get("offset") ?? 0),
           }),
         );
-      if (seg[2] === "facets" && seg.length === 3 && method === "GET")
-        return json(await reqRepo.sourceFacets());
-      if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
-        return json(await reqRepo.scanStatus());
-      if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "manage_adapter");
-        if (denied) return denied;
-        return json({ scanned: await reqRepo.scanSources() });
-      }
-      // GET /api/sources/unmapped?dimId=&table=&column=&limit=
-      if (seg[2] === "unmapped" && seg.length === 3 && method === "GET") {
-        const dimId = url.searchParams.get("dimId") ?? "";
-        const table = url.searchParams.get("table") ?? "";
-        const column = url.searchParams.get("column") ?? "";
-        const limit = Number(url.searchParams.get("limit") ?? 5);
-        if (!dimId || !table || !column) return err("dimId, table, column required", 400);
-        return json(await reqRepo.topUnmapped(dimId, table, column, limit));
-      }
-    }
 
-    // GET /api/catalog — browse/search the warehouse catalog (the 1000+ tables)
-    if (seg[1] === "catalog" && seg.length === 2 && method === "GET")
-      return json(
-        await reqRepo.searchCatalog({
-          q: url.searchParams.get("q") ?? undefined,
-          schema: url.searchParams.get("schema") ?? undefined,
-          limit: Number(url.searchParams.get("limit") ?? 50),
-          offset: Number(url.searchParams.get("offset") ?? 0),
-        }),
-      );
-
-    // GET /api/audit ; POST /api/audit {action, detail}
-    if (seg[1] === "audit" && seg.length === 2) {
-      if (method === "GET")
-        return json(await reqRepo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
-      if (method === "POST") {
-        const { action, detail } = (await req.json()) as { action: string; detail: string };
-        await reqRepo.appendAudit(me, action, detail);
-        return noContent();
-      }
-    }
-
-    // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
-    if (seg[1] === "grid-layout" && seg.length === 3) {
-      const dimId = decodeURIComponent(seg[2]!);
-      if (method === "GET") return json(await reqRepo.getGridLayout(me, dimId));
-      if (method === "PATCH") {
-        const body = (await req.json()) as GridLayoutConfig;
-        await reqRepo.setGridLayout(me, dimId, body);
-        return noContent();
-      }
-    }
-
-    if (seg[1] === "tables") {
-      if (seg.length === 2 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "manage_adapter");
-        if (denied) return denied;
-        try {
-          const input = (await req.json()) as tables.CreateTableInput;
-          const result = await tables.createTable(input, me, tenantCtx.tenantId);
-          return json(result, 201);
-        } catch (e) {
-          if (e instanceof AppError) {
-            return json(
-              {
-                error: e.message,
-                code: e.code,
-                ...(e.details ? { details: e.details } : {}),
-              },
-              e.status,
-            );
-          }
-          throw e;
-        }
-      }
-      // GET /api/tables/:id/row-activity?since=<iso>
-      if (seg.length === 4 && seg[3] === "row-activity" && method === "GET") {
-        const tableId = decodeURIComponent(seg[2]!);
-        const sinceParam = url.searchParams.get("since");
-        const since = sinceParam ? new Date(sinceParam) : new Date(Date.now() - 86_400_000);
-        if (Number.isNaN(since.getTime())) {
-          throw new AppError("VALIDATION_FAILED", "invalid `since` query param", 400);
-        }
-        const entries = await reqRepo.getRowActivitySince(tableId, since);
-        return json({ entries, serverTime: new Date().toISOString() });
-      }
-      return json({ error: "not found" }, 404);
-    }
-
-    if (seg[1] === "dimensions") {
-      // GET /api/dimensions[?full=true] ; POST /api/dimensions {name}
-      // ?full=true returns the full MappingDimension shapes (canonical rows,
-      // values, fields, …) in one response — kills the N+1 the client used to
-      // make at boot (1 list + N detail fetches).
-      if (seg.length === 2) {
-        if (method === "GET") {
-          if (url.searchParams.get("full") === "true") {
-            const metas = await reqRepo.listDimensions();
-            const fulls = await Promise.all(metas.map((m) => reqRepo.getDimension(m.id)));
-            return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
-          }
-          return json(await reqRepo.listDimensions());
-        }
+      // GET /api/audit ; POST /api/audit {action, detail}
+      if (seg[1] === "audit" && seg.length === 2) {
+        if (method === "GET")
+          return json(await reqRepo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
         if (method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          const { name, keyKind } = (await req.json()) as {
-            name: string;
-            keyKind?: "slug" | "external_id";
-          };
-          return json({ id: await reqRepo.addDimension(name, [], { keyKind }, me) }, 201);
-        }
-      }
-      const id = seg[2] ? decodeURIComponent(seg[2]) : "";
-      // GET /api/dimensions/:id
-      if (seg.length === 3 && id && method === "GET") {
-        const dim = await reqRepo.getDimension(id);
-        return dim ? json(dim) : json({ error: "not found" }, 404);
-      }
-      if (seg[3] === "drafts") {
-        // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
-        if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
-        if (seg.length === 4 && method === "PUT") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          const b = (await req.json()) as {
-            raw: string;
-            status: "mapped" | "skipped";
-            targetLabel: string | null;
-            targetKey: string | null;
-          };
-          await reqRepo.saveDraft(id, b.raw, b.status, b.targetLabel ?? null, b.targetKey ?? null, me);
-          return noContent();
-        }
-        if (seg.length === 5 && method === "DELETE") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
+          const { action, detail } = (await req.json()) as { action: string; detail: string };
+          await reqRepo.appendAudit(me, action, detail);
           return noContent();
         }
       }
-      // POST /api/dimensions/:id/sources {table, column} — wire a warehouse column
-      if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "manage_adapter");
-        if (denied) return denied;
-        const { table, column } = (await req.json()) as { table: string; column: string };
-        await reqRepo.addSource(id, table, column);
-        return noContent();
-      }
-      // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
-      if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "curate");
-        if (denied) return denied;
-        const { table, column, nameColumn } = (await req.json()) as {
-          table: string;
-          column: string;
-          nameColumn?: string;
-        };
-        return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, {}, me));
-      }
-      // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
-      if (seg[3] === "import" && seg.length === 4 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "curate");
-        if (denied) return denied;
-        const { rows } = (await req.json()) as { rows: ImportRow[] };
-        if (!Array.isArray(rows)) {
-          throw new AppError("VALIDATION_FAILED", "rows must be an array", 400);
-        }
-        if (rows.length > 10_000) {
-          throw new AppError("VALIDATION_FAILED", "too many rows (max 10000)", 400);
-        }
-        return json(await reqRepo.importCanonical(id, rows, me));
-      }
-      // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
-      if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "curate");
-        if (denied) return denied;
-        const { label, type, options, numberFormat, ratingMax, referencedDimId, displayFields } =
-          (await req.json()) as {
-            label: string;
-            type?: string;
-            options?: { label: string; color: string | null }[];
-            numberFormat?: NumberFormat;
-            ratingMax?: number;
-            referencedDimId?: string;
-            displayFields?: string[];
-          };
-        return json(
-          await reqRepo.addField(
-            id,
-            label,
-            type,
-            options as OptionDef[] | undefined,
-            { numberFormat, ratingMax, referencedDimId, displayFields },
-            me,
-          ),
-        );
-      }
-      // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
-      if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "curate");
-        if (denied) return denied;
-        const field = decodeURIComponent(seg[4]!);
-        const { label, color } = (await req.json()) as { label: string; color?: string | null };
-        const res = await reqRepo.addColumnOption(
-          id,
-          field,
-          label,
-          (color ?? null) as PaletteName | null,
-          {},
-          me,
-        );
-        return res ? json(res) : json({ error: "not a select column" }, 400);
-      }
-      // PUT/PATCH/DELETE /api/dimensions/:id/fields/:field — rename / change type / update meta / delete
-      if (seg[3] === "fields" && seg.length === 5) {
-        const field = decodeURIComponent(seg[4]!);
-        if (method === "PUT") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          const body = (await req.json()) as {
-            label?: string;
-            type?: string;
-            options?: { label: string; color: string | null }[];
-            numberFormat?: NumberFormat;
-            ratingMax?: number;
-            coerceInvalidToNull?: boolean;
-          };
-          if (body.label != null) {
-            await reqRepo.renameColumn(id, field, body.label, me);
-          }
-          if (body.type != null) {
-            const res = await reqRepo.changeColumnType(id, field, {
-              newType: body.type,
-              options: body.options as OptionDef[] | undefined,
-              numberFormat: body.numberFormat,
-              ratingMax: body.ratingMax,
-              coerceInvalidToNull: body.coerceInvalidToNull ?? false,
-              userId: me,
-            });
-            return json(res);
-          }
-          return noContent();
-        }
+
+      // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
+      if (seg[1] === "grid-layout" && seg.length === 3) {
+        const dimId = decodeURIComponent(seg[2]!);
+        if (method === "GET") return json(await reqRepo.getGridLayout(me, dimId));
         if (method === "PATCH") {
+          const body = (await req.json()) as GridLayoutConfig;
+          await reqRepo.setGridLayout(me, dimId, body);
+          return noContent();
+        }
+      }
+
+      if (seg[1] === "tables") {
+        if (seg.length === 2 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "manage_adapter");
+          if (denied) return denied;
+          try {
+            const input = (await req.json()) as tables.CreateTableInput;
+            const result = await tables.createTable(input, me, tenantCtx.tenantId);
+            return json(result, 201);
+          } catch (e) {
+            if (e instanceof AppError) {
+              return json(
+                {
+                  error: e.message,
+                  code: e.code,
+                  ...(e.details ? { details: e.details } : {}),
+                },
+                e.status,
+              );
+            }
+            throw e;
+          }
+        }
+        // GET /api/tables/:id/row-activity?since=<iso>
+        if (seg.length === 4 && seg[3] === "row-activity" && method === "GET") {
+          const tableId = decodeURIComponent(seg[2]!);
+          const sinceParam = url.searchParams.get("since");
+          const since = sinceParam ? new Date(sinceParam) : new Date(Date.now() - 86_400_000);
+          if (Number.isNaN(since.getTime())) {
+            throw new AppError("VALIDATION_FAILED", "invalid `since` query param", 400);
+          }
+          const entries = await reqRepo.getRowActivitySince(tableId, since);
+          return json({ entries, serverTime: new Date().toISOString() });
+        }
+        return json({ error: "not found" }, 404);
+      }
+
+      if (seg[1] === "dimensions") {
+        // GET /api/dimensions[?full=true] ; POST /api/dimensions {name}
+        // ?full=true returns the full MappingDimension shapes (canonical rows,
+        // values, fields, …) in one response — kills the N+1 the client used to
+        // make at boot (1 list + N detail fetches).
+        if (seg.length === 2) {
+          if (method === "GET") {
+            if (url.searchParams.get("full") === "true") {
+              const metas = await reqRepo.listDimensions();
+              const fulls = await Promise.all(metas.map((m) => reqRepo.getDimension(m.id)));
+              return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
+            }
+            return json(await reqRepo.listDimensions());
+          }
+          if (method === "POST") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            const { name, keyKind } = (await req.json()) as {
+              name: string;
+              keyKind?: "slug" | "external_id";
+            };
+            return json({ id: await reqRepo.addDimension(name, [], { keyKind }, me) }, 201);
+          }
+        }
+        const id = seg[2] ? decodeURIComponent(seg[2]) : "";
+        // GET /api/dimensions/:id
+        if (seg.length === 3 && id && method === "GET") {
+          const dim = await reqRepo.getDimension(id);
+          return dim ? json(dim) : json({ error: "not found" }, 404);
+        }
+        if (seg[3] === "drafts") {
+          // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
+          if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
+          if (seg.length === 4 && method === "PUT") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            const b = (await req.json()) as {
+              raw: string;
+              status: "mapped" | "skipped";
+              targetLabel: string | null;
+              targetKey: string | null;
+            };
+            await reqRepo.saveDraft(
+              id,
+              b.raw,
+              b.status,
+              b.targetLabel ?? null,
+              b.targetKey ?? null,
+              me,
+            );
+            return noContent();
+          }
+          if (seg.length === 5 && method === "DELETE") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
+            return noContent();
+          }
+        }
+        // POST /api/dimensions/:id/sources {table, column} — wire a warehouse column
+        if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "manage_adapter");
+          if (denied) return denied;
+          const { table, column } = (await req.json()) as { table: string; column: string };
+          await reqRepo.addSource(id, table, column);
+          return noContent();
+        }
+        // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
+        if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(sessionUser, "curate");
           if (denied) return denied;
-          const body = (await req.json()) as {
-            description?: string | null;
-            field_config?: string | null;
+          const { table, column, nameColumn } = (await req.json()) as {
+            table: string;
+            column: string;
+            nameColumn?: string;
           };
-          await reqRepo.updateField(
+          return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, {}, me));
+        }
+        // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
+        if (seg[3] === "import" && seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
+          const { rows } = (await req.json()) as { rows: ImportRow[] };
+          if (!Array.isArray(rows)) {
+            throw new AppError("VALIDATION_FAILED", "rows must be an array", 400);
+          }
+          if (rows.length > 10_000) {
+            throw new AppError("VALIDATION_FAILED", "too many rows (max 10000)", 400);
+          }
+          return json(await reqRepo.importCanonical(id, rows, me));
+        }
+        // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
+        if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
+          const { label, type, options, numberFormat, ratingMax, referencedDimId, displayFields } =
+            (await req.json()) as {
+              label: string;
+              type?: string;
+              options?: { label: string; color: string | null }[];
+              numberFormat?: NumberFormat;
+              ratingMax?: number;
+              referencedDimId?: string;
+              displayFields?: string[];
+            };
+          return json(
+            await reqRepo.addField(
+              id,
+              label,
+              type,
+              options as OptionDef[] | undefined,
+              { numberFormat, ratingMax, referencedDimId, displayFields },
+              me,
+            ),
+          );
+        }
+        // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
+        if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "curate");
+          if (denied) return denied;
+          const field = decodeURIComponent(seg[4]!);
+          const { label, color } = (await req.json()) as { label: string; color?: string | null };
+          const res = await reqRepo.addColumnOption(
             id,
             field,
-            { description: body.description, fieldConfig: body.field_config },
+            label,
+            (color ?? null) as PaletteName | null,
+            {},
             me,
           );
-          return noContent();
+          return res ? json(res) : json({ error: "not a select column" }, 400);
         }
-        if (method === "DELETE") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          return json(await reqRepo.deleteColumn(id, field, me));
-        }
-      }
-      // canonical record management
-      if (seg[3] === "canonical") {
-        if (seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          const { label, key } = (await req.json()) as { label: string; key?: string };
-          await reqRepo.addCanonicalOne(id, label, key, me);
-          return noContent();
-        }
-        if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          if (url.searchParams.get("confirm") !== "true") {
-            throw new AppError("CONFIRMATION_REQUIRED", "merge requires ?confirm=true", 400);
-          }
-          const { survivor, losers, expectedVersions } = (await req.json()) as {
-            survivor: string;
-            losers: string[];
-            expectedVersions?: Record<string, number>;
-          };
-          if (!expectedVersions || typeof expectedVersions !== "object") {
-            throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
-          }
-          return json({
-            merged: await reqRepo.mergeCanonical(id, survivor, losers, me, expectedVersions),
-          });
-        }
-        const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
-        if (seg[5] === "variants" && seg.length === 6 && method === "GET")
-          return json(await reqRepo.listVariants(id, ck));
-        // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
-        if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
-          const denied = gateOrJson(sessionUser, "curate");
-          if (denied) return denied;
-          const { value } = (await req.json()) as { value: string | null };
-          await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
-          return noContent();
-        }
-        if (seg.length === 5 && ck) {
+        // PUT/PATCH/DELETE /api/dimensions/:id/fields/:field — rename / change type / update meta / delete
+        if (seg[3] === "fields" && seg.length === 5) {
+          const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
             const denied = gateOrJson(sessionUser, "curate");
             if (denied) return denied;
-            const { label, expectedVersion } = (await req.json()) as {
-              label: string;
-              expectedVersion?: number;
+            const body = (await req.json()) as {
+              label?: string;
+              type?: string;
+              options?: { label: string; color: string | null }[];
+              numberFormat?: NumberFormat;
+              ratingMax?: number;
+              coerceInvalidToNull?: boolean;
             };
-            if (typeof expectedVersion !== "number") {
-              throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
+            if (body.label != null) {
+              await reqRepo.renameColumn(id, field, body.label, me);
             }
-            const result = await reqRepo.renameCanonical(id, ck, label, me, expectedVersion);
-            return json(result);
+            if (body.type != null) {
+              const res = await reqRepo.changeColumnType(id, field, {
+                newType: body.type,
+                options: body.options as OptionDef[] | undefined,
+                numberFormat: body.numberFormat,
+                ratingMax: body.ratingMax,
+                coerceInvalidToNull: body.coerceInvalidToNull ?? false,
+                userId: me,
+              });
+              return json(res);
+            }
+            return noContent();
+          }
+          if (method === "PATCH") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            const body = (await req.json()) as {
+              description?: string | null;
+              field_config?: string | null;
+            };
+            await reqRepo.updateField(
+              id,
+              field,
+              { description: body.description, fieldConfig: body.field_config },
+              me,
+            );
+            return noContent();
           }
           if (method === "DELETE") {
             const denied = gateOrJson(sessionUser, "curate");
             if (denied) return denied;
-            const ev = url.searchParams.get("expectedVersion");
-            const expectedVersion = ev !== null ? Number(ev) : NaN;
-            if (!Number.isFinite(expectedVersion)) {
-              throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
+            return json(await reqRepo.deleteColumn(id, field, me));
+          }
+        }
+        // canonical record management
+        if (seg[3] === "canonical") {
+          if (seg.length === 4 && method === "POST") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            const { label, key } = (await req.json()) as { label: string; key?: string };
+            await reqRepo.addCanonicalOne(id, label, key, me);
+            return noContent();
+          }
+          if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            if (url.searchParams.get("confirm") !== "true") {
+              throw new AppError("CONFIRMATION_REQUIRED", "merge requires ?confirm=true", 400);
             }
-            return json(await reqRepo.retireCanonical(id, ck, me, expectedVersion));
+            const { survivor, losers, expectedVersions } = (await req.json()) as {
+              survivor: string;
+              losers: string[];
+              expectedVersions?: Record<string, number>;
+            };
+            if (!expectedVersions || typeof expectedVersions !== "object") {
+              throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
+            }
+            return json({
+              merged: await reqRepo.mergeCanonical(id, survivor, losers, me, expectedVersions),
+            });
+          }
+          const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
+          if (seg[5] === "variants" && seg.length === 6 && method === "GET")
+            return json(await reqRepo.listVariants(id, ck));
+          // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
+          if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
+            const denied = gateOrJson(sessionUser, "curate");
+            if (denied) return denied;
+            const { value } = (await req.json()) as { value: string | null };
+            await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
+            return noContent();
+          }
+          if (seg.length === 5 && ck) {
+            if (method === "PUT") {
+              const denied = gateOrJson(sessionUser, "curate");
+              if (denied) return denied;
+              const { label, expectedVersion } = (await req.json()) as {
+                label: string;
+                expectedVersion?: number;
+              };
+              if (typeof expectedVersion !== "number") {
+                throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
+              }
+              const result = await reqRepo.renameCanonical(id, ck, label, me, expectedVersion);
+              return json(result);
+            }
+            if (method === "DELETE") {
+              const denied = gateOrJson(sessionUser, "curate");
+              if (denied) return denied;
+              const ev = url.searchParams.get("expectedVersion");
+              const expectedVersion = ev !== null ? Number(ev) : NaN;
+              if (!Number.isFinite(expectedVersion)) {
+                throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
+              }
+              return json(await reqRepo.retireCanonical(id, ck, me, expectedVersion));
+            }
+          }
+        }
+        // POST /api/dimensions/:id/commit
+        if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "commit");
+          if (denied) return denied;
+          return json(await reqRepo.commit(id, me));
+        }
+        // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
+        if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
+          const dimId = seg[2]!;
+          const dim = await reqRepo.getDimension(dimId);
+          if (!dim) return json({ error: "not found" }, 404);
+          const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
+          const buf = await exportCanonicalToParquet({
+            dimId: dim.id,
+            dimTable: dim.dimTable,
+            mapTable: dim.mapTable,
+            keyCol: dim.keyCol,
+          });
+          return new Response(buf, {
+            status: 200,
+            headers: {
+              ...corsHeaders,
+              "content-type": "application/octet-stream",
+              "content-disposition": `attachment; filename="${dimId}-map.parquet"`,
+              "cache-control": "no-store",
+            },
+          });
+        }
+      }
+
+      // GET /api/team/members ; POST /api/team/members ; DELETE /api/team/members/:email
+      if (seg[1] === "team" && seg[2] === "members") {
+        if (seg.length === 3 && method === "GET") return json(await team.listMembers());
+        if (seg.length === 3 && method === "POST") {
+          const denied = gateOrJson(sessionUser, "manage_team");
+          if (denied) return denied;
+          const { email } = (await req.json()) as { email: string };
+          try {
+            await team.addMember(email, me);
+            return noContent();
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg === "wrong_domain")
+              return json({ error: `Only @${env.allowedDomain} emails allowed` }, 400);
+            if (msg.includes("unique") || msg.includes("duplicate"))
+              return json({ error: "already_exists" }, 409);
+            throw e;
+          }
+        }
+        if (seg.length === 4 && method === "DELETE") {
+          const denied = gateOrJson(sessionUser, "manage_team");
+          if (denied) return denied;
+          const email = decodeURIComponent(seg[3]!);
+          try {
+            await team.removeMember(email, me);
+            return noContent();
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (msg === "cannot_remove_self") return json({ error: "cannot_remove_self" }, 400);
+            throw e;
           }
         }
       }
-      // POST /api/dimensions/:id/commit
-      if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
-        const denied = gateOrJson(sessionUser, "commit");
-        if (denied) return denied;
-        return json(await reqRepo.commit(id, me));
-      }
-      // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
-      if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
-        const dimId = seg[2]!;
-        const dim = await reqRepo.getDimension(dimId);
-        if (!dim) return json({ error: "not found" }, 404);
-        const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
-        const buf = await exportCanonicalToParquet({
-          dimId: dim.id,
-          dimTable: dim.dimTable,
-          mapTable: dim.mapTable,
-          keyCol: dim.keyCol,
-        });
-        return new Response(buf, {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            "content-type": "application/octet-stream",
-            "content-disposition": `attachment; filename="${dimId}-map.parquet"`,
-            "cache-control": "no-store",
-          },
-        });
-      }
-    }
 
-    // GET /api/team/members ; POST /api/team/members ; DELETE /api/team/members/:email
-    if (seg[1] === "team" && seg[2] === "members") {
-      if (seg.length === 3 && method === "GET") return json(await team.listMembers());
-      if (seg.length === 3 && method === "POST") {
+      // GET /api/team/users — list all users with roles (any authenticated user)
+      if (seg[1] === "team" && seg[2] === "users" && seg.length === 3 && method === "GET") {
+        const users = await team.listTeamUsers();
+        return json({ users });
+      }
+
+      // PUT /api/team/users/:id/role — change a user's role (admin only)
+      if (
+        seg[1] === "team" &&
+        seg[2] === "users" &&
+        seg.length === 5 &&
+        seg[4] === "role" &&
+        method === "PUT"
+      ) {
         const denied = gateOrJson(sessionUser, "manage_team");
         if (denied) return denied;
-        const { email } = (await req.json()) as { email: string };
+
+        const targetId = seg[3]!;
+        const body = (await req.json().catch(() => null)) as { role?: string } | null;
+        const newRole = body?.role;
+        if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") {
+          return json({ error: "invalid_role" }, 400);
+        }
+
         try {
-          await team.addMember(email, me);
+          await team.updateUserRole(targetId, newRole);
           return noContent();
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
-          if (msg === "wrong_domain")
-            return json({ error: `Only @${env.allowedDomain} emails allowed` }, 400);
-          if (msg.includes("unique") || msg.includes("duplicate"))
-            return json({ error: "already_exists" }, 409);
+          if (msg === "last_admin") {
+            const reason = (e as { reason?: string }).reason ?? "Cannot demote the last admin.";
+            return json({ error: "last_admin", reason }, 400);
+          }
           throw e;
         }
       }
-      if (seg.length === 4 && method === "DELETE") {
-        const denied = gateOrJson(sessionUser, "manage_team");
-        if (denied) return denied;
-        const email = decodeURIComponent(seg[3]!);
-        try {
-          await team.removeMember(email, me);
-          return noContent();
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (msg === "cannot_remove_self") return json({ error: "cannot_remove_self" }, 400);
-          throw e;
-        }
-      }
-    }
 
-    // GET /api/team/users — list all users with roles (any authenticated user)
-    if (seg[1] === "team" && seg[2] === "users" && seg.length === 3 && method === "GET") {
-      const users = await team.listTeamUsers();
-      return json({ users });
-    }
-
-    // PUT /api/team/users/:id/role — change a user's role (admin only)
-    if (
-      seg[1] === "team" &&
-      seg[2] === "users" &&
-      seg.length === 5 &&
-      seg[4] === "role" &&
-      method === "PUT"
-    ) {
-      const denied = gateOrJson(sessionUser, "manage_team");
-      if (denied) return denied;
-
-      const targetId = seg[3]!;
-      const body = (await req.json().catch(() => null)) as { role?: string } | null;
-      const newRole = body?.role;
-      if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") {
-        return json({ error: "invalid_role" }, 400);
-      }
-
-      try {
-        await team.updateUserRole(targetId, newRole);
-        return noContent();
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (msg === "last_admin") {
-          const reason = (e as { reason?: string }).reason ?? "Cannot demote the last admin.";
-          return json({ error: "last_admin", reason }, 400);
-        }
-        throw e;
-      }
-    }
-
-    return json({ error: `no route for ${method} ${pathname}` }, 404);
+      return json({ error: `no route for ${method} ${pathname}` }, 404);
     });
   } catch (e) {
     if (e instanceof AppError) {

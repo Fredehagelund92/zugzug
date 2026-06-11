@@ -106,10 +106,7 @@ export async function teardownTenant(tenantId: string): Promise<void> {
       await tx.run(`DELETE FROM "zugzug_app"."${tbl}" WHERE tenant_id = $1`, [tenantId]);
     }
 
-    await tx.run(
-      `UPDATE "zugzug_app"."tenant" SET deleted_at = now() WHERE id = $1`,
-      [tenantId],
-    );
+    await tx.run(`UPDATE "zugzug_app"."tenant" SET deleted_at = now() WHERE id = $1`, [tenantId]);
   });
 }
 

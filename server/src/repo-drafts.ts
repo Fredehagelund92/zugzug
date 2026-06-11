@@ -162,10 +162,10 @@ export async function commit(
          AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`,
       [dimId, tenantId],
     );
-    await run(
-      `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
-      [dimId, tenantId],
-    );
+    await run(`DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`, [
+      dimId,
+      tenantId,
+    ]);
   });
 
   // Per-row audit: one entry per distinct target_key so each canonical row

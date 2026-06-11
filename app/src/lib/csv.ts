@@ -107,9 +107,7 @@ export function prepareImport(
   const headers = grid[0]!;
   const mapping = mapCsvHeaders(headers, opts);
   if (mapping.labelIdx === -1 && mapping.keyIdx === -1) {
-    throw new Error(
-      `No "label" or "key" column found. Headers seen: ${headers.join(", ")}`,
-    );
+    throw new Error(`No "label" or "key" column found. Headers seen: ${headers.join(", ")}`);
   }
   const rows = grid.slice(1).map((cells) => {
     const fields: Record<string, string | null> = {};
@@ -126,7 +124,9 @@ export function prepareImport(
   const summary = [
     `${rows.length} data row${rows.length === 1 ? "" : "s"}`,
     mapping.keyIdx >= 0 ? `key ← "${headers[mapping.keyIdx]}"` : "key ← derived from label",
-    mapping.labelIdx >= 0 ? `label ← "${headers[mapping.labelIdx]}"` : "label ← (existing records only)",
+    mapping.labelIdx >= 0
+      ? `label ← "${headers[mapping.labelIdx]}"`
+      : "label ← (existing records only)",
     ...Object.entries(mapping.fieldIdx).map(([f, i]) => `${f} ← "${headers[i]}"`),
     ...(mapping.ignored.length > 0 ? [`ignored: ${mapping.ignored.join(", ")}`] : []),
   ];

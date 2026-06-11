@@ -31,9 +31,12 @@ export interface UnmappedSample {
 /** Registered source columns, read from the cached stats (POST /api/sources/scan
  *  refreshes them) so this is instant regardless of source count. Supports search
  *  (q), schema filter, and a status filter; ranked by unmapped (rows at risk). */
-export async function listSources(
-  opts: { q?: string; schema?: string; status?: string; tenantId: string },
-): Promise<SourceInfo[]> {
+export async function listSources(opts: {
+  q?: string;
+  schema?: string;
+  status?: string;
+  tenantId: string;
+}): Promise<SourceInfo[]> {
   const params: unknown[] = [opts.tenantId];
   const where: string[] = [`s.tenant_id = $1`];
   if (opts.q) {
@@ -469,9 +472,17 @@ export async function scanStatus(tenantId: string = "default"): Promise<ScanStat
 
 /** Browse/search the warehouse catalog (the 1000+ tables) — server-side search +
  *  schema facets + pagination, metadata only (no row counts). The scale surface. */
-export async function searchCatalog(
-  opts: { q?: string; schema?: string; limit?: number; offset?: number; tenantId: string },
-): Promise<{ rows: CatalogTable[]; total: number; schemas: { schema: string; tables: number }[] }> {
+export async function searchCatalog(opts: {
+  q?: string;
+  schema?: string;
+  limit?: number;
+  offset?: number;
+  tenantId: string;
+}): Promise<{
+  rows: CatalogTable[];
+  total: number;
+  schemas: { schema: string; tables: number }[];
+}> {
   void opts.tenantId; // catalog browse is global (warehouse view); tenant accepted for parity / future filtering
   if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
   const adapter = await getAdapter();

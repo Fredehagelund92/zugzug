@@ -309,7 +309,9 @@ function patchCanonical(
   patch: (c: CanonicalValue) => CanonicalValue,
 ): void {
   dims = dims.map((d) =>
-    d.id !== dimId ? d : { ...d, canonical: d.canonical.map((c) => (c.key === key ? patch(c) : c)) },
+    d.id !== dimId
+      ? d
+      : { ...d, canonical: d.canonical.map((c) => (c.key === key ? patch(c) : c)) },
   );
 }
 /** Re-fetch a single dimension from the server and notify subscribers.
@@ -505,7 +507,15 @@ export async function saveDraft(
   const prev = draftsFlat[k];
   draftsFlat = {
     ...draftsFlat,
-    [k]: { dimId, raw, status, targetLabel, targetKey, user: currentUser, at: new Date().toISOString() },
+    [k]: {
+      dimId,
+      raw,
+      status,
+      targetLabel,
+      targetKey,
+      user: currentUser,
+      at: new Date().toISOString(),
+    },
   };
   emit();
   try {
