@@ -15,7 +15,9 @@ describe("useSyncStatus", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url: string, opts?: RequestInit) => {
-        if (opts?.method) await gate;
+        if (opts?.method && opts.method !== "GET") await gate;
+        if (!opts?.method || opts.method === "GET")
+          return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
         return new Response(null, { status: 204 });
       }),
     );
@@ -37,7 +39,11 @@ describe("useSyncStatus", () => {
   test("saved decays back to idle after ~1.5s", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(null, { status: 204 })),
+      vi.fn(async (_url: string, opts?: RequestInit) => {
+        if (!opts?.method || opts.method === "GET")
+          return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+        return new Response(null, { status: 204 });
+      }),
     );
     const { useSyncStatus, discardDraft } = await import("../src/store");
     const { result } = renderHook(() => useSyncStatus());

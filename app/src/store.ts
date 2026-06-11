@@ -320,7 +320,6 @@ export async function refreshDimAndNotify(dimId: string): Promise<void> {
 async function refreshDrafts(dimId?: string): Promise<void> {
   if (dimId) {
     const list = await api<Draft[]>(`/dimensions/${encodeURIComponent(dimId)}/drafts`);
-    if (!Array.isArray(list)) return;
     const next: Record<string, Draft> = {};
     for (const [k, d] of Object.entries(draftsFlat)) if (d.dimId !== dimId) next[k] = d;
     for (const d of list) next[dkey(d.dimId, d.raw)] = d;
@@ -331,7 +330,7 @@ async function refreshDrafts(dimId?: string): Promise<void> {
     dims.map((d) => api<Draft[]>(`/dimensions/${encodeURIComponent(d.id)}/drafts`)),
   );
   const flat: Record<string, Draft> = {};
-  for (const list of lists) if (Array.isArray(list)) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
+  for (const list of lists) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {
