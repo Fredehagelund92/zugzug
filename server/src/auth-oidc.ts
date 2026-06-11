@@ -12,6 +12,8 @@ import * as defaultClient from "openid-client";
 import { env, pg } from "./env.ts";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
 import { issueSession } from "./auth.ts";
+import { acceptInvitesFor } from "./tenant.ts";
+import { log } from "./log.ts";
 
 // ---- DI types ---------------------------------------------------------------
 
@@ -234,10 +236,9 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   );
 
   try {
-    const { acceptInvitesFor } = await import("./tenant.ts");
     await acceptInvitesFor(userId, email);
   } catch (e) {
-    console.error("acceptInvitesFor failed:", e);
+    log({ level: "error", msg: "accept-invites-failed", userId, err: String(e) });
   }
 
   const { cookie } = await issueSession(userId);
