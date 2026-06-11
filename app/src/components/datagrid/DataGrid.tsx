@@ -651,6 +651,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     rowKey,
     columns: orderedVisible,
     getValue,
+    // Hosts that own single-key actions (workbench A/S/R/N…) get printable
+    // keys via onCellKeyDown instead of type-to-edit.
+    typeToEdit: !props.onCellKeyDown,
     onCommit: () => {
       /* the editor's onBlur handles the actual value commit */
     },
@@ -711,6 +714,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor.cursor?.rowKey, cursor.cursor?.field]);
+
+  // ── Cursor mirror for hosts that key features off the focused row ─────────
+  const onCursorChange = props.onCursorChange;
+  useEffect(() => {
+    if (!onCursorChange) return;
+    onCursorChange(
+      cursor.cursor ? { rowKey: cursor.cursor.rowKey, field: cursor.cursor.field } : null,
+    );
+  }, [cursor.cursor?.rowKey, cursor.cursor?.field, onCursorChange]);
 
   // ── Publish self cursor position to presence when cursor moves ────────────
   useEffect(() => {
@@ -1209,6 +1221,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       }
 
       cursor.onKeyDown(e);
+
+      // Host hook for workbench single-key actions: fires iff (not editing)
+      // AND no grid handler above consumed the event AND the cursor bindings
+      // didn't preventDefault.
+      if (!e.defaultPrevented && props.onCellKeyDown) {
+        props.onCellKeyDown(e, {
+          cursor: cur ? { rowKey: cur.rowKey, field: cur.field } : null,
+          startEdit: (seed?: string) => cursor.startEdit(seed),
+        });
+      }
     },
     [
       cursor,
@@ -1225,6 +1247,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       commitValue,
       computeRangeBounds,
       selection,
+      props.onCellKeyDown,
     ],
   );
 
@@ -1735,37 +1758,47 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                     const rk = rowKey(row);
                     const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
                     const evaluation = condFmt.evaluateRow(row);
+                    // Host-controlled detail row (provenance drill). Rendered
+                    // outside the virtualizer's size estimates — acceptable for
+                    // one open drill at a time on ≤500-row surfaces.
+                    const detail = props.renderRowDetail?.(row) ?? null;
                     return (
-                      <GridRow
-                        key={rk}
-                        row={row}
-                        rowKey={rk}
-                        rowIndex={vRow.index}
-                        columns={orderedVisible}
-                        focusedField={cursorOnThisRow?.field ?? null}
-                        editingField={
-                          cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null
-                        }
-                        cursorInitial={cursorOnThisRow?.initial}
-                        cellInRange={inRange}
-                        selected={isSelected(rk)}
-                        selectionCol={selectionCol}
-                        showRowNumbers={showRowNumbers}
-                        cellPadY={cellPadY}
-                        gridStyle={gridStyle}
-                        onAddFieldClick={onAddFieldClick}
-                        hiddenFieldCount={hiddenList.length}
-                        getValue={getValue}
-                        onCellPointerDown={onCellPointerDown}
-                        onCellDoubleClick={onCellDoubleClick}
-                        onToggleSelect={onToggleSelect}
-                        onCommitCell={commitValue}
-                        onStopEdit={onStopEdit}
-                        onAddColumnOption={props.onAddColumnOption}
-                        onRowNumPointerDown={onRowNumPointerDown}
-                        evaluation={evaluation}
-                        activityEntry={activity?.get(rk)}
-                      />
+                      <React.Fragment key={rk}>
+                        <GridRow
+                          row={row}
+                          rowKey={rk}
+                          rowIndex={vRow.index}
+                          columns={orderedVisible}
+                          focusedField={cursorOnThisRow?.field ?? null}
+                          editingField={
+                            cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null
+                          }
+                          cursorInitial={cursorOnThisRow?.initial}
+                          cellInRange={inRange}
+                          selected={isSelected(rk)}
+                          selectionCol={selectionCol}
+                          showRowNumbers={showRowNumbers}
+                          cellPadY={cellPadY}
+                          gridStyle={gridStyle}
+                          onAddFieldClick={onAddFieldClick}
+                          hiddenFieldCount={hiddenList.length}
+                          getValue={getValue}
+                          onCellPointerDown={onCellPointerDown}
+                          onCellDoubleClick={onCellDoubleClick}
+                          onToggleSelect={onToggleSelect}
+                          onCommitCell={commitValue}
+                          onStopEdit={onStopEdit}
+                          onAddColumnOption={props.onAddColumnOption}
+                          onRowNumPointerDown={onRowNumPointerDown}
+                          evaluation={evaluation}
+                          activityEntry={activity?.get(rk)}
+                        />
+                        {detail !== null && (
+                          <div role="row" className="border-b border-line bg-surface-2/50">
+                            {detail}
+                          </div>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                   {bottomPad > 0 && <div style={{ height: bottomPad }} />}

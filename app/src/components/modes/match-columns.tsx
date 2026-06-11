@@ -1,0 +1,299 @@
+import { useEffect, useRef } from "react";
+import type { MappingValue } from "../../data";
+import { valueRows } from "../../data";
+import type { ColumnDef, EditCtx } from "../datagrid/types";
+import { ComboSelect, type ComboSelectHandle } from "../ComboSelect";
+import { Chip } from "../datagrid";
+import { cx } from "../../lib/cx";
+
+const confBar = (c: number) => (c >= 90 ? "bg-ok" : c >= 70 ? "bg-warn" : "bg-danger/30");
+const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "text-danger");
+
+export interface MatchRowState {
+  target: string | null;
+  status: "mapped" | "new" | "skipped";
+}
+
+/** ComboSelect as a DataGrid edit cell: opens on mount, commits the pick,
+ *  cancels when the popover closes without one (Escape, outside click) —
+ *  the cancel is critical, otherwise DataGrid stays in edit mode and silently
+ *  swallows subsequent clicks. */
+function TargetEditor({
+  row,
+  ctx,
+  options,
+  allowCreate,
+  current,
+}: {
+  row: MappingValue;
+  ctx: EditCtx<MappingValue>;
+  options: string[];
+  allowCreate: boolean;
+  current: string | null;
+}) {
+  const handle = useRef<ComboSelectHandle>(null);
+  const committedRef = useRef(false);
+  useEffect(() => {
+    handle.current?.open();
+  }, []);
+  return (
+    <ComboSelect
+      ref={handle}
+      options={options}
+      value={current}
+      suggestion={row.suggestion}
+      allowCreate={allowCreate}
+      onPick={(t) => {
+        committedRef.current = true;
+        ctx.commit(t);
+      }}
+      onClose={() => {
+        if (!committedRef.current) ctx.cancel();
+      }}
+    />
+  );
+}
+
+export function matchColumns(opts: {
+  dimensionLabel: string;
+  options: string[];
+  state: Record<string, MatchRowState>;
+  external: boolean;
+  canEdit: boolean;
+  onToggleDrill: (value: string) => void;
+  openDrill: string | null;
+}): ColumnDef<MappingValue>[] {
+  const { dimensionLabel, options, state, external, canEdit, onToggleDrill, openDrill } = opts;
+  return [
+    {
+      field: "value",
+      label: "Source value · where it's seen",
+      config: { type: "text" },
+      editable: false,
+      pinnedLeft: true,
+      render: (r) => {
+        const primary = r.sources[0];
+        return (
+          <span className="min-w-0">
+            <span className="block truncate font-mono text-[13px] text-ink">{r.value}</span>
+            {primary && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleDrill(r.value);
+                }}
+                className={cx(
+                  "block truncate font-mono text-[10px] transition-colors",
+                  openDrill === r.value ? "text-ink-2" : "text-ink-3 hover:text-ink-2",
+                )}
+              >
+                {primary.table}.{primary.column}
+                {r.sources.length > 1 ? ` +${r.sources.length - 1}` : ""} ·{" "}
+                {valueRows(r).toLocaleString()} rows
+              </button>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      field: "target",
+      label: `${dimensionLabel.toLowerCase()} record`,
+      config: { type: "text" },
+      editable: canEdit,
+      render: (r) => {
+        const target = state[r.value]?.target ?? null;
+        if (target)
+          return <span className="truncate font-display text-[13px] text-ink">{target}</span>;
+        if (r.suggestion)
+          return (
+            <span className="truncate font-mono text-[12px] text-ink-3">
+              {r.suggestion} <span className="text-accent">(suggested)</span>
+            </span>
+          );
+        return <span className="font-mono text-[12px] text-ink-3">—</span>;
+      },
+      edit: (r, ctx) => (
+        <TargetEditor
+          row={r}
+          ctx={ctx}
+          options={options}
+          allowCreate={!external}
+          current={state[r.value]?.target ?? null}
+        />
+      ),
+    },
+    {
+      field: "confidence",
+      label: "Confidence",
+      config: { type: "text" },
+      editable: false,
+      width: 110,
+      render: (r) =>
+        r.confidence > 0 ? (
+          <span className="flex items-center gap-2">
+            <span className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+              <span
+                className={cx("block h-full rounded-pill", confBar(r.confidence))}
+                style={{ width: `${r.confidence}%` }}
+              />
+            </span>
+            <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>
+              {r.confidence}
+            </span>
+          </span>
+        ) : (
+          <span className="font-mono text-[11px] text-ink-2">—</span>
+        ),
+    },
+    {
+      field: "status",
+      label: "Status",
+      config: { type: "text" },
+      editable: false,
+      width: 96,
+      render: (r) => {
+        const s = state[r.value]?.status ?? "new";
+        return s === "mapped" ? (
+          <Chip label="Mapped" bucket="chip-1" dot />
+        ) : s === "skipped" ? (
+          <Chip label="Skipped" bucket="chip-5" />
+        ) : (
+          <Chip label="New" bucket="chip-2" dot />
+        );
+      },
+    },
+  ];
+}
+
+/** Structural row shape consumed by `crossDimColumns` — Triage's `CrossRow`
+ *  satisfies this without importing from a route file. */
+export interface CrossRowLike {
+  dimId: string;
+  dimName: string;
+  raw: string;
+  suggestion: string | null;
+  confidence: number;
+  status: "mapped" | "new" | "skipped";
+  target: string | null;
+  dimRows: number;
+}
+
+function TargetEditorCross({
+  row,
+  ctx,
+  options,
+}: {
+  row: CrossRowLike;
+  ctx: EditCtx<CrossRowLike>;
+  options: string[];
+}) {
+  const handle = useRef<ComboSelectHandle>(null);
+  const committedRef = useRef(false);
+  useEffect(() => {
+    handle.current?.open();
+  }, []);
+  return (
+    <ComboSelect
+      ref={handle}
+      options={options}
+      value={row.target}
+      suggestion={row.suggestion}
+      onPick={(t) => {
+        committedRef.current = true;
+        ctx.commit(t);
+      }}
+      onClose={() => {
+        if (!committedRef.current) ctx.cancel();
+      }}
+    />
+  );
+}
+
+export function crossDimColumns(opts: {
+  optionsFor: (dimId: string) => string[];
+  canEdit: boolean;
+}): ColumnDef<CrossRowLike>[] {
+  const { optionsFor, canEdit } = opts;
+  return [
+    {
+      field: "dimName",
+      label: "Table",
+      config: { type: "text" },
+      editable: false,
+      width: 130,
+      render: (r) => <Chip label={r.dimName} bucket="chip-3" />,
+    },
+    {
+      field: "raw",
+      label: "Source value",
+      config: { type: "text" },
+      editable: false,
+      pinnedLeft: true,
+      render: (r) => (
+        <span className="min-w-0">
+          <span className="block truncate font-mono text-[13px] text-ink">{r.raw}</span>
+          <span className="block font-mono text-[10px] text-ink-2 tabular-nums">
+            {r.dimRows.toLocaleString()} rows in warehouse
+          </span>
+        </span>
+      ),
+    },
+    {
+      field: "target",
+      label: "record",
+      config: { type: "text" },
+      editable: canEdit,
+      render: (r) =>
+        r.target ? (
+          <span className="truncate font-display text-[13px] text-ink">{r.target}</span>
+        ) : r.suggestion ? (
+          <span className="truncate font-mono text-[12px] text-ink-3">
+            {r.suggestion} <span className="text-accent">(suggested)</span>
+          </span>
+        ) : (
+          <span className="font-mono text-[12px] text-ink-3">—</span>
+        ),
+      edit: (r, ctx) => <TargetEditorCross row={r} ctx={ctx} options={optionsFor(r.dimId)} />,
+    },
+    {
+      field: "confidence",
+      label: "Confidence",
+      config: { type: "text" },
+      editable: false,
+      width: 110,
+      render: (r) =>
+        r.confidence > 0 ? (
+          <span className="flex items-center gap-2">
+            <span className="h-1 w-8 overflow-hidden rounded-pill bg-surface-2">
+              <span
+                className={cx("block h-full rounded-pill", confBar(r.confidence))}
+                style={{ width: `${r.confidence}%` }}
+              />
+            </span>
+            <span className={cx("font-mono text-[11px] tabular-nums", confText(r.confidence))}>
+              {r.confidence}
+            </span>
+          </span>
+        ) : (
+          <span className="font-mono text-[11px] text-ink-2">—</span>
+        ),
+    },
+    {
+      field: "status",
+      label: "Status",
+      config: { type: "text" },
+      editable: false,
+      width: 96,
+      render: (r) =>
+        r.status === "mapped" ? (
+          <Chip label="Mapped" bucket="chip-1" dot />
+        ) : r.status === "skipped" ? (
+          <Chip label="Skipped" bucket="chip-5" />
+        ) : (
+          <Chip label="New" bucket="chip-2" dot />
+        ),
+    },
+  ];
+}

@@ -180,4 +180,25 @@ export interface DataGridProps<Row> {
     peers: PeerState[];
     setCell: (row: number, col: number) => void;
   };
+  /** Host hook for workbench single-key actions (A/S/R/N…). Called for keydowns
+   *  the grid itself did not handle (never while editing). `startEdit` opens
+   *  the editor on the cursor cell — the M-key affordance. When set, the grid's
+   *  type-to-edit behavior is disabled so printable keys reach the host. */
+  onCellKeyDown?: (
+    e: React.KeyboardEvent,
+    ctx: {
+      cursor: { rowKey: string; field: string } | null;
+      /** Opens the editor on the cursor cell; `seed` pre-fills the typed
+       *  character so hosts can reconstruct type-to-edit selectively. */
+      startEdit: (seed?: string) => void;
+    },
+  ) => void;
+  /** Notified when the grid's internal cursor moves — host hook for features
+   *  that key off the focused row (e.g. AI hint fetching in Review). */
+  onCursorChange?: (cursor: { rowKey: string; field: string } | null) => void;
+  /** Full-width detail row rendered beneath a data row when this returns
+   *  non-null. The host owns which row is open (return null for the rest).
+   *  Detail height is outside the virtualizer's estimates — fine for one open
+   *  drill at a time. */
+  renderRowDetail?: (row: Row) => ReactNode | null;
 }

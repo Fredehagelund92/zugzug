@@ -75,6 +75,9 @@ interface Opts<Row> {
   onRedo?: () => void;
   onShortcuts?: () => void; // '?' → open shortcuts overlay
   onFocusFilter?: () => void; // '/' → focus toolbar filter
+  /** Disable type-to-edit (printable char enters edit mode). Off when the host
+   *  owns single-key actions via DataGrid's onCellKeyDown. Default true. */
+  typeToEdit?: boolean;
 }
 
 export function useGridCursor<Row>({
@@ -89,6 +92,7 @@ export function useGridCursor<Row>({
   onRedo,
   onShortcuts,
   onFocusFilter,
+  typeToEdit = true,
 }: Opts<Row>) {
   const [cursor, setCursor] = useState<Cursor | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -136,12 +140,36 @@ export function useGridCursor<Row>({
     el?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [cursor?.rowKey, cursor?.field]);
 
-  // When the host's rows change (filter toggle, async save), drop the cursor if
-  // its row vanished — prevents an orphan focus ring on a dead key.
+  // When the host's rows change (filter toggle, async save), the cursor may
+  // point at a row that no longer exists. Instead of dropping focus (which
+  // would break the workbench A/A/A triage loop — accept → row leaves → next
+  // A is a no-op), move the cursor to whatever row now occupies the same
+  // index. Same UX as Linear archiving in a list. Tracked via lastIndexRef so
+  // we know where the cursor *was* before the row vanished.
+  const lastIndexRef = useRef(-1);
   useEffect(() => {
-    if (!cursor) return;
-    const present = rows.some((r) => rowKey(r) === cursor.rowKey);
-    if (!present) setCursor(null);
+    if (!cursor) {
+      lastIndexRef.current = -1;
+      return;
+    }
+    const present = rows.findIndex((r) => rowKey(r) === cursor.rowKey);
+    if (present >= 0) {
+      lastIndexRef.current = present;
+      return;
+    }
+    if (rows.length === 0) {
+      setCursor(null);
+      lastIndexRef.current = -1;
+      return;
+    }
+    const targetIdx = Math.max(0, Math.min(lastIndexRef.current, rows.length - 1));
+    const targetRow = rows[targetIdx];
+    if (!targetRow) {
+      setCursor(null);
+      return;
+    }
+    setCursor({ rowKey: rowKey(targetRow), field: cursor.field, editing: false });
+    lastIndexRef.current = targetIdx;
   }, [rows, cursor, rowKey]);
 
   const onKeyDown = useCallback(
@@ -247,7 +275,9 @@ export function useGridCursor<Row>({
         move(1, 0);
         return;
       }
-      if (e.key === "Enter") {
+      // Plain Enter starts editing; ⌘/Ctrl+Enter is left unhandled so it can
+      // reach the host's onCellKeyDown (e.g. Match's ⌘↵ publish binding).
+      if (e.key === "Enter" && !isCmd) {
         e.preventDefault();
         startEdit();
         return;
@@ -279,7 +309,8 @@ export function useGridCursor<Row>({
       }
       // Type-to-edit: any printable single character (no modifier) enters edit
       // mode with that character as the seed value. Standard spreadsheet feel.
-      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Skipped when the host owns printable keys (DataGrid onCellKeyDown).
+      if (typeToEdit && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         startEdit(e.key);
         return;
@@ -301,6 +332,7 @@ export function useGridCursor<Row>({
       navCols,
       rowKey,
       getValue,
+      typeToEdit,
     ],
   );
 
