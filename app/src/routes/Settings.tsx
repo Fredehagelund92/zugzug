@@ -68,6 +68,8 @@ interface ScanStatus {
   lastScanAt: string | null;
   sourceCount: number;
   unmappedCount: number;
+  lastAutoPublishAt?: string | null;
+  lastAutoPublishDetail?: string | null;
 }
 
 function relativeTime(iso: string | null): string {
