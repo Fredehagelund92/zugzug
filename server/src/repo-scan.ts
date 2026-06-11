@@ -357,27 +357,25 @@ export interface ScanStatusResult {
 }
 
 export async function scanStatus(): Promise<ScanStatusResult> {
-  const row = await pgGet<{
-    last_scan: string | null;
-    sources: number;
-    unmapped: number;
-  }>(
-    `SELECT max(st.scanned_at)::text                   AS last_scan,
-            count(s.*)::int                            AS sources,
-            COALESCE(sum(st.unmapped), 0)::int         AS unmapped
-     FROM ${pg("dimension_source")} s
-     LEFT JOIN ${pg("source_stat")} st
-       ON  st.dim_id = s.dim_id
-       AND st.source_table  = s.source_table
-       AND st.source_column = s.source_column`,
-  ).catch(() => null);
-  const lastAuto = await pgGet<{ at: string; detail: string }>(
-    `SELECT created_at AS at, detail
-       FROM ${pg("audit_log")}
-      WHERE user_id = 'u_system' AND action = 'Committed'
-      ORDER BY created_at DESC
-      LIMIT 1`,
-  ).catch(() => null);
+  const [row, lastAuto] = await Promise.all([
+    pgGet<{ last_scan: string | null; sources: number; unmapped: number }>(
+      `SELECT max(st.scanned_at)::text                   AS last_scan,
+              count(s.*)::int                            AS sources,
+              COALESCE(sum(st.unmapped), 0)::int         AS unmapped
+       FROM ${pg("dimension_source")} s
+       LEFT JOIN ${pg("source_stat")} st
+         ON  st.dim_id = s.dim_id
+         AND st.source_table  = s.source_table
+         AND st.source_column = s.source_column`,
+    ).catch(() => null),
+    pgGet<{ at: string; detail: string }>(
+      `SELECT created_at::text AS at, detail
+         FROM ${pg("audit_log")}
+        WHERE user_id = 'u_system' AND action = 'Committed'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+    ).catch(() => null),
+  ]);
   return {
     lastScanAt: row?.last_scan ?? null,
     sourceCount: Number(row?.sources ?? 0),
