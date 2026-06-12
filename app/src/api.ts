@@ -1,0 +1,30 @@
+/**
+ * Tenant-aware fetch wrapper. Derives the active tenant slug from
+ * window.location.pathname (`/app/<slug>/...`) and rewrites paths:
+ *   `/foo`         → `/api/t/<slug>/foo`         (regular)
+ *   `/admin/foo`   → `/api/admin/foo`            (super-admin override)
+ *   `/foo` (admin) → `/api/admin/foo`            (slug === "admin")
+ *   `/foo` (none)  → `/api/foo`                  (pre-login: /login, /signup)
+ *
+ * No module state. The URL is the source of truth — switching tenants is a
+ * react-router navigation, the next apiFetch picks up the new slug.
+ */
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const m = /^\/app\/([^/]+)\//.exec(window.location.pathname + "/");
+  const slug = m?.[1] ?? "";
+  const url =
+    path.startsWith("/admin/") ? `/api${path}` :
+    slug === "admin"           ? `/api/admin${path}` :
+    slug                       ? `/api/t/${slug}${path}` :
+                                 `/api${path}`;
+  return fetch(url, { credentials: "include", ...init });
+}
+
+/**
+ * Pre-login fetch wrapper. Always `/api${path}`, never tenant-prefixed.
+ * Use for `/auth/me`, `/auth/logout`, `/auth/dev`, `/auth/config`, `/auth/login`,
+ * `/auth/signup`, and `/me/memberships` (called pre-tenant-resolve in BootGate).
+ */
+export async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`/api${path}`, { credentials: "include", ...init });
+}
