@@ -6,6 +6,7 @@ import { PALETTE, PALETTE_NAMES, defaultTintFor } from "../lib/palette";
 import { createTable, useSources, type CreateTableMode, type CreateTableInput } from "../store";
 import { ComboSelect } from "./ComboSelect";
 import type { PaletteName } from "../data";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 
 interface Props {
   open: boolean;
@@ -23,6 +24,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [color, setColor] = useState<PaletteName>(() => defaultTintFor(String(Date.now())));
+  const nav = useNavLinks();
   const [mode, setMode] = useState<CreateTableMode>(defaultMode);
   const [source, setSource] = useState<{ table: string; column: string } | null>(null);
   const [external, setExternal] = useState<{
@@ -296,7 +298,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                   {sourceOpts.length === 0 ? (
                     <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
                       No warehouse columns available.{" "}
-                      <a href="/app/sources" className="text-accent underline">
+                      <a href={nav.sources} className="text-accent underline">
                         Configure a source
                       </a>{" "}
                       first.
@@ -334,7 +336,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               {sourceOpts.length === 0 ? (
                 <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
                   No warehouse columns available.{" "}
-                  <a href="/app/sources" className="text-accent underline">
+                  <a href={nav.sources} className="text-accent underline">
                     Configure a source
                   </a>{" "}
                   first.

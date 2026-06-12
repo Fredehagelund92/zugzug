@@ -27,6 +27,7 @@ import { useOpenTabs } from "../lib/open-tabs";
 import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
 import { ToastStack, toast } from "./Toast";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -189,6 +190,7 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useMediaQuery("(max-width: 767px)");
+  const navLinks = useNavLinks();
 
   // Close the drawer whenever the viewport leaves mobile — avoids a stuck open
   // drawer if the user resizes or rotates their device to desktop width.
@@ -278,7 +280,7 @@ export function AppShell() {
         // Cmd+1..9 → switch to the Nth tab in the tab strip (1-indexed).
         // Only fires on /app/tables, since tabs only exist there; elsewhere we
         // bail so the browser's own Cmd+1..9 shortcut still works.
-        if (!window.location.pathname.startsWith("/app/tables")) return;
+        if (!window.location.pathname.startsWith(navLinks.tables)) return;
         const idx = parseInt(e.key, 10) - 1;
         const target = tabsRef.current[idx];
         if (target) {
@@ -295,16 +297,16 @@ export function AppShell() {
 
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const nav = [
-    { to: "/app", label: "Home", Icon: IconDashboard, end: true },
-    { to: "/app/triage", label: "Review", Icon: IconMapping, count: totalNew },
+    { to: navLinks.dashboard, label: "Home", Icon: IconDashboard, end: true },
+    { to: navLinks.triage, label: "Review", Icon: IconMapping, count: totalNew },
     {
-      to: "/app/sources",
+      to: navLinks.sources,
       label: "Sources",
       Icon: IconSources,
       count: undefined as number | undefined,
     },
-    { to: "/app/tables", label: "Tables", Icon: IconTables, count: dims.length },
-    { to: "/app/settings", label: "Settings", Icon: IconSettings },
+    { to: navLinks.tables, label: "Tables", Icon: IconTables, count: dims.length },
+    { to: navLinks.settings, label: "Settings", Icon: IconSettings },
   ];
 
   // Quick-switcher command list — navigation + every dim + every canonical
@@ -318,7 +320,7 @@ export function AppShell() {
       group: "Navigate",
       label: "Home",
       icon: <IconDashboard className="h-4 w-4" />,
-      action: () => navigate("/app"),
+      action: () => navigate(navLinks.dashboard),
       keywords: "dashboard overview",
       priority: true,
     });
@@ -328,7 +330,7 @@ export function AppShell() {
       label: "Review",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate("/app/triage"),
+      action: () => navigate(navLinks.triage),
       keywords: "inbox queue match reconcile mapping triage",
       priority: true,
     });
@@ -337,7 +339,7 @@ export function AppShell() {
       group: "Navigate",
       label: "Sources",
       icon: <IconSources className="h-4 w-4" />,
-      action: () => navigate("/app/sources"),
+      action: () => navigate(navLinks.sources),
       keywords: "warehouse catalog",
       priority: true,
     });
@@ -347,7 +349,7 @@ export function AppShell() {
       label: "Tables",
       secondary: `${dims.length}`,
       icon: <IconTables className="h-4 w-4" />,
-      action: () => navigate("/app/tables"),
+      action: () => navigate(navLinks.tables),
       keywords: "master records",
       priority: true,
     });
@@ -356,7 +358,7 @@ export function AppShell() {
       group: "Navigate",
       label: "Settings",
       icon: <IconSettings className="h-4 w-4" />,
-      action: () => navigate("/app/settings"),
+      action: () => navigate(navLinks.settings),
       keywords: "workspace preferences team",
       priority: true,
     });
@@ -373,7 +375,7 @@ export function AppShell() {
         keywords: `${d.id} ${d.mapTable} ${d.dimTable} ${d.keyCol}`,
         action: () => {
           openTab(d.id);
-          navigate(`/app/tables?open=${d.id}&active=${d.id}&mode=match`);
+          navigate(navLinks.table(d.id, "match"));
         },
       });
     }
@@ -389,13 +391,13 @@ export function AppShell() {
           keywords: `${d.dimension} ${c.key} ${d.id}`,
           action: () => {
             openTab(d.id);
-            navigate(`/app/tables?focus=${encodeURIComponent(c.key)}`);
+            navigate(navLinks.tablesFocus(c.key));
           },
         });
       }
     }
     return out;
-  }, [dims, totalNew, navigate, openTab]);
+  }, [dims, totalNew, navigate, openTab, navLinks]);
 
   // Shared sidebar content — rendered both in the desktop aside and the mobile drawer.
   const sidebarContent = (
@@ -442,7 +444,7 @@ export function AppShell() {
           <nav className="shrink-0 border-t border-line">
             <div className="flex items-center justify-around px-2 py-2">
               {nav
-                .filter((n) => n.to !== "/app/tables")
+                .filter((n) => n.to !== navLinks.tables)
                 .map(({ to, label, Icon, count, end }) => (
                   <NavLink
                     key={to}

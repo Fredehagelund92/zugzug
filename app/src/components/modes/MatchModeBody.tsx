@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useNavLinks } from "../../lib/use-tenant-navigate";
 import { Badge } from "../Badge";
 import { Button } from "../Button";
 import { Checkbox } from "../Checkbox";
@@ -82,6 +83,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const undo = useUndoStack();
+  const nav = useNavLinks();
 
   const [sel, setSel] = useState<string[]>([]);
   // Filter persists in session so re-opening a tab keeps the user's last lens.
@@ -577,7 +579,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   See what else needs attention across all tables.
                 </div>
                 <div className="mt-4">
-                  <Link to="/app/triage">
+                  <Link to={nav.triage}>
                     <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                       Open Triage
                     </Button>

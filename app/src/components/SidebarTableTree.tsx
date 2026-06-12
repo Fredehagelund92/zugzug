@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { cx } from "../lib/cx";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 import { PALETTE, type PaletteName } from "../lib/palette";
 import { IconPlus, IconPin, IconSearch } from "./Icons";
 import { useDimensions, useDrafts } from "../store";
@@ -131,6 +132,7 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
   const { activeId, openTab } = useOpenTabs();
   const create = useCreateTableModal();
   const navigate = useNavigate();
+  const navLinks = useNavLinks();
   const [pinnedIds, togglePin] = usePinnedDims();
   const [q, setQ] = useState("");
   const activeDimId = activeId ? activeId.slice("tables:".length) : null;
@@ -151,7 +153,7 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
 
   const openDim = (id: string) => {
     openTab(id);
-    navigate("/app/tables");
+    navigate(navLinks.tables);
     onNavigate?.();
   };
 
