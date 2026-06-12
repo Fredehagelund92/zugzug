@@ -28,6 +28,8 @@ import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
 import { ToastStack, toast } from "./Toast";
 import { useNavLinks } from "../lib/use-tenant-navigate";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { type Membership } from "./TenantLayout";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -181,7 +183,7 @@ function UserMenu() {
   );
 }
 
-export function AppShell() {
+export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const dims = useDimensions();
   const me = useCurrentUser();
   const { engineer } = useEngineerMode();
@@ -430,7 +432,10 @@ export function AppShell() {
         </>
       ) : (
         <>
-          <div className="flex items-center gap-2 px-5 pt-3 pb-1">
+          <div className="px-3 pt-2 pb-1">
+            <WorkspaceSwitcher memberships={memberships} />
+          </div>
+          <div className="flex items-center gap-2 px-5 pt-2 pb-1">
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
               Master data layer
             </span>

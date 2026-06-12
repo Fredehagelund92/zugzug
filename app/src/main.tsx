@@ -97,7 +97,7 @@ createRoot(root).render(
                               />
                             }
                           >
-                            <Route element={<AppShell />}>
+                            <Route element={<AppShell memberships={boot.memberships} />}>
                               <Route index element={<Dashboard />} />
                               <Route path="triage" element={<Triage />} />
                               <Route path="sources" element={<Sources />} />
