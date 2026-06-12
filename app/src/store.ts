@@ -7,6 +7,7 @@ import type {
   NumberFormat,
 } from "./data";
 import type { ConditionalRule } from "./components/datagrid/types";
+import { apiFetch, authFetch } from "./api";
 
 /** Thrown by client mutation helpers on HTTP 409 from the server.
  *  Callers (TablePane) inspect `current` to render the inline conflict banner. */
@@ -148,6 +149,40 @@ export interface AuthConfig {
 let _authConfigCache: AuthConfig | null = null;
 let _authConfigPromise: Promise<AuthConfig | null> | null = null;
 
+// One AbortController per tenant session. Aborted by onTenantSwitch().
+let tenantSessionController = new AbortController();
+
+/** Called by TenantLayout when the URL slug changes. */
+export function onTenantSwitch(): void {
+  tenantSessionController.abort();
+  tenantSessionController = new AbortController();
+  cancelDebouncedTimers();
+  resetStore();
+}
+
+function resetStore(): void {
+  dims = [];
+  sources = [];
+  draftsFlat = {};
+  audit = [];
+  preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null };
+  _authConfigCache = null;
+  _authConfigPromise = null;
+  _workspaceInfoCache = null;
+  _workspaceInfoPromise = null;
+  emit();
+}
+
+// Track debounced timers so they can be cancelled on tenant switch.
+const _debouncedTimers = new Set<ReturnType<typeof setTimeout>>();
+export function trackDebouncedTimer(t: ReturnType<typeof setTimeout>): void {
+  _debouncedTimers.add(t);
+}
+function cancelDebouncedTimers(): void {
+  for (const t of _debouncedTimers) clearTimeout(t);
+  _debouncedTimers.clear();
+}
+
 function isAuthConfig(x: unknown): x is AuthConfig {
   if (!x || typeof x !== "object") return false;
   const o = x as Record<string, unknown>;
@@ -164,7 +199,7 @@ export function useAuthConfig(): AuthConfig | null {
     if (_authConfigCache) return;
     if (!_authConfigPromise) {
       _authConfigPromise = (async () => {
-        const r = await fetch("/api/auth/config");
+        const r = await authFetch("/auth/config");
         if (!r.ok) return null;
         const data: unknown = await r.json().catch(() => null);
         if (!isAuthConfig(data)) return null;
@@ -183,7 +218,7 @@ export function useWorkspaceInfo(): WorkspaceInfo | null {
     if (_workspaceInfoCache) return;
     if (!_workspaceInfoPromise) {
       _workspaceInfoPromise = (async () => {
-        const r = await fetch("/api/workspace/info");
+        const r = await apiFetch("/workspace/info");
         if (!r.ok) return null;
         const data: unknown = await r.json().catch(() => null);
         if (!isWorkspaceInfo(data)) return null;
@@ -263,8 +298,9 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await apiFetch(path, {
     ...opts,
+    signal: opts?.signal ?? tenantSessionController.signal,
     headers: { "content-type": "application/json", ...opts?.headers },
   });
   if (!res.ok) {
@@ -354,7 +390,7 @@ async function refreshPreferences(): Promise<void> {
 export async function initStore(): Promise<void> {
   const [u, meRaw] = await Promise.all([
     api<{ currentUser: User; collaborators: User[] }>("/users"),
-    fetch("/api/auth/me")
+    authFetch("/auth/me")
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
   ]);
@@ -473,7 +509,7 @@ export interface CreateTableError {
  *  Throws an Error with .message set to the server's `error` string and a
  *  numeric `.code` attached for the modal to render an inline banner. */
 export async function createTable(input: CreateTableInput): Promise<string> {
-  const res = await fetch(`/api/tables`, {
+  const res = await apiFetch("/tables", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
@@ -946,14 +982,14 @@ export interface CreatedApiToken extends ApiToken {
 }
 
 export async function listApiTokens(): Promise<ApiToken[]> {
-  const r = await fetch("/api/tokens");
+  const r = await apiFetch("/tokens");
   if (!r.ok) throw new Error(`list_tokens_${r.status}`);
   const body = (await r.json()) as { tokens: ApiToken[] };
   return body.tokens;
 }
 
 export async function createApiToken(name: string): Promise<CreatedApiToken> {
-  const r = await fetch("/api/tokens", {
+  const r = await apiFetch("/tokens", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ name }),
@@ -963,7 +999,7 @@ export async function createApiToken(name: string): Promise<CreatedApiToken> {
 }
 
 export async function revokeApiToken(id: string): Promise<void> {
-  const r = await fetch(`/api/tokens/${id}`, { method: "DELETE" });
+  const r = await apiFetch(`/tokens/${id}`, { method: "DELETE" });
   if (!r.ok) throw new Error(`revoke_token_${r.status}`);
 }
 
@@ -1011,8 +1047,8 @@ export interface ConnectionHealth {
 let connectionHealth: ConnectionHealth | null = null;
 
 export async function refreshConnectionHealth(opts: { force?: boolean } = {}): Promise<void> {
-  const url = opts.force ? "/api/health/connections?force=1" : "/api/health/connections";
-  const res = await fetch(url);
+  const path = opts.force ? "/health/connections?force=1" : "/health/connections";
+  const res = await apiFetch(path);
   if (!res.ok) return; // fail quiet; UI shows last known state
   connectionHealth = (await res.json()) as ConnectionHealth;
   emit();
@@ -1028,7 +1064,7 @@ export function useConnectionHealth(): ConnectionHealth | null {
 
 /** List all workspace users with their roles. Any authenticated user may call this. */
 export async function listTeamMembers(): Promise<TeamMember[]> {
-  const r = await fetch("/api/team/users");
+  const r = await apiFetch("/team/users");
   if (!r.ok) throw new Error(`list_team_members_${r.status}`);
   const body = (await r.json()) as { users: TeamMember[] };
   return body.users;
@@ -1036,7 +1072,7 @@ export async function listTeamMembers(): Promise<TeamMember[]> {
 
 /** Change a user's role. Admin only — the server enforces the gate + last-admin guard. */
 export async function updateUserRole(userId: string, role: TeamMember["role"]): Promise<void> {
-  const r = await fetch(`/api/team/users/${userId}/role`, {
+  const r = await apiFetch(`/team/users/${userId}/role`, {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ role }),
