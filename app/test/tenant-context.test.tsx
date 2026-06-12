@@ -1,7 +1,18 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TenantProvider, useTenant } from "../src/lib/tenant-context";
+import { TenantLayout } from "../src/components/TenantLayout";
+
+vi.mock("../src/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/store")>();
+  return {
+    ...actual,
+    initStore: vi.fn().mockResolvedValue(undefined),
+    onTenantSwitch: vi.fn(),
+  };
+});
 
 function Probe() {
   const t = useTenant();
@@ -19,6 +30,38 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
     return this.props.children;
   }
 }
+
+const fakeMemberships = [{ slug: "acme", label: "Acme", role: "admin" as const }];
+
+describe("TenantLayout slug validation", () => {
+  test("renders children when slug is in memberships", () => {
+    render(
+      <MemoryRouter initialEntries={["/app/acme/triage"]}>
+        <Routes>
+          <Route element={<TenantLayout memberships={fakeMemberships} isSuperAdmin={false} />}>
+            <Route path="/app/:tenantSlug/triage" element={<div data-testid="kid">child</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("kid")).toBeTruthy();
+  });
+
+  test("redirects to /app when slug is not in memberships and not super-admin", async () => {
+    render(
+      <MemoryRouter initialEntries={["/app/forbidden/triage"]}>
+        <Routes>
+          <Route element={<TenantLayout memberships={fakeMemberships} isSuperAdmin={false} />}>
+            <Route path="/app/:tenantSlug/triage" element={<div data-testid="kid">child</div>} />
+          </Route>
+          <Route path="/app" element={<div data-testid="redirected">redirected</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId("kid")).toBeNull();
+    expect(screen.getByTestId("redirected")).toBeTruthy();
+  });
+});
 
 describe("TenantProvider", () => {
   test("exposes tenant via useTenant()", () => {
