@@ -13,8 +13,6 @@ import {
   handleDevLogin,
   canMutate,
   updateUserName,
-  listUsers,
-  setSuperAdmin,
   type SessionUser,
   type Operation,
 } from "./auth.ts";
@@ -278,7 +276,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           };
           const dbRows = await raw.all<{ database_name: string }>("SHOW DATABASES");
           const excluded = new Set(["system", "temp"]);
-          const names = dbRows.map((r) => r.database_name).filter((n) => !excluded.has(n));
+          const names = dbRows
+            .map((r) => r.database_name)
+            .filter((n) => !excluded.has(n));
 
           const countRows = await raw.all<{ table_catalog: string; n: bigint }>(
             "SELECT table_catalog, COUNT(*) AS n FROM information_schema.tables GROUP BY 1",
@@ -297,27 +297,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         } catch (err) {
           log({ level: "warn", msg: "admin/warehouses: warehouse unreachable", err: String(err) });
           return json({ databases: [], attached: false, error: "warehouse_unreachable" });
-        }
-      }
-
-      // GET /api/admin/users[?q=…&limit=…&offset=…]
-      if (seg[2] === "users" && seg.length === 3 && method === "GET") {
-        const q = url.searchParams.get("q") ?? undefined;
-        const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
-        const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
-        return json({ users: await listUsers(q, limit, offset) });
-      }
-
-      // PATCH /api/admin/users/:id — promote/demote super-admin
-      if (seg[2] === "users" && seg.length === 4 && method === "PATCH") {
-        const targetId = decodeURIComponent(seg[3]!);
-        const { isSuperAdmin } = (await req.json()) as { isSuperAdmin: boolean };
-        try {
-          await setSuperAdmin(targetId, me, isSuperAdmin);
-          return noContent();
-        } catch (e) {
-          if (e instanceof AppError) return json({ error: e.code.toLowerCase() }, e.status);
-          throw e;
         }
       }
 
@@ -426,12 +405,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     // POST /api/t/:slug/leave — leave workspace (any member; last-admin guard)
-    if (
-      tenantSlugFromPath !== null &&
-      seg[1] === "leave" &&
-      seg.length === 2 &&
-      method === "POST"
-    ) {
+    if (tenantSlugFromPath !== null && seg[1] === "leave" && seg.length === 2 && method === "POST") {
       try {
         await leaveTenant(tenantCtx.tenantId, me);
       } catch (e) {
