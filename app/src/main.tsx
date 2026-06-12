@@ -97,7 +97,7 @@ createRoot(root).render(
                               <Route path="workspaces" element={<Workspaces />} />
                               <Route path="users" element={<AdminUsers />} />
                               <Route path="audit" element={<AdminAudit />} />
-                              <Route path="warehouses" element={<AdminWarehousesStub />} />
+                              <Route path="warehouses" element={<AdminWarehouses />} />
                             </Route>
                           ) : null}
 
