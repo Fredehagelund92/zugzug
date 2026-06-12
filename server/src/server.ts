@@ -20,7 +20,7 @@ import {
 } from "./auth.ts";
 import * as team from "./team.ts";
 import * as tables from "./tables.ts";
-import { pgAll, pgEnd, pgContext } from "./pg.ts";
+import { pgAll, pgEnd, pgTxScoped } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { createScheduler } from "./scheduler.ts";
@@ -493,7 +493,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
-    return await pgContext.run({ insideTenantRepo: true }, async () => {
+    return await pgTxScoped(tenantCtx.tenantId, async () => {
       // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
       if (seg[1] === "preferences" && seg.length === 2) {
         if (method === "GET") return json(await reqRepo.getPreferences());
