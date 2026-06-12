@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { TenantProvider } from "../src/lib/tenant-context";
+import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
 import { WorkspaceSwitcher } from "../src/components/WorkspaceSwitcher";
 
 // Mock store + authFetch
@@ -60,5 +60,40 @@ describe("WorkspaceSwitcher", () => {
     harness(false);
     fireEvent.click(screen.getByRole("button", { name: /acme/i }));
     expect(screen.getByText(/Sign out/i)).toBeTruthy();
+  });
+
+  test("shows Account settings for all roles (admin harness)", () => {
+    harness(false);
+    fireEvent.click(screen.getByRole("button", { name: /acme/i }));
+    expect(screen.getByText(/account settings/i)).toBeTruthy();
+  });
+
+  test("admin sees Workspace settings", () => {
+    harness(false);
+    fireEvent.click(screen.getByRole("button", { name: /acme/i }));
+    expect(screen.getByText(/workspace settings/i)).toBeTruthy();
+  });
+
+  test("editor does NOT see Workspace settings", () => {
+    // Re-render with editor role
+    const value: TenantContextValue = {
+      id: "acme", slug: "acme", label: "Acme", role: "editor", isSuperAdmin: false,
+    };
+    render(
+      <MemoryRouter initialEntries={["/app/acme/triage"]}>
+        <Routes>
+          <Route
+            path="/app/:tenantSlug/*"
+            element={
+              <TenantProvider value={value}>
+                <WorkspaceSwitcher memberships={memberships} />
+              </TenantProvider>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.queryByText(/workspace settings/i)).toBeNull();
   });
 });
