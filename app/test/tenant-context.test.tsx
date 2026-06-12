@@ -61,6 +61,21 @@ describe("TenantLayout slug validation", () => {
     expect(screen.queryByTestId("kid")).toBeNull();
     expect(screen.getByTestId("redirected")).toBeTruthy();
   });
+
+  test("super-admin can enter a tenant they're not a member of", () => {
+    render(
+      <MemoryRouter initialEntries={["/app/other/triage"]}>
+        <Routes>
+          <Route element={<TenantLayout memberships={fakeMemberships} isSuperAdmin={true} />}>
+            <Route path="/app/:tenantSlug/triage" element={<div data-testid="kid">child</div>} />
+          </Route>
+          <Route path="/app" element={<div data-testid="redirected">redirected</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("kid")).toBeTruthy();
+    expect(screen.queryByTestId("redirected")).toBeNull();
+  });
 });
 
 describe("TenantProvider", () => {
