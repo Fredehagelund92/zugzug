@@ -14,14 +14,15 @@ const T_IDS = ["timp_target"];
 const U_IDS = ["u_imp_super"];
 
 async function cleanup(): Promise<void> {
-  for (const t of T_IDS) {
-    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
-    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
-  }
+  // Delete active_sessions first — it has an FK to tenant
   for (const u of U_IDS) {
     await pgRun(`DELETE FROM "zugzug_app"."active_sessions" WHERE user_id = $1`, [u]);
     await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [u]);
     await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [u]);
+  }
+  for (const t of T_IDS) {
+    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
+    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
   }
 }
 beforeEach(cleanup);
@@ -75,8 +76,8 @@ test("POST /api/admin/impersonate (no target) clears the flag", async () => {
      VALUES ('u_imp_super', 'super', 'XX', 'u_imp_super@example.com', 'editor', true)`,
   );
   await pgRun(
-    `INSERT INTO "zugzug_app"."active_sessions" (user_id, last_seen, impersonating_tenant_id)
-     VALUES ('u_imp_super', current_timestamp, 'timp_target')`,
+    `INSERT INTO "zugzug_app"."active_sessions" (user_id, last_seen, tenant_id, impersonating_tenant_id)
+     VALUES ('u_imp_super', current_timestamp, 'timp_target', 'timp_target')`,
   );
   const { issueSession } = await import("../src/auth.ts");
   const { sessionId } = await issueSession("u_imp_super");

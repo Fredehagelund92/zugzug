@@ -21,10 +21,10 @@ const KEY_COL = "country_id";
 beforeAll(async () => {
   await pgRun(
     `INSERT INTO "zugzug_app"."dimension"
-       (id, label, dim_table, map_table, key_col, created_at)
-     VALUES ($1, $2, $3, $4, $5, now())
-     ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label, dim_table = EXCLUDED.dim_table, map_table = EXCLUDED.map_table, key_col = EXCLUDED.key_col`,
-    [DIM, "Canon Test", DIM_TABLE, MAP_TABLE, KEY_COL],
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, now(), $6)
+     ON CONFLICT (tenant_id, id) DO UPDATE SET label = EXCLUDED.label, dim_table = EXCLUDED.dim_table, map_table = EXCLUDED.map_table, key_col = EXCLUDED.key_col`,
+    [DIM, "Canon Test", DIM_TABLE, MAP_TABLE, KEY_COL, T],
   );
   await pgRun(
     `CREATE TABLE IF NOT EXISTS "zugzug_app"."dim_d_canon_test" (${KEY_COL} varchar PRIMARY KEY, label varchar)`,

@@ -35,8 +35,8 @@ test("pgTxScoped rolls back if fn throws", async () => {
   try {
     await pgTxScoped("default", async () => {
       await pgRun(
-        `INSERT INTO "zugzug_app"."audit_log" (id, created_at, user_id, action, detail)
-         VALUES ($1, now(), 'u_test', 'probe', 'rollback-test')`,
+        `INSERT INTO "zugzug_app"."audit_log" (id, created_at, user_id, action, detail, tenant_id)
+         VALUES ($1, now(), 'u_test', 'probe', 'rollback-test', 'default')`,
         [probeId],
       );
       throw new Error("rollback me");

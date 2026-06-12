@@ -19,7 +19,7 @@ const app = pgSchema("zugzug_app");
 export const dimension = app.table(
   "dimension",
   {
-    id:          varchar("id").primaryKey(),
+    id:          varchar("id").notNull(),
     label:       varchar("label").notNull(),
     dim_table:   varchar("dim_table").notNull(),
     map_table:   varchar("map_table").notNull(),
@@ -31,9 +31,12 @@ export const dimension = app.table(
     name_col:    varchar("name_col"),
     description: varchar("description"),
     color:       varchar("color"),
-    tenant_id:   varchar("tenant_id").default("default"),
+    tenant_id:   varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [index("dimension_tenant_idx").on(t.tenant_id)],
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.id] }),
+    index("dimension_tenant_idx").on(t.tenant_id),
+  ],
 );
 
 export const dimensionSource = app.table(
@@ -42,9 +45,9 @@ export const dimensionSource = app.table(
     dim_id:        varchar("dim_id").notNull(),
     source_table:  varchar("source_table").notNull(),
     source_column: varchar("source_column").notNull(),
-    tenant_id:     varchar("tenant_id").default("default"),
+    tenant_id:     varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
+  (t) => [primaryKey({ columns: [t.tenant_id, t.dim_id, t.source_table, t.source_column] })],
 );
 
 export const dimensionField = app.table(
@@ -57,9 +60,9 @@ export const dimensionField = app.table(
     created_at:   timestamp("created_at").notNull(),
     field_config: varchar("field_config"),
     description:  varchar("description"),
-    tenant_id:    varchar("tenant_id").default("default"),
+    tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [primaryKey({ columns: [t.dim_id, t.field] })],
+  (t) => [primaryKey({ columns: [t.tenant_id, t.dim_id, t.field] })],
 );
 
 export const sourceStat = app.table(
@@ -73,9 +76,9 @@ export const sourceStat = app.table(
     distinct_values: bigint("distinct_values", { mode: "number" }).notNull(),
     unmapped:        bigint("unmapped", { mode: "number" }).notNull(),
     scanned_at:      timestamp("scanned_at").notNull(),
-    tenant_id:       varchar("tenant_id").default("default"),
+    tenant_id:       varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [primaryKey({ columns: [t.dim_id, t.source_table, t.source_column] })],
+  (t) => [primaryKey({ columns: [t.tenant_id, t.dim_id, t.source_table, t.source_column] })],
 );
 
 export const draft = app.table(
@@ -88,10 +91,10 @@ export const draft = app.table(
     target_key:   varchar("target_key"),
     user_id:      varchar("user_id").notNull(),
     created_at:   timestamp("created_at").notNull(),
-    tenant_id:    varchar("tenant_id").default("default"),
+    tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
-    primaryKey({ columns: [t.dim_id, t.raw, t.user_id] }),
+    primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw, t.user_id] }),
     index("draft_tenant_idx").on(t.tenant_id),
   ],
 );
@@ -106,7 +109,7 @@ export const auditLog = app.table(
     detail:     varchar("detail").notNull(),
     table_id:   varchar("table_id"),
     row_key:    varchar("row_key"),
-    tenant_id:  varchar("tenant_id").default("default"),
+    tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
     index("audit_log_table_row_recency_idx")
@@ -156,7 +159,7 @@ export const apiTokens = app.table(
 export const activeSessions = app.table("active_sessions", {
   user_id:   varchar("user_id").primaryKey(),
   last_seen: timestamp("last_seen").notNull(),
-  tenant_id: varchar("tenant_id").default("default"),
+  tenant_id: varchar("tenant_id").notNull().references(() => tenant.id),
   impersonating_tenant_id: varchar("impersonating_tenant_id"),
 });
 
@@ -184,7 +187,7 @@ export const preferences = app.table(
     suggest_threshold: integer("suggest_threshold").notNull(),
     scan_schedule:     varchar("scan_schedule", { length: 10 }),
     updated_at:        timestamp("updated_at").notNull(),
-    tenant_id:         varchar("tenant_id").default("default"),
+    tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [uniqueIndex("preferences_tenant_unique").on(t.tenant_id)],
 );
@@ -211,10 +214,10 @@ export const aiHintCache = app.table(
     model:      varchar("model").notNull(),
     created_at: timestamp("created_at").notNull(),
     hits:       integer("hits").notNull().default(sql`0`),
-    tenant_id:  varchar("tenant_id").default("default"),
+    tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
-    primaryKey({ columns: [t.dim_id, t.raw] }),
+    primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw] }),
     index("ai_hint_cache_dim_id_idx").on(t.dim_id),
     index("ai_hint_cache_tenant_dim_idx").on(t.tenant_id, t.dim_id),
   ],
@@ -223,7 +226,7 @@ export const aiHintCache = app.table(
 export const scanRuns = app.table(
   "scan_run",
   {
-    id:            varchar("id").primaryKey(),
+    id:            varchar("id").notNull(),
     source_id:     varchar("source_id").notNull(),
     started_at:    timestamp("started_at").notNull(),
     ended_at:      timestamp("ended_at"),
@@ -231,9 +234,10 @@ export const scanRuns = app.table(
     rows_scanned:  integer("rows_scanned"),
     duration_ms:   integer("duration_ms"),
     error_message: text("error_message"),
-    tenant_id:     varchar("tenant_id").default("default"),
+    tenant_id:     varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
+    primaryKey({ columns: [t.tenant_id, t.id] }),
     index("scan_run_source_id_idx").on(t.source_id),
     index("scan_run_started_at_idx").on(t.started_at),
   ],
@@ -249,10 +253,10 @@ export const canonicalVersion = app.table(
     /** Semantically users.id. No FK constraint — matches existing convention
      *  (repo-canonical.ts uses userId strings without enforced FKs). */
     updated_by: varchar("updated_by").notNull(),
-    tenant_id:  varchar("tenant_id").default("default"),
+    tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
-    primaryKey({ columns: [t.dim_id, t.key] }),
+    primaryKey({ columns: [t.tenant_id, t.dim_id, t.key] }),
     index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
     index("canonical_version_tenant_dim_idx").on(t.tenant_id, t.dim_id),
   ],

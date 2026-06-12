@@ -50,9 +50,9 @@ async function recordScanRun(
   const startedAt = new Date();
   try {
     await pgRun(
-      `INSERT INTO ${pg("scan_run")} (id, source_id, started_at, status)
-       VALUES ($1, $2, $3, 'running')`,
-      [runId, jobName, startedAt],
+      `INSERT INTO ${pg("scan_run")} (id, source_id, started_at, status, tenant_id)
+       VALUES ($1, $2, $3, 'running', $4)`,
+      [runId, jobName, startedAt, tenantId],
     );
   } catch (e) {
     // Don't let scan_run persistence failure block the job — log and proceed.

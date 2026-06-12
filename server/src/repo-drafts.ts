@@ -75,10 +75,9 @@ export async function saveDraft(
   await pgRun(
     `INSERT INTO ${pg("draft")} (dim_id, raw, status, target_label, target_key, user_id, created_at, tenant_id)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7)
-     ON CONFLICT (dim_id, raw, user_id) DO UPDATE
+     ON CONFLICT (tenant_id, dim_id, raw, user_id) DO UPDATE
        SET status = EXCLUDED.status, target_label = EXCLUDED.target_label,
-           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at,
-           tenant_id = EXCLUDED.tenant_id`,
+           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at`,
     [dimId, raw, status, targetLabel, targetKey, userId, tenantId],
   );
 }

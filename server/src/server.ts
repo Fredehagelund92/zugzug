@@ -329,8 +329,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const t = await tenantBySlug(target);
           if (!t) return json({ error: "tenant_not_found" }, 404);
           await pgRun(
-            `INSERT INTO ${pg("active_sessions")} (user_id, last_seen, impersonating_tenant_id)
-             VALUES ($1, current_timestamp, $2)
+            `INSERT INTO ${pg("active_sessions")} (user_id, last_seen, tenant_id, impersonating_tenant_id)
+             VALUES ($1, current_timestamp, $2, $2)
              ON CONFLICT (user_id) DO UPDATE
                SET impersonating_tenant_id = EXCLUDED.impersonating_tenant_id,
                    last_seen = current_timestamp`,

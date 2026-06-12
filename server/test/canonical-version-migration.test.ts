@@ -13,11 +13,11 @@ beforeAll(async () => {
   // any polluted row from earlier test runs that stored the bad format.
   await pgRun(
     `INSERT INTO "zugzug_app"."dimension"
-       (id, label, dim_table, map_table, key_col, created_at)
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
      VALUES
        ('d_test_e2', 'Test E2', 'zugzug_app.dim_test_e2', 'zugzug_app.map_test_e2',
-        'country_id', now())
-     ON CONFLICT (id) DO UPDATE SET
+        'country_id', now(), 'default')
+     ON CONFLICT (tenant_id, id) DO UPDATE SET
        label = EXCLUDED.label,
        dim_table = EXCLUDED.dim_table,
        map_table = EXCLUDED.map_table,
@@ -60,12 +60,12 @@ test("backfill seeds version=1 for every existing dim row", async () => {
     DO $$
     DECLARE d record; sql_stmt text;
     BEGIN
-      FOR d IN SELECT id, dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2' LOOP
+      FOR d IN SELECT id, dim_table, key_col, tenant_id FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2' LOOP
         sql_stmt := format(
-          'INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by)
-           SELECT %L, %I, 1, now(), %L FROM %s
-           ON CONFLICT (dim_id, key) DO NOTHING',
-          d.id, d.key_col, 'u_system', d.dim_table
+          'INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+           SELECT %L, %I, 1, now(), %L, %L FROM %s
+           ON CONFLICT (tenant_id, dim_id, key) DO NOTHING',
+          d.id, d.key_col, 'u_system', d.tenant_id, d.dim_table
         );
         EXECUTE sql_stmt;
       END LOOP;
@@ -90,12 +90,12 @@ test("backfill is idempotent — re-running does not duplicate or bump version",
     DO $$
     DECLARE d record; sql_stmt text;
     BEGIN
-      FOR d IN SELECT id, dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2' LOOP
+      FOR d IN SELECT id, dim_table, key_col, tenant_id FROM "zugzug_app"."dimension" WHERE id = 'd_test_e2' LOOP
         sql_stmt := format(
-          'INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by)
-           SELECT %L, %I, 1, now(), %L FROM %s
-           ON CONFLICT (dim_id, key) DO NOTHING',
-          d.id, d.key_col, 'u_system', d.dim_table
+          'INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+           SELECT %L, %I, 1, now(), %L, %L FROM %s
+           ON CONFLICT (tenant_id, dim_id, key) DO NOTHING',
+          d.id, d.key_col, 'u_system', d.tenant_id, d.dim_table
         );
         EXECUTE sql_stmt;
       END LOOP;

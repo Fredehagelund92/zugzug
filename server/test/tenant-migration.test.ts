@@ -82,15 +82,16 @@ test("Deploy 1 added is_super_admin to users with default false", async () => {
   expect(col?.is_nullable).toBe("NO");
 });
 
-test("Deploy 1 added tenant_id column to dimension with DEFAULT 'default'", async () => {
-  const col = await pgGet<{ column_default: string }>(
-    `SELECT column_default
+test("Deploy 5 hardened tenant_id on dimension: NOT NULL, no DEFAULT", async () => {
+  const col = await pgGet<{ column_default: string | null; is_nullable: string }>(
+    `SELECT column_default, is_nullable
        FROM information_schema.columns
       WHERE table_schema = 'zugzug_app'
         AND table_name = 'dimension'
         AND column_name = 'tenant_id'`,
   );
-  expect(col?.column_default).toContain("default");
+  expect(col?.column_default).toBeNull();
+  expect(col?.is_nullable).toBe("NO");
 });
 
 test("Existing dimension rows have tenant_id = 'default' after the migration", async () => {

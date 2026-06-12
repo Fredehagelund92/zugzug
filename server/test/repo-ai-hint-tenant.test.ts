@@ -4,9 +4,10 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
-import { test, expect, beforeEach, afterAll } from "bun:test";
+import { test, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { pgRun } from "../src/pg.ts";
 import { getAiHint } from "../src/repo-ai-hint.ts";
+import { provisionTenant } from "../src/tenant.ts";
 import { env } from "../src/env.ts";
 
 const TA = "tah_a";
@@ -17,8 +18,18 @@ const RAW = "FRA_IS_NOT_A_REAL_CANONICAL_LABEL";
 async function cleanup(): Promise<void> {
   await pgRun(`DELETE FROM "zugzug_app"."ai_hint_cache" WHERE dim_id = $1`, [DIM]);
 }
+
+async function teardown(): Promise<void> {
+  await cleanup();
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id IN ($1, $2)`, [TA, TB]);
+}
+
+beforeAll(async () => {
+  await provisionTenant({ id: TA, label: "AiHint Tenant A" });
+  await provisionTenant({ id: TB, label: "AiHint Tenant B" });
+});
 beforeEach(cleanup);
-afterAll(cleanup);
+afterAll(teardown);
 
 test("getAiHint cache lookup is scoped by tenant_id", async () => {
   // Seed a deterministic cache row for tenant A only

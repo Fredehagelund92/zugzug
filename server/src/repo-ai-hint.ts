@@ -173,7 +173,7 @@ export async function getAiHint(
     `INSERT INTO ${pg("ai_hint_cache")}
        (dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits, tenant_id)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, 0, $7)
-     ON CONFLICT (dim_id, raw) DO UPDATE
+     ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE
        SET suggestion  = EXCLUDED.suggestion,
            confidence  = EXCLUDED.confidence,
            reasoning   = EXCLUDED.reasoning,

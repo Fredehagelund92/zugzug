@@ -104,16 +104,16 @@ export async function createTable(
     // 3. Source binding(s) — write directly so we stay in the pgTx connection
     if (input.mode === "source" && input.source) {
       await run(
-        `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
-         VALUES ($1, $2, $3) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
-        [id, input.source.table, input.source.column],
+        `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
+         VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
+        [id, input.source.table, input.source.column, tenantId],
       );
     }
     if (input.mode === "external_id" && input.external) {
       await run(
-        `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column)
-         VALUES ($1, $2, $3) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
-        [id, input.external.table, input.external.idColumn],
+        `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
+         VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
+        [id, input.external.table, input.external.idColumn, tenantId],
       );
       // External-ID also needs the name binding; this lives on the dimension row
       await run(

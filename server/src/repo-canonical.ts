@@ -108,7 +108,7 @@ async function seedVersionRow(
   await tx.run(
     `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
      VALUES ($1, $2, 1, now(), $3, $4)
-     ON CONFLICT (dim_id, key) DO NOTHING`,
+     ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
     [dimId, key, userId, tenantId],
   );
 }
@@ -465,7 +465,7 @@ export async function addDimension(
   for (const s of sources) {
     await pgRun(
       `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
-       VALUES ($1, $2, $3, $4) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
+       VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
       [id, s.table, s.column, tenantId],
     );
   }
@@ -949,7 +949,7 @@ export async function addField(
             : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, field_config, created_at, tenant_id)
-     VALUES ($1, $2, $3, $4, $5, current_timestamp, $6) ON CONFLICT (dim_id, field) DO NOTHING`,
+     VALUES ($1, $2, $3, $4, $5, current_timestamp, $6) ON CONFLICT (tenant_id, dim_id, field) DO NOTHING`,
     [dimId, field, label.trim(), t, optsJson, tenantId],
   );
   if (!opts.silent) {
