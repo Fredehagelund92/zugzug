@@ -17,7 +17,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
     slug === "admin"           ? `/api/admin${path}` :
     slug                       ? `/api/t/${slug}${path}` :
                                  `/api${path}`;
-  return fetch(url, { credentials: "include", ...init });
+  return fetch(url, { ...init, credentials: "include" });
 }
 
 /**
@@ -26,5 +26,5 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
  * `/auth/signup`, and `/me/memberships` (called pre-tenant-resolve in BootGate).
  */
 export async function authFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`/api${path}`, { credentials: "include", ...init });
+  return fetch(`/api${path}`, { ...init, credentials: "include" });
 }
