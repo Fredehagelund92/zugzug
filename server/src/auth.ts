@@ -16,8 +16,7 @@
 */
 
 import { env, pg } from "./env.ts";
-import { pgRun as run, pgGet as get, pgAll } from "./pg.ts";
-import { AppError } from "./errors.ts";
+import { pgRun as run, pgGet as get } from "./pg.ts";
 
 export interface SessionUser {
   id: string;
@@ -184,9 +183,10 @@ export async function handleMe(req: Request): Promise<Response> {
       headers: { "content-type": "application/json", ...cors },
     });
   // Best-effort — fire-and-forget, never blocks the response.
-  void run(`UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`, [user.id]).catch(
-    () => {},
-  );
+  void run(
+    `UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`,
+    [user.id],
+  ).catch(() => {});
   return new Response(JSON.stringify(user), {
     status: 200,
     headers: { "content-type": "application/json", ...cors },
@@ -206,62 +206,4 @@ export async function handleDevLogin(): Promise<Response> {
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", setCookie);
   return new Response(null, { status: 302, headers });
-}
-
-/** Updates the display name for an authenticated user. Throws AppError on empty name. */
-export async function updateUserName(userId: string, name: string): Promise<void> {
-  const trimmed = name.trim();
-  if (!trimmed) throw new AppError("VALIDATION_FAILED", "name cannot be empty", 400);
-  await run(`UPDATE ${pg("users")} SET name = $1 WHERE id = $2`, [trimmed, userId]);
-}
-
-export interface AdminUserRecord {
-  id: string;
-  email: string | null;
-  name: string;
-  initials: string;
-  isSuperAdmin: boolean;
-  lastSeenAt: string | null;
-  membershipCount: number;
-}
-
-export async function listUsers(q?: string, limit = 50, offset = 0): Promise<AdminUserRecord[]> {
-  const params: unknown[] = [limit, offset];
-  const filter = q ? `WHERE (u.email ILIKE $3 OR u.name ILIKE $3)` : "";
-  if (q) params.push(`%${q}%`);
-  return pgAll<AdminUserRecord>(
-    `SELECT u.id, u.email, u.name, u.initials,
-            u.is_super_admin AS "isSuperAdmin",
-            u.last_seen_at AS "lastSeenAt",
-            COUNT(tm.user_id)::int AS "membershipCount"
-       FROM ${pg("users")} u
-       LEFT JOIN ${pg("tenant_member")} tm ON tm.user_id = u.id
-       ${filter}
-       GROUP BY u.id
-       ORDER BY u.name
-       LIMIT $1 OFFSET $2`,
-    params,
-  );
-}
-
-export async function countSuperAdmins(): Promise<number> {
-  const row = await get<{ n: number }>(
-    `SELECT COUNT(*)::int AS n FROM ${pg("users")} WHERE is_super_admin = true`,
-    [],
-  );
-  return row?.n ?? 0;
-}
-
-export async function setSuperAdmin(
-  targetId: string,
-  callerId: string,
-  value: boolean,
-): Promise<void> {
-  if (!value && targetId === callerId) {
-    throw new AppError("SELF_DEMOTE", "cannot demote yourself", 409);
-  }
-  if (!value && (await countSuperAdmins()) <= 1) {
-    throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
-  }
-  await run(`UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`, [value, targetId]);
 }
