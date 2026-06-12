@@ -3,6 +3,14 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import React from "react";
 
+const stubTenant = {
+  id: "test-ws",
+  slug: "test-ws",
+  label: "Test Workspace",
+  role: "admin" as const,
+  isSuperAdmin: false,
+};
+
 const stubDim = {
   id: "country",
   dimension: "Country",
@@ -38,6 +46,19 @@ const stubDraft = {
 };
 
 function setupMocks(writable: boolean) {
+  vi.doMock("../src/lib/use-tenant-navigate", () => ({
+    useTenantNavigate: () => () => {},
+    useNavLinks: () => ({
+      base: "/app/test-ws",
+      dashboard: "/app/test-ws",
+      triage: "/app/test-ws/triage",
+      sources: "/app/test-ws/sources",
+      tables: "/app/test-ws/tables",
+      settings: "/app/test-ws/settings",
+      table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+      tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
+    }),
+  }));
   vi.doMock("../src/store", async (orig) => {
     const real = await orig<typeof import("../src/store")>();
     return {

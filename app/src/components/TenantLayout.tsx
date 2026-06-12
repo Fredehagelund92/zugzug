@@ -32,19 +32,19 @@ export function TenantLayout({
     void initStore();
   }, [tenantSlug]);
 
-  if (!tenantSlug) return <Navigate to="/app" replace />;
-  if (!m && !isSuperAdmin) return <Navigate to="/app" replace />;
-
   const ctx: TenantContextValue = useMemo(
     () => ({
-      id: m?.slug ?? tenantSlug,
-      slug: tenantSlug,
-      label: m?.label ?? tenantSlug,
+      id: m?.slug ?? tenantSlug ?? "",
+      slug: tenantSlug ?? "",
+      label: m?.label ?? tenantSlug ?? "",
       role: m?.role ?? "admin",
       isSuperAdmin,
     }),
     [tenantSlug, m, isSuperAdmin],
   );
+
+  if (!tenantSlug) return <Navigate to="/app" replace />;
+  if (!m && !isSuperAdmin) return <Navigate to="/app" replace />;
 
   return (
     <TenantProvider value={ctx}>
