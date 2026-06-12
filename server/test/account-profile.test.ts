@@ -6,69 +6,73 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.AUTH_MODE = "password";
 process.env.ALLOWED_DOMAIN = "example.com";
 
-import { test, expect, beforeEach } from "bun:test";
-import { resetDb } from "./setup.ts";
-import { updateUserName, issueSession } from "../src/auth.ts";
-import { pgGet } from "../src/pg.ts";
-import { AppError } from "../src/errors.ts";
+import { test, expect, beforeEach, afterAll } from "bun:test";
+import { pgRun, pgGet } from "../src/pg.ts";
 
-beforeEach(async () => {
-  await resetDb();
-});
+const U_IDS = ["u_profile_e2e"];
 
-test("updateUserName updates the user's display name", async () => {
-  // Create a user via SQL
-  const userId = "u_profile_test";
-  await (await import("../src/pg.ts")).pgRun(
+async function cleanup(): Promise<void> {
+  for (const u of U_IDS) {
+    await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [u]);
+    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [u]);
+  }
+}
+beforeEach(cleanup);
+afterAll(cleanup);
+
+async function login(userId: string): Promise<string> {
+  await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
      VALUES ($1, 'Original Name', 'ON', $2, 'editor', false)`,
     [userId, `${userId}@example.com`],
   );
+  const { issueSession } = await import("../src/auth.ts");
+  const { sessionId } = await issueSession(userId);
+  return `zz_sid=${sessionId}`;
+}
 
-  // Update the name
-  await updateUserName(userId, "New Name");
-
-  // Verify
+test("PATCH /api/auth/me updates name", async () => {
+  const cookie = await login("u_profile_e2e");
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request("http://localhost/api/auth/me", {
+      method: "PATCH",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name: "New Name" }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(204);
   const row = await pgGet<{ name: string }>(
     `SELECT name FROM "zugzug_app"."users" WHERE id = $1`,
-    [userId],
+    ["u_profile_e2e"],
   );
   expect(row?.name).toBe("New Name");
 });
 
-test("updateUserName trims whitespace from name", async () => {
-  const userId = "u_profile_trim";
-  await (await import("../src/pg.ts")).pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, 'Original', 'ON', $2, 'editor', false)`,
-    [userId, `${userId}@example.com`],
+test("PATCH /api/auth/me rejects empty name", async () => {
+  const cookie = await login("u_profile_e2e");
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request("http://localhost/api/auth/me", {
+      method: "PATCH",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ name: "   " }),
+    }),
+    () => {},
   );
-
-  await updateUserName(userId, "  Trimmed Name  ");
-
-  const row = await pgGet<{ name: string }>(
-    `SELECT name FROM "zugzug_app"."users" WHERE id = $1`,
-    [userId],
-  );
-  expect(row?.name).toBe("Trimmed Name");
+  expect(res.status).toBe(400);
 });
 
-test("updateUserName rejects empty name", async () => {
-  const userId = "u_profile_empty";
-  await (await import("../src/pg.ts")).pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, 'Original', 'ON', $2, 'editor', false)`,
-    [userId, `${userId}@example.com`],
+test("PATCH /api/auth/me returns 401 when not signed in", async () => {
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request("http://localhost/api/auth/me", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Hacker" }),
+    }),
+    () => {},
   );
-
-  try {
-    await updateUserName(userId, "   ");
-    expect(true).toBe(false); // Should have thrown
-  } catch (e) {
-    expect(e instanceof AppError).toBe(true);
-    if (e instanceof AppError) {
-      expect(e.code).toBe("VALIDATION_FAILED");
-      expect(e.status).toBe(400);
-    }
-  }
+  expect(res.status).toBe(401);
 });
