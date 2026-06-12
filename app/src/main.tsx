@@ -7,7 +7,7 @@ import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
-import { AdminShell } from "./components/AdminShell";
+import { AdminLayout } from "./components/admin/AdminLayout";
 import { TenantLayout } from "./components/TenantLayout";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
@@ -26,7 +26,7 @@ import { Warehouse } from "./routes/settings/Warehouse";
 import { Audit as SettingsAudit } from "./routes/settings/Audit";
 import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
-import { AdminTenants } from "./routes/admin/Tenants";
+import { Workspaces } from "./routes/admin/Workspaces";
 import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
 import { Appearance as AccountAppearance } from "./routes/account/Appearance";
@@ -54,6 +54,10 @@ declare global {
 if (import.meta.env.DEV) {
   window.BrandApp = { setAccent, setTheme, toggleTheme };
 }
+
+function AdminUsersStub() { return <div>Users — coming in Task 6</div>; }
+function AdminAuditStub() { return <div>Audit — coming in Task 7</div>; }
+function AdminWarehousesStub() { return <div>Warehouses — coming in Task 8</div>; }
 
 const root = document.getElementById("root")!;
 
@@ -89,9 +93,12 @@ createRoot(root).render(
 
                           {/* Super-admin shell */}
                           {boot.isSuperAdmin ? (
-                            <Route path="/app/admin" element={<AdminShell />}>
-                              <Route index element={<AdminTenants />} />
-                              <Route path="tenants" element={<AdminTenants />} />
+                            <Route path="/app/admin/*" element={<AdminLayout />}>
+                              <Route index element={<Navigate to="workspaces" replace />} />
+                              <Route path="workspaces" element={<Workspaces />} />
+                              <Route path="users" element={<AdminUsersStub />} />
+                              <Route path="audit" element={<AdminAuditStub />} />
+                              <Route path="warehouses" element={<AdminWarehousesStub />} />
                             </Route>
                           ) : null}
 

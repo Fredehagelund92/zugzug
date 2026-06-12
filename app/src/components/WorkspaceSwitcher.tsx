@@ -65,7 +65,7 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
               <button onClick={() => { setOpen(false); navigate("/app/admin"); }} className="block w-full text-left px-3 py-1.5 hover:bg-surface-2" role="menuitem">
                 Admin console
               </button>
-              <button onClick={() => { setOpen(false); navigate("/app/admin/tenants"); }} className="block w-full text-left px-3 py-1.5 hover:bg-surface-2" role="menuitem">
+              <button onClick={() => { setOpen(false); navigate("/app/admin/workspaces"); }} className="block w-full text-left px-3 py-1.5 hover:bg-surface-2" role="menuitem">
                 + Create workspace
               </button>
             </>
