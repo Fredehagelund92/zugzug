@@ -27,6 +27,9 @@ import { Audit as SettingsAudit } from "./routes/settings/Audit";
 import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
 import { Workspaces } from "./routes/admin/Workspaces";
+import { Users as AdminUsers } from "./routes/admin/Users";
+import { Audit as AdminAudit } from "./routes/admin/Audit";
+import { Warehouses as AdminWarehouses } from "./routes/admin/Warehouses";
 import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
 import { Appearance as AccountAppearance } from "./routes/account/Appearance";
@@ -54,10 +57,6 @@ declare global {
 if (import.meta.env.DEV) {
   window.BrandApp = { setAccent, setTheme, toggleTheme };
 }
-
-function AdminUsersStub() { return <div>Users — coming in Task 6</div>; }
-function AdminAuditStub() { return <div>Audit — coming in Task 7</div>; }
-function AdminWarehousesStub() { return <div>Warehouses — coming in Task 8</div>; }
 
 const root = document.getElementById("root")!;
 
@@ -96,8 +95,8 @@ createRoot(root).render(
                             <Route path="/app/admin/*" element={<AdminLayout />}>
                               <Route index element={<Navigate to="workspaces" replace />} />
                               <Route path="workspaces" element={<Workspaces />} />
-                              <Route path="users" element={<AdminUsersStub />} />
-                              <Route path="audit" element={<AdminAuditStub />} />
+                              <Route path="users" element={<AdminUsers />} />
+                              <Route path="audit" element={<AdminAudit />} />
                               <Route path="warehouses" element={<AdminWarehousesStub />} />
                             </Route>
                           ) : null}
