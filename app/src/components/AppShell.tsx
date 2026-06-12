@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { apiFetch, authFetch } from "../api";
 import { cx } from "../lib/cx";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
@@ -133,7 +134,7 @@ function UserMenu() {
   }, [open]);
 
   const signOut = () => {
-    fetch("/api/auth/logout", { method: "POST" })
+    authFetch("/auth/logout", { method: "POST" })
       .then(() => {
         window.location.href = "/login";
       })
@@ -234,7 +235,7 @@ export function AppShell() {
     const tick = async () => {
       if (stop || document.visibilityState !== "visible") return;
       try {
-        const r = await fetch("/api/sources/scan-status");
+        const r = await apiFetch("/sources/scan-status");
         if (!r.ok) return;
         const s = (await r.json()) as {
           lastAutoPublishAt: string | null;

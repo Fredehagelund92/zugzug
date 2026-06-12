@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { apiFetch } from "../api";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -89,7 +90,7 @@ function ScansSection() {
   const loadStatus = useCallback(async () => {
     setStatusError(null);
     try {
-      const r = await fetch("/api/sources/scan-status");
+      const r = await apiFetch("/sources/scan-status");
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       setStatus((await r.json()) as ScanStatus);
     } catch (err) {
@@ -861,7 +862,7 @@ function TeamSection() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const r = await fetch("/api/team/members");
+      const r = await apiFetch("/team/members");
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       setMembers((await r.json()) as Member[]);
       setLoaded(true);
@@ -944,7 +945,7 @@ function TeamSection() {
 
     const results = await Promise.allSettled(
       validChips.map(async (c) => {
-        const res = await fetch("/api/team/members", {
+        const res = await apiFetch("/team/members", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ email: c.email }),
@@ -983,7 +984,7 @@ function TeamSection() {
   const remove = async (email: string) => {
     setRemoveError(null);
     try {
-      const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, {
+      const res = await apiFetch(`/team/members/${encodeURIComponent(email)}`, {
         method: "DELETE",
       });
       if (!res.ok) {

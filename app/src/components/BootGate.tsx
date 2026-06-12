@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { authFetch } from "../api";
 import { initStore } from "../store";
 import { Mark } from "./Mark";
 import { Button } from "./Button";
@@ -11,7 +12,7 @@ export function BootGate({ children }: { children: ReactNode }) {
   const boot = () => {
     setState({ kind: "loading" });
     (async () => {
-      const meRes = await fetch("/api/auth/me");
+      const meRes = await authFetch("/auth/me");
       if (meRes.status === 401) {
         window.location.replace("/login");
         return;

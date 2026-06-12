@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { authFetch } from "../api";
 import { Mark } from "../components/Mark";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -24,7 +25,7 @@ export function Signup() {
     setFormError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/signup", {
+      const res = await authFetch("/auth/signup", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, email, password }),

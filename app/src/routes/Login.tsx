@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { authFetch } from "../api";
 import { Mark } from "../components/Mark";
 import { useAuthConfig } from "../store";
 
@@ -20,7 +21,7 @@ export function Login() {
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    fetch("/api/auth/dev", { method: "GET", redirect: "manual" })
+    authFetch("/auth/dev", { method: "GET", redirect: "manual" })
       .then((r) => {
         // 302 / "opaqueredirect" (Bun returns 302 with status "manual") indicates the route is live.
         // 404 means dev bypass is off.
@@ -97,7 +98,7 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
     setFormError(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await authFetch("/auth/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password }),
