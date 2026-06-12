@@ -128,6 +128,7 @@ export const users = app.table(
     auth_provider: varchar("auth_provider").notNull().default("password"),
     role:           varchar("role").notNull().default("editor"),
     is_super_admin: boolean("is_super_admin").notNull().default(false),
+    last_seen_at:  timestamp("last_seen_at"),
   },
   (t) => [
     uniqueIndex("users_email_unique").on(t.email).where(sql`email IS NOT NULL`),

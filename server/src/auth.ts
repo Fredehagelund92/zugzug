@@ -182,6 +182,11 @@ export async function handleMe(req: Request): Promise<Response> {
       status: 401,
       headers: { "content-type": "application/json", ...cors },
     });
+  // Best-effort — fire-and-forget, never blocks the response.
+  void run(
+    `UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`,
+    [user.id],
+  ).catch(() => {});
   return new Response(JSON.stringify(user), {
     status: 200,
     headers: { "content-type": "application/json", ...cors },
