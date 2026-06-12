@@ -290,3 +290,33 @@ export async function removeMember(tenantId: string, userId: string): Promise<vo
     userId,
   ]);
 }
+
+/** Updates the display label of a tenant. Slug is immutable. */
+export async function updateTenantLabel(tenantId: string, label: string): Promise<void> {
+  const trimmed = label.trim();
+  if (!trimmed) throw new AppError("VALIDATION_FAILED", "label cannot be empty", 400);
+  await pgRun(
+    `UPDATE "zugzug_app"."tenant" SET label = $1 WHERE id = $2`,
+    [trimmed, tenantId],
+  );
+}
+
+/**
+ * Removes a user's own membership from a tenant.
+ * Enforces last-admin guard: throws AppError("LAST_ADMIN", ..., 409) when removing
+ * the user would leave the tenant with zero admins.
+ */
+export async function leaveTenant(tenantId: string, userId: string): Promise<void> {
+  const members = await listMembersForTenant(tenantId);
+  const leaving = members.find((m) => m.user_id === userId);
+  if (leaving?.role === "admin") {
+    const adminCount = members.filter((m) => m.role === "admin").length;
+    if (adminCount <= 1) {
+      throw new AppError("LAST_ADMIN", "cannot leave — you are the last admin", 409);
+    }
+  }
+  await pgRun(
+    `DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1 AND user_id = $2`,
+    [tenantId, userId],
+  );
+}

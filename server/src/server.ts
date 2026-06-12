@@ -44,6 +44,8 @@ import {
   setMemberRole,
   countAdmins,
   removeMember,
+  updateTenantLabel,
+  leaveTenant,
 } from "./tenant.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
@@ -382,6 +384,37 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const { handleRevokeToken } = await import("./auth-api-tokens.ts");
         return handleRevokeToken(seg[2], me);
       }
+    }
+
+    // PATCH /api/t/:slug — rename workspace label (admin only)
+    if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
+      if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+      const { label } = (await req.json()) as { label: string };
+      await updateTenantLabel(tenantCtx.tenantId, label);
+      return noContent();
+    }
+
+    // DELETE /api/t/:slug — delete workspace (admin only; refuses on "default")
+    if (tenantSlugFromPath !== null && seg.length === 1 && method === "DELETE") {
+      if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+      if (tenantSlugFromPath === "default") {
+        return json({ error: "cannot_delete_default" }, 409);
+      }
+      await teardownTenant(tenantCtx.tenantId);
+      return noContent();
+    }
+
+    // POST /api/t/:slug/leave — leave workspace (any member; last-admin guard)
+    if (tenantSlugFromPath !== null && seg[1] === "leave" && seg.length === 2 && method === "POST") {
+      try {
+        await leaveTenant(tenantCtx.tenantId, me);
+      } catch (e) {
+        if (e instanceof AppError && e.code === "LAST_ADMIN") {
+          return json({ error: "last_admin" }, 409);
+        }
+        throw e;
+      }
+      return noContent();
     }
 
     // Per-tenant team routes: /api/t/:slug/team/members|invites

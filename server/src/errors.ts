@@ -8,6 +8,7 @@ export type ErrorCode =
   | "ALREADY_EXISTS"
   | "CANNOT_REMOVE_SELF"
   | "CONFLICT"
+  | "LAST_ADMIN"
   | "INTERNAL";
 
 export class AppError extends Error {
