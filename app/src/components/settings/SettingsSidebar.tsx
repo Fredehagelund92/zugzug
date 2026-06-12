@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { can, type Action } from "../../lib/permissions";
 import { cx } from "../../lib/cx";
@@ -23,7 +23,6 @@ const ITEMS: Item[] = [
 
 export function SettingsSidebar() {
   const tenant = useTenant();
-  const location = useLocation();
   const visible = ITEMS.filter((i) => can(tenant, i.action));
 
   return (
@@ -31,24 +30,23 @@ export function SettingsSidebar() {
       <div className="font-mono text-[10px] uppercase tracking-widest text-ink-3 px-3 pb-2">
         Workspace
       </div>
-      {visible.map((item) => {
-        const isActive = location.pathname.endsWith(item.to);
-        return (
-          <Link
-            key={item.to}
-            to={item.to}
-            className={cx(
+      {visible.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end
+          className={({ isActive }) =>
+            cx(
               "block px-3 py-1.5 text-sm font-body transition-colors rounded-sm",
               isActive
                 ? "bg-surface-2 text-ink"
                 : "text-ink-2 hover:text-ink hover:bg-hover",
-            )}
-            aria-current={isActive ? "page" : undefined}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+            )
+          }
+        >
+          {item.label}
+        </NavLink>
+      ))}
     </nav>
   );
 }
