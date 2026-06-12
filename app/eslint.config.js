@@ -35,6 +35,10 @@ export default tseslint.config(
           selector: "NewExpression[callee.name='Request'] > Literal[value=/^\\/api/]",
           message: "Use apiFetch() from src/api.ts — raw Request() bypasses tenant routing.",
         },
+        {
+          selector: "NewExpression[callee.name='Request'] > TemplateLiteral[quasis.0.value.raw=/^\\/api/]",
+          message: "Use apiFetch() from src/api.ts — raw Request() bypasses tenant routing.",
+        },
       ],
       "no-restricted-imports": ["error", { paths: ["axios", "ky"] }],
     },
