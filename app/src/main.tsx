@@ -16,7 +16,16 @@ import { Dashboard } from "./routes/Dashboard";
 import { Triage } from "./routes/Triage";
 import { Sources } from "./routes/Sources";
 import { MasterTables } from "./routes/MasterTables";
-import { Settings } from "./routes/Settings";
+import { SettingsLayout } from "./components/settings/SettingsLayout";
+import { General } from "./routes/settings/General";
+import { Members } from "./routes/settings/Members";
+import { Tokens } from "./routes/settings/Tokens";
+import { Scans } from "./routes/settings/Scans";
+import { Matching } from "./routes/settings/Matching";
+import { Warehouse } from "./routes/settings/Warehouse";
+import { Appearance } from "./routes/settings/Appearance";
+import { Audit as SettingsAudit } from "./routes/settings/Audit";
+import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
 import { AdminTenants } from "./routes/admin/Tenants";
 
@@ -68,7 +77,10 @@ createRoot(root).render(
                       <Route
                         path="/app"
                         element={
-                          <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
+                          <Navigate
+                            to={`/app/${boot.memberships[0]?.slug ?? "admin"}`}
+                            replace
+                          />
                         }
                       />
 
@@ -95,7 +107,18 @@ createRoot(root).render(
                           <Route path="triage" element={<Triage />} />
                           <Route path="sources" element={<Sources />} />
                           <Route path="tables" element={<MasterTables />} />
-                          <Route path="settings" element={<Settings />} />
+                          <Route path="settings" element={<SettingsLayout />}>
+                            <Route index element={<Navigate to="general" replace />} />
+                            <Route path="general" element={<General />} />
+                            <Route path="members" element={<Members />} />
+                            <Route path="tokens" element={<Tokens />} />
+                            <Route path="scans" element={<Scans />} />
+                            <Route path="matching" element={<Matching />} />
+                            <Route path="warehouse" element={<Warehouse />} />
+                            <Route path="appearance" element={<Appearance />} />
+                            <Route path="audit" element={<SettingsAudit />} />
+                            <Route path="danger" element={<Danger />} />
+                          </Route>
                         </Route>
                       </Route>
 
