@@ -88,22 +88,21 @@ function putReq(path: string, body: unknown, cookieHeader: string): Request {
 // Unit: canMutate gate behaviour (mirrors B3 but tests the gate helper path)
 // ---------------------------------------------------------------------------
 
-test("gate: viewer cannot curate, commit, manage_team, or manage_adapter", () => {
-  const ops: Operation[] = ["curate", "commit", "manage_team", "manage_adapter"];
+test("gate: viewer cannot curate, commit, or manage_adapter", () => {
+  const ops: Operation[] = ["curate", "commit", "manage_adapter"];
   for (const op of ops) {
     expect(canMutate("viewer", op)).toBe(false);
   }
 });
 
-test("gate: editor can curate and commit but not manage_team or manage_adapter", () => {
+test("gate: editor can curate and commit but not manage_adapter", () => {
   expect(canMutate("editor", "curate")).toBe(true);
   expect(canMutate("editor", "commit")).toBe(true);
-  expect(canMutate("editor", "manage_team")).toBe(false);
   expect(canMutate("editor", "manage_adapter")).toBe(false);
 });
 
 test("gate: admin can perform all operations", () => {
-  const ops: Operation[] = ["curate", "commit", "manage_team", "manage_adapter"];
+  const ops: Operation[] = ["curate", "commit", "manage_adapter"];
   for (const op of ops) {
     expect(canMutate("admin", op)).toBe(true);
   }
@@ -148,10 +147,11 @@ test("POST /api/dimensions — editor allowed, viewer blocked (curate)", async (
   void putReq;
 });
 
-test("POST /api/team/members — admin allowed, editor blocked (manage_team)", async () => {
-  expect(canMutate("admin", "manage_team")).toBe(true);
-  expect(canMutate("editor", "manage_team")).toBe(false);
-  expect(canMutate("viewer", "manage_team")).toBe(false);
+test("POST /api/t/:slug/members — admin allowed, editor/viewer blocked (tenant role gate)", async () => {
+  // manage_team op removed; team management now guarded by tenantCtx.role === "admin" checks
+  expect(canMutate("admin", "manage_adapter")).toBe(true);
+  expect(canMutate("editor", "manage_adapter")).toBe(false);
+  expect(canMutate("viewer", "manage_adapter")).toBe(false);
 });
 
 test("POST /api/dimensions/:id/commit — editor allowed, viewer blocked (commit)", async () => {

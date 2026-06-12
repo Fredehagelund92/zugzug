@@ -71,10 +71,10 @@ const noContent = () => new Response(null, { status: 204, headers: corsHeaders }
 const err = (e: unknown, status = 500) =>
   json({ error: e instanceof Error ? e.message : String(e) }, status);
 
-/** Returns a 403 Response if the user's role cannot perform op; null otherwise. */
-function gateOrJson(user: SessionUser, op: Operation): Response | null {
-  if (!canMutate(user.role, op)) {
-    return json({ error: "forbidden", reason: `role '${user.role}' cannot ${op}` }, 403);
+/** Returns a 403 Response if the role cannot perform op; null otherwise. */
+function gateOrJson(role: "admin" | "editor" | "viewer", op: Operation): Response | null {
+  if (!canMutate(role, op)) {
+    return json({ error: "forbidden", reason: `role '${role}' cannot ${op}` }, 403);
   }
   return null;
 }
@@ -573,7 +573,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
           return json(await reqRepo.scanStatus());
         if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "manage_adapter");
+          const denied = gateOrJson(tenantCtx.role,"manage_adapter");
           if (denied) return denied;
           return json({ scanned: await reqRepo.scanSources() });
         }
@@ -623,7 +623,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
       if (seg[1] === "tables") {
         if (seg.length === 2 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "manage_adapter");
+          const denied = gateOrJson(tenantCtx.role,"manage_adapter");
           if (denied) return denied;
           try {
             const input = (await req.json()) as tables.CreateTableInput;
@@ -672,7 +672,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(await reqRepo.listDimensions());
           }
           if (method === "POST") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             const { name, keyKind } = (await req.json()) as {
               name: string;
@@ -691,7 +691,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
           if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
           if (seg.length === 4 && method === "PUT") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             const b = (await req.json()) as {
               raw: string;
@@ -710,7 +710,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (seg.length === 5 && method === "DELETE") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
             return noContent();
@@ -718,7 +718,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/sources {table, column} — wire a warehouse column
         if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "manage_adapter");
+          const denied = gateOrJson(tenantCtx.role,"manage_adapter");
           if (denied) return denied;
           const { table, column } = (await req.json()) as { table: string; column: string };
           await reqRepo.addSource(id, table, column);
@@ -726,7 +726,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
+          const denied = gateOrJson(tenantCtx.role,"curate");
           if (denied) return denied;
           const { table, column, nameColumn } = (await req.json()) as {
             table: string;
@@ -737,7 +737,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
+          const denied = gateOrJson(tenantCtx.role,"curate");
           if (denied) return denied;
           const { rows } = (await req.json()) as { rows: ImportRow[] };
           if (!Array.isArray(rows)) {
@@ -750,7 +750,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
+          const denied = gateOrJson(tenantCtx.role,"curate");
           if (denied) return denied;
           const { label, type, options, numberFormat, ratingMax, referencedDimId, displayFields } =
             (await req.json()) as {
@@ -775,7 +775,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "curate");
+          const denied = gateOrJson(tenantCtx.role,"curate");
           if (denied) return denied;
           const field = decodeURIComponent(seg[4]!);
           const { label, color } = (await req.json()) as { label: string; color?: string | null };
@@ -793,7 +793,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             const body = (await req.json()) as {
               label?: string;
@@ -820,7 +820,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "PATCH") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             const body = (await req.json()) as {
               description?: string | null;
@@ -835,7 +835,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "DELETE") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             return json(await reqRepo.deleteColumn(id, field, me));
           }
@@ -843,14 +843,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // canonical record management
         if (seg[3] === "canonical") {
           if (seg.length === 4 && method === "POST") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             const { label, key } = (await req.json()) as { label: string; key?: string };
             await reqRepo.addCanonicalOne(id, label, key, me);
             return noContent();
           }
           if (seg[4] === "merge" && seg.length === 5 && method === "POST") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             if (url.searchParams.get("confirm") !== "true") {
               throw new AppError("CONFIRMATION_REQUIRED", "merge requires ?confirm=true", 400);
@@ -872,7 +872,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(await reqRepo.listVariants(id, ck));
           // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
           if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
-            const denied = gateOrJson(sessionUser, "curate");
+            const denied = gateOrJson(tenantCtx.role,"curate");
             if (denied) return denied;
             const { value } = (await req.json()) as { value: string | null };
             await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
@@ -880,7 +880,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           }
           if (seg.length === 5 && ck) {
             if (method === "PUT") {
-              const denied = gateOrJson(sessionUser, "curate");
+              const denied = gateOrJson(tenantCtx.role,"curate");
               if (denied) return denied;
               const { label, expectedVersion } = (await req.json()) as {
                 label: string;
@@ -893,7 +893,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               return json(result);
             }
             if (method === "DELETE") {
-              const denied = gateOrJson(sessionUser, "curate");
+              const denied = gateOrJson(tenantCtx.role,"curate");
               if (denied) return denied;
               const ev = url.searchParams.get("expectedVersion");
               const expectedVersion = ev !== null ? Number(ev) : NaN;
@@ -906,7 +906,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/commit
         if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "commit");
+          const denied = gateOrJson(tenantCtx.role,"commit");
           if (denied) return denied;
           return json(await reqRepo.commit(id, me));
         }
