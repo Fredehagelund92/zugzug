@@ -28,6 +28,8 @@ import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
 import { ToastStack, toast } from "./Toast";
 import { useNavLinks } from "../lib/use-tenant-navigate";
+import { useTenant } from "../lib/tenant-context";
+import { scopedKey } from "../lib/tenant-storage";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { type Membership } from "./TenantLayout";
 
@@ -187,6 +189,8 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const dims = useDimensions();
   const me = useCurrentUser();
   const { engineer } = useEngineerMode();
+  const { slug } = useTenant();
+  const paletteKey = scopedKey(PALETTE_RECENTS_KEY, slug);
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -204,7 +208,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   // empty search so the user's most-used jumps are one keystroke away.
   const [recents, setRecents] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem(PALETTE_RECENTS_KEY) ?? "[]");
+      return JSON.parse(localStorage.getItem(paletteKey) ?? "[]");
     } catch {
       return [];
     }
@@ -213,7 +217,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     setRecents((prev) => {
       const next = [id, ...prev.filter((x) => x !== id)].slice(0, 5);
       try {
-        localStorage.setItem(PALETTE_RECENTS_KEY, JSON.stringify(next));
+        localStorage.setItem(paletteKey, JSON.stringify(next));
       } catch {
         /* ignore */
       }

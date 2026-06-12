@@ -5,8 +5,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
-import { OpenTabsProvider } from "./lib/open-tabs";
-import { CreateTableModalProvider } from "./lib/create-table-modal";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { AdminShell } from "./components/AdminShell";
@@ -64,9 +62,7 @@ createRoot(root).render(
               <EngineerModeProvider>
                 <BootGate>
                   {(boot) => (
-                    <OpenTabsProvider>
-                      <CreateTableModalProvider>
-                        <Routes>
+                    <Routes>
                           {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
                           <Route path="/" element={<Navigate to="/app" replace />} />
                           <Route
@@ -108,8 +104,6 @@ createRoot(root).render(
 
                           <Route path="*" element={<Navigate to="/app" replace />} />
                         </Routes>
-                      </CreateTableModalProvider>
-                    </OpenTabsProvider>
                   )}
                 </BootGate>
               </EngineerModeProvider>

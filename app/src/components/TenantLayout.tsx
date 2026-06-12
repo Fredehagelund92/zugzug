@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useParams } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../lib/tenant-context";
+import { OpenTabsProvider } from "../lib/open-tabs";
+import { CreateTableModalProvider } from "../lib/create-table-modal";
 import { onTenantSwitch, initStore } from "../store";
 
 export interface Membership {
@@ -46,7 +48,11 @@ export function TenantLayout({
 
   return (
     <TenantProvider value={ctx}>
-      <Outlet />
+      <OpenTabsProvider slug={tenantSlug}>
+        <CreateTableModalProvider>
+          <Outlet />
+        </CreateTableModalProvider>
+      </OpenTabsProvider>
     </TenantProvider>
   );
 }
