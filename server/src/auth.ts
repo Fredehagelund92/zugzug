@@ -24,7 +24,6 @@ export interface SessionUser {
   name: string;
   email: string;
   initials: string;
-  role: Role;
   isSuperAdmin: boolean;
   /** Set by POST /api/admin/impersonate; only honored when isSuperAdmin is true. */
   impersonatingTenantId: string | null;
@@ -104,7 +103,7 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     return null;
   }
   return get<SessionUser>(
-    `SELECT u.id, u.name, u.email, u.initials, u.role,
+    `SELECT u.id, u.name, u.email, u.initials,
             u.is_super_admin AS "isSuperAdmin",
             a.impersonating_tenant_id AS "impersonatingTenantId"
        FROM ${pg("users")} u

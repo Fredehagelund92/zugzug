@@ -166,7 +166,7 @@ test("PUT /api/preferences — admin allowed, editor and viewer blocked (manage_
   expect(canMutate("viewer", "manage_adapter")).toBe(false);
 });
 
-test("role column persists through issueSession / getSessionUser round-trip", async () => {
+test("getSessionUser round-trip — role absent from SessionUser (PR5 dropped users.role fallback)", async () => {
   const { getSessionUser } = await import("../src/auth.ts");
 
   await createAdminViaSignup("admin2@example.com", "Admin2");
@@ -178,5 +178,6 @@ test("role column persists through issueSession / getSessionUser round-trip", as
   });
   const user = await getSessionUser(req);
   expect(user).not.toBeNull();
-  expect(user!.role).toBe("editor");
+  // role is no longer part of SessionUser (PR5); it lives on tenant_member rows
+  expect("role" in (user ?? {})).toBe(false);
 });

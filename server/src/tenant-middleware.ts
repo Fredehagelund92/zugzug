@@ -58,11 +58,12 @@ export async function resolveTenantContext(opts: ResolveOpts): Promise<TenantCon
     if (row) return { tenantId: row.id, role: "admin", isSuperAdmin: true };
   }
 
-  // Legacy /api/* path → default tenant. The role comes from the user's
-  // membership in 'default'; falls back to the session user's role (which is
-  // the global users.role until Deploy 2 drops it). During PR2a both should
-  // agree because the PR1 migration backfilled users.role into the default
-  // tenant_member row.
-  const role = (await memberRole("default", opts.user.id)) ?? opts.user.role;
-  return { tenantId: "default", role, isSuperAdmin: opts.isSuperAdmin ?? false };
+  // Legacy /api/* path with no slug → require explicit default tenant membership.
+  // PR5 removed the users.role fallback; un-tenanted /api/* requests must come from
+  // an actual default-tenant member or a super-admin.
+  const role = await memberRole("default", opts.user.id);
+  if (role) {
+    return { tenantId: "default", role, isSuperAdmin: opts.isSuperAdmin ?? false };
+  }
+  throw new AppError("FORBIDDEN", "no_membership", 403);
 }

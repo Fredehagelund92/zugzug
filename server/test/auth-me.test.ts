@@ -13,7 +13,7 @@ beforeEach(async () => {
   await resetDb();
 });
 
-test("GET /api/auth/me — returns role for authenticated user", async () => {
+test("GET /api/auth/me — returns user identity for authenticated user", async () => {
   const signup = await handleSignup(
     new Request("http://localhost/api/auth/signup", {
       method: "POST",
@@ -36,10 +36,10 @@ test("GET /api/auth/me — returns role for authenticated user", async () => {
     name: string;
     email: string;
     initials: string;
-    role: string;
   };
   expect(body.id).toBe(id);
-  expect(body.role).toBe("admin"); // first user
+  // role is no longer part of SessionUser (PR5); it lives on tenant_member rows
+  expect("role" in body).toBe(false);
 });
 
 test("GET /api/auth/me — 401 when not authenticated", async () => {
