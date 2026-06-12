@@ -1,31 +1,35 @@
 import { describe, expect, test } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { ReadOnly } from "../src/components/settings/ReadOnly";
 
 describe("ReadOnly", () => {
-  test("renders children when enabled=false", () => {
+  test("renders children with no disabling when enabled=false", () => {
     render(
       <ReadOnly enabled={false}>
         <button>click me</button>
       </ReadOnly>,
     );
-    const btn = screen.getByRole("button", { name: /click me/i }) as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
+    // fieldset should not have disabled attribute
+    const btn = screen.getByRole("button", { name: /click me/i });
+    const fieldset = btn.closest("fieldset")!;
+    expect(fieldset.disabled).toBe(false);
   });
 
-  test("disables fieldset when enabled=true", () => {
-    let clicked = 0;
-    const { container } = render(
+  test("wraps in disabled fieldset when enabled=true", () => {
+    render(
       <ReadOnly enabled={true}>
-        <button onClick={() => clicked++}>click me</button>
+        <button>click me</button>
         <input data-testid="i" defaultValue="x" />
       </ReadOnly>,
     );
-    const fieldset = container.querySelector("fieldset") as HTMLFieldSetElement;
+    const btn = screen.getByRole("button", { name: /click me/i });
+    const fieldset = btn.closest("fieldset")!;
+    // The fieldset itself is disabled — this is what disables child controls in browsers.
+    // jsdom does not propagate .disabled to child elements (known limitation),
+    // but real browsers do. We verify the fieldset is disabled and has opacity class.
     expect(fieldset.disabled).toBe(true);
-    // Fieldset disabled prevents form submission and makes controls non-interactive
-    // The click handler may still fire depending on browser/test environment,
-    // but the fieldset.disabled state is what prevents actual form submission
+    expect(fieldset.className).toMatch(/opacity-70/);
+    expect(fieldset.className).toMatch(/cursor-not-allowed/);
   });
 
   test("sets aria-disabled on the wrapper for screen readers", () => {
@@ -36,5 +40,15 @@ describe("ReadOnly", () => {
     );
     const wrapper = screen.getByTestId("kid").parentElement!;
     expect(wrapper.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  test("no aria-disabled when enabled=false", () => {
+    render(
+      <ReadOnly enabled={false}>
+        <span data-testid="kid">x</span>
+      </ReadOnly>,
+    );
+    const wrapper = screen.getByTestId("kid").parentElement!;
+    expect(wrapper.getAttribute("aria-disabled")).toBeNull();
   });
 });
