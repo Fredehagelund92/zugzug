@@ -143,7 +143,10 @@ test("signup — first user gets role='admin'", async () => {
   );
   expect(res.status).toBe(200);
   const userId = ((await res.json()) as { id: string }).id;
-  const row = await pgGet<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [userId]);
+  const row = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = $1 AND tenant_id = 'default'`,
+    [userId],
+  );
   expect(row?.role).toBe("admin");
 });
 
@@ -162,6 +165,9 @@ test("signup — second user gets role='editor'", async () => {
   );
   expect(res.status).toBe(200);
   const userId = ((await res.json()) as { id: string }).id;
-  const row = await pgGet<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [userId]);
+  const row = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = $1 AND tenant_id = 'default'`,
+    [userId],
+  );
   expect(row?.role).toBe("editor");
 });

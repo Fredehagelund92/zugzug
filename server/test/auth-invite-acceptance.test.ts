@@ -71,8 +71,8 @@ test("password login (existing user, no membership, no invite) does not crash an
   // Create a real password hash for "knownpassword123"
   const hash = await Bun.password.hash("knownpassword123");
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, auth_provider, password_hash)
-     VALUES ('u_existing_memberless', 'X', 'XX', $1, 'editor', 'password', $2)`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, auth_provider, password_hash)
+     VALUES ('u_existing_memberless', 'X', 'XX', $1, 'password', $2)`,
     [EMAIL, hash],
   );
 

@@ -98,9 +98,9 @@ export async function handleSignup(req: Request): Promise<Response> {
   const hash = await Bun.password.hash(password); // argon2id default
   const userId = `u_${crypto.randomUUID().replace(/-/g, "")}`;
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider, role)
-     VALUES ($1, $2, $3, $4, $5, 'password', $6)`,
-    [userId, name, email, initialsOf(name), hash, role],
+    `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider)
+     VALUES ($1, $2, $3, $4, $5, 'password')`,
+    [userId, name, email, initialsOf(name), hash],
   );
 
   // Seed default-tenant membership (first user = admin, rest = editor).

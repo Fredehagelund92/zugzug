@@ -33,8 +33,8 @@ async function setupUserWithMembership(opts: {
   tenants: { id: string; label: string; role: "admin" | "editor" | "viewer" }[];
 }): Promise<string> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
-     VALUES ($1, $1, 'XX', $2, 'editor')
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ($1, $1, 'XX', $2)
      ON CONFLICT (id) DO NOTHING`,
     [opts.userId, `${opts.userId}@example.com`],
   );

@@ -180,7 +180,7 @@ test("oidc callback — first user gets role='admin'", async () => {
   );
   expect(res.status).toBe(302);
   const user = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-admin'`,
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-admin' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("admin");
 });
@@ -218,7 +218,7 @@ test("oidc callback — second user gets role='editor'", async () => {
   );
   expect(res.status).toBe(302);
   const user = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-second'`,
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-second' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("editor");
 });
@@ -242,8 +242,8 @@ test("oidc callback — re-login does not overwrite existing role", async () => 
   // user existing so the re-login would compute role='editor' if it re-ran the logic.
   // Insert a second user to make userCount > 0 for the re-login.
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider, role)
-     VALUES ('u_dummy', 'Dummy', 'dummy@example.com', 'DU', 'oidc', 'editor')`,
+    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider)
+     VALUES ('u_dummy', 'Dummy', 'dummy@example.com', 'DU', 'oidc')`,
   );
 
   // Re-login for the same user — userCount is now 2, so role computed as 'editor'.
@@ -259,7 +259,7 @@ test("oidc callback — re-login does not overwrite existing role", async () => 
 
   // Role must still be admin despite re-login when userCount > 0
   const user = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-stays-admin'`,
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-stays-admin' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("admin");
 });

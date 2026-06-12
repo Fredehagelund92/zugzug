@@ -37,8 +37,8 @@ afterAll(cleanup);
 
 async function login(userId: string, isSuperAdmin: boolean): Promise<string> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, $1, 'XX', $2, 'editor', $3)`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+     VALUES ($1, $1, 'XX', $2, $3)`,
     [userId, `${userId}@example.com`, isSuperAdmin],
   );
   const { issueSession } = await import("../src/auth.ts");

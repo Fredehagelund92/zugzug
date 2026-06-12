@@ -226,14 +226,14 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   // ON CONFLICT deliberately does NOT update role — an admin who re-logs in via
   // OIDC must stay admin; only the first-insert path sets the role.
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider, role)
-     VALUES ($1, $2, $3, $4, $5, 'oidc', $6)
+    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider)
+     VALUES ($1, $2, $3, $4, $5, 'oidc')
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        email = EXCLUDED.email,
        initials = EXCLUDED.initials,
        auth_provider = 'oidc'`,
-    [userId, name, email, sub, initials, role],
+    [userId, name, email, sub, initials],
   );
 
   // Seed default-tenant membership on first sign-in (first user = admin, rest = editor).

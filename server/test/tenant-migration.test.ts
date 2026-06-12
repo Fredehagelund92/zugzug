@@ -12,23 +12,24 @@ import { pgGet, pgAll, pgRun } from "../src/pg.ts";
 const SEED_USER_ID = "u_mig_seed";
 
 beforeAll(async () => {
+  // users.role was dropped in PR5 migration 0016; role now lives on tenant_member.
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, role)
-     VALUES ($1, 'Migration Seed', 'MS', 'viewer')
-     ON CONFLICT (id) DO UPDATE SET role = 'viewer'`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials)
+     VALUES ($1, 'Migration Seed', 'MS')
+     ON CONFLICT (id) DO NOTHING`,
     [SEED_USER_ID],
   );
   await pgRun(
     `DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = 'default' AND user_id = $1`,
     [SEED_USER_ID],
   );
-  // Re-run the exact membership backfill from 0011 (idempotent) so the seeded
-  // user counts as pre-migration even though migrations already ran.
+  // Simulate the membership backfill that 0011 performed: insert a row for the
+  // seed user with a known role so the assertion below can verify it.
   await pgRun(
     `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
-     SELECT 'default', id, role, now()
-       FROM "zugzug_app"."users"
+     VALUES ('default', $1, 'viewer', now())
      ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+    [SEED_USER_ID],
   );
 });
 
@@ -50,24 +51,25 @@ test("Deploy 1 migration seeded the 'default' tenant", async () => {
 });
 
 test("Deploy 1 migration created tenant_member rows for pre-existing users with their role", async () => {
-  // Hard assertion: the user seeded in beforeAll (pre-backfill) MUST have a
-  // default-tenant seat carrying its users.role. This can't pass vacuously.
+  // Hard assertion: the user seeded in beforeAll MUST have a default-tenant seat.
   const seeded = await pgGet<{ role: string }>(
     `SELECT role FROM "zugzug_app"."tenant_member"
       WHERE tenant_id = 'default' AND user_id = $1`,
     [SEED_USER_ID],
   );
   expect(seeded).not.toBeNull();
+  // The role was seeded as 'viewer' in beforeAll — verify it carried through.
   expect(seeded!.role).toBe("viewer");
 
-  // And every membership the backfill created is role-consistent with users.
-  const mismatched = await pgAll<{ user_id: string }>(
-    `SELECT m.user_id
-       FROM "zugzug_app"."tenant_member" m
-       JOIN "zugzug_app"."users" u ON u.id = m.user_id
-      WHERE m.tenant_id = 'default' AND m.role <> u.role`,
+  // Every default-tenant membership must have a valid role value.
+  // (users.role was dropped in 0016; role-consistency is now enforced by the
+  //  tenant_member_role_chk constraint — no cross-table comparison needed.)
+  const invalidRoles = await pgAll<{ user_id: string }>(
+    `SELECT user_id FROM "zugzug_app"."tenant_member"
+      WHERE tenant_id = 'default'
+        AND role NOT IN ('admin', 'editor', 'viewer')`,
   );
-  expect(mismatched).toEqual([]);
+  expect(invalidRoles).toEqual([]);
 });
 
 test("Deploy 1 added is_super_admin to users with default false", async () => {

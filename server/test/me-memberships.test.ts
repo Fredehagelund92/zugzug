@@ -28,8 +28,8 @@ afterAll(cleanup);
 
 async function makeUser(id: string, email: string, isSuperAdmin = false): Promise<void> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, $1, 'XX', $2, 'editor', $3)`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+     VALUES ($1, $1, 'XX', $2, $3)`,
     [id, email, isSuperAdmin],
   );
 }

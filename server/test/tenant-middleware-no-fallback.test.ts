@@ -24,8 +24,8 @@ afterAll(cleanup);
 test("user with no tenant_member rows + not super-admin → 403 no_membership on legacy /api/preferences", async () => {
   // Insert user WITHOUT a tenant_member row.
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, $1, 'XX', $2, 'editor', false)`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+     VALUES ($1, $1, 'XX', $2, false)`,
     ["u_nomember_e2e", "u_nomember_e2e@example.com"],
   );
   const { issueSession } = await import("../src/auth.ts");

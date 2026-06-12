@@ -129,7 +129,6 @@ export const users = app.table(
     google_sub:    varchar("google_sub"),
     password_hash: varchar("password_hash"),
     auth_provider: varchar("auth_provider").notNull().default("password"),
-    role:           varchar("role").notNull().default("editor"),
     is_super_admin: boolean("is_super_admin").notNull().default(false),
     last_seen_at:  timestamp("last_seen_at"),
   },
@@ -163,11 +162,6 @@ export const activeSessions = app.table("active_sessions", {
   impersonating_tenant_id: varchar("impersonating_tenant_id"),
 });
 
-export const allowedEmails = app.table("allowed_emails", {
-  email:    varchar("email").primaryKey(),
-  added_by: varchar("added_by").notNull(),
-  added_at: timestamp("added_at").notNull(),
-});
 
 export const sessions = app.table(
   "sessions",

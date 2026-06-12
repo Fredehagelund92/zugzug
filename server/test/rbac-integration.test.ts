@@ -49,9 +49,15 @@ async function createUserWithRole(
 ): Promise<{ id: string; cookie: string }> {
   const id = `u_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider, role)
-     VALUES ($1, $2, $3, $4, 'password', $5)`,
-    [id, name, email, name.slice(0, 2).toUpperCase(), role],
+    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider)
+     VALUES ($1, $2, $3, $4, 'password')`,
+    [id, name, email, name.slice(0, 2).toUpperCase()],
+  );
+  await pgRun(
+    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+     VALUES ('default', $1, $2, now())
+     ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+    [id, role],
   );
   const { cookie } = await issueSession(id);
   const sidCookie = cookie.split(";")[0]!;
@@ -123,15 +129,19 @@ test("POST /api/dimensions — editor allowed, viewer blocked (curate)", async (
   // exported from server.ts, we test via auth functions + canMutate directly.
   // The representative test below uses addDimension through the role gate logic.
 
-  // Verify role stored correctly
+  // Verify role stored correctly in tenant_member
   const editorRow = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE email = $1`,
+    `SELECT tm.role FROM ${pg("tenant_member")} tm
+      JOIN ${pg("users")} u ON u.id = tm.user_id
+     WHERE u.email = $1 AND tm.tenant_id = 'default'`,
     ["editor@example.com"],
   );
   expect(editorRow?.role).toBe("editor");
 
   const viewerRow = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE email = $1`,
+    `SELECT tm.role FROM ${pg("tenant_member")} tm
+      JOIN ${pg("users")} u ON u.id = tm.user_id
+     WHERE u.email = $1 AND tm.tenant_id = 'default'`,
     ["viewer@example.com"],
   );
   expect(viewerRow?.role).toBe("viewer");

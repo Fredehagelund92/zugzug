@@ -30,8 +30,8 @@ afterAll(cleanup);
 
 async function setupUser(userId: string): Promise<void> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
-     VALUES ($1, $1, 'TT', $2, 'editor')
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ($1, $1, 'TT', $2)
      ON CONFLICT (id) DO NOTHING`,
     [userId, `${userId}@example.com`],
   );
