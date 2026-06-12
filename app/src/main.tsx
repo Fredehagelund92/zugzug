@@ -60,21 +60,23 @@ createRoot(root).render(
             <RouteErrorBoundary>
               <EngineerModeProvider>
                 <BootGate>
-                  <OpenTabsProvider>
-                    <CreateTableModalProvider>
-                      <Routes>
-                        <Route path="/" element={<Navigate to="/app" replace />} />
-                        <Route element={<AppShell />}>
-                          <Route path="/app" element={<Dashboard />} />
-                          <Route path="/app/triage" element={<Triage />} />
-                          <Route path="/app/sources" element={<Sources />} />
-                          <Route path="/app/tables" element={<MasterTables />} />
-                          <Route path="/app/settings" element={<Settings />} />
-                        </Route>
-                        <Route path="*" element={<Navigate to="/app" replace />} />
-                      </Routes>
-                    </CreateTableModalProvider>
-                  </OpenTabsProvider>
+                  {() => (
+                    <OpenTabsProvider>
+                      <CreateTableModalProvider>
+                        <Routes>
+                          <Route path="/" element={<Navigate to="/app" replace />} />
+                          <Route element={<AppShell />}>
+                            <Route path="/app" element={<Dashboard />} />
+                            <Route path="/app/triage" element={<Triage />} />
+                            <Route path="/app/sources" element={<Sources />} />
+                            <Route path="/app/tables" element={<MasterTables />} />
+                            <Route path="/app/settings" element={<Settings />} />
+                          </Route>
+                          <Route path="*" element={<Navigate to="/app" replace />} />
+                        </Routes>
+                      </CreateTableModalProvider>
+                    </OpenTabsProvider>
+                  )}
                 </BootGate>
               </EngineerModeProvider>
             </RouteErrorBoundary>
