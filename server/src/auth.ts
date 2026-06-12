@@ -17,6 +17,7 @@
 
 import { env, pg } from "./env.ts";
 import { pgRun as run, pgGet as get } from "./pg.ts";
+import { AppError } from "./errors.ts";
 
 export interface SessionUser {
   id: string;
@@ -206,4 +207,14 @@ export async function handleDevLogin(): Promise<Response> {
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", setCookie);
   return new Response(null, { status: 302, headers });
+}
+
+/** Updates the display name for an authenticated user. Throws AppError on empty name. */
+export async function updateUserName(userId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new AppError("VALIDATION_FAILED", "name cannot be empty", 400);
+  await run(
+    `UPDATE ${pg("users")} SET name = $1 WHERE id = $2`,
+    [trimmed, userId],
+  );
 }

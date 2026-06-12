@@ -12,6 +12,7 @@ import {
   handleAuthConfig,
   handleDevLogin,
   canMutate,
+  updateUserName,
   type SessionUser,
   type Operation,
 } from "./auth.ts";
@@ -122,6 +123,37 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     if (seg[2] === "me" && method === "GET") return handleMe(req);
     if (seg[2] === "logout" && method === "POST") return handleLogout(req);
     if (seg[2] === "config" && method === "GET") return handleAuthConfig();
+    // PATCH /api/auth/me — update display name (requires session)
+    if (seg[2] === "me" && method === "PATCH") {
+      let sessionUser;
+      try {
+        sessionUser = await getSessionUser(req);
+        if (!sessionUser) {
+          const { getApiTokenUser } = await import("./auth-api-tokens.ts");
+          sessionUser = await getApiTokenUser(req);
+        }
+      } catch (e) {
+        return err(e, 503);
+      }
+      if (!sessionUser) return json({ error: "Unauthorized" }, 401);
+      try {
+        const { name } = (await req.json()) as { name: string };
+        await updateUserName(sessionUser.id, name);
+        return noContent();
+      } catch (e) {
+        if (e instanceof AppError) {
+          return json(
+            {
+              error: e.message,
+              code: e.code,
+              ...(e.details ? { details: e.details } : {}),
+            },
+            e.status,
+          );
+        }
+        throw e;
+      }
+    }
 
     // Password mode (only meaningful when env.authMode === "password")
     if (seg[2] === "signup" && method === "POST") {
@@ -225,6 +257,45 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const scope = filterTenant ?? "*";
         const adminRepo = new TenantRepo(scope, "admin", true);
         return json(await adminRepo.listAudit(limit));
+      }
+
+      // GET /api/admin/warehouses
+      if (seg[2] === "warehouses" && seg.length === 3 && method === "GET") {
+        if (!env.attachWarehouse) {
+          return json({ databases: [], attached: false });
+        }
+        try {
+          const adapter = await getAdapter();
+          // Cast to access the protected `all()` method — this is an admin-only
+          // introspection path; the public adapter interface intentionally has no
+          // raw SQL escape hatch, so we poke through here rather than widening it.
+          const raw = adapter as unknown as {
+            all<T>(sql: string): Promise<T[]>;
+          };
+          const dbRows = await raw.all<{ database_name: string }>("SHOW DATABASES");
+          const excluded = new Set(["system", "temp"]);
+          const names = dbRows
+            .map((r) => r.database_name)
+            .filter((n) => !excluded.has(n));
+
+          const countRows = await raw.all<{ table_catalog: string; n: bigint }>(
+            "SELECT table_catalog, COUNT(*) AS n FROM information_schema.tables GROUP BY 1",
+          );
+          const countByDb = new Map<string, number>();
+          for (const r of countRows) {
+            countByDb.set(r.table_catalog, Number(r.n));
+          }
+
+          const databases = names.map((name) => ({
+            name,
+            tableCount: countByDb.get(name) ?? 0,
+            connected: true,
+          }));
+          return json({ databases, attached: true });
+        } catch (err) {
+          log({ level: "warn", msg: "admin/warehouses: warehouse unreachable", err: String(err) });
+          return json({ databases: [], attached: false, error: "warehouse_unreachable" });
+        }
       }
 
       // POST /api/admin/impersonate/:tenant_id (set) or /api/admin/impersonate (clear)
