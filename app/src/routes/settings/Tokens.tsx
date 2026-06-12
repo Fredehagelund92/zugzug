@@ -10,12 +10,17 @@ import {
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useTenant } from "../../lib/tenant-context";
+import { can } from "../../lib/permissions";
 
 function formatDate(iso: string): string {
   return iso.slice(0, 10); // "2026-06-09"
 }
 
 export function Tokens() {
+  const tenant = useTenant();
+  const canEdit = can(tenant, "settings.tokens.edit");
+
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +85,7 @@ export function Tokens() {
       title="API tokens"
       hint="Personal access tokens for headless access (dbt, CI). Each token authenticates as you. Revoke to invalidate."
     >
-      <ReadOnly enabled={false}>
+      <ReadOnly enabled={!canEdit}>
         {error && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
             <span>{error}</span>
