@@ -18,7 +18,6 @@ function harness(role: "viewer" | "editor" | "admin", path = "/app/acme/settings
           <Route path="scans" element={<div>Scans</div>} />
           <Route path="matching" element={<div>Matching</div>} />
           <Route path="warehouse" element={<div>Warehouse</div>} />
-          <Route path="appearance" element={<div>Appearance</div>} />
           <Route path="audit" element={<div>Audit</div>} />
           <Route path="danger" element={<div>Danger</div>} />
         </Route>
@@ -72,7 +71,7 @@ describe("SettingsSidebar", () => {
     harness("admin");
     const links = getNavLinks();
     const texts = links.map((l) => l.text);
-    for (const label of ["General", "Members", "Tokens", "Scans", "Matching", "Warehouse", "Appearance", "Audit", "Danger"]) {
+    for (const label of ["General", "Members", "Tokens", "Scans", "Matching", "Warehouse", "Audit", "Danger"]) {
       expect(texts.includes(label)).toBeTruthy();
     }
   });

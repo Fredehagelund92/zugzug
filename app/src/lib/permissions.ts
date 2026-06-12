@@ -14,7 +14,6 @@ export type Action =
   | "settings.matching.edit"
   | "settings.warehouse.view"
   | "settings.audit.view"
-  | "settings.appearance.edit"
   | "settings.danger.leave"
   | "settings.danger.delete"
   | "admin.view";
@@ -22,7 +21,6 @@ export type Action =
 export function can(t: TenantContextValue, action: Action): boolean {
   switch (action) {
     case "account.profile.edit":
-    case "settings.appearance.edit":
     case "settings.danger.leave":
       return true;
 

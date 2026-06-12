@@ -23,7 +23,6 @@ import { Tokens } from "./routes/settings/Tokens";
 import { Scans } from "./routes/settings/Scans";
 import { Matching } from "./routes/settings/Matching";
 import { Warehouse } from "./routes/settings/Warehouse";
-import { Appearance } from "./routes/settings/Appearance";
 import { Audit as SettingsAudit } from "./routes/settings/Audit";
 import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
@@ -81,7 +80,10 @@ createRoot(root).render(
                       <Route
                         path="/app"
                         element={
-                          <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
+                          <Navigate
+                            to={`/app/${boot.memberships[0]?.slug ?? "admin"}`}
+                            replace
+                          />
                         }
                       />
 
@@ -116,7 +118,6 @@ createRoot(root).render(
                             <Route path="scans" element={<Scans />} />
                             <Route path="matching" element={<Matching />} />
                             <Route path="warehouse" element={<Warehouse />} />
-                            <Route path="appearance" element={<Appearance />} />
                             <Route path="audit" element={<SettingsAudit />} />
                             <Route path="danger" element={<Danger />} />
                           </Route>
