@@ -68,23 +68,23 @@ export async function handleSignup(req: Request): Promise<Response> {
     return jsonError(400, "domain_not_allowed", { allowedDomain: env.allowedDomain });
   }
 
-  // First user becomes admin (and is added to allowlist).
-  // Subsequent users must already be on the allowlist.
+  // First user becomes admin and is seeded into the default tenant.
+  // Subsequent users must already have a tenant_member or tenant_invite row.
   const [{ n: userCount }] = await pgAll<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${pg("users")}`,
   );
-  if (userCount === 0) {
-    await pgRun(
-      `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at)
-       VALUES ($1, 'bootstrap', current_timestamp)
-       ON CONFLICT (email) DO NOTHING`,
+  if (userCount > 0) {
+    const allowed = await pgGet<{ ok: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM ${pg("tenant_member")} tm
+           JOIN ${pg("users")} u ON u.id = tm.user_id
+          WHERE u.email = $1
+         UNION ALL
+         SELECT 1 FROM ${pg("tenant_invite")} WHERE lower(email) = lower($1)
+       ) AS ok`,
       [email],
     );
-  } else {
-    const allowed = await pgGet(`SELECT email FROM ${pg("allowed_emails")} WHERE email = $1`, [
-      email,
-    ]);
-    if (!allowed) return jsonError(403, "not_allowed");
+    if (!allowed?.ok) return jsonError(403, "not_allowed");
   }
 
   // Check email isn't already used (by either auth provider)
@@ -101,6 +101,14 @@ export async function handleSignup(req: Request): Promise<Response> {
     `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider, role)
      VALUES ($1, $2, $3, $4, $5, 'password', $6)`,
     [userId, name, email, initialsOf(name), hash, role],
+  );
+
+  // Seed default-tenant membership (first user = admin, rest = editor).
+  await pgRun(
+    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+     VALUES ('default', $1, $2, now())
+     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+    [userId, role],
   );
 
   try {
