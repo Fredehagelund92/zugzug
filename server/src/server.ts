@@ -18,7 +18,6 @@ import {
   type SessionUser,
   type Operation,
 } from "./auth.ts";
-import * as team from "./team.ts";
 import * as tables from "./tables.ts";
 import { pgAll, pgEnd, pgTxScoped } from "./pg.ts";
 import { AppError } from "./errors.ts";
@@ -932,77 +931,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               "cache-control": "no-store",
             },
           });
-        }
-      }
-
-      // GET /api/team/members ; POST /api/team/members ; DELETE /api/team/members/:email
-      if (seg[1] === "team" && seg[2] === "members") {
-        if (seg.length === 3 && method === "GET") return json(await team.listMembers());
-        if (seg.length === 3 && method === "POST") {
-          const denied = gateOrJson(sessionUser, "manage_team");
-          if (denied) return denied;
-          const { email } = (await req.json()) as { email: string };
-          try {
-            await team.addMember(email, me);
-            return noContent();
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            if (msg === "wrong_domain")
-              return json({ error: `Only @${env.allowedDomain} emails allowed` }, 400);
-            if (msg.includes("unique") || msg.includes("duplicate"))
-              return json({ error: "already_exists" }, 409);
-            throw e;
-          }
-        }
-        if (seg.length === 4 && method === "DELETE") {
-          const denied = gateOrJson(sessionUser, "manage_team");
-          if (denied) return denied;
-          const email = decodeURIComponent(seg[3]!);
-          try {
-            await team.removeMember(email, me);
-            return noContent();
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            if (msg === "cannot_remove_self") return json({ error: "cannot_remove_self" }, 400);
-            throw e;
-          }
-        }
-      }
-
-      // GET /api/team/users — list all users with roles (any authenticated user)
-      if (seg[1] === "team" && seg[2] === "users" && seg.length === 3 && method === "GET") {
-        const users = await team.listTeamUsers();
-        return json({ users });
-      }
-
-      // PUT /api/team/users/:id/role — change a user's role (admin only)
-      if (
-        seg[1] === "team" &&
-        seg[2] === "users" &&
-        seg.length === 5 &&
-        seg[4] === "role" &&
-        method === "PUT"
-      ) {
-        const denied = gateOrJson(sessionUser, "manage_team");
-        if (denied) return denied;
-
-        const targetId = seg[3]!;
-        const body = (await req.json().catch(() => null)) as { role?: string } | null;
-        const newRole = body?.role;
-        if (newRole !== "admin" && newRole !== "editor" && newRole !== "viewer") {
-          return json({ error: "invalid_role" }, 400);
-        }
-
-        try {
-          await team.updateUserRole(targetId, newRole);
-          return noContent();
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (msg === "last_admin") {
-            const reason = (e as { reason?: string }).reason ?? "Cannot demote the last admin.";
-            return json({ error: "last_admin", reason }, 400);
-          }
-          throw e;
         }
       }
 
