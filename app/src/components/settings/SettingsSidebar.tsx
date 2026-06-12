@@ -10,14 +10,14 @@ interface Item {
 }
 
 const ITEMS: Item[] = [
-  { label: "General", to: "general", action: "settings.general.view" },
-  { label: "Members", to: "members", action: "settings.members.view" },
-  { label: "Tokens", to: "tokens", action: "settings.tokens.view" },
-  { label: "Scans", to: "scans", action: "settings.scans.view" },
-  { label: "Matching", to: "matching", action: "settings.matching.view" },
-  { label: "Warehouse", to: "warehouse", action: "settings.warehouse.view" },
-  { label: "Audit", to: "audit", action: "settings.audit.view" },
-  { label: "Danger", to: "danger", action: "settings.danger.leave" },
+  { label: "General",    to: "general",    action: "settings.general.view" },
+  { label: "Members",    to: "members",    action: "settings.members.view" },
+  { label: "Tokens",     to: "tokens",     action: "settings.tokens.view" },
+  { label: "Scans",      to: "scans",      action: "settings.scans.view" },
+  { label: "Matching",   to: "matching",   action: "settings.matching.view" },
+  { label: "Warehouse",  to: "warehouse",  action: "settings.warehouse.view" },
+  { label: "Audit",      to: "audit",      action: "settings.audit.view" },
+  { label: "Danger",     to: "danger",     action: "settings.danger.leave" },
 ];
 
 export function SettingsSidebar() {
@@ -37,7 +37,9 @@ export function SettingsSidebar() {
           className={({ isActive }) =>
             cx(
               "block px-3 py-1.5 text-sm font-body transition-colors rounded-sm",
-              isActive ? "bg-surface-2 text-ink" : "text-ink-2 hover:text-ink hover:bg-hover",
+              isActive
+                ? "bg-surface-2 text-ink"
+                : "text-ink-2 hover:text-ink hover:bg-hover",
             )
           }
         >
