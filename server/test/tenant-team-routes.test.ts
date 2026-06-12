@@ -240,3 +240,48 @@ test("Editor gets 403 on DELETE /api/t/:slug/team/members/:userId", async () => 
   );
   expect(res.status).toBe(403);
 });
+
+test("Editor can list invites — GET /api/t/:slug/team/invites → 200", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_editor", "tteam_acme", "editor");
+
+  const res = await req("GET", "/api/t/tteam_acme/team/invites", cookie);
+  expect(res.status).toBe(200);
+  const invites = (await res.json()) as unknown[];
+  expect(Array.isArray(invites)).toBe(true);
+});
+
+test("Editor gets 403 on PUT /api/t/:slug/team/members/:userId/role", async () => {
+  await ensureTenant("tteam_acme");
+  const editorCookie = await loginAs("u_tteam_editor", "tteam_acme", "editor");
+  await setupUser("u_tteam_other");
+  await pgRun(
+    `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT DO NOTHING`,
+    ["tteam_acme", "u_tteam_other", "viewer"],
+  );
+
+  const res = await req(
+    "PUT",
+    `/api/t/tteam_acme/team/members/${encodeURIComponent("u_tteam_other")}/role`,
+    editorCookie,
+    { role: "editor" },
+  );
+  expect(res.status).toBe(403);
+});
+
+test("PUT /team/members/:nonexistentId/role → 404", async () => {
+  await ensureTenant("tteam_acme");
+  const adminCookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+
+  const res = await req(
+    "PUT",
+    `/api/t/tteam_acme/team/members/${encodeURIComponent("u_does_not_exist")}/role`,
+    adminCookie,
+    { role: "editor" },
+  );
+  expect(res.status).toBe(404);
+  const body = (await res.json()) as { error: string };
+  expect(body.error).toBe("not_found");
+});

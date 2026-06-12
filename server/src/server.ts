@@ -327,6 +327,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
         const body = (await req.json()) as { role: "admin" | "editor" | "viewer" };
         const targetUserId = decodeURIComponent(seg[3]!);
+        const exists = (await listMembersForTenant(tenantCtx.tenantId)).find(
+          (m) => m.user_id === targetUserId,
+        );
+        if (!exists) return json({ error: "not_found" }, 404);
         await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
         return new Response(null, { status: 204, headers: corsHeaders });
       }
