@@ -170,6 +170,17 @@ function resetStore(): void {
   _authConfigPromise = null;
   _workspaceInfoCache = null;
   _workspaceInfoPromise = null;
+  connectionHealth = null;
+  currentUser = { id: "u_ada", name: "Ada Berg", initials: "AB" };
+  collaborators = [];
+  currentUserFull = null;
+  pendingWrites = 0;
+  syncStatus = "idle";
+  if (savedDecayTimer) {
+    clearTimeout(savedDecayTimer);
+    savedDecayTimer = null;
+  }
+  emitSync();
   emit();
 }
 
