@@ -4,13 +4,14 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.AUTH_MODE = "password";
+process.env.ALLOWED_DOMAIN = "example.com";
 
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { pgRun } from "../src/pg.ts";
 import { provisionTenant } from "../src/tenant.ts";
 
 const T_IDS = ["mem_acme", "mem_globex"];
-const U_IDS = ["u_mem_alice", "u_mem_unauthed"];
+const U_IDS = ["u_mem_alice"];
 
 async function cleanup(): Promise<void> {
   for (const t of T_IDS) {
@@ -28,8 +29,7 @@ afterAll(cleanup);
 async function makeUser(id: string, email: string, isSuperAdmin = false): Promise<void> {
   await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, $1, 'XX', $2, 'editor', $3)
-     ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email, is_super_admin = EXCLUDED.is_super_admin`,
+     VALUES ($1, $1, 'XX', $2, 'editor', $3)`,
     [id, email, isSuperAdmin],
   );
 }
@@ -83,7 +83,7 @@ describe("GET /api/me/memberships", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { isSuperAdmin: boolean; memberships: unknown[] };
     expect(body.isSuperAdmin).toBe(true);
-    expect(Array.isArray(body.memberships)).toBe(true);
+    expect(body.memberships).toHaveLength(0);
   });
 
   test("401 when not signed in", async () => {
