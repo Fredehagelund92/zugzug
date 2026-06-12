@@ -7,7 +7,7 @@ import { setAccent, setTheme, toggleTheme } from "./theme";
 import { EngineerModeProvider } from "./lib/engineer-mode";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
-import { AdminLayout } from "./components/admin/AdminLayout";
+import { AdminShell } from "./components/AdminShell";
 import { TenantLayout } from "./components/TenantLayout";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Login } from "./routes/Login";
@@ -26,10 +26,7 @@ import { Warehouse } from "./routes/settings/Warehouse";
 import { Audit as SettingsAudit } from "./routes/settings/Audit";
 import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
-import { Workspaces } from "./routes/admin/Workspaces";
-import { Users as AdminUsers } from "./routes/admin/Users";
-import { Audit as AdminAudit } from "./routes/admin/Audit";
-import { Warehouses as AdminWarehouses } from "./routes/admin/Warehouses";
+import { AdminTenants } from "./routes/admin/Tenants";
 import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
 import { Appearance as AccountAppearance } from "./routes/account/Appearance";
@@ -78,63 +75,63 @@ createRoot(root).render(
                 <BootGate>
                   {(boot) => (
                     <Routes>
-                      {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
-                      <Route path="/" element={<Navigate to="/app" replace />} />
-                      <Route
-                        path="/app"
-                        element={
-                          <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
-                        }
-                      />
-
-                      {/* Super-admin shell */}
-                      {boot.isSuperAdmin ? (
-                        <Route path="/app/admin/*" element={<AdminLayout />}>
-                          <Route index element={<Navigate to="workspaces" replace />} />
-                          <Route path="workspaces" element={<Workspaces />} />
-                          <Route path="users" element={<AdminUsers />} />
-                          <Route path="audit" element={<AdminAudit />} />
-                          <Route path="warehouses" element={<AdminWarehouses />} />
-                        </Route>
-                      ) : null}
-
-                      {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
-                      <Route
-                        path="/app/:tenantSlug/*"
-                        element={
-                          <TenantLayout
-                            memberships={boot.memberships}
-                            isSuperAdmin={boot.isSuperAdmin}
+                          {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
+                          <Route path="/" element={<Navigate to="/app" replace />} />
+                          <Route
+                            path="/app"
+                            element={
+                              <Navigate
+                                to={`/app/${boot.memberships[0]?.slug ?? "admin"}`}
+                                replace
+                              />
+                            }
                           />
-                        }
-                      >
-                        <Route element={<AppShell memberships={boot.memberships} />}>
-                          <Route index element={<Dashboard />} />
-                          <Route path="triage" element={<Triage />} />
-                          <Route path="sources" element={<Sources />} />
-                          <Route path="tables" element={<MasterTables />} />
-                          <Route path="settings" element={<SettingsLayout />}>
-                            <Route index element={<Navigate to="general" replace />} />
-                            <Route path="general" element={<General />} />
-                            <Route path="members" element={<Members />} />
-                            <Route path="tokens" element={<Tokens />} />
-                            <Route path="scans" element={<Scans />} />
-                            <Route path="matching" element={<Matching />} />
-                            <Route path="warehouse" element={<Warehouse />} />
-                            <Route path="audit" element={<SettingsAudit />} />
-                            <Route path="danger" element={<Danger />} />
-                          </Route>
-                          <Route path="account" element={<Account />}>
-                            <Route index element={<Navigate to="profile" replace />} />
-                            <Route path="profile" element={<Profile />} />
-                            <Route path="appearance" element={<AccountAppearance />} />
-                            <Route path="notifications" element={<Notifications />} />
-                          </Route>
-                        </Route>
-                      </Route>
 
-                      <Route path="*" element={<Navigate to="/app" replace />} />
-                    </Routes>
+                          {/* Super-admin shell */}
+                          {boot.isSuperAdmin ? (
+                            <Route path="/app/admin" element={<AdminShell />}>
+                              <Route index element={<AdminTenants />} />
+                              <Route path="tenants" element={<AdminTenants />} />
+                            </Route>
+                          ) : null}
+
+                          {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
+                          <Route
+                            path="/app/:tenantSlug/*"
+                            element={
+                              <TenantLayout
+                                memberships={boot.memberships}
+                                isSuperAdmin={boot.isSuperAdmin}
+                              />
+                            }
+                          >
+                            <Route element={<AppShell memberships={boot.memberships} />}>
+                              <Route index element={<Dashboard />} />
+                              <Route path="triage" element={<Triage />} />
+                              <Route path="sources" element={<Sources />} />
+                              <Route path="tables" element={<MasterTables />} />
+                              <Route path="settings" element={<SettingsLayout />}>
+                                <Route index element={<Navigate to="general" replace />} />
+                                <Route path="general" element={<General />} />
+                                <Route path="members" element={<Members />} />
+                                <Route path="tokens" element={<Tokens />} />
+                                <Route path="scans" element={<Scans />} />
+                                <Route path="matching" element={<Matching />} />
+                                <Route path="warehouse" element={<Warehouse />} />
+                                <Route path="audit" element={<SettingsAudit />} />
+                                <Route path="danger" element={<Danger />} />
+                              </Route>
+                              <Route path="account" element={<Account />}>
+                                <Route index element={<Navigate to="profile" replace />} />
+                                <Route path="profile" element={<Profile />} />
+                                <Route path="appearance" element={<AccountAppearance />} />
+                                <Route path="notifications" element={<Notifications />} />
+                              </Route>
+                            </Route>
+                          </Route>
+
+                          <Route path="*" element={<Navigate to="/app" replace />} />
+                        </Routes>
                   )}
                 </BootGate>
               </EngineerModeProvider>

@@ -44,18 +44,10 @@ function SettingsLayout() {
 
 const getNavLinks = () => {
   const nav = screen.getByRole("navigation");
-  return Array.from(nav.querySelectorAll("a")).map((link) => {
-    // The label text lives in the last <span> child (after the counter span).
-    // Fall back to full textContent for forward-compatibility.
-    const spans = link.querySelectorAll("span.font-body");
-    const text = spans.length > 0
-      ? (spans[spans.length - 1].textContent?.trim() || "")
-      : (link.textContent?.trim() || "");
-    return {
-      text,
-      ariaCurrent: link.getAttribute("aria-current"),
-    };
-  });
+  return Array.from(nav.querySelectorAll("a")).map((link) => ({
+    text: link.textContent?.trim() || "",
+    ariaCurrent: link.getAttribute("aria-current"),
+  }));
 };
 
 describe("SettingsSidebar", () => {
