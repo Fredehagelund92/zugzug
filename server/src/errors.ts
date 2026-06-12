@@ -9,6 +9,8 @@ export type ErrorCode =
   | "CANNOT_REMOVE_SELF"
   | "CONFLICT"
   | "LAST_ADMIN"
+  | "SELF_DEMOTE"
+  | "LAST_SUPER_ADMIN"
   | "INTERNAL";
 
 export class AppError extends Error {
