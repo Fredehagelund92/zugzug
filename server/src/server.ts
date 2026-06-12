@@ -35,6 +35,7 @@ import {
   tenantBySlug,
   memberRole,
   teardownTenant,
+  listMembershipsForUser,
 } from "./tenant.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
@@ -158,6 +159,19 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   if (!sessionUser) return json({ error: "Unauthorized" }, 401);
   const me = sessionUser.id;
   setUid(me);
+
+  // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
+  if (pathname === "/api/me/memberships" && method === "GET") {
+    const memberships = await listMembershipsForUser(sessionUser.id);
+    return json({
+      isSuperAdmin: sessionUser.isSuperAdmin,
+      memberships: memberships.map((m) => ({
+        slug: m.tenant.slug,
+        label: m.tenant.label,
+        role: m.role,
+      })),
+    });
+  }
 
   // Admin block — hoisted OUT of the pgContext.run wrapper because admin routes
   // call pgAll/pgRun directly (via listTenants, teardownTenant, etc.) and would
