@@ -5,6 +5,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { WarehousePicker } from "../../components/WarehousePicker";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
+import { invalidate, subscribeInvalidate } from "../../store";
 
 interface Tenant {
   id: string;
@@ -35,6 +36,13 @@ export function Workspaces() {
     void refresh();
   }, []);
 
+  useEffect(() => {
+    const unsub = subscribeInvalidate("tenantList", () => {
+      void refresh();
+    });
+    return unsub;
+  }, []);
+
   const create = async () => {
     if (!slug || !label) return;
     setCreating(true);
@@ -48,7 +56,10 @@ export function Workspaces() {
       setLabel("");
       setWarehouseId("default");
       setShowForm(false);
-      await refresh();
+      invalidate.tenantList();
+      // Creating a workspace auto-joins the super-admin per the server, so
+      // refresh memberships so the switcher dropdown gains the row.
+      await invalidate.memberships();
     }
     setCreating(false);
   };
