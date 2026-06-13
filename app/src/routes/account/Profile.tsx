@@ -54,7 +54,7 @@ export function Profile() {
         </FormField>
         <FormField label="Email">
           <p className="text-sm text-ink-2">{user?.email ?? "—"}</p>
-          <p className="mt-1 text-xs text-ink-3">Email cannot be changed here.</p>
+          <p className="mt-1 text-xs text-ink-3">Email changes coming soon.</p>
         </FormField>
       </SettingsSection>
 
