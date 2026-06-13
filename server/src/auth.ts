@@ -195,9 +195,9 @@ export async function handleMe(req: Request): Promise<Response> {
 export async function handleDevLogin(): Promise<Response> {
   const userId = "u_dev";
   await run(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider)
-     VALUES ($1, 'Dev User', 'dev@localhost', 'DV', 'password')
-     ON CONFLICT (id) DO NOTHING`,
+    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider, is_super_admin)
+     VALUES ($1, 'Dev User', 'dev@localhost', 'DV', 'password', true)
+     ON CONFLICT (id) DO UPDATE SET is_super_admin = true`,
     [userId],
   );
   const { cookie: setCookie } = await issueSession(userId);
