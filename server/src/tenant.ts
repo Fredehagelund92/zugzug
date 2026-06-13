@@ -10,10 +10,22 @@ import { AppError } from "./errors.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
+export const WORKSPACE_COLORS = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
+  "#f59e0b", "#10b981", "#14b8a6", "#3b82f6", "#64748b",
+] as const;
+
+function assertValidColor(color: string): void {
+  if (!(WORKSPACE_COLORS as readonly string[]).includes(color)) {
+    throw new AppError("VALIDATION_FAILED", `invalid color '${color}'`, 400);
+  }
+}
+
 export interface TenantRecord {
   id: string;
   slug: string;
   label: string;
+  color: string | null;
   warehouse_id: string;
   created_at: Date;
 }
@@ -25,11 +37,13 @@ export async function provisionTenant(opts: {
   slug?: string;
   /** Optional warehouse id; defaults to 'default' (shared warehouse for phase 1). */
   warehouseId?: string;
+  color?: string;
 }): Promise<TenantRecord> {
   const id = opts.id.trim();
   const slug = (opts.slug ?? id).trim();
   const label = opts.label.trim();
   const warehouseId = (opts.warehouseId ?? "default").trim();
+  const color = opts.color ?? null;
 
   if (!TENANT_ID_RE.test(id)) {
     throw new AppError(
@@ -49,16 +63,18 @@ export async function provisionTenant(opts: {
     throw new AppError("VALIDATION_FAILED", `tenant label cannot be empty`, 400);
   }
 
+  if (color !== null) assertValidColor(color);
+
   // Single atomic statement — no check-then-insert race. ON CONFLICT DO
   // NOTHING (no target) absorbs any unique violation: the id PK and the
   // tenant_slug_unique index. No row back ⇒ somebody (possibly a concurrent
   // call) already owns that id or slug.
   const row = await pgGet<TenantRecord>(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $2, $3, $4, now())
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, color, warehouse_id, created_at)
+     VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT DO NOTHING
-     RETURNING id, slug, label, warehouse_id, created_at`,
-    [id, slug, label, warehouseId],
+     RETURNING id, slug, label, color, warehouse_id, created_at`,
+    [id, slug, label, color, warehouseId],
   );
   if (!row) {
     throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists (id or slug taken)`, 409);
@@ -112,7 +128,7 @@ export async function teardownTenant(tenantId: string): Promise<void> {
 
 export async function listTenants(): Promise<TenantRecord[]> {
   return pgAll<TenantRecord>(
-    `SELECT id, slug, label, warehouse_id, created_at
+    `SELECT id, slug, label, color, warehouse_id, created_at
        FROM "zugzug_app"."tenant"
       WHERE deleted_at IS NULL
       ORDER BY id`,
@@ -126,7 +142,7 @@ export interface TenantAdminRow extends TenantRecord {
 
 export async function listTenantsForAdmin(): Promise<TenantAdminRow[]> {
   return pgAll<TenantAdminRow>(
-    `SELECT t.id, t.slug, t.label, t.warehouse_id, t.created_at,
+    `SELECT t.id, t.slug, t.label, t.color, t.warehouse_id, t.created_at,
             (SELECT count(*)::int FROM "zugzug_app"."tenant_member" tm
               WHERE tm.tenant_id = t.id) AS member_count,
             (SELECT max(created_at) FROM "zugzug_app"."audit_log" a
@@ -144,7 +160,7 @@ export interface Membership {
 
 export async function tenantBySlug(slug: string): Promise<TenantRecord | null> {
   return pgGet<TenantRecord>(
-    `SELECT id, slug, label, warehouse_id, created_at
+    `SELECT id, slug, label, color, warehouse_id, created_at
        FROM "zugzug_app"."tenant"
       WHERE slug = $1 AND deleted_at IS NULL`,
     [slug],
@@ -156,11 +172,12 @@ export async function listMembershipsForUser(userId: string): Promise<Membership
     tid: string;
     slug: string;
     label: string;
+    color: string | null;
     warehouse_id: string;
     created_at: Date;
     role: "admin" | "editor" | "viewer";
   }>(
-    `SELECT t.id AS tid, t.slug, t.label, t.warehouse_id, t.created_at, tm.role
+    `SELECT t.id AS tid, t.slug, t.label, t.color, t.warehouse_id, t.created_at, tm.role
        FROM "zugzug_app"."tenant_member" tm
        JOIN "zugzug_app"."tenant" t ON t.id = tm.tenant_id
       WHERE tm.user_id = $1 AND t.deleted_at IS NULL
@@ -172,6 +189,7 @@ export async function listMembershipsForUser(userId: string): Promise<Membership
       id: r.tid,
       slug: r.slug,
       label: r.label,
+      color: r.color,
       warehouse_id: r.warehouse_id,
       created_at: r.created_at,
     },
@@ -314,6 +332,12 @@ export async function updateTenantLabel(tenantId: string, label: string): Promis
   const trimmed = label.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "label cannot be empty", 400);
   await pgRun(`UPDATE "zugzug_app"."tenant" SET label = $1 WHERE id = $2`, [trimmed, tenantId]);
+}
+
+/** Updates the accent color of a tenant. Must be one of WORKSPACE_COLORS. */
+export async function updateTenantColor(tenantId: string, color: string): Promise<void> {
+  assertValidColor(color);
+  await pgRun(`UPDATE "zugzug_app"."tenant" SET color = $1 WHERE id = $2`, [color, tenantId]);
 }
 
 /** Updates the URL slug of a tenant. Refuses to change the 'default' tenant's
