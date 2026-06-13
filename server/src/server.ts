@@ -49,6 +49,7 @@ import {
   updateTenantLabel,
   leaveTenant,
 } from "./tenant.ts";
+import { appendAuditAs } from "./repo-meta.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
 import type { ServerWebSocket } from "bun";
@@ -418,9 +419,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
       const gate = requireAdmin(tenantCtx);
       if (!gate.ok) return json({ error: "forbidden" }, 403);
-      // elevated audit tag in next task
       const { label } = (await req.json()) as { label: string };
       await updateTenantLabel(tenantCtx.tenantId, label);
+      await appendAuditAs(me, "workspace.rename", `renamed workspace to "${label}"`, {
+        tenantId: tenantCtx.tenantId,
+        metadata: { actor_super_admin: gate.elevated },
+      });
       return noContent();
     }
 
@@ -428,10 +432,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "DELETE") {
       const gate = requireAdmin(tenantCtx);
       if (!gate.ok) return json({ error: "forbidden" }, 403);
-      // elevated audit tag in next task
       if (tenantSlugFromPath === "default") {
         return json({ error: "cannot_delete_default" }, 409);
       }
+      await appendAuditAs(me, "workspace.delete", `deleted workspace ${tenantSlugFromPath}`, {
+        tenantId: tenantCtx.tenantId,
+        metadata: { actor_super_admin: gate.elevated },
+      });
       await teardownTenant(tenantCtx.tenantId);
       return noContent();
     }
@@ -467,7 +474,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[2] === "members" && seg.length === 5 && seg[4] === "role" && method === "PUT") {
         const gate = requireAdmin(tenantCtx);
         if (!gate.ok) return json({ error: "forbidden" }, 403);
-        // elevated audit tag in next task
         const body = (await req.json()) as { role: "admin" | "editor" | "viewer" };
         const targetUserId = decodeURIComponent(seg[3]!);
         const exists = (await listMembersForTenant(tenantCtx.tenantId)).find(
@@ -475,13 +481,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         );
         if (!exists) return json({ error: "not_found" }, 404);
         await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
+        await appendAuditAs(
+          me,
+          "member.role",
+          `set ${targetUserId} role to ${body.role}`,
+          {
+            tenantId: tenantCtx.tenantId,
+            metadata: { actor_super_admin: gate.elevated, target_user_id: targetUserId },
+          },
+        );
         return new Response(null, { status: 204, headers: corsHeaders });
       }
       // DELETE /api/t/:slug/team/members/:userId
       if (seg[2] === "members" && seg.length === 4 && method === "DELETE") {
         const gate = requireAdmin(tenantCtx);
         if (!gate.ok) return json({ error: "forbidden" }, 403);
-        // elevated audit tag in next task
         const targetUserId = decodeURIComponent(seg[3]!);
         const targetRole = (await listMembersForTenant(tenantCtx.tenantId)).find(
           (m) => m.user_id === targetUserId,
@@ -490,6 +504,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return json({ error: "last_admin" }, 409);
         }
         await removeMember(tenantCtx.tenantId, targetUserId);
+        await appendAuditAs(me, "member.remove", `removed ${targetUserId}`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated, target_user_id: targetUserId },
+        });
         return new Response(null, { status: 204, headers: corsHeaders });
       }
       // GET /api/t/:slug/team/invites
@@ -500,17 +518,29 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[2] === "invites" && seg.length === 3 && method === "POST") {
         const gate = requireAdmin(tenantCtx);
         if (!gate.ok) return json({ error: "forbidden" }, 403);
-        // elevated audit tag in next task
         const body = (await req.json()) as { email: string; role: "admin" | "editor" | "viewer" };
         await createInvite(tenantCtx.tenantId, body.email, body.role, me);
+        await appendAuditAs(
+          me,
+          "invite.create",
+          `invited ${body.email} as ${body.role}`,
+          {
+            tenantId: tenantCtx.tenantId,
+            metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
+          },
+        );
         return json({ ok: true }, 201);
       }
       // DELETE /api/t/:slug/team/invites/:email
       if (seg[2] === "invites" && seg.length === 4 && method === "DELETE") {
         const gate = requireAdmin(tenantCtx);
         if (!gate.ok) return json({ error: "forbidden" }, 403);
-        // elevated audit tag in next task
-        await revokeInvite(tenantCtx.tenantId, decodeURIComponent(seg[3]!));
+        const email = decodeURIComponent(seg[3]!);
+        await revokeInvite(tenantCtx.tenantId, email);
+        await appendAuditAs(me, "invite.revoke", `revoked invite for ${email}`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated, invitee_email: email },
+        });
         return new Response(null, { status: 204, headers: corsHeaders });
       }
     }

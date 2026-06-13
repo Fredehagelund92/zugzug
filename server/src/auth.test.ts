@@ -19,4 +19,10 @@ describe("requireAdmin", () => {
     expect(requireAdmin(ctx("editor"))).toEqual({ ok: false });
     expect(requireAdmin(ctx("viewer"))).toEqual({ ok: false });
   });
+  it("elevation flag matches expected actor_super_admin tag", () => {
+    const elevated = requireAdmin(ctx("viewer", true));
+    expect(elevated.ok && elevated.elevated).toBe(true);
+    const native = requireAdmin(ctx("admin", false));
+    expect(native.ok && !native.elevated).toBe(true);
+  });
 });

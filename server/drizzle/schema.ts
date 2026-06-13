@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   text,
   check,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 const app = pgSchema("zugzug_app");
@@ -115,6 +116,7 @@ export const auditLog = app.table(
     table_id:   varchar("table_id"),
     row_key:    varchar("row_key"),
     tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
+    metadata:   jsonb("metadata"),
   },
   (t) => [
     index("audit_log_table_row_recency_idx")

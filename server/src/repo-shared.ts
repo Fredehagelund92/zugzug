@@ -254,6 +254,7 @@ export interface AuditEntry {
   user: User;
   action: string;
   detail: string;
+  metadata: Record<string, unknown> | null;
 }
 export interface GridLayoutConfig {
   widths?: Record<string, number>;

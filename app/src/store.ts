@@ -83,6 +83,7 @@ export interface AuditEntry {
   user: User;
   action: string;
   detail: string;
+  metadata?: Record<string, unknown> | null;
 }
 /** A registered warehouse source column for a dimension (from the source registry,
  *  not the scan) — so the UI shows the tables even with zero warehouse rows. */

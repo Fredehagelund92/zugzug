@@ -25,11 +25,16 @@ export async function appendAuditAs(
   userId: string,
   action: string,
   detail: string,
-  ctx: { tableId?: string; rowKey?: string; tenantId?: string } = {},
+  ctx: {
+    tableId?: string;
+    rowKey?: string;
+    tenantId?: string;
+    metadata?: Record<string, unknown>;
+  } = {},
 ): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key, tenant_id)
-     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6, $7)`,
+    `INSERT INTO ${pg("audit_log")} (id, created_at, user_id, action, detail, table_id, row_key, tenant_id, metadata)
+     VALUES ($1, current_timestamp, $2, $3, $4, $5, $6, $7, $8)`,
     [
       randomUUID(),
       userId,
@@ -38,6 +43,7 @@ export async function appendAuditAs(
       ctx.tableId ?? null,
       ctx.rowKey ?? null,
       ctx.tenantId ?? "default",
+      ctx.metadata ? JSON.stringify(ctx.metadata) : null,
     ],
   );
 }
@@ -53,8 +59,9 @@ export async function listAudit(limit = 30, tenantId: string = "default"): Promi
     action: string;
     detail: string;
     secs: number;
+    metadata: Record<string, unknown> | null;
   }>(
-    `SELECT id, user_id AS uid, action, detail,
+    `SELECT id, user_id AS uid, action, detail, metadata,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
      FROM ${pg("audit_log")} ${where}
      ORDER BY created_at DESC
@@ -77,6 +84,7 @@ export async function listAudit(limit = 30, tenantId: string = "default"): Promi
     action: r.action,
     detail: r.detail,
     at: rel(Number(r.secs)),
+    metadata: r.metadata,
   }));
 }
 
