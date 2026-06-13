@@ -6,6 +6,8 @@ import {
   listApiTokens,
   createApiToken,
   revokeApiToken,
+  invalidate,
+  subscribeInvalidate,
   type ApiToken,
   type CreatedApiToken,
 } from "../../store";
@@ -50,6 +52,14 @@ export function Tokens() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const unsub = subscribeInvalidate("tokens", (slug) => {
+      if (slug && slug !== tenant.slug) return;
+      void load();
+    });
+    return unsub;
+  }, [load, tenant.slug]);
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
@@ -59,7 +69,7 @@ export function Tokens() {
       setCreatedToken(tok);
       setShowForm(false);
       setNewName("");
-      void load();
+      invalidate.tokens(tenant.slug);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Could not create token.");
     } finally {
@@ -70,7 +80,7 @@ export function Tokens() {
   const handleRevoke = async (id: string) => {
     try {
       await revokeApiToken(id);
-      void load();
+      invalidate.tokens(tenant.slug);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not revoke token.");
     }
