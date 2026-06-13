@@ -28,3 +28,9 @@ export function useTenant(): TenantContextValue {
     );
   return v;
 }
+
+/** Like useTenant() but returns null instead of throwing outside the provider.
+ *  Use from hooks that may be called from non-tenant routes (e.g. account shell). */
+export function useTenantOptional(): TenantContextValue | null {
+  return useContext(Ctx);
+}

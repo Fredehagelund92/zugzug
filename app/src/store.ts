@@ -8,6 +8,7 @@ import type {
 } from "./data";
 import type { ConditionalRule } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
+import { useTenantOptional } from "./lib/tenant-context";
 
 /** Thrown by client mutation helpers on HTTP 409 from the server.
  *  Callers (TablePane) inspect `current` to render the inline conflict banner. */
@@ -467,12 +468,15 @@ export function useCurrentUser(): CurrentUser | null {
   );
 }
 
-/** Convenience: true when the current user may mutate state (not a viewer).
- *  Defaults to false during the brief initial-load window where currentUser is null. */
+/** Convenience: true when the current user may mutate state in the active workspace.
+ *  Reads role + super-admin from TenantContext (per-workspace, authoritative) rather
+ *  than the global currentUser shape (which doesn't carry workspace role).
+ *  Super-admin short-circuits to true per the 2026-06-13 settings spec. */
 export function useCanEdit(): boolean {
-  const user = useCurrentUser();
-  if (!user) return false;
-  return user.role !== "viewer";
+  const t = useTenantOptional();
+  if (!t) return false;
+  if (t.isSuperAdmin) return true;
+  return t.role !== "viewer";
 }
 
 export async function setPreferences(p: Preferences): Promise<void> {
