@@ -10,6 +10,7 @@ import { can } from "../../lib/permissions";
 import { toast } from "../../components/Toast";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { currentUser, useAuthConfig } from "../../store";
+import { SuperAdminBanner } from "../../components/SuperAdminBanner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -884,8 +885,17 @@ export function Members() {
   const invalidCount = chips.filter((c) => c.status === "invalid").length;
   const failedCount = chips.filter((c) => c.status === "failed").length;
 
+  const isMember = teamUsers.some((m) => m.user_id === currentUser.id);
+  const showSuperAdminBanner = tenant.isSuperAdmin && !isMember && teamUsers.length > 0;
+
   return (
     <SettingsSection title="Team" hint="Manage who has access to this workspace and their roles.">
+      {showSuperAdminBanner && (
+        <SuperAdminBanner>
+          You&apos;re viewing this workspace as a super-admin. You can manage members but
+          aren&apos;t a member yourself.
+        </SuperAdminBanner>
+      )}
       <ReadOnly enabled={!isAdmin}>
         {/* Error banners */}
         {membersError && (
