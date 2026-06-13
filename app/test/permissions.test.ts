@@ -39,7 +39,9 @@ describe("can()", () => {
     expect(can(t("editor", true), "admin.view")).toBe(true);
   });
 
-  test("super-admin entering as viewer still gets settings edits via tenant context", () => {
-    expect(can(t("viewer", true), "settings.tokens.edit")).toBe(false);
+  // Per 2026-06-13 spec Section A.1: super-admin gets every workspace +
+  // account affordance regardless of workspace role.
+  test("super-admin entering as viewer is elevated for settings edits via tenant context", () => {
+    expect(can(t("viewer", true), "settings.tokens.edit")).toBe(true);
   });
 });
