@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import {
@@ -50,6 +51,7 @@ function HealthBadge({ state }: { state?: ConnectionHealth["warehouse"] }) {
 
 function ConnectionsSection() {
   const { engineer } = useEngineerMode();
+  const tenant = useTenant();
   const wsInfo = useWorkspaceInfo();
   const dims = useDimensions();
   const audit = useAudit();
@@ -175,6 +177,18 @@ function ConnectionsSection() {
           </div>
         )}
       </div>
+
+      {tenant.isSuperAdmin && (
+        <p className="text-[12.5px] text-ink-3">
+          Need a fresh database?{" "}
+          <Link
+            to="/app/admin/warehouses"
+            className="text-accent underline-offset-2 hover:underline"
+          >
+            Manage warehouses →
+          </Link>
+        </p>
+      )}
     </SettingsSection>
   );
 }
