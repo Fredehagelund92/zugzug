@@ -15,7 +15,10 @@ export function Audit() {
       ) : (
         <ul className="divide-y divide-line">
           {audit.slice(0, 100).map((row, i) => (
-            <li key={i} className="py-2.5 grid grid-cols-[160px_160px_1fr] gap-3 items-baseline text-sm">
+            <li
+              key={i}
+              className="py-2.5 grid grid-cols-[160px_160px_1fr] gap-3 items-baseline text-sm"
+            >
               <span className="font-mono text-xs text-ink-3 tabular-nums">
                 {relativeTime(row.at ?? null)}
               </span>

@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
 
-export function SettingsShell({
-  sidebar,
-  children,
-}: {
-  sidebar: ReactNode;
-  children: ReactNode;
-}) {
+export function SettingsShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
   return (
     <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
       <div className="flex gap-6 md:gap-8">

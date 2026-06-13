@@ -735,7 +735,10 @@ export function Members() {
         body: JSON.stringify({ role: newRole }),
       });
       if (!r.ok) {
-        const body = (await r.json().catch(() => null)) as { error?: string; reason?: string } | null;
+        const body = (await r.json().catch(() => null)) as {
+          error?: string;
+          reason?: string;
+        } | null;
         throw new Error(body?.reason ?? body?.error ?? `update_role_${r.status}`);
       }
       void loadMembers();
@@ -762,7 +765,9 @@ export function Members() {
       void loadMembers();
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? `Couldn't remove ${email} — ${err.message}` : `Couldn't remove ${email}.`,
+        err instanceof Error
+          ? `Couldn't remove ${email} — ${err.message}`
+          : `Couldn't remove ${email}.`,
       );
     }
   };
@@ -780,7 +785,11 @@ export function Members() {
 
   // Chip validation uses current member emails + pending invite emails
   const membersByEmail = useMemo(
-    () => new Set([...teamUsers.map((u) => u.email.toLowerCase()), ...invites.map((i) => i.email.toLowerCase())]),
+    () =>
+      new Set([
+        ...teamUsers.map((u) => u.email.toLowerCase()),
+        ...invites.map((i) => i.email.toLowerCase()),
+      ]),
     [teamUsers, invites],
   );
 
@@ -846,7 +855,8 @@ export function Members() {
     validChips.forEach((c, i) => {
       const r = results[i];
       if (r!.status === "fulfilled") succeededIds.add(c.id);
-      else failedById.set(c.id, r!.reason instanceof Error ? (r!.reason as Error).message : "Failed");
+      else
+        failedById.set(c.id, r!.reason instanceof Error ? (r!.reason as Error).message : "Failed");
     });
 
     const sentCount = succeededIds.size;
@@ -855,7 +865,9 @@ export function Members() {
         if (succeededIds.has(c.id)) return [];
         const failedReason = failedById.get(c.id);
         if (failedReason)
-          return [{ id: c.id, email: c.email, status: "failed" as ChipStatus, reason: failedReason }];
+          return [
+            { id: c.id, email: c.email, status: "failed" as ChipStatus, reason: failedReason },
+          ];
         return [c];
       }),
     );
@@ -872,10 +884,7 @@ export function Members() {
   const failedCount = chips.filter((c) => c.status === "failed").length;
 
   return (
-    <SettingsSection
-      title="Team"
-      hint="Manage who has access to this workspace and their roles."
-    >
+    <SettingsSection title="Team" hint="Manage who has access to this workspace and their roles.">
       <ReadOnly enabled={!isAdmin}>
         {/* Error banners */}
         {membersError && (
@@ -927,7 +936,11 @@ export function Members() {
             </Button>
           </div>
         )}
-        <PendingInvitesList invites={invites} isAdmin={isAdmin} onRevoke={(email) => void revokeInvite(email)} />
+        <PendingInvitesList
+          invites={invites}
+          isAdmin={isAdmin}
+          onRevoke={(email) => void revokeInvite(email)}
+        />
 
         {/* Confirm remove member */}
         <ConfirmDialog

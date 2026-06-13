@@ -7,14 +7,10 @@ export function General() {
   return (
     <SettingsSection title="General" hint="Workspace identity. Slug is immutable.">
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-3 text-sm">
-        <dt className="font-mono text-[11px] uppercase tracking-widest text-ink-3 pt-0.5">
-          Label
-        </dt>
+        <dt className="font-mono text-[11px] uppercase tracking-widest text-ink-3 pt-0.5">Label</dt>
         <dd className="text-ink">{tenant.label}</dd>
 
-        <dt className="font-mono text-[11px] uppercase tracking-widest text-ink-3 pt-0.5">
-          Slug
-        </dt>
+        <dt className="font-mono text-[11px] uppercase tracking-widest text-ink-3 pt-0.5">Slug</dt>
         <dd>
           <code className="font-mono text-accent">{tenant.slug}</code>
         </dd>

@@ -114,9 +114,7 @@ export function Warehouse() {
       <div className="rounded-sm border border-line bg-surface-2 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="font-display text-[14px] font-semibold text-ink">
-              Master records
-            </span>
+            <span className="font-display text-[14px] font-semibold text-ink">Master records</span>
             <Badge tone={wsInfo?.writable ? "ok" : undefined}>
               {wsInfo
                 ? wsInfo.writable

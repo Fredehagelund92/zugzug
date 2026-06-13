@@ -1,12 +1,6 @@
 import type { ReactNode } from "react";
 
-export function ReadOnly({
-  enabled,
-  children,
-}: {
-  enabled: boolean;
-  children: ReactNode;
-}) {
+export function ReadOnly({ enabled, children }: { enabled: boolean; children: ReactNode }) {
   return (
     <fieldset
       disabled={enabled}

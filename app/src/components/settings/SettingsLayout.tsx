@@ -7,7 +7,11 @@ export function SettingsLayout() {
   return (
     <>
       <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8 md:pb-0">
-        <PageHeader kicker="Workspace" title="Settings" lede="Changes are saved as you make them." />
+        <PageHeader
+          kicker="Workspace"
+          title="Settings"
+          lede="Changes are saved as you make them."
+        />
       </div>
       <SettingsShell sidebar={<SettingsSidebar />}>
         <Outlet />

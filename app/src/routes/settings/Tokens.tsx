@@ -170,7 +170,11 @@ export function Tokens() {
               autoFocus
               disabled={creating}
             />
-            <Button onClick={() => void handleCreate()} loading={creating} disabled={!newName.trim()}>
+            <Button
+              onClick={() => void handleCreate()}
+              loading={creating}
+              disabled={!newName.trim()}
+            >
               Generate
             </Button>
             <Button
