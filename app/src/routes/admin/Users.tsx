@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -28,12 +28,27 @@ function relativeTime(iso: string | null): string {
   return `${Math.floor(diff / 86_400_000)}d ago`;
 }
 
+type RoleFilter = "all" | "super_admin" | "regular";
+
 export function Users() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [pending, setPending] = useState<{ userId: string; promote: boolean } | null>(null);
+  const [filter, setFilter] = useState<RoleFilter>("all");
+  const [pending, setPending] = useState<{ user: AdminUser; promote: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const counts = useMemo(() => {
+    let sa = 0;
+    for (const u of users) if (u.isSuperAdmin) sa++;
+    return { all: users.length, super_admin: sa, regular: users.length - sa };
+  }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    if (filter === "super_admin") return users.filter((u) => u.isSuperAdmin);
+    if (filter === "regular") return users.filter((u) => !u.isSuperAdmin);
+    return users;
+  }, [users, filter]);
 
   const load = useCallback(async (q?: string) => {
     setLoading(true);
@@ -71,7 +86,7 @@ export function Users() {
     if (!pending) return;
     setBusy(true);
     try {
-      const r = await apiFetch(`/users/${encodeURIComponent(pending.userId)}`, {
+      const r = await apiFetch(`/users/${encodeURIComponent(pending.user.id)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ isSuperAdmin: pending.promote }),
@@ -106,7 +121,7 @@ export function Users() {
         kicker="System"
         title="Users"
         lede="All registered users. Promote or demote super-admin access."
-        count={loading ? undefined : users.length}
+        count={loading ? undefined : filteredUsers.length}
         action={
           <form onSubmit={handleSearch} className="flex gap-2">
             <input
@@ -122,11 +137,37 @@ export function Users() {
         }
       />
 
+      <div className="flex flex-wrap items-center gap-1">
+        {(
+          [
+            { key: "all", label: "All", count: counts.all },
+            { key: "super_admin", label: "Super-admins", count: counts.super_admin },
+            { key: "regular", label: "Regular", count: counts.regular },
+          ] as { key: RoleFilter; label: string; count: number }[]
+        ).map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            data-active={filter === c.key}
+            onClick={() => setFilter(c.key)}
+            className={
+              "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border transition-colors " +
+              (filter === c.key
+                ? "bg-accent-soft border-accent text-accent"
+                : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
+            }
+          >
+            <span>{c.label}</span>
+            <span className="font-mono text-[10px] tabular-nums opacity-80">{c.count}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="zz-rise border border-line" style={{ animationDelay: "80ms" }}>
         {loading ? (
           <SkeletonList rows={5} columns={[24, "minmax(0,1fr)", 160, 80, 100, 120]} />
-        ) : users.length === 0 ? (
-          <EmptyState title="No users found" body="Try a different search term or invite teammates from a workspace." />
+        ) : filteredUsers.length === 0 ? (
+          <EmptyState title="No users found" body="Try a different search term, filter, or invite teammates from a workspace." />
         ) : (
           <div className="border border-line divide-y divide-line bg-surface">
             <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5">
@@ -144,7 +185,7 @@ export function Users() {
               </span>
               <span />
             </div>
-            {users.map((u, i) => (
+            {filteredUsers.map((u, i) => (
               <div
                 key={u.id}
                 className="zz-rise grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
@@ -183,7 +224,7 @@ export function Users() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setPending({ userId: u.id, promote: !u.isSuperAdmin })}
+                    onClick={() => setPending({ user: u, promote: !u.isSuperAdmin })}
                   >
                     {u.isSuperAdmin ? "Demote" : "Promote"}
                   </Button>
@@ -196,13 +237,24 @@ export function Users() {
 
       <ConfirmDialog
         open={!!pending}
-        title={pending?.promote ? "Promote to super-admin?" : "Remove super-admin?"}
+        title={
+          pending
+            ? pending.promote
+              ? `Grant super-admin to ${pending.user.name}?`
+              : `Revoke super-admin from ${pending.user.name}?`
+            : ""
+        }
         body={
-          <p className="text-sm text-ink-2">
-            {pending?.promote
-              ? "This user will gain full system access including all workspaces and the admin console."
-              : "This user will lose super-admin access. They retain workspace memberships."}
-          </p>
+          pending && (
+            <div className="space-y-2 text-sm text-ink-2">
+              <p className="font-mono text-xs text-ink-3">{pending.user.email ?? "—"}</p>
+              <p>
+                {pending.promote
+                  ? "This grants full system access across every workspace, including the admin console."
+                  : "This removes super-admin access. The user keeps their existing workspace memberships."}
+              </p>
+            </div>
+          )
         }
         confirmLabel={pending?.promote ? "Promote" : "Demote"}
         danger={!pending?.promote}
