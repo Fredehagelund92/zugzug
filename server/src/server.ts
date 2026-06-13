@@ -308,6 +308,26 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
       }
 
+      // POST /api/admin/warehouses — create a new MotherDuck database.
+      // The whole admin block above already gates on isSuperAdmin.
+      if (seg[2] === "warehouses" && seg.length === 3 && method === "POST") {
+        if (!env.attachWarehouse) {
+          return json({ error: "warehouse not attached", code: "FORBIDDEN" }, 403);
+        }
+        const body = (await req.json()) as { name?: string };
+        if (typeof body.name !== "string") {
+          return json({ error: "name required", code: "VALIDATION_FAILED" }, 400);
+        }
+        const trimmed = body.name.trim();
+        const { createWarehouseDatabase } = await import("./admin.ts");
+        const names = await createWarehouseDatabase(trimmed);
+        await appendAuditAs(me, "admin.warehouse.create", `created database "${trimmed}"`, {
+          tenantId: "default",
+          metadata: { actor_super_admin: true, warehouse_name: trimmed },
+        });
+        return json({ warehouses: names });
+      }
+
       // GET /api/admin/users[?q=…&limit=…&offset=…]
       if (seg[2] === "users" && seg.length === 3 && method === "GET") {
         const q = url.searchParams.get("q") ?? undefined;
