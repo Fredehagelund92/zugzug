@@ -3,7 +3,7 @@ import type { CellCtx, EditCtx, ColumnDef } from "../types";
 import type { NumberFormat } from "../../../data";
 
 const inputBase =
-  "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 text-right font-mono text-[12px] text-ink outline-none tabular-nums";
+  "w-full h-full bg-transparent border-0 outline-none p-0 m-0 text-right font-mono text-[12px] leading-normal text-ink tabular-nums";
 
 export function formatNumber(value: unknown, fmt: NumberFormat | undefined): string {
   const n = value == null || value === "" ? null : Number(value);

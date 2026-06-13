@@ -536,7 +536,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const gridStyle = useMemo(() => {
     const tracks = orderedVisible.map((c) => {
       const w = colWidth(c.field);
-      return w ? `${w}px` : "minmax(96px, 1fr)";
+      return w ? `${w}px` : "minmax(0, 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
     if (showRowNumbers) tracks.unshift("36px");
@@ -1380,7 +1380,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
-        className="relative flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
+        className="relative flex flex-1 flex-col min-h-0 overflow-auto outline-none"
+        style={{ scrollbarGutter: "stable" }}
       >
         {fillHandlePos && (
           <FillHandle

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CellCtx, EditCtx } from "../types";
 
 const inputBase =
-  "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 font-mono text-[12px] text-ink outline-none";
+  "w-full h-full bg-transparent border-0 outline-none p-0 m-0 font-mono text-[12px] leading-normal text-ink";
 
 function Renderer<Row>({ value }: CellCtx<Row>) {
   const email = typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
