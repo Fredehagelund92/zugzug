@@ -2,8 +2,8 @@ import { NavLink } from "react-router-dom";
 import { cx } from "../../lib/cx";
 
 const ITEMS = [
-  { label: "Profile",       to: "profile" },
-  { label: "Appearance",    to: "appearance" },
+  { label: "Profile", to: "profile" },
+  { label: "Appearance", to: "appearance" },
   { label: "Notifications", to: "notifications" },
 ];
 

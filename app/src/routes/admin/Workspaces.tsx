@@ -64,8 +64,8 @@ export function Workspaces() {
             )}
           </div>
           <p className="text-sm text-ink-2 max-w-lg">
-            Isolated reconciliation environments. Each workspace is scoped to a warehouse
-            connection and owns its own canonical tables and audit trail.
+            Isolated reconciliation environments. Each workspace is scoped to a warehouse connection
+            and owns its own canonical tables and audit trail.
           </p>
         </div>
         <Button
@@ -92,9 +92,15 @@ export function Workspaces() {
             {/* Column headers */}
             <div className="grid grid-cols-[20px_160px_1fr_140px] gap-4 items-center px-5 py-2.5 bg-surface-2">
               <span />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Slug</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Label</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Warehouse</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Slug
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Label
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Warehouse
+              </span>
             </div>
 
             {tenants.map((t, i) => (

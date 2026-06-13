@@ -3,8 +3,8 @@ import { cx } from "../../lib/cx";
 
 const ITEMS = [
   { label: "Workspaces", to: "workspaces" },
-  { label: "Users",      to: "users" },
-  { label: "Audit",      to: "audit" },
+  { label: "Users", to: "users" },
+  { label: "Audit", to: "audit" },
   { label: "Warehouses", to: "warehouses" },
 ];
 
@@ -63,7 +63,13 @@ export function AdminSidebar() {
           className="flex items-center gap-2 text-xs text-ink-3 hover:text-ink-2 transition-colors"
         >
           <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="none">
-            <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M10 12L6 8l4-4"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
           Back to app
         </a>

@@ -16,9 +16,7 @@ export function SettingsSection({
         <div className="absolute left-0 inset-y-0 w-[2px] bg-accent" />
         <div className="max-w-2xl">
           <h2 className="font-display text-xl font-bold tracking-tight text-ink">{title}</h2>
-          {hint && (
-            <p className="mt-0.5 text-[13px] text-ink-2 leading-snug">{hint}</p>
-          )}
+          {hint && <p className="mt-0.5 text-[13px] text-ink-2 leading-snug">{hint}</p>}
         </div>
       </div>
       <div className="px-5 py-5 md:px-6 md:py-6">

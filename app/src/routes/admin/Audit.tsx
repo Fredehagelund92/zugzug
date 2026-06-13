@@ -95,10 +95,18 @@ export function Audit() {
         ) : (
           <div className="border border-line divide-y divide-line">
             <div className="grid grid-cols-[140px_100px_160px_1fr] gap-4 items-center px-5 py-2.5 bg-surface-2">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">When</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">User</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Action</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Detail</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                When
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                User
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Action
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Detail
+              </span>
             </div>
             {rows.map((row, i) => (
               <div
@@ -106,7 +114,9 @@ export function Audit() {
                 className="zz-rise grid grid-cols-[140px_100px_160px_1fr] gap-4 items-baseline px-5 py-3 hover:bg-hover transition-colors"
                 style={{ animationDelay: `${100 + i * 20}ms` }}
               >
-                <span className="font-mono text-xs text-ink-3 tabular-nums">{relativeTime(row.at)}</span>
+                <span className="font-mono text-xs text-ink-3 tabular-nums">
+                  {relativeTime(row.at)}
+                </span>
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-accent-soft flex items-center justify-center text-[10px] font-bold text-accent">
                     {row.user.initials}

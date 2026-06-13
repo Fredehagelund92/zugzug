@@ -252,15 +252,16 @@ export async function countSuperAdmins(): Promise<number> {
   return row?.n ?? 0;
 }
 
-export async function setSuperAdmin(targetId: string, callerId: string, value: boolean): Promise<void> {
+export async function setSuperAdmin(
+  targetId: string,
+  callerId: string,
+  value: boolean,
+): Promise<void> {
   if (!value && targetId === callerId) {
     throw new AppError("SELF_DEMOTE", "cannot demote yourself", 409);
   }
   if (!value && (await countSuperAdmins()) <= 1) {
     throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
   }
-  await run(
-    `UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`,
-    [value, targetId],
-  );
+  await run(`UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`, [value, targetId]);
 }

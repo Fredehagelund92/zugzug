@@ -94,7 +94,9 @@ export function Users() {
               </span>
             )}
           </div>
-          <p className="text-sm text-ink-2">All registered users. Promote or demote super-admin access.</p>
+          <p className="text-sm text-ink-2">
+            All registered users. Promote or demote super-admin access.
+          </p>
         </div>
         <form onSubmit={handleSearch} className="flex gap-2">
           <input
@@ -121,10 +123,18 @@ export function Users() {
         ) : (
           <>
             <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5 bg-surface-2 border-b border-line">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">User</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Last seen</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">Workspaces</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Role</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                User
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Last seen
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
+                Workspaces
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Role
+              </span>
               <span />
             </div>
             {users.map((u, i) => (
@@ -135,15 +145,21 @@ export function Users() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-7 w-7 shrink-0 rounded-full bg-accent-soft flex items-center justify-center">
-                    <span className="font-mono text-[10px] font-bold text-accent">{u.initials}</span>
+                    <span className="font-mono text-[10px] font-bold text-accent">
+                      {u.initials}
+                    </span>
                   </div>
                   <div className="min-w-0">
                     <div className="text-sm text-ink truncate">{u.name}</div>
                     <div className="font-mono text-xs text-ink-3 truncate">{u.email ?? "—"}</div>
                   </div>
                 </div>
-                <span className="font-mono text-xs text-ink-3 tabular-nums">{relativeTime(u.lastSeenAt)}</span>
-                <span className="font-mono text-xs text-ink-3 tabular-nums text-right">{u.membershipCount}</span>
+                <span className="font-mono text-xs text-ink-3 tabular-nums">
+                  {relativeTime(u.lastSeenAt)}
+                </span>
+                <span className="font-mono text-xs text-ink-3 tabular-nums text-right">
+                  {u.membershipCount}
+                </span>
                 <div>
                   {u.isSuperAdmin ? (
                     <span

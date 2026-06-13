@@ -36,13 +36,17 @@ export function Warehouses() {
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
           <div className="border border-line py-16 flex items-center justify-center">
-            <span className="font-mono text-xs text-ink-3 uppercase tracking-widest">Connecting…</span>
+            <span className="font-mono text-xs text-ink-3 uppercase tracking-widest">
+              Connecting…
+            </span>
           </div>
         ) : attached === false ? (
           <div className="border border-dashed border-line-2 p-8">
             <p className="text-sm text-ink-3 text-center">
               Warehouse not attached.{" "}
-              <code className="font-mono text-xs bg-surface-2 px-1.5 py-0.5">ATTACH_WAREHOUSE=true</code>{" "}
+              <code className="font-mono text-xs bg-surface-2 px-1.5 py-0.5">
+                ATTACH_WAREHOUSE=true
+              </code>{" "}
               to enable.
             </p>
           </div>
@@ -53,9 +57,15 @@ export function Warehouses() {
         ) : (
           <div className="border border-line divide-y divide-line">
             <div className="grid grid-cols-[1fr_120px_80px] gap-4 items-center px-5 py-2.5 bg-surface-2">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Database</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">Tables</span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">Status</span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Database
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
+                Tables
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Status
+              </span>
             </div>
             {dbs.map((db, i) => (
               <div
@@ -67,7 +77,9 @@ export function Warehouses() {
                   <div className="w-0.5 h-5 bg-accent opacity-40 group-hover:opacity-90 transition-opacity shrink-0" />
                   <code className="font-mono text-sm text-accent truncate">{db.name}</code>
                 </div>
-                <span className="font-mono text-sm text-ink-3 tabular-nums text-right">{db.tableCount}</span>
+                <span className="font-mono text-sm text-ink-3 tabular-nums text-right">
+                  {db.tableCount}
+                </span>
                 <span
                   className="font-mono text-[10px] flex items-center gap-1"
                   style={{ color: db.connected ? "var(--ak-ok)" : "var(--ink-3)" }}
