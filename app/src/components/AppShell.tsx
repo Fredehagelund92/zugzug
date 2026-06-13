@@ -636,7 +636,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
         </header>
 
         <main className="zz-canvas flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
-          <Outlet />
+          <Outlet context={{ memberships }} />
         </main>
       </div>
       <ToastStack />

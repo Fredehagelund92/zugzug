@@ -32,6 +32,7 @@ import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
 import { Appearance as AccountAppearance } from "./routes/account/Appearance";
 import { Notifications } from "./routes/account/Notifications";
+import { Memberships } from "./routes/account/Memberships";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN;
 if (dsn) {
@@ -127,6 +128,7 @@ createRoot(root).render(
                             <Route index element={<Navigate to="profile" replace />} />
                             <Route path="profile" element={<Profile />} />
                             <Route path="appearance" element={<AccountAppearance />} />
+                            <Route path="memberships" element={<Memberships />} />
                             <Route path="notifications" element={<Notifications />} />
                           </Route>
                         </Route>
