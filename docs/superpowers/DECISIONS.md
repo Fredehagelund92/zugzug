@@ -67,94 +67,32 @@ Future (Phase 2): Add workspace settings UI to manage keys, test provider connec
 
 ---
 
-## Caching Strategy (2026-06-13)
+## MVP Configuration Approach (2026-06-13)
 
-**Decision:** Permanent cache with `(workspace_id, dimension_id, raw_value)` unique key.
+**Decision:** Environment variables for MVP; admin API endpoint in Phase 2.
 
-**Cache Table:** `ai_suggestion_cache`
-```sql
-id UUID PRIMARY KEY
-workspace_id UUID
-dimension_id UUID
-raw_value TEXT
-suggested_canonical TEXT
-confidence TEXT (enum: 'high', 'medium', 'low')
-reasoning TEXT (optional)
-created_at TIMESTAMP
-created_at TIMESTAMP
-UNIQUE(workspace_id, dimension_id, raw_value)
+**MVP Configuration Method:** Environment Variables
+```bash
+# Server startup loads these into workspace_config
+OPENAI_API_KEY=sk-...
+# Later: ANTHROPIC_API_KEY=... for v2
 ```
 
-**Why Permanent Cache:**
-- Suggestions for a given raw value + dimension pair don't change
-- Cache hits eliminate API calls for repeated reconciliation (same value, same dimension)
-- Expected reduction: 60–80% fewer API calls after first pass through dimension
+**How it works:**
+- On server startup, bootstrap script reads `OPENAI_API_KEY` from `.env`
+- Workspace admin sets `ai_enabled=true` and `ai_provider='openai'` in `workspace_config`
+- Keys are fetched from `workspace_config` at request time
+- No UI for key management in MVP (admin workflow: environment variable → Postgres directly)
 
-**User Control:** Force refresh via `force_refresh=true` flag if suggestion is stale
+**Spec compliance note:** This satisfies the requirement "Accept configuration via environment variables or admin API (no UI for MVP)". Environment variables are the chosen path for initial MVP setup.
+
+**Phase 2 enhancement:** Add admin API endpoint to rotate keys securely without restart:
 ```
-POST /api/dimensions/:dimensionId/suggest
-{ "raw_value": "...", "force_refresh": true }
+POST /api/admin/workspace/:workspaceId/ai-config
+{ "ai_enabled": true, "ai_provider": "openai", "ai_api_key": "..." }
 ```
 
-**Cache Invalidation:**
-- Dimension deleted → cascading delete on cache rows (via `ON DELETE CASCADE`)
-- Canonical values updated → **no automatic invalidation** (accepted tradeoff for simplicity)
-  - Rationale: Suggestions are "good enough" suggestions, not definitive mappings
-  - User can manually refresh if needed
-
-**No TTL:** Cache rows persist indefinitely (database cleanup via archival jobs, if needed).
-
----
-
-## Error Handling (2026-06-13)
-
-**Decision:** Errors are user-recoverable. Non-blocking workflow.
-
-**Error Classification:**
-
-| Error | HTTP Status | Code | User Message | Recovery |
-|-------|-------------|------|--------------|----------|
-| AI not enabled | 400 | `AI_NOT_CONFIGURED` | "Enable AI in Workspace Settings" | Admin enables AI + sets key |
-| Invalid/expired API key | 401 | `INVALID_API_KEY` | "AI provider API key is invalid or expired" | Admin updates key in workspace config |
-| Rate limit exceeded | 429 | `RATE_LIMITED` | "AI rate limit exceeded; try again in a few seconds" | Retry after delay |
-| Provider error (5xx, timeout) | 500 | `AI_SERVICE_ERROR` | "AI service temporarily unavailable; please try again" | Retry manually |
-| Malformed response | 500 | `AI_RESPONSE_ERROR` | "AI returned an unparseable response" | Log for debugging; user retries |
-
-**Retry Strategy:**
-- **Rate limit (429):** Exponential backoff, max 3 attempts (1s, 2s, 4s)
-- **Transient 5xx:** Retry once with 1s delay
-- **Permanent errors (4xx auth, 400 invalid):** Fail immediately; user retries manually or fixes config
-
-**Non-blocking:** Failed suggestion doesn't prevent user from manually creating draft or reconciling via other methods.
-
----
-
-## Why This Architecture
-
-**Design principles:**
-1. **Lazy, on-demand:** No background jobs. Suggestions generated when user clicks button.
-2. **Cached, cost-efficient:** Permanent cache reduces API calls by 60–80%.
-3. **Workspace-scoped:** Each team manages their own credentials and enable/disable.
-4. **Provider-agnostic:** Core logic is provider-independent; new providers added as isolated modules.
-5. **User-focused:** Confidence levels (High/Medium/Low) are human-friendly, not algorithmic scores.
-6. **Non-blocking:** Failed suggestions don't break the reconciliation workflow.
-
-**Tradeoffs accepted in MVP:**
-- No key rotation UI (deferred to Phase 2)
-- No automatic cache invalidation (user can force refresh)
-- No multi-provider switching in UI (currently config-only)
-- No usage stats or cost tracking (deferred to Phase 2)
-
----
-
-## Success Criteria
-
-- ✅ Suggestions generated in <1 second (cached hits much faster)
-- ✅ Cache reduces API calls by >60% on repeated values
-- ✅ Error handling is graceful; failed suggestions don't block reconciliation
-- ✅ Audit trail captures AI-generated mappings (`draft.source = 'ai'`, `draft.confidence`)
-- ✅ Code is testable, documented, and extensible
-- ✅ Users can distinguish AI suggestions from manual ones (badge + confidence indicator)
+This keeps MVP simple (env vars only) while enabling future self-service key management.
 
 ---
 
