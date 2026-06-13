@@ -5,6 +5,7 @@ import {
   boolean,
   bigint,
   integer,
+  serial,
   timestamp,
   primaryKey,
   index,
@@ -177,7 +178,7 @@ export const sessions = app.table(
 export const preferences = app.table(
   "preferences",
   {
-    id:                integer("id").primaryKey(),
+    id:                serial("id").primaryKey(),
     publish_threshold: integer("publish_threshold").notNull(),
     suggest_threshold: integer("suggest_threshold").notNull(),
     scan_schedule:     varchar("scan_schedule", { length: 10 }),

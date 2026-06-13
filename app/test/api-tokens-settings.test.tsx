@@ -1,5 +1,14 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import type { TenantContextValue } from "../src/lib/tenant-context";
+
+const tenantValue: TenantContextValue = {
+  id: "t1",
+  slug: "acme",
+  label: "Acme",
+  role: "admin",
+  isSuperAdmin: false,
+};
 
 describe("ApiTokensSection", () => {
   beforeEach(() => {
@@ -26,8 +35,9 @@ describe("ApiTokensSection", () => {
       };
     });
 
-    const { ApiTokensSection } = await import("../src/routes/Settings");
-    render(<ApiTokensSection />);
+    const { Tokens: ApiTokensSection } = await import("../src/routes/settings/Tokens");
+    const { TenantProvider } = await import("../src/lib/tenant-context");
+    render(<TenantProvider value={tenantValue}><ApiTokensSection /></TenantProvider>);
 
     await waitFor(() => {
       expect(screen.getByText("CI token")).toBeInTheDocument();
@@ -54,8 +64,9 @@ describe("ApiTokensSection", () => {
       };
     });
 
-    const { ApiTokensSection } = await import("../src/routes/Settings");
-    render(<ApiTokensSection />);
+    const { Tokens: ApiTokensSection } = await import("../src/routes/settings/Tokens");
+    const { TenantProvider } = await import("../src/lib/tenant-context");
+    render(<TenantProvider value={tenantValue}><ApiTokensSection /></TenantProvider>);
 
     // Wait for initial load to finish
     await waitFor(() => {
@@ -98,8 +109,9 @@ describe("ApiTokensSection", () => {
       };
     });
 
-    const { ApiTokensSection } = await import("../src/routes/Settings");
-    render(<ApiTokensSection />);
+    const { Tokens: ApiTokensSection } = await import("../src/routes/settings/Tokens");
+    const { TenantProvider } = await import("../src/lib/tenant-context");
+    render(<TenantProvider value={tenantValue}><ApiTokensSection /></TenantProvider>);
 
     await waitFor(() => {
       expect(screen.getByText("to be revoked")).toBeInTheDocument();
@@ -139,8 +151,9 @@ describe("ApiTokensSection", () => {
       };
     });
 
-    const { ApiTokensSection } = await import("../src/routes/Settings");
-    render(<ApiTokensSection />);
+    const { Tokens: ApiTokensSection } = await import("../src/routes/settings/Tokens");
+    const { TenantProvider } = await import("../src/lib/tenant-context");
+    render(<TenantProvider value={tenantValue}><ApiTokensSection /></TenantProvider>);
 
     await waitFor(() => {
       expect(screen.getByText("cancel me")).toBeInTheDocument();
