@@ -19,6 +19,7 @@ function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
   const seeded = initial != null;
   const [v, setV] = useState(seeded ? initial : value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
   useEffect(() => {
     ref.current?.focus();
     if (seeded) {
@@ -35,10 +36,20 @@ function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
       value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={() => {
+        composingRef.current = false;
+      }}
       // Enter / Tab commit synchronously: useGridCursor's stopEdit unmounts
       // the editor before the browser blur event reaches React, so onBlur
       // alone would silently drop the typed value.
       onKeyDown={(e) => {
+        // IME composition (CJK): Enter/Tab mean "accept candidate", not
+        // "commit cell". Guard with both isComposing (Chromium/Firefox)
+        // and a compositionstart/end ref (Safari timing).
+        if (e.nativeEvent.isComposing || composingRef.current) return;
         if (e.key === "Escape") {
           e.preventDefault();
           cancel();

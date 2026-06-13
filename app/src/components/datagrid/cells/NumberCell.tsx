@@ -123,6 +123,7 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
   const usable = seeded && /^[0-9.-]$/.test(initial);
   const [v, setV] = useState(usable ? initial : displayValue);
   const ref = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
 
   useEffect(() => {
     ref.current?.focus();
@@ -161,10 +162,19 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
       placeholder={isDuration ? "0:00:00" : undefined}
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={() => {
+        composingRef.current = false;
+      }}
       // Enter / Tab also commit synchronously: useGridCursor's stopEdit
       // unmounts the editor before the browser blur event reaches React, so
       // relying on onBlur alone silently drops the typed value.
       onKeyDown={(e) => {
+        // IME composition (CJK): Enter/Tab mean "accept candidate", not
+        // "commit cell".
+        if (e.nativeEvent.isComposing || composingRef.current) return;
         if (e.key === "Escape") {
           e.preventDefault();
           cancel();
