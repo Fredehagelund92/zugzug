@@ -1,6 +1,6 @@
 {
-  "id": "aadaf03c-b46c-4ba9-9011-a14650187d56",
-  "prevId": "5ccf1ae3-3414-4adf-a2ba-15727b7c7434",
+  "id": "4c4bf281-0aa9-42f3-808c-8c8bc222b7f1",
+  "prevId": "b94696f8-7b77-4899-acb6-00a03d7b0f7e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -24,8 +24,7 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         },
         "impersonating_tenant_id": {
           "name": "impersonating_tenant_id",
@@ -35,7 +34,22 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "active_sessions_tenant_id_tenant_id_fk": {
+          "name": "active_sessions_tenant_id_tenant_id_fk",
+          "tableFrom": "active_sessions",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -99,8 +113,7 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -141,47 +154,32 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "ai_hint_cache_tenant_id_tenant_id_fk": {
+          "name": "ai_hint_cache_tenant_id_tenant_id_fk",
+          "tableFrom": "ai_hint_cache",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
-        "ai_hint_cache_dim_id_raw_pk": {
-          "name": "ai_hint_cache_dim_id_raw_pk",
+        "ai_hint_cache_tenant_id_dim_id_raw_pk": {
+          "name": "ai_hint_cache_tenant_id_dim_id_raw_pk",
           "columns": [
+            "tenant_id",
             "dim_id",
             "raw"
           ]
         }
       },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "zugzug_app.allowed_emails": {
-      "name": "allowed_emails",
-      "schema": "zugzug_app",
-      "columns": {
-        "email": {
-          "name": "email",
-          "type": "varchar",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "added_by": {
-          "name": "added_by",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "added_at": {
-          "name": "added_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -323,8 +321,7 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -378,7 +375,22 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "audit_log_tenant_id_tenant_id_fk": {
+          "name": "audit_log_tenant_id_tenant_id_fk",
+          "tableFrom": "audit_log",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -423,8 +435,7 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -471,11 +482,27 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "canonical_version_tenant_id_tenant_id_fk": {
+          "name": "canonical_version_tenant_id_tenant_id_fk",
+          "tableFrom": "canonical_version",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
-        "canonical_version_dim_id_key_pk": {
-          "name": "canonical_version_dim_id_key_pk",
+        "canonical_version_tenant_id_dim_id_key_pk": {
+          "name": "canonical_version_tenant_id_dim_id_key_pk",
           "columns": [
+            "tenant_id",
             "dim_id",
             "key"
           ]
@@ -493,7 +520,7 @@
         "id": {
           "name": "id",
           "type": "varchar",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "label": {
@@ -566,8 +593,7 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -587,8 +613,31 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "foreignKeys": {
+        "dimension_tenant_id_tenant_id_fk": {
+          "name": "dimension_tenant_id_tenant_id_fk",
+          "tableFrom": "dimension",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "dimension_tenant_id_id_pk": {
+          "name": "dimension_tenant_id_id_pk",
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -644,16 +693,31 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "dimension_field_tenant_id_tenant_id_fk": {
+          "name": "dimension_field_tenant_id_tenant_id_fk",
+          "tableFrom": "dimension_field",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
-        "dimension_field_dim_id_field_pk": {
-          "name": "dimension_field_dim_id_field_pk",
+        "dimension_field_tenant_id_dim_id_field_pk": {
+          "name": "dimension_field_tenant_id_dim_id_field_pk",
           "columns": [
+            "tenant_id",
             "dim_id",
             "field"
           ]
@@ -690,16 +754,31 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "dimension_source_tenant_id_tenant_id_fk": {
+          "name": "dimension_source_tenant_id_tenant_id_fk",
+          "tableFrom": "dimension_source",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
-        "dimension_source_dim_id_source_table_source_column_pk": {
-          "name": "dimension_source_dim_id_source_table_source_column_pk",
+        "dimension_source_tenant_id_dim_id_source_table_source_column_pk": {
+          "name": "dimension_source_tenant_id_dim_id_source_table_source_column_pk",
           "columns": [
+            "tenant_id",
             "dim_id",
             "source_table",
             "source_column"
@@ -757,12 +836,30 @@
           "primaryKey": false,
           "notNull": true
         },
+        "source": {
+          "name": "source",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'user'"
+        },
+        "confidence": {
+          "name": "confidence",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reasoning": {
+          "name": "reasoning",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "tenant_id": {
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -782,11 +879,27 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "draft_tenant_id_tenant_id_fk": {
+          "name": "draft_tenant_id_tenant_id_fk",
+          "tableFrom": "draft",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
-        "draft_dim_id_raw_user_id_pk": {
-          "name": "draft_dim_id_raw_user_id_pk",
+        "draft_tenant_id_dim_id_raw_user_id_pk": {
+          "name": "draft_tenant_id_dim_id_raw_user_id_pk",
           "columns": [
+            "tenant_id",
             "dim_id",
             "raw",
             "user_id"
@@ -795,7 +908,16 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "draft_source_chk": {
+          "name": "draft_source_chk",
+          "value": "\"zugzug_app\".\"draft\".\"source\" IN ('user', 'ai')"
+        },
+        "draft_confidence_chk": {
+          "name": "draft_confidence_chk",
+          "value": "\"zugzug_app\".\"draft\".\"confidence\" IS NULL OR \"zugzug_app\".\"draft\".\"confidence\" IN ('high', 'medium', 'low')"
+        }
+      },
       "isRLSEnabled": false
     },
     "zugzug_app.preferences": {
@@ -804,7 +926,7 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "serial",
           "primaryKey": true,
           "notNull": true
         },
@@ -832,12 +954,31 @@
           "primaryKey": false,
           "notNull": true
         },
+        "ai_enabled": {
+          "name": "ai_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "ai_provider": {
+          "name": "ai_provider",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "ai_api_key": {
+          "name": "ai_api_key",
+          "type": "varchar",
+          "primaryKey": false,
+          "notNull": false
+        },
         "tenant_id": {
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -857,11 +998,31 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "preferences_tenant_id_tenant_id_fk": {
+          "name": "preferences_tenant_id_tenant_id_fk",
+          "tableFrom": "preferences",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "preferences_ai_provider_chk": {
+          "name": "preferences_ai_provider_chk",
+          "value": "\"zugzug_app\".\"preferences\".\"ai_provider\" IN ('openai', 'anthropic', 'none')"
+        }
+      },
       "isRLSEnabled": false
     },
     "zugzug_app.scan_run": {
@@ -871,7 +1032,7 @@
         "id": {
           "name": "id",
           "type": "varchar",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "source_id": {
@@ -920,8 +1081,7 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {
@@ -956,8 +1116,31 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
+      "foreignKeys": {
+        "scan_run_tenant_id_tenant_id_fk": {
+          "name": "scan_run_tenant_id_tenant_id_fk",
+          "tableFrom": "scan_run",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "scan_run_tenant_id_id_pk": {
+          "name": "scan_run_tenant_id_id_pk",
+          "columns": [
+            "tenant_id",
+            "id"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1066,16 +1249,31 @@
           "name": "tenant_id",
           "type": "varchar",
           "primaryKey": false,
-          "notNull": false,
-          "default": "'default'"
+          "notNull": true
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "source_stat_tenant_id_tenant_id_fk": {
+          "name": "source_stat_tenant_id_tenant_id_fk",
+          "tableFrom": "source_stat",
+          "tableTo": "tenant",
+          "schemaTo": "zugzug_app",
+          "columnsFrom": [
+            "tenant_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {
-        "source_stat_dim_id_source_table_source_column_pk": {
-          "name": "source_stat_dim_id_source_table_source_column_pk",
+        "source_stat_tenant_id_dim_id_source_table_source_column_pk": {
+          "name": "source_stat_tenant_id_dim_id_source_table_source_column_pk",
           "columns": [
+            "tenant_id",
             "dim_id",
             "source_table",
             "source_column"
@@ -1390,13 +1588,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'password'"
-        },
-        "role": {
-          "name": "role",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'editor'"
         },
         "is_super_admin": {
           "name": "is_super_admin",
