@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../api";
+import { PageHeader } from "../../components/PageHeader";
 
 interface WarehouseDb {
   name: string;
@@ -26,12 +27,12 @@ export function Warehouses() {
 
   return (
     <div className="space-y-6">
-      <div className="zz-rise">
-        <h1 className="font-display text-2xl font-bold mb-1.5">Warehouses</h1>
-        <p className="text-sm text-ink-2">
-          MotherDuck databases available to this deployment. Read-only.
-        </p>
-      </div>
+      <PageHeader
+        kicker="System"
+        title="Warehouses"
+        lede="MotherDuck databases available to this deployment. Read-only."
+        count={loading || attached !== true ? undefined : dbs.length}
+      />
 
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (

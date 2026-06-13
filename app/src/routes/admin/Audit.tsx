@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../api";
+import { PageHeader } from "../../components/PageHeader";
 
 export interface User {
   id: string;
@@ -50,38 +51,40 @@ export function Audit() {
 
   return (
     <div className="space-y-6">
-      <div className="zz-rise flex items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-bold mb-1.5">System audit</h1>
-          <p className="text-sm text-ink-2">Cross-workspace activity log. Newest first.</p>
-        </div>
-        <form onSubmit={handleFilter} className="flex gap-2">
-          <input
-            className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink font-mono placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
-            value={tenantFilter}
-            onChange={(e) => setTenantFilter(e.target.value)}
-            placeholder="Filter by tenant ID…"
-          />
-          <button
-            type="submit"
-            className="px-3 py-1.5 text-sm bg-surface-2 border border-line text-ink-2 hover:text-ink hover:bg-hover transition-colors"
-          >
-            Filter
-          </button>
-          {tenantFilter && (
+      <PageHeader
+        kicker="System"
+        title="System audit"
+        lede="Cross-workspace activity log. Newest first."
+        count={loading ? undefined : rows.length}
+        action={
+          <form onSubmit={handleFilter} className="flex gap-2">
+            <input
+              className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink font-mono placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+              value={tenantFilter}
+              onChange={(e) => setTenantFilter(e.target.value)}
+              placeholder="Filter by tenant ID…"
+            />
             <button
-              type="button"
-              onClick={() => {
-                setTenantFilter("");
-                void load();
-              }}
-              className="px-3 py-1.5 text-sm text-ink-3 hover:text-ink transition-colors"
+              type="submit"
+              className="px-3 py-1.5 text-sm bg-surface-2 border border-line text-ink-2 hover:text-ink hover:bg-hover transition-colors"
             >
-              Clear
+              Filter
             </button>
-          )}
-        </form>
-      </div>
+            {tenantFilter && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTenantFilter("");
+                  void load();
+                }}
+                className="px-3 py-1.5 text-sm text-ink-3 hover:text-ink transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </form>
+        }
+      />
 
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (

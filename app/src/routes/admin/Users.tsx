@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { PageHeader } from "../../components/PageHeader";
 import { toast } from "../../components/Toast";
 
 interface AdminUser {
@@ -84,32 +85,25 @@ export function Users() {
 
   return (
     <div className="space-y-6">
-      <div className="zz-rise flex items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1.5">
-            <h1 className="font-display text-2xl font-bold">Users</h1>
-            {!loading && (
-              <span className="font-mono text-xs bg-surface-2 border border-line text-ink-3 px-2 py-0.5 tabular-nums">
-                {users.length}
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-ink-2">
-            All registered users. Promote or demote super-admin access.
-          </p>
-        </div>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name or email…"
-          />
-          <Button size="sm" type="submit">
-            Search
-          </Button>
-        </form>
-      </div>
+      <PageHeader
+        kicker="System"
+        title="Users"
+        lede="All registered users. Promote or demote super-admin access."
+        count={loading ? undefined : users.length}
+        action={
+          <form onSubmit={handleSearch} className="flex gap-2">
+            <input
+              className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name or email…"
+            />
+            <Button size="sm" type="submit">
+              Search
+            </Button>
+          </form>
+        }
+      />
 
       <div className="zz-rise border border-line" style={{ animationDelay: "80ms" }}>
         {loading ? (
