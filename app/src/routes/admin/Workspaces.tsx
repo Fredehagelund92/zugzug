@@ -7,11 +7,14 @@ import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { ago } from "../../components/sources/utils";
 import { invalidate, subscribeInvalidate } from "../../store";
+import { WorkspaceColorPicker } from "../../components/WorkspaceColorPicker";
+import { WORKSPACE_COLORS } from "../../lib/workspace-colors";
 
 interface Tenant {
   id: string;
   slug: string;
   label: string;
+  color: string | null;
   warehouse_id: string;
   member_count?: number;
   last_activity_at?: string | null;
@@ -27,6 +30,7 @@ export function Workspaces() {
   const [slug, setSlug] = useState("");
   const [label, setLabel] = useState("");
   const [warehouseId, setWarehouseId] = useState("default");
+  const [color, setColor] = useState<string>(WORKSPACE_COLORS[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
@@ -74,12 +78,13 @@ export function Workspaces() {
     const r = await apiFetch("/tenants", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug, label, warehouseId }),
+      body: JSON.stringify({ slug, label, warehouseId, color }),
     });
     if (r.ok) {
       setSlug("");
       setLabel("");
       setWarehouseId("default");
+      setColor(WORKSPACE_COLORS[0]);
       setShowForm(false);
       invalidate.tenantList();
       // Creating a workspace auto-joins the super-admin per the server, so
@@ -149,8 +154,11 @@ export function Workspaces() {
                 className="zz-rise grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
                 style={{ animationDelay: `${120 + i * 40}ms` }}
               >
-                {/* left accent bar */}
-                <div className="w-0.5 h-6 bg-accent opacity-40 group-hover:opacity-90 transition-opacity" />
+                {/* workspace color dot */}
+                <div
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ background: t.color ?? WORKSPACE_COLORS[0] }}
+                />
 
                 {/* slug */}
                 <code className="font-mono text-sm text-accent truncate">{t.slug}</code>
@@ -241,6 +249,42 @@ export function Workspaces() {
                 Warehouse ID
               </label>
               <WarehousePicker value={warehouseId} onChange={setWarehouseId} />
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-1.5">
+            <label className="block font-mono text-[10px] uppercase tracking-widest text-ink-3">
+              Color
+            </label>
+            <div className="flex items-center gap-4">
+              <WorkspaceColorPicker value={color} onChange={setColor} />
+              {/* Live avatar preview */}
+              <div className="flex items-center gap-2 px-2 py-1 border border-line bg-surface rounded">
+                <div
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 5,
+                    background: color,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "#fff" }}>
+                    {label
+                      ? (() => {
+                          const words = label.trim().split(/\s+/).filter(Boolean);
+                          return words.length === 1
+                            ? words[0].slice(0, 2).toUpperCase()
+                            : (words[0]![0]! + words[1]![0]!).toUpperCase();
+                        })()
+                      : "??"}
+                  </span>
+                </div>
+                <span className="text-xs text-ink-2 truncate max-w-[140px]">{label || "Preview"}</span>
+              </div>
             </div>
           </div>
 
