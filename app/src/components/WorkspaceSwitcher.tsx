@@ -4,7 +4,11 @@ import { useTenant } from "../lib/tenant-context";
 import { authFetch } from "../api";
 import { can } from "../lib/permissions";
 
-interface Item { slug: string; label: string; role: "admin" | "editor" | "viewer"; }
+interface Item {
+  slug: string;
+  label: string;
+  role: "admin" | "editor" | "viewer";
+}
 
 export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
   const tenant = useTenant();
@@ -42,10 +46,15 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
         aria-expanded={open}
       >
         <span className="font-medium truncate">{tenant.label}</span>
-        <span aria-hidden className="ml-auto shrink-0">▾</span>
+        <span aria-hidden className="ml-auto shrink-0">
+          ▾
+        </span>
       </button>
       {open && (
-        <div role="menu" className="absolute left-0 top-full mt-1 min-w-[220px] rounded border border-line bg-surface shadow-lg z-50">
+        <div
+          role="menu"
+          className="absolute left-0 top-full mt-1 min-w-[220px] rounded border border-line bg-surface shadow-lg z-50"
+        >
           <div className="px-3 py-1.5 text-xs text-ink-2 uppercase tracking-wide">Workspaces</div>
           {memberships.map((m) => (
             <button
@@ -62,17 +71,34 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
           {tenant.isSuperAdmin && (
             <>
               <hr className="my-1 border-line" />
-              <button onClick={() => { setOpen(false); navigate("/app/admin"); }} className="block w-full text-left px-3 py-1.5 hover:bg-surface-2" role="menuitem">
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/app/admin");
+                }}
+                className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
+                role="menuitem"
+              >
                 Admin console
               </button>
-              <button onClick={() => { setOpen(false); navigate("/app/admin/tenants"); }} className="block w-full text-left px-3 py-1.5 hover:bg-surface-2" role="menuitem">
+              <button
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/app/admin/tenants");
+                }}
+                className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
+                role="menuitem"
+              >
                 + Create workspace
               </button>
             </>
           )}
           <hr className="my-1 border-line" />
           <button
-            onClick={() => { setOpen(false); navigate(`/app/${tenant.slug}/account`); }}
+            onClick={() => {
+              setOpen(false);
+              navigate(`/app/${tenant.slug}/account`);
+            }}
             className="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 transition-colors"
             role="menuitem"
           >
@@ -80,7 +106,10 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
           </button>
           {can(tenant, "settings.general.edit") && (
             <button
-              onClick={() => { setOpen(false); navigate(`/app/${tenant.slug}/settings`); }}
+              onClick={() => {
+                setOpen(false);
+                navigate(`/app/${tenant.slug}/settings`);
+              }}
               className="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 transition-colors"
               role="menuitem"
             >
@@ -88,7 +117,11 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
             </button>
           )}
           <hr className="my-1 border-line" />
-          <button onClick={signOut} className="block w-full text-left px-3 py-1.5 hover:bg-surface-2" role="menuitem">
+          <button
+            onClick={signOut}
+            className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
+            role="menuitem"
+          >
             Sign out
           </button>
         </div>

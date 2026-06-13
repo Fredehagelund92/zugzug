@@ -34,9 +34,7 @@ export function Profile() {
   };
 
   const signOut = () =>
-    authFetch("/auth/logout", { method: "POST" }).then(() =>
-      window.location.replace("/login"),
-    );
+    authFetch("/auth/logout", { method: "POST" }).then(() => window.location.replace("/login"));
 
   return (
     <>

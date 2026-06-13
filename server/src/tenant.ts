@@ -295,10 +295,7 @@ export async function removeMember(tenantId: string, userId: string): Promise<vo
 export async function updateTenantLabel(tenantId: string, label: string): Promise<void> {
   const trimmed = label.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "label cannot be empty", 400);
-  await pgRun(
-    `UPDATE "zugzug_app"."tenant" SET label = $1 WHERE id = $2`,
-    [trimmed, tenantId],
-  );
+  await pgRun(`UPDATE "zugzug_app"."tenant" SET label = $1 WHERE id = $2`, [trimmed, tenantId]);
 }
 
 /**
@@ -315,8 +312,8 @@ export async function leaveTenant(tenantId: string, userId: string): Promise<voi
       throw new AppError("LAST_ADMIN", "cannot leave — you are the last admin", 409);
     }
   }
-  await pgRun(
-    `DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1 AND user_id = $2`,
-    [tenantId, userId],
-  );
+  await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1 AND user_id = $2`, [
+    tenantId,
+    userId,
+  ]);
 }

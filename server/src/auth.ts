@@ -184,10 +184,9 @@ export async function handleMe(req: Request): Promise<Response> {
       headers: { "content-type": "application/json", ...cors },
     });
   // Best-effort — fire-and-forget, never blocks the response.
-  void run(
-    `UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`,
-    [user.id],
-  ).catch(() => {});
+  void run(`UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`, [user.id]).catch(
+    () => {},
+  );
   return new Response(JSON.stringify(user), {
     status: 200,
     headers: { "content-type": "application/json", ...cors },
@@ -213,8 +212,5 @@ export async function handleDevLogin(): Promise<Response> {
 export async function updateUserName(userId: string, name: string): Promise<void> {
   const trimmed = name.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "name cannot be empty", 400);
-  await run(
-    `UPDATE ${pg("users")} SET name = $1 WHERE id = $2`,
-    [trimmed, userId],
-  );
+  await run(`UPDATE ${pg("users")} SET name = $1 WHERE id = $2`, [trimmed, userId]);
 }

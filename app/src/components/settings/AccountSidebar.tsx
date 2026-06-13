@@ -2,8 +2,8 @@ import { NavLink } from "react-router-dom";
 import { cx } from "../../lib/cx";
 
 const ITEMS = [
-  { label: "Profile",       to: "profile" },
-  { label: "Appearance",    to: "appearance" },
+  { label: "Profile", to: "profile" },
+  { label: "Appearance", to: "appearance" },
   { label: "Notifications", to: "notifications" },
 ];
 
@@ -21,9 +21,7 @@ export function AccountSidebar() {
           className={({ isActive }) =>
             cx(
               "block px-3 py-1.5 text-sm font-body transition-colors rounded-sm",
-              isActive
-                ? "bg-surface-2 text-ink"
-                : "text-ink-2 hover:text-ink hover:bg-hover",
+              isActive ? "bg-surface-2 text-ink" : "text-ink-2 hover:text-ink hover:bg-hover",
             )
           }
         >

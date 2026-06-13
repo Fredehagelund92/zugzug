@@ -80,10 +80,7 @@ createRoot(root).render(
                       <Route
                         path="/app"
                         element={
-                          <Navigate
-                            to={`/app/${boot.memberships[0]?.slug ?? "admin"}`}
-                            replace
-                          />
+                          <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
                         }
                       />
 

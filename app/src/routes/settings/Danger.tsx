@@ -120,10 +120,7 @@ export function Danger() {
             className="w-full max-w-sm rounded-lg border border-line bg-surface-elevated p-5 shadow-pop"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2
-              id="delete-dialog-title"
-              className="font-display text-base font-bold text-ink"
-            >
+            <h2 id="delete-dialog-title" className="font-display text-base font-bold text-ink">
               Delete {tenant.label}?
             </h2>
             <p className="mt-2 text-[13px] text-ink-2">

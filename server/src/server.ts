@@ -276,9 +276,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           };
           const dbRows = await raw.all<{ database_name: string }>("SHOW DATABASES");
           const excluded = new Set(["system", "temp"]);
-          const names = dbRows
-            .map((r) => r.database_name)
-            .filter((n) => !excluded.has(n));
+          const names = dbRows.map((r) => r.database_name).filter((n) => !excluded.has(n));
 
           const countRows = await raw.all<{ table_catalog: string; n: bigint }>(
             "SELECT table_catalog, COUNT(*) AS n FROM information_schema.tables GROUP BY 1",
@@ -405,7 +403,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     // POST /api/t/:slug/leave — leave workspace (any member; last-admin guard)
-    if (tenantSlugFromPath !== null && seg[1] === "leave" && seg.length === 2 && method === "POST") {
+    if (
+      tenantSlugFromPath !== null &&
+      seg[1] === "leave" &&
+      seg.length === 2 &&
+      method === "POST"
+    ) {
       try {
         await leaveTenant(tenantCtx.tenantId, me);
       } catch (e) {
