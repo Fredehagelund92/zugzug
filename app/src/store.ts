@@ -73,6 +73,9 @@ export interface Draft {
   targetKey: string | null;
   user: User;
   at: string;
+  source: "user" | "ai";
+  confidence: "high" | "medium" | "low" | null;
+  reasoning: string | null;
 }
 export interface AuditEntry {
   id: string;
@@ -562,6 +565,10 @@ export async function saveDraft(
       targetKey,
       user: currentUser,
       at: new Date().toISOString(),
+      // Preserve AI provenance from previous draft if it exists; otherwise default to user.
+      source: prev?.source ?? "user",
+      confidence: prev?.confidence ?? null,
+      reasoning: prev?.reasoning ?? null,
     },
   };
   emit();
@@ -607,6 +614,66 @@ export async function discardDraft(dimId: string, raw: string): Promise<void> {
 /** All staged edits for a dimension (sync read of the cache). */
 export function listDrafts(dimId: string): Draft[] {
   return Object.values(draftsFlat).filter((d) => d.dimId === dimId);
+}
+
+/**
+ * Generate AI mapping suggestion for an unmapped raw value.
+ * POST /api/dimensions/:dimensionId/suggest
+ * Returns a draft created with source='ai' and confidence metadata.
+ */
+export async function generateSuggestion(
+  dimensionId: string,
+  rawValue: string,
+  options?: { forceRefresh?: boolean },
+): Promise<{
+  draft_id: string;
+  draft: {
+    id: string;
+    dim_id: string;
+    raw: string;
+    target_label: string;
+    target_key: string | null;
+    source: "ai" | "user";
+    confidence: "high" | "medium" | "low";
+    reasoning?: string;
+    created_at: string;
+    created_by: string;
+  };
+  cached?: boolean;
+}> {
+  const response = await apiFetch(`/dimensions/${encodeURIComponent(dimensionId)}/suggest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      raw_value: rawValue,
+      force_refresh: options?.forceRefresh,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = (await response.json().catch(() => ({}))) as {
+      detail?: string;
+      error?: string;
+    };
+    throw new Error(error.detail ?? error.error ?? "Failed to generate suggestion");
+  }
+
+  return response.json() as Promise<{
+    draft_id: string;
+    draft: {
+      id: string;
+      dim_id: string;
+      raw: string;
+      target_label: string;
+      target_key: string | null;
+      source: "ai" | "user";
+      confidence: "high" | "medium" | "low";
+      reasoning?: string;
+      created_at: string;
+      created_by: string;
+    };
+    cached?: boolean;
+  }>;
 }
 
 /** Approve & commit the dimension's mapped drafts (server folds them into the

@@ -26,6 +26,81 @@ const MarkBackdrop = () => (
   <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
 );
 
+/* EmptyStateIllustration — tells the Zugzug story in a single picture:
+   three messy raw values (left) reconciled into one canonical value (right).
+   Token-driven (ink/line/accent), animated reveal via zz-rise. */
+const EmptyStateIllustration = () => (
+  <div className="zz-rise relative mx-auto flex h-44 w-full max-w-md items-center justify-center md:h-56">
+    <svg
+      viewBox="0 0 360 200"
+      fill="none"
+      className="h-full w-full"
+      aria-hidden="true"
+    >
+      <defs>
+        <pattern id="zz-grid" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
+          <path d="M 14 0 L 0 0 0 14" className="text-line-2" stroke="currentColor" strokeWidth="0.5" />
+        </pattern>
+      </defs>
+
+      {/* Subtle grid background */}
+      <rect width="360" height="200" fill="url(#zz-grid)" opacity="0.4" />
+
+      {/* Left column — three messy variants */}
+      <g className="text-line" stroke="currentColor" strokeWidth="1.25">
+        <rect x="24" y="36" width="118" height="28" rx="6" fill="var(--bg)" />
+        <rect x="24" y="86" width="118" height="28" rx="6" fill="var(--bg)" />
+        <rect x="24" y="136" width="118" height="28" rx="6" fill="var(--bg)" />
+      </g>
+      <g className="font-mono text-ink-2" fontSize="11" fontFamily="ui-monospace, monospace">
+        <text x="38" y="55">espn</text>
+        <text x="38" y="105">E.S.P.N</text>
+        <text x="38" y="155">Espn Inc.</text>
+      </g>
+
+      {/* Connection lines — dashed, accent */}
+      <g className="text-accent" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 4" fill="none">
+        <path d="M 142 50 C 190 50, 200 100, 218 100" />
+        <path d="M 142 100 L 218 100" />
+        <path d="M 142 150 C 190 150, 200 100, 218 100" />
+      </g>
+
+      {/* Right canonical card — solid, accented */}
+      <g>
+        <rect
+          x="218"
+          y="78"
+          width="118"
+          height="44"
+          rx="8"
+          className="text-accent"
+          fill="var(--ak-accent-wash, color-mix(in srgb, var(--accent) 9%, transparent))"
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+        <text
+          x="277"
+          y="105"
+          className="text-ink font-display"
+          fontSize="14"
+          fontWeight="700"
+          textAnchor="middle"
+        >
+          ESPN
+        </text>
+      </g>
+
+      {/* Tiny accent dots on connection joins */}
+      <g className="text-accent" fill="currentColor">
+        <circle cx="142" cy="50" r="2" />
+        <circle cx="142" cy="100" r="2" />
+        <circle cx="142" cy="150" r="2" />
+        <circle cx="218" cy="100" r="2.5" />
+      </g>
+    </svg>
+  </div>
+);
+
 function rise(i: number) {
   return { className: "zz-rise", style: { animationDelay: `${i * 70}ms` } };
 }
@@ -142,7 +217,8 @@ export function Dashboard() {
 
   if (dims.length === 0) {
     return (
-      <div className="space-y-8">
+      <div className="mx-auto w-full max-w-2xl space-y-8 p-6 md:p-12">
+        <EmptyStateIllustration />
         <PageHeader
           backdrop={<MarkBackdrop />}
           kicker="Master data"

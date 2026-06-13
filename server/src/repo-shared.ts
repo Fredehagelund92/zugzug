@@ -239,6 +239,9 @@ export interface Draft {
   targetKey: string | null;
   user: User;
   at: string;
+  source: "user" | "ai";
+  confidence: "high" | "medium" | "low" | null;
+  reasoning: string | null;
 }
 export interface User {
   id: string;

@@ -91,11 +91,16 @@ export const draft = app.table(
     target_key:   varchar("target_key"),
     user_id:      varchar("user_id").notNull(),
     created_at:   timestamp("created_at").notNull(),
+    source:       varchar("source").notNull().default("user"),
+    confidence:   varchar("confidence"),
+    reasoning:    varchar("reasoning"),
     tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw, t.user_id] }),
     index("draft_tenant_idx").on(t.tenant_id),
+    check("draft_source_chk", sql`${t.source} IN ('user', 'ai')`),
+    check("draft_confidence_chk", sql`${t.confidence} IS NULL OR ${t.confidence} IN ('high', 'medium', 'low')`),
   ],
 );
 
@@ -181,9 +186,15 @@ export const preferences = app.table(
     suggest_threshold: integer("suggest_threshold").notNull(),
     scan_schedule:     varchar("scan_schedule", { length: 10 }),
     updated_at:        timestamp("updated_at").notNull(),
+    ai_enabled:        boolean("ai_enabled").notNull().default(false),
+    ai_provider:       varchar("ai_provider").notNull().default("none"),
+    ai_api_key:        varchar("ai_api_key"),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [uniqueIndex("preferences_tenant_unique").on(t.tenant_id)],
+  (t) => [
+    uniqueIndex("preferences_tenant_unique").on(t.tenant_id),
+    check("preferences_ai_provider_chk", sql`${t.ai_provider} IN ('openai', 'anthropic', 'none')`),
+  ],
 );
 
 export const userGridLayout = app.table(

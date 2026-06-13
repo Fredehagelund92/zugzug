@@ -22,6 +22,7 @@ import {
   useDrafts,
   useCanEdit,
 } from "../../store";
+import { GetSuggestionButton } from "../GetSuggestionButton";
 
 /* MatchModeBody — the per-tab single-dim Match workbench. Lifted from the
    monolithic Mapping route so each open table mounts its own scoped instance
@@ -566,6 +567,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     </div>
                   ) : null;
                 })()}
+                {/* Show AI suggestion button for unmapped values with no existing suggestion */}
+                {state[r.value]?.status === "new" && !r.suggestion && canEdit && (
+                  <div className="mt-2">
+                    <GetSuggestionButton dimensionId={dim.id} rawValue={r.value} />
+                  </div>
+                )}
               </div>
             );
           }}
@@ -729,6 +736,34 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                                 {d.user.initials}
                               </span>
                               <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
+                              {d.source === "ai" && (
+                                <span className="flex shrink-0 items-center gap-1">
+                                  <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">
+                                    AI
+                                  </span>
+                                  {d.confidence && (
+                                    <span
+                                      className={cx(
+                                        "rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                                        d.confidence === "high" && "bg-green-100 text-green-700",
+                                        d.confidence === "medium" && "bg-yellow-100 text-yellow-700",
+                                        d.confidence === "low" && "bg-red-100 text-red-700",
+                                      )}
+                                      title={d.reasoning ?? undefined}
+                                    >
+                                      {d.confidence.charAt(0).toUpperCase() + d.confidence.slice(1)}
+                                    </span>
+                                  )}
+                                  {d.reasoning && (
+                                    <span
+                                      title={d.reasoning}
+                                      className="inline-grid h-3.5 w-3.5 cursor-help place-items-center rounded-full bg-surface-3 text-[8px] text-ink-3"
+                                    >
+                                      ?
+                                    </span>
+                                  )}
+                                </span>
+                              )}
                               <span className="shrink-0 text-ink-2 tabular-nums">
                                 {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
                               </span>

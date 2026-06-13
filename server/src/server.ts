@@ -54,6 +54,13 @@ import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
 import { checkHealth } from "./health.ts"; // used by the /api/health/connections route below
+import { generateSuggestion, AINotEnabledError } from "./suggestion.ts";
+import {
+  InvalidAPIKeyError,
+  AIProviderError,
+  AIResponseParseError,
+  RateLimitError,
+} from "./ai-providers/index.ts";
 
 const corsHeaders = {
   "access-control-allow-origin": env.origin,
@@ -912,6 +919,130 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(tenantCtx.role, "commit");
           if (denied) return denied;
           return json(await reqRepo.commit(id, me));
+        }
+        // POST /api/dimensions/:id/suggest {raw_value, force_refresh?} — AI suggestion
+        if (seg[3] === "suggest" && seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(tenantCtx.role, "curate");
+          if (denied) return denied;
+          const body = (await req.json()) as {
+            raw_value?: unknown;
+            force_refresh?: unknown;
+          };
+          const rawValue = body.raw_value;
+          const forceRefresh = body.force_refresh === true;
+          if (typeof rawValue !== "string" || rawValue.length === 0) {
+            return json(
+              {
+                error: "INVALID_REQUEST",
+                detail: "raw_value is required and must be a string",
+              },
+              400,
+            );
+          }
+          try {
+            const dimension = await reqRepo.getDimensionBasic(id);
+            if (!dimension) {
+              return json(
+                {
+                  error: "DIMENSION_NOT_FOUND",
+                  detail: `Dimension ${id} not found in workspace`,
+                },
+                404,
+              );
+            }
+            const canonicals = await reqRepo.getCanonicalValues(id, { limit: 30 });
+            const suggestion = await generateSuggestion(
+              tenantCtx.tenantId,
+              {
+                dimensionId: id,
+                dimensionName: dimension.label,
+                rawValue,
+                existingCanonicalValues: canonicals,
+              },
+              { forceRefresh },
+            );
+            const draft = await reqRepo.createDraft(
+              {
+                dim_id: id,
+                raw: rawValue,
+                target_label: suggestion.canonical,
+                source: "ai",
+                confidence: suggestion.confidence,
+                reasoning: suggestion.reasoning ?? null,
+              },
+              me,
+            );
+            return json(
+              {
+                draft_id: `${draft.dimId}:${draft.raw}`,
+                draft: {
+                  dim_id: draft.dimId,
+                  raw: draft.raw,
+                  status: draft.status,
+                  target_label: draft.targetLabel,
+                  target_key: draft.targetKey,
+                  source: draft.source,
+                  confidence: draft.confidence,
+                  reasoning: draft.reasoning,
+                  user: draft.user,
+                  at: draft.at,
+                },
+                cached: suggestion.cached,
+              },
+              201,
+            );
+          } catch (e) {
+            if (e instanceof AINotEnabledError) {
+              return json(
+                {
+                  error: "AI_NOT_CONFIGURED",
+                  detail: "Enable AI in Workspace Settings",
+                },
+                400,
+              );
+            }
+            if (e instanceof InvalidAPIKeyError) {
+              return json(
+                {
+                  error: "INVALID_API_KEY",
+                  detail: "AI provider API key is invalid or expired",
+                },
+                401,
+              );
+            }
+            if (e instanceof RateLimitError) {
+              return json(
+                {
+                  error: "RATE_LIMITED",
+                  detail:
+                    "AI provider rate limit exceeded; try again in a few seconds",
+                },
+                429,
+              );
+            }
+            if (e instanceof AIResponseParseError) {
+              console.error("AI response parse error:", e.message);
+              return json(
+                {
+                  error: "AI_RESPONSE_ERROR",
+                  detail: "AI provider returned an unparseable response",
+                },
+                500,
+              );
+            }
+            if (e instanceof AIProviderError) {
+              console.error("AI provider error:", e.message);
+              return json(
+                {
+                  error: "AI_SERVICE_ERROR",
+                  detail:
+                    "AI service is temporarily unavailable; please try again",
+                },
+                500,
+              );
+            }
+            throw e;
+          }
         }
         // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
         if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
