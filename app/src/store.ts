@@ -73,6 +73,9 @@ export interface Draft {
   targetKey: string | null;
   user: User;
   at: string;
+  source: "user" | "ai";
+  confidence: "high" | "medium" | "low" | null;
+  reasoning: string | null;
 }
 export interface AuditEntry {
   id: string;
@@ -562,6 +565,10 @@ export async function saveDraft(
       targetKey,
       user: currentUser,
       at: new Date().toISOString(),
+      // Preserve AI provenance from previous draft if it exists; otherwise default to user.
+      source: prev?.source ?? "user",
+      confidence: prev?.confidence ?? null,
+      reasoning: prev?.reasoning ?? null,
     },
   };
   emit();

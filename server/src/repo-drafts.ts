@@ -34,11 +34,15 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
     targetKey: string | null;
     uid: string;
     secs: number;
+    source: "user" | "ai";
+    confidence: "high" | "medium" | "low" | null;
+    reasoning: string | null;
   }>(
     `SELECT dim_id AS "dimId", raw, status,
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
-            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
+            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            source, confidence, reasoning
      FROM ${pg("draft")} WHERE dim_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
     [dimId, tenantId],
   );
@@ -60,6 +64,9 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
     targetKey: r.targetKey,
     user: byId.get(r.uid) ?? unknownUser,
     at: rel(Number(r.secs)),
+    source: r.source,
+    confidence: r.confidence,
+    reasoning: r.reasoning,
   }));
 }
 
