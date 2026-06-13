@@ -116,11 +116,15 @@ export function General() {
             <WorkspaceColorPicker
               value={tenant.color}
               onChange={async (hex) => {
-                await apiFetch("", {
+                const res = await apiFetch("", {
                   method: "PATCH",
                   headers: { "content-type": "application/json" },
                   body: JSON.stringify({ color: hex }),
                 });
+                if (!res.ok) {
+                  const msg = await readServerError(res);
+                  throw new Error(msg);
+                }
                 await invalidate.memberships();
               }}
             />

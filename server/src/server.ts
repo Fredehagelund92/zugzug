@@ -223,7 +223,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
   if (pathname === "/api/me/memberships" && method === "GET") {
     const memberships = await listMembershipsForUser(sessionUser.id);
-    let workspaces: { slug: string; label: string; role: string; color: string | null }[];
+    let workspaces: { slug: string; label: string; role: "admin" | "editor" | "viewer"; color: string | null }[];
     if (sessionUser.isSuperAdmin) {
       const allTenants = await listTenants();
       const memberMap = new Map(memberships.map((m) => [m.tenant.id, m.role]));
