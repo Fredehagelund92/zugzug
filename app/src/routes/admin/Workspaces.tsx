@@ -3,6 +3,8 @@ import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { PageHeader } from "../../components/PageHeader";
 import { WarehousePicker } from "../../components/WarehousePicker";
+import { SkeletonList } from "../../components/Skeleton";
+import { EmptyState } from "../../components/EmptyState";
 
 interface Tenant {
   id: string;
@@ -72,13 +74,17 @@ export function Workspaces() {
       {/* Workspace list */}
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <div className="border border-line py-16 flex items-center justify-center">
-            <span className="font-mono text-xs text-ink-3 uppercase tracking-widest">Loading…</span>
-          </div>
+          <SkeletonList rows={4} columns={[20, 160, "minmax(0,1fr)", 140]} data-testid="workspaces-skeleton" />
         ) : tenants.length === 0 ? (
-          <div className="border border-dashed border-line-2 py-16 text-center">
-            <p className="text-sm text-ink-3">No workspaces yet.</p>
-          </div>
+          <EmptyState
+            title="No workspaces yet"
+            body="Workspaces isolate reconciliation environments. Each scopes to a warehouse connection and owns its own canonical tables."
+            action={
+              <Button size="sm" onClick={() => setShowForm(true)}>
+                Create your first workspace
+              </Button>
+            }
+          />
         ) : (
           <div className="border border-line divide-y divide-line">
             {/* Column headers */}
