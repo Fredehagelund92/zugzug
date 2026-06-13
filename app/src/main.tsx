@@ -23,11 +23,14 @@ import { Tokens } from "./routes/settings/Tokens";
 import { Scans } from "./routes/settings/Scans";
 import { Matching } from "./routes/settings/Matching";
 import { Warehouse } from "./routes/settings/Warehouse";
-import { Appearance } from "./routes/settings/Appearance";
 import { Audit as SettingsAudit } from "./routes/settings/Audit";
 import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
 import { AdminTenants } from "./routes/admin/Tenants";
+import { Account } from "./routes/account/Account";
+import { Profile } from "./routes/account/Profile";
+import { Appearance as AccountAppearance } from "./routes/account/Appearance";
+import { Notifications } from "./routes/account/Notifications";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN;
 if (dsn) {
@@ -112,9 +115,14 @@ createRoot(root).render(
                             <Route path="scans" element={<Scans />} />
                             <Route path="matching" element={<Matching />} />
                             <Route path="warehouse" element={<Warehouse />} />
-                            <Route path="appearance" element={<Appearance />} />
                             <Route path="audit" element={<SettingsAudit />} />
                             <Route path="danger" element={<Danger />} />
+                          </Route>
+                          <Route path="account" element={<Account />}>
+                            <Route index element={<Navigate to="profile" replace />} />
+                            <Route path="profile" element={<Profile />} />
+                            <Route path="appearance" element={<AccountAppearance />} />
+                            <Route path="notifications" element={<Notifications />} />
                           </Route>
                         </Route>
                       </Route>

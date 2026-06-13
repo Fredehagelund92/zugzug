@@ -16,7 +16,6 @@ const ITEMS: Item[] = [
   { label: "Scans", to: "scans", action: "settings.scans.view" },
   { label: "Matching", to: "matching", action: "settings.matching.view" },
   { label: "Warehouse", to: "warehouse", action: "settings.warehouse.view" },
-  { label: "Appearance", to: "appearance", action: "settings.appearance.edit" },
   { label: "Audit", to: "audit", action: "settings.audit.view" },
   { label: "Danger", to: "danger", action: "settings.danger.leave" },
 ];

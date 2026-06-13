@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTenant } from "../lib/tenant-context";
 import { authFetch } from "../api";
+import { can } from "../lib/permissions";
 
 interface Item {
   slug: string;
@@ -91,6 +92,29 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
                 + Create workspace
               </button>
             </>
+          )}
+          <hr className="my-1 border-line" />
+          <button
+            onClick={() => {
+              setOpen(false);
+              navigate(`/app/${tenant.slug}/account`);
+            }}
+            className="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 transition-colors"
+            role="menuitem"
+          >
+            Account settings
+          </button>
+          {can(tenant, "settings.general.edit") && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                navigate(`/app/${tenant.slug}/settings`);
+              }}
+              className="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 transition-colors"
+              role="menuitem"
+            >
+              Workspace settings
+            </button>
           )}
           <hr className="my-1 border-line" />
           <button

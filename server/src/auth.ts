@@ -17,6 +17,7 @@
 
 import { env, pg } from "./env.ts";
 import { pgRun as run, pgGet as get } from "./pg.ts";
+import { AppError } from "./errors.ts";
 
 export interface SessionUser {
   id: string;
@@ -182,6 +183,10 @@ export async function handleMe(req: Request): Promise<Response> {
       status: 401,
       headers: { "content-type": "application/json", ...cors },
     });
+  // Best-effort — fire-and-forget, never blocks the response.
+  void run(`UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`, [user.id]).catch(
+    () => {},
+  );
   return new Response(JSON.stringify(user), {
     status: 200,
     headers: { "content-type": "application/json", ...cors },
@@ -201,4 +206,11 @@ export async function handleDevLogin(): Promise<Response> {
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", setCookie);
   return new Response(null, { status: 302, headers });
+}
+
+/** Updates the display name for an authenticated user. Throws AppError on empty name. */
+export async function updateUserName(userId: string, name: string): Promise<void> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new AppError("VALIDATION_FAILED", "name cannot be empty", 400);
+  await run(`UPDATE ${pg("users")} SET name = $1 WHERE id = $2`, [trimmed, userId]);
 }
