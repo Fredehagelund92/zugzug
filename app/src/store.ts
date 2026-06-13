@@ -1133,3 +1133,162 @@ export function useConnectionHealth(): ConnectionHealth | null {
     () => connectionHealth,
   );
 }
+
+/* ============================================================================
+   Memberships slice + invalidate() registry
+   ----------------------------------------------------------------------------
+   Phase B: post-save state propagation. Most "settings" data (members, tokens,
+   tenant list, admin users) is owned by individual route components — they
+   fetch with their own `useEffect`. To let a save handler in one page refresh
+   data in another (e.g. renaming a workspace must update the WorkspaceSwitcher
+   on every page), we expose a tiny pub/sub: `invalidate.X()` fires registered
+   subscribers, plus runs the built-in refetcher for any slice the store owns
+   directly (currentUser, preferences, memberships, audit).
+
+   Subscribers register via `subscribeInvalidate(key, fn)` and the function is
+   called whenever `invalidate.<key>()` fires. Use this from route components
+   that own their fetch (Members, Tokens, Workspaces admin, Users admin).
+   ============================================================================ */
+
+export interface MembershipLite {
+  slug: string;
+  label: string;
+  role: "admin" | "editor" | "viewer";
+}
+
+let memberships: MembershipLite[] = [];
+
+export function setMemberships(next: MembershipLite[]): void {
+  memberships = next;
+  emit();
+}
+
+export function getMemberships(): MembershipLite[] {
+  return memberships;
+}
+
+export function useMemberships(): MembershipLite[] {
+  return useSyncExternalStore(
+    subscribe,
+    () => memberships,
+    () => memberships,
+  );
+}
+
+async function refetchCurrentUser(): Promise<void> {
+  const res = await authFetch("/auth/me");
+  if (!res.ok) return;
+  const data: unknown = await res.json().catch(() => null);
+  if (isCurrentUser(data)) {
+    currentUserFull = data;
+    emit();
+  }
+}
+
+async function refetchMemberships(): Promise<void> {
+  const res = await authFetch("/me/memberships");
+  if (!res.ok) return;
+  const body = (await res.json().catch(() => null)) as
+    | { memberships?: MembershipLite[] }
+    | null;
+  if (body && Array.isArray(body.memberships)) {
+    memberships = body.memberships;
+    emit();
+  }
+}
+
+async function refetchPreferences(): Promise<void> {
+  await refreshPreferences();
+  emit();
+}
+
+async function refetchAudit(): Promise<void> {
+  await refreshAudit();
+  emit();
+}
+
+/* ---- subscriber registry for route-owned fetches ---- */
+export type InvalidateKey =
+  | "currentUser"
+  | "tenant"
+  | "memberships"
+  | "members"
+  | "tokens"
+  | "scans"
+  | "audit"
+  | "warehouses"
+  | "tenantList"
+  | "adminUsers";
+
+type Subscriber = (slug?: string) => void | Promise<void>;
+const invalidateSubs: Map<InvalidateKey, Set<Subscriber>> = new Map();
+
+export function subscribeInvalidate(key: InvalidateKey, fn: Subscriber): () => void {
+  let set = invalidateSubs.get(key);
+  if (!set) {
+    set = new Set();
+    invalidateSubs.set(key, set);
+  }
+  set.add(fn);
+  return () => {
+    set?.delete(fn);
+  };
+}
+
+function fireInvalidate(key: InvalidateKey, slug?: string): void {
+  const set = invalidateSubs.get(key);
+  if (!set) return;
+  for (const fn of set) {
+    try {
+      const r = fn(slug);
+      if (r && typeof (r as Promise<void>).catch === "function") {
+        (r as Promise<void>).catch((err) => console.error(`invalidate.${key} subscriber`, err));
+      }
+    } catch (err) {
+      console.error(`invalidate.${key} subscriber`, err);
+    }
+  }
+}
+
+/** Targeted refetch entry points called from save handlers. Each fires both
+ *  store-owned refetchers (where applicable) and any registered subscribers
+ *  from route components. Slugs are passed through for namespaced data. */
+export const invalidate = {
+  currentUser: async (): Promise<void> => {
+    await refetchCurrentUser();
+    fireInvalidate("currentUser");
+  },
+  tenant: async (slug?: string): Promise<void> => {
+    // No dedicated tenant fetcher — the label flows through memberships, and
+    // per-tenant config lives on `preferences`. Refresh both.
+    await Promise.all([refetchMemberships(), refetchPreferences()]);
+    fireInvalidate("tenant", slug);
+  },
+  memberships: async (): Promise<void> => {
+    await refetchMemberships();
+    fireInvalidate("memberships");
+  },
+  members: (slug?: string): void => {
+    fireInvalidate("members", slug);
+  },
+  tokens: (slug?: string): void => {
+    fireInvalidate("tokens", slug);
+  },
+  scans: async (slug?: string): Promise<void> => {
+    await refetchPreferences();
+    fireInvalidate("scans", slug);
+  },
+  audit: async (slug?: string): Promise<void> => {
+    await refetchAudit();
+    fireInvalidate("audit", slug);
+  },
+  warehouses: (): void => {
+    fireInvalidate("warehouses");
+  },
+  tenantList: (): void => {
+    fireInvalidate("tenantList");
+  },
+  adminUsers: (): void => {
+    fireInvalidate("adminUsers");
+  },
+};
