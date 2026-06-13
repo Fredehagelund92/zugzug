@@ -20,7 +20,7 @@ import {
   IconMenu,
   IconX,
 } from "./Icons";
-import { useDimensions, currentUser, useCurrentUser } from "../store";
+import { useDimensions, currentUser } from "../store";
 import { RoleBadge } from "./RoleBadge";
 import { SyncPill } from "./SyncPill";
 import { useEngineerMode } from "../lib/engineer-mode";
@@ -188,9 +188,8 @@ function UserMenu() {
 
 export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const dims = useDimensions();
-  const me = useCurrentUser();
   const { engineer } = useEngineerMode();
-  const { slug } = useTenant();
+  const { slug, role: tenantRole } = useTenant();
   const paletteKey = scopedKey(PALETTE_RECENTS_KEY, slug);
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -630,7 +629,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
           <div className="ml-auto flex items-center gap-3">
             <ThemeToggle />
             <SyncPill />
-            {me && <RoleBadge role={me.role} />}
+            <RoleBadge role={tenantRole} />
             <UserMenu />
           </div>
         </header>

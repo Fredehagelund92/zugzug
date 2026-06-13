@@ -1,7 +1,5 @@
-import type { CurrentUser } from "../store";
-
 interface RoleBadgeProps {
-  role: CurrentUser["role"];
+  role: "admin" | "editor" | "viewer";
 }
 
 /** Visual signal for non-editor roles. Editor renders nothing (it's the default).

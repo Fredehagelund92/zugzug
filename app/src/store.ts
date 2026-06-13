@@ -45,14 +45,14 @@ export interface User {
   email?: string;
 }
 
-/** The signed-in user with RBAC role. Returned by /api/auth/me and exposed via
- *  useCurrentUser(). Distinct from User (collaborator shape) which lacks role. */
+/** The signed-in user. Returned by /api/auth/me and exposed via useCurrentUser().
+ *  Workspace role lives on TenantContext (per-tenant), not here. */
 export interface CurrentUser {
   id: string;
   name: string;
   email: string;
   initials: string;
-  role: "admin" | "editor" | "viewer";
+  isSuperAdmin: boolean;
 }
 
 function isCurrentUser(x: unknown): x is CurrentUser {
@@ -62,8 +62,7 @@ function isCurrentUser(x: unknown): x is CurrentUser {
     typeof o.id === "string" &&
     typeof o.name === "string" &&
     typeof o.email === "string" &&
-    typeof o.initials === "string" &&
-    (o.role === "admin" || o.role === "editor" || o.role === "viewer")
+    typeof o.initials === "string"
   );
 }
 export interface Draft {

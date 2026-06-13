@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { authFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { FormField } from "../../components/FormField";
@@ -10,6 +10,14 @@ import { cx } from "../../lib/cx";
 export function Profile() {
   const user = useCurrentUser();
   const [name, setName] = useState(user?.name ?? "");
+
+  // Sync local field when the user arrives or changes upstream (e.g. after a
+  // refetch from invalidate.currentUser()). useState's initializer only runs
+  // on mount; without this the field stays empty while the user is loading.
+  useEffect(() => {
+    if (user?.name && user.name !== name) setName(user.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name]);
 
   const save = async (next: string) => {
     const trimmed = next.trim();
