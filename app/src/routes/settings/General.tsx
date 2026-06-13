@@ -11,6 +11,7 @@ import { useAutosave } from "../../hooks/useAutosave";
 import { invalidate } from "../../store";
 import { readServerError } from "../../lib/api-errors";
 import { cx } from "../../lib/cx";
+import { WorkspaceColorPicker } from "../../components/WorkspaceColorPicker";
 
 export function General() {
   const tenant = useTenant();
@@ -105,6 +106,27 @@ export function General() {
           </dl>
         )}
       </SettingsSection>
+
+      {canEdit && (
+        <SettingsSection
+          title="Workspace color"
+          hint="Used as the avatar background in the workspace switcher."
+        >
+          <FormField label="Color">
+            <WorkspaceColorPicker
+              value={tenant.color}
+              onChange={async (hex) => {
+                await apiFetch("", {
+                  method: "PATCH",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ color: hex }),
+                });
+                await invalidate.memberships();
+              }}
+            />
+          </FormField>
+        </SettingsSection>
+      )}
 
       {canChangeSlug && (
         <SettingsSection
