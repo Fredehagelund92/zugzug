@@ -187,7 +187,7 @@ export async function scanSources(tenantId: string): Promise<number> {
       `INSERT INTO ${pg("source_stat")}
          (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, current_timestamp, $8)
-       ON CONFLICT (dim_id, source_table, source_column) DO UPDATE SET
+       ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO UPDATE SET
          present = EXCLUDED.present, rows = EXCLUDED.rows,
          distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
          scanned_at = EXCLUDED.scanned_at`,
@@ -280,7 +280,7 @@ export async function addSource(
   void opts;
   await pgRun(
     `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (dim_id, source_table, source_column) DO NOTHING`,
+     VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
     [dimId, table, column, tenantId],
   );
 }

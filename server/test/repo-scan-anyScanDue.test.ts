@@ -17,8 +17,8 @@ beforeEach(async () => {
 test("anyScanDue returns true when no sources are wired (lastScan is null)", async () => {
   // Insert preferences row only — no sources, no source_stat rows
   await pgRun(
-    `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at)
-     VALUES (1, 'hourly', 95, 75, current_timestamp)
+    `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at, tenant_id)
+     VALUES (1, 'hourly', 95, 75, current_timestamp, 'default')
      ON CONFLICT (id) DO UPDATE SET scan_schedule = 'hourly'`,
   );
   // anyScanDue returns true because lastScan is null (never scanned)
@@ -28,8 +28,8 @@ test("anyScanDue returns true when no sources are wired (lastScan is null)", asy
 test("anyScanDue returns false when most-recent scan is within cadence window", async () => {
   // Setup: preferences + dimension + registered source + recent scan stat
   await pgRun(
-    `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at)
-     VALUES (1, 'hourly', 95, 75, current_timestamp)
+    `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at, tenant_id)
+     VALUES (1, 'hourly', 95, 75, current_timestamp, 'default')
      ON CONFLICT (id) DO UPDATE SET scan_schedule = 'hourly'`,
   );
 
@@ -43,9 +43,9 @@ test("anyScanDue returns false when most-recent scan is within cadence window", 
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
   await pgRun(
     `INSERT INTO zugzug_app.source_stat
-       (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at)
-     VALUES ($1, $2, $3, true, 100, 50, 5, $4)
-     ON CONFLICT (dim_id, source_table, source_column) DO UPDATE SET
+       (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+     VALUES ($1, $2, $3, true, 100, 50, 5, $4, 'default')
+     ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO UPDATE SET
        present = EXCLUDED.present, rows = EXCLUDED.rows,
        distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
        scanned_at = EXCLUDED.scanned_at`,
@@ -59,8 +59,8 @@ test("anyScanDue returns false when most-recent scan is within cadence window", 
 test("anyScanDue returns true when a newly-registered source has never been scanned (THE BUG)", async () => {
   // Setup: preferences + one dimension with TWO sources
   await pgRun(
-    `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at)
-     VALUES (1, 'hourly', 95, 75, current_timestamp)
+    `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at, tenant_id)
+     VALUES (1, 'hourly', 95, 75, current_timestamp, 'default')
      ON CONFLICT (id) DO UPDATE SET scan_schedule = 'hourly'`,
   );
 
@@ -76,8 +76,8 @@ test("anyScanDue returns true when a newly-registered source has never been scan
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
   await pgRun(
     `INSERT INTO zugzug_app.source_stat
-       (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at)
-     VALUES ($1, $2, $3, true, 100, 50, 5, $4)`,
+       (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+     VALUES ($1, $2, $3, true, 100, 50, 5, $4, 'default')`,
     [dimId, "public.partners", "partner_id", tenMinutesAgo],
   );
 

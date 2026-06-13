@@ -143,17 +143,21 @@ test("signup — first user gets role='admin'", async () => {
   );
   expect(res.status).toBe(200);
   const userId = ((await res.json()) as { id: string }).id;
-  const row = await pgGet<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [userId]);
+  const row = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = $1 AND tenant_id = 'default'`,
+    [userId],
+  );
   expect(row?.role).toBe("admin");
 });
 
 test("signup — second user gets role='editor'", async () => {
-  // First signup (becomes admin + bootstraps allowlist)
+  // First signup (becomes admin + gets default tenant membership)
   await handleSignup(jsonReq({ email: "admin@example.com", password: "longenoughpw12", name: "Admin" }));
-  // Add second to allowlist
+  // Invite second user via tenant_invite so they pass the gate.
+  // Use 'bootstrap' as invited_by — robust to parallel-test environments.
   await pgRun(
-    `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at)
-     VALUES ('second@example.com', 'admin', current_timestamp)
+    `INSERT INTO ${pg("tenant_invite")} (tenant_id, email, role, invited_by, invited_at)
+     VALUES ('default', 'second@example.com', 'editor', 'bootstrap', now())
      ON CONFLICT DO NOTHING`,
   );
   const res = await handleSignup(
@@ -161,6 +165,9 @@ test("signup — second user gets role='editor'", async () => {
   );
   expect(res.status).toBe(200);
   const userId = ((await res.json()) as { id: string }).id;
-  const row = await pgGet<{ role: string }>(`SELECT role FROM ${pg("users")} WHERE id = $1`, [userId]);
+  const row = await pgGet<{ role: string }>(
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = $1 AND tenant_id = 'default'`,
+    [userId],
+  );
   expect(row?.role).toBe("editor");
 });

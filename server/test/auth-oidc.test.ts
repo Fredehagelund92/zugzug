@@ -95,11 +95,13 @@ test("oidc callback — valid token, first user becomes admin, session cookie se
   const setCookies = res.headers.getSetCookie();
   expect(setCookies.some((c) => c.includes("zz_sid="))).toBe(true);
 
-  // First user should be bootstrapped into allowed_emails
-  const allowed = await pgGet(
-    `SELECT email FROM ${pg("allowed_emails")} WHERE email = 'first@example.com'`,
+  // First user should be seeded into default tenant as admin
+  const member = await pgGet(
+    `SELECT tm.role FROM ${pg("tenant_member")} tm
+       JOIN ${pg("users")} u ON u.id = tm.user_id
+      WHERE u.email = 'first@example.com' AND tm.tenant_id = 'default'`,
   );
-  expect(allowed).not.toBeNull();
+  expect(member).not.toBeNull();
 });
 
 // ---------------------------------------------------------------------------
@@ -178,7 +180,7 @@ test("oidc callback — first user gets role='admin'", async () => {
   );
   expect(res.status).toBe(302);
   const user = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-admin'`,
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-admin' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("admin");
 });
@@ -198,10 +200,10 @@ test("oidc callback — second user gets role='editor'", async () => {
     }),
   );
 
-  // Add second user to allowlist
+  // Invite second user via tenant_invite so they pass the gate
   await pgRun(
-    `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at)
-     VALUES ('second@example.com', 'admin', current_timestamp)
+    `INSERT INTO ${pg("tenant_invite")} (tenant_id, email, role, invited_by, invited_at)
+     VALUES ('default', 'second@example.com', 'editor', 'u_sub-first', now())
      ON CONFLICT DO NOTHING`,
   );
 
@@ -216,7 +218,7 @@ test("oidc callback — second user gets role='editor'", async () => {
   );
   expect(res.status).toBe(302);
   const user = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-second'`,
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-second' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("editor");
 });
@@ -240,8 +242,8 @@ test("oidc callback — re-login does not overwrite existing role", async () => 
   // user existing so the re-login would compute role='editor' if it re-ran the logic.
   // Insert a second user to make userCount > 0 for the re-login.
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider, role)
-     VALUES ('u_dummy', 'Dummy', 'dummy@example.com', 'DU', 'oidc', 'editor')`,
+    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider)
+     VALUES ('u_dummy', 'Dummy', 'dummy@example.com', 'DU', 'oidc')`,
   );
 
   // Re-login for the same user — userCount is now 2, so role computed as 'editor'.
@@ -257,7 +259,7 @@ test("oidc callback — re-login does not overwrite existing role", async () => 
 
   // Role must still be admin despite re-login when userCount > 0
   const user = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE id = 'u_sub-stays-admin'`,
+    `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-stays-admin' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("admin");
 });

@@ -23,6 +23,7 @@ async function cleanup(): Promise<void> {
   await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."dimension_field" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]);
 }

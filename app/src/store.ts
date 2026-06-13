@@ -1039,15 +1039,8 @@ export async function searchCatalog(
 }
 
 // ---------------------------------------------------------------------------
-// Team user management (role picker)
+// Connection health
 // ---------------------------------------------------------------------------
-
-export interface TeamMember {
-  id: string;
-  name: string;
-  email: string | null;
-  role: "admin" | "editor" | "viewer";
-}
 
 /* ---- connection health ---- */
 export interface ConnectionHealth {
@@ -1071,25 +1064,4 @@ export function useConnectionHealth(): ConnectionHealth | null {
     () => connectionHealth,
     () => connectionHealth,
   );
-}
-
-/** List all workspace users with their roles. Any authenticated user may call this. */
-export async function listTeamMembers(): Promise<TeamMember[]> {
-  const r = await apiFetch("/team/users");
-  if (!r.ok) throw new Error(`list_team_members_${r.status}`);
-  const body = (await r.json()) as { users: TeamMember[] };
-  return body.users;
-}
-
-/** Change a user's role. Admin only — the server enforces the gate + last-admin guard. */
-export async function updateUserRole(userId: string, role: TeamMember["role"]): Promise<void> {
-  const r = await apiFetch(`/team/users/${userId}/role`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ role }),
-  });
-  if (!r.ok) {
-    const body = (await r.json().catch(() => null)) as { error?: string; reason?: string } | null;
-    throw new Error(body?.reason ?? body?.error ?? `update_role_${r.status}`);
-  }
 }

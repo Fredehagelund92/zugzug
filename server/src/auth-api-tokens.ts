@@ -122,7 +122,7 @@ export async function getApiTokenUser(req: Request): Promise<SessionUser | null>
         cand.id,
       ]).catch(() => {});
       const user = await pgGet<SessionUser>(
-        `SELECT id, name, email, initials, role,
+        `SELECT id, name, email, initials,
                 is_super_admin AS "isSuperAdmin",
                 NULL::varchar AS "impersonatingTenantId"
            FROM ${pg("users")} WHERE id = $1`,

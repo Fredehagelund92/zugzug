@@ -24,7 +24,6 @@ export interface SessionUser {
   name: string;
   email: string;
   initials: string;
-  role: Role;
   isSuperAdmin: boolean;
   /** Set by POST /api/admin/impersonate; only honored when isSuperAdmin is true. */
   impersonatingTenantId: string | null;
@@ -35,13 +34,12 @@ export type Role = "admin" | "editor" | "viewer";
 export type Operation =
   | "curate" // create/update drafts
   | "commit" // commit drafts to canonical
-  | "manage_team" // change roles, manage allowlist
   | "manage_adapter"; // configure warehouse credentials
 
 /** Static permission matrix. Returns true if the given role may perform op. */
 export function canMutate(role: Role, op: Operation): boolean {
   const matrix: Record<Role, Operation[]> = {
-    admin: ["curate", "commit", "manage_team", "manage_adapter"],
+    admin: ["curate", "commit", "manage_adapter"],
     editor: ["curate", "commit"],
     viewer: [],
   };
@@ -105,7 +103,7 @@ export async function getSessionUser(req: Request): Promise<SessionUser | null> 
     return null;
   }
   return get<SessionUser>(
-    `SELECT u.id, u.name, u.email, u.initials, u.role,
+    `SELECT u.id, u.name, u.email, u.initials,
             u.is_super_admin AS "isSuperAdmin",
             a.impersonating_tenant_id AS "impersonatingTenantId"
        FROM ${pg("users")} u

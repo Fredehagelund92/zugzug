@@ -192,22 +192,23 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
     return loginErrorRedirect("domain", clearState, clearNonce);
   }
 
-  // Allowlist check (with bootstrap: first OIDC user becomes admin)
+  // Gate check (with bootstrap: first OIDC user becomes admin).
+  // Subsequent users must have a tenant_member or tenant_invite row.
   const [{ n: userCount }] = await pgAll<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${pg("users")}`,
   );
-  if (userCount === 0) {
-    await pgRun(
-      `INSERT INTO ${pg("allowed_emails")} (email, added_by, added_at)
-       VALUES ($1, 'bootstrap', current_timestamp)
-       ON CONFLICT (email) DO NOTHING`,
+  if (userCount > 0) {
+    const allowed = await pgGet<{ ok: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM ${pg("tenant_member")} tm
+           JOIN ${pg("users")} u ON u.id = tm.user_id
+          WHERE u.email = $1
+         UNION ALL
+         SELECT 1 FROM ${pg("tenant_invite")} WHERE lower(email) = lower($1)
+       ) AS ok`,
       [email],
     );
-  } else {
-    const allowed = await pgGet(`SELECT email FROM ${pg("allowed_emails")} WHERE email = $1`, [
-      email,
-    ]);
-    if (!allowed) {
+    if (!allowed?.ok) {
       return loginErrorRedirect("not_allowed", clearState, clearNonce);
     }
   }
@@ -225,14 +226,23 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   // ON CONFLICT deliberately does NOT update role — an admin who re-logs in via
   // OIDC must stay admin; only the first-insert path sets the role.
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider, role)
-     VALUES ($1, $2, $3, $4, $5, 'oidc', $6)
+    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider)
+     VALUES ($1, $2, $3, $4, $5, 'oidc')
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        email = EXCLUDED.email,
        initials = EXCLUDED.initials,
        auth_provider = 'oidc'`,
-    [userId, name, email, sub, initials, role],
+    [userId, name, email, sub, initials],
+  );
+
+  // Seed default-tenant membership on first sign-in (first user = admin, rest = editor).
+  // ON CONFLICT DO NOTHING preserves existing role on re-login.
+  await pgRun(
+    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+     VALUES ('default', $1, $2, now())
+     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+    [userId, role],
   );
 
   try {

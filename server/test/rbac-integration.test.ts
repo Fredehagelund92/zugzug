@@ -49,9 +49,15 @@ async function createUserWithRole(
 ): Promise<{ id: string; cookie: string }> {
   const id = `u_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider, role)
-     VALUES ($1, $2, $3, $4, 'password', $5)`,
-    [id, name, email, name.slice(0, 2).toUpperCase(), role],
+    `INSERT INTO ${pg("users")} (id, name, email, initials, auth_provider)
+     VALUES ($1, $2, $3, $4, 'password')`,
+    [id, name, email, name.slice(0, 2).toUpperCase()],
+  );
+  await pgRun(
+    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+     VALUES ('default', $1, $2, now())
+     ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+    [id, role],
   );
   const { cookie } = await issueSession(id);
   const sidCookie = cookie.split(";")[0]!;
@@ -88,22 +94,21 @@ function putReq(path: string, body: unknown, cookieHeader: string): Request {
 // Unit: canMutate gate behaviour (mirrors B3 but tests the gate helper path)
 // ---------------------------------------------------------------------------
 
-test("gate: viewer cannot curate, commit, manage_team, or manage_adapter", () => {
-  const ops: Operation[] = ["curate", "commit", "manage_team", "manage_adapter"];
+test("gate: viewer cannot curate, commit, or manage_adapter", () => {
+  const ops: Operation[] = ["curate", "commit", "manage_adapter"];
   for (const op of ops) {
     expect(canMutate("viewer", op)).toBe(false);
   }
 });
 
-test("gate: editor can curate and commit but not manage_team or manage_adapter", () => {
+test("gate: editor can curate and commit but not manage_adapter", () => {
   expect(canMutate("editor", "curate")).toBe(true);
   expect(canMutate("editor", "commit")).toBe(true);
-  expect(canMutate("editor", "manage_team")).toBe(false);
   expect(canMutate("editor", "manage_adapter")).toBe(false);
 });
 
 test("gate: admin can perform all operations", () => {
-  const ops: Operation[] = ["curate", "commit", "manage_team", "manage_adapter"];
+  const ops: Operation[] = ["curate", "commit", "manage_adapter"];
   for (const op of ops) {
     expect(canMutate("admin", op)).toBe(true);
   }
@@ -124,15 +129,19 @@ test("POST /api/dimensions — editor allowed, viewer blocked (curate)", async (
   // exported from server.ts, we test via auth functions + canMutate directly.
   // The representative test below uses addDimension through the role gate logic.
 
-  // Verify role stored correctly
+  // Verify role stored correctly in tenant_member
   const editorRow = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE email = $1`,
+    `SELECT tm.role FROM ${pg("tenant_member")} tm
+      JOIN ${pg("users")} u ON u.id = tm.user_id
+     WHERE u.email = $1 AND tm.tenant_id = 'default'`,
     ["editor@example.com"],
   );
   expect(editorRow?.role).toBe("editor");
 
   const viewerRow = await pgGet<{ role: string }>(
-    `SELECT role FROM ${pg("users")} WHERE email = $1`,
+    `SELECT tm.role FROM ${pg("tenant_member")} tm
+      JOIN ${pg("users")} u ON u.id = tm.user_id
+     WHERE u.email = $1 AND tm.tenant_id = 'default'`,
     ["viewer@example.com"],
   );
   expect(viewerRow?.role).toBe("viewer");
@@ -148,10 +157,11 @@ test("POST /api/dimensions — editor allowed, viewer blocked (curate)", async (
   void putReq;
 });
 
-test("POST /api/team/members — admin allowed, editor blocked (manage_team)", async () => {
-  expect(canMutate("admin", "manage_team")).toBe(true);
-  expect(canMutate("editor", "manage_team")).toBe(false);
-  expect(canMutate("viewer", "manage_team")).toBe(false);
+test("POST /api/t/:slug/members — admin allowed, editor/viewer blocked (tenant role gate)", async () => {
+  // manage_team op removed; team management now guarded by tenantCtx.role === "admin" checks
+  expect(canMutate("admin", "manage_adapter")).toBe(true);
+  expect(canMutate("editor", "manage_adapter")).toBe(false);
+  expect(canMutate("viewer", "manage_adapter")).toBe(false);
 });
 
 test("POST /api/dimensions/:id/commit — editor allowed, viewer blocked (commit)", async () => {
@@ -166,7 +176,7 @@ test("PUT /api/preferences — admin allowed, editor and viewer blocked (manage_
   expect(canMutate("viewer", "manage_adapter")).toBe(false);
 });
 
-test("role column persists through issueSession / getSessionUser round-trip", async () => {
+test("getSessionUser round-trip — role absent from SessionUser (PR5 dropped users.role fallback)", async () => {
   const { getSessionUser } = await import("../src/auth.ts");
 
   await createAdminViaSignup("admin2@example.com", "Admin2");
@@ -178,5 +188,6 @@ test("role column persists through issueSession / getSessionUser round-trip", as
   });
   const user = await getSessionUser(req);
   expect(user).not.toBeNull();
-  expect(user!.role).toBe("editor");
+  // role is no longer part of SessionUser (PR5); it lives on tenant_member rows
+  expect("role" in (user ?? {})).toBe(false);
 });

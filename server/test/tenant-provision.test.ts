@@ -86,8 +86,8 @@ test("listTenants returns the default tenant plus any provisioned ones", async (
 test("promoteSuperAdmin sets users.is_super_admin = true for an existing user", async () => {
   // Provision a fresh user row to mutate. The users table is global, no tenant_id.
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
-     VALUES ('u_promo_test', 'Promo Test', 'PT', 'promo@example.com', 'editor')
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ('u_promo_test', 'Promo Test', 'PT', 'promo@example.com')
      ON CONFLICT (id) DO UPDATE SET is_super_admin = false`,
   );
 

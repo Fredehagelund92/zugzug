@@ -45,7 +45,7 @@ if (n <= 1) {
       [u.id, u.name, u.initials],
     );
     await pgRun(
-      `INSERT INTO "zugzug_app"."active_sessions" (user_id, last_seen) VALUES ($1, current_timestamp) ON CONFLICT (user_id) DO NOTHING`,
+      `INSERT INTO "zugzug_app"."active_sessions" (user_id, last_seen, tenant_id) VALUES ($1, current_timestamp, 'default') ON CONFLICT (user_id) DO NOTHING`,
       [u.id],
     );
   }

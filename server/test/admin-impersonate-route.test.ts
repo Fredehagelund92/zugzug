@@ -14,14 +14,15 @@ const T_IDS = ["timp_target"];
 const U_IDS = ["u_imp_super"];
 
 async function cleanup(): Promise<void> {
-  for (const t of T_IDS) {
-    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
-    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
-  }
+  // Delete active_sessions first — it has an FK to tenant
   for (const u of U_IDS) {
     await pgRun(`DELETE FROM "zugzug_app"."active_sessions" WHERE user_id = $1`, [u]);
     await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [u]);
     await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [u]);
+  }
+  for (const t of T_IDS) {
+    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
+    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
   }
 }
 beforeEach(cleanup);
@@ -29,8 +30,8 @@ afterAll(cleanup);
 
 async function login(userId: string, isSuperAdmin: boolean): Promise<string> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, $1, 'XX', $2, 'editor', $3)`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+     VALUES ($1, $1, 'XX', $2, $3)`,
     [userId, `${userId}@example.com`, isSuperAdmin],
   );
   const { issueSession } = await import("../src/auth.ts");
@@ -71,12 +72,12 @@ test("POST /api/admin/impersonate/:tenant_id sets the flag and writes audit", as
 test("POST /api/admin/impersonate (no target) clears the flag", async () => {
   await provisionTenant({ id: "timp_target", label: "Target" });
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ('u_imp_super', 'super', 'XX', 'u_imp_super@example.com', 'editor', true)`,
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+     VALUES ('u_imp_super', 'super', 'XX', 'u_imp_super@example.com', true)`,
   );
   await pgRun(
-    `INSERT INTO "zugzug_app"."active_sessions" (user_id, last_seen, impersonating_tenant_id)
-     VALUES ('u_imp_super', current_timestamp, 'timp_target')`,
+    `INSERT INTO "zugzug_app"."active_sessions" (user_id, last_seen, tenant_id, impersonating_tenant_id)
+     VALUES ('u_imp_super', current_timestamp, 'timp_target', 'timp_target')`,
   );
   const { issueSession } = await import("../src/auth.ts");
   const { sessionId } = await issueSession("u_imp_super");

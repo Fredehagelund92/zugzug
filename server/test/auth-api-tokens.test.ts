@@ -96,10 +96,14 @@ test("list tokens — omits values, includes name + created", async () => {
 
 test("list tokens — only returns current user's tokens", async () => {
   const userA = await newUser("a@example.com");
-  // Add userB to allowlist (since they're not the first user)
+  // Invite userB via tenant_invite so they pass the gate (not the first user)
   const { pgRun } = await import("../src/pg.ts");
+  const { pg } = await import("../src/env.ts");
   await pgRun(
-    `INSERT INTO zugzug_app.allowed_emails (email, added_by, added_at) VALUES ('b@example.com', 'bootstrap', current_timestamp) ON CONFLICT DO NOTHING`,
+    `INSERT INTO ${pg("tenant_invite")} (tenant_id, email, role, invited_by, invited_at)
+     VALUES ('default', 'b@example.com', 'editor', $1, now())
+     ON CONFLICT DO NOTHING`,
+    [userA],
   );
   const userB = await newUser("b@example.com");
 

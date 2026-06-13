@@ -37,8 +37,8 @@ async function login(
   tenantId: string,
 ): Promise<string> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role, is_super_admin)
-     VALUES ($1, $1, 'XX', $2, 'editor', false)
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+     VALUES ($1, $1, 'XX', $2, false)
      ON CONFLICT (id) DO NOTHING`,
     [userId, `${userId}@example.com`],
   );

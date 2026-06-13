@@ -4,10 +4,11 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
-import { test, expect, beforeEach, afterAll } from "bun:test";
+import { test, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { pgRun } from "../src/pg.ts";
 import { getRowActivitySince } from "../src/repo-activity.ts";
+import { provisionTenant } from "../src/tenant.ts";
 
 const TA = "tact_a";
 const TB = "tact_b";
@@ -18,8 +19,20 @@ async function cleanup(): Promise<void> {
     await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
   }
 }
+
+async function teardown(): Promise<void> {
+  await cleanup();
+  for (const t of [TA, TB]) {
+    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
+  }
+}
+
+beforeAll(async () => {
+  await provisionTenant({ id: TA, label: "Activity Tenant A" });
+  await provisionTenant({ id: TB, label: "Activity Tenant B" });
+});
 beforeEach(cleanup);
-afterAll(cleanup);
+afterAll(teardown);
 
 async function seedAudit(tenantId: string, rowKey: string, action: string): Promise<void> {
   await pgRun(

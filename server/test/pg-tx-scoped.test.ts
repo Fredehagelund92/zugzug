@@ -5,11 +5,11 @@ process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect } from "bun:test";
-import { pgTxScoped, pgGet } from "../src/pg.ts";
+import { pgTxScoped, pgGet, pgRun } from "../src/pg.ts";
 
 test("pgTxScoped exposes app.tenant_id via current_setting inside the tx", async () => {
-  const seen = await pgTxScoped("default", async (tx) => {
-    const row = await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`);
+  const seen = await pgTxScoped("default", async () => {
+    const row = await pgGet<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`);
     return row?.t;
   });
   expect(seen).toBe("default");
@@ -18,11 +18,11 @@ test("pgTxScoped exposes app.tenant_id via current_setting inside the tx", async
 test("pgTxScoped isolates settings between transactions (SET LOCAL semantics)", async () => {
   const a = await pgTxScoped(
     "tprov_a_setting",
-    async (tx) => (await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
+    async () => (await pgGet<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
   );
   const b = await pgTxScoped(
     "tprov_b_setting",
-    async (tx) => (await tx.get<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
+    async () => (await pgGet<{ t: string }>(`SELECT current_setting('app.tenant_id') AS t`))?.t,
   );
   expect(a).toBe("tprov_a_setting");
   expect(b).toBe("tprov_b_setting");
@@ -33,10 +33,10 @@ test("pgTxScoped rolls back if fn throws", async () => {
   const probeId = `probe_${Date.now()}`;
   let thrown: Error | null = null;
   try {
-    await pgTxScoped("default", async (tx) => {
-      await tx.run(
-        `INSERT INTO "zugzug_app"."audit_log" (id, created_at, user_id, action, detail)
-         VALUES ($1, now(), 'u_test', 'probe', 'rollback-test')`,
+    await pgTxScoped("default", async () => {
+      await pgRun(
+        `INSERT INTO "zugzug_app"."audit_log" (id, created_at, user_id, action, detail, tenant_id)
+         VALUES ($1, now(), 'u_test', 'probe', 'rollback-test', 'default')`,
         [probeId],
       );
       throw new Error("rollback me");

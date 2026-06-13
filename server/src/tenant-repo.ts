@@ -25,10 +25,10 @@ import type {
 } from "./repo-shared.ts";
 
 export type Role = "admin" | "editor" | "viewer";
-export type Operation = "curate" | "commit" | "manage_team" | "manage_adapter";
+export type Operation = "curate" | "commit" | "manage_adapter";
 
 const ROLE_OPS: Record<Role, Operation[]> = {
-  admin: ["curate", "commit", "manage_team", "manage_adapter"],
+  admin: ["curate", "commit", "manage_adapter"],
   editor: ["curate", "commit"],
   viewer: [],
 };

@@ -32,8 +32,8 @@ afterAll(cleanup);
 
 async function makeUser(id: string, email: string): Promise<void> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
-     VALUES ($1, $1, 'XX', $2, 'editor')
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ($1, $1, 'XX', $2)
      ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email`,
     [id, email],
   );

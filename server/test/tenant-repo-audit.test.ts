@@ -24,8 +24,8 @@ test("tenant A's audit list does not include tenant B's entries", async () => {
   await provisionTenant({ id: "taudit_a", label: "A" });
   await provisionTenant({ id: "taudit_b", label: "B" });
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
-     VALUES ('u_audit', 'U', 'XX', 'u_audit@x', 'editor')
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ('u_audit', 'U', 'XX', 'u_audit@x')
      ON CONFLICT (id) DO NOTHING`,
   );
 
@@ -47,8 +47,8 @@ test("super-admin '*' tenant sees both tenants' entries", async () => {
   await provisionTenant({ id: "taudit_a", label: "A" });
   await provisionTenant({ id: "taudit_b", label: "B" });
   await pgRun(
-    `INSERT INTO "zugzug_app"."users" (id, name, initials, email, role)
-     VALUES ('u_audit', 'U', 'XX', 'u_audit@x', 'editor')
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ('u_audit', 'U', 'XX', 'u_audit@x')
      ON CONFLICT (id) DO NOTHING`,
   );
 
