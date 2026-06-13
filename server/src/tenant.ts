@@ -119,6 +119,24 @@ export async function listTenants(): Promise<TenantRecord[]> {
   );
 }
 
+export interface TenantAdminRow extends TenantRecord {
+  member_count: number;
+  last_activity_at: Date | null;
+}
+
+export async function listTenantsForAdmin(): Promise<TenantAdminRow[]> {
+  return pgAll<TenantAdminRow>(
+    `SELECT t.id, t.slug, t.label, t.warehouse_id, t.created_at,
+            (SELECT count(*)::int FROM "zugzug_app"."tenant_member" tm
+              WHERE tm.tenant_id = t.id) AS member_count,
+            (SELECT max(created_at) FROM "zugzug_app"."audit_log" a
+              WHERE a.tenant_id = t.id) AS last_activity_at
+       FROM "zugzug_app"."tenant" t
+      WHERE t.deleted_at IS NULL
+      ORDER BY t.id`,
+  );
+}
+
 export interface Membership {
   tenant: TenantRecord;
   role: "admin" | "editor" | "viewer";
@@ -296,6 +314,32 @@ export async function updateTenantLabel(tenantId: string, label: string): Promis
   const trimmed = label.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "label cannot be empty", 400);
   await pgRun(`UPDATE "zugzug_app"."tenant" SET label = $1 WHERE id = $2`, [trimmed, tenantId]);
+}
+
+/** Updates the URL slug of a tenant. Refuses to change the 'default' tenant's
+ *  slug. Validates charset against TENANT_ID_RE. Throws ALREADY_EXISTS if the
+ *  target slug is taken by another tenant. */
+export async function updateTenantSlug(currentSlug: string, newSlug: string): Promise<void> {
+  const next = newSlug.trim();
+  if (currentSlug === "default") {
+    throw new AppError("FORBIDDEN", "cannot change slug of the default workspace", 403);
+  }
+  if (!TENANT_ID_RE.test(next)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `slug '${next}' must match ${TENANT_ID_RE.source}`,
+      400,
+    );
+  }
+  if (next === currentSlug) return;
+  const existing = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."tenant" WHERE slug = $1 AND deleted_at IS NULL`,
+    [next],
+  );
+  if (existing) {
+    throw new AppError("ALREADY_EXISTS", `slug '${next}' is taken`, 409);
+  }
+  await pgRun(`UPDATE "zugzug_app"."tenant" SET slug = $1 WHERE slug = $2`, [next, currentSlug]);
 }
 
 /**

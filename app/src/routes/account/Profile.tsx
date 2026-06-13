@@ -3,7 +3,7 @@ import { authFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { FormField } from "../../components/FormField";
 import { SettingsSection } from "../../components/settings/SettingsSection";
-import { useCurrentUser } from "../../store";
+import { useCurrentUser, invalidate } from "../../store";
 import { useAutosave } from "../../hooks/useAutosave";
 import { cx } from "../../lib/cx";
 
@@ -21,7 +21,7 @@ export function Profile() {
     });
     if (!res.ok) throw new Error(`${res.status}`);
   };
-  const autosave = useAutosave(name, save);
+  const autosave = useAutosave(name, save, 600, () => invalidate.currentUser());
 
   const signOut = () =>
     authFetch("/auth/logout", { method: "POST" }).then(() => window.location.replace("/login"));
@@ -54,7 +54,7 @@ export function Profile() {
         </FormField>
         <FormField label="Email">
           <p className="text-sm text-ink-2">{user?.email ?? "—"}</p>
-          <p className="mt-1 text-xs text-ink-3">Email cannot be changed here.</p>
+          <p className="mt-1 text-xs text-ink-3">Email changes coming soon.</p>
         </FormField>
       </SettingsSection>
 

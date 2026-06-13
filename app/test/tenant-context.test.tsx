@@ -4,6 +4,7 @@ import { Component, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TenantProvider, useTenant } from "../src/lib/tenant-context";
 import { TenantLayout } from "../src/components/TenantLayout";
+import { setMemberships } from "../src/store";
 
 vi.mock("../src/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/store")>();
@@ -35,6 +36,7 @@ const fakeMemberships = [{ slug: "acme", label: "Acme", role: "admin" as const }
 
 describe("TenantLayout slug validation", () => {
   test("renders children when slug is in memberships", () => {
+    setMemberships(fakeMemberships);
     render(
       <MemoryRouter initialEntries={["/app/acme/triage"]}>
         <Routes>
@@ -48,6 +50,7 @@ describe("TenantLayout slug validation", () => {
   });
 
   test("redirects to /app when slug is not in memberships and not super-admin", async () => {
+    setMemberships(fakeMemberships);
     render(
       <MemoryRouter initialEntries={["/app/forbidden/triage"]}>
         <Routes>
@@ -63,6 +66,7 @@ describe("TenantLayout slug validation", () => {
   });
 
   test("super-admin can enter a tenant they're not a member of", () => {
+    setMemberships(fakeMemberships);
     render(
       <MemoryRouter initialEntries={["/app/other/triage"]}>
         <Routes>

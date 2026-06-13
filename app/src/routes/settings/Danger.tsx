@@ -8,6 +8,7 @@ import { useTenant } from "../../lib/tenant-context";
 import { apiFetch } from "../../api";
 import { toast } from "../../components/Toast";
 import { readServerError } from "../../lib/api-errors";
+import { invalidate, getMemberships } from "../../store";
 
 export function Danger() {
   const tenant = useTenant();
@@ -25,7 +26,12 @@ export function Danger() {
         toast(`Couldn't delete workspace — ${msg}.`, "error");
         return;
       }
-      navigate("/app");
+      // Refresh memberships + admin tenant list so the switcher and
+      // Admin → Workspaces table drop the deleted row immediately.
+      await invalidate.memberships();
+      invalidate.tenantList();
+      const next = getMemberships().find((m) => m.slug !== tenant.slug)?.slug;
+      navigate(next ? `/app/${next}` : "/app");
     } finally {
       setBusy(false);
     }
@@ -43,12 +49,25 @@ export function Danger() {
             <div>
               <p className="text-sm font-semibold text-ink">Delete workspace</p>
               <p className="mt-0.5 text-xs text-ink-2">
-                Permanently deletes this workspace and all its data. This cannot be undone.
+                {tenant.slug === "default"
+                  ? "The default workspace cannot be deleted — it's the fallback every user lands in."
+                  : "Permanently deletes this workspace and all its data. This cannot be undone."}
               </p>
             </div>
-            <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
-              Delete workspace
-            </Button>
+            {tenant.slug === "default" ? (
+              <Button
+                variant="danger"
+                size="sm"
+                disabled
+                title="The default workspace cannot be deleted."
+              >
+                Delete workspace
+              </Button>
+            ) : (
+              <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
+                Delete workspace
+              </Button>
+            )}
           </div>
         </RoleGate>
       </SettingsSection>

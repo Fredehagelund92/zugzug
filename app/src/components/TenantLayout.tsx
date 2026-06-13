@@ -3,7 +3,7 @@ import { Navigate, Outlet, useParams } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../lib/tenant-context";
 import { OpenTabsProvider } from "../lib/open-tabs";
 import { CreateTableModalProvider } from "../lib/create-table-modal";
-import { onTenantSwitch, initStore } from "../store";
+import { onTenantSwitch, initStore, useMemberships } from "../store";
 
 export interface Membership {
   slug: string;
@@ -11,14 +11,12 @@ export interface Membership {
   role: "admin" | "editor" | "viewer";
 }
 
-export function TenantLayout({
-  memberships,
-  isSuperAdmin,
-}: {
-  memberships: Membership[];
-  isSuperAdmin: boolean;
-}) {
+export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
+  // Read live from the store so a rename/leave/delete elsewhere re-derives the
+  // TenantProvider value (label flows through here into SettingsLayout header,
+  // WorkspaceSwitcher trigger, etc.).
+  const memberships = useMemberships();
   const m = memberships.find((x) => x.slug === tenantSlug);
 
   const lastSlug = useRef<string | null>(null);

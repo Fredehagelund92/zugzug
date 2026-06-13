@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { authFetch } from "../api";
+import { setMemberships } from "../store";
 import { Mark } from "./Mark";
 import { Button } from "./Button";
 import { NoWorkspaceLanding } from "./NoWorkspaceLanding";
@@ -37,6 +38,11 @@ export function BootGate({ children }: { children: (data: BootData) => ReactNode
       const memRes = await authFetch("/me/memberships");
       if (!memRes.ok) throw new Error(`memberships ${memRes.status}`);
       const body = (await memRes.json()) as BootData;
+
+      // Seed the memberships slice so TenantLayout / WorkspaceSwitcher and any
+      // other consumer can react to live updates (rename, leave, delete) via
+      // invalidate.memberships() without a prop refresh.
+      setMemberships(body.memberships);
 
       if (body.memberships.length === 0 && !body.isSuperAdmin) {
         setState({ kind: "no-workspace" });

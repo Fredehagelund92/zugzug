@@ -19,6 +19,19 @@ vi.mock("../src/store", () => ({
   listApiTokens: vi.fn(async () => []),
   createApiToken: vi.fn(),
   revokeApiToken: vi.fn(),
+  invalidate: {
+    currentUser: vi.fn(),
+    tenant: vi.fn(),
+    memberships: vi.fn(),
+    members: vi.fn(),
+    tokens: vi.fn(),
+    scans: vi.fn(),
+    audit: vi.fn(),
+    warehouses: vi.fn(),
+    tenantList: vi.fn(),
+    adminUsers: vi.fn(),
+  },
+  subscribeInvalidate: vi.fn(() => () => undefined),
 }));
 vi.mock("../src/api", () => ({ apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })) }));
 vi.mock("../src/lib/engineer-mode", () => ({ useEngineerMode: () => ({ engineer: false }) }));

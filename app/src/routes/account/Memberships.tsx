@@ -7,6 +7,7 @@ import { SettingsSection } from "../../components/settings/SettingsSection";
 import { EmptyState } from "../../components/EmptyState";
 import { toast } from "../../components/Toast";
 import { readServerError } from "../../lib/api-errors";
+import { invalidate } from "../../store";
 import type { Membership } from "../../components/TenantLayout";
 
 const ROLE_LABEL: Record<Membership["role"], string> = {
@@ -19,24 +20,30 @@ export function Memberships() {
   const { memberships } = useOutletContext<{ memberships: Membership[] }>();
   const [leaving, setLeaving] = useState<Membership | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rowError, setRowError] = useState<{ slug: string; msg: string } | null>(null);
 
   const leave = async () => {
     if (!leaving) return;
     setBusy(true);
+    setRowError(null);
     try {
       const res = await authFetch(`/t/${leaving.slug}/leave`, { method: "POST" });
       if (res.status === 409) {
-        toast(`Can't leave ${leaving.label} — you're the last admin.`, "error");
+        setRowError({
+          slug: leaving.slug,
+          msg: "You're the only admin. Promote another member or delete the workspace first.",
+        });
         setLeaving(null);
         return;
       }
       if (!res.ok) {
         const msg = await readServerError(res);
-        toast(`Couldn't leave ${leaving.label} — ${msg}.`, "error");
+        setRowError({ slug: leaving.slug, msg: `Couldn't leave — ${msg}.` });
         return;
       }
       toast(`Left ${leaving.label}.`, "success");
-      window.location.reload();
+      setLeaving(null);
+      await invalidate.memberships();
     } finally {
       setBusy(false);
     }
@@ -61,6 +68,11 @@ export function Memberships() {
                 <div className="font-mono text-[10.5px] text-ink-3">
                   /{m.slug} · {ROLE_LABEL[m.role]}
                 </div>
+                {rowError?.slug === m.slug && (
+                  <div className="mt-1 text-xs text-danger" role="status">
+                    {rowError.msg}
+                  </div>
+                )}
               </div>
               <Button variant="ghost" size="sm" onClick={() => setLeaving(m)}>
                 Leave

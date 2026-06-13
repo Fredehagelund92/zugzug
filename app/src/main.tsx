@@ -100,10 +100,7 @@ createRoot(root).render(
                       <Route
                         path="/app/:tenantSlug/*"
                         element={
-                          <TenantLayout
-                            memberships={boot.memberships}
-                            isSuperAdmin={boot.isSuperAdmin}
-                          />
+                          <TenantLayout isSuperAdmin={boot.isSuperAdmin} />
                         }
                       >
                         <Route element={<AppShell memberships={boot.memberships} />}>

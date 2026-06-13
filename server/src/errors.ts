@@ -11,6 +11,7 @@ export type ErrorCode =
   | "LAST_ADMIN"
   | "SELF_DEMOTE"
   | "LAST_SUPER_ADMIN"
+  | "READ_ONLY_TOKEN"
   | "INTERNAL";
 
 export class AppError extends Error {

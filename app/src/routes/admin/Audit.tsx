@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "../../api";
 import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
@@ -16,6 +17,7 @@ interface AuditEntry {
   user: User;
   action: string;
   detail: string;
+  metadata?: Record<string, unknown> | null;
 }
 
 function relativeTime(iso: string): string {
@@ -29,9 +31,45 @@ function relativeTime(iso: string): string {
 export function Audit() {
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tenantFilter, setTenantFilter] = useState("");
+  const [params, setParams] = useSearchParams();
 
-  const load = async (tenantId?: string) => {
+  // URL-persisted filter state — single source of truth.
+  const tenantParam = params.get("tenant") ?? "";
+  const typeParam = params.get("type") ?? "";
+  const onlyElevated = params.get("elevated") === "1";
+
+  const [tenantFilter, setTenantFilter] = useState(tenantParam);
+  useEffect(() => setTenantFilter(tenantParam), [tenantParam]);
+
+  const setParamReplace = useCallback(
+    (key: string, value: string | null) => {
+      const next = new URLSearchParams(params);
+      if (value && value.length > 0) next.set(key, value);
+      else next.delete(key);
+      setParams(next, { replace: true });
+    },
+    [params, setParams],
+  );
+
+  const eventTypes = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.action))).sort(),
+    [rows],
+  );
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) => {
+      if (onlyElevated) {
+        const elevated =
+          (r.metadata as { actor_super_admin?: boolean } | null | undefined)
+            ?.actor_super_admin === true;
+        if (!elevated) return false;
+      }
+      if (typeParam && r.action !== typeParam) return false;
+      return true;
+    });
+  }, [rows, onlyElevated, typeParam]);
+
+  const load = useCallback(async (tenantId?: string) => {
     setLoading(true);
     try {
       const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}&limit=100` : "?limit=100";
@@ -40,15 +78,15 @@ export function Audit() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void load();
-  }, []);
+    void load(tenantParam.trim() || undefined);
+  }, [load, tenantParam]);
 
   const handleFilter = (e: React.FormEvent) => {
     e.preventDefault();
-    void load(tenantFilter.trim() || undefined);
+    setParamReplace("tenant", tenantFilter.trim() || null);
   };
 
   return (
@@ -57,9 +95,22 @@ export function Audit() {
         kicker="System"
         title="System audit"
         lede="Cross-workspace activity log. Newest first."
-        count={loading ? undefined : rows.length}
+        count={loading ? undefined : filteredRows.length}
         action={
           <form onSubmit={handleFilter} className="flex gap-2">
+            <button
+              type="button"
+              data-active={onlyElevated}
+              onClick={() => setParamReplace("elevated", onlyElevated ? null : "1")}
+              className={
+                "px-3 py-1.5 text-sm border transition-colors " +
+                (onlyElevated
+                  ? "bg-accent-soft border-accent text-accent"
+                  : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
+              }
+            >
+              Super-admin actions
+            </button>
             <input
               className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink font-mono placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
               value={tenantFilter}
@@ -72,13 +123,10 @@ export function Audit() {
             >
               Filter
             </button>
-            {tenantFilter && (
+            {tenantParam && (
               <button
                 type="button"
-                onClick={() => {
-                  setTenantFilter("");
-                  void load();
-                }}
+                onClick={() => setParamReplace("tenant", null)}
                 className="px-3 py-1.5 text-sm text-ink-3 hover:text-ink transition-colors"
               >
                 Clear
@@ -88,10 +136,50 @@ export function Audit() {
         }
       />
 
+      {eventTypes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            data-active={!typeParam}
+            onClick={() => setParamReplace("type", null)}
+            className={
+              "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border transition-colors " +
+              (!typeParam
+                ? "bg-accent-soft border-accent text-accent"
+                : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
+            }
+          >
+            <span>All events</span>
+            <span className="font-mono text-[10px] tabular-nums opacity-80">{rows.length}</span>
+          </button>
+          {eventTypes.map((t) => {
+            const active = typeParam === t;
+            const count = rows.filter((r) => r.action === t).length;
+            return (
+              <button
+                key={t}
+                type="button"
+                data-active={active}
+                onClick={() => setParamReplace("type", active ? null : t)}
+                className={
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border transition-colors " +
+                  (active
+                    ? "bg-accent-soft border-accent text-accent"
+                    : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
+                }
+              >
+                <code className="font-mono text-[10.5px]">{t}</code>
+                <span className="font-mono text-[10px] tabular-nums opacity-80">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
           <SkeletonList rows={6} columns={[140, 100, 160, "minmax(0,1fr)"]} />
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <EmptyState title="No activity yet" body="System activity will appear here as workspaces are created and changed." />
         ) : (
           <div className="border border-line divide-y divide-line bg-surface">
@@ -109,7 +197,7 @@ export function Audit() {
                 Detail
               </span>
             </div>
-            {rows.map((row, i) => (
+            {filteredRows.map((row, i) => (
               <div
                 key={row.id ?? i}
                 className="zz-rise grid grid-cols-[140px_100px_160px_1fr] gap-4 items-baseline px-5 py-3 hover:bg-hover transition-colors"

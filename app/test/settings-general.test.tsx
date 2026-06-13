@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { General } from "../src/routes/settings/General";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
 
@@ -13,7 +14,11 @@ function wrap(ui: React.ReactNode, role: "viewer" | "editor" | "admin" = "admin"
     role,
     isSuperAdmin: false,
   };
-  return <TenantProvider value={value}>{ui}</TenantProvider>;
+  return (
+    <MemoryRouter>
+      <TenantProvider value={value}>{ui}</TenantProvider>
+    </MemoryRouter>
+  );
 }
 
 describe("Settings/General", () => {

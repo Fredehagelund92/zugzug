@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."audit_log" ADD COLUMN "metadata" jsonb;

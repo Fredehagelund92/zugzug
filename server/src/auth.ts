@@ -242,6 +242,25 @@ export async function listUsers(q?: string, limit = 50, offset = 0): Promise<Adm
   );
 }
 
+export interface TenantAuthContext {
+  tenantId: string;
+  role: "admin" | "editor" | "viewer";
+  isSuperAdmin: boolean;
+}
+
+/**
+ * Authorization check for workspace-admin mutations.
+ * Super-admin entering a workspace as a non-admin member is elevated to admin.
+ * Returns { ok, elevated } so callers can tag the audit log.
+ */
+export function requireAdmin(
+  ctx: TenantAuthContext,
+): { ok: true; elevated: boolean } | { ok: false } {
+  if (ctx.role === "admin") return { ok: true, elevated: false };
+  if (ctx.isSuperAdmin) return { ok: true, elevated: true };
+  return { ok: false };
+}
+
 export async function countSuperAdmins(): Promise<number> {
   const row = await get<{ n: number }>(
     `SELECT COUNT(*)::int AS n FROM ${pg("users")} WHERE is_super_admin = true`,

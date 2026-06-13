@@ -12,6 +12,7 @@ import {
   handleAuthConfig,
   handleDevLogin,
   canMutate,
+  requireAdmin,
   updateUserName,
   listUsers,
   setSuperAdmin,
@@ -33,7 +34,7 @@ import { resolveTenantContext } from "./tenant-middleware.ts";
 import { TenantRepo } from "./tenant-repo.ts";
 import {
   provisionTenant,
-  listTenants,
+  listTenantsForAdmin,
   tenantBySlug,
   memberRole,
   teardownTenant,
@@ -46,8 +47,10 @@ import {
   countAdmins,
   removeMember,
   updateTenantLabel,
+  updateTenantSlug,
   leaveTenant,
 } from "./tenant.ts";
+import { appendAuditAs } from "./repo-meta.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
 import type { ServerWebSocket } from "bun";
@@ -232,7 +235,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     try {
       // /api/admin/tenants (GET list, POST provision)
       if (seg[2] === "tenants" && seg.length === 3) {
-        if (method === "GET") return json({ tenants: await listTenants() });
+        if (method === "GET") return json({ tenants: await listTenantsForAdmin() });
         if (method === "POST") {
           const body = (await req.json()) as {
             id: string;
@@ -248,6 +251,40 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           });
           return json(tenant, 201);
         }
+      }
+
+      // PATCH /api/admin/tenants/:id — super-admin label edit
+      if (seg[2] === "tenants" && seg.length === 4 && method === "PATCH") {
+        const targetId = decodeURIComponent(seg[3]!);
+        const body = (await req.json()) as { label?: string };
+        if (typeof body.label !== "string") {
+          return json({ error: "label required" }, 400);
+        }
+        try {
+          await updateTenantLabel(targetId, body.label);
+        } catch (e) {
+          if (e instanceof AppError) {
+            return json({ error: e.code, message: e.message }, e.status);
+          }
+          throw e;
+        }
+        // System-scope audit: tenantId "default" so it survives a later teardown
+        // of the renamed tenant. actor_super_admin is unconditionally true since
+        // this branch already passed the isSuperAdmin gate at line 232.
+        await appendAuditAs(
+          me,
+          "admin.tenant.label_update",
+          `renamed workspace ${targetId} to "${body.label.trim()}"`,
+          {
+            tenantId: "default",
+            metadata: {
+              actor_super_admin: true,
+              target_tenant_id: targetId,
+              new_label: body.label.trim(),
+            },
+          },
+        );
+        return json({ ok: true });
       }
 
       // POST /api/admin/tenants/:id/teardown
@@ -304,6 +341,26 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           log({ level: "warn", msg: "admin/warehouses: warehouse unreachable", err: String(err) });
           return json({ databases: [], attached: false, error: "warehouse_unreachable" });
         }
+      }
+
+      // POST /api/admin/warehouses — create a new MotherDuck database.
+      // The whole admin block above already gates on isSuperAdmin.
+      if (seg[2] === "warehouses" && seg.length === 3 && method === "POST") {
+        if (!env.attachWarehouse) {
+          return json({ error: "warehouse not attached", code: "FORBIDDEN" }, 403);
+        }
+        const body = (await req.json()) as { name?: string };
+        if (typeof body.name !== "string") {
+          return json({ error: "name required", code: "VALIDATION_FAILED" }, 400);
+        }
+        const trimmed = body.name.trim();
+        const { createWarehouseDatabase } = await import("./admin.ts");
+        const names = await createWarehouseDatabase(trimmed);
+        await appendAuditAs(me, "admin.warehouse.create", `created database "${trimmed}"`, {
+          tenantId: "default",
+          metadata: { actor_super_admin: true, warehouse_name: trimmed },
+        });
+        return json({ warehouses: names });
       }
 
       // GET /api/admin/users[?q=…&limit=…&offset=…]
@@ -415,18 +472,77 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // PATCH /api/t/:slug — rename workspace label (admin only)
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
-      if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+      const gate = requireAdmin(tenantCtx);
+      if (!gate.ok) return json({ error: "forbidden" }, 403);
       const { label } = (await req.json()) as { label: string };
       await updateTenantLabel(tenantCtx.tenantId, label);
+      await appendAuditAs(me, "workspace.rename", `renamed workspace to "${label}"`, {
+        tenantId: tenantCtx.tenantId,
+        metadata: { actor_super_admin: gate.elevated },
+      });
       return noContent();
+    }
+
+    // PATCH /api/t/:slug/slug — change URL slug (admin only; refuses on "default")
+    if (
+      tenantSlugFromPath !== null &&
+      seg[1] === "slug" &&
+      seg.length === 2 &&
+      method === "PATCH"
+    ) {
+      const gate = requireAdmin(tenantCtx);
+      if (!gate.ok) return json({ error: "forbidden" }, 403);
+      const body = (await req.json()) as { slug?: string };
+      if (typeof body.slug !== "string") {
+        return json({ error: "slug required" }, 400);
+      }
+      const oldSlug = tenantSlugFromPath;
+      try {
+        await updateTenantSlug(oldSlug, body.slug);
+      } catch (e) {
+        if (e instanceof AppError) {
+          return json({ error: e.code, message: e.message }, e.status);
+        }
+        throw e;
+      }
+      await appendAuditAs(
+        me,
+        "workspace.slug",
+        `changed slug from "${oldSlug}" to "${body.slug.trim()}"`,
+        {
+          tenantId: tenantCtx.tenantId,
+          metadata: {
+            actor_super_admin: gate.elevated,
+            old_slug: oldSlug,
+            new_slug: body.slug.trim(),
+          },
+        },
+      );
+      return json({ ok: true, new_slug: body.slug.trim() });
     }
 
     // DELETE /api/t/:slug — delete workspace (admin only; refuses on "default")
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "DELETE") {
-      if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+      const gate = requireAdmin(tenantCtx);
+      if (!gate.ok) return json({ error: "forbidden" }, 403);
       if (tenantSlugFromPath === "default") {
         return json({ error: "cannot_delete_default" }, 409);
       }
+      // Scope this audit row to the "default" (system) tenant so it survives
+      // teardownTenant() — which deletes audit_log rows for the target tenant.
+      await appendAuditAs(
+        me,
+        "workspace.delete",
+        `deleted workspace ${tenantSlugFromPath} (${tenantCtx.tenantId})`,
+        {
+          tenantId: "default",
+          metadata: {
+            actor_super_admin: gate.elevated,
+            deleted_tenant_id: tenantCtx.tenantId,
+            deleted_tenant_slug: tenantSlugFromPath,
+          },
+        },
+      );
       await teardownTenant(tenantCtx.tenantId);
       return noContent();
     }
@@ -460,7 +576,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
       // PUT /api/t/:slug/team/members/:userId/role
       if (seg[2] === "members" && seg.length === 5 && seg[4] === "role" && method === "PUT") {
-        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        const gate = requireAdmin(tenantCtx);
+        if (!gate.ok) return json({ error: "forbidden" }, 403);
         const body = (await req.json()) as { role: "admin" | "editor" | "viewer" };
         const targetUserId = decodeURIComponent(seg[3]!);
         const exists = (await listMembersForTenant(tenantCtx.tenantId)).find(
@@ -468,11 +585,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         );
         if (!exists) return json({ error: "not_found" }, 404);
         await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
+        await appendAuditAs(
+          me,
+          "member.role",
+          `set ${targetUserId} role to ${body.role}`,
+          {
+            tenantId: tenantCtx.tenantId,
+            metadata: { actor_super_admin: gate.elevated, target_user_id: targetUserId },
+          },
+        );
         return new Response(null, { status: 204, headers: corsHeaders });
       }
       // DELETE /api/t/:slug/team/members/:userId
       if (seg[2] === "members" && seg.length === 4 && method === "DELETE") {
-        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        const gate = requireAdmin(tenantCtx);
+        if (!gate.ok) return json({ error: "forbidden" }, 403);
         const targetUserId = decodeURIComponent(seg[3]!);
         const targetRole = (await listMembersForTenant(tenantCtx.tenantId)).find(
           (m) => m.user_id === targetUserId,
@@ -481,6 +608,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return json({ error: "last_admin" }, 409);
         }
         await removeMember(tenantCtx.tenantId, targetUserId);
+        await appendAuditAs(me, "member.remove", `removed ${targetUserId}`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated, target_user_id: targetUserId },
+        });
         return new Response(null, { status: 204, headers: corsHeaders });
       }
       // GET /api/t/:slug/team/invites
@@ -489,15 +620,31 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
       // POST /api/t/:slug/team/invites
       if (seg[2] === "invites" && seg.length === 3 && method === "POST") {
-        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        const gate = requireAdmin(tenantCtx);
+        if (!gate.ok) return json({ error: "forbidden" }, 403);
         const body = (await req.json()) as { email: string; role: "admin" | "editor" | "viewer" };
         await createInvite(tenantCtx.tenantId, body.email, body.role, me);
+        await appendAuditAs(
+          me,
+          "invite.create",
+          `invited ${body.email} as ${body.role}`,
+          {
+            tenantId: tenantCtx.tenantId,
+            metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
+          },
+        );
         return json({ ok: true }, 201);
       }
       // DELETE /api/t/:slug/team/invites/:email
       if (seg[2] === "invites" && seg.length === 4 && method === "DELETE") {
-        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
-        await revokeInvite(tenantCtx.tenantId, decodeURIComponent(seg[3]!));
+        const gate = requireAdmin(tenantCtx);
+        if (!gate.ok) return json({ error: "forbidden" }, 403);
+        const email = decodeURIComponent(seg[3]!);
+        await revokeInvite(tenantCtx.tenantId, email);
+        await appendAuditAs(me, "invite.revoke", `revoked invite for ${email}`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated, invitee_email: email },
+        });
         return new Response(null, { status: 204, headers: corsHeaders });
       }
     }
