@@ -362,7 +362,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // instance into this ref so the cursor scroll-into-view effect below can
   // imperatively call scrollToIndex without re-creating the virtualiser here.
   const estimatedRowHeight = compact ? 26 : 38;
-  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
+  const virtualizerRef = useRef<Virtualizer<HTMLElement, Element> | null>(null);
 
   // Pointer-driven cursor moves must NOT auto-scroll: the clicked cell is
   // already visible, and scrollToIndex (estimated row sizes) can shift the
@@ -1079,7 +1079,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   return (
-    <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
+    <div className="relative flex flex-col rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
       {filterSet && filterSet.conditions.length > 0 && (
         <FilterBar filterSet={filterSet} columns={orderedVisible} onChange={setFilterSet} />
       )}
@@ -1091,8 +1091,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
-        className="relative flex flex-1 flex-col min-h-0 overflow-auto outline-none"
-        style={{ scrollbarGutter: "stable" }}
+        className="relative flex flex-col overflow-x-auto outline-none"
       >
         {fillHandlePos && (
           <FillHandle

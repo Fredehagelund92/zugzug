@@ -176,17 +176,32 @@ export function useGridCursor<Row>({
     const sel = `[data-cell="${cursor.rowKey}::${cursor.field}"]`;
     const el = cont.querySelector<HTMLElement>(sel);
     if (!el) return;
+    // Vertical scrolling now lives on the canvas (the nearest ancestor with
+    // overflow-y: auto|scroll), not on `cont` itself — `cont` only scrolls
+    // horizontally. Compute vertical bounds against that ancestor, horizontal
+    // bounds against `cont`. Sticky header is anchored to the canvas, so
+    // discount its height from the visible top of the canvas viewport.
+    let scrollParent: HTMLElement | null = cont.parentElement;
+    while (scrollParent) {
+      const s = getComputedStyle(scrollParent);
+      if (/(auto|scroll)/.test(s.overflowY)) break;
+      scrollParent = scrollParent.parentElement;
+    }
+    const vRect =
+      scrollParent?.getBoundingClientRect() ??
+      ({ top: 0, bottom: window.innerHeight } as DOMRect);
+    const vClientH = scrollParent?.clientHeight ?? window.innerHeight;
     const contRect = cont.getBoundingClientRect();
     const cellRect = el.getBoundingClientRect();
     const header = cont.querySelector<HTMLElement>('[role="row"][aria-rowindex="1"]');
     const headerH = header?.getBoundingClientRect().height ?? 0;
-    // clientWidth/clientHeight exclude scrollbars and reserved gutter — without
-    // this, cells under the horizontal scrollbar or to the left of the vertical
-    // scrollbar register as off-screen and trigger a scroll on click.
+    // clientWidth excludes scrollbars and reserved gutter — without this, cells
+    // under the horizontal scrollbar register as off-screen and trigger a scroll
+    // on click.
     const visibleLeft = contRect.left;
     const visibleRight = contRect.left + cont.clientWidth;
-    const visibleTop = contRect.top + headerH;
-    const visibleBottom = contRect.top + cont.clientHeight;
+    const visibleTop = vRect.top + headerH;
+    const visibleBottom = vRect.top + vClientH;
     // 1px tolerance for sub-pixel rounding at the edges.
     const EPS = 1;
     const fullyVisible =

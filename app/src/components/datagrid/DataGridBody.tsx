@@ -1,5 +1,20 @@
 import React from "react";
 import { useVirtualizer, type Virtualizer } from "@tanstack/react-virtual";
+
+/** Walk up the DOM from `el` to the nearest ancestor whose computed
+ *  `overflow-y` is `auto` or `scroll`. Falls back to the document
+ *  scrolling element. Used so the row virtualizer measures against the
+ *  page-level canvas scroll (`<main class="zz-canvas">`) instead of the
+ *  grid's own container, which no longer scrolls vertically. */
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let node: HTMLElement | null = el?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY)) return node;
+    node = node.parentElement;
+  }
+  return (document.scrollingElement as HTMLElement | null) ?? document.documentElement;
+}
 import { GridRow } from "./DataGridRow";
 import type { ColumnDef } from "./types";
 import type { PaletteName } from "../../lib/palette";
@@ -25,7 +40,7 @@ interface DataGridBodyProps<Row> {
   scrollContainerRef: React.RefObject<HTMLDivElement>;
   /** Lets DataGrid call `virtualizer.scrollToIndex` from outside (cursor
    *  scroll-into-view). Body assigns this on every render. */
-  virtualizerRef: React.MutableRefObject<Virtualizer<HTMLDivElement, Element> | null>;
+  virtualizerRef: React.MutableRefObject<Virtualizer<HTMLElement, Element> | null>;
   /** Empty-state element override; falls back to "No rows.". */
   empty?: React.ReactNode;
 
@@ -99,9 +114,23 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
     renderRowDetail,
   } = props;
 
+  // Resolve the actual scrolling ancestor once on mount and cache it. The grid's
+  // own container no longer scrolls vertically (overflow-x-auto only) so the
+  // virtualizer must measure against the page canvas (`<main class="zz-canvas">`).
+  // useVirtualizer expects getScrollElement to return a stable element — so we
+  // memoize the lookup in a ref and re-resolve only when the cached node detaches.
+  const scrollParentRef = React.useRef<HTMLElement | null>(null);
+  const getScrollElement = React.useCallback(() => {
+    const cached = scrollParentRef.current;
+    if (cached && cached.isConnected) return cached;
+    const resolved = findScrollParent(scrollContainerRef.current);
+    scrollParentRef.current = resolved;
+    return resolved;
+  }, [scrollContainerRef]);
+
   const virtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollContainerRef.current,
+    getScrollElement,
     estimateSize: () => estimatedRowHeight,
     overscan: 5,
   });
