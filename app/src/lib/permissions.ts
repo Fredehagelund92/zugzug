@@ -19,6 +19,11 @@ export type Action =
   | "admin.view";
 
 export function can(t: TenantContextValue, action: Action): boolean {
+  // Super-admin gets every workspace + account affordance. The /admin shell
+  // is still gated by isSuperAdmin via the "admin.view" action below — we
+  // reach this branch only for non-admin actions.
+  if (t.isSuperAdmin && action !== "admin.view") return true;
+
   switch (action) {
     case "account.profile.edit":
     case "settings.danger.leave":
