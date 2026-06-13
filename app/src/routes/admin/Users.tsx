@@ -6,6 +6,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../components/Toast";
+import { readServerError } from "../../lib/api-errors";
 
 interface AdminUser {
   id: string;
@@ -69,12 +70,13 @@ export function Users() {
         } else if (body.error === "last_super_admin") {
           toast("Cannot demote the last super-admin.", "error");
         } else {
-          toast("Action failed.", "error");
+          toast(`Couldn't update role — ${body.error}.`, "error");
         }
         return;
       }
       if (!r.ok) {
-        toast("Request failed.", "error");
+        const msg = await readServerError(r);
+        toast(`Couldn't update role — ${msg}.`, "error");
         return;
       }
       toast(pending.promote ? "Promoted to super-admin." : "Super-admin removed.", "success");

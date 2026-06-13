@@ -88,7 +88,7 @@ export function Sources() {
       const n = await scanSources();
       toast(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Scan failed.", "error");
+      toast(e instanceof Error ? e.message : "Couldn't scan.", "error");
     }
   });
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {

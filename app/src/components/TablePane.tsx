@@ -999,7 +999,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             const r = await importRows(activeId, toImport);
             toast(`Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`);
           } catch (err) {
-            toast(err instanceof Error ? err.message : "Import failed.", "error");
+            toast(err instanceof Error ? err.message : "Couldn't import.", "error");
           }
         }}
         onCancel={() => setPendingImport(null)}

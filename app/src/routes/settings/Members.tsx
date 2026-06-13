@@ -874,7 +874,7 @@ export function Members() {
     );
     setSubmitting(false);
     if (sentCount > 0) {
-      toast(`Invite${sentCount > 1 ? "s" : ""} sent — they'll join when they next sign in.`);
+      toast(`Invite${sentCount > 1 ? "s" : ""} sent.`, "success");
       void loadInvites();
     }
     inputRef.current?.focus();

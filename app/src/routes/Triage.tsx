@@ -275,7 +275,7 @@ function TriageInner() {
     }, 0);
     const n0 = stagedAllDrafts.length;
     toast(
-      `✓ ${n0} change${n0 === 1 ? "" : "s"} published · ${predictedRows.toLocaleString()} rows recovered`,
+      `${n0} change${n0 === 1 ? "" : "s"} published · ${predictedRows.toLocaleString()} rows recovered`,
     );
     try {
       let total = 0,

@@ -7,6 +7,7 @@ import { RoleGate } from "../../components/settings/RoleGate";
 import { useTenant } from "../../lib/tenant-context";
 import { apiFetch } from "../../api";
 import { toast } from "../../components/Toast";
+import { readServerError } from "../../lib/api-errors";
 
 export function Danger() {
   const tenant = useTenant();
@@ -33,7 +34,8 @@ export function Danger() {
         }
       }
       if (!res.ok) {
-        toast("Failed to leave workspace.", "error");
+        const msg = await readServerError(res);
+        toast(`Couldn't leave workspace — ${msg}.`, "error");
         return;
       }
       navigate("/app");
@@ -47,7 +49,8 @@ export function Danger() {
     try {
       const res = await apiFetch("", { method: "DELETE" });
       if (!res.ok) {
-        toast("Failed to delete workspace.", "error");
+        const msg = await readServerError(res);
+        toast(`Couldn't delete workspace — ${msg}.`, "error");
         return;
       }
       navigate("/app");

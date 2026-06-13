@@ -257,7 +257,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
         }
         if (s.lastAutoPublishAt && s.lastAutoPublishAt !== lastAutoSeen.current) {
           lastAutoSeen.current = s.lastAutoPublishAt;
-          toast(`⚡ Auto-published ${s.lastAutoPublishDetail ?? "changes"}`);
+          toast(`Auto-published ${s.lastAutoPublishDetail ?? "changes"}.`);
         }
       } catch {
         /* offline — the BootGate/health surfaces handle connectivity */
