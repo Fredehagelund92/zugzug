@@ -319,3 +319,44 @@
     animation: none;
   }
 }
+
+/* DataGrid column-hover highlight. Toggled via DOM mutation from DataGrid's
+   applyColumnHover (see useGridCursor / Step 3 plan) — class is added to
+   every [data-field=X] body cell + the matching [data-header=X] header when
+   the user mouses into a cell or header in that column. Kept very subtle so
+   it stacks under the row-hover tint and never overwhelms the focused cell's
+   accent ring. */
+.zz-col-hover {
+  background-color: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+/* DataGrid scroll viewport — thin, overlay-ish scrollbars (Sheets/Linear
+   feel). Applied to the grid's own scroll container so the bordered
+   viewport doesn't feel weighed down by chunky native chrome. Both
+   axes styled the same; padded thumb via background-clip:content-box so
+   the visible bar reads as ~6 px inside a 10 px track. */
+.zz-grid-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+.zz-grid-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.zz-grid-scroll::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  background-clip: content-box;
+  border: 2px solid transparent;
+  border-radius: 5px;
+}
+.zz-grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-3);
+  background-clip: content-box;
+  border: 2px solid transparent;
+}
+.zz-grid-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.zz-grid-scroll::-webkit-scrollbar-corner {
+  background: transparent;
+}

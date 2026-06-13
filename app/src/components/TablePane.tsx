@@ -156,7 +156,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
           />
         </div>
       )}
-      <div className="flex flex-1 flex-col min-h-0 overflow-auto">
+      <div className="flex flex-1 flex-col min-h-0">
         {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} />}
         {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
         {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}

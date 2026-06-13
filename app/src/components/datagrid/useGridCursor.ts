@@ -123,6 +123,38 @@ export function useGridCursor<Row>({
     [rows, navCols, rowKey],
   );
 
+  // Horizontal move that wraps at the row edges (Sheets/Excel convention).
+  // ArrowRight on last col → next row, first col. ArrowLeft on first col →
+  // previous row, last col. Top-left / bottom-right corners clamp. Used for
+  // plain ArrowLeft/Right and Tab/Shift-Tab (both in and out of edit mode).
+  const moveH = useCallback(
+    (delta: -1 | 1) => {
+      setCursor((cur) => {
+        if (!cur) return cur;
+        const ri = rows.findIndex((r) => rowKey(r) === cur.rowKey);
+        const ci = navCols.findIndex((c) => c.field === cur.field);
+        if (ri < 0 || ci < 0) return cur;
+        let nr = ri;
+        let nc = ci + delta;
+        if (nc >= navCols.length) {
+          if (ri >= rows.length - 1) return cur; // bottom-right corner clamps
+          nr = ri + 1;
+          nc = 0;
+        } else if (nc < 0) {
+          if (ri <= 0) return cur; // top-left corner clamps
+          nr = ri - 1;
+          nc = navCols.length - 1;
+        }
+        const row = rows[nr];
+        const col = navCols[nc];
+        return row && col
+          ? { rowKey: rowKey(row), field: col.field, editing: cur.editing, initial: cur.initial }
+          : cur;
+      });
+    },
+    [rows, navCols, rowKey],
+  );
+
   const startEdit = useCallback(
     (initial?: string) => setCursor((c) => (c ? { ...c, editing: true, initial } : c)),
     [],
@@ -132,12 +164,39 @@ export function useGridCursor<Row>({
     [],
   );
 
-  // auto-scroll the focused cell into view
+  // auto-scroll the focused cell into view — but only when it's actually
+  // off-screen. block:"nearest" treats cells partially obscured by the sticky
+  // header as visible and "optimizes" by scrolling them out from under it,
+  // producing a click-jump on cells that are already on-screen. Compare rects
+  // against the scroll container (accounting for sticky-header overlap at the
+  // top) and bail when the cell is fully visible.
   useEffect(() => {
     if (!cursor || !ref.current) return;
+    const cont = ref.current;
     const sel = `[data-cell="${cursor.rowKey}::${cursor.field}"]`;
-    const el = ref.current.querySelector<HTMLElement>(sel);
-    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const el = cont.querySelector<HTMLElement>(sel);
+    if (!el) return;
+    const contRect = cont.getBoundingClientRect();
+    const cellRect = el.getBoundingClientRect();
+    const header = cont.querySelector<HTMLElement>('[role="row"][aria-rowindex="1"]');
+    const headerH = header?.getBoundingClientRect().height ?? 0;
+    // clientWidth/clientHeight exclude scrollbars — without this, cells under
+    // the horizontal scrollbar register as off-screen and trigger a scroll on
+    // click.
+    const visibleLeft = contRect.left;
+    const visibleRight = contRect.left + cont.clientWidth;
+    const visibleTop = contRect.top + headerH;
+    const visibleBottom = contRect.top + cont.clientHeight;
+    // 1px tolerance for sub-pixel rounding at the edges.
+    const EPS = 1;
+    const fullyVisible =
+      cellRect.top >= visibleTop - EPS &&
+      cellRect.bottom <= visibleBottom + EPS &&
+      cellRect.left >= visibleLeft - EPS &&
+      cellRect.right <= visibleRight + EPS;
+    if (!fullyVisible) {
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }, [cursor?.rowKey, cursor?.field]);
 
   // When the host's rows change (filter toggle, async save), the cursor may
@@ -200,7 +259,7 @@ export function useGridCursor<Row>({
           e.preventDefault();
           onCommit?.();
           stopEdit();
-          move(e.shiftKey ? -1 : 1, 0);
+          moveH(e.shiftKey ? -1 : 1);
           startEdit();
           return;
         }
@@ -267,12 +326,12 @@ export function useGridCursor<Row>({
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        move(-1, 0);
+        moveH(-1);
         return;
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        move(1, 0);
+        moveH(1);
         return;
       }
       // Plain Enter starts editing; ⌘/Ctrl+Enter is left unhandled so it can
@@ -284,7 +343,7 @@ export function useGridCursor<Row>({
       }
       if (e.key === "Tab") {
         e.preventDefault();
-        move(e.shiftKey ? -1 : 1, 0);
+        moveH(e.shiftKey ? -1 : 1);
         return;
       }
       if (e.key === "?") {
@@ -319,6 +378,7 @@ export function useGridCursor<Row>({
     [
       cursor,
       move,
+      moveH,
       startEdit,
       stopEdit,
       onCommit,

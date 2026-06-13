@@ -1,47 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import type { Virtualizer } from "@tanstack/react-virtual";
 import { cx } from "../../lib/cx";
-import { Checkbox } from "../Checkbox";
-import {
-  IconEye,
-  IconFieldBoolean,
-  IconFieldDate,
-  IconFieldNumber,
-  IconFieldSelect,
-  IconFieldText,
-} from "../Icons";
-
-const IconFieldUrl = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>
-    ↗
-  </span>
-);
-const IconFieldEmail = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>
-    @
-  </span>
-);
-const IconFieldRating = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>
-    ★
-  </span>
-);
-const IconFieldLinked = ({ className }: { className?: string }) => (
-  <span className={className} style={{ fontSize: "10px" }}>
-    ⇢
-  </span>
-);
-import { TextCell } from "./cells/TextCell";
-import { NumberCell } from "./cells/NumberCell";
-import { BooleanCell } from "./cells/BooleanCell";
-import { DateCell } from "./cells/DateCell";
-import { UrlCell } from "./cells/UrlCell";
-import { EmailCell } from "./cells/EmailCell";
-import { RatingCell } from "./cells/RatingCell";
-import { LinkedCell } from "./cells/LinkedCell";
-import { SelectCell } from "./cells/SelectCell";
-import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
-import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import { useGridCursor } from "./useGridCursor";
 import { useUndoStack } from "./UndoStack";
 import { useFillHandle } from "./useFillHandle";
@@ -52,272 +11,12 @@ import { useContextMenu, type ContextSurface } from "./useContextMenu";
 import { ContextMenu, type MenuItem } from "./ContextMenu";
 import { ConditionalFormatPopover } from "./ConditionalFormatPopover";
 import { FieldDescriptionEditor } from "./FieldDescriptionEditor";
-import { useConditionalFormatting, type RowEvaluation } from "./useConditionalFormatting";
-import type { DataGridProps, CellType, ColumnDef, FilterSet, RuleStyle } from "./types";
-import type { PaletteName } from "../../lib/palette";
-import type { OptionDef } from "../../data";
-import type { RowActivityEntry } from "../../lib/use-row-activity";
-import { RowActivityBadge } from "./RowActivityBadge";
+import { useConditionalFormatting } from "./useConditionalFormatting";
+import type { DataGridProps, FilterSet } from "./types";
 import { CursorOverlay } from "./CursorOverlay";
-
-// ── GridRow — memoized per-row component ────────────────────────────────────
-interface GridRowProps<Row> {
-  row: Row;
-  rowKey: string;
-  rowIndex: number;
-  columns: ColumnDef<Row>[];
-  /** Which field on this row has the cursor (null = cursor is elsewhere). */
-  focusedField: string | null;
-  /** Which field on this row is actively being edited (null = none). */
-  editingField: string | null;
-  /** Passed through to editors for type-to-edit seeding. */
-  cursorInitial: string | undefined;
-  /** Returns true when (rowKey, field) is inside the current range selection.
-   *  Takes the row key so the stable callback can be passed straight through
-   *  without a per-row closure (which would defeat React.memo on GridRow). */
-  cellInRange: (rk: string, field: string) => boolean;
-  selected: boolean;
-  selectionCol: boolean;
-  showRowNumbers: boolean;
-  cellPadY: string;
-  gridStyle: React.CSSProperties;
-  onAddFieldClick: (() => void) | undefined;
-  hiddenFieldCount: number;
-  getValue: (row: Row, field: string) => unknown;
-  onCellPointerDown: (e: React.PointerEvent, rk: string, field: string) => void;
-  onCellDoubleClick: (rk: string, field: string) => void;
-  onToggleSelect: (rk: string) => void;
-  onCommitCell: (rk: string, field: string, value: unknown) => void;
-  onStopEdit: () => void;
-  onAddColumnOption:
-    | ((field: string, label: string, color?: PaletteName | null) => Promise<OptionDef[]>)
-    | undefined;
-  onRowNumPointerDown?: (e: React.PointerEvent, rk: string) => void;
-  evaluation: RowEvaluation;
-  /** Latest audit entry for this row, if any. When present, renders the
-   *  activity pip + hover badge inside the row wrapper. */
-  activityEntry?: RowActivityEntry;
-}
-
-function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
-  // Ref for the currently-editing cell — passed to SelectCell.Editor so the
-  // portal popover can position itself relative to the cell anchor.
-  const editingCellRef = useRef<HTMLDivElement>(null);
-  const {
-    row,
-    rowKey: rk,
-    rowIndex,
-    columns,
-    focusedField,
-    editingField,
-    cursorInitial,
-    cellInRange,
-    selected,
-    selectionCol,
-    showRowNumbers,
-    cellPadY,
-    gridStyle,
-    onAddFieldClick,
-    hiddenFieldCount,
-    getValue,
-    onCellPointerDown,
-    onCellDoubleClick,
-    onToggleSelect,
-    onCommitCell,
-    onStopEdit,
-    onAddColumnOption,
-    onRowNumPointerDown,
-    evaluation,
-    activityEntry,
-  } = props;
-  return (
-    <div
-      role="row"
-      aria-rowindex={rowIndex + 2}
-      className={cx(
-        "relative group grid items-stretch border-b border-line transition-colors",
-        selected ? "bg-surface-2" : "hover:bg-hover",
-      )}
-      style={gridStyle}
-      data-row={rk}
-    >
-      {activityEntry && <RowActivityBadge entry={activityEntry} />}
-      {evaluation.rowStripe && (
-        <span
-          aria-hidden
-          data-row-stripe={evaluation.rowStripe}
-          className="absolute left-0 top-0 bottom-0 w-1 z-[1] pointer-events-none"
-          style={{ background: `var(--tint-${evaluation.rowStripe})` }}
-        />
-      )}
-      {showRowNumbers && (
-        <div
-          data-row-num={rk}
-          onPointerDown={(e) => onRowNumPointerDown?.(e, rk)}
-          className={cx(
-            "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3 tabular-nums cursor-cell",
-            cellPadY,
-          )}
-        >
-          {rowIndex + 1}
-        </div>
-      )}
-      {selectionCol && (
-        <div className={cx("flex items-center justify-center border-r border-line", cellPadY)}>
-          <Checkbox
-            state={selected ? "on" : "off"}
-            onClick={() => onToggleSelect(rk)}
-            aria-label={`Select row ${rk}`}
-          />
-        </div>
-      )}
-      {columns.map((c, idx) => {
-        const focused = focusedField === c.field;
-        const editing = editingField === c.field;
-        const inRangeCell = cellInRange(rk, c.field);
-        const value = getValue(row, c.field);
-        const ctx = { row, rowKey: rk, field: c.field, value, focused, column: c };
-        const isLastCol = idx === columns.length - 1;
-        const isFirstPinned = c.pinnedLeft && !columns.slice(0, idx).some((x) => x.pinnedLeft);
-        const cellCx = cx(
-          "relative flex min-w-0 select-none items-center px-3",
-          cellPadY,
-          !isLastCol && "border-r border-line",
-          c.align === "right" && "justify-end text-right",
-          inRangeCell && !focused && "bg-accent/10",
-          focused && "ring-2 ring-accent ring-inset",
-          isFirstPinned && "sticky left-0 z-[5] bg-[var(--surface)]",
-          isFirstPinned && selected && "!bg-[var(--surface-2)]",
-        );
-        const ruleStyle: RuleStyle | undefined = evaluation.cellStyles.get(c.field);
-        const cellInlineStyle: React.CSSProperties = {};
-        if (ruleStyle?.cellBg)
-          cellInlineStyle.background = `color-mix(in srgb,var(--tint-${ruleStyle.cellBg}) 18%,transparent)`;
-        if (ruleStyle?.textColor) cellInlineStyle.color = `var(--tint-${ruleStyle.textColor})`;
-        const data = `${rk}::${c.field}`;
-        return (
-          <div
-            key={c.field}
-            ref={editing ? editingCellRef : undefined}
-            role="gridcell"
-            aria-colindex={idx + 1}
-            aria-selected={focused ? true : undefined}
-            data-cell={data}
-            onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
-            onDoubleClick={() => onCellDoubleClick(rk, c.field)}
-            className={cellCx}
-            style={Object.keys(cellInlineStyle).length > 0 ? cellInlineStyle : undefined}
-          >
-            {editing && c.editable !== false ? (
-              c.edit ? (
-                c.edit(row, {
-                  ...ctx,
-                  initial: cursorInitial,
-                  commit: (v: unknown) => {
-                    onStopEdit();
-                    onCommitCell(rk, c.field, v);
-                  },
-                  cancel: () => onStopEdit(),
-                })
-              ) : c.config.type === "select" ? (
-                <SelectCell.Editor
-                  row={row}
-                  rowKey={rk}
-                  field={c.field}
-                  value={value}
-                  focused
-                  column={c}
-                  anchorRef={editingCellRef}
-                  commit={(v: unknown) => {
-                    onStopEdit();
-                    onCommitCell(rk, c.field, v);
-                  }}
-                  cancel={() => onStopEdit()}
-                  options={c.config.options}
-                  onCreate={async (label: string, color) => {
-                    if (!onAddColumnOption)
-                      return c.config.type === "select" ? c.config.options : [];
-                    return await onAddColumnOption(c.field, label, color);
-                  }}
-                />
-              ) : c.config.type === "linked" ? (
-                <LinkedCell.Editor
-                  row={row}
-                  rowKey={rk}
-                  field={c.field}
-                  value={value}
-                  focused
-                  column={c}
-                  anchorRef={editingCellRef}
-                  commit={(v: unknown) => {
-                    onStopEdit();
-                    onCommitCell(rk, c.field, v);
-                  }}
-                  cancel={() => onStopEdit()}
-                  candidates={c.config.candidates}
-                />
-              ) : (
-                <CellEditor
-                  type={c.config.type}
-                  ctx={{
-                    ...ctx,
-                    initial: cursorInitial,
-                    commit: (v: unknown) => {
-                      onStopEdit();
-                      onCommitCell(rk, c.field, v);
-                    },
-                    cancel: () => onStopEdit(),
-                  }}
-                />
-              )
-            ) : c.render ? (
-              c.render(row, ctx)
-            ) : c.config.type === "select" ? (
-              <SelectCell.Renderer {...ctx} />
-            ) : c.config.type === "linked" ? (
-              <LinkedCell.Renderer {...ctx} />
-            ) : (
-              <CellRenderer type={c.config.type} ctx={ctx} />
-            )}
-          </div>
-        );
-      })}
-      {onAddFieldClick && (
-        <div aria-hidden className="invisible flex items-center">
-          {hiddenFieldCount > 0 && (
-            <span className="px-2 py-2 text-[12px] font-medium">👁 {hiddenFieldCount} hidden</span>
-          )}
-          <span className="px-3 py-2 text-[12px] font-medium">+ Field</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// React.memo erases generics — re-cast to preserve them at the call site.
-const GridRow = React.memo(GridRowInner) as <Row>(props: GridRowProps<Row>) => React.ReactElement;
-
-const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: string }>> = {
-  text: IconFieldText,
-  number: IconFieldNumber,
-  boolean: IconFieldBoolean,
-  date: IconFieldDate,
-  select: IconFieldSelect,
-  url: IconFieldUrl,
-  email: IconFieldEmail,
-  rating: IconFieldRating,
-  linked: IconFieldLinked,
-};
-
-const CELLS: Record<Exclude<CellType, "select" | "linked">, { Renderer: any; Editor: any }> = {
-  text: TextCell,
-  number: NumberCell,
-  boolean: BooleanCell,
-  date: DateCell,
-  url: UrlCell,
-  email: EmailCell,
-  rating: RatingCell,
-};
+import { DataGridBody } from "./DataGridBody";
+import { DataGridHeader } from "./DataGridHeader";
+import { attrEsc, flashCell } from "./util";
 
 // ── Range selection types ───────────────────────────────────────────────────
 interface RangeCorner {
@@ -327,23 +26,6 @@ interface RangeCorner {
 interface RangeState {
   anchor: RangeCorner;
   focus: RangeCorner;
-}
-
-// Escape a string for use inside a double-quoted CSS attribute selector.
-const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-// Brief accent-wash on a cell after a bulk action (paste-fill / clear-range)
-// so the user sees what the keystroke just did. Deferred to the next frame
-// so React has rendered the new value first.
-function flashCell(rk: string, field: string): void {
-  requestAnimationFrame(() => {
-    const sel = `[data-cell="${attrEsc(`${rk}::${field}`)}"]`;
-    const el = document.querySelector<HTMLElement>(sel);
-    if (!el) return;
-    el.classList.remove("zz-row-flash");
-    void el.offsetWidth;
-    el.classList.add("zz-row-flash");
-    window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
-  });
 }
 
 // ── FillHandle — absolutely-positioned 8×8 accent square ────────────────────
@@ -419,7 +101,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const showRowNumbers = !!props.showRowNumbers;
   const compact = props.density === "compact";
   const cellPadY = compact ? "py-[3px]" : "py-[7px]";
-  const headerPadY = compact ? "py-[5px]" : "py-2";
   const undo = useUndoStack();
 
   // Typed cell-value accessor: uses the prop if provided, otherwise falls back
@@ -446,8 +127,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // (open at the cursor, expanding right + down). Cleared on close so the next ⋯ button open
   // falls back to element-anchored positioning.
   const [menuAnchorRect, setMenuAnchorRect] = useState<DOMRect | null>(null);
-  const [hiddenOpen, setHiddenOpen] = useState(false);
-  const hiddenAnchorRef = useRef<HTMLButtonElement | null>(null);
   const hiddenList = useMemo(() => columns.filter((c) => c.hidden), [columns]);
 
   const filteredRows = useMemo(() => {
@@ -536,7 +215,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const gridStyle = useMemo(() => {
     const tracks = orderedVisible.map((c) => {
       const w = colWidth(c.field);
-      return w ? `${w}px` : "minmax(96px, 1fr)";
+      return w ? `${w}px` : "minmax(0, 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
     if (showRowNumbers) tracks.unshift("36px");
@@ -679,13 +358,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   });
 
   // ── Virtualiser ────────────────────────────────────────────────────────────
+  // The actual `useVirtualizer` call lives in DataGridBody; it writes its
+  // instance into this ref so the cursor scroll-into-view effect below can
+  // imperatively call scrollToIndex without re-creating the virtualiser here.
   const estimatedRowHeight = compact ? 26 : 38;
-  const virtualizer = useVirtualizer({
-    count: sortedRows.length,
-    getScrollElement: () => cursor.ref.current,
-    estimateSize: () => estimatedRowHeight,
-    overscan: 5,
-  });
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
   // Pointer-driven cursor moves must NOT auto-scroll: the clicked cell is
   // already visible, and scrollToIndex (estimated row sizes) can shift the
@@ -705,7 +382,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if (performance.now() - pointerCursorAt.current < 100) return;
     const idx = rowIndexMap.get(rk);
     if (idx == null) return;
-    virtualizer.scrollToIndex(idx, { align: "auto" });
+    virtualizerRef.current?.scrollToIndex(idx, { align: "auto" });
     requestAnimationFrame(() => {
       const el = cursor.ref.current?.querySelector<HTMLElement>(
         `[data-cell="${attrEsc(`${rk}::${field ?? ""}`)}"]`,
@@ -737,6 +414,33 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // Keep range anchor in sync when cursor moves without shift (range collapses)
   // We handle this explicitly in the key handler below, not via useEffect, to
   // avoid fighting with the cursor state.
+
+  // ── Column-hover highlight ─────────────────────────────────────────────────
+  // Hovering a cell or header tints every cell in the column. DOM-mutation
+  // based (no React state) so the per-hover path doesn't trigger renders —
+  // important because GridRow is memoized and a top-level state change would
+  // invalidate every row.
+  const hoverFieldRef = useRef<string | null>(null);
+  const applyColumnHover = useCallback(
+    (field: string | null) => {
+      const root = cursor.ref.current;
+      if (!root) return;
+      if (hoverFieldRef.current === field) return;
+      if (hoverFieldRef.current) {
+        root
+          .querySelectorAll(".zz-col-hover")
+          .forEach((el) => el.classList.remove("zz-col-hover"));
+      }
+      hoverFieldRef.current = field;
+      if (field) {
+        const esc = attrEsc(field);
+        root
+          .querySelectorAll(`[data-field="${esc}"], [data-header="${esc}"]`)
+          .forEach((el) => el.classList.add("zz-col-hover"));
+      }
+    },
+    [cursor.ref],
+  );
 
   // ── Copy (Cmd+C) ───────────────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {
@@ -1251,7 +955,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     ],
   );
 
-  const isSelected = (rk: string) => selection?.selected.includes(rk) ?? false;
+  const selectedSet = useMemo(
+    () => new Set(selection?.selected ?? []),
+    [selection?.selected],
+  );
+  const isSelected = useCallback(
+    (rk: string) => selectedSet.has(rk),
+    [selectedSet],
+  );
 
   const onToggleSelect = useCallback(
     (rk: string) => {
@@ -1380,7 +1091,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
-        className="relative flex flex-1 flex-col min-h-0 overflow-x-auto overflow-y-auto outline-none"
+        className="zz-grid-scroll relative flex flex-1 flex-col min-h-0 overflow-auto outline-none"
       >
         {fillHandlePos && (
           <FillHandle
@@ -1391,420 +1102,80 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           />
         )}
         {/* header row */}
-        <div
-          role="row"
-          aria-rowindex={1}
-          className="grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
-          style={gridStyle}
-        >
-          {showRowNumbers && (
-            <div
-              className={cx(
-                "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3",
-                headerPadY,
-              )}
-            >
-              #
-            </div>
-          )}
-          {selectionCol && (
-            <div
-              className={cx("flex items-center justify-center border-r border-line", headerPadY)}
-            >
-              <Checkbox
-                state={
-                  selection!.selected.length === sortedRows.length && sortedRows.length > 0
-                    ? "on"
-                    : selection!.selected.length > 0
-                      ? "mixed"
-                      : "off"
-                }
-                onClick={() =>
-                  selection!.onChange(
-                    selection!.selected.length === sortedRows.length ? [] : sortedRows.map(rowKey),
-                  )
-                }
-                aria-label="Select all"
-              />
-            </div>
-          )}
-          {orderedVisible.map((c, idx) => {
-            const sortGlyph = sort?.field === c.field ? (sort.dir === "asc" ? " ↑" : " ↓") : "";
-            const TypeIcon = FIELD_TYPE_ICONS[c.config.type];
-            const isLastCol = idx === orderedVisible.length - 1;
-            return (
-              <div
-                key={c.field}
-                role="columnheader"
-                aria-colindex={idx + 1}
-                aria-sort={
-                  sort?.field === c.field
-                    ? sort.dir === "asc"
-                      ? "ascending"
-                      : "descending"
-                    : "none"
-                }
-                className={cx(
-                  "group relative flex items-center gap-1.5 px-3",
-                  headerPadY,
-                  !isLastCol && "border-r border-line",
-                  c.pinnedLeft && idx === 0 && "sticky left-0 z-10 bg-surface",
-                )}
-                data-header={c.field}
-              >
-                {TypeIcon && <TypeIcon className="h-3.5 w-3.5 shrink-0 text-ink-3" />}
-                {/* Task 21: dragged-column wash + drop-target line */}
-                {drag?.field === c.field && (
-                  <span className="absolute inset-0 bg-accent-wash" aria-hidden />
-                )}
-                {drag?.overIndex != null && orderedVisible[drag.overIndex]?.field === c.field && (
-                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-accent" aria-hidden />
-                )}
-
-                {/* Task 21: hold-then-drag label — always left-aligned, even on
-                  right-aligned (numeric) columns. Spreadsheet convention:
-                  headers read uniformly left-to-right while the body cells
-                  themselves right-align their numbers for tabular comparison. */}
-                <span
-                  className={cx(
-                    "min-w-0 flex-1 truncate cursor-grab select-none",
-                    c.pinnedLeft && "cursor-default",
-                  )}
-                  onPointerDown={(_e) => {
-                    if (c.pinnedLeft) return;
-                    let holding = true;
-                    let moved = false;
-                    const startTime = Date.now();
-                    const holdTimer = window.setTimeout(() => {
-                      if (!holding) return;
-                      setDrag({ field: c.field, overIndex: null });
-                    }, 200);
-                    const onMove = (ev: PointerEvent) => {
-                      moved = true;
-                      if (!dragRef.current) return;
-                      // determine which header column we're over via element-at-point
-                      const target = document.elementFromPoint(
-                        ev.clientX,
-                        ev.clientY,
-                      ) as HTMLElement | null;
-                      const headerEl = target?.closest<HTMLElement>("[data-header]");
-                      const overField = headerEl?.dataset.header ?? null;
-                      if (overField == null) return;
-                      const next = orderedVisible.findIndex((x) => x.field === overField);
-                      setDrag((d) => (d ? { ...d, overIndex: next } : d));
-                    };
-                    const onUp = () => {
-                      holding = false;
-                      window.clearTimeout(holdTimer);
-                      window.removeEventListener("pointermove", onMove);
-                      window.removeEventListener("pointerup", onUp);
-                      const elapsed = Date.now() - startTime;
-                      if (!moved && elapsed < 200 && !dragRef.current) {
-                        // Plain click — select whole column
-                        cursor.ref.current?.focus({ preventScroll: true });
-                        const firstRow = sortedRows[0];
-                        const lastRow = sortedRows[sortedRows.length - 1];
-                        if (firstRow && lastRow) {
-                          const anchor = { rowKey: rowKey(firstRow), field: c.field };
-                          const focus = { rowKey: rowKey(lastRow), field: c.field };
-                          if (_e.shiftKey && rangeRef.current) {
-                            setRange({ anchor: rangeRef.current.anchor, focus });
-                          } else {
-                            setRange({ anchor, focus });
-                          }
-                          cursor.setCursor({
-                            rowKey: anchor.rowKey,
-                            field: c.field,
-                            editing: false,
-                          });
-                        }
-                        return;
-                      }
-                      setDrag((d) => {
-                        if (!d || d.overIndex == null) return null;
-                        const from = orderedVisible.findIndex((x) => x.field === d.field);
-                        if (from < 0 || from === d.overIndex) return null;
-                        const next = [...orderedVisible.map((x) => x.field)];
-                        next.splice(from, 1);
-                        next.splice(d.overIndex, 0, d.field);
-                        setOrder(next);
-                        props.onLayoutChange?.({ order: next });
-                        return null;
-                      });
-                    };
-                    window.addEventListener("pointermove", onMove);
-                    window.addEventListener("pointerup", onUp);
-                  }}
-                >
-                  {c.label}
-                  {sortGlyph}
-                </span>
-                {filterSet?.conditions.some((fc) => fc.field === c.field) && (
-                  <span
-                    className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"
-                    title="column filtered"
-                  >
-                    ▣
-                  </span>
-                )}
-
-                {/* description info badge — paired with the ⋯ menu in the
-                  right-side metadata cluster so the label stays left-aligned
-                  across columns regardless of whether a description exists. */}
-                {c.description && (
-                  <span
-                    data-field-info
-                    title={c.description}
-                    className="ml-auto inline-flex h-3.5 w-3.5 shrink-0 cursor-help items-center justify-center rounded-full border border-line-2 text-[8px] text-ink-3 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
-                    aria-label={`Description: ${c.description}`}
-                  >
-                    i
-                  </span>
-                )}
-
-                {/* Task 19: ⋯ menu button — pinned to the right cluster. When the
-                  info badge is present it owns ml-auto; otherwise the button does. */}
-                {!c.pinnedLeft && (
-                  <button
-                    type="button"
-                    aria-label="Column menu"
-                    className={cx(
-                      "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40",
-                      !c.description && "ml-auto",
-                    )}
-                    onClick={(e) => {
-                      menuAnchorRef.current = e.currentTarget;
-                      setMenuAnchorRect(null);
-                      setMenuFor((s) => (s === c.field ? null : c.field));
-                    }}
-                  >
-                    ⋯
-                  </button>
-                )}
-
-                {/* Task 19: ColumnHeaderMenu */}
-                {menuFor === c.field && (
-                  <ColumnHeaderMenu
-                    column={c}
-                    anchorRef={menuAnchorRef}
-                    anchorRect={menuAnchorRect}
-                    sortDir={sort?.field === c.field ? sort.dir : null}
-                    filterValue={
-                      filterSet?.conditions.find(
-                        (fc) => fc.field === c.field && fc.operator === "contains",
-                      )?.value ?? null
-                    }
-                    onClose={() => {
-                      setMenuFor(null);
-                      setMenuAnchorRect(null);
-                    }}
-                    onRename={(label) => props.onRenameColumn?.(c.field, label)}
-                    onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
-                    onOpenRules={
-                      props.onSaveColumnRules
-                        ? () => {
-                            setMenuFor(null);
-                            setRulesEditor(c.field);
-                          }
-                        : undefined
-                    }
-                    onEditDescription={
-                      props.onSaveColumnDescription
-                        ? () => {
-                            setMenuFor(null);
-                            setDescEditor(c.field);
-                          }
-                        : undefined
-                    }
-                    onFilter={(v) =>
-                      setFilterSet((cur) => {
-                        const existing = cur?.conditions ?? [];
-                        const withoutThis = existing.filter(
-                          (fc) => !(fc.field === c.field && fc.operator === "contains"),
-                        );
-                        if (!v) {
-                          return withoutThis.length === 0
-                            ? null
-                            : { conjunction: cur?.conjunction ?? "and", conditions: withoutThis };
-                        }
-                        const conditions = [
-                          ...withoutThis,
-                          {
-                            id: `${c.field}-contains`,
-                            field: c.field,
-                            operator: "contains" as const,
-                            value: v,
-                          },
-                        ];
-                        return { conjunction: cur?.conjunction ?? "and", conditions };
-                      })
-                    }
-                    onChangeType={async (newConfig) => {
-                      if (!props.onChangeColumnType) return;
-                      const res = await props.onChangeColumnType(c.field, newConfig);
-                      if (!res.ok && res.invalidCount) {
-                        if (
-                          confirm(
-                            `${res.invalidCount} value(s) won't parse as ${newConfig.type}. Coerce to empty?`,
-                          )
-                        ) {
-                          await props.onChangeColumnType(c.field, newConfig, {
-                            coerceInvalidToNull: true,
-                          });
-                        }
-                      }
-                    }}
-                    onHide={() => {
-                      // include any already-hidden columns from the full prop list — `visible`
-                      // is the post-filter set and never contains them
-                      const hidden = [
-                        ...columns.filter((v) => v.hidden).map((v) => v.field),
-                        c.field,
-                      ];
-                      props.onLayoutChange?.({ hidden });
-                    }}
-                    onDelete={() => props.onDeleteColumn?.(c.field)}
-                  />
-                )}
-
-                {/* Task 20: right-edge resize grip */}
-                {!c.pinnedLeft && (
-                  <span
-                    aria-hidden
-                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors group-hover:bg-line-2"
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      const startX = e.clientX;
-                      const headerEl = e.currentTarget.parentElement as HTMLElement;
-                      const startW = headerEl.getBoundingClientRect().width;
-                      const onMove = (ev: PointerEvent) => {
-                        const next = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
-                        setWidths((w) => ({ ...w, [c.field]: next }));
-                      };
-                      const onUp = () => {
-                        window.removeEventListener("pointermove", onMove);
-                        window.removeEventListener("pointerup", onUp);
-                        // commit the final width via the host
-                        setWidths((w) => {
-                          props.onLayoutChange?.({ widths: w });
-                          return w;
-                        });
-                      };
-                      window.addEventListener("pointermove", onMove);
-                      window.addEventListener("pointerup", onUp);
-                    }}
-                  />
-                )}
-              </div>
-            );
-          })}
-          {onAddFieldClick && (
-            <div className="flex items-center">
-              {hiddenList.length > 0 && (
-                <button
-                  ref={hiddenAnchorRef}
-                  type="button"
-                  onClick={() => setHiddenOpen((s) => !s)}
-                  className="flex items-center gap-1.5 px-2 py-2 text-[12px] font-medium text-ink-3 transition-colors hover:text-accent"
-                  aria-label="Show hidden fields"
-                >
-                  <IconEye className="h-3.5 w-3.5" />
-                  <span className="tabular-nums">{hiddenList.length} hidden</span>
-                </button>
-              )}
-              <button
-                ref={addFieldRef as React.RefObject<HTMLButtonElement>}
-                type="button"
-                onClick={onAddFieldClick}
-                className="px-3 py-2 text-[12px] font-medium text-accent transition-colors hover:brightness-110"
-                aria-label="Add field"
-              >
-                + Field
-              </button>
-            </div>
-          )}
-        </div>
-        {hiddenOpen && hiddenList.length > 0 && (
-          <HiddenFieldsPopover
-            hidden={hiddenList}
-            anchorRef={hiddenAnchorRef}
-            onUnhide={(field) => {
-              const next = columns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
-              props.onLayoutChange?.({ hidden: next });
-            }}
-            onClose={() => setHiddenOpen(false)}
-          />
-        )}
-
+        <DataGridHeader
+          columns={orderedVisible}
+          allColumns={columns}
+          gridStyle={gridStyle}
+          cellPadY={cellPadY}
+          showRowNumbers={showRowNumbers}
+          selectionCol={selectionCol}
+          selection={selection}
+          sortedRows={sortedRows}
+          rowKey={rowKey}
+          sort={sort}
+          setSort={setSort}
+          filterSet={filterSet}
+          setFilterSet={setFilterSet}
+          setWidths={setWidths}
+          setOrder={setOrder}
+          drag={drag}
+          setDrag={setDrag}
+          dragRef={dragRef}
+          menuFor={menuFor}
+          setMenuFor={setMenuFor}
+          menuAnchorRef={menuAnchorRef}
+          menuAnchorRect={menuAnchorRect}
+          setMenuAnchorRect={setMenuAnchorRect}
+          setRulesEditor={setRulesEditor}
+          setDescEditor={setDescEditor}
+          onColumnHover={applyColumnHover}
+          scrollContainerRef={cursor.ref}
+          rangeRef={rangeRef}
+          setRange={setRange}
+          setCursor={cursor.setCursor}
+          onAddFieldClick={onAddFieldClick}
+          addFieldRef={addFieldRef as React.RefObject<HTMLButtonElement> | undefined}
+          onLayoutChange={props.onLayoutChange}
+          onRenameColumn={props.onRenameColumn}
+          onSaveColumnRules={props.onSaveColumnRules}
+          onSaveColumnDescription={props.onSaveColumnDescription}
+          onChangeColumnType={props.onChangeColumnType}
+          onDeleteColumn={props.onDeleteColumn}
+        />
         {/* body */}
-        {sortedRows.length === 0
-          ? (empty ?? (
-              <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">
-                No rows.
-              </div>
-            ))
-          : (() => {
-              const vItems = virtualizer.getVirtualItems();
-              const topPad = vItems[0]?.start ?? 0;
-              const bottomPad =
-                vItems.length > 0
-                  ? virtualizer.getTotalSize() - (vItems[vItems.length - 1]?.end ?? 0)
-                  : virtualizer.getTotalSize();
-              return (
-                <>
-                  {topPad > 0 && <div style={{ height: topPad }} />}
-                  {vItems.map((vRow) => {
-                    const row = sortedRows[vRow.index]!;
-                    const rk = rowKey(row);
-                    const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
-                    const evaluation = condFmt.evaluateRow(row);
-                    // Host-controlled detail row (provenance drill). Rendered
-                    // outside the virtualizer's size estimates — acceptable for
-                    // one open drill at a time on ≤500-row surfaces.
-                    const detail = props.renderRowDetail?.(row) ?? null;
-                    return (
-                      <React.Fragment key={rk}>
-                        <GridRow
-                          row={row}
-                          rowKey={rk}
-                          rowIndex={vRow.index}
-                          columns={orderedVisible}
-                          focusedField={cursorOnThisRow?.field ?? null}
-                          editingField={
-                            cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null
-                          }
-                          cursorInitial={cursorOnThisRow?.initial}
-                          cellInRange={inRange}
-                          selected={isSelected(rk)}
-                          selectionCol={selectionCol}
-                          showRowNumbers={showRowNumbers}
-                          cellPadY={cellPadY}
-                          gridStyle={gridStyle}
-                          onAddFieldClick={onAddFieldClick}
-                          hiddenFieldCount={hiddenList.length}
-                          getValue={getValue}
-                          onCellPointerDown={onCellPointerDown}
-                          onCellDoubleClick={onCellDoubleClick}
-                          onToggleSelect={onToggleSelect}
-                          onCommitCell={commitValue}
-                          onStopEdit={onStopEdit}
-                          onAddColumnOption={props.onAddColumnOption}
-                          onRowNumPointerDown={onRowNumPointerDown}
-                          evaluation={evaluation}
-                          activityEntry={activity?.get(rk)}
-                        />
-                        {detail !== null && (
-                          <div role="row" className="border-b border-line bg-surface-2/50">
-                            {detail}
-                          </div>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                  {bottomPad > 0 && <div style={{ height: bottomPad }} />}
-                </>
-              );
-            })()}
+        <DataGridBody
+          rows={sortedRows}
+          rowKey={rowKey}
+          columns={orderedVisible}
+          gridStyle={gridStyle}
+          cellPadY={cellPadY}
+          showRowNumbers={showRowNumbers}
+          selectionCol={selectionCol}
+          estimatedRowHeight={estimatedRowHeight}
+          scrollContainerRef={cursor.ref}
+          virtualizerRef={virtualizerRef}
+          empty={empty}
+          cursorRowKey={cursor.cursor?.rowKey ?? null}
+          cursorField={cursor.cursor?.field ?? null}
+          cursorEditing={!!cursor.cursor?.editing}
+          cursorInitial={cursor.cursor?.initial}
+          cellInRange={inRange}
+          isSelected={isSelected}
+          onAddFieldClick={onAddFieldClick}
+          hiddenFieldCount={hiddenList.length}
+          getValue={getValue}
+          onCellPointerDown={onCellPointerDown}
+          onCellDoubleClick={onCellDoubleClick}
+          onToggleSelect={onToggleSelect}
+          onCommitCell={commitValue}
+          onStopEdit={onStopEdit}
+          onAddColumnOption={props.onAddColumnOption}
+          onRowNumPointerDown={onRowNumPointerDown}
+          onColumnHover={applyColumnHover}
+          condFmt={condFmt}
+          activity={activity}
+          renderRowDetail={props.renderRowDetail}
+        />
         {presence && (
           <CursorOverlay
             peers={presence.peers}
@@ -1876,18 +1247,4 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         })()}
     </div>
   );
-}
-
-function CellRenderer({ type, ctx }: { type: CellType; ctx: any }) {
-  if (type === "select") return <SelectCell.Renderer {...ctx} />;
-  if (type === "linked") return <LinkedCell.Renderer {...ctx} />;
-  const C = CELLS[type as Exclude<CellType, "select" | "linked">];
-  return <C.Renderer {...ctx} />;
-}
-
-function CellEditor({ type, ctx }: { type: CellType; ctx: any }) {
-  if (type === "select") return null; // select uses inline SelectCell.Editor in the body (needs options + onCreate)
-  if (type === "linked") return null; // linked uses inline LinkedCell.Editor in the body (needs candidates + anchorRef)
-  const C = CELLS[type as Exclude<CellType, "select" | "linked">];
-  return <C.Editor {...ctx} />;
 }

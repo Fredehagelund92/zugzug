@@ -3,7 +3,7 @@ import type { CellCtx, EditCtx, ColumnDef } from "../types";
 import type { NumberFormat } from "../../../data";
 
 const inputBase =
-  "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 text-right font-mono text-[12px] text-ink outline-none tabular-nums";
+  "w-full h-full bg-transparent border-0 outline-none p-0 m-0 text-right font-mono text-[12px] leading-normal text-ink tabular-nums";
 
 export function formatNumber(value: unknown, fmt: NumberFormat | undefined): string {
   const n = value == null || value === "" ? null : Number(value);
@@ -123,6 +123,7 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
   const usable = seeded && /^[0-9.-]$/.test(initial);
   const [v, setV] = useState(usable ? initial : displayValue);
   const ref = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
 
   useEffect(() => {
     ref.current?.focus();
@@ -161,10 +162,19 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
       placeholder={isDuration ? "0:00:00" : undefined}
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={() => {
+        composingRef.current = false;
+      }}
       // Enter / Tab also commit synchronously: useGridCursor's stopEdit
       // unmounts the editor before the browser blur event reaches React, so
       // relying on onBlur alone silently drops the typed value.
       onKeyDown={(e) => {
+        // IME composition (CJK): Enter/Tab mean "accept candidate", not
+        // "commit cell".
+        if (e.nativeEvent.isComposing || composingRef.current) return;
         if (e.key === "Escape") {
           e.preventDefault();
           cancel();

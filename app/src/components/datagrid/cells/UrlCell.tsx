@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CellCtx, EditCtx } from "../types";
 
 const inputBase =
-  "w-full rounded-sm border border-accent bg-bg px-1.5 py-0.5 font-mono text-[12px] text-ink outline-none";
+  "w-full h-full bg-transparent border-0 outline-none p-0 m-0 font-mono text-[12px] leading-normal text-ink";
 
 // "example.com" without a scheme would otherwise resolve as a same-origin relative
 // path — normalise to https:// so the link goes outside. Existing schemes pass
@@ -34,6 +34,7 @@ function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
   const seeded = initial != null;
   const [v, setV] = useState(seeded ? initial : value == null ? "" : String(value));
   const ref = useRef<HTMLInputElement>(null);
+  const composingRef = useRef(false);
   useEffect(() => {
     ref.current?.focus();
     if (seeded) {
@@ -50,7 +51,16 @@ function Editor<Row>({ value, initial, commit, cancel }: EditCtx<Row>) {
       value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={commitNow}
+      onCompositionStart={() => {
+        composingRef.current = true;
+      }}
+      onCompositionEnd={() => {
+        composingRef.current = false;
+      }}
       onKeyDown={(e) => {
+        // IME composition (CJK): Enter/Tab mean "accept candidate", not
+        // "commit cell".
+        if (e.nativeEvent.isComposing || composingRef.current) return;
         if (e.key === "Escape") {
           e.preventDefault();
           cancel();
