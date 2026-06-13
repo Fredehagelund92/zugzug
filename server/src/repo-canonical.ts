@@ -156,6 +156,40 @@ export async function listDimensions(tenantId: string): Promise<DimensionMeta[]>
   return metas.map((m, i) => ({ ...m, rows: Number(counts[i]?.n ?? 0) }));
 }
 
+/** Lightweight dimension lookup — id + display label only, scoped to tenant.
+ *  Used where the full canonical materialization in `getDimension` is overkill
+ *  (e.g. the AI suggestion workflow that just needs the dimension name). */
+export async function getDimensionBasic(
+  id: string,
+  tenantId: string,
+): Promise<{ id: string; label: string } | null> {
+  const row = await pgGet<{ id: string; label: string }>(
+    `SELECT id, label FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+    [id, tenantId],
+  );
+  return row ?? null;
+}
+
+/** Sample of existing canonical labels for a dimension, scoped to tenant.
+ *  Reads the dynamic `dim_*` table whose name lives in the dimension registry. */
+export async function getCanonicalValues(
+  dimId: string,
+  tenantId: string,
+  opts: { limit?: number } = {},
+): Promise<string[]> {
+  const limit = Math.max(1, Math.min(opts.limit ?? 30, 1000));
+  const meta = await pgGet<{ dimTable: string }>(
+    `SELECT dim_table AS "dimTable" FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
+  );
+  if (!meta) return [];
+  const rows = await pgAll<{ label: string }>(
+    `SELECT DISTINCT label FROM ${cq(meta.dimTable)}
+     WHERE label IS NOT NULL ORDER BY label ASC LIMIT ${limit}`,
+  ).catch(() => [] as { label: string }[]);
+  return rows.map((r) => r.label);
+}
+
 export async function getDimension(id: string, tenantId: string): Promise<MappingDimension | null> {
   const meta = await pgGet<
     Omit<DimensionMeta, "rows"> & {

@@ -97,6 +97,18 @@ export class TenantRepo {
     return this.withClearCtx(() => repoCanonical.getDimension(id, this.tenantId));
   }
 
+  /** Lightweight dimension lookup — id + label only. Used by AI suggest flow
+   *  where the full canonical materialization is overkill. */
+  getDimensionBasic(id: string): Promise<{ id: string; label: string } | null> {
+    return this.withClearCtx(() => repoCanonical.getDimensionBasic(id, this.tenantId));
+  }
+
+  /** Sample of existing canonical labels for a dimension (default limit 30).
+   *  Used to build AI context and workbench previews. */
+  getCanonicalValues(id: string, opts: { limit?: number } = {}): Promise<string[]> {
+    return this.withClearCtx(() => repoCanonical.getCanonicalValues(id, this.tenantId, opts));
+  }
+
   listFields(dimId: string): Promise<FieldDef[]> {
     return this.withClearCtx(() => repoCanonical.listFields(dimId, this.tenantId));
   }
@@ -291,6 +303,22 @@ export class TenantRepo {
     return this.withClearCtx(() =>
       repoDrafts.saveDraft(dimId, raw, status, targetLabel, targetKey, userId, this.tenantId),
     );
+  }
+
+  /** AI-aware draft insert that captures provenance metadata (`source`,
+   *  `confidence`, `reasoning`). Returns the persisted row. */
+  createDraft(
+    input: repoDrafts.CreateDraftInput,
+    userId: string,
+  ): Promise<
+    Draft & {
+      source: "user" | "ai";
+      confidence: "high" | "medium" | "low" | null;
+      reasoning: string | null;
+    }
+  > {
+    this.assertRole("curate");
+    return this.withClearCtx(() => repoDrafts.createDraft(input, userId, this.tenantId));
   }
 
   discardDraft(dimId: string, raw: string, userId: string): Promise<void> {

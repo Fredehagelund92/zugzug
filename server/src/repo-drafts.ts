@@ -82,6 +82,114 @@ export async function saveDraft(
   );
 }
 
+/** Input shape for `createDraft` — the AI-suggestion-aware draft creator.
+ *  Unlike `saveDraft`, this carries provenance metadata (`source`, `confidence`,
+ *  `reasoning`) so AI-generated proposals are distinguishable from user edits. */
+export interface CreateDraftInput {
+  dim_id: string;
+  raw: string;
+  target_label?: string | null;
+  target_key?: string | null;
+  source?: "user" | "ai";
+  confidence?: "high" | "medium" | "low" | null;
+  reasoning?: string | null;
+  status?: "mapped" | "skipped";
+}
+
+/** Insert (or upsert) a draft row, capturing AI provenance when present.
+ *  Returns the persisted row including provenance columns. */
+export async function createDraft(
+  input: CreateDraftInput,
+  userId: string,
+  tenantId: string,
+): Promise<Draft & {
+  source: "user" | "ai";
+  confidence: "high" | "medium" | "low" | null;
+  reasoning: string | null;
+}> {
+  const {
+    dim_id,
+    raw,
+    target_label = null,
+    target_key = null,
+    source = "user",
+    confidence = null,
+    reasoning = null,
+    status = "mapped",
+  } = input;
+
+  await pgRun(
+    `INSERT INTO ${pg("draft")}
+       (dim_id, raw, status, target_label, target_key, user_id, created_at, tenant_id,
+        source, confidence, reasoning)
+     VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7, $8, $9, $10)
+     ON CONFLICT (tenant_id, dim_id, raw, user_id) DO UPDATE SET
+       status       = EXCLUDED.status,
+       target_label = EXCLUDED.target_label,
+       target_key   = EXCLUDED.target_key,
+       created_at   = EXCLUDED.created_at,
+       source       = EXCLUDED.source,
+       confidence   = EXCLUDED.confidence,
+       reasoning    = EXCLUDED.reasoning`,
+    [
+      dim_id,
+      raw,
+      status,
+      target_label,
+      target_key,
+      userId,
+      tenantId,
+      source,
+      confidence,
+      reasoning,
+    ],
+  );
+
+  const row = await pgGet<{
+    dimId: string;
+    raw: string;
+    status: "mapped" | "skipped";
+    targetLabel: string | null;
+    targetKey: string | null;
+    uid: string;
+    secs: number;
+    source: "user" | "ai";
+    confidence: "high" | "medium" | "low" | null;
+    reasoning: string | null;
+  }>(
+    `SELECT dim_id AS "dimId", raw, status,
+            target_label AS "targetLabel", target_key AS "targetKey",
+            user_id AS uid,
+            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            source, confidence, reasoning
+       FROM ${pg("draft")}
+      WHERE tenant_id = $1 AND dim_id = $2 AND raw = $3 AND user_id = $4
+      LIMIT 1`,
+    [tenantId, dim_id, raw, userId],
+  );
+  if (!row) {
+    throw new Error(`createDraft: failed to read back inserted draft ${dim_id}/${raw}`);
+  }
+
+  const user = await pgGet<User>(
+    `SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`,
+    [row.uid],
+  );
+
+  return {
+    dimId: row.dimId,
+    raw: row.raw,
+    status: row.status,
+    targetLabel: row.targetLabel,
+    targetKey: row.targetKey,
+    user: user ?? { id: row.uid, name: "Unknown", initials: "??" },
+    at: rel(Number(row.secs)),
+    source: row.source,
+    confidence: row.confidence,
+    reasoning: row.reasoning,
+  };
+}
+
 export async function discardDraft(
   dimId: string,
   raw: string,
