@@ -10,12 +10,21 @@ export interface TenantContextValue {
 
 const Ctx = createContext<TenantContextValue | null>(null);
 
-export function TenantProvider({ value, children }: { value: TenantContextValue; children: ReactNode }) {
+export function TenantProvider({
+  value,
+  children,
+}: {
+  value: TenantContextValue;
+  children: ReactNode;
+}) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useTenant(): TenantContextValue {
   const v = useContext(Ctx);
-  if (!v) throw new Error("useTenant() called outside <TenantProvider> — only valid inside /app/:slug/* routes");
+  if (!v)
+    throw new Error(
+      "useTenant() called outside <TenantProvider> — only valid inside /app/:slug/* routes",
+    );
   return v;
 }

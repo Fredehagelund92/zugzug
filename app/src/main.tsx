@@ -63,47 +63,44 @@ createRoot(root).render(
                 <BootGate>
                   {(boot) => (
                     <Routes>
-                          {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
-                          <Route path="/" element={<Navigate to="/app" replace />} />
-                          <Route
-                            path="/app"
-                            element={
-                              <Navigate
-                                to={`/app/${boot.memberships[0]?.slug ?? "admin"}`}
-                                replace
-                              />
-                            }
+                      {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
+                      <Route path="/" element={<Navigate to="/app" replace />} />
+                      <Route
+                        path="/app"
+                        element={
+                          <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
+                        }
+                      />
+
+                      {/* Super-admin shell */}
+                      {boot.isSuperAdmin ? (
+                        <Route path="/app/admin" element={<AdminShell />}>
+                          <Route index element={<AdminTenants />} />
+                          <Route path="tenants" element={<AdminTenants />} />
+                        </Route>
+                      ) : null}
+
+                      {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
+                      <Route
+                        path="/app/:tenantSlug/*"
+                        element={
+                          <TenantLayout
+                            memberships={boot.memberships}
+                            isSuperAdmin={boot.isSuperAdmin}
                           />
+                        }
+                      >
+                        <Route element={<AppShell memberships={boot.memberships} />}>
+                          <Route index element={<Dashboard />} />
+                          <Route path="triage" element={<Triage />} />
+                          <Route path="sources" element={<Sources />} />
+                          <Route path="tables" element={<MasterTables />} />
+                          <Route path="settings" element={<Settings />} />
+                        </Route>
+                      </Route>
 
-                          {/* Super-admin shell */}
-                          {boot.isSuperAdmin ? (
-                            <Route path="/app/admin" element={<AdminShell />}>
-                              <Route index element={<AdminTenants />} />
-                              <Route path="tenants" element={<AdminTenants />} />
-                            </Route>
-                          ) : null}
-
-                          {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
-                          <Route
-                            path="/app/:tenantSlug/*"
-                            element={
-                              <TenantLayout
-                                memberships={boot.memberships}
-                                isSuperAdmin={boot.isSuperAdmin}
-                              />
-                            }
-                          >
-                            <Route element={<AppShell memberships={boot.memberships} />}>
-                              <Route index element={<Dashboard />} />
-                              <Route path="triage" element={<Triage />} />
-                              <Route path="sources" element={<Sources />} />
-                              <Route path="tables" element={<MasterTables />} />
-                              <Route path="settings" element={<Settings />} />
-                            </Route>
-                          </Route>
-
-                          <Route path="*" element={<Navigate to="/app" replace />} />
-                        </Routes>
+                      <Route path="*" element={<Navigate to="/app" replace />} />
+                    </Routes>
                   )}
                 </BootGate>
               </EngineerModeProvider>

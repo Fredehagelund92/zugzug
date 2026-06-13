@@ -900,7 +900,10 @@ function TeamSection() {
         body: JSON.stringify({ role: newRole }),
       });
       if (!r.ok) {
-        const body = (await r.json().catch(() => null)) as { error?: string; reason?: string } | null;
+        const body = (await r.json().catch(() => null)) as {
+          error?: string;
+          reason?: string;
+        } | null;
         throw new Error(body?.reason ?? body?.error ?? `update_role_${r.status}`);
       }
       void loadMembers();
@@ -927,7 +930,9 @@ function TeamSection() {
       void loadMembers();
     } catch (err) {
       setRemoveError(
-        err instanceof Error ? `Couldn't remove ${email} — ${err.message}` : `Couldn't remove ${email}.`,
+        err instanceof Error
+          ? `Couldn't remove ${email} — ${err.message}`
+          : `Couldn't remove ${email}.`,
       );
     }
   };
@@ -945,7 +950,11 @@ function TeamSection() {
 
   // Chip validation uses current member emails + pending invite emails
   const membersByEmail = useMemo(
-    () => new Set([...teamUsers.map((u) => u.email.toLowerCase()), ...invites.map((i) => i.email.toLowerCase())]),
+    () =>
+      new Set([
+        ...teamUsers.map((u) => u.email.toLowerCase()),
+        ...invites.map((i) => i.email.toLowerCase()),
+      ]),
     [teamUsers, invites],
   );
 
@@ -1011,7 +1020,8 @@ function TeamSection() {
     validChips.forEach((c, i) => {
       const r = results[i];
       if (r!.status === "fulfilled") succeededIds.add(c.id);
-      else failedById.set(c.id, r!.reason instanceof Error ? (r!.reason as Error).message : "Failed");
+      else
+        failedById.set(c.id, r!.reason instanceof Error ? (r!.reason as Error).message : "Failed");
     });
 
     const sentCount = succeededIds.size;
@@ -1020,7 +1030,9 @@ function TeamSection() {
         if (succeededIds.has(c.id)) return [];
         const failedReason = failedById.get(c.id);
         if (failedReason)
-          return [{ id: c.id, email: c.email, status: "failed" as ChipStatus, reason: failedReason }];
+          return [
+            { id: c.id, email: c.email, status: "failed" as ChipStatus, reason: failedReason },
+          ];
         return [c];
       }),
     );
@@ -1037,10 +1049,7 @@ function TeamSection() {
   const failedCount = chips.filter((c) => c.status === "failed").length;
 
   return (
-    <Section
-      title="Team"
-      hint="Manage who has access to this workspace and their roles."
-    >
+    <Section title="Team" hint="Manage who has access to this workspace and their roles.">
       {/* Error banners */}
       {membersError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
@@ -1091,7 +1100,11 @@ function TeamSection() {
           </Button>
         </div>
       )}
-      <PendingInvitesList invites={invites} isAdmin={isAdmin} onRevoke={(email) => void revokeInvite(email)} />
+      <PendingInvitesList
+        invites={invites}
+        isAdmin={isAdmin}
+        onRevoke={(email) => void revokeInvite(email)}
+      />
 
       {/* Confirm remove member */}
       <ConfirmDialog

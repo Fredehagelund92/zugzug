@@ -285,8 +285,8 @@ export async function countAdmins(tenantId: string): Promise<number> {
 }
 
 export async function removeMember(tenantId: string, userId: string): Promise<void> {
-  await pgRun(
-    `DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1 AND user_id = $2`,
-    [tenantId, userId],
-  );
+  await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1 AND user_id = $2`, [
+    tenantId,
+    userId,
+  ]);
 }

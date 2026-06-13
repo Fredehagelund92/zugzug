@@ -12,11 +12,13 @@
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const m = /^\/app\/([^/]+)\//.exec(window.location.pathname + "/");
   const slug = m?.[1] ?? "";
-  const url =
-    path.startsWith("/admin/") ? `/api${path}` :
-    slug === "admin"           ? `/api/admin${path}` :
-    slug                       ? `/api/t/${slug}${path}` :
-                                 `/api${path}`;
+  const url = path.startsWith("/admin/")
+    ? `/api${path}`
+    : slug === "admin"
+      ? `/api/admin${path}`
+      : slug
+        ? `/api/t/${slug}${path}`
+        : `/api${path}`;
   return fetch(url, { ...init, credentials: "include" });
 }
 

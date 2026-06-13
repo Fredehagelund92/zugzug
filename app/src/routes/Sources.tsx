@@ -446,10 +446,7 @@ export function Sources() {
                   <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link
-                to={nav.table(agg.worst.dimId, "match")}
-                className="shrink-0"
-              >
+              <Link to={nav.table(agg.worst.dimId, "match")} className="shrink-0">
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                   Match values
                 </Button>
