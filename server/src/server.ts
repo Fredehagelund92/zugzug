@@ -435,10 +435,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (tenantSlugFromPath === "default") {
         return json({ error: "cannot_delete_default" }, 409);
       }
-      await appendAuditAs(me, "workspace.delete", `deleted workspace ${tenantSlugFromPath}`, {
-        tenantId: tenantCtx.tenantId,
-        metadata: { actor_super_admin: gate.elevated },
-      });
+      // Scope this audit row to the "default" (system) tenant so it survives
+      // teardownTenant() — which deletes audit_log rows for the target tenant.
+      await appendAuditAs(
+        me,
+        "workspace.delete",
+        `deleted workspace ${tenantSlugFromPath} (${tenantCtx.tenantId})`,
+        {
+          tenantId: "default",
+          metadata: {
+            actor_super_admin: gate.elevated,
+            deleted_tenant_id: tenantCtx.tenantId,
+            deleted_tenant_slug: tenantSlugFromPath,
+          },
+        },
+      );
       await teardownTenant(tenantCtx.tenantId);
       return noContent();
     }
