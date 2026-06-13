@@ -25,6 +25,7 @@ export function useNavLinks() {
       triage: `/app/${slug}/triage`,
       sources: `/app/${slug}/sources`,
       tables: `/app/${slug}/tables`,
+      audit: `/app/${slug}/audit`,
       settings: `/app/${slug}/settings`,
       table: (dimId: string, mode?: "match" | "review") =>
         `/app/${slug}/tables?open=${dimId}&active=${dimId}${mode ? `&mode=${mode}` : ""}`,

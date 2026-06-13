@@ -12,6 +12,7 @@ import {
   IconTables,
   IconSources,
   IconSettings,
+  IconAudit,
   IconChevronLeft,
   IconChevronRight,
   IconSearch,
@@ -312,6 +313,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       count: undefined as number | undefined,
     },
     { to: navLinks.tables, label: "Tables", Icon: IconTables, count: dims.length },
+    { to: navLinks.audit, label: "Audit", Icon: IconAudit },
     { to: navLinks.settings, label: "Settings", Icon: IconSettings },
   ];
 
@@ -357,6 +359,15 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       icon: <IconTables className="h-4 w-4" />,
       action: () => navigate(navLinks.tables),
       keywords: "master records",
+      priority: true,
+    });
+    out.push({
+      id: "nav:audit",
+      group: "Navigate",
+      label: "Audit",
+      icon: <IconAudit className="h-4 w-4" />,
+      action: () => navigate(navLinks.audit),
+      keywords: "activity log history changes",
       priority: true,
     });
     out.push({

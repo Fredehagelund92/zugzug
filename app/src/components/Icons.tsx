@@ -199,3 +199,9 @@ export const IconMenu = (p: SVGProps<SVGSVGElement>) => (
     <path d="M3 6h18M3 12h18M3 18h18" />
   </Base>
 );
+export const IconAudit = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </Base>
+);

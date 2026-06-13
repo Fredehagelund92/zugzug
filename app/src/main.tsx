@@ -21,7 +21,7 @@ import { General } from "./routes/settings/General";
 import { Members } from "./routes/settings/Members";
 import { Matching } from "./routes/settings/Matching";
 import { Warehouse } from "./routes/settings/Warehouse";
-import { Audit as SettingsAudit } from "./routes/settings/Audit";
+import { Audit } from "./routes/Audit";
 import { Danger } from "./routes/settings/Danger";
 import { Showcase } from "./routes/Showcase";
 import { Workspaces } from "./routes/admin/Workspaces";
@@ -111,6 +111,7 @@ createRoot(root).render(
                           <Route path="triage" element={<Triage />} />
                           <Route path="sources" element={<Sources />} />
                           <Route path="tables" element={<MasterTables />} />
+                          <Route path="audit" element={<Audit />} />
                           <Route path="settings" element={<SettingsLayout />}>
                             <Route index element={<Navigate to="general" replace />} />
                             <Route path="general" element={<General />} />
@@ -119,7 +120,7 @@ createRoot(root).render(
                             <Route path="scans" element={<Navigate to="../warehouse#scans" replace />} />
                             <Route path="matching" element={<Matching />} />
                             <Route path="warehouse" element={<Warehouse />} />
-                            <Route path="audit" element={<SettingsAudit />} />
+                            <Route path="audit" element={<Navigate to="../../audit" replace />} />
                             <Route path="danger" element={<Danger />} />
                           </Route>
                           <Route path="account" element={<Account />}>
