@@ -110,11 +110,8 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
 
   await pgRun(
     `INSERT INTO ${pg("preferences")}
-       (id, publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
-     VALUES (
-       (SELECT COALESCE(MAX(id), 0) + 1 FROM ${pg("preferences")}),
-       $1, $2, $3, current_timestamp, $4
-     )
+       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
+     VALUES ($1, $2, $3, current_timestamp, $4)
      ON CONFLICT (tenant_id) DO UPDATE
        SET publish_threshold = EXCLUDED.publish_threshold,
            suggest_threshold = EXCLUDED.suggest_threshold,

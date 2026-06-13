@@ -1,6 +1,6 @@
 /* bootstrap.ts — provision the stores.
    • runs Drizzle migrations to ensure the Postgres app-state schema
-   • seeds system data (default preferences + u_system user)
+   • seeds system data (u_system user)
    • `--seed` also registers the demo Country/Channel dimensions */
 
 import { runMigrations } from "../drizzle/migrate.ts";
@@ -23,11 +23,6 @@ console.log("\nZug Zug — bootstrap\n");
 await runMigrations();
 
 // Seed system data (idempotent — safe to re-run)
-await pgRun(
-  `INSERT INTO "zugzug_app"."preferences" (id, publish_threshold, suggest_threshold, updated_at)
-   VALUES (1, 95, 80, current_timestamp)
-   ON CONFLICT (id) DO NOTHING`,
-);
 await pgRun(
   `INSERT INTO "zugzug_app"."users" (id, name, initials)
    VALUES ('u_system', 'Auto-match', 'AM')
