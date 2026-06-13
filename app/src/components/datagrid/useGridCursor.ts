@@ -180,12 +180,20 @@ export function useGridCursor<Row>({
     const cellRect = el.getBoundingClientRect();
     const header = cont.querySelector<HTMLElement>('[role="row"][aria-rowindex="1"]');
     const headerH = header?.getBoundingClientRect().height ?? 0;
+    // clientWidth/clientHeight exclude scrollbars and reserved gutter — without
+    // this, cells under the horizontal scrollbar or to the left of the vertical
+    // scrollbar register as off-screen and trigger a scroll on click.
+    const visibleLeft = contRect.left;
+    const visibleRight = contRect.left + cont.clientWidth;
     const visibleTop = contRect.top + headerH;
+    const visibleBottom = contRect.top + cont.clientHeight;
+    // 1px tolerance for sub-pixel rounding at the edges.
+    const EPS = 1;
     const fullyVisible =
-      cellRect.top >= visibleTop &&
-      cellRect.bottom <= contRect.bottom &&
-      cellRect.left >= contRect.left &&
-      cellRect.right <= contRect.right;
+      cellRect.top >= visibleTop - EPS &&
+      cellRect.bottom <= visibleBottom + EPS &&
+      cellRect.left >= visibleLeft - EPS &&
+      cellRect.right <= visibleRight + EPS;
     if (!fullyVisible) {
       el.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
