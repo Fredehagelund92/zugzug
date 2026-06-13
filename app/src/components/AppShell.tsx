@@ -448,7 +448,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       ) : (
         <>
           <div className="px-3 pt-2 pb-1">
-            <WorkspaceSwitcher memberships={memberships} />
+            <WorkspaceSwitcher />
           </div>
           <div className="flex items-center gap-2 px-5 pt-2 pb-1">
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">

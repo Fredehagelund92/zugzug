@@ -5,16 +5,9 @@ import { authFetch } from "../api";
 import { useMemberships } from "../store";
 import { can } from "../lib/permissions";
 
-interface Item {
-  slug: string;
-  label: string;
-  role: "admin" | "editor" | "viewer";
-}
-
 /** Memberships are read live from the store so a rename/leave/delete from any
- *  Settings page reflects here without a reload. The prop is accepted for
- *  backwards-compat with existing callers but ignored. */
-export function WorkspaceSwitcher(_props: { memberships?: Item[] } = {}) {
+ *  Settings page reflects here without a reload. */
+export function WorkspaceSwitcher() {
   const tenant = useTenant();
   const memberships = useMemberships();
   const [open, setOpen] = useState(false);
