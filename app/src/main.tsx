@@ -19,8 +19,6 @@ import { MasterTables } from "./routes/MasterTables";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { General } from "./routes/settings/General";
 import { Members } from "./routes/settings/Members";
-import { Tokens } from "./routes/settings/Tokens";
-import { Scans } from "./routes/settings/Scans";
 import { Matching } from "./routes/settings/Matching";
 import { Warehouse } from "./routes/settings/Warehouse";
 import { Audit as SettingsAudit } from "./routes/settings/Audit";
@@ -117,8 +115,8 @@ createRoot(root).render(
                             <Route index element={<Navigate to="general" replace />} />
                             <Route path="general" element={<General />} />
                             <Route path="members" element={<Members />} />
-                            <Route path="tokens" element={<Tokens />} />
-                            <Route path="scans" element={<Scans />} />
+                            <Route path="tokens" element={<Navigate to="../warehouse#tokens" replace />} />
+                            <Route path="scans" element={<Navigate to="../warehouse#scans" replace />} />
                             <Route path="matching" element={<Matching />} />
                             <Route path="warehouse" element={<Warehouse />} />
                             <Route path="audit" element={<SettingsAudit />} />

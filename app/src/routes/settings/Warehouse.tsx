@@ -13,6 +13,10 @@ import { warehouseSyncStatusByDim } from "../dashboard-helpers";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { useEngineerMode } from "../../lib/engineer-mode";
+import { Scans } from "./Scans";
+import { Tokens } from "./Tokens";
+import { useTenant } from "../../lib/tenant-context";
+import { can } from "../../lib/permissions";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -44,7 +48,7 @@ function HealthBadge({ state }: { state?: ConnectionHealth["warehouse"] }) {
   );
 }
 
-export function Warehouse() {
+function ConnectionsSection() {
   const { engineer } = useEngineerMode();
   const wsInfo = useWorkspaceInfo();
   const dims = useDimensions();
@@ -172,5 +176,17 @@ export function Warehouse() {
         )}
       </div>
     </SettingsSection>
+  );
+}
+
+export function Warehouse() {
+  const tenant = useTenant();
+  const canViewTokens = can(tenant, "settings.tokens.view");
+  return (
+    <div className="space-y-8">
+      <ConnectionsSection />
+      <div id="scans"><Scans /></div>
+      {canViewTokens && <div id="tokens"><Tokens /></div>}
+    </div>
   );
 }
