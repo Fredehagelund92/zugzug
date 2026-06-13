@@ -155,3 +155,65 @@ describe("ConfirmDialog", () => {
     expect(document.activeElement).toBe(confirm);
   });
 });
+
+describe("ConfirmDialog with confirmPhrase", () => {
+  it("disables confirm until phrase is typed exactly", () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Delete?"
+        body="Type sportsbook to confirm."
+        confirmPhrase="sportsbook"
+        confirmLabel="Delete"
+        danger
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const confirm = screen.getByRole("button", { name: "Delete" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "sportsbook" } });
+    expect(confirm).not.toBeDisabled();
+  });
+
+  it("does not render input when confirmPhrase is undefined", () => {
+    render(<ConfirmDialog open title="X" onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  it("resets the typed phrase when the dialog closes", () => {
+    const { rerender } = render(
+      <ConfirmDialog
+        open
+        title="Delete?"
+        confirmPhrase="x"
+        confirmLabel="Go"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "x" } });
+    rerender(
+      <ConfirmDialog
+        open={false}
+        title="Delete?"
+        confirmPhrase="x"
+        confirmLabel="Go"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    rerender(
+      <ConfirmDialog
+        open
+        title="Delete?"
+        confirmPhrase="x"
+        confirmLabel="Go"
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Go" })).toBeDisabled();
+  });
+});

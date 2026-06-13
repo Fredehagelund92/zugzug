@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 
 export interface ConfirmDialogProps {
@@ -11,6 +11,8 @@ export interface ConfirmDialogProps {
   danger?: boolean;
   /** Shows loading state on confirm button. */
   loading?: boolean;
+  /** When set, requires the user to type this phrase exactly before confirming. */
+  confirmPhrase?: string;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -25,11 +27,13 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   danger = false,
   loading = false,
+  confirmPhrase,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [phrase, setPhrase] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +67,14 @@ export function ConfirmDialog({
     };
   }, [open, onCancel]);
 
+  useEffect(() => {
+    if (!open) setPhrase("");
+  }, [open]);
+
   if (!open) return null;
+
+  const phraseRequired = confirmPhrase !== undefined;
+  const phraseMatches = !phraseRequired || phrase === confirmPhrase;
 
   return (
     <div
@@ -83,6 +94,18 @@ export function ConfirmDialog({
           {title}
         </h2>
         {body && <div className="mt-2 text-[13px] text-ink-2">{body}</div>}
+        {phraseRequired && (
+          <input
+            type="text"
+            className="mt-3 w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-accent"
+            placeholder={confirmPhrase}
+            value={phrase}
+            onChange={(e) => setPhrase(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            aria-label={`Type ${confirmPhrase} to confirm`}
+          />
+        )}
         <div className="mt-5 flex justify-end gap-2">
           <Button ref={cancelRef} variant="ghost" size="sm" onClick={onCancel} disabled={loading}>
             {cancelLabel}
@@ -91,6 +114,7 @@ export function ConfirmDialog({
             variant={danger ? "danger" : "primary"}
             size="sm"
             loading={loading}
+            disabled={!phraseMatches || loading}
             onClick={() => void onConfirm()}
           >
             {confirmLabel}
