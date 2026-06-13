@@ -2,19 +2,28 @@ import { NavLink } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { can, type Action } from "../../lib/permissions";
 import { cx } from "../../lib/cx";
+import {
+  IconSettings,
+  IconUsers,
+  IconWand,
+  IconDatabase,
+  IconOctagonAlert,
+} from "../Icons";
+import type { SVGProps, ComponentType } from "react";
 
 interface Item {
   label: string;
   to: string;
   action: Action;
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 const ITEMS: Item[] = [
-  { label: "General", to: "general", action: "settings.general.view" },
-  { label: "Members", to: "members", action: "settings.members.view" },
-  { label: "Matching", to: "matching", action: "settings.matching.view" },
-  { label: "Warehouse", to: "warehouse", action: "settings.warehouse.view" },
-  { label: "Danger", to: "danger", action: "settings.danger.leave" },
+  { label: "General", to: "general", action: "settings.general.view", Icon: IconSettings },
+  { label: "Members", to: "members", action: "settings.members.view", Icon: IconUsers },
+  { label: "Matching", to: "matching", action: "settings.matching.view", Icon: IconWand },
+  { label: "Warehouse", to: "warehouse", action: "settings.warehouse.view", Icon: IconDatabase },
+  { label: "Danger", to: "danger", action: "settings.danger.leave", Icon: IconOctagonAlert },
 ];
 
 export function SettingsSidebar() {
@@ -31,12 +40,12 @@ export function SettingsSidebar() {
       </div>
 
       <div className="space-y-0.5">
-        {visible.map((item, i) => (
+        {visible.map((item) => (
           <NavLink key={item.to} to={item.to} end>
             {({ isActive }) => (
               <span
                 className={cx(
-                  "relative flex items-center gap-2.5 pl-3 pr-3 py-[7px] text-sm rounded-sm transition-all duration-150 w-full",
+                  "group relative flex items-center gap-2.5 pl-3 pr-3 py-[7px] text-sm rounded-sm transition-all duration-150 w-full",
                   isActive
                     ? "text-accent bg-accent-soft"
                     : "text-ink-2 hover:text-ink hover:bg-hover hover:translate-x-[2px]",
@@ -45,14 +54,12 @@ export function SettingsSidebar() {
                 {isActive && (
                   <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-accent" />
                 )}
-                <span
+                <item.Icon
                   className={cx(
-                    "font-mono text-[10px] tabular-nums w-[18px] text-right shrink-0 transition-colors",
-                    isActive ? "text-accent/70" : "text-ink-3",
+                    "h-3.5 w-3.5 shrink-0 transition-opacity",
+                    isActive ? "opacity-100" : "opacity-60 group-hover:opacity-100",
                   )}
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </span>
+                />
                 <span className="font-body">{item.label}</span>
               </span>
             )}

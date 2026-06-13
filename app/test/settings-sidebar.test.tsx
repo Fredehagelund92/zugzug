@@ -70,4 +70,14 @@ describe("SettingsSidebar", () => {
     const membersLink = links.find((l) => l.text === "Members");
     expect(membersLink?.ariaCurrent).toBe("page");
   });
+
+  test("each sidebar item renders an icon", () => {
+    harness("admin");
+    const nav = screen.getByRole("navigation");
+    const links = Array.from(nav.querySelectorAll("a"));
+    expect(links.length).toBe(5);
+    for (const link of links) {
+      expect(link.querySelector("svg")).not.toBeNull();
+    }
+  });
 });

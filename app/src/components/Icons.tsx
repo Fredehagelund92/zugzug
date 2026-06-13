@@ -205,3 +205,52 @@ export const IconAudit = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 7v5l3 2" />
   </Base>
 );
+export const IconUsers = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </Base>
+);
+export const IconDatabase = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <ellipse cx="12" cy="5" rx="9" ry="3" />
+    <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+    <path d="M3 12a9 3 0 0 0 18 0" />
+  </Base>
+);
+export const IconOctagonAlert = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z" />
+    <path d="M12 8v4M12 16h0" />
+  </Base>
+);
+export const IconUser = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21v-1a8 8 0 0 1 16 0v1" />
+  </Base>
+);
+export const IconPalette = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor" />
+    <circle cx="17.5" cy="10.5" r="0.5" fill="currentColor" />
+    <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor" />
+    <circle cx="6.5" cy="12.5" r="0.5" fill="currentColor" />
+    <path d="M12 2a10 10 0 1 0 0 20 2 2 0 0 0 0-4h-1.5a2.5 2.5 0 1 1 0-5H17a5 5 0 0 0 0-10z" />
+  </Base>
+);
+export const IconLayers = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="m12 2 9 4-9 4-9-4z" />
+    <path d="m3 12 9 4 9-4" />
+    <path d="m3 18 9 4 9-4" />
+  </Base>
+);
+export const IconBuilding = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <rect x="4" y="2" width="16" height="20" rx="2" />
+    <path d="M9 6h.01M9 10h.01M9 14h.01M14 6h.01M14 10h.01M14 14h.01M9 22v-4h6v4" />
+  </Base>
+);
