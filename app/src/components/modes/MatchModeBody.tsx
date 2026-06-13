@@ -22,6 +22,7 @@ import {
   useDrafts,
   useCanEdit,
 } from "../../store";
+import { GetSuggestionButton } from "../GetSuggestionButton";
 
 /* MatchModeBody — the per-tab single-dim Match workbench. Lifted from the
    monolithic Mapping route so each open table mounts its own scoped instance
@@ -566,6 +567,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     </div>
                   ) : null;
                 })()}
+                {/* Show AI suggestion button for unmapped values with no existing suggestion */}
+                {state[r.value]?.status === "new" && !r.suggestion && canEdit && (
+                  <div className="mt-2">
+                    <GetSuggestionButton dimensionId={dim.id} rawValue={r.value} />
+                  </div>
+                )}
               </div>
             );
           }}

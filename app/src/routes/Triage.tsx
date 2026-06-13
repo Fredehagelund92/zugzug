@@ -8,6 +8,7 @@ import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { toast } from "../components/Toast";
 import { valueRows } from "../data";
+import { GetSuggestionButton } from "../components/GetSuggestionButton";
 import type { MappingDimension } from "../data";
 import {
   useDimensions,
@@ -530,7 +531,14 @@ function CrossDimInbox(p: CrossDimInboxProps) {
               const key = `${r.dimId}::${r.raw}`;
               const isCursor = p.cursor && `${p.cursor.dimId}::${p.cursor.raw}` === key;
               if (!isCursor || r.target) return null;
-              return <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />;
+              return (
+                <div className="flex flex-col gap-2">
+                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
+                  {r.status === "new" && !r.suggestion && p.canEdit && (
+                    <GetSuggestionButton dimensionId={r.dimId} rawValue={r.raw} />
+                  )}
+                </div>
+              );
             }}
             empty={
               <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
