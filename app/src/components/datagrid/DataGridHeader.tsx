@@ -274,7 +274,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                   "min-w-0 flex-1 truncate cursor-grab select-none",
                   c.pinnedLeft && "cursor-default",
                 )}
-                onPointerDown={(_e) => {
+                onPointerDown={(e) => {
                   if (c.pinnedLeft) return;
                   let holding = true;
                   let moved = false;
@@ -311,7 +311,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                       if (firstRow && lastRow) {
                         const anchor = { rowKey: rowKey(firstRow), field: c.field };
                         const focus = { rowKey: rowKey(lastRow), field: c.field };
-                        if (_e.shiftKey && rangeRef.current) {
+                        if (e.shiftKey && rangeRef.current) {
                           setRange({ anchor: rangeRef.current.anchor, focus });
                         } else {
                           setRange({ anchor, focus });

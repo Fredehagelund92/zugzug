@@ -955,7 +955,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     ],
   );
 
-  const isSelected = (rk: string) => selection?.selected.includes(rk) ?? false;
+  const selectedSet = useMemo(
+    () => new Set(selection?.selected ?? []),
+    [selection?.selected],
+  );
+  const isSelected = useCallback(
+    (rk: string) => selectedSet.has(rk),
+    [selectedSet],
+  );
 
   const onToggleSelect = useCallback(
     (rk: string) => {
