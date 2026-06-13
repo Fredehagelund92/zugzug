@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTenant } from "../lib/tenant-context";
 import { authFetch } from "../api";
+import { useMemberships } from "../store";
 import { can } from "../lib/permissions";
 
 interface Item {
@@ -10,8 +11,12 @@ interface Item {
   role: "admin" | "editor" | "viewer";
 }
 
-export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
+/** Memberships are read live from the store so a rename/leave/delete from any
+ *  Settings page reflects here without a reload. The prop is accepted for
+ *  backwards-compat with existing callers but ignored. */
+export function WorkspaceSwitcher(_props: { memberships?: Item[] } = {}) {
   const tenant = useTenant();
+  const memberships = useMemberships();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
