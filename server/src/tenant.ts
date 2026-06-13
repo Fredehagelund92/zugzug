@@ -298,6 +298,32 @@ export async function updateTenantLabel(tenantId: string, label: string): Promis
   await pgRun(`UPDATE "zugzug_app"."tenant" SET label = $1 WHERE id = $2`, [trimmed, tenantId]);
 }
 
+/** Updates the URL slug of a tenant. Refuses to change the 'default' tenant's
+ *  slug. Validates charset against TENANT_ID_RE. Throws ALREADY_EXISTS if the
+ *  target slug is taken by another tenant. */
+export async function updateTenantSlug(currentSlug: string, newSlug: string): Promise<void> {
+  const next = newSlug.trim();
+  if (currentSlug === "default") {
+    throw new AppError("FORBIDDEN", "cannot change slug of the default workspace", 403);
+  }
+  if (!TENANT_ID_RE.test(next)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `slug '${next}' must match ${TENANT_ID_RE.source}`,
+      400,
+    );
+  }
+  if (next === currentSlug) return;
+  const existing = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."tenant" WHERE slug = $1 AND deleted_at IS NULL`,
+    [next],
+  );
+  if (existing) {
+    throw new AppError("ALREADY_EXISTS", `slug '${next}' is taken`, 409);
+  }
+  await pgRun(`UPDATE "zugzug_app"."tenant" SET slug = $1 WHERE slug = $2`, [next, currentSlug]);
+}
+
 /**
  * Removes a user's own membership from a tenant.
  * Enforces last-admin guard: throws AppError("LAST_ADMIN", ..., 409) when removing

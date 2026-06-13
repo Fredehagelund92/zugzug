@@ -47,6 +47,7 @@ import {
   countAdmins,
   removeMember,
   updateTenantLabel,
+  updateTenantSlug,
   leaveTenant,
 } from "./tenant.ts";
 import { appendAuditAs } from "./repo-meta.ts";
@@ -446,6 +447,44 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         metadata: { actor_super_admin: gate.elevated },
       });
       return noContent();
+    }
+
+    // PATCH /api/t/:slug/slug — change URL slug (admin only; refuses on "default")
+    if (
+      tenantSlugFromPath !== null &&
+      seg[1] === "slug" &&
+      seg.length === 2 &&
+      method === "PATCH"
+    ) {
+      const gate = requireAdmin(tenantCtx);
+      if (!gate.ok) return json({ error: "forbidden" }, 403);
+      const body = (await req.json()) as { slug?: string };
+      if (typeof body.slug !== "string") {
+        return json({ error: "slug required" }, 400);
+      }
+      const oldSlug = tenantSlugFromPath;
+      try {
+        await updateTenantSlug(oldSlug, body.slug);
+      } catch (e) {
+        if (e instanceof AppError) {
+          return json({ error: e.code, message: e.message }, e.status);
+        }
+        throw e;
+      }
+      await appendAuditAs(
+        me,
+        "workspace.slug",
+        `changed slug from "${oldSlug}" to "${body.slug.trim()}"`,
+        {
+          tenantId: tenantCtx.tenantId,
+          metadata: {
+            actor_super_admin: gate.elevated,
+            old_slug: oldSlug,
+            new_slug: body.slug.trim(),
+          },
+        },
+      );
+      return json({ ok: true, new_slug: body.slug.trim() });
     }
 
     // DELETE /api/t/:slug — delete workspace (admin only; refuses on "default")
