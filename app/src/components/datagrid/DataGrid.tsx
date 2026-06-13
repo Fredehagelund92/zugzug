@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import type { Virtualizer } from "@tanstack/react-virtual";
 import { cx } from "../../lib/cx";
 import { Checkbox } from "../Checkbox";
 import {
@@ -46,7 +46,7 @@ import { FieldDescriptionEditor } from "./FieldDescriptionEditor";
 import { useConditionalFormatting } from "./useConditionalFormatting";
 import type { DataGridProps, CellType, FilterSet } from "./types";
 import { CursorOverlay } from "./CursorOverlay";
-import { GridRow } from "./DataGridRow";
+import { DataGridBody } from "./DataGridBody";
 import { attrEsc, flashCell } from "./util";
 
 const FIELD_TYPE_ICONS: Record<CellType, React.ComponentType<{ className?: string }>> = {
@@ -403,13 +403,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   });
 
   // ── Virtualiser ────────────────────────────────────────────────────────────
+  // The actual `useVirtualizer` call lives in DataGridBody; it writes its
+  // instance into this ref so the cursor scroll-into-view effect below can
+  // imperatively call scrollToIndex without re-creating the virtualiser here.
   const estimatedRowHeight = compact ? 26 : 38;
-  const virtualizer = useVirtualizer({
-    count: sortedRows.length,
-    getScrollElement: () => cursor.ref.current,
-    estimateSize: () => estimatedRowHeight,
-    overscan: 5,
-  });
+  const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
   // Pointer-driven cursor moves must NOT auto-scroll: the clicked cell is
   // already visible, and scrollToIndex (estimated row sizes) can shift the
@@ -429,7 +427,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if (performance.now() - pointerCursorAt.current < 100) return;
     const idx = rowIndexMap.get(rk);
     if (idx == null) return;
-    virtualizer.scrollToIndex(idx, { align: "auto" });
+    virtualizerRef.current?.scrollToIndex(idx, { align: "auto" });
     requestAnimationFrame(() => {
       const el = cursor.ref.current?.querySelector<HTMLElement>(
         `[data-cell="${attrEsc(`${rk}::${field ?? ""}`)}"]`,
@@ -1557,75 +1555,39 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         )}
 
         {/* body */}
-        {sortedRows.length === 0
-          ? (empty ?? (
-              <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-2">
-                No rows.
-              </div>
-            ))
-          : (() => {
-              const vItems = virtualizer.getVirtualItems();
-              const topPad = vItems[0]?.start ?? 0;
-              const bottomPad =
-                vItems.length > 0
-                  ? virtualizer.getTotalSize() - (vItems[vItems.length - 1]?.end ?? 0)
-                  : virtualizer.getTotalSize();
-              return (
-                <>
-                  {topPad > 0 && <div style={{ height: topPad }} />}
-                  {vItems.map((vRow) => {
-                    const row = sortedRows[vRow.index]!;
-                    const rk = rowKey(row);
-                    const cursorOnThisRow = cursor.cursor?.rowKey === rk ? cursor.cursor : null;
-                    const evaluation = condFmt.evaluateRow(row);
-                    // Host-controlled detail row (provenance drill). Rendered
-                    // outside the virtualizer's size estimates — acceptable for
-                    // one open drill at a time on ≤500-row surfaces.
-                    const detail = props.renderRowDetail?.(row) ?? null;
-                    return (
-                      <React.Fragment key={rk}>
-                        <GridRow
-                          row={row}
-                          rowKey={rk}
-                          rowIndex={vRow.index}
-                          columns={orderedVisible}
-                          focusedField={cursorOnThisRow?.field ?? null}
-                          editingField={
-                            cursorOnThisRow?.editing ? (cursorOnThisRow.field ?? null) : null
-                          }
-                          cursorInitial={cursorOnThisRow?.initial}
-                          cellInRange={inRange}
-                          selected={isSelected(rk)}
-                          selectionCol={selectionCol}
-                          showRowNumbers={showRowNumbers}
-                          cellPadY={cellPadY}
-                          gridStyle={gridStyle}
-                          onAddFieldClick={onAddFieldClick}
-                          hiddenFieldCount={hiddenList.length}
-                          getValue={getValue}
-                          onCellPointerDown={onCellPointerDown}
-                          onCellDoubleClick={onCellDoubleClick}
-                          onToggleSelect={onToggleSelect}
-                          onCommitCell={commitValue}
-                          onStopEdit={onStopEdit}
-                          onAddColumnOption={props.onAddColumnOption}
-                          onRowNumPointerDown={onRowNumPointerDown}
-                          evaluation={evaluation}
-                          activityEntry={activity?.get(rk)}
-                          onColumnHover={applyColumnHover}
-                        />
-                        {detail !== null && (
-                          <div role="row" className="border-b border-line bg-surface-2/50">
-                            {detail}
-                          </div>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                  {bottomPad > 0 && <div style={{ height: bottomPad }} />}
-                </>
-              );
-            })()}
+        <DataGridBody
+          rows={sortedRows}
+          rowKey={rowKey}
+          columns={orderedVisible}
+          gridStyle={gridStyle}
+          cellPadY={cellPadY}
+          showRowNumbers={showRowNumbers}
+          selectionCol={selectionCol}
+          estimatedRowHeight={estimatedRowHeight}
+          scrollContainerRef={cursor.ref}
+          virtualizerRef={virtualizerRef}
+          empty={empty}
+          cursorRowKey={cursor.cursor?.rowKey ?? null}
+          cursorField={cursor.cursor?.field ?? null}
+          cursorEditing={!!cursor.cursor?.editing}
+          cursorInitial={cursor.cursor?.initial}
+          cellInRange={inRange}
+          isSelected={isSelected}
+          onAddFieldClick={onAddFieldClick}
+          hiddenFieldCount={hiddenList.length}
+          getValue={getValue}
+          onCellPointerDown={onCellPointerDown}
+          onCellDoubleClick={onCellDoubleClick}
+          onToggleSelect={onToggleSelect}
+          onCommitCell={commitValue}
+          onStopEdit={onStopEdit}
+          onAddColumnOption={props.onAddColumnOption}
+          onRowNumPointerDown={onRowNumPointerDown}
+          onColumnHover={applyColumnHover}
+          condFmt={condFmt}
+          activity={activity}
+          renderRowDetail={props.renderRowDetail}
+        />
         {presence && (
           <CursorOverlay
             peers={presence.peers}
