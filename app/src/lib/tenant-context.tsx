@@ -4,6 +4,7 @@ export interface TenantContextValue {
   id: string;
   slug: string;
   label: string;
+  color: string | null;
   role: "admin" | "editor" | "viewer";
   isSuperAdmin: boolean;
 }

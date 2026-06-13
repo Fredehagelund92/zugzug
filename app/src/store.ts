@@ -1157,6 +1157,7 @@ export interface MembershipLite {
   slug: string;
   label: string;
   role: "admin" | "editor" | "viewer";
+  color: string | null;
 }
 
 let memberships: MembershipLite[] = [];

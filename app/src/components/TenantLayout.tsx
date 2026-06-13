@@ -9,6 +9,7 @@ export interface Membership {
   slug: string;
   label: string;
   role: "admin" | "editor" | "viewer";
+  color: string | null;
 }
 
 export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
@@ -35,6 +36,7 @@ export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       id: m?.slug ?? tenantSlug ?? "",
       slug: tenantSlug ?? "",
       label: m?.label ?? tenantSlug ?? "",
+      color: m?.color ?? null,
       role: m?.role ?? "admin",
       isSuperAdmin,
     }),

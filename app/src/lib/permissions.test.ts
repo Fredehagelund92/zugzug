@@ -3,7 +3,7 @@ import { can, type Action } from "./permissions";
 import type { TenantContextValue } from "./tenant-context";
 
 function ctx(role: "admin" | "editor" | "viewer", isSuperAdmin = false): TenantContextValue {
-  return { id: "t1", slug: "t1", label: "T1", role, isSuperAdmin };
+  return { id: "t1", slug: "t1", label: "T1", color: null, role, isSuperAdmin };
 }
 
 const EDIT_ACTIONS: Action[] = [
