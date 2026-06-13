@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "../../components/Button";
+import { EmptyState } from "../../components/EmptyState";
+import { SkeletonList } from "../../components/Skeleton";
 import {
   listApiTokens,
   createApiToken,
@@ -124,12 +126,19 @@ export function Tokens() {
         )}
 
         {loading ? (
-          <p className="font-mono text-[11px] text-ink-3">Loading tokens…</p>
+          <SkeletonList rows={3} columns={["minmax(0,1fr)", 120, 80, 60]} />
+        ) : tokens.length === 0 && !showForm ? (
+          <EmptyState
+            title="No tokens yet"
+            body="Create a personal access token for headless access — dbt, CI, scripts."
+            action={
+              <Button size="sm" onClick={() => setShowForm(true)}>
+                Create token
+              </Button>
+            }
+          />
         ) : (
           <ul className="divide-y divide-line rounded-sm border border-line">
-            {tokens.length === 0 && !showForm && (
-              <li className="px-4 py-3 text-[13px] text-ink-3">No tokens yet.</li>
-            )}
             {tokens.map((tok) => (
               <li key={tok.id} className="flex items-center gap-3 px-4 py-2.5">
                 <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">

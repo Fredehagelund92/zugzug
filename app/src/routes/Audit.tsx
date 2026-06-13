@@ -1,4 +1,5 @@
 import { useAudit } from "../store";
+import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { relativeTime } from "./settings/_shared";
 
@@ -15,7 +16,10 @@ export function Audit() {
 
       <div className="mt-8">
         {audit.length === 0 ? (
-          <p className="text-sm text-ink-3">No activity yet.</p>
+          <EmptyState
+            title="No activity yet"
+            body="Drafts, commits, member changes, and other workspace actions will appear here."
+          />
         ) : (
           <ul className="divide-y divide-line">
             {audit.slice(0, 100).map((row, i) => (

@@ -3,6 +3,7 @@ import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { FormField } from "../../components/FormField";
 import { SegControl } from "../../components/SegControl";
+import { SkeletonRow } from "../../components/Skeleton";
 import { cx } from "../../lib/cx";
 import { useTenant } from "../../lib/tenant-context";
 import { usePreferences, setPreferences, scanSources } from "../../store";
@@ -108,7 +109,7 @@ export function Scans() {
         )}
 
         {!status && !statusError && prefs.scanSchedule && (
-          <p className="font-mono text-[11px] text-ink-3">Loading scan status…</p>
+          <SkeletonRow columns={[16, "minmax(0,1fr)", 80]} className="rounded-sm border border-line bg-surface-2 py-3" />
         )}
 
         {statusError && (

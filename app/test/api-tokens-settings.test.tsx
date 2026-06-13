@@ -68,13 +68,13 @@ describe("ApiTokensSection", () => {
     const { TenantProvider } = await import("../src/lib/tenant-context");
     render(<TenantProvider value={tenantValue}><ApiTokensSection /></TenantProvider>);
 
-    // Wait for initial load to finish
+    // Wait for initial load to finish (empty state renders two "Create token" buttons)
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create token/i })).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: /create token/i })[0]).toBeInTheDocument();
     });
 
     // Open the create form
-    fireEvent.click(screen.getByRole("button", { name: /create token/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /create token/i })[0]);
 
     // Fill in the name
     const nameInput = screen.getByPlaceholderText(/token name/i);

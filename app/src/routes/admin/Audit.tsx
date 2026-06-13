@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../api";
+import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
+import { SkeletonList } from "../../components/Skeleton";
 
 export interface User {
   id: string;
@@ -88,13 +90,9 @@ export function Audit() {
 
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <div className="border border-line py-16 flex items-center justify-center">
-            <span className="font-mono text-xs text-ink-3 uppercase tracking-widest">Loading…</span>
-          </div>
+          <SkeletonList rows={6} columns={[140, 100, 160, "minmax(0,1fr)"]} />
         ) : rows.length === 0 ? (
-          <div className="border border-dashed border-line-2 py-16 text-center">
-            <p className="text-sm text-ink-3">No audit events found.</p>
-          </div>
+          <EmptyState title="No activity yet" body="System activity will appear here as workspaces are created and changed." />
         ) : (
           <div className="border border-line divide-y divide-line">
             <div className="grid grid-cols-[140px_100px_160px_1fr] gap-4 items-center px-5 py-2.5 bg-surface-2">

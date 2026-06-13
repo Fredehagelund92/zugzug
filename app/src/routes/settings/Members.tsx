@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
+import { EmptyState } from "../../components/EmptyState";
 import { useTenant } from "../../lib/tenant-context";
 import { cx } from "../../lib/cx";
 import { SettingsSection } from "../../components/settings/SettingsSection";
@@ -913,7 +914,7 @@ export function Members() {
         )}
 
         {/* Member roster */}
-        {teamUsers.length > 0 && (
+        {teamUsers.length > 0 ? (
           <TeamRoster
             users={teamUsers}
             isAdmin={isAdmin}
@@ -925,6 +926,18 @@ export function Members() {
               setRemoveTarget({ userId, email: u?.email ?? userId });
             }}
           />
+        ) : (
+          !membersError && (
+            <EmptyState
+              title="You're flying solo"
+              body="Invite teammates to collaborate on this workspace."
+              action={
+                <Button size="sm" onClick={() => inputRef.current?.focus()}>
+                  Send invites
+                </Button>
+              }
+            />
+          )
         )}
 
         {/* Pending invites */}

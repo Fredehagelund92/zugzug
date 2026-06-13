@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
+import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../components/Toast";
 
 interface AdminUser {
@@ -107,13 +109,9 @@ export function Users() {
 
       <div className="zz-rise border border-line" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <div className="py-16 flex items-center justify-center">
-            <span className="font-mono text-xs text-ink-3 uppercase tracking-widest">Loading…</span>
-          </div>
+          <SkeletonList rows={5} columns={[24, "minmax(0,1fr)", 160, 80, 100, 120]} />
         ) : users.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-ink-3">No users found.</p>
-          </div>
+          <EmptyState title="No users found" body="Try a different search term or invite teammates from a workspace." />
         ) : (
           <>
             <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5 bg-surface-2 border-b border-line">

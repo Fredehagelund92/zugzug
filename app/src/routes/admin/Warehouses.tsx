@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "../../api";
+import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
+import { SkeletonList } from "../../components/Skeleton";
 
 interface WarehouseDb {
   name: string;
@@ -36,11 +38,7 @@ export function Warehouses() {
 
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <div className="border border-line py-16 flex items-center justify-center">
-            <span className="font-mono text-xs text-ink-3 uppercase tracking-widest">
-              Connecting…
-            </span>
-          </div>
+          <SkeletonList rows={3} columns={["minmax(0,1fr)", 120, 80]} />
         ) : attached === false ? (
           <div className="border border-dashed border-line-2 p-8">
             <p className="text-sm text-ink-3 text-center">
@@ -52,9 +50,7 @@ export function Warehouses() {
             </p>
           </div>
         ) : dbs.length === 0 ? (
-          <div className="border border-dashed border-line-2 py-16 text-center">
-            <p className="text-sm text-ink-3">No databases found.</p>
-          </div>
+          <EmptyState title="No databases found" body="The warehouse connection succeeded but returned no databases." />
         ) : (
           <div className="border border-line divide-y divide-line">
             <div className="grid grid-cols-[1fr_120px_80px] gap-4 items-center px-5 py-2.5 bg-surface-2">
