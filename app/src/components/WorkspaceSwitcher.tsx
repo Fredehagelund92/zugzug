@@ -1,33 +1,77 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useTenant } from "../lib/tenant-context";
+import { createPortal } from "react-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { authFetch } from "../api";
 import { useMemberships } from "../store";
-import { can } from "../lib/permissions";
+import { useTenant } from "../lib/tenant-context";
+import { workspaceColor, workspaceInitials } from "../lib/workspace-colors";
+import { cx } from "../lib/cx";
 
-/** Memberships are read live from the store so a rename/leave/delete from any
- *  Settings page reflects here without a reload. */
+function WorkspaceAvatar({ label, color, size }: { label: string; color: string | null; size: number }) {
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        background: workspaceColor(color),
+        borderRadius: 6,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <span style={{ fontSize: size <= 22 ? 9 : 10, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+        {workspaceInitials(label)}
+      </span>
+    </div>
+  );
+}
+
 export function WorkspaceSwitcher() {
   const tenant = useTenant();
   const memberships = useMemberships();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [focusedIdx, setFocusedIdx] = useState(-1);
   const navigate = useNavigate();
   const location = useLocation();
-  const ref = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const others = memberships.filter((m) => m.slug !== tenant.slug);
+  const filtered = query
+    ? others.filter((m) => m.label.toLowerCase().includes(query.toLowerCase()))
+    : others;
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    setQuery("");
+    setFocusedIdx(-1);
+    const t = setTimeout(() => searchRef.current?.focus(), 0);
+    return () => clearTimeout(t);
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setOpen(false); return; }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.min(i + 1, filtered.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFocusedIdx((i) => Math.max(i - 1, -1));
+      } else if (e.key === "Enter" && focusedIdx >= 0 && filtered[focusedIdx]) {
+        switchTo(filtered[focusedIdx]!.slug);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, focusedIdx, filtered]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchTo = (slug: string) => {
     setOpen(false);
     if (slug === tenant.slug) return;
-    // Preserve subpath where possible
     const rest = location.pathname.replace(/^\/app\/[^/]+/, "") || "";
     navigate(`/app/${slug}${rest}`);
   };
@@ -36,94 +80,119 @@ export function WorkspaceSwitcher() {
     authFetch("/auth/logout", { method: "POST" }).then(() => window.location.replace("/login"));
 
   return (
-    <div ref={ref} className="relative">
+    <>
+      {/* ── Trigger ── */}
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         className="flex items-center gap-2 rounded px-2 py-1 hover:bg-surface-2 w-full text-left"
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <span className="font-medium truncate">{tenant.label}</span>
-        <span aria-hidden className="ml-auto shrink-0">
-          ▾
-        </span>
+        <WorkspaceAvatar label={tenant.label} color={tenant.color} size={22} />
+        <span className="font-medium truncate flex-1 text-sm">{tenant.label}</span>
+        <span aria-hidden className="shrink-0 text-ink-3 text-[10px]">▾</span>
       </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute left-0 top-full mt-1 min-w-[220px] rounded border border-line bg-surface shadow-lg z-50"
-        >
-          <div className="px-3 py-1.5 text-xs text-ink-2 uppercase tracking-wide">Workspaces</div>
-          {memberships.map((m) => (
-            <button
-              key={m.slug}
-              onClick={() => switchTo(m.slug)}
-              className={`flex w-full text-left px-3 py-1.5 hover:bg-surface-2 ${m.slug === tenant.slug ? "font-medium" : ""}`}
-              role="menuitem"
-            >
-              <span className="mr-2 inline-block w-3">{m.slug === tenant.slug ? "✓" : ""}</span>
-              {m.label}
-              <span className="ml-2 text-xs text-ink-2">({m.role})</span>
-            </button>
-          ))}
-          {tenant.isSuperAdmin && (
-            <>
-              <hr className="my-1 border-line" />
+
+      {/* ── Modal ── */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+
+          {/* Panel */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Switch workspace"
+            className="relative w-[360px] rounded-xl border border-line bg-surface shadow-2xl overflow-hidden"
+          >
+            {/* Search */}
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-line">
+              <svg className="h-3.5 w-3.5 text-ink-3 shrink-0" viewBox="0 0 16 16" fill="none">
+                <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setFocusedIdx(-1); }}
+                placeholder="Switch workspace…"
+                className="flex-1 bg-transparent text-sm text-ink placeholder:text-ink-3 focus:outline-none"
+              />
+              <kbd className="font-mono text-[10px] text-ink-3 bg-surface-2 border border-line px-1.5 py-0.5 rounded">
+                ESC
+              </kbd>
+            </div>
+
+            {/* Current workspace */}
+            <div className="py-1">
+              <div className="px-3.5 py-1 font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Current
+              </div>
+              <div className="px-3.5 py-1.5 flex items-center gap-2.5 bg-hover">
+                <WorkspaceAvatar label={tenant.label} color={tenant.color} size={26} />
+                <span className="flex-1 text-sm font-medium text-ink truncate">{tenant.label}</span>
+                <span className="text-[10px] text-ink-3 bg-surface-2 border border-line rounded px-1.5 py-0.5 shrink-0">
+                  {tenant.role}
+                </span>
+              </div>
+            </div>
+
+            {/* All workspaces */}
+            {filtered.length > 0 && (
+              <div className="border-t border-line py-1">
+                <div className="px-3.5 py-1 font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                  All workspaces
+                </div>
+                <div className="max-h-[240px] overflow-y-auto">
+                  {filtered.map((m, i) => (
+                    <button
+                      key={m.slug}
+                      onClick={() => switchTo(m.slug)}
+                      className={cx(
+                        "w-full flex items-center gap-2.5 px-3.5 py-1.5 text-left transition-colors",
+                        focusedIdx === i ? "bg-hover" : "hover:bg-hover",
+                      )}
+                    >
+                      <WorkspaceAvatar label={m.label} color={m.color} size={26} />
+                      <span className="flex-1 text-sm text-ink truncate">{m.label}</span>
+                      <span className="text-[10px] text-ink-3 bg-surface-2 border border-line rounded px-1.5 py-0.5 shrink-0">
+                        {m.role}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="flex items-center gap-4 px-3.5 py-2 border-t border-line">
+              {tenant.isSuperAdmin && (
+                <Link
+                  to="/app/admin"
+                  onClick={() => setOpen(false)}
+                  className="text-[11px] text-ink-3 hover:text-ink transition-colors"
+                >
+                  Admin console
+                </Link>
+              )}
               <button
-                onClick={() => {
-                  setOpen(false);
-                  navigate("/app/admin");
-                }}
-                className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
-                role="menuitem"
+                onClick={() => { setOpen(false); navigate(`/app/${tenant.slug}/account`); }}
+                className="text-[11px] text-ink-3 hover:text-ink transition-colors"
               >
-                Admin console
+                Account
               </button>
               <button
-                onClick={() => {
-                  setOpen(false);
-                  navigate("/app/admin/tenants");
-                }}
-                className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
-                role="menuitem"
+                onClick={signOut}
+                className="text-[11px] text-ink-3 hover:text-ink transition-colors ml-auto"
               >
-                + Create workspace
+                Sign out
               </button>
-            </>
-          )}
-          <hr className="my-1 border-line" />
-          <button
-            onClick={() => {
-              setOpen(false);
-              navigate(`/app/${tenant.slug}/account`);
-            }}
-            className="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 transition-colors"
-            role="menuitem"
-          >
-            Account settings
-          </button>
-          {can(tenant, "settings.general.edit") && (
-            <button
-              onClick={() => {
-                setOpen(false);
-                navigate(`/app/${tenant.slug}/settings`);
-              }}
-              className="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 transition-colors"
-              role="menuitem"
-            >
-              Workspace settings
-            </button>
-          )}
-          <hr className="my-1 border-line" />
-          <button
-            onClick={signOut}
-            className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
-            role="menuitem"
-          >
-            Sign out
-          </button>
-        </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }

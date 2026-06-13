@@ -7,17 +7,20 @@ import { WorkspaceSwitcher } from "../src/components/WorkspaceSwitcher";
 // Mock store + authFetch
 vi.mock("../src/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/store")>();
-  return { ...actual, initStore: vi.fn(), onTenantSwitch: vi.fn() };
+  return {
+    ...actual,
+    initStore: vi.fn(),
+    onTenantSwitch: vi.fn(),
+    useMemberships: vi.fn(() => [
+      { slug: "acme", label: "Acme", role: "admin" as const, color: null },
+      { slug: "globex", label: "Globex", role: "editor" as const, color: null },
+    ]),
+  };
 });
 vi.mock("../src/api", () => ({
   authFetch: vi.fn().mockResolvedValue(new Response(null)),
   apiFetch: vi.fn().mockResolvedValue(new Response(null)),
 }));
-
-const memberships = [
-  { slug: "acme", label: "Acme", role: "admin" as const },
-  { slug: "globex", label: "Globex", role: "editor" as const },
-];
 
 function harness(isSuperAdmin: boolean, path = "/app/acme/triage") {
   return render(
@@ -26,8 +29,8 @@ function harness(isSuperAdmin: boolean, path = "/app/acme/triage") {
         <Route
           path="/app/:tenantSlug/*"
           element={
-            <TenantProvider value={{ id: "acme", slug: "acme", label: "Acme", role: "admin", isSuperAdmin }}>
-              <WorkspaceSwitcher memberships={memberships} />
+            <TenantProvider value={{ id: "acme", slug: "acme", label: "Acme", color: null, role: "admin", isSuperAdmin }}>
+              <WorkspaceSwitcher />
             </TenantProvider>
           }
         />
@@ -42,17 +45,15 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.getByText("Acme")).toBeTruthy();
   });
 
-  test("non-super-admin does NOT see Create workspace or Admin console", () => {
+  test("non-super-admin does NOT see Admin console", () => {
     harness(false);
     fireEvent.click(screen.getByRole("button", { name: /acme/i }));
-    expect(screen.queryByText(/Create workspace/i)).toBeNull();
     expect(screen.queryByText(/Admin console/i)).toBeNull();
   });
 
-  test("super-admin sees Create workspace and Admin console", () => {
+  test("super-admin sees Admin console", () => {
     harness(true);
     fireEvent.click(screen.getByRole("button", { name: /acme/i }));
-    expect(screen.getByText(/\+ Create workspace/i)).toBeTruthy();
     expect(screen.getByText(/Admin console/i)).toBeTruthy();
   });
 
@@ -62,22 +63,22 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.getByText(/Sign out/i)).toBeTruthy();
   });
 
-  test("shows Account settings for all roles (admin harness)", () => {
+  test("shows Account for all roles (admin harness)", () => {
     harness(false);
     fireEvent.click(screen.getByRole("button", { name: /acme/i }));
-    expect(screen.getByText(/account settings/i)).toBeTruthy();
+    expect(screen.getByText(/^Account$/i)).toBeTruthy();
   });
 
-  test("admin sees Workspace settings", () => {
+  test("shows other workspaces in the list", () => {
     harness(false);
     fireEvent.click(screen.getByRole("button", { name: /acme/i }));
-    expect(screen.getByText(/workspace settings/i)).toBeTruthy();
+    // Globex is not the current workspace, should appear in "All workspaces"
+    expect(screen.getByText("Globex")).toBeTruthy();
   });
 
-  test("editor does NOT see Workspace settings", () => {
-    // Re-render with editor role
+  test("editor role does NOT see Admin console", () => {
     const value: TenantContextValue = {
-      id: "acme", slug: "acme", label: "Acme", role: "editor", isSuperAdmin: false,
+      id: "acme", slug: "acme", label: "Acme", color: null, role: "editor", isSuperAdmin: false,
     };
     render(
       <MemoryRouter initialEntries={["/app/acme/triage"]}>
@@ -86,14 +87,14 @@ describe("WorkspaceSwitcher", () => {
             path="/app/:tenantSlug/*"
             element={
               <TenantProvider value={value}>
-                <WorkspaceSwitcher memberships={memberships} />
+                <WorkspaceSwitcher />
               </TenantProvider>
             }
           />
         </Routes>
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole("button"));
-    expect(screen.queryByText(/workspace settings/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /acme/i }));
+    expect(screen.queryByText(/Admin console/i)).toBeNull();
   });
 });
