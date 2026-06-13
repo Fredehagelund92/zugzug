@@ -97,6 +97,10 @@ interface GridRowProps<Row> {
   /** Latest audit entry for this row, if any. When present, renders the
    *  activity pip + hover badge inside the row wrapper. */
   activityEntry?: RowActivityEntry;
+  /** Column-hover highlight: invoked from each cell's onMouseEnter/Leave to
+   *  tint the column. DOM-mutation based on the DataGrid side — see
+   *  applyColumnHover. */
+  onColumnHover: (field: string | null) => void;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -129,6 +133,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     onRowNumPointerDown,
     evaluation,
     activityEntry,
+    onColumnHover,
   } = props;
   return (
     <div
@@ -206,6 +211,8 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
             data-field={c.field}
             onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
             onDoubleClick={() => onCellDoubleClick(rk, c.field)}
+            onMouseEnter={() => onColumnHover(c.field)}
+            onMouseLeave={() => onColumnHover(null)}
             className={cellCx}
             style={Object.keys(cellInlineStyle).length > 0 ? cellInlineStyle : undefined}
           >
@@ -737,6 +744,33 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // Keep range anchor in sync when cursor moves without shift (range collapses)
   // We handle this explicitly in the key handler below, not via useEffect, to
   // avoid fighting with the cursor state.
+
+  // ── Column-hover highlight ─────────────────────────────────────────────────
+  // Hovering a cell or header tints every cell in the column. DOM-mutation
+  // based (no React state) so the per-hover path doesn't trigger renders —
+  // important because GridRow is memoized and a top-level state change would
+  // invalidate every row.
+  const hoverFieldRef = useRef<string | null>(null);
+  const applyColumnHover = useCallback(
+    (field: string | null) => {
+      const root = cursor.ref.current;
+      if (!root) return;
+      if (hoverFieldRef.current === field) return;
+      if (hoverFieldRef.current) {
+        root
+          .querySelectorAll(".zz-col-hover")
+          .forEach((el) => el.classList.remove("zz-col-hover"));
+      }
+      hoverFieldRef.current = field;
+      if (field) {
+        const esc = attrEsc(field);
+        root
+          .querySelectorAll(`[data-field="${esc}"], [data-header="${esc}"]`)
+          .forEach((el) => el.classList.add("zz-col-hover"));
+      }
+    },
+    [cursor.ref],
+  );
 
   // ── Copy (Cmd+C) ───────────────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {
@@ -1452,6 +1486,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   c.pinnedLeft && idx === 0 && "sticky left-0 z-10 bg-surface",
                 )}
                 data-header={c.field}
+                onMouseEnter={() => applyColumnHover(c.field)}
+                onMouseLeave={() => applyColumnHover(null)}
               >
                 {TypeIcon && <TypeIcon className="h-3.5 w-3.5 shrink-0 text-ink-3" />}
                 {/* Task 21: dragged-column wash + drop-target line */}
@@ -1859,6 +1895,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                           onRowNumPointerDown={onRowNumPointerDown}
                           evaluation={evaluation}
                           activityEntry={activity?.get(rk)}
+                          onColumnHover={applyColumnHover}
                         />
                         {detail !== null && (
                           <div role="row" className="border-b border-line bg-surface-2/50">

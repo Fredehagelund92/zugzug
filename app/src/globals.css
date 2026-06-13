@@ -319,3 +319,13 @@
     animation: none;
   }
 }
+
+/* DataGrid column-hover highlight. Toggled via DOM mutation from DataGrid's
+   applyColumnHover (see useGridCursor / Step 3 plan) — class is added to
+   every [data-field=X] body cell + the matching [data-header=X] header when
+   the user mouses into a cell or header in that column. Kept very subtle so
+   it stacks under the row-hover tint and never overwhelms the focused cell's
+   accent ring. */
+.zz-col-hover {
+  background-color: color-mix(in srgb, var(--accent) 5%, transparent);
+}

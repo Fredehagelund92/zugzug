@@ -123,6 +123,38 @@ export function useGridCursor<Row>({
     [rows, navCols, rowKey],
   );
 
+  // Horizontal move that wraps at the row edges (Sheets/Excel convention).
+  // ArrowRight on last col → next row, first col. ArrowLeft on first col →
+  // previous row, last col. Top-left / bottom-right corners clamp. Used for
+  // plain ArrowLeft/Right and Tab/Shift-Tab (both in and out of edit mode).
+  const moveH = useCallback(
+    (delta: -1 | 1) => {
+      setCursor((cur) => {
+        if (!cur) return cur;
+        const ri = rows.findIndex((r) => rowKey(r) === cur.rowKey);
+        const ci = navCols.findIndex((c) => c.field === cur.field);
+        if (ri < 0 || ci < 0) return cur;
+        let nr = ri;
+        let nc = ci + delta;
+        if (nc >= navCols.length) {
+          if (ri >= rows.length - 1) return cur; // bottom-right corner clamps
+          nr = ri + 1;
+          nc = 0;
+        } else if (nc < 0) {
+          if (ri <= 0) return cur; // top-left corner clamps
+          nr = ri - 1;
+          nc = navCols.length - 1;
+        }
+        const row = rows[nr];
+        const col = navCols[nc];
+        return row && col
+          ? { rowKey: rowKey(row), field: col.field, editing: cur.editing, initial: cur.initial }
+          : cur;
+      });
+    },
+    [rows, navCols, rowKey],
+  );
+
   const startEdit = useCallback(
     (initial?: string) => setCursor((c) => (c ? { ...c, editing: true, initial } : c)),
     [],
@@ -200,7 +232,7 @@ export function useGridCursor<Row>({
           e.preventDefault();
           onCommit?.();
           stopEdit();
-          move(e.shiftKey ? -1 : 1, 0);
+          moveH(e.shiftKey ? -1 : 1);
           startEdit();
           return;
         }
@@ -267,12 +299,12 @@ export function useGridCursor<Row>({
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
-        move(-1, 0);
+        moveH(-1);
         return;
       }
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        move(1, 0);
+        moveH(1);
         return;
       }
       // Plain Enter starts editing; ⌘/Ctrl+Enter is left unhandled so it can
@@ -284,7 +316,7 @@ export function useGridCursor<Row>({
       }
       if (e.key === "Tab") {
         e.preventDefault();
-        move(e.shiftKey ? -1 : 1, 0);
+        moveH(e.shiftKey ? -1 : 1);
         return;
       }
       if (e.key === "?") {
@@ -319,6 +351,7 @@ export function useGridCursor<Row>({
     [
       cursor,
       move,
+      moveH,
       startEdit,
       stopEdit,
       onCommit,
