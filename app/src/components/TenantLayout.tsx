@@ -11,13 +11,7 @@ export interface Membership {
   role: "admin" | "editor" | "viewer";
 }
 
-export function TenantLayout({
-  memberships: _memberships,
-  isSuperAdmin,
-}: {
-  memberships: Membership[]; // initial seed (BootGate also pushes to the store)
-  isSuperAdmin: boolean;
-}) {
+export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   // Read live from the store so a rename/leave/delete elsewhere re-derives the
   // TenantProvider value (label flows through here into SettingsLayout header,
