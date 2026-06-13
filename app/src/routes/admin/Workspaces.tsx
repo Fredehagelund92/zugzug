@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
+import { PageHeader } from "../../components/PageHeader";
 import { WarehousePicker } from "../../components/WarehousePicker";
 
 interface Tenant {
@@ -52,30 +53,21 @@ export function Workspaces() {
 
   return (
     <div className="space-y-8">
-      {/* Page header */}
-      <div className="zz-rise flex items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1.5">
-            <h1 className="font-display text-2xl font-bold">Workspaces</h1>
-            {!loading && (
-              <span className="font-mono text-xs bg-surface-2 border border-line text-ink-3 px-2 py-0.5 tabular-nums">
-                {tenants.length}
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-ink-2 max-w-lg">
-            Isolated reconciliation environments. Each workspace is scoped to a warehouse connection
-            and owns its own canonical tables and audit trail.
-          </p>
-        </div>
-        <Button
-          variant={showForm ? "secondary" : "primary"}
-          size="sm"
-          onClick={() => setShowForm((v) => !v)}
-        >
-          {showForm ? "Cancel" : "+ New workspace"}
-        </Button>
-      </div>
+      <PageHeader
+        kicker="System"
+        title="Workspaces"
+        lede="Isolated reconciliation environments. Each workspace is scoped to a warehouse connection and owns its own canonical tables and audit trail."
+        count={loading ? undefined : tenants.length}
+        action={
+          <Button
+            variant={showForm ? "secondary" : "primary"}
+            size="sm"
+            onClick={() => setShowForm((v) => !v)}
+          >
+            {showForm ? "Cancel" : "+ New workspace"}
+          </Button>
+        }
+      />
 
       {/* Workspace list */}
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
