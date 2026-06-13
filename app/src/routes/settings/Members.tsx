@@ -163,22 +163,26 @@ function MemberRoleControl({
   member,
   isAdmin,
   pending,
+  lockedReason,
   onChange,
 }: {
   member: MemberRecord;
   isAdmin: boolean;
   pending: boolean;
+  lockedReason?: string;
   onChange: (role: RoleKey) => void;
 }) {
   const [open, setOpen] = useState(false);
   const meta = ROLE_META[member.role];
 
-  if (!isAdmin) {
+  if (!isAdmin || lockedReason) {
     return (
       <span
+        title={lockedReason}
         className={cx(
           "shrink-0 rounded-sm border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide",
           meta.chip,
+          lockedReason && "cursor-not-allowed opacity-80",
         )}
       >
         <span aria-hidden className="mr-1 opacity-70">
@@ -229,6 +233,7 @@ function MemberRow({
   isAdmin,
   isMe,
   pending,
+  lockedReason,
   onRoleChange,
   onRemove,
 }: {
@@ -236,6 +241,7 @@ function MemberRow({
   isAdmin: boolean;
   isMe: boolean;
   pending: boolean;
+  lockedReason?: string;
   onRoleChange: (role: RoleKey) => void;
   onRemove?: () => void;
 }) {
@@ -268,6 +274,7 @@ function MemberRow({
         member={member}
         isAdmin={isAdmin}
         pending={pending}
+        lockedReason={lockedReason}
         onChange={onRoleChange}
       />
       {isAdmin && !isMe && onRemove && (
@@ -307,6 +314,12 @@ function TeamRoster({
     for (const u of users) c[u.role]++;
     return c;
   }, [users]);
+
+  const lockedReasonFor = useCallback(
+    (u: MemberRecord) =>
+      u.role === "admin" && counts.admin <= 1 ? "Cannot demote the only admin" : undefined,
+    [counts.admin],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -466,6 +479,7 @@ function TeamRoster({
                       isAdmin={isAdmin}
                       isMe={u.email === currentEmail}
                       pending={rolePending.has(u.user_id)}
+                      lockedReason={lockedReasonFor(u)}
                       onRoleChange={(role) => onRoleChange(u.user_id, role)}
                       onRemove={() => onRemove(u.user_id)}
                     />
@@ -490,6 +504,7 @@ function TeamRoster({
                 isAdmin={isAdmin}
                 isMe={u.email === currentEmail}
                 pending={rolePending.has(u.user_id)}
+                lockedReason={lockedReasonFor(u)}
                 onRoleChange={(role) => onRoleChange(u.user_id, role)}
                 onRemove={() => onRemove(u.user_id)}
               />
