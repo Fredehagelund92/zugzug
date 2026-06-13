@@ -142,7 +142,7 @@ export function Dashboard() {
 
   if (dims.length === 0) {
     return (
-      <div className="space-y-8">
+      <div className="mx-auto w-full max-w-2xl space-y-8 p-6 md:p-12">
         <PageHeader
           backdrop={<MarkBackdrop />}
           kicker="Master data"
