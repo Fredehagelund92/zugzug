@@ -7,6 +7,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../components/Toast";
 import { readServerError } from "../../lib/api-errors";
+import { invalidate, subscribeInvalidate } from "../../store";
 
 interface AdminUser {
   id: string;
@@ -49,6 +50,13 @@ export function Users() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const unsub = subscribeInvalidate("adminUsers", () => {
+      void load(query.trim() || undefined);
+    });
+    return unsub;
+  }, [load, query]);
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     void load(query.trim() || undefined);
@@ -80,7 +88,7 @@ export function Users() {
         return;
       }
       toast(pending.promote ? "Promoted to super-admin." : "Super-admin removed.", "success");
-      void load(query.trim() || undefined);
+      invalidate.adminUsers();
     } finally {
       setBusy(false);
       setPending(null);
