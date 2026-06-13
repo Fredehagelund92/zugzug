@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { CatalogExplorer } from "../components/CatalogExplorer";
 import { PageHeader } from "../components/PageHeader";
@@ -64,6 +65,7 @@ export function Sources() {
   const sources = useSources();
   const dims = useDimensions();
   const canEdit = useCanEdit();
+  const nav = useNavLinks();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQ = searchParams.get("q") ?? "";
   const initialStatus = ((): Status => {
@@ -444,10 +446,7 @@ export function Sources() {
                   <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link
-                to={`/app/tables?open=${agg.worst.dimId}&active=${agg.worst.dimId}&mode=match`}
-                className="shrink-0"
-              >
+              <Link to={nav.table(agg.worst.dimId, "match")} className="shrink-0">
                 <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                   Match values
                 </Button>

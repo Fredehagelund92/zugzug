@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useNavLinks } from "../../lib/use-tenant-navigate";
 import { Button } from "../Button";
 import { IconArrowRight, IconWand } from "../Icons";
 import { LedgerRow } from "../sources/LedgerRow";
@@ -27,6 +28,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
   const canEdit = useCanEdit();
+  const nav = useNavLinks();
   const deriveAction = useAsyncAction(async (dimId: string, table: string, column: string) => {
     const n = await deriveCanonical(dimId, table, column);
     toast(
@@ -78,7 +80,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
             Wire a warehouse column to start watching for new {dim.dimension.toLowerCase()} values.
           </p>
           <div className="mt-5 inline-flex">
-            <Link to="/app/sources">
+            <Link to={nav.sources}>
               <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
                 Browse warehouse
               </Button>
@@ -130,7 +132,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
                 </span>
               </h2>
             </div>
-            <Link to={`/app/sources?focus=${encodeURIComponent(firstSchema)}`}>
+            <Link to={`${nav.sources}?focus=${encodeURIComponent(firstSchema)}`}>
               <Button
                 variant="secondary"
                 size="sm"

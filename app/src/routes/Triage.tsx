@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
@@ -385,6 +386,7 @@ function CrossDimInbox(p: CrossDimInboxProps) {
     { k: "all", label: "All", n: p.counts.all },
     { k: "mapped", label: "Mapped", n: p.counts.mapped },
   ];
+  const nav = useNavLinks();
 
   // Per-dim option list — DataGrid asks for it per-row via the factory closure
   const columns = useMemo(
@@ -454,11 +456,11 @@ function CrossDimInbox(p: CrossDimInboxProps) {
                 </div>
                 <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
                   Curate records in{" "}
-                  <Link to="/app/tables" className="text-accent hover:underline">
+                  <Link to={nav.tables} className="text-accent hover:underline">
                     Tables
                   </Link>
                   , or{" "}
-                  <Link to="/app/sources" className="text-accent hover:underline">
+                  <Link to={nav.sources} className="text-accent hover:underline">
                     wire more sources
                   </Link>
                   .

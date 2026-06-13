@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Kpi } from "../components/Kpi";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -42,6 +43,7 @@ export function Dashboard() {
   const draftsMap = useDrafts();
   const wsInfo = useWorkspaceInfo();
   const navigate = useNavigate();
+  const nav = useNavLinks();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
   const staged = Object.values(draftsMap).filter(
     (d) =>
@@ -148,10 +150,10 @@ export function Dashboard() {
           lede="Create a master table to start reconciling messy source values to canonical ones. Each table maps a single dimension (countries, regions, post types, …) from your warehouse."
           meta={
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Link to="/app/tables">
+              <Link to={nav.tables}>
                 <Button icon={<IconPlus className="h-4 w-4" />}>Create your first table</Button>
               </Link>
-              <Link to="/app/sources">
+              <Link to={nav.sources}>
                 <Button variant="secondary">Browse the warehouse</Button>
               </Link>
             </div>
@@ -190,7 +192,7 @@ export function Dashboard() {
         }
         action={
           totalNew > 0 ? (
-            <Link to="/app/triage">
+            <Link to={nav.triage}>
               <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
                 Review {totalNew} new
               </Button>
@@ -322,7 +324,7 @@ export function Dashboard() {
               return (
                 <tr
                   key={dim.id}
-                  onClick={() => navigate(`/app/tables?open=${dim.id}&active=${dim.id}&mode=match`)}
+                  onClick={() => navigate(nav.table(dim.id, "match"))}
                   className={cx(
                     "cursor-pointer",
                     isStaged

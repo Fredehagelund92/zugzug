@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { apiFetch } from "../api";
 import { Card } from "../components/Card";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -12,7 +13,6 @@ import {
   usePreferences,
   setPreferences,
   currentUser,
-  useCurrentUser,
   scanSources,
   useWorkspaceInfo,
   useAuthConfig,
@@ -21,15 +21,13 @@ import {
   listApiTokens,
   createApiToken,
   revokeApiToken,
-  listTeamMembers,
-  updateUserRole,
   useConnectionHealth,
   refreshConnectionHealth,
   type ApiToken,
   type CreatedApiToken,
-  type TeamMember,
   type ConnectionHealth,
 } from "../store";
+import { useTenant } from "../lib/tenant-context";
 import { warehouseSyncStatusByDim } from "./dashboard-helpers";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { useAsyncAction } from "../hooks/useAsyncAction";
@@ -89,7 +87,7 @@ function ScansSection() {
   const loadStatus = useCallback(async () => {
     setStatusError(null);
     try {
-      const r = await fetch("/api/sources/scan-status");
+      const r = await apiFetch("/sources/scan-status");
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       setStatus((await r.json()) as ScanStatus);
     } catch (err) {
@@ -180,10 +178,20 @@ function ScansSection() {
   );
 }
 
-interface Member {
+/** Shape returned by per-tenant GET /team/members */
+interface MemberRecord {
+  user_id: string;
   email: string;
-  addedBy: string;
-  addedAt: string;
+  name: string | null;
+  role: "admin" | "editor" | "viewer";
+  joined_at: string;
+}
+
+/** Shape returned by per-tenant GET /team/invites */
+interface PendingInvite {
+  email: string;
+  role: "admin" | "editor" | "viewer";
+  invited_at: string;
 }
 
 type ChipStatus = "valid" | "invalid" | "inviting" | "failed";
@@ -213,7 +221,7 @@ function validateChip(
 
 // — Team roster bits —————————————————————————————————————————————————————
 
-type RoleKey = TeamMember["role"];
+type RoleKey = "admin" | "editor" | "viewer";
 
 const ROLE_META: Record<
   RoleKey,
@@ -322,7 +330,7 @@ function MemberRoleControl({
   pending,
   onChange,
 }: {
-  member: TeamMember;
+  member: MemberRecord;
   isAdmin: boolean;
   pending: boolean;
   onChange: (role: RoleKey) => void;
@@ -387,13 +395,16 @@ function MemberRow({
   isMe,
   pending,
   onRoleChange,
+  onRemove,
 }: {
-  member: TeamMember;
+  member: MemberRecord;
   isAdmin: boolean;
   isMe: boolean;
   pending: boolean;
   onRoleChange: (role: RoleKey) => void;
+  onRemove?: () => void;
 }) {
+  const displayName = member.name ?? member.email;
   return (
     <div className="group/row flex items-center gap-3 px-3 py-2 transition-colors hover:bg-hover/60">
       <span
@@ -403,18 +414,20 @@ function MemberRow({
         )}
         aria-hidden
       >
-        {userInitials(member.name, member.email)}
+        {userInitials(displayName ?? "?", member.email)}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <span className="truncate text-[12.5px] font-medium text-ink">{member.name}</span>
+          <span className="truncate text-[12.5px] font-medium text-ink">{displayName ?? "—"}</span>
           {isMe && (
             <span className="shrink-0 rounded-sm border border-line bg-bg px-1 font-mono text-[9.5px] uppercase tracking-wider text-ink-3">
               you
             </span>
           )}
         </div>
-        <div className="truncate font-mono text-[10.5px] text-ink-3">{member.email ?? "—"}</div>
+        {member.name && (
+          <div className="truncate font-mono text-[10.5px] text-ink-3">{member.email}</div>
+        )}
       </div>
       <MemberRoleControl
         member={member}
@@ -422,6 +435,15 @@ function MemberRow({
         pending={pending}
         onChange={onRoleChange}
       />
+      {isAdmin && !isMe && onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-ink-3 opacity-0 transition-opacity hover:bg-danger-soft hover:text-danger focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 group-hover/row:opacity-100"
+        >
+          remove
+        </button>
+      )}
     </div>
   );
 }
@@ -432,12 +454,14 @@ function TeamRoster({
   currentEmail,
   rolePending,
   onRoleChange,
+  onRemove,
 }: {
-  users: TeamMember[];
+  users: MemberRecord[];
   isAdmin: boolean;
   currentEmail: string;
   rolePending: Set<string>;
   onRoleChange: (userId: string, role: RoleKey) => void;
+  onRemove: (userId: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | RoleKey>("all");
@@ -455,18 +479,21 @@ function TeamRoster({
       if (filter !== "all" && u.role !== filter) return false;
       if (!q) return true;
       return (
-        u.name.toLowerCase().includes(q) ||
-        (u.email ?? "").toLowerCase().includes(q) ||
+        (u.name ?? "").toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
         u.role.includes(q)
       );
     });
   }, [users, query, filter]);
 
+  const sortByName = (a: MemberRecord, b: MemberRecord) =>
+    (a.name ?? a.email).localeCompare(b.name ?? b.email);
+
   const bucketed = useMemo(() => {
-    const groups: Record<RoleKey, TeamMember[]> = { admin: [], editor: [], viewer: [] };
+    const groups: Record<RoleKey, MemberRecord[]> = { admin: [], editor: [], viewer: [] };
     for (const u of filtered) groups[u.role].push(u);
     for (const k of Object.keys(groups) as RoleKey[]) {
-      groups[k].sort((a, b) => a.name.localeCompare(b.name));
+      groups[k].sort(sortByName);
     }
     return groups;
   }, [filtered]);
@@ -599,12 +626,13 @@ function TeamRoster({
                 <div className="divide-y divide-line/70">
                   {bucketed[r].map((u) => (
                     <MemberRow
-                      key={u.id}
+                      key={u.user_id}
                       member={u}
                       isAdmin={isAdmin}
                       isMe={u.email === currentEmail}
-                      pending={rolePending.has(u.id)}
-                      onRoleChange={(role) => onRoleChange(u.id, role)}
+                      pending={rolePending.has(u.user_id)}
+                      onRoleChange={(role) => onRoleChange(u.user_id, role)}
+                      onRemove={() => onRemove(u.user_id)}
                     />
                   ))}
                 </div>
@@ -618,16 +646,17 @@ function TeamRoster({
             .sort((a, b) => {
               const ro = ROLE_META[a.role].order - ROLE_META[b.role].order;
               if (ro !== 0) return ro;
-              return a.name.localeCompare(b.name);
+              return (a.name ?? a.email).localeCompare(b.name ?? b.email);
             })
             .map((u) => (
               <MemberRow
-                key={u.id}
+                key={u.user_id}
                 member={u}
                 isAdmin={isAdmin}
                 isMe={u.email === currentEmail}
-                pending={rolePending.has(u.id)}
-                onRoleChange={(role) => onRoleChange(u.id, role)}
+                pending={rolePending.has(u.user_id)}
+                onRoleChange={(role) => onRoleChange(u.user_id, role)}
+                onRemove={() => onRemove(u.user_id)}
               />
             ))}
         </div>
@@ -678,94 +707,65 @@ function RoleFilterPill({
   );
 }
 
-function AllowedEmailsList({
-  members,
-  loaded,
-  loadError,
-  onRetry,
-  myEmail,
-  onRemove,
+function PendingInvitesList({
+  invites,
+  isAdmin,
+  onRevoke,
 }: {
-  members: Member[];
-  loaded: boolean;
-  loadError: string | null;
-  onRetry: () => void;
-  myEmail: string;
-  onRemove: (email: string) => void;
+  invites: PendingInvite[];
+  isAdmin: boolean;
+  onRevoke: (email: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-
+  if (invites.length === 0) return null;
   return (
-    <div className="rounded-sm border border-line">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-hover/60"
-      >
-        <div className="min-w-0">
-          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-2">
-            Email allowlist
-          </div>
-          <div className="mt-0.5 text-[11.5px] text-ink-3">
-            Addresses cleared to sign in. People sign in here and become members above.
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-[10.5px] tabular-nums text-ink-3">
-            {members.length}
-          </span>
-          <svg
-            viewBox="0 0 8 6"
-            className={cx("h-2 w-2.5 text-ink-3 transition-transform", open && "rotate-180")}
-            aria-hidden
-          >
-            <path d="M0 1 L4 5 L8 1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-          </svg>
-        </div>
-      </button>
-      {open && (
-        <div className="border-t border-line">
-          {loadError && (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-danger-soft px-3 py-2 font-mono text-[11px] text-danger">
-              <span>Couldn&rsquo;t load — {loadError}</span>
-              <Button variant="ghost" size="sm" onClick={onRetry}>
-                Retry
-              </Button>
-            </div>
-          )}
-          {loaded && members.length === 0 ? (
-            <div className="px-3 py-3 font-mono text-[11.5px] text-ink-3">
-              The allowlist is empty.
-            </div>
-          ) : (
-            <ul className="divide-y divide-line/70">
-              {members.map((m) => (
-                <li
-                  key={m.email}
-                  className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-hover/60"
+    <div className="space-y-1.5">
+      <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">
+        Pending invites <span className="text-ink-3/60">·</span>{" "}
+        <span className="tabular-nums">{invites.length}</span>
+      </h3>
+      <div className="overflow-hidden rounded-sm border border-line">
+        <ul className="divide-y divide-line/70">
+          {invites.map((inv) => {
+            const meta = ROLE_META[inv.role];
+            return (
+              <li
+                key={inv.email}
+                className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-hover/60"
+              >
+                <span
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[10px] text-ink-3 ring-1 ring-line"
+                  aria-hidden
                 >
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-2">
-                    {m.email}
-                  </span>
-                  <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-wider text-ink-3 sm:inline">
-                    by {m.addedBy === "bootstrap" ? "bootstrap" : m.addedBy}
-                  </span>
-                  {m.email !== myEmail && (
-                    <button
-                      type="button"
-                      onClick={() => onRemove(m.email)}
-                      className="shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-ink-3 hover:bg-warn/10 hover:text-warn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-                    >
-                      remove
-                    </button>
+                  {userInitials(inv.email, null)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono text-[12px] text-ink-2">{inv.email}</div>
+                </div>
+                <span
+                  className={cx(
+                    "shrink-0 rounded-sm border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wide",
+                    meta.chip,
                   )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+                >
+                  <span aria-hidden className="mr-1 opacity-70">
+                    {meta.glyph}
+                  </span>
+                  {meta.label}
+                </span>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => onRevoke(inv.email)}
+                    className="shrink-0 rounded-sm px-1.5 py-0.5 font-mono text-[10.5px] uppercase tracking-wider text-ink-3 hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  >
+                    revoke
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -832,62 +832,81 @@ function ChipPill({ chip, onRemove }: { chip: Chip; onRemove: () => void }) {
 
 function TeamSection() {
   const authConfig = useAuthConfig();
-  const currentUserData = useCurrentUser();
-  const isAdmin = currentUserData?.role === "admin";
+  const tenant = useTenant();
+  const isAdmin = tenant.role === "admin";
   const allowedDomain = authConfig?.allowedDomain ? "@" + authConfig.allowedDomain : null;
-  const [members, setMembers] = useState<Member[]>([]);
-  const [teamUsers, setTeamUsers] = useState<TeamMember[]>([]);
+
+  // Members
+  const [teamUsers, setTeamUsers] = useState<MemberRecord[]>([]);
+  const [membersError, setMembersError] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [rolePending, setRolePending] = useState<Set<string>>(new Set());
+  // remove member (by userId)
+  const [removeTarget, setRemoveTarget] = useState<{ userId: string; email: string } | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  // Pending invites
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [invitesError, setInvitesError] = useState<string | null>(null);
+
+  // Chip-based invite input
   const [chips, setChips] = useState<Chip[]>([]);
   const [buffer, setBuffer] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [removeError, setRemoveError] = useState<string | null>(null);
-  const [removeTarget, setRemoveTarget] = useState<string | null>(null);
-  const [rolePending, setRolePending] = useState<Set<string>>(new Set());
-  const [loaded, setLoaded] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const idCounter = useRef(0);
   const newId = () => `c${idCounter.current++}`;
 
-  const loadTeamUsers = useCallback(async () => {
-    try {
-      setTeamUsers(await listTeamMembers());
-    } catch {
-      // non-critical — role table is supplementary
-    }
-  }, []);
+  const myEmail = currentUser.email;
 
-  const load = useCallback(async () => {
-    setLoadError(null);
+  // Load members
+  const loadMembers = useCallback(async () => {
+    setMembersError(null);
     try {
-      const r = await fetch("/api/team/members");
+      const r = await apiFetch("/team/members");
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      setMembers((await r.json()) as Member[]);
-      setLoaded(true);
+      setTeamUsers((await r.json()) as MemberRecord[]);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : "Could not reach the server.");
+      setMembersError(err instanceof Error ? err.message : "Could not load team members.");
+    }
+  }, []);
+
+  // Load pending invites
+  const loadInvites = useCallback(async () => {
+    setInvitesError(null);
+    try {
+      const r = await apiFetch("/team/invites");
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      setInvites((await r.json()) as PendingInvite[]);
+    } catch (err) {
+      setInvitesError(err instanceof Error ? err.message : "Could not load pending invites.");
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadMembers();
+    void loadInvites();
+  }, [loadMembers, loadInvites]);
 
-  useEffect(() => {
-    void loadTeamUsers();
-  }, [loadTeamUsers]);
-
-  const handleRoleChange = async (userId: string, newRole: TeamMember["role"]) => {
+  // Role change — PUT /team/members/:userId/role
+  const handleRoleChange = async (userId: string, newRole: RoleKey) => {
     setRoleError(null);
-    setRolePending((prev) => {
-      const next = new Set(prev);
-      next.add(userId);
-      return next;
-    });
+    setRolePending((prev) => new Set([...prev, userId]));
     try {
-      await updateUserRole(userId, newRole);
-      void loadTeamUsers();
+      const r = await apiFetch(`/team/members/${userId}/role`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => null)) as {
+          error?: string;
+          reason?: string;
+        } | null;
+        throw new Error(body?.reason ?? body?.error ?? `update_role_${r.status}`);
+      }
+      void loadMembers();
     } catch (err) {
       setRoleError(err instanceof Error ? err.message : "Could not change role.");
     } finally {
@@ -899,9 +918,44 @@ function TeamSection() {
     }
   };
 
+  // Remove member — DELETE /team/members/:userId
+  const removeMember = async (userId: string, email: string) => {
+    setRemoveError(null);
+    try {
+      const r = await apiFetch(`/team/members/${userId}`, { method: "DELETE" });
+      if (!r.ok) {
+        setRemoveError(`Couldn't remove ${email} — ${r.status} ${r.statusText}`);
+        return;
+      }
+      void loadMembers();
+    } catch (err) {
+      setRemoveError(
+        err instanceof Error
+          ? `Couldn't remove ${email} — ${err.message}`
+          : `Couldn't remove ${email}.`,
+      );
+    }
+  };
+
+  // Revoke invite — DELETE /team/invites/:email
+  const revokeInvite = async (email: string) => {
+    try {
+      const r = await apiFetch(`/team/invites/${encodeURIComponent(email)}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      void loadInvites();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not revoke invite.", "error");
+    }
+  };
+
+  // Chip validation uses current member emails + pending invite emails
   const membersByEmail = useMemo(
-    () => new Set(members.map((m) => m.email.toLowerCase())),
-    [members],
+    () =>
+      new Set([
+        ...teamUsers.map((u) => u.email.toLowerCase()),
+        ...invites.map((i) => i.email.toLowerCase()),
+      ]),
+    [teamUsers, invites],
   );
 
   const addChip = useCallback(
@@ -921,6 +975,7 @@ function TeamSection() {
 
   const removeChip = (id: string) => setChips((prev) => prev.filter((c) => c.id !== id));
 
+  // Submit invites — POST /team/invites with { email, role: "editor" }
   const submit = async () => {
     let working = chips;
     if (buffer.trim()) {
@@ -944,17 +999,18 @@ function TeamSection() {
 
     const results = await Promise.allSettled(
       validChips.map(async (c) => {
-        const res = await fetch("/api/team/members", {
+        const res = await apiFetch("/team/invites", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: c.email }),
+          body: JSON.stringify({ email: c.email, role: "editor" }),
         });
-        if (res.status === 409) throw new Error("Already on the team");
+        if (res.status === 409) throw new Error("Already invited or on the team");
+        if (res.status === 403) throw new Error("Only admins can invite");
         if (res.status === 400)
           throw new Error(
             allowedDomain ? `Must be a ${allowedDomain} email` : "Email domain not allowed",
           );
-        if (!res.ok) throw new Error("Couldn't add — try again");
+        if (!res.ok) throw new Error("Couldn't send invite — try again");
         return c.id;
       }),
     );
@@ -963,237 +1019,247 @@ function TeamSection() {
     const succeededIds = new Set<string>();
     validChips.forEach((c, i) => {
       const r = results[i];
-      if (r.status === "fulfilled") succeededIds.add(c.id);
-      else failedById.set(c.id, r.reason instanceof Error ? r.reason.message : "Failed");
+      if (r!.status === "fulfilled") succeededIds.add(c.id);
+      else
+        failedById.set(c.id, r!.reason instanceof Error ? (r!.reason as Error).message : "Failed");
     });
+
+    const sentCount = succeededIds.size;
     setChips((prev) =>
       prev.flatMap((c) => {
         if (succeededIds.has(c.id)) return [];
         const failedReason = failedById.get(c.id);
         if (failedReason)
-          return [{ id: c.id, email: c.email, status: "failed", reason: failedReason }];
+          return [
+            { id: c.id, email: c.email, status: "failed" as ChipStatus, reason: failedReason },
+          ];
         return [c];
       }),
     );
     setSubmitting(false);
-    void load();
+    if (sentCount > 0) {
+      toast(`Invite${sentCount > 1 ? "s" : ""} sent — they'll join when they next sign in.`);
+      void loadInvites();
+    }
     inputRef.current?.focus();
   };
 
-  const remove = async (email: string) => {
-    setRemoveError(null);
-    try {
-      const res = await fetch(`/api/team/members/${encodeURIComponent(email)}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        setRemoveError(`Couldn't remove ${email} — ${res.status} ${res.statusText}`);
-        return;
-      }
-      void load();
-    } catch (err) {
-      setRemoveError(
-        err instanceof Error
-          ? `Couldn't remove ${email} — ${err.message}`
-          : `Couldn't remove ${email}.`,
-      );
-    }
-  };
-
-  const myEmail = currentUser.email;
   const validCount = chips.filter((c) => c.status === "valid").length;
   const invalidCount = chips.filter((c) => c.status === "invalid").length;
   const failedCount = chips.filter((c) => c.status === "failed").length;
 
   return (
-    <Section
-      title="Team"
-      hint="Only people on this list can log in. Any team member can add or remove others."
-    >
-      {/* Team members with roles — searchable, role-bucketed roster */}
-      {teamUsers.length > 0 && (
-        <div className="space-y-2">
-          {roleError && (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-              <span>{roleError}</span>
-              <Button variant="ghost" size="sm" onClick={() => setRoleError(null)}>
-                Dismiss
-              </Button>
-            </div>
-          )}
-          <TeamRoster
-            users={teamUsers}
-            isAdmin={isAdmin}
-            currentEmail={myEmail ?? ""}
-            rolePending={rolePending}
-            onRoleChange={(userId, role) => void handleRoleChange(userId, role)}
-          />
-        </div>
-      )}
-
-      {/* Allowed-emails — collapsed by default; secondary to the roster above */}
-      <AllowedEmailsList
-        members={members}
-        loaded={loaded}
-        loadError={loadError}
-        onRetry={() => void load()}
-        myEmail={myEmail ?? ""}
-        onRemove={(email) => setRemoveTarget(email)}
-      />
-
-      <ConfirmDialog
-        open={removeTarget !== null}
-        title="Remove this member?"
-        body={
-          <>
-            <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
-              {removeTarget}
-            </code>{" "}
-            will lose access immediately. They can be re-invited from this screen if needed.
-          </>
-        }
-        confirmLabel="Remove"
-        danger
-        onConfirm={async () => {
-          if (!removeTarget) return;
-          await remove(removeTarget);
-          setRemoveTarget(null);
-        }}
-        onCancel={() => setRemoveTarget(null)}
-      />
-
-      <div className="space-y-2">
-        <div
-          className={cx(
-            "flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-sm border border-line-2 bg-bg px-2 py-1.5 transition-colors",
-            "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/40",
-            submitting && "opacity-70",
-          )}
-          onClick={() => inputRef.current?.focus()}
-        >
-          {chips.map((c) => (
-            <ChipPill key={c.id} chip={c} onRemove={() => removeChip(c.id)} />
-          ))}
-          <input
-            ref={inputRef}
-            className="min-w-[160px] flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
-            placeholder={
-              chips.length === 0
-                ? allowedDomain
-                  ? `colleague@${allowedDomain.slice(1)}, another@${allowedDomain.slice(1)}…`
-                  : "colleague@example.com, another@example.com…"
-                : ""
-            }
-            value={buffer}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (/[,;\n\t]/.test(v)) {
-                v.split(/[,;\n\t]+/)
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-                  .forEach(addChip);
-                setBuffer("");
-              } else {
-                setBuffer(v);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (buffer.trim()) {
-                  addChip(buffer);
-                  setBuffer("");
-                } else if (validCount > 0) {
-                  void submit();
-                }
-              } else if (e.key === "Tab" && buffer.trim()) {
-                addChip(buffer);
-                setBuffer("");
-              } else if (e.key === "Backspace" && !buffer && chips.length > 0) {
-                e.preventDefault();
-                removeChip(chips[chips.length - 1].id);
-              }
-            }}
-            onPaste={(e) => {
-              const text = e.clipboardData.getData("text");
-              if (/[\s,;]/.test(text)) {
-                e.preventDefault();
-                text
-                  .split(/[\s,;]+/)
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-                  .forEach(addChip);
-                setBuffer("");
-              }
-            }}
-            onBlur={() => {
-              if (buffer.trim()) {
-                addChip(buffer);
-                setBuffer("");
-              }
-            }}
-            disabled={submitting}
-            aria-label="Invite team members"
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 font-mono text-[11px]">
-          {chips.length === 0 ? (
-            <p className="text-ink-3">
-              Type or paste emails — separate with commas. Press Enter to add.
-            </p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              {validCount > 0 && (
-                <span className="text-ink-2">
-                  <span className="tabular-nums text-ink">{validCount}</span> ready
-                </span>
-              )}
-              {invalidCount > 0 && (
-                <span className="text-warn">
-                  <span className="tabular-nums">{invalidCount}</span> invalid
-                </span>
-              )}
-              {failedCount > 0 && (
-                <span className="text-danger">
-                  <span className="tabular-nums">{failedCount}</span> failed
-                </span>
-              )}
-            </div>
-          )}
-          {chips.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setChips([]);
-                setBuffer("");
-                inputRef.current?.focus();
-              }}
-              disabled={submitting}
-              className="shrink-0 text-ink-3 transition-colors hover:text-warn disabled:opacity-50"
-            >
-              clear all
-            </button>
-          )}
-        </div>
-
-        <div className="flex justify-end">
-          <Button
-            onClick={() => void submit()}
-            disabled={submitting || (validCount === 0 && !buffer.trim())}
-            className="max-md:w-full max-md:justify-center"
-          >
-            {submitting ? "Adding…" : validCount > 1 ? `Add ${validCount} members` : "Add"}
+    <Section title="Team" hint="Manage who has access to this workspace and their roles.">
+      {/* Error banners */}
+      {membersError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>{membersError}</span>
+          <Button variant="ghost" size="sm" onClick={() => void loadMembers()}>
+            Retry
           </Button>
         </div>
-      </div>
-
+      )}
+      {roleError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>{roleError}</span>
+          <Button variant="ghost" size="sm" onClick={() => setRoleError(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
       {removeError && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
           <span>{removeError}</span>
           <Button variant="ghost" size="sm" onClick={() => setRemoveError(null)}>
             Dismiss
           </Button>
+        </div>
+      )}
+
+      {/* Member roster */}
+      {teamUsers.length > 0 && (
+        <TeamRoster
+          users={teamUsers}
+          isAdmin={isAdmin}
+          currentEmail={myEmail ?? ""}
+          rolePending={rolePending}
+          onRoleChange={(userId, role) => void handleRoleChange(userId, role)}
+          onRemove={(userId) => {
+            const u = teamUsers.find((m) => m.user_id === userId);
+            setRemoveTarget({ userId, email: u?.email ?? userId });
+          }}
+        />
+      )}
+
+      {/* Pending invites */}
+      {invitesError && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-warn/40 bg-warn-soft px-4 py-2.5 font-mono text-[11.5px] text-warn">
+          <span>Couldn&rsquo;t load invites — {invitesError}</span>
+          <Button variant="ghost" size="sm" onClick={() => void loadInvites()}>
+            Retry
+          </Button>
+        </div>
+      )}
+      <PendingInvitesList
+        invites={invites}
+        isAdmin={isAdmin}
+        onRevoke={(email) => void revokeInvite(email)}
+      />
+
+      {/* Confirm remove member */}
+      <ConfirmDialog
+        open={removeTarget !== null}
+        title="Remove this member?"
+        body={
+          removeTarget && (
+            <>
+              <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                {removeTarget.email}
+              </code>{" "}
+              will lose access immediately. They can be re-invited from this screen if needed.
+            </>
+          )
+        }
+        confirmLabel="Remove"
+        danger
+        onConfirm={async () => {
+          if (!removeTarget) return;
+          await removeMember(removeTarget.userId, removeTarget.email);
+          setRemoveTarget(null);
+        }}
+        onCancel={() => setRemoveTarget(null)}
+      />
+
+      {/* Invite input — chip-based, admin only */}
+      {isAdmin && (
+        <div className="space-y-2">
+          <div
+            className={cx(
+              "flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-sm border border-line-2 bg-bg px-2 py-1.5 transition-colors",
+              "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/40",
+              submitting && "opacity-70",
+            )}
+            onClick={() => inputRef.current?.focus()}
+          >
+            {chips.map((c) => (
+              <ChipPill key={c.id} chip={c} onRemove={() => removeChip(c.id)} />
+            ))}
+            <input
+              ref={inputRef}
+              className="min-w-[160px] flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
+              placeholder={
+                chips.length === 0
+                  ? allowedDomain
+                    ? `colleague@${allowedDomain.slice(1)}, another@${allowedDomain.slice(1)}…`
+                    : "colleague@example.com, another@example.com…"
+                  : ""
+              }
+              value={buffer}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (/[,;\n\t]/.test(v)) {
+                  v.split(/[,;\n\t]+/)
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                    .forEach(addChip);
+                  setBuffer("");
+                } else {
+                  setBuffer(v);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (buffer.trim()) {
+                    addChip(buffer);
+                    setBuffer("");
+                  } else if (validCount > 0) {
+                    void submit();
+                  }
+                } else if (e.key === "Tab" && buffer.trim()) {
+                  addChip(buffer);
+                  setBuffer("");
+                } else if (e.key === "Backspace" && !buffer && chips.length > 0) {
+                  e.preventDefault();
+                  removeChip(chips[chips.length - 1]!.id);
+                }
+              }}
+              onPaste={(e) => {
+                const text = e.clipboardData.getData("text");
+                if (/[\s,;]/.test(text)) {
+                  e.preventDefault();
+                  text
+                    .split(/[\s,;]+/)
+                    .map((s) => s.trim())
+                    .filter(Boolean)
+                    .forEach(addChip);
+                  setBuffer("");
+                }
+              }}
+              onBlur={() => {
+                if (buffer.trim()) {
+                  addChip(buffer);
+                  setBuffer("");
+                }
+              }}
+              disabled={submitting}
+              aria-label="Invite team members"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-3 font-mono text-[11px]">
+            {chips.length === 0 ? (
+              <p className="text-ink-3">
+                Type or paste emails — separate with commas. Press Enter to add.
+              </p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                {validCount > 0 && (
+                  <span className="text-ink-2">
+                    <span className="tabular-nums text-ink">{validCount}</span> ready
+                  </span>
+                )}
+                {invalidCount > 0 && (
+                  <span className="text-warn">
+                    <span className="tabular-nums">{invalidCount}</span> invalid
+                  </span>
+                )}
+                {failedCount > 0 && (
+                  <span className="text-danger">
+                    <span className="tabular-nums">{failedCount}</span> failed
+                  </span>
+                )}
+              </div>
+            )}
+            {chips.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setChips([]);
+                  setBuffer("");
+                  inputRef.current?.focus();
+                }}
+                disabled={submitting}
+                className="shrink-0 text-ink-3 transition-colors hover:text-warn disabled:opacity-50"
+              >
+                clear all
+              </button>
+            )}
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() => void submit()}
+              disabled={submitting || (validCount === 0 && !buffer.trim())}
+              className="max-md:w-full max-md:justify-center"
+            >
+              {submitting
+                ? "Sending…"
+                : validCount > 1
+                  ? `Send ${validCount} invites`
+                  : "Send invite"}
+            </Button>
+          </div>
         </div>
       )}
     </Section>

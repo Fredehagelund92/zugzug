@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchUnmappedSample, type SourceInfo, type UnmappedSample } from "../../store";
+import { useNavLinks } from "../../lib/use-tenant-navigate";
 
 /* ExpandedDrill — the "Top unmapped values" sample that hangs under an
    expanded <LedgerRow>. Extracted from `routes/Sources.tsx` alongside
@@ -8,6 +9,7 @@ import { fetchUnmappedSample, type SourceInfo, type UnmappedSample } from "../..
 
 export function ExpandedDrill({ row }: { row: SourceInfo }) {
   const [sample, setSample] = useState<UnmappedSample[] | "loading" | "error">("loading");
+  const nav = useNavLinks();
 
   useEffect(() => {
     let alive = true;
@@ -57,10 +59,7 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
         </ul>
       )}
       <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link
-          to={`/app/tables?open=${row.dimId}&active=${row.dimId}&mode=match`}
-          className="text-accent hover:underline"
-        >
+        <Link to={nav.table(row.dimId, "match")} className="text-accent hover:underline">
           Open in Match values →
         </Link>
         <span>→ {row.dimension}</span>

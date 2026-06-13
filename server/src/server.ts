@@ -35,6 +35,14 @@ import {
   tenantBySlug,
   memberRole,
   teardownTenant,
+  listMembershipsForUser,
+  listMembersForTenant,
+  listInvitesForTenant,
+  createInvite,
+  revokeInvite,
+  setMemberRole,
+  countAdmins,
+  removeMember,
 } from "./tenant.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
@@ -158,6 +166,19 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   if (!sessionUser) return json({ error: "Unauthorized" }, 401);
   const me = sessionUser.id;
   setUid(me);
+
+  // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
+  if (pathname === "/api/me/memberships" && method === "GET") {
+    const memberships = await listMembershipsForUser(sessionUser.id);
+    return json({
+      isSuperAdmin: sessionUser.isSuperAdmin,
+      memberships: memberships.map((m) => ({
+        slug: m.tenant.slug,
+        label: m.tenant.label,
+        role: m.role,
+      })),
+    });
+  }
 
   // Admin block — hoisted OUT of the pgContext.run wrapper because admin routes
   // call pgAll/pgRun directly (via listTenants, teardownTenant, etc.) and would
@@ -289,6 +310,59 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg.length === 3 && method === "DELETE") {
         const { handleRevokeToken } = await import("./auth-api-tokens.ts");
         return handleRevokeToken(seg[2], me);
+      }
+    }
+
+    // Per-tenant team routes: /api/t/:slug/team/members|invites
+    // These call pgAll/pgRun directly (not via TenantRepo) so must live OUTSIDE
+    // the pgContext.run({ insideTenantRepo: true }) block.
+    // After splice, seg = ["api","team","members"|"invites", ...userId|email, "role"?]
+    if (tenantSlugFromPath !== null && seg[1] === "team") {
+      // GET /api/t/:slug/team/members
+      if (seg[2] === "members" && seg.length === 3 && method === "GET") {
+        return json(await listMembersForTenant(tenantCtx.tenantId));
+      }
+      // PUT /api/t/:slug/team/members/:userId/role
+      if (seg[2] === "members" && seg.length === 5 && seg[4] === "role" && method === "PUT") {
+        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        const body = (await req.json()) as { role: "admin" | "editor" | "viewer" };
+        const targetUserId = decodeURIComponent(seg[3]!);
+        const exists = (await listMembersForTenant(tenantCtx.tenantId)).find(
+          (m) => m.user_id === targetUserId,
+        );
+        if (!exists) return json({ error: "not_found" }, 404);
+        await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
+        return new Response(null, { status: 204, headers: corsHeaders });
+      }
+      // DELETE /api/t/:slug/team/members/:userId
+      if (seg[2] === "members" && seg.length === 4 && method === "DELETE") {
+        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        const targetUserId = decodeURIComponent(seg[3]!);
+        const targetRole = (await listMembersForTenant(tenantCtx.tenantId)).find(
+          (m) => m.user_id === targetUserId,
+        )?.role;
+        if (targetRole === "admin" && (await countAdmins(tenantCtx.tenantId)) <= 1) {
+          return json({ error: "last_admin" }, 409);
+        }
+        await removeMember(tenantCtx.tenantId, targetUserId);
+        return new Response(null, { status: 204, headers: corsHeaders });
+      }
+      // GET /api/t/:slug/team/invites
+      if (seg[2] === "invites" && seg.length === 3 && method === "GET") {
+        return json(await listInvitesForTenant(tenantCtx.tenantId));
+      }
+      // POST /api/t/:slug/team/invites
+      if (seg[2] === "invites" && seg.length === 3 && method === "POST") {
+        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        const body = (await req.json()) as { email: string; role: "admin" | "editor" | "viewer" };
+        await createInvite(tenantCtx.tenantId, body.email, body.role, me);
+        return json({ ok: true }, 201);
+      }
+      // DELETE /api/t/:slug/team/invites/:email
+      if (seg[2] === "invites" && seg.length === 4 && method === "DELETE") {
+        if (tenantCtx.role !== "admin") return json({ error: "forbidden" }, 403);
+        await revokeInvite(tenantCtx.tenantId, decodeURIComponent(seg[3]!));
+        return new Response(null, { status: 204, headers: corsHeaders });
       }
     }
 

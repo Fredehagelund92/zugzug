@@ -41,7 +41,10 @@ export function usePresence(
 
     const doc = new Y.Doc();
     const wsProto = location.protocol === "https:" ? "wss" : "ws";
-    const wsUrl = `${wsProto}://${location.host}/ws/presence`;
+    // Extract tenant slug from pathname (same pattern as apiFetch)
+    const m = /^\/app\/([^/]+)\//.exec(location.pathname + "/");
+    const slug = m?.[1] ?? "default";
+    const wsUrl = `${wsProto}://${location.host}/ws/t/${slug}/presence/${encodeURIComponent(tableId)}`;
     const provider = new WebsocketProvider(wsUrl, tableId, doc, { connect: true });
     const awareness = provider.awareness as Awareness;
     awarenessRef.current = awareness;

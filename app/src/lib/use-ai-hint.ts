@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../api";
 
 export interface AiHint {
   suggestion: string | null;
@@ -49,7 +50,7 @@ export function useAiHint(dimId: string, raw: string, enabled: boolean): State {
       abortRef.current = controller;
 
       const qs = new URLSearchParams({ dimId, raw });
-      fetch(`/api/triage/ai-hint?${qs.toString()}`, { signal: controller.signal })
+      apiFetch(`/triage/ai-hint?${qs.toString()}`, { signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) throw new Error(`${res.status}`);
           return res.json() as Promise<AiHint>;

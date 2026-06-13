@@ -5,7 +5,7 @@
  * super-admin /api/admin/tenants route in PR 2). The CLI script in
  * scripts/admin.ts also calls in here for PR 1 bootstrap. */
 
-import { pgGet, pgAll, pgTxRaw } from "./pg.ts";
+import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
 import { AppError } from "./errors.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
@@ -205,4 +205,88 @@ export async function acceptInvitesFor(userId: string, email: string): Promise<A
     await tx.run(`DELETE FROM "zugzug_app"."tenant_invite" WHERE lower(email) = $1`, [normalized]);
     return invites;
   });
+}
+
+export interface InviteRecord {
+  email: string;
+  role: "admin" | "editor" | "viewer";
+  invited_at: Date;
+}
+
+export async function listInvitesForTenant(tenantId: string): Promise<InviteRecord[]> {
+  return pgAll<InviteRecord>(
+    `SELECT email, role, invited_at
+       FROM "zugzug_app"."tenant_invite"
+      WHERE tenant_id = $1
+      ORDER BY invited_at DESC`,
+    [tenantId],
+  );
+}
+
+export async function createInvite(
+  tenantId: string,
+  email: string,
+  role: "admin" | "editor" | "viewer",
+  invitedBy: string,
+): Promise<void> {
+  await pgRun(
+    `INSERT INTO "zugzug_app"."tenant_invite" (tenant_id, email, role, invited_by, invited_at)
+     VALUES ($1, lower($2), $3, $4, now())
+     ON CONFLICT (tenant_id, email) DO UPDATE SET role = EXCLUDED.role, invited_by = EXCLUDED.invited_by`,
+    [tenantId, email, role, invitedBy],
+  );
+}
+
+export async function revokeInvite(tenantId: string, email: string): Promise<void> {
+  await pgRun(
+    `DELETE FROM "zugzug_app"."tenant_invite" WHERE tenant_id = $1 AND lower(email) = lower($2)`,
+    [tenantId, email],
+  );
+}
+
+export interface MemberRecord {
+  user_id: string;
+  email: string;
+  name: string | null;
+  role: "admin" | "editor" | "viewer";
+  joined_at: Date;
+}
+
+export async function listMembersForTenant(tenantId: string): Promise<MemberRecord[]> {
+  return pgAll<MemberRecord>(
+    `SELECT u.id AS user_id, u.email, u.name, tm.role, tm.created_at AS joined_at
+       FROM "zugzug_app"."tenant_member" tm
+       JOIN "zugzug_app"."users" u ON u.id = tm.user_id
+      WHERE tm.tenant_id = $1
+      ORDER BY u.email`,
+    [tenantId],
+  );
+}
+
+export async function setMemberRole(
+  tenantId: string,
+  userId: string,
+  role: "admin" | "editor" | "viewer",
+): Promise<void> {
+  await pgRun(
+    `UPDATE "zugzug_app"."tenant_member" SET role = $3
+      WHERE tenant_id = $1 AND user_id = $2`,
+    [tenantId, userId, role],
+  );
+}
+
+export async function countAdmins(tenantId: string): Promise<number> {
+  const row = await pgGet<{ n: number }>(
+    `SELECT COUNT(*)::int AS n FROM "zugzug_app"."tenant_member"
+      WHERE tenant_id = $1 AND role = 'admin'`,
+    [tenantId],
+  );
+  return row?.n ?? 0;
+}
+
+export async function removeMember(tenantId: string, userId: string): Promise<void> {
+  await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1 AND user_id = $2`, [
+    tenantId,
+    userId,
+  ]);
 }

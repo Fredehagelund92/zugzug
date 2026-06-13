@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
 import { IconArrowRight, IconPlus } from "./Icons";
+import { useNavLinks } from "../lib/use-tenant-navigate";
 
 /* NoTablesYet — shared empty-state for the value-mapping + master-list
    routes when the workspace has zero tables. Replaces a crash that
@@ -14,6 +15,7 @@ export function NoTablesYet({
    *  opens CreateTableModal directly. The Sources flow becomes secondary. */
   onCreateRequested?: () => void;
 }) {
+  const nav = useNavLinks();
   return (
     <div className="zz-rise mx-auto max-w-xl rounded-lg border border-line bg-surface p-10 text-center">
       <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">
@@ -31,7 +33,7 @@ export function NoTablesYet({
             Create blank table
           </Button>
         )}
-        <Link to="/app/sources">
+        <Link to={nav.sources}>
           <Button
             variant={onCreateRequested ? "secondary" : undefined}
             icon={<IconArrowRight className="h-4 w-4" />}

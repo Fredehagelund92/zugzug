@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useDimensions } from "../store";
+import { scopedKey } from "./tenant-storage";
 
 declare const __tabId: unique symbol;
 export type TabId = string & { readonly [__tabId]: true };
@@ -105,17 +106,17 @@ function reducer(state: OpenTabsState, a: Action): OpenTabsState {
   }
 }
 
-const STORAGE_KEY = "zugzug:open-tabs";
+const STORAGE_KEY_BASE = "zugzug:open-tabs";
 
 interface Serialized {
   tabs: Array<{ id: string; dimId: string; pinned: boolean; openedAt: number }>;
   activeId: string | null;
 }
 
-function readStored(): OpenTabsState {
+function readStored(storageKey: string): OpenTabsState {
   if (typeof localStorage === "undefined") return { tabs: [], activeId: null };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return { tabs: [], activeId: null };
     const parsed: unknown = JSON.parse(raw);
     if (
@@ -147,7 +148,7 @@ function readStored(): OpenTabsState {
   }
 }
 
-function writeStored(state: OpenTabsState): void {
+function writeStored(storageKey: string, state: OpenTabsState): void {
   if (typeof localStorage === "undefined") return;
   try {
     const payload: Serialized = {
@@ -159,7 +160,7 @@ function writeStored(state: OpenTabsState): void {
       })),
       activeId: state.activeId,
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch {
     /* quota / disabled — silently fall back to ephemeral */
   }
@@ -167,8 +168,9 @@ function writeStored(state: OpenTabsState): void {
 
 const Ctx = createContext<UseOpenTabs | null>(null);
 
-export function OpenTabsProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, readStored);
+export function OpenTabsProvider({ slug, children }: { slug: string; children: ReactNode }) {
+  const storageKey = scopedKey(STORAGE_KEY_BASE, slug);
+  const [state, dispatch] = useReducer(reducer, undefined, () => readStored(storageKey));
   const dims = useDimensions();
 
   useEffect(() => {
@@ -180,13 +182,13 @@ export function OpenTabsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (writeTimer.current) clearTimeout(writeTimer.current);
     writeTimer.current = setTimeout(() => {
-      writeStored(state);
+      writeStored(storageKey, state);
       writeTimer.current = null;
     }, 200);
     return () => {
       if (writeTimer.current) clearTimeout(writeTimer.current);
     };
-  }, [state]);
+  }, [storageKey, state]);
 
   const openTab = useCallback((dimId: string): TabId => {
     dispatch({ type: "open", dimId, now: Date.now() });
