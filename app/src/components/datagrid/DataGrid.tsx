@@ -203,6 +203,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
             aria-colindex={idx + 1}
             aria-selected={focused ? true : undefined}
             data-cell={data}
+            data-field={c.field}
             onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
             onDoubleClick={() => onCellDoubleClick(rk, c.field)}
             className={cellCx}
@@ -419,7 +420,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const showRowNumbers = !!props.showRowNumbers;
   const compact = props.density === "compact";
   const cellPadY = compact ? "py-[3px]" : "py-[7px]";
-  const headerPadY = compact ? "py-[5px]" : "py-2";
   const undo = useUndoStack();
 
   // Typed cell-value accessor: uses the prop if provided, otherwise falls back
@@ -1402,7 +1402,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             <div
               className={cx(
                 "flex items-center justify-end border-r border-line pr-2 font-mono text-[10px] text-ink-3",
-                headerPadY,
+                cellPadY,
               )}
             >
               #
@@ -1410,7 +1410,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           )}
           {selectionCol && (
             <div
-              className={cx("flex items-center justify-center border-r border-line", headerPadY)}
+              className={cx("flex items-center justify-center border-r border-line", cellPadY)}
             >
               <Checkbox
                 state={
@@ -1447,7 +1447,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 }
                 className={cx(
                   "group relative flex items-center gap-1.5 px-3",
-                  headerPadY,
+                  cellPadY,
                   !isLastCol && "border-r border-line",
                   c.pinnedLeft && idx === 0 && "sticky left-0 z-10 bg-surface",
                 )}
@@ -1668,11 +1668,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                   />
                 )}
 
-                {/* Task 20: right-edge resize grip */}
+                {/* Task 20: right-edge resize grip — 8px hit area straddling the
+                  column boundary (4px each side); the visible 2px bar appears on
+                  hover only. Sheets/Airtable pattern. Narrower than 12px so it
+                  doesn't overlap the ⋯ menu trigger's right edge. */}
                 {!c.pinnedLeft && (
                   <span
                     aria-hidden
-                    className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize transition-colors group-hover:bg-line-2"
+                    className="absolute right-[-4px] top-0 bottom-0 w-2 z-[2] cursor-col-resize group/grip"
                     onPointerDown={(e) => {
                       e.preventDefault();
                       const startX = e.clientX;
@@ -1694,7 +1697,70 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                       window.addEventListener("pointermove", onMove);
                       window.addEventListener("pointerup", onUp);
                     }}
-                  />
+                    onDoubleClick={(e) => {
+                      // Fit column to widest visible rendered cell (header + body).
+                      // Airtable-style: measure only what's in the DOM. Body cells
+                      // are selected by an exact data-field match (no suffix collisions,
+                      // attribute value escaped). Header is the grip's parent.
+                      //
+                      // Renderers truncate their inner span (overflow:hidden +
+                      // text-overflow:ellipsis + white-space:nowrap), so the wrapper's
+                      // scrollWidth reflects its current rendered width, not the natural
+                      // content width. We temporarily relax the truncating styles on
+                      // the inner span, read scrollWidth, then restore. We mutate/restore
+                      // inline (rather than cloning the subtree) because cloning is more
+                      // expensive and this runs only once per double-click; a synchronous
+                      // mutate→read→restore stays within one task, so no flash is visible.
+                      const root = cursor.ref.current;
+                      if (!root) return;
+                      const measureNatural = (el: HTMLElement): number => {
+                        const inner = el.firstElementChild as HTMLElement | null;
+                        const target = inner ?? el;
+                        const prev = {
+                          maxWidth: target.style.maxWidth,
+                          overflow: target.style.overflow,
+                          textOverflow: target.style.textOverflow,
+                          whiteSpace: target.style.whiteSpace,
+                        };
+                        target.style.maxWidth = "none";
+                        target.style.overflow = "visible";
+                        target.style.textOverflow = "clip";
+                        target.style.whiteSpace = "nowrap";
+                        const w = target.scrollWidth;
+                        target.style.maxWidth = prev.maxWidth;
+                        target.style.overflow = prev.overflow;
+                        target.style.textOverflow = prev.textOverflow;
+                        target.style.whiteSpace = prev.whiteSpace;
+                        return w;
+                      };
+                      // Wrappers use px-3 = 12px horizontal padding each side = 24px total.
+                      const PAD = 24;
+                      const headerEl = e.currentTarget.parentElement as HTMLElement | null;
+                      const cells = root.querySelectorAll<HTMLElement>(
+                        `[data-field="${attrEsc(c.field)}"]`,
+                      );
+                      let max = 60;
+                      if (headerEl) {
+                        const hw = measureNatural(headerEl) + PAD;
+                        if (hw > max) max = hw;
+                      }
+                      for (const cell of cells) {
+                        const w = measureNatural(cell) + PAD;
+                        if (w > max) max = w;
+                      }
+                      const next = Math.min(600, Math.max(60, max));
+                      setWidths((w) => {
+                        const updated = { ...w, [c.field]: next };
+                        props.onLayoutChange?.({ widths: updated });
+                        return updated;
+                      });
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-line-2 opacity-0 transition-opacity group-hover/grip:opacity-100"
+                    />
+                  </span>
                 )}
               </div>
             );
