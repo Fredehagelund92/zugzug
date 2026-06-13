@@ -34,7 +34,7 @@ import { resolveTenantContext } from "./tenant-middleware.ts";
 import { TenantRepo } from "./tenant-repo.ts";
 import {
   provisionTenant,
-  listTenants,
+  listTenantsForAdmin,
   tenantBySlug,
   memberRole,
   teardownTenant,
@@ -235,7 +235,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     try {
       // /api/admin/tenants (GET list, POST provision)
       if (seg[2] === "tenants" && seg.length === 3) {
-        if (method === "GET") return json({ tenants: await listTenants() });
+        if (method === "GET") return json({ tenants: await listTenantsForAdmin() });
         if (method === "POST") {
           const body = (await req.json()) as {
             id: string;
@@ -251,6 +251,40 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           });
           return json(tenant, 201);
         }
+      }
+
+      // PATCH /api/admin/tenants/:id — super-admin label edit
+      if (seg[2] === "tenants" && seg.length === 4 && method === "PATCH") {
+        const targetId = decodeURIComponent(seg[3]!);
+        const body = (await req.json()) as { label?: string };
+        if (typeof body.label !== "string") {
+          return json({ error: "label required" }, 400);
+        }
+        try {
+          await updateTenantLabel(targetId, body.label);
+        } catch (e) {
+          if (e instanceof AppError) {
+            return json({ error: e.code, message: e.message }, e.status);
+          }
+          throw e;
+        }
+        // System-scope audit: tenantId "default" so it survives a later teardown
+        // of the renamed tenant. actor_super_admin is unconditionally true since
+        // this branch already passed the isSuperAdmin gate at line 232.
+        await appendAuditAs(
+          me,
+          "admin.tenant.label_update",
+          `renamed workspace ${targetId} to "${body.label.trim()}"`,
+          {
+            tenantId: "default",
+            metadata: {
+              actor_super_admin: true,
+              target_tenant_id: targetId,
+              new_label: body.label.trim(),
+            },
+          },
+        );
+        return json({ ok: true });
       }
 
       // POST /api/admin/tenants/:id/teardown

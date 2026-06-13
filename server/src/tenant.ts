@@ -119,6 +119,24 @@ export async function listTenants(): Promise<TenantRecord[]> {
   );
 }
 
+export interface TenantAdminRow extends TenantRecord {
+  member_count: number;
+  last_activity_at: Date | null;
+}
+
+export async function listTenantsForAdmin(): Promise<TenantAdminRow[]> {
+  return pgAll<TenantAdminRow>(
+    `SELECT t.id, t.slug, t.label, t.warehouse_id, t.created_at,
+            (SELECT count(*)::int FROM "zugzug_app"."tenant_member" tm
+              WHERE tm.tenant_id = t.id) AS member_count,
+            (SELECT max(created_at) FROM "zugzug_app"."audit_log" a
+              WHERE a.tenant_id = t.id) AS last_activity_at
+       FROM "zugzug_app"."tenant" t
+      WHERE t.deleted_at IS NULL
+      ORDER BY t.id`,
+  );
+}
+
 export interface Membership {
   tenant: TenantRecord;
   role: "admin" | "editor" | "viewer";
