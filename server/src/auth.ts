@@ -182,10 +182,9 @@ export async function handleMe(req: Request): Promise<Response> {
       headers: { "content-type": "application/json", ...cors },
     });
   // Best-effort — fire-and-forget, never blocks the response.
-  void run(
-    `UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`,
-    [user.id],
-  ).catch(() => {});
+  void run(`UPDATE ${pg("users")} SET last_seen_at = now() WHERE id = $1`, [user.id]).catch(
+    () => {},
+  );
   return new Response(JSON.stringify(user), {
     status: 200,
     headers: { "content-type": "application/json", ...cors },
@@ -211,10 +210,7 @@ export async function handleDevLogin(): Promise<Response> {
 export async function updateUserName(userId: string, name: string): Promise<void> {
   const trimmed = name.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "name cannot be empty", 400);
-  await run(
-    `UPDATE ${pg("users")} SET name = $1 WHERE id = $2`,
-    [trimmed, userId],
-  );
+  await run(`UPDATE ${pg("users")} SET name = $1 WHERE id = $2`, [trimmed, userId]);
 }
 
 export interface AdminUserRecord {
@@ -254,15 +250,16 @@ export async function countSuperAdmins(): Promise<number> {
   return row?.n ?? 0;
 }
 
-export async function setSuperAdmin(targetId: string, callerId: string, value: boolean): Promise<void> {
+export async function setSuperAdmin(
+  targetId: string,
+  callerId: string,
+  value: boolean,
+): Promise<void> {
   if (!value && targetId === callerId) {
     throw new AppError("SELF_DEMOTE", "cannot demote yourself", 409);
   }
   if (!value && (await countSuperAdmins()) <= 1) {
     throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
   }
-  await run(
-    `UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`,
-    [value, targetId],
-  );
+  await run(`UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`, [value, targetId]);
 }

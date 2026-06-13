@@ -1065,4 +1065,3 @@ export function useConnectionHealth(): ConnectionHealth | null {
     () => connectionHealth,
   );
 }
-

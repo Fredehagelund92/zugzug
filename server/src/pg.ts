@@ -66,7 +66,10 @@ export async function pgGet<T = Record<string, unknown>>(
 
 export async function pgRun(query: string, params: unknown[] = []): Promise<void> {
   const ctx = pgContext.getStore();
-  if (ctx?.tx) { await ctx.tx.run(query, params); return; }
+  if (ctx?.tx) {
+    await ctx.tx.run(query, params);
+    return;
+  }
   assertNotInsideTenantRepo("pgRun");
   await pool.unsafe(query, params as postgres.ParameterOrJSON<never>[]);
 }
