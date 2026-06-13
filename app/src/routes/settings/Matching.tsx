@@ -1,5 +1,5 @@
 import { ThresholdRange } from "../../components/ThresholdRange";
-import { usePreferences, setPreferences } from "../../store";
+import { usePreferences, setPreferences, invalidate } from "../../store";
 import { useTenant } from "../../lib/tenant-context";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { ReadOnly } from "../../components/settings/ReadOnly";
@@ -21,9 +21,13 @@ export function Matching() {
           <ThresholdRange
             publish={prefs.publishThreshold}
             suggest={prefs.suggestThreshold}
-            onChange={({ publish, suggest }) =>
-              setPreferences({ ...prefs, publishThreshold: publish, suggestThreshold: suggest })
-            }
+            onChange={({ publish, suggest }) => {
+              void setPreferences({
+                ...prefs,
+                publishThreshold: publish,
+                suggestThreshold: suggest,
+              }).then(() => invalidate.tenant(tenant.slug));
+            }}
           />
         </FormField>
       </ReadOnly>
