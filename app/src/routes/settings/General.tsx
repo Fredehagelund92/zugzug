@@ -6,6 +6,7 @@ import { SettingsSection } from "../../components/settings/SettingsSection";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { useAutosave } from "../../hooks/useAutosave";
+import { invalidate } from "../../store";
 import { cx } from "../../lib/cx";
 
 export function General() {
@@ -23,7 +24,11 @@ export function General() {
     });
     if (!res.ok) throw new Error(`${res.status}`);
   };
-  const autosave = useAutosave(label, save);
+  const autosave = useAutosave(label, save, 600, async () => {
+    // Renaming the workspace must refresh: tenant slice (page header,
+    // settings header) AND memberships (workspace switcher + dropdown row).
+    await invalidate.tenant(tenant.slug);
+  });
 
   return (
     <SettingsSection title="General" hint="Workspace identity. Slug is immutable.">
