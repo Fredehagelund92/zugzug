@@ -31,7 +31,6 @@ import { Warehouses as AdminWarehouses } from "./routes/admin/Warehouses";
 import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
 import { Appearance as AccountAppearance } from "./routes/account/Appearance";
-import { Notifications } from "./routes/account/Notifications";
 import { Memberships } from "./routes/account/Memberships";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -129,7 +128,7 @@ createRoot(root).render(
                             <Route path="profile" element={<Profile />} />
                             <Route path="appearance" element={<AccountAppearance />} />
                             <Route path="memberships" element={<Memberships />} />
-                            <Route path="notifications" element={<Notifications />} />
+                            <Route path="notifications" element={<Navigate to="../memberships" replace />} />
                           </Route>
                         </Route>
                       </Route>

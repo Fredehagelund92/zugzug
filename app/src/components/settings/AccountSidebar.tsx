@@ -5,7 +5,6 @@ const ITEMS = [
   { label: "Profile", to: "profile" },
   { label: "Appearance", to: "appearance" },
   { label: "Memberships", to: "memberships" },
-  { label: "Notifications", to: "notifications" },
 ];
 
 export function AccountSidebar() {

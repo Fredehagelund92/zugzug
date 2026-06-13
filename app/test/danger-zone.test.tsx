@@ -35,9 +35,10 @@ function harness(role: "viewer" | "editor" | "admin") {
 }
 
 describe("Danger zone", () => {
-  test("shows Leave workspace button for viewer", () => {
+  test("does not render Leave workspace (moved to Account/Memberships)", () => {
     harness("viewer");
-    expect(screen.getByRole("button", { name: /leave workspace/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /leave workspace/i })).toBeNull();
+    expect(screen.queryByText(/leave workspace/i)).toBeNull();
   });
 
   test("does NOT show Delete workspace button for editor", () => {
@@ -48,13 +49,6 @@ describe("Danger zone", () => {
   test("shows Delete workspace button for admin", () => {
     harness("admin");
     expect(screen.getByRole("button", { name: /delete workspace/i })).toBeTruthy();
-  });
-
-  test("Leave confirm dialog opens on click", () => {
-    harness("admin");
-    fireEvent.click(screen.getByRole("button", { name: /leave workspace/i }));
-    // ConfirmDialog title should appear
-    expect(screen.getByText(/leave.*acme|are you sure|acme/i)).toBeTruthy();
   });
 
   test("Delete confirm requires typing the slug", () => {
