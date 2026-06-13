@@ -1,63 +1,55 @@
 import { useState } from "react";
 import { useTenant } from "../../lib/tenant-context";
 import { apiFetch } from "../../api";
-import { Button } from "../../components/Button";
 import { FormField } from "../../components/FormField";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
-import { toast } from "../../components/Toast";
+import { useAutosave } from "../../hooks/useAutosave";
+import { cx } from "../../lib/cx";
 
 export function General() {
   const tenant = useTenant();
   const canEdit = can(tenant, "settings.general.edit");
   const [label, setLabel] = useState(tenant.label);
-  const [saving, setSaving] = useState(false);
 
-  const save = async () => {
-    if (!label.trim()) return;
-    setSaving(true);
-    try {
-      // apiFetch("") → /api/t/:slug (bare tenant URL, matches PATCH route in server.ts)
-      const res = await apiFetch("", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ label: label.trim() }),
-      });
-      if (!res.ok) throw new Error(`${res.status}`);
-      toast("Workspace renamed — takes effect on next navigation.", "success");
-    } catch {
-      toast("Failed to rename workspace", "error");
-    } finally {
-      setSaving(false);
-    }
+  const save = async (next: string) => {
+    const trimmed = next.trim();
+    if (!trimmed || trimmed === tenant.label) return;
+    const res = await apiFetch("", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: trimmed }),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
   };
+  const autosave = useAutosave(label, save);
 
   return (
     <SettingsSection title="General" hint="Workspace identity. Slug is immutable.">
       <ReadOnly enabled={!canEdit}>
-        <FormField label="Workspace name">
-          <div className="flex gap-3">
-            <input
-              className="flex-1 bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void save();
-              }}
-              placeholder={tenant.label}
-            />
-            {canEdit && (
-              <Button
-                onClick={save}
-                loading={saving}
-                disabled={!label.trim() || label.trim() === tenant.label}
-                size="sm"
-              >
-                Save
-              </Button>
-            )}
-          </div>
+        <FormField
+          label="Workspace name"
+          status={
+            <span
+              className={cx(
+                "font-mono text-[10.5px]",
+                autosave.status === "error" ? "text-danger" : "text-ink-3",
+              )}
+              aria-live="polite"
+            >
+              {autosave.status === "saving" && "saving…"}
+              {autosave.status === "saved" && "saved"}
+              {autosave.status === "error" && (autosave.error ?? "couldn't save")}
+            </span>
+          }
+        >
+          <input
+            className="w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder={tenant.label}
+          />
         </FormField>
       </ReadOnly>
 
