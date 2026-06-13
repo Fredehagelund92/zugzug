@@ -86,9 +86,9 @@ export function Workspaces() {
             }
           />
         ) : (
-          <div className="border border-line divide-y divide-line">
+          <div className="border border-line divide-y divide-line bg-surface">
             {/* Column headers */}
-            <div className="grid grid-cols-[20px_160px_1fr_140px] gap-4 items-center px-5 py-2.5 bg-surface-2">
+            <div className="grid grid-cols-[20px_160px_1fr_140px] gap-4 items-center px-5 py-2.5">
               <span />
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 Slug

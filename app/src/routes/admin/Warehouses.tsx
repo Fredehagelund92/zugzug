@@ -52,8 +52,8 @@ export function Warehouses() {
         ) : dbs.length === 0 ? (
           <EmptyState title="No databases found" body="The warehouse connection succeeded but returned no databases." />
         ) : (
-          <div className="border border-line divide-y divide-line">
-            <div className="grid grid-cols-[1fr_120px_80px] gap-4 items-center px-5 py-2.5 bg-surface-2">
+          <div className="border border-line divide-y divide-line bg-surface">
+            <div className="grid grid-cols-[1fr_120px_80px] gap-4 items-center px-5 py-2.5">
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 Database
               </span>

@@ -115,8 +115,8 @@ export function Users() {
         ) : users.length === 0 ? (
           <EmptyState title="No users found" body="Try a different search term or invite teammates from a workspace." />
         ) : (
-          <>
-            <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5 bg-surface-2 border-b border-line">
+          <div className="border border-line divide-y divide-line bg-surface">
+            <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5">
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 User
               </span>
@@ -134,7 +134,7 @@ export function Users() {
             {users.map((u, i) => (
               <div
                 key={u.id}
-                className="zz-rise grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors border-b border-line last:border-0"
+                className="zz-rise grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
                 style={{ animationDelay: `${100 + i * 30}ms` }}
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -177,7 +177,7 @@ export function Users() {
                 </div>
               </div>
             ))}
-          </>
+          </div>
         )}
       </div>
 

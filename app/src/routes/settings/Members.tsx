@@ -15,7 +15,7 @@ import { currentUser, useAuthConfig } from "../../store";
 
 interface MemberRecord {
   user_id: string;
-  email: string;
+  email: string | null;
   name: string | null;
   role: "admin" | "editor" | "viewer";
   joined_at: string;
@@ -314,14 +314,14 @@ function TeamRoster({
       if (!q) return true;
       return (
         (u.name ?? "").toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
+        (u.email ?? "").toLowerCase().includes(q) ||
         u.role.includes(q)
       );
     });
   }, [users, query, filter]);
 
   const sortByName = (a: MemberRecord, b: MemberRecord) =>
-    (a.name ?? a.email).localeCompare(b.name ?? b.email);
+    (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
 
   const bucketed = useMemo(() => {
     const groups: Record<RoleKey, MemberRecord[]> = { admin: [], editor: [], viewer: [] };
@@ -480,7 +480,7 @@ function TeamRoster({
             .sort((a, b) => {
               const ro = ROLE_META[a.role].order - ROLE_META[b.role].order;
               if (ro !== 0) return ro;
-              return (a.name ?? a.email).localeCompare(b.name ?? b.email);
+              return (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
             })
             .map((u) => (
               <MemberRow
@@ -788,7 +788,7 @@ export function Members() {
   const membersByEmail = useMemo(
     () =>
       new Set([
-        ...teamUsers.map((u) => u.email.toLowerCase()),
+        ...teamUsers.map((u) => (u.email ?? "").toLowerCase()),
         ...invites.map((i) => i.email.toLowerCase()),
       ]),
     [teamUsers, invites],

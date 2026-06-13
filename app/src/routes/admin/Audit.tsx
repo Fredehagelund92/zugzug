@@ -94,8 +94,8 @@ export function Audit() {
         ) : rows.length === 0 ? (
           <EmptyState title="No activity yet" body="System activity will appear here as workspaces are created and changed." />
         ) : (
-          <div className="border border-line divide-y divide-line">
-            <div className="grid grid-cols-[140px_100px_160px_1fr] gap-4 items-center px-5 py-2.5 bg-surface-2">
+          <div className="border border-line divide-y divide-line bg-surface">
+            <div className="grid grid-cols-[140px_100px_160px_1fr] gap-4 items-center px-5 py-2.5">
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 When
               </span>
