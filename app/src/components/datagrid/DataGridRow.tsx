@@ -17,11 +17,12 @@ import type { RowActivityEntry } from "../../lib/use-row-activity";
 import { RowActivityBadge } from "./RowActivityBadge";
 import type { RowEvaluation } from "./useConditionalFormatting";
 
-const CELLS: Record<Exclude<CellType, "select" | "linked">, { Renderer: any; Editor: any }> = {
+type InlineEditor = "select" | "linked" | "date";
+
+const CELLS: Record<Exclude<CellType, InlineEditor>, { Renderer: any; Editor: any }> = {
   text: TextCell,
   number: NumberCell,
   boolean: BooleanCell,
-  date: DateCell,
   url: UrlCell,
   email: EmailCell,
   rating: RatingCell,
@@ -30,14 +31,16 @@ const CELLS: Record<Exclude<CellType, "select" | "linked">, { Renderer: any; Edi
 function CellRenderer({ type, ctx }: { type: CellType; ctx: any }) {
   if (type === "select") return <SelectCell.Renderer {...ctx} />;
   if (type === "linked") return <LinkedCell.Renderer {...ctx} />;
-  const C = CELLS[type as Exclude<CellType, "select" | "linked">];
+  if (type === "date") return <DateCell.Renderer {...ctx} />;
+  const C = CELLS[type as Exclude<CellType, InlineEditor>];
   return <C.Renderer {...ctx} />;
 }
 
 function CellEditor({ type, ctx }: { type: CellType; ctx: any }) {
-  if (type === "select") return null; // select uses inline SelectCell.Editor in the body (needs options + onCreate)
-  if (type === "linked") return null; // linked uses inline LinkedCell.Editor in the body (needs candidates + anchorRef)
-  const C = CELLS[type as Exclude<CellType, "select" | "linked">];
+  // select / linked / date editors render their own portal popovers and need
+  // anchorRef — they're handled inline in the body below.
+  if (type === "select" || type === "linked" || type === "date") return null;
+  const C = CELLS[type as Exclude<CellType, InlineEditor>];
   return <C.Editor {...ctx} />;
 }
 
@@ -175,6 +178,22 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
             }}
             cancel={() => onStopEdit()}
             candidates={c.config.candidates}
+          />
+        ) : c.config.type === "date" ? (
+          <DateCell.Editor
+            row={row}
+            rowKey={rk}
+            field={c.field}
+            value={value}
+            focused
+            column={c}
+            anchorRef={editingCellRef}
+            initial={cursorInitial}
+            commit={(v: unknown) => {
+              onStopEdit();
+              onCommitCell(rk, c.field, v);
+            }}
+            cancel={() => onStopEdit()}
           />
         ) : (
           <CellEditor
