@@ -277,6 +277,7 @@ export const tenant = app.table(
     id:           varchar("id").primaryKey(),
     slug:         varchar("slug").notNull(),
     label:        varchar("label").notNull(),
+    color:        varchar("color"),
     warehouse_id: varchar("warehouse_id").notNull(),
     created_at:   timestamp("created_at").notNull(),
     deleted_at:   timestamp("deleted_at"),

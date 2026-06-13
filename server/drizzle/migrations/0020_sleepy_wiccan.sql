@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."tenant" ADD COLUMN "color" varchar;
