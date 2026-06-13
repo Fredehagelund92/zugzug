@@ -34,6 +34,7 @@ import { resolveTenantContext } from "./tenant-middleware.ts";
 import { TenantRepo } from "./tenant-repo.ts";
 import {
   provisionTenant,
+  listTenants,
   listTenantsForAdmin,
   tenantBySlug,
   memberRole,
@@ -47,6 +48,7 @@ import {
   countAdmins,
   removeMember,
   updateTenantLabel,
+  updateTenantColor,    // ← add
   updateTenantSlug,
   leaveTenant,
 } from "./tenant.ts";
@@ -221,14 +223,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
   if (pathname === "/api/me/memberships" && method === "GET") {
     const memberships = await listMembershipsForUser(sessionUser.id);
-    return json({
-      isSuperAdmin: sessionUser.isSuperAdmin,
-      memberships: memberships.map((m) => ({
+    let workspaces: { slug: string; label: string; role: string; color: string | null }[];
+    if (sessionUser.isSuperAdmin) {
+      const allTenants = await listTenants();
+      const memberMap = new Map(memberships.map((m) => [m.tenant.id, m.role]));
+      workspaces = allTenants.map((t) => ({
+        slug: t.slug,
+        label: t.label,
+        role: memberMap.get(t.id) ?? "admin",
+        color: t.color ?? null,
+      }));
+    } else {
+      workspaces = memberships.map((m) => ({
         slug: m.tenant.slug,
         label: m.tenant.label,
         role: m.role,
-      })),
-    });
+        color: m.tenant.color ?? null,
+      }));
+    }
+    return json({ isSuperAdmin: sessionUser.isSuperAdmin, memberships: workspaces });
   }
 
   // Admin block — hoisted OUT of the pgContext.run wrapper because admin routes
@@ -248,48 +261,52 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             label: string;
             slug?: string;
             warehouseId?: string;
+            color?: string;
           };
           const tenant = await provisionTenant({
             id: body.id,
             label: body.label,
             slug: body.slug,
             warehouseId: body.warehouseId,
+            color: body.color,
           });
           return json(tenant, 201);
         }
       }
 
-      // PATCH /api/admin/tenants/:id — super-admin label edit
+      // PATCH /api/admin/tenants/:id — super-admin label/color edit
       if (seg[2] === "tenants" && seg.length === 4 && method === "PATCH") {
         const targetId = decodeURIComponent(seg[3]!);
-        const body = (await req.json()) as { label?: string };
-        if (typeof body.label !== "string") {
-          return json({ error: "label required" }, 400);
-        }
+        const body = (await req.json()) as { label?: string; color?: string };
         try {
-          await updateTenantLabel(targetId, body.label);
+          if (typeof body.label === "string") {
+            await updateTenantLabel(targetId, body.label);
+            // System-scope audit: tenantId "default" so it survives a later teardown
+            // of the renamed tenant. actor_super_admin is unconditionally true since
+            // this branch already passed the isSuperAdmin gate at line 232.
+            await appendAuditAs(
+              me,
+              "admin.tenant.label_update",
+              `renamed workspace ${targetId} to "${body.label.trim()}"`,
+              {
+                tenantId: "default",
+                metadata: {
+                  actor_super_admin: true,
+                  target_tenant_id: targetId,
+                  new_label: body.label.trim(),
+                },
+              },
+            );
+          }
+          if (typeof body.color === "string") {
+            await updateTenantColor(targetId, body.color);
+          }
         } catch (e) {
           if (e instanceof AppError) {
             return json({ error: e.code, message: e.message }, e.status);
           }
           throw e;
         }
-        // System-scope audit: tenantId "default" so it survives a later teardown
-        // of the renamed tenant. actor_super_admin is unconditionally true since
-        // this branch already passed the isSuperAdmin gate at line 232.
-        await appendAuditAs(
-          me,
-          "admin.tenant.label_update",
-          `renamed workspace ${targetId} to "${body.label.trim()}"`,
-          {
-            tenantId: "default",
-            metadata: {
-              actor_super_admin: true,
-              target_tenant_id: targetId,
-              new_label: body.label.trim(),
-            },
-          },
-        );
         return json({ ok: true });
       }
 
@@ -476,16 +493,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
-    // PATCH /api/t/:slug — rename workspace label (admin only)
+    // PATCH /api/t/:slug — rename workspace label and/or set color (admin only)
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
       const gate = requireAdmin(tenantCtx);
       if (!gate.ok) return json({ error: "forbidden" }, 403);
-      const { label } = (await req.json()) as { label: string };
-      await updateTenantLabel(tenantCtx.tenantId, label);
-      await appendAuditAs(me, "workspace.rename", `renamed workspace to "${label}"`, {
-        tenantId: tenantCtx.tenantId,
-        metadata: { actor_super_admin: gate.elevated },
-      });
+      const body = (await req.json()) as { label?: string; color?: string };
+      if (typeof body.label === "string") {
+        await updateTenantLabel(tenantCtx.tenantId, body.label);
+        await appendAuditAs(me, "workspace.rename", `renamed workspace to "${body.label}"`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated },
+        });
+      }
+      if (typeof body.color === "string") {
+        await updateTenantColor(tenantCtx.tenantId, body.color);
+      }
       return noContent();
     }
 
