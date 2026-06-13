@@ -116,9 +116,19 @@ export function Scans() {
                 )}
               </span>
             </div>
-            <Button onClick={() => void scanNow.run()} loading={scanNow.isPending}>
-              Scan now
-            </Button>
+            <div className="flex items-center gap-2">
+              {scanNow.isPending && (
+                <span
+                  className="font-mono text-[10.5px] text-ink-3"
+                  aria-live="polite"
+                >
+                  scanning…
+                </span>
+              )}
+              <Button onClick={() => void scanNow.run()} loading={scanNow.isPending}>
+                Scan now
+              </Button>
+            </div>
           </div>
         )}
 
