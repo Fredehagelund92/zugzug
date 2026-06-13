@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../api";
+import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
+import { invalidate, subscribeInvalidate } from "../../store";
 
 interface WarehouseDb {
   name: string;
@@ -10,30 +12,98 @@ interface WarehouseDb {
   connected: boolean;
 }
 
+const NAME_RE = /^[a-z][a-z0-9_]{2,62}$/;
+
+const inputCls =
+  "w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
+
 export function Warehouses() {
   const [dbs, setDbs] = useState<WarehouseDb[]>([]);
   const [attached, setAttached] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    apiFetch("/warehouses")
-      .then(async (r) => {
-        if (!r.ok) return;
-        const body = (await r.json()) as { databases: WarehouseDb[]; attached: boolean };
-        setAttached(body.attached);
-        setDbs(body.databases);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  // Create form state
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const r = await apiFetch("/admin/warehouses");
+    if (r.ok) {
+      const body = (await r.json()) as { databases: WarehouseDb[]; attached: boolean };
+      setAttached(body.attached);
+      setDbs(body.databases);
+    }
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    const unsub = subscribeInvalidate("warehouses", () => {
+      void refresh();
+    });
+    return unsub;
+  }, [refresh]);
+
+  const existingNames = dbs.map((d) => d.name);
+  const localError = !name
+    ? null
+    : !NAME_RE.test(name)
+      ? "Lowercase letters, digits, underscore. 3-63 chars. Starts with a letter."
+      : existingNames.includes(name)
+        ? "A database with this name already exists."
+        : null;
+
+  const reset = () => {
+    setName("");
+    setServerError(null);
+    setShowForm(false);
+  };
+
+  const create = async () => {
+    if (!name || localError) return;
+    setCreating(true);
+    setServerError(null);
+    try {
+      const r = await apiFetch("/admin/warehouses", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => ({}))) as { error?: string };
+        setServerError(body.error || `Failed (${r.status})`);
+        return;
+      }
+      invalidate.warehouses();
+      reset();
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader
         kicker="System"
         title="Warehouses"
-        lede="MotherDuck databases available to this deployment. Read-only."
+        lede="MotherDuck databases available to this deployment."
         count={loading || attached !== true ? undefined : dbs.length}
+        action={
+          attached === true ? (
+            <Button
+              variant={showForm ? "secondary" : "primary"}
+              size="sm"
+              onClick={() => (showForm ? reset() : setShowForm(true))}
+            >
+              {showForm ? "Cancel" : "+ New database"}
+            </Button>
+          ) : undefined
+        }
       />
 
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
@@ -89,6 +159,55 @@ export function Warehouses() {
           </div>
         )}
       </div>
+
+      {/* Create form — matches Workspaces.tsx idiom */}
+      {showForm && (
+        <div className="zz-rise border border-line-2 bg-surface-2 p-6">
+          <div className="flex items-center gap-2.5 mb-5">
+            <div className="w-0.5 h-4 bg-accent flex-shrink-0" />
+            <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2">
+              New database
+            </span>
+          </div>
+
+          <div className="mb-5">
+            <div className="space-y-1.5 max-w-sm">
+              <label className="block font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Database name
+              </label>
+              <input
+                className={inputCls + " font-mono"}
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value.toLowerCase());
+                  setServerError(null);
+                }}
+                placeholder="acme_prod"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !creating && name && !localError) {
+                    e.preventDefault();
+                    void create();
+                  }
+                }}
+              />
+              {(localError || serverError) && (
+                <p className="font-mono text-[11px] text-red-500">{localError ?? serverError}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-ink-3">
+              Creates a fresh MotherDuck database in your account. Appears in the workspace picker
+              immediately.
+            </p>
+            <Button onClick={create} loading={creating} disabled={!name || !!localError}>
+              Create database
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
