@@ -164,12 +164,31 @@ export function useGridCursor<Row>({
     [],
   );
 
-  // auto-scroll the focused cell into view
+  // auto-scroll the focused cell into view — but only when it's actually
+  // off-screen. block:"nearest" treats cells partially obscured by the sticky
+  // header as visible and "optimizes" by scrolling them out from under it,
+  // producing a click-jump on cells that are already on-screen. Compare rects
+  // against the scroll container (accounting for sticky-header overlap at the
+  // top) and bail when the cell is fully visible.
   useEffect(() => {
     if (!cursor || !ref.current) return;
+    const cont = ref.current;
     const sel = `[data-cell="${cursor.rowKey}::${cursor.field}"]`;
-    const el = ref.current.querySelector<HTMLElement>(sel);
-    el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const el = cont.querySelector<HTMLElement>(sel);
+    if (!el) return;
+    const contRect = cont.getBoundingClientRect();
+    const cellRect = el.getBoundingClientRect();
+    const header = cont.querySelector<HTMLElement>('[role="row"][aria-rowindex="1"]');
+    const headerH = header?.getBoundingClientRect().height ?? 0;
+    const visibleTop = contRect.top + headerH;
+    const fullyVisible =
+      cellRect.top >= visibleTop &&
+      cellRect.bottom <= contRect.bottom &&
+      cellRect.left >= contRect.left &&
+      cellRect.right <= contRect.right;
+    if (!fullyVisible) {
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }, [cursor?.rowKey, cursor?.field]);
 
   // When the host's rows change (filter toggle, async save), the cursor may
