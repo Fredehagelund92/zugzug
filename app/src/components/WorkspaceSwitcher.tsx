@@ -84,7 +84,7 @@ export function WorkspaceSwitcher({ memberships }: { memberships: Item[] }) {
               <button
                 onClick={() => {
                   setOpen(false);
-                  navigate("/app/admin/tenants");
+                  navigate("/app/admin/workspaces");
                 }}
                 className="block w-full text-left px-3 py-1.5 hover:bg-surface-2"
                 role="menuitem"

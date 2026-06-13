@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Card } from "../Card";
 
 export function SettingsSection({
@@ -7,18 +8,19 @@ export function SettingsSection({
 }: {
   title: string;
   hint?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <Card className="p-0">
-      <div className="border-b border-line px-4 py-3 md:px-6 md:py-4">
+    <Card className="p-0 overflow-hidden">
+      <div className="relative border-b border-line px-5 py-4 md:px-6 md:py-5">
+        <div className="absolute left-0 inset-y-0 w-[2px] bg-accent" />
         <div className="max-w-2xl">
-          <h2 className="font-display text-lg font-semibold text-ink">{title}</h2>
-          {hint && <p className="mt-0.5 text-[13px] text-ink-2">{hint}</p>}
+          <h2 className="font-display text-xl font-bold tracking-tight text-ink">{title}</h2>
+          {hint && <p className="mt-0.5 text-[13px] text-ink-2 leading-snug">{hint}</p>}
         </div>
       </div>
-      <div className="px-4 py-4 md:px-6 md:py-5">
-        <div className="max-w-2xl space-y-5">{children}</div>
+      <div className="px-5 py-5 md:px-6 md:py-6">
+        <div className="max-w-2xl space-y-6">{children}</div>
       </div>
     </Card>
   );

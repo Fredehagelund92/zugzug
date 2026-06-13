@@ -9,6 +9,8 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Renders the confirm button with the danger variant. */
   danger?: boolean;
+  /** Shows loading state on confirm button. */
+  loading?: boolean;
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
@@ -22,6 +24,7 @@ export function ConfirmDialog({
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   danger = false,
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -81,12 +84,13 @@ export function ConfirmDialog({
         </h2>
         {body && <div className="mt-2 text-[13px] text-ink-2">{body}</div>}
         <div className="mt-5 flex justify-end gap-2">
-          <Button ref={cancelRef} variant="ghost" size="sm" onClick={onCancel}>
+          <Button ref={cancelRef} variant="ghost" size="sm" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </Button>
           <Button
             variant={danger ? "danger" : "primary"}
             size="sm"
+            loading={loading}
             onClick={() => void onConfirm()}
           >
             {confirmLabel}
