@@ -49,12 +49,25 @@ export function Danger() {
             <div>
               <p className="text-sm font-semibold text-ink">Delete workspace</p>
               <p className="mt-0.5 text-xs text-ink-2">
-                Permanently deletes this workspace and all its data. This cannot be undone.
+                {tenant.slug === "default"
+                  ? "The default workspace cannot be deleted — it's the fallback every user lands in."
+                  : "Permanently deletes this workspace and all its data. This cannot be undone."}
               </p>
             </div>
-            <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
-              Delete workspace
-            </Button>
+            {tenant.slug === "default" ? (
+              <Button
+                variant="danger"
+                size="sm"
+                disabled
+                title="The default workspace cannot be deleted."
+              >
+                Delete workspace
+              </Button>
+            ) : (
+              <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
+                Delete workspace
+              </Button>
+            )}
           </div>
         </RoleGate>
       </SettingsSection>
