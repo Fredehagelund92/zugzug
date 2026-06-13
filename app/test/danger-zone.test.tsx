@@ -60,11 +60,18 @@ describe("Danger zone", () => {
   test("Delete confirm requires typing the slug", () => {
     harness("admin");
     fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
-    const input = screen.getByPlaceholderText(/acme/i);
+    const input = screen.getByRole("textbox");
     expect(input).toBeTruthy();
     const confirmBtn = screen.getByRole("button", { name: /^delete$/i });
     expect((confirmBtn as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(input, { target: { value: "acme" } });
     expect((confirmBtn as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  test("delete confirmation uses ConfirmDialog (not a bespoke modal)", () => {
+    harness("admin");
+    fireEvent.click(screen.getByRole("button", { name: /delete workspace/i }));
+    expect(screen.getByTestId("confirm-dialog-backdrop")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
   });
 });

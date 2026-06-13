@@ -14,7 +14,6 @@ export function Danger() {
 
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteSlug, setDeleteSlug] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function leave() {
@@ -44,7 +43,6 @@ export function Danger() {
   }
 
   async function deleteWorkspace() {
-    if (deleteSlug !== tenant.slug) return;
     setBusy(true);
     try {
       const res = await apiFetch("", { method: "DELETE" });
@@ -104,62 +102,22 @@ export function Danger() {
         onCancel={() => setLeaveOpen(false)}
       />
 
-      {/* Delete confirm — custom inline modal with slug input */}
-      {deleteOpen && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center bg-ink/50 p-4 backdrop-blur-sm"
-          onClick={() => {
-            setDeleteOpen(false);
-            setDeleteSlug("");
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-dialog-title"
-            className="w-full max-w-sm rounded-lg border border-line bg-surface-elevated p-5 shadow-pop"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="delete-dialog-title" className="font-display text-base font-bold text-ink">
-              Delete {tenant.label}?
-            </h2>
-            <p className="mt-2 text-[13px] text-ink-2">
-              This will permanently delete the workspace and all its data. Type{" "}
-              <strong className="font-semibold text-ink">{tenant.slug}</strong> to confirm.
-            </p>
-            <input
-              type="text"
-              className="mt-3 w-full rounded-sm border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-accent"
-              placeholder={tenant.slug}
-              value={deleteSlug}
-              onChange={(e) => setDeleteSlug(e.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <div className="mt-5 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setDeleteOpen(false);
-                  setDeleteSlug("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                disabled={deleteSlug !== tenant.slug || busy}
-                loading={busy}
-                onClick={() => void deleteWorkspace()}
-              >
-                Delete
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={deleteOpen}
+        title={`Delete ${tenant.label}?`}
+        body={
+          <>
+            This will permanently delete the workspace and all its data. Type{" "}
+            <strong className="font-semibold text-ink">{tenant.slug}</strong> to confirm.
+          </>
+        }
+        confirmPhrase={tenant.slug}
+        confirmLabel="Delete"
+        danger
+        loading={busy}
+        onConfirm={() => void deleteWorkspace()}
+        onCancel={() => setDeleteOpen(false)}
+      />
     </>
   );
 }
