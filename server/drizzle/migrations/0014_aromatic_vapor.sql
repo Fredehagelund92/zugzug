@@ -213,3 +213,5 @@ DO $$ BEGIN
     ALTER TABLE "zugzug_app"."source_stat" ADD CONSTRAINT "source_stat_tenant_id_tenant_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "zugzug_app"."tenant"("id") ON DELETE no action ON UPDATE no action;
   END IF;
 END $$;
+--> statement-breakpoint
+ALTER TABLE "zugzug_app"."users" ADD COLUMN IF NOT EXISTS "last_seen_at" timestamp;

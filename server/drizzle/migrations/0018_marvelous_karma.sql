@@ -1,4 +1,3 @@
-ALTER TABLE "zugzug_app"."preferences" ALTER COLUMN "id" SET DATA TYPE serial;--> statement-breakpoint
 ALTER TABLE "zugzug_app"."draft" ADD COLUMN "source" varchar DEFAULT 'user' NOT NULL;--> statement-breakpoint
 ALTER TABLE "zugzug_app"."draft" ADD COLUMN "confidence" varchar;--> statement-breakpoint
 ALTER TABLE "zugzug_app"."draft" ADD COLUMN "reasoning" varchar;--> statement-breakpoint

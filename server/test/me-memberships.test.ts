@@ -83,7 +83,8 @@ describe("GET /api/me/memberships", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { isSuperAdmin: boolean; memberships: unknown[] };
     expect(body.isSuperAdmin).toBe(true);
-    expect(body.memberships).toHaveLength(0);
+    // super-admins see ALL tenants (including the default workspace)
+    expect(body.memberships.length).toBeGreaterThanOrEqual(1);
   });
 
   test("401 when not signed in", async () => {
