@@ -5,6 +5,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { WarehousePicker } from "../../components/WarehousePicker";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
+import { ago } from "../../components/sources/utils";
 import { invalidate, subscribeInvalidate } from "../../store";
 
 interface Tenant {
@@ -12,6 +13,8 @@ interface Tenant {
   slug: string;
   label: string;
   warehouse_id: string;
+  member_count?: number;
+  last_activity_at?: string | null;
 }
 
 const inputCls =
@@ -25,6 +28,28 @@ export function Workspaces() {
   const [label, setLabel] = useState("");
   const [warehouseId, setWarehouseId] = useState("default");
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+
+  const commitLabel = async (t: Tenant) => {
+    const next = draftLabel.trim();
+    setEditingId(null);
+    if (!next || next === t.label) return;
+    const r = await apiFetch(`/tenants/${encodeURIComponent(t.id)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: next }),
+    });
+    if (r.ok) {
+      // Optimistic local update so the row reflects immediately even before
+      // the refresh from invalidate.tenantList() lands.
+      setTenants((prev) => prev.map((x) => (x.id === t.id ? { ...x, label: next } : x)));
+      await invalidate.tenantList();
+      // The switcher also displays this label — refresh memberships so the
+      // rename propagates without a reload.
+      await invalidate.memberships();
+    }
+  };
 
   const refresh = async () => {
     const r = await apiFetch("/tenants");
@@ -85,7 +110,7 @@ export function Workspaces() {
       {/* Workspace list */}
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <SkeletonList rows={4} columns={[20, 160, "minmax(0,1fr)", 140]} data-testid="workspaces-skeleton" />
+          <SkeletonList rows={4} columns={[20, 160, "minmax(0,1fr)", 140, 72, 120]} data-testid="workspaces-skeleton" />
         ) : tenants.length === 0 ? (
           <EmptyState
             title="No workspaces yet"
@@ -99,7 +124,7 @@ export function Workspaces() {
         ) : (
           <div className="border border-line divide-y divide-line bg-surface">
             {/* Column headers */}
-            <div className="grid grid-cols-[20px_160px_1fr_140px] gap-4 items-center px-5 py-2.5">
+            <div className="grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-2.5">
               <span />
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 Slug
@@ -110,12 +135,18 @@ export function Workspaces() {
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 Warehouse
               </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
+                Members
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                Last activity
+              </span>
             </div>
 
             {tenants.map((t, i) => (
               <div
                 key={t.id}
-                className="zz-rise grid grid-cols-[20px_160px_1fr_140px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
+                className="zz-rise grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
                 style={{ animationDelay: `${120 + i * 40}ms` }}
               >
                 {/* left accent bar */}
@@ -124,12 +155,46 @@ export function Workspaces() {
                 {/* slug */}
                 <code className="font-mono text-sm text-accent truncate">{t.slug}</code>
 
-                {/* label */}
-                <span className="font-body text-sm text-ink">{t.label}</span>
+                {/* label — click to edit */}
+                {editingId === t.id ? (
+                  <input
+                    autoFocus
+                    value={draftLabel}
+                    onChange={(e) => setDraftLabel(e.target.value)}
+                    onBlur={() => void commitLabel(t)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                      else if (e.key === "Escape") setEditingId(null);
+                    }}
+                    className="w-full bg-surface border border-accent px-2 py-1 text-sm text-ink focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftLabel(t.label);
+                      setEditingId(t.id);
+                    }}
+                    className="font-body text-sm text-ink text-left hover:text-accent transition-colors truncate"
+                    title="Click to rename"
+                  >
+                    {t.label}
+                  </button>
+                )}
 
                 {/* warehouse badge */}
                 <span className="font-mono text-xs text-ink-3 bg-surface-2 border border-line px-2 py-0.5 truncate inline-block">
                   {t.warehouse_id}
+                </span>
+
+                {/* member count */}
+                <span className="font-mono text-sm text-ink-2 tabular-nums text-right">
+                  {t.member_count ?? 0}
+                </span>
+
+                {/* last activity */}
+                <span className="font-mono text-xs text-ink-3">
+                  {t.last_activity_at ? `${ago(t.last_activity_at)} ago` : "—"}
                 </span>
               </div>
             ))}
