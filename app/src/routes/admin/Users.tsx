@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -50,12 +50,17 @@ export function Users() {
     void load();
   }, [load]);
 
+  const queryRef = useRef(query);
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
+
   useEffect(() => {
     const unsub = subscribeInvalidate("adminUsers", () => {
-      void load(query.trim() || undefined);
+      void load(queryRef.current.trim() || undefined);
     });
     return unsub;
-  }, [load, query]);
+  }, [load]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
