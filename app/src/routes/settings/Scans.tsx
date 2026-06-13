@@ -6,7 +6,13 @@ import { SegControl } from "../../components/SegControl";
 import { SkeletonRow } from "../../components/Skeleton";
 import { cx } from "../../lib/cx";
 import { useTenant } from "../../lib/tenant-context";
-import { usePreferences, setPreferences, scanSources } from "../../store";
+import {
+  usePreferences,
+  setPreferences,
+  scanSources,
+  invalidate,
+  subscribeInvalidate,
+} from "../../store";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
@@ -44,6 +50,14 @@ export function Scans() {
     void loadStatus();
   }, [loadStatus]);
 
+  useEffect(() => {
+    const unsub = subscribeInvalidate("scans", (slug) => {
+      if (slug && slug !== tenant.slug) return;
+      void loadStatus();
+    });
+    return unsub;
+  }, [loadStatus, tenant.slug]);
+
   const scanNow = useAsyncAction(async () => {
     try {
       const n = await scanSources();
@@ -58,7 +72,7 @@ export function Scans() {
     void setPreferences({
       ...prefs,
       scanSchedule: next as "15m" | "hourly" | "daily" | null,
-    });
+    }).then(() => invalidate.scans(tenant.slug));
   };
 
   const scheduleOptions = [
