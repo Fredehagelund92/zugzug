@@ -56,8 +56,11 @@ export abstract class DuckDbBase {
   }
 
   async ping(): Promise<boolean> {
+    // Hard 3s cap — a wedged MotherDuck ATTACH must not block liveness checks.
     try {
-      const row = await this.get<{ ok: number }>("SELECT 1 AS ok");
+      const probe = this.get<{ ok: number }>("SELECT 1 AS ok");
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+      const row = await Promise.race([probe, timeout]);
       return row?.ok === 1;
     } catch {
       return false;

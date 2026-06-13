@@ -502,6 +502,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
+    // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
+    // not hold a tenant transaction; doing so would exhaust the pg pool.
+    if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
+      const force = url.searchParams.get("force") === "1";
+      const snapshot = await checkHealth({ force });
+      return json(snapshot);
+    }
+
     return await pgTxScoped(tenantCtx.tenantId, async () => {
       // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule}
       if (seg[1] === "preferences" && seg.length === 2) {
@@ -559,13 +567,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           warehouseDb: env.warehouseDb || null,
           defaultEngineerMode: env.defaultEngineerMode,
         });
-      }
-
-      // GET /api/health/connections — postgres + warehouse liveness (5s cache)
-      if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
-        const force = url.searchParams.get("force") === "1";
-        const snapshot = await checkHealth({ force });
-        return json(snapshot);
       }
 
       // /api/sources — registered source columns (cached); /facets; /scan

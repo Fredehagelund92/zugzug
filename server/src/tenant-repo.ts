@@ -57,7 +57,11 @@ export class TenantRepo {
   }
 
   private withClearCtx<T>(fn: () => Promise<T>): Promise<T> {
-    return pgContext.run({ insideTenantRepo: false }, fn);
+    // Drop the TenantRepo guard but preserve the parent tx — otherwise nested
+    // pg.* calls grab a second pool conn while pgTxScoped is still holding the
+    // first, deadlocking the pool under parallel tenant requests.
+    const parent = pgContext.getStore();
+    return pgContext.run({ insideTenantRepo: false, tx: parent?.tx }, fn);
   }
 
   // --- preferences -----------------------------------------------------------
