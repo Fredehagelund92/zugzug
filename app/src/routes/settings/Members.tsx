@@ -9,7 +9,7 @@ import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { toast } from "../../components/Toast";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { currentUser, useAuthConfig } from "../../store";
+import { currentUser, useAuthConfig, invalidate, subscribeInvalidate } from "../../store";
 import { SuperAdminBanner } from "../../components/SuperAdminBanner";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -726,6 +726,17 @@ export function Members() {
     void loadInvites();
   }, [loadMembers, loadInvites]);
 
+  // Subscribe to invalidate.members(slug) — fires after any mutation here, but
+  // also lets other surfaces force a refresh.
+  useEffect(() => {
+    const unsub = subscribeInvalidate("members", (slug) => {
+      if (slug && slug !== tenant.slug) return;
+      void loadMembers();
+      void loadInvites();
+    });
+    return unsub;
+  }, [loadMembers, loadInvites, tenant.slug]);
+
   // Role change — PUT /team/members/:userId/role
   const handleRoleChange = async (userId: string, newRole: RoleKey) => {
     setRoleError(null);
@@ -743,7 +754,7 @@ export function Members() {
         } | null;
         throw new Error(body?.reason ?? body?.error ?? `update_role_${r.status}`);
       }
-      void loadMembers();
+      void invalidate.members(tenant.slug);
     } catch (err) {
       setRoleError(err instanceof Error ? err.message : "Could not change role.");
     } finally {
@@ -764,7 +775,7 @@ export function Members() {
         setRemoveError(`Couldn't remove ${email} — ${r.status} ${r.statusText}`);
         return;
       }
-      void loadMembers();
+      void invalidate.members(tenant.slug);
     } catch (err) {
       setRemoveError(
         err instanceof Error
@@ -779,7 +790,7 @@ export function Members() {
     try {
       const r = await apiFetch(`/team/invites/${encodeURIComponent(email)}`, { method: "DELETE" });
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      void loadInvites();
+      void invalidate.members(tenant.slug);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Could not revoke invite.", "error");
     }
@@ -876,7 +887,7 @@ export function Members() {
     setSubmitting(false);
     if (sentCount > 0) {
       toast(`Invite${sentCount > 1 ? "s" : ""} sent.`, "success");
-      void loadInvites();
+      void invalidate.members(tenant.slug);
     }
     inputRef.current?.focus();
   };
