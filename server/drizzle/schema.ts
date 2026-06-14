@@ -3,6 +3,7 @@ import {
   pgSchema,
   varchar,
   boolean,
+  bytea,
   bigint,
   integer,
   serial,
@@ -394,5 +395,174 @@ export const userWarehouseState = app.table(
       foreignColumns: [warehouseDatabase.id],
       name:           "user_warehouse_state_recent_db_fk",
     }).onDelete("set null"),
+  ],
+);
+
+/* ---------- Outbound integrations (PR1 of 4) ---------- */
+
+export const serviceAccount = app.table(
+  "service_account",
+  {
+    id:           varchar("id").primaryKey(),
+    tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
+    name:         varchar("name").notNull(),
+    /* Argon2id of the full token string. Verified, never used for signing. */
+    token_hash:   varchar("token_hash").notNull(),
+    /* First 12 chars of plaintext token (e.g. "zzsa_b8K3kP"). NOT secret —
+       used as a non-cryptographic lookup column so auth is a single-row hash
+       verify instead of a full table scan. */
+    token_prefix: varchar("token_prefix", { length: 12 }).notNull(),
+    scopes:       varchar("scopes").array().notNull().default(sql`ARRAY['read']::varchar[]`),
+                                                      // v1: ['read'] only; reserved: ['webhook:manage']
+    created_at:   timestamp("created_at").notNull(),
+    created_by:   varchar("created_by").notNull(),    // users.id
+    last_used_at: timestamp("last_used_at"),
+    revoked_at:   timestamp("revoked_at"),
+    expires_at:   timestamp("expires_at"),            // null = never
+  },
+  (t) => [
+    uniqueIndex("service_account_token_hash_unique").on(t.token_hash),
+    index("service_account_tenant_prefix_idx").on(t.tenant_id, t.token_prefix),
+    index("service_account_tenant_idx").on(t.tenant_id),
+    check(
+      "service_account_scope_chk",
+      sql`${t.scopes} <@ ARRAY['read', 'webhook:manage']::varchar[]
+           AND cardinality(${t.scopes}) >= 1`,
+    ),
+  ],
+);
+
+export const webhook = app.table(
+  "webhook",
+  {
+    id:            varchar("id").primaryKey(),
+    tenant_id:     varchar("tenant_id").notNull().references(() => tenant.id),
+    url:           varchar("url", { length: 2048 }).notNull(),
+    /* Webhook secrets are SIGNING KEYS, not passwords. We need the plaintext on
+       every delivery to compute HMAC_SHA256, so we cannot argon2-hash them.
+       AES-256-GCM ciphertext under a server-side master key. */
+    secret_ciphertext:  bytea("secret_ciphertext").notNull(),
+    secret_nonce:       bytea("secret_nonce").notNull(),
+    secret_key_version: integer("secret_key_version").notNull().default(1),
+    secret_prefix:      varchar("secret_prefix", { length: 12 }).notNull(),
+    /* Optional grace-period dual-key support: 24h post-rotation. */
+    secret_ciphertext_previous: bytea("secret_ciphertext_previous"),
+    secret_nonce_previous:      bytea("secret_nonce_previous"),
+    secret_previous_expires_at: timestamp("secret_previous_expires_at"),
+    secret_prefix_previous:     varchar("secret_prefix_previous", { length: 12 }),
+    events:        varchar("events").array().notNull(),
+    status:        varchar("status", { length: 16 }).notNull().default("active"),
+                                                      // 'active' | 'paused' | 'disabled'
+    description:   varchar("description"),
+    created_at:    timestamp("created_at").notNull(),
+    created_by:    varchar("created_by").notNull(),
+    paused_at:     timestamp("paused_at"),
+    disabled_at:   timestamp("disabled_at"),
+    disabled_reason: varchar("disabled_reason"),
+  },
+  (t) => [
+    index("webhook_tenant_idx").on(t.tenant_id),
+    check(
+      "webhook_status_chk",
+      sql`status IN ('active', 'paused', 'disabled')`,
+    ),
+    check(
+      "webhook_url_scheme_chk",
+      sql`${t.url} ~* '^https?://'`,
+    ),
+    check(
+      "webhook_events_nonempty_chk",
+      sql`cardinality(${t.events}) > 0`,
+    ),
+    check(
+      "webhook_events_known_chk",
+      sql`${t.events} <@ ARRAY[
+        'dimension.committed',
+        'dimension.created',
+        'dimension.schema.updated',
+        'canonical.deleted'
+      ]::varchar[]`,
+    ),
+  ],
+);
+
+export const outboundEvent = app.table(
+  "outbound_event",
+  {
+    id:           varchar("id").primaryKey(),
+    tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
+    type:         varchar("type", { length: 64 }).notNull(),
+    dim_id:       varchar("dim_id"),
+    occurred_at:  timestamp("occurred_at").notNull(),
+    payload:      jsonb("payload").notNull(),
+    idem_key:     varchar("idem_key", { length: 128 }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("outbound_event_tenant_idem_unique").on(t.tenant_id, t.idem_key),
+    index("outbound_event_tenant_type_time_idx").on(
+      t.tenant_id,
+      t.type,
+      t.occurred_at,
+      t.id,
+    ),
+    check(
+      "outbound_event_type_chk",
+      sql`${t.type} IN (
+        'dimension.committed',
+        'dimension.created',
+        'dimension.schema.updated',
+        'canonical.deleted'
+      )`,
+    ),
+  ],
+);
+
+export const webhookDelivery = app.table(
+  "webhook_delivery",
+  {
+    id:                varchar("id").primaryKey(),
+    tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
+    webhook_id:        varchar("webhook_id").notNull(),
+    event_id:          varchar("event_id").notNull(),
+    event_type:        varchar("event_type", { length: 64 }).notNull(),
+    /* Snapshot of the URL at enqueue time. A URL edit on the parent webhook
+       does NOT redirect in-flight deliveries (anti-exfiltration). */
+    delivery_url:      varchar("delivery_url", { length: 2048 }).notNull(),
+    signing_kid:       varchar("signing_kid", { length: 16 }).notNull(),
+                                                      // 'current' | 'previous'
+    is_test:           boolean("is_test").notNull().default(false),
+    status:            varchar("status", { length: 16 }).notNull(),
+                                                      // 'pending' | 'in_flight' | 'success' | 'retry' | 'dlq'
+    attempts:          integer("attempts").notNull().default(0),
+    max_attempts:      integer("max_attempts").notNull().default(5),
+    next_attempt_at:   timestamp("next_attempt_at"),
+    last_attempt_at:   timestamp("last_attempt_at"),
+    last_response_code: integer("last_response_code"),
+    last_response_body: text("last_response_body"),
+    last_error:        text("last_error"),
+    payload:           jsonb("payload").notNull(),
+    signature:         varchar("signature", { length: 96 }).notNull(),
+    created_at:        timestamp("created_at").notNull(),
+    completed_at:      timestamp("completed_at"),
+  },
+  (t) => [
+    index("webhook_delivery_due_idx")
+      .on(t.next_attempt_at)
+      .where(sql`status IN ('pending', 'retry')`),
+    /* The INCLUDE (status, is_test) variant is appended as raw SQL in the
+       migration file (Task 3) — Drizzle 0.45.2 does not surface INCLUDE
+       through index(). */
+    index("webhook_delivery_webhook_time_idx").on(t.webhook_id, t.created_at.desc()),
+    index("webhook_delivery_in_flight_reaper_idx")
+      .on(t.last_attempt_at)
+      .where(sql`status = 'in_flight'`),
+    check(
+      "webhook_delivery_status_chk",
+      sql`status IN ('pending', 'in_flight', 'success', 'retry', 'dlq')`,
+    ),
+    check(
+      "webhook_delivery_signing_kid_chk",
+      sql`signing_kid IN ('current', 'previous')`,
+    ),
   ],
 );
