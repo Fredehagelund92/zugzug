@@ -162,6 +162,19 @@ export class TenantRepo {
     );
   }
 
+  addCanonicalOneAt(
+    dimId: string,
+    label: string,
+    key: string | undefined,
+    insertAt: { anchor: string; direction: "above" | "below" },
+    userId: string,
+  ): Promise<void> {
+    this.assertRole("commit");
+    return this.withClearCtx(() =>
+      repoCanonical.addCanonicalOneAt(dimId, label, key, insertAt, userId, this.tenantId),
+    );
+  }
+
   importCanonical(
     dimId: string,
     rows: repoCanonical.ImportRow[],

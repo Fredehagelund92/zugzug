@@ -1399,8 +1399,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (seg.length === 4 && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
-            const { label, key } = (await req.json()) as { label: string; key?: string };
-            await reqRepo.addCanonicalOne(id, label, key, me);
+            const { label, key, insertAt } = (await req.json()) as {
+              label: string;
+              key?: string;
+              insertAt?: { anchor: string; direction: "above" | "below" };
+            };
+            if (insertAt) {
+              await reqRepo.addCanonicalOneAt(id, label, key, insertAt, me);
+            } else {
+              await reqRepo.addCanonicalOne(id, label, key, me);
+            }
             return noContent();
           }
           if (seg[4] === "merge" && seg.length === 5 && method === "POST") {

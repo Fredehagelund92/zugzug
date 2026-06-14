@@ -1711,6 +1711,121 @@ export async function updateDimensionMeta(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Position helpers
+// ---------------------------------------------------------------------------
+
+export async function rebalanceDimPositions(
+  dimId:    string,
+  m:        { dimTable: string; keyCol: string },
+  userId:   string,
+  tenantId: string,
+  trigger:  "manual" | "collision" | "threshold",
+): Promise<number> {
+  const DIMT = cq(m.dimTable);
+  const KC   = qid(m.keyCol);
+  const rows = await pgAll<{ key: string }>(
+    `SELECT ${KC} AS key FROM ${DIMT} WHERE position IS NOT NULL ORDER BY position ASC`,
+  );
+  for (let i = 0; i < rows.length; i++) {
+    await pgRun(`UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`, [(i + 1) * 1024, rows[i]!.key]);
+  }
+  if (trigger !== "collision") {
+    await appendAuditAs(userId, "Rebalanced positions", `${rows.length} rows`, {
+      tableId: dimId, tenantId,
+      metadata: { rebalancedRows: rows.length, trigger },
+    });
+  }
+  return rows.length;
+}
+
+export async function addCanonicalOneAt(
+  dimId:     string,
+  label:     string,
+  key:       string | undefined,
+  insertAt:  { anchor: string; direction: "above" | "below" },
+  userId:    string,
+  tenantId:  string,
+): Promise<void> {
+  const m = await dimMeta(dimId, tenantId);
+  if (!m) return;
+  if (m.orderingMode !== "manual") {
+    return addCanonicalOne(dimId, label, key, userId, tenantId);
+  }
+  const k    = (key && slug(key)) || slug(label);
+  if (!k) return;
+  const DIMT = cq(m.dimTable);
+  const KC   = qid(m.keyCol);
+
+  const anchor = await pgGet<{ position: string | null }>(
+    `SELECT position FROM ${DIMT} WHERE ${KC} = $1`,
+    [insertAt.anchor],
+  );
+  if (!anchor) throw new AppError("NOT_FOUND", `anchor ${insertAt.anchor} not found`, 404);
+
+  const anchorPos = anchor.position == null ? null : BigInt(anchor.position);
+
+  let neighbourPos: bigint | null = null;
+  if (anchorPos !== null) {
+    if (insertAt.direction === "above") {
+      const prev = await pgGet<{ position: string | null }>(
+        `SELECT position FROM ${DIMT} WHERE position IS NOT NULL AND position < $1
+         ORDER BY position DESC LIMIT 1`,
+        [String(anchorPos)],
+      );
+      neighbourPos = prev?.position == null ? null : BigInt(prev.position);
+    } else {
+      const next = await pgGet<{ position: string | null }>(
+        `SELECT position FROM ${DIMT} WHERE position IS NOT NULL AND position > $1
+         ORDER BY position ASC LIMIT 1`,
+        [String(anchorPos)],
+      );
+      neighbourPos = next?.position == null ? null : BigInt(next.position);
+    }
+  }
+
+  const pAbove = insertAt.direction === "above" ? neighbourPos : anchorPos;
+  const pBelow = insertAt.direction === "above" ? anchorPos    : neighbourPos;
+  let newPos   = computeInsertPosition(pAbove, pBelow);
+
+  if (newPos === null) {
+    await rebalanceDimPositions(dimId, m, userId, tenantId, "collision");
+    const refreshed = await pgGet<{ position: string | null }>(
+      `SELECT position FROM ${DIMT} WHERE ${KC} = $1`,
+      [insertAt.anchor],
+    );
+    if (!refreshed?.position) throw new AppError("NOT_FOUND", `anchor ${insertAt.anchor} not found after rebalance`, 404);
+    const ap2 = BigInt(refreshed.position);
+    if (insertAt.direction === "above") {
+      const prev2 = await pgGet<{ position: string | null }>(
+        `SELECT position FROM ${DIMT} WHERE position IS NOT NULL AND position < $1 ORDER BY position DESC LIMIT 1`,
+        [String(ap2)],
+      );
+      newPos = computeInsertPosition(prev2?.position == null ? null : BigInt(prev2.position), ap2) ?? (ap2 - 512n);
+    } else {
+      const next2 = await pgGet<{ position: string | null }>(
+        `SELECT position FROM ${DIMT} WHERE position IS NOT NULL AND position > $1 ORDER BY position ASC LIMIT 1`,
+        [String(ap2)],
+      );
+      newPos = computeInsertPosition(ap2, next2?.position == null ? null : BigInt(next2.position)) ?? (ap2 + 512n);
+    }
+  }
+
+  await pgTx(async (tx) => {
+    await tx.run(
+      `INSERT INTO ${DIMT} (${KC}, label, position) VALUES ($1, $2, $3)
+       ON CONFLICT (${KC}) DO NOTHING`,
+      [k, label, String(newPos!)],
+    );
+    await seedVersionRow(tx, dimId, k, userId, tenantId);
+  });
+
+  await appendAuditAs(userId, "Inserted canonical at position", `${label} (${k})`, {
+    tableId: dimId, rowKey: k, tenantId,
+    metadata: { key: k, anchor: insertAt.anchor, direction: insertAt.direction },
+  });
+}
+
 /** The raw variants that resolve to a canonical key — the lineage "receipt". */
 export async function listVariants(
   dimId: string,
