@@ -642,20 +642,33 @@ export async function addCanonical(
   values: CanonicalValue[],
   tenantId: string,
 ): Promise<void> {
-  const meta = await pgGet<{ dimTable: string; keyCol: string }>(
-    `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
-  );
+  const meta = await dimMeta(dimId, tenantId);
   if (!meta) return;
   // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
   // stays per-tenant-implicit (dim ids are globally unique → effectively
   // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
-  for (const v of values) {
-    await pgRun(
-      `INSERT INTO ${cq(meta.dimTable)} (${qid(meta.keyCol)}, label) VALUES ($1, $2)
-       ON CONFLICT (${qid(meta.keyCol)}) DO NOTHING`,
-      [v.key, v.label],
-    );
+  if (meta.orderingMode === "manual") {
+    await pgTx(async (tx) => {
+      const startPos = await nextPosition(tx, meta.dimTable);
+      let localIdx = 0;
+      for (const v of values) {
+        const inserted = await tx.get<{ k: string }>(
+          `INSERT INTO ${cq(meta.dimTable)} (${qid(meta.keyCol)}, label, position) VALUES ($1, $2, $3)
+           ON CONFLICT (${qid(meta.keyCol)}) DO NOTHING
+           RETURNING ${qid(meta.keyCol)} AS k`,
+          [v.key, v.label, String(startPos + BigInt(localIdx) * 1024n)],
+        );
+        if (inserted) localIdx++;
+      }
+    });
+  } else {
+    for (const v of values) {
+      await pgRun(
+        `INSERT INTO ${cq(meta.dimTable)} (${qid(meta.keyCol)}, label) VALUES ($1, $2)
+         ON CONFLICT (${qid(meta.keyCol)}) DO NOTHING`,
+        [v.key, v.label],
+      );
+    }
   }
 }
 
@@ -675,11 +688,20 @@ export async function addCanonicalOne(
   // stays per-tenant-implicit (dim ids are globally unique → effectively
   // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
   await pgTx(async (tx) => {
-    await tx.run(
-      `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
-       ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
-      [k, label],
-    );
+    if (m.orderingMode === "manual") {
+      const pos = await nextPosition(tx, m.dimTable);
+      await tx.run(
+        `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label, position) VALUES ($1, $2, $3)
+         ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+        [k, label, String(pos)],
+      );
+    } else {
+      await tx.run(
+        `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
+         ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+        [k, label],
+      );
+    }
     await seedVersionRow(tx, dimId, k, userId, tenantId);
   });
   await appendAuditAs(userId, "Added canonical", `${label} (${k})`, {
@@ -716,39 +738,99 @@ export async function importCanonical(
   let created = 0,
     updated = 0,
     skipped = 0;
-  for (const row of rows) {
-    const label = row.label?.trim() ?? "";
-    // Keys are preserved verbatim (they may be external warehouse IDs);
-    // only label-derived keys go through slug().
-    const key = row.key?.trim() || (label ? slug(label) : "");
-    if (!key) {
-      skipped++;
-      continue;
+  if (m.orderingMode === "manual") {
+    const fieldUpdates: Array<{ key: string; entries: [string, string | null][] }> = [];
+
+    await pgTx(async (tx) => {
+      const startPos = await nextPosition(tx, m.dimTable);
+      let localIdx = 0;
+
+      for (const row of rows) {
+        const label = row.label?.trim() ?? "";
+        // Keys are preserved verbatim (they may be external warehouse IDs);
+        // only label-derived keys go through slug().
+        const key = row.key?.trim() || (label ? slug(label) : "");
+        if (!key) {
+          skipped++;
+          continue;
+        }
+        const fieldEntries = Object.entries(row.fields ?? {}).filter(([f]) =>
+          validFields.has(f),
+        ) as [string, string | null][];
+
+        if (existing.has(key)) {
+          if (fieldEntries.length === 0) {
+            skipped++;
+            continue;
+          }
+          fieldUpdates.push({ key, entries: fieldEntries });
+          updated++;
+        } else {
+          if (!label) {
+            skipped++;
+            continue;
+          }
+          const pos = startPos + BigInt(localIdx) * 1024n;
+          const inserted = await tx.get<{ k: string }>(
+            `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label, position) VALUES ($1, $2, $3)
+             ON CONFLICT (${qid(m.keyCol)}) DO NOTHING
+             RETURNING ${qid(m.keyCol)} AS k`,
+            [key, label, String(pos)],
+          );
+          if (inserted) {
+            await seedVersionRow(tx, dimId, key, userId, tenantId);
+            existing.add(key);
+            localIdx++;
+            created++;
+            if (fieldEntries.length > 0) {
+              fieldUpdates.push({ key, entries: fieldEntries });
+            }
+          } else {
+            skipped++;
+          }
+        }
+      }
+    });
+
+    // Apply field updates outside the tx (pgRun is fine here)
+    for (const { key, entries } of fieldUpdates) {
+      for (const [f, v] of entries) await setFieldValue(dimId, key, f, v, tenantId);
     }
-    const fieldEntries = Object.entries(row.fields ?? {}).filter(([f]) => validFields.has(f));
-    if (existing.has(key)) {
-      if (fieldEntries.length === 0) {
+  } else {
+    for (const row of rows) {
+      const label = row.label?.trim() ?? "";
+      // Keys are preserved verbatim (they may be external warehouse IDs);
+      // only label-derived keys go through slug().
+      const key = row.key?.trim() || (label ? slug(label) : "");
+      if (!key) {
         skipped++;
         continue;
       }
-      for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v, tenantId);
-      updated++;
-    } else {
-      if (!label) {
-        skipped++;
-        continue;
+      const fieldEntries = Object.entries(row.fields ?? {}).filter(([f]) => validFields.has(f));
+      if (existing.has(key)) {
+        if (fieldEntries.length === 0) {
+          skipped++;
+          continue;
+        }
+        for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v, tenantId);
+        updated++;
+      } else {
+        if (!label) {
+          skipped++;
+          continue;
+        }
+        await pgTx(async (tx) => {
+          await tx.run(
+            `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
+             ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+            [key, label],
+          );
+          await seedVersionRow(tx, dimId, key, userId, tenantId);
+        });
+        for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v, tenantId);
+        existing.add(key);
+        created++;
       }
-      await pgTx(async (tx) => {
-        await tx.run(
-          `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
-           ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
-          [key, label],
-        );
-        await seedVersionRow(tx, dimId, key, userId, tenantId);
-      });
-      for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v, tenantId);
-      existing.add(key);
-      created++;
     }
   }
   await appendAuditAs(
