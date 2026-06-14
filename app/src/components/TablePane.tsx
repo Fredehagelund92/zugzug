@@ -228,6 +228,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     key: string;
     label: string;
   } | null>(null);
+  // FK column delete needs its own confirm — the existing singleDeleteConfirm is
+  // for retiring records. A linked column carries its lookups with it; surface
+  // that count so deletes aren't silent cascades.
+  const [deleteColumnConfirm, setDeleteColumnConfirm] = useState<{
+    field: string;
+    label: string;
+    lookupCount: number;
+  } | null>(null);
   const [mergeConfirm, setMergeConfirm] = useState<{
     survivorLabel: string;
     loserCount: number;
@@ -887,6 +895,20 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             canEdit
               ? (field) => {
                   if (field.includes("__")) return;
+                  const target = fields.find((f) => f.field === field);
+                  if (target?.type === "linked") {
+                    // Lookup columns mirror displayFields minus "label". The FK
+                    // column carries them; deleting it nukes them all.
+                    const lookupCount = (target.displayFields ?? []).filter(
+                      (d) => d !== "label",
+                    ).length;
+                    setDeleteColumnConfirm({
+                      field,
+                      label: target.label,
+                      lookupCount,
+                    });
+                    return;
+                  }
                   void deleteColumn(activeId, field);
                 }
               : undefined
@@ -1170,6 +1192,36 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           setSingleDeleteConfirm(null);
         }}
         onCancel={() => setSingleDeleteConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={deleteColumnConfirm !== null}
+        title={
+          deleteColumnConfirm ? `Delete "${deleteColumnConfirm.label}"?` : "Delete column?"
+        }
+        body={
+          deleteColumnConfirm && (
+            <>
+              {deleteColumnConfirm.lookupCount > 0 ? (
+                <>
+                  This will also remove {deleteColumnConfirm.lookupCount} linked column
+                  {deleteColumnConfirm.lookupCount === 1 ? "" : "s"} that depend on it.
+                </>
+              ) : (
+                <>This will remove the linked column.</>
+              )}
+            </>
+          )
+        }
+        confirmLabel="Delete"
+        danger
+        onConfirm={async () => {
+          if (!deleteColumnConfirm) return;
+          const { field } = deleteColumnConfirm;
+          setDeleteColumnConfirm(null);
+          await deleteColumn(activeId, field);
+        }}
+        onCancel={() => setDeleteColumnConfirm(null)}
       />
 
       <ConfirmDialog

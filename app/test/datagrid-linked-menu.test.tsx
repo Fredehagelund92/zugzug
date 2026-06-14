@@ -87,3 +87,67 @@ describe("right-click on normal column", () => {
     expect(menu.textContent).not.toContain("Change displayed field");
   });
 });
+
+describe("stale lookup column header", () => {
+  function staleLookupColumn(): ColumnDef<Row> {
+    return {
+      field: "country__deleted",
+      label: "Country › deleted",
+      config: { type: "text" },
+      editable: false,
+      columnKind: "lookup",
+      sourceField: "country",
+      linkedStale: true,
+    };
+  }
+
+  test("shows a warning icon when linkedStale is true", () => {
+    const { container } = render(
+      <UndoStackProvider>
+        <DataGrid
+          rows={rows}
+          columns={[fkColumn(), staleLookupColumn()]}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+        />
+      </UndoStackProvider>,
+    );
+    const header = container.querySelector(`[data-header="country__deleted"]`)!;
+    expect(header).not.toBeNull();
+    expect(header.textContent).toContain("⚠");
+    expect(header.querySelector('[aria-label="Stale lookup"]')).not.toBeNull();
+  });
+
+  test("healthy lookup column has no warning icon", () => {
+    const { container } = render(
+      <UndoStackProvider>
+        <DataGrid
+          rows={rows}
+          columns={[fkColumn(), lookupColumn()]}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+        />
+      </UndoStackProvider>,
+    );
+    const header = container.querySelector(`[data-header="country__iso_code"]`)!;
+    expect(header).not.toBeNull();
+    expect(header.textContent).not.toContain("⚠");
+    expect(header.querySelector('[aria-label="Stale lookup"]')).toBeNull();
+  });
+
+  test("FK column has no warning icon", () => {
+    const { container } = render(
+      <UndoStackProvider>
+        <DataGrid
+          rows={rows}
+          columns={[fkColumn()]}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+        />
+      </UndoStackProvider>,
+    );
+    const header = container.querySelector(`[data-header="country"]`)!;
+    expect(header).not.toBeNull();
+    expect(header.textContent).not.toContain("⚠");
+  });
+});

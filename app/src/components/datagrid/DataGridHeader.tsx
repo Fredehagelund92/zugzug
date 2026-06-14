@@ -341,6 +341,15 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                 }}
               >
                 {c.label}
+                {c.linkedStale && (
+                  <span
+                    className="ml-1 text-warn"
+                    title="Source field was renamed — reconfigure"
+                    aria-label="Stale lookup"
+                  >
+                    ⚠
+                  </span>
+                )}
                 {sortGlyph}
               </span>
               {filterSet?.conditions.some((fc) => fc.field === c.field) && (
