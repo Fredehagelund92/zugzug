@@ -32,6 +32,8 @@ import {
   setGridLayout,
   insertCanonicalAt,
   reorderCanonical,
+  patchDimension,
+  rebalancePositions,
   useCanEdit,
   useCurrentUser,
   ConflictError,
@@ -286,6 +288,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     survivorLabel: string;
     loserCount: number;
   } | null>(null);
+  const [orderingOpen, setOrderingOpen] = useState(false);
+  const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
+  const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
     anchorRect: DOMRect;
@@ -712,6 +717,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <span>
                 key <span className="text-ink">{dim.keyCol}</span>
               </span>
+              {dim.orderingMode === "manual" && dim.nextPosition && (
+                <span className="font-mono text-[11px] text-ink-3">
+                  next position: {dim.nextPosition}
+                </span>
+              )}
               <span className="text-line-2">·</span>
             </>
           )}
@@ -753,6 +763,16 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           {list.length > 0 && (
             <Button variant="ghost" size="sm" onClick={() => exportToCSV(dim)}>
               ↓ Export CSV
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setOrderingOpen((v) => !v)}
+              title="Table ordering settings"
+            >
+              ⇅ Ordering
             </Button>
           )}
           {canEdit && (
@@ -817,6 +837,61 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           )}
         </div>
       </div>
+
+      {orderingOpen && (
+        <div className="border-b border-line bg-surface-2 px-4 py-3 text-[13px]">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-3">
+            Ordering
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="radio"
+                name={`ordering-${activeId}`}
+                value="derived"
+                checked={dim.orderingMode !== "manual"}
+                onChange={() => {
+                  if (dim.orderingMode === "manual") setOrderingConfirm("derived");
+                }}
+                className="mt-0.5"
+              />
+              <div>
+                <div className="font-medium">Derived</div>
+                <div className="text-[12px] text-ink-3">Sort by variant count, then alphabetically. Best for reference data.</div>
+              </div>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="radio"
+                name={`ordering-${activeId}`}
+                value="manual"
+                checked={dim.orderingMode === "manual"}
+                onChange={() => {
+                  if (dim.orderingMode !== "manual") setOrderingConfirm("manual");
+                }}
+                className="mt-0.5"
+              />
+              <div>
+                <div className="font-medium">Manual</div>
+                <div className="text-[12px] text-ink-3">
+                  Persisted drag-orderable order. Best for workflow stages.
+                  {dim.orderingMode === "manual" && (
+                    <> Currently {list.length} row{list.length === 1 ? "" : "s"} positioned.</>
+                  )}
+                </div>
+              </div>
+            </label>
+            {dim.orderingMode === "manual" && canEdit && (
+              <button
+                className="mt-1 self-start text-[12px] text-ink-3 underline hover:text-ink"
+                onClick={() => setRebalanceConfirm(true)}
+              >
+                Rebalance positions
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {notice && (
         <div className="border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
@@ -1410,6 +1485,43 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           setMergeConfirm(null);
         }}
         onCancel={() => setMergeConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={orderingConfirm === "manual"}
+        title="Switch to manual ordering?"
+        body={`This will assign positions to all ${list.length} rows in their current display order. You can drag rows to reorder them afterwards.`}
+        confirmLabel="Switch to manual"
+        onConfirm={async () => {
+          await patchDimension(activeId, { orderingMode: "manual" });
+          setOrderingConfirm(null);
+        }}
+        onCancel={() => setOrderingConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={orderingConfirm === "derived"}
+        title="Switch to derived ordering?"
+        body={`This will null the positions on all ${list.length} rows. Switching back to manual later will assign new positions — your current manual order cannot be recovered.`}
+        confirmLabel="Switch to derived"
+        danger
+        onConfirm={async () => {
+          await patchDimension(activeId, { orderingMode: "derived" });
+          setOrderingConfirm(null);
+        }}
+        onCancel={() => setOrderingConfirm(null)}
+      />
+
+      <ConfirmDialog
+        open={rebalanceConfirm}
+        title="Rebalance positions?"
+        body="Reassign positions in evenly-spaced steps of 1024. This is safe to do at any time."
+        confirmLabel="Rebalance"
+        onConfirm={async () => {
+          await rebalancePositions(activeId);
+          setRebalanceConfirm(false);
+        }}
+        onCancel={() => setRebalanceConfirm(false)}
       />
     </div>
   );
