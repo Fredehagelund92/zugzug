@@ -888,6 +888,68 @@ export async function updateField(
         currentCfg = {};
       }
     }
+
+    // Validate linked-field config keys BEFORE merging/writing.
+    // We pre-parse the incoming payload here so we can reject bad inputs without
+    // mutating the row. The main parse below builds `incomingCfg` for the merge.
+    const incomingParsed: Record<string, unknown> = (() => {
+      if (updates.fieldConfig == null) return {};
+      try {
+        const v: unknown = JSON.parse(updates.fieldConfig);
+        return v !== null && typeof v === "object" && !Array.isArray(v)
+          ? (v as Record<string, unknown>)
+          : {};
+      } catch {
+        return {};
+      }
+    })();
+
+    if ("targetDimId" in incomingParsed) {
+      const incomingTarget = String(incomingParsed.targetDimId ?? "");
+      const currentTarget = typeof currentCfg.targetDimId === "string" ? currentCfg.targetDimId : "";
+      if (currentTarget !== "" && incomingTarget !== "" && incomingTarget !== currentTarget) {
+        throw new Error("targetDimId is immutable after creation; delete and recreate the field");
+      }
+    }
+
+    let beforeDisplayFields: string[] | null = null;
+    let afterDisplayFields: string[] | null = null;
+    if ("displayFields" in incomingParsed) {
+      const incoming = incomingParsed.displayFields;
+      if (!Array.isArray(incoming) || !incoming.every((v) => typeof v === "string")) {
+        throw new Error("displayFields must be an array of strings");
+      }
+      if (!incoming.includes("label")) {
+        throw new Error('displayFields must include "label"');
+      }
+      if (new Set(incoming).size !== incoming.length) {
+        throw new Error("displayFields contains duplicate entries");
+      }
+      const targetDimId =
+        (typeof currentCfg.targetDimId === "string" ? currentCfg.targetDimId : "") ||
+        (typeof incomingParsed.targetDimId === "string" ? incomingParsed.targetDimId : "");
+      if (targetDimId === "") {
+        throw new Error("displayFields update requires a target dimension");
+      }
+      const targetFields = await pgAll<{ field: string }>(
+        `SELECT field FROM ${pg("dimension_field")} WHERE dim_id = $1 AND tenant_id = $2`,
+        [targetDimId, tenantId],
+      );
+      const validFields = new Set(targetFields.map((r) => r.field));
+      const priorList = Array.isArray(currentCfg.displayFields)
+        ? (currentCfg.displayFields as unknown[]).filter((v): v is string => typeof v === "string")
+        : ["label"];
+      const priorSet = new Set(priorList);
+      for (const entry of incoming) {
+        if (entry === "label") continue;
+        if (validFields.has(entry)) continue;
+        if (priorSet.has(entry)) continue; // stale-but-already-stored: tolerate
+        throw new Error(`displayFields entry not found on target dimension: ${entry}`);
+      }
+      beforeDisplayFields = priorList;
+      afterDisplayFields = incoming;
+    }
+
     let incomingCfg: Record<string, unknown> | null = null;
     if (typeof updates.fieldConfig === "string") {
       try {
@@ -912,6 +974,13 @@ export async function updateField(
     );
     if (incomingCfg !== null && "rules" in incomingCfg) {
       await appendAuditAs(userId, "Updated field rules", field, { tenantId });
+    }
+    if (beforeDisplayFields !== null && afterDisplayFields !== null) {
+      await appendAuditAs(userId, "field.displayFields.update", field, {
+        tableId: dimId,
+        tenantId,
+        metadata: { before: beforeDisplayFields, after: afterDisplayFields },
+      });
     }
   }
 }
