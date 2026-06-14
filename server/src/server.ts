@@ -1187,6 +1187,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const dim = await reqRepo.getDimension(id);
           return dim ? json(dim) : json({ error: "not found" }, 404);
         }
+        // PATCH /api/dimensions/:id — update orderingMode / description / color
+        if (seg.length === 3 && id && method === "PATCH") {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const patch = (await req.json()) as import("./repo-canonical.ts").UpdateDimensionMetaInput;
+          const dim = await reqRepo.updateDimensionMeta(id, patch, me);
+          return json({ ok: true, dim });
+        }
         if (seg[3] === "drafts") {
           // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
           if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));

@@ -1596,6 +1596,121 @@ export async function setFieldValue(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Dimension meta update
+// ---------------------------------------------------------------------------
+
+export interface UpdateDimensionMetaInput {
+  orderingMode?: "derived" | "manual";
+  description?:  string | null;
+  color?:        string | null;
+}
+
+export async function updateDimensionMeta(
+  dimId:    string,
+  patch:    UpdateDimensionMetaInput,
+  userId:   string,
+  tenantId: string,
+): Promise<{ id: string; orderingMode: string; description: string | null; color: string | null }> {
+  const current = await pgGet<{
+    dimTable: string;
+    keyCol:   string;
+    keyKind:  string;
+    mapTable: string;
+    orderingMode: string;
+    description: string | null;
+    color: string | null;
+  }>(
+    `SELECT dim_table AS "dimTable", key_col AS "keyCol",
+            COALESCE(key_kind, 'slug') AS "keyKind",
+            map_table AS "mapTable",
+            COALESCE(ordering_mode, 'derived') AS "orderingMode",
+            description, color
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
+  );
+  if (!current) throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
+
+  if (patch.color !== undefined && patch.color !== null) {
+    if (!(PALETTE_NAMES as readonly string[]).includes(patch.color)) {
+      throw new AppError("VALIDATION_FAILED", `unknown color: ${patch.color}`, 422);
+    }
+  }
+  if (patch.orderingMode !== undefined &&
+      patch.orderingMode !== "derived" && patch.orderingMode !== "manual") {
+    throw new AppError("VALIDATION_FAILED", `unknown orderingMode: ${patch.orderingMode}`, 422);
+  }
+
+  const modeChanges = patch.orderingMode !== undefined && patch.orderingMode !== current.orderingMode;
+
+  // Build SET clause for scalar fields only
+  const sets: string[]  = [];
+  const vals: unknown[] = [dimId, tenantId];
+  let p = 3;
+  if (patch.description !== undefined) {
+    sets.push(`description = $${p++}`);
+    vals.push(patch.description?.trim() || null);
+  }
+  if (patch.color !== undefined) {
+    sets.push(`color = $${p++}`);
+    vals.push(patch.color ?? null);
+  }
+  if (modeChanges) {
+    sets.push(`ordering_mode = $${p++}`);
+    vals.push(patch.orderingMode!);
+  }
+  if (sets.length > 0) {
+    await pgRun(
+      `UPDATE ${pg("dimension")} SET ${sets.join(", ")} WHERE id = $1 AND tenant_id = $2`,
+      vals,
+    );
+  }
+
+  if (modeChanges) {
+    const DIMT = cq(current.dimTable);
+    const k    = qid(current.keyCol);
+    const tiebreak = current.keyKind === "external_id" ? k : "d.label";
+
+    if (patch.orderingMode === "manual") {
+      // derived → manual: assign positions in current display order
+      const rows = await pgAll<{ key: string }>(
+        `SELECT d.${k} AS key FROM ${DIMT} d
+         LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(current.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
+         ORDER BY COALESCE(v.n, 0) DESC, ${tiebreak}`,
+      );
+      for (let i = 0; i < rows.length; i++) {
+        await pgRun(
+          `UPDATE ${DIMT} SET position = $1 WHERE ${k} = $2`,
+          [(i + 1) * 1024, rows[i]!.key],
+        );
+      }
+      await appendAuditAs(userId, "Switched ordering mode", `derived → manual`, {
+        tableId: dimId, tenantId,
+        metadata: { from: "derived", to: "manual", backfilledRows: rows.length },
+      });
+    } else {
+      // manual → derived: null all positions
+      const result = await pgGet<{ n: number }>(
+        `WITH upd AS (UPDATE ${DIMT} SET position = NULL RETURNING 1)
+         SELECT count(*)::int AS n FROM upd`,
+      ).catch(() => ({ n: 0 }));
+      await appendAuditAs(userId, "Switched ordering mode", `manual → derived`, {
+        tableId: dimId, tenantId,
+        metadata: { from: "manual", to: "derived", nulledRows: result?.n ?? 0 },
+      });
+    }
+  }
+
+  return {
+    id:           dimId,
+    orderingMode: modeChanges ? patch.orderingMode! : current.orderingMode,
+    description:  patch.description !== undefined
+      ? (patch.description?.trim() || null)
+      : current.description,
+    color: patch.color !== undefined ? (patch.color ?? null) : current.color,
+  };
+}
+
 /** The raw variants that resolve to a canonical key — the lineage "receipt". */
 export async function listVariants(
   dimId: string,
