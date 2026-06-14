@@ -91,6 +91,19 @@ export const env = {
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
    *  Off by default; flip to `true` only when MotherDuck token has write access. */
   motherduckWritable: process.env.MOTHERDUCK_WRITABLE?.trim() === "true",
+  /** Encryption key for webhook signing secrets. AES-256-GCM master key
+   *  resolved from this var, or from ZUGZUG_WEBHOOK_MASTER_KEY_FILE, or
+   *  (self-host only) auto-generated at boot. 32 random bytes, base64. */
+  webhookMasterKeyB64: process.env.ZUGZUG_WEBHOOK_MASTER_KEY?.trim() || null,
+  webhookMasterKeyFile: process.env.ZUGZUG_WEBHOOK_MASTER_KEY_FILE?.trim() || null,
+  /** HMAC key for paginated cursor signing (PR2). Separate from the webhook
+   *  master key so rotating one doesn't invalidate the other. */
+  cursorKeyB64: process.env.ZUGZUG_CURSOR_KEY?.trim() || null,
+  /** Self-host mode — relaxes some defaults (http://localhost webhooks,
+   *  auto-generated master key) that would be operator-error in hosted SaaS. */
+  selfHosted: process.env.ZUGZUG_SELF_HOSTED?.trim() === "1",
+  /** Webhook dispatcher on/off. Default differs by deployment — see .env.example. */
+  webhooksEnabled: process.env.WEBHOOKS_ENABLED?.trim() === "1",
   /** Default value of the engineer-mode toggle for users who haven't set a
    *  preference yet. OSS default: true. BC override: DEFAULT_ENGINEER_MODE=false. */
   defaultEngineerMode: process.env.DEFAULT_ENGINEER_MODE?.trim() !== "false",
