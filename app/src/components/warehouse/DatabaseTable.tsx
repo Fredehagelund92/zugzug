@@ -12,7 +12,7 @@ interface Props {
   databases: DatabaseRow[];
   canAdd: boolean;
   onAdd: () => void;
-  onRemove: (db: DatabaseRow) => void;
+  onRemove?: (db: DatabaseRow) => void;
 }
 
 export function DatabaseTable(props: Props): JSX.Element {
@@ -57,12 +57,14 @@ export function DatabaseTable(props: Props): JSX.Element {
                       unreachable
                     </span>
                   )}
-                  <button
-                    onClick={() => props.onRemove(d)}
-                    className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-ink hover:bg-bg-2"
-                  >
-                    Remove
-                  </button>
+                  {props.onRemove && (
+                    <button
+                      onClick={() => props.onRemove?.(d)}
+                      className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-ink hover:bg-bg-2"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { PageHeader } from "../../components/PageHeader";
-import { WarehousePicker } from "../../components/WarehousePicker";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { ago } from "../../components/sources/utils";
@@ -29,7 +28,6 @@ export function Workspaces() {
   const [showForm, setShowForm] = useState(false);
   const [slug, setSlug] = useState("");
   const [label, setLabel] = useState("");
-  const [warehouseId, setWarehouseId] = useState("default");
   const [color, setColor] = useState<string>(WORKSPACE_COLORS[0]);
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -78,12 +76,11 @@ export function Workspaces() {
     const r = await apiFetch("/tenants", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug, label, warehouseId, color }),
+      body: JSON.stringify({ slug, label, color }),
     });
     if (r.ok) {
       setSlug("");
       setLabel("");
-      setWarehouseId("default");
       setColor(WORKSPACE_COLORS[0]);
       setShowForm(false);
       invalidate.tenantList();
@@ -220,7 +217,7 @@ export function Workspaces() {
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 mb-6">
             <div className="space-y-1.5">
               <label className="block font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 Slug
@@ -243,12 +240,6 @@ export function Workspaces() {
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="My Workspace"
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="block font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Warehouse ID
-              </label>
-              <WarehousePicker value={warehouseId} onChange={setWarehouseId} />
             </div>
           </div>
 

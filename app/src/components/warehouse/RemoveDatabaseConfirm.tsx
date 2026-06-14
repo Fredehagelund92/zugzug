@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { apiFetch } from "../../api";
+import { authFetch } from "../../api";
 import type { DatabaseRow } from "./DatabaseTable";
 
 /* RemoveDatabaseConfirm — first DELETE probes for in-use dependencies (409
@@ -32,7 +32,7 @@ export function RemoveDatabaseConfirm({
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch(`/warehouse/databases/${database.id}`, { method: "DELETE" })
+    authFetch(`/warehouse/databases/${database.id}`, { method: "DELETE" })
       .then(async (r) => {
         if (cancelled) return;
         if (r.ok || r.status === 204) {
@@ -61,7 +61,7 @@ export function RemoveDatabaseConfirm({
   const force = async (): Promise<void> => {
     setBusy(true);
     try {
-      const r = await apiFetch(`/warehouse/databases/${database.id}?force=true`, {
+      const r = await authFetch(`/warehouse/databases/${database.id}?force=true`, {
         method: "DELETE",
       });
       if (r.ok || r.status === 204) {

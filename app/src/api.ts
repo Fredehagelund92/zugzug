@@ -30,3 +30,34 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 export async function authFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(`/api${path}`, { ...init, credentials: "include" });
 }
+
+/**
+ * Deployment-global warehouse health probe. Returns reachability state.
+ * Backed by `GET /api/warehouse/health`.
+ */
+export async function fetchWarehouseHealth(): Promise<{ ok: boolean; reason?: string }> {
+  const res = await authFetch("/warehouse/health");
+  if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
+  return (await res.json()) as { ok: boolean; reason?: string };
+}
+
+/**
+ * Deployment-global warehouse database list. Visible to any authenticated user;
+ * super-admin gates writes (POST/PATCH/DELETE) at the server layer.
+ * Backed by `GET /api/warehouse/databases`.
+ */
+export async function fetchWarehouseDatabases(): Promise<
+  Array<{
+    id: string;
+    databaseName: string;
+    label: string | null;
+    addedAt: string;
+    lastProbeAt: string | null;
+    lastProbeError: string | null;
+    sourceCount: number;
+  }>
+> {
+  const res = await authFetch("/warehouse/databases");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}

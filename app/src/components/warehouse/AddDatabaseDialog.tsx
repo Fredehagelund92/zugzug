@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { apiFetch } from "../../api";
+import { authFetch } from "../../api";
 
 interface Discovered {
   databaseName: string;
@@ -23,7 +23,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    apiFetch("/warehouse/databases/available")
+    authFetch("/warehouse/databases/available")
       .then((r) =>
         r.ok ? (r.json() as Promise<Discovered[]>) : Promise.reject(new Error(`status ${r.status}`)),
       )
@@ -53,7 +53,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
 
   const onSubmit = async (): Promise<void> => {
     setBusy(true);
-    const r = await apiFetch("/warehouse/databases", {
+    const r = await authFetch("/warehouse/databases", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ databaseName: name, label: label || undefined }),

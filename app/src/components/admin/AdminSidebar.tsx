@@ -13,7 +13,7 @@ const ITEMS: Item[] = [
   { label: "Workspaces", to: "workspaces", Icon: IconBuilding },
   { label: "Users", to: "users", Icon: IconUsers },
   { label: "Audit", to: "audit", Icon: IconAudit },
-  { label: "Warehouses", to: "warehouses", Icon: IconDatabase },
+  { label: "Warehouse", to: "warehouse", Icon: IconDatabase },
 ];
 
 export function AdminSidebar() {

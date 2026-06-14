@@ -1,211 +1,110 @@
-import { useState, useEffect, useCallback } from "react";
-import { apiFetch } from "../../api";
-import { Button } from "../../components/Button";
-import { EmptyState } from "../../components/EmptyState";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { authFetch } from "../../api";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
-import { invalidate, subscribeInvalidate } from "../../store";
+import { EmptyState } from "../../components/EmptyState";
+import { Badge } from "../../components/Badge";
 
-interface WarehouseDb {
-  name: string;
-  tableCount: number;
-  connected: boolean;
+interface AdminWarehouseProjection {
+  adapter: "disabled" | "motherduck" | string;
+  configuredFrom: "env";
+  envVarName: string | null;
+  bootValidation: { ok: boolean; reason?: string };
+  databases: Array<{
+    id: string;
+    databaseName: string;
+    label: string | null;
+    sourceCount: number;
+    lastProbeAt: string | null;
+    lastProbeError: string | null;
+  }>;
 }
 
-const NAME_RE = /^[a-z][a-z0-9_]{2,62}$/;
-
-const inputCls =
-  "w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
-
 export function Warehouses() {
-  const [dbs, setDbs] = useState<WarehouseDb[]>([]);
-  const [attached, setAttached] = useState<boolean | null>(null);
+  const [data, setData] = useState<AdminWarehouseProjection | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Create form state
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    const r = await apiFetch("/admin/warehouses");
-    if (r.ok) {
-      const body = (await r.json()) as { databases: WarehouseDb[]; attached: boolean };
-      setAttached(body.attached);
-      setDbs(body.databases);
-    }
-    setLoading(false);
-  }, []);
-
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    const unsub = subscribeInvalidate("warehouses", () => {
-      void refresh();
-    });
-    return unsub;
-  }, [refresh]);
-
-  const existingNames = dbs.map((d) => d.name);
-  const localError = !name
-    ? null
-    : !NAME_RE.test(name)
-      ? "Lowercase letters, digits, underscore. 3-63 chars. Starts with a letter."
-      : existingNames.includes(name)
-        ? "A database with this name already exists."
-        : null;
-
-  const reset = () => {
-    setName("");
-    setServerError(null);
-    setShowForm(false);
-  };
-
-  const create = async () => {
-    if (!name || localError) return;
-    setCreating(true);
-    setServerError(null);
-    try {
-      const r = await apiFetch("/admin/warehouses", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (!r.ok) {
-        const body = (await r.json().catch(() => ({}))) as { error?: string };
-        setServerError(body.error || `Failed (${r.status})`);
-        return;
+    void (async () => {
+      const r = await authFetch("/admin/warehouse");
+      if (r.ok) {
+        setData((await r.json()) as AdminWarehouseProjection);
       }
-      invalidate.warehouses();
-      reset();
-    } finally {
-      setCreating(false);
-    }
-  };
+      setLoading(false);
+    })();
+  }, []);
 
   return (
     <div className="space-y-6">
       <PageHeader
         kicker="System"
-        title="Warehouses"
-        lede="MotherDuck databases available to this deployment."
-        count={loading || attached !== true ? undefined : dbs.length}
-        action={
-          attached === true ? (
-            <Button
-              variant={showForm ? "secondary" : "primary"}
-              size="sm"
-              onClick={() => (showForm ? reset() : setShowForm(true))}
-            >
-              {showForm ? "Cancel" : "+ New database"}
-            </Button>
-          ) : undefined
-        }
+        title="Warehouse"
+        lede="The deployment's warehouse adapter is configured by environment variables. Manage databases from the workspace's Settings → Warehouse page."
+        count={data?.databases.length}
       />
 
-      <div className="zz-rise" style={{ animationDelay: "80ms" }}>
-        {loading ? (
-          <SkeletonList rows={3} columns={["minmax(0,1fr)", 120, 80]} />
-        ) : attached === false ? (
-          <div className="border border-dashed border-line-2 p-8">
-            <p className="text-sm text-ink-3 text-center">
-              Warehouse not attached.{" "}
-              <code className="font-mono text-xs bg-surface-2 px-1.5 py-0.5">
-                ATTACH_WAREHOUSE=true
-              </code>{" "}
-              to enable.
-            </p>
-          </div>
-        ) : dbs.length === 0 ? (
-          <EmptyState title="No databases found" body="The warehouse connection succeeded but returned no databases." />
-        ) : (
-          <div className="border border-line divide-y divide-line bg-surface">
-            <div className="grid grid-cols-[1fr_120px_80px] gap-4 items-center px-5 py-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Database
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
-                Tables
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Status
-              </span>
-            </div>
-            {dbs.map((db, i) => (
-              <div
-                key={db.name}
-                className="zz-rise grid grid-cols-[1fr_120px_80px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
-                style={{ animationDelay: `${100 + i * 40}ms` }}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-0.5 h-5 bg-accent opacity-40 group-hover:opacity-90 transition-opacity shrink-0" />
-                  <code className="font-mono text-sm text-accent truncate">{db.name}</code>
-                </div>
-                <span className="font-mono text-sm text-ink-3 tabular-nums text-right">
-                  {db.tableCount}
+      {loading ? (
+        <SkeletonList rows={3} columns={["minmax(0,1fr)", 120, 80]} />
+      ) : !data ? (
+        <EmptyState
+          title="Couldn't load warehouse info"
+          body="Try refreshing. If the issue persists, check the server logs."
+        />
+      ) : (
+        <div className="space-y-4">
+          <div className="rounded-sm border border-line bg-surface-2 p-4">
+            <div className="flex items-center gap-2">
+              <span className="font-display text-[14px] font-semibold text-ink">Adapter</span>
+              <Badge>{data.adapter}</Badge>
+              {data.envVarName && (
+                <span className="font-mono text-[11px] text-ink-3">
+                  from env: {data.envVarName}
                 </span>
-                <span
-                  className="font-mono text-[10px] flex items-center gap-1"
-                  style={{ color: db.connected ? "var(--ak-ok)" : "var(--ink-3)" }}
-                >
-                  <span className={db.connected ? "animate-pulse" : ""}>●</span>
-                  {db.connected ? "live" : "off"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Create form — matches Workspaces.tsx idiom */}
-      {showForm && (
-        <div className="zz-rise border border-line-2 bg-surface-2 p-6">
-          <div className="flex items-center gap-2.5 mb-5">
-            <div className="w-0.5 h-4 bg-accent flex-shrink-0" />
-            <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2">
-              New database
-            </span>
-          </div>
-
-          <div className="mb-5">
-            <div className="space-y-1.5 max-w-sm">
-              <label className="block font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Database name
-              </label>
-              <input
-                className={inputCls + " font-mono"}
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value.toLowerCase());
-                  setServerError(null);
-                }}
-                placeholder="acme_prod"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !creating && name && !localError) {
-                    e.preventDefault();
-                    void create();
-                  }
-                }}
-              />
-              {(localError || serverError) && (
-                <p className="font-mono text-[11px] text-red-500">{localError ?? serverError}</p>
               )}
             </div>
+            <div className="mt-2 text-[12.5px] text-ink-2">
+              {data.bootValidation.ok
+                ? "Adapter loaded successfully at boot."
+                : `Boot validation failed: ${data.bootValidation.reason ?? "unknown reason"}`}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-ink-3">
-              Creates a fresh MotherDuck database in your account. Appears in the workspace picker
-              immediately.
-            </p>
-            <Button onClick={create} loading={creating} disabled={!name || !!localError}>
-              Create database
-            </Button>
+          <div className="rounded-sm border border-line bg-surface">
+            <div className="border-b border-line px-4 py-2 text-[12px] font-medium text-ink-2">
+              Databases
+            </div>
+            {data.databases.length === 0 ? (
+              <div className="px-4 py-6 text-[12.5px] text-ink-3">No databases registered.</div>
+            ) : (
+              <ul className="divide-y divide-line">
+                {data.databases.map((db) => (
+                  <li key={db.id} className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <div className="text-[13px] text-ink">{db.databaseName}</div>
+                      {db.label && <div className="text-[11.5px] text-ink-3">{db.label}</div>}
+                    </div>
+                    <div className="flex items-center gap-3 text-[11.5px] text-ink-3">
+                      <span>
+                        {db.sourceCount} source{db.sourceCount === 1 ? "" : "s"}
+                      </span>
+                      {db.lastProbeError && <Badge tone="warn">probe error</Badge>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
+
+          <p className="text-[12.5px] text-ink-3">
+            Need to add or remove a database?{" "}
+            <Link
+              to="/app/settings/warehouse"
+              className="text-accent underline-offset-2 hover:underline"
+            >
+              Open Settings → Warehouse →
+            </Link>
+          </p>
         </div>
       )}
     </div>

@@ -15,8 +15,7 @@ import { Scans } from "./Scans";
 import { Tokens } from "./Tokens";
 import { useTenant } from "../../lib/tenant-context";
 import { can } from "../../lib/permissions";
-import { apiFetch } from "../../api";
-import { WarehouseCard, type ConnectionProjection } from "../../components/warehouse/WarehouseCard";
+import { fetchWarehouseDatabases } from "../../api";
 import { DatabaseTable, type DatabaseRow } from "../../components/warehouse/DatabaseTable";
 import { AddDatabaseDialog } from "../../components/warehouse/AddDatabaseDialog";
 import { RemoveDatabaseConfirm } from "../../components/warehouse/RemoveDatabaseConfirm";
@@ -53,21 +52,14 @@ function HealthBadge({ state }: { state?: ConnectionHealth["warehouse"] }) {
 
 function DatabasesSection() {
   const tenant = useTenant();
-  const isAdmin = tenant.role === "admin" || tenant.isSuperAdmin === true;
-  const [conn, setConn] = useState<ConnectionProjection | null>(null);
+  const { engineer } = useEngineerMode();
+  const isSuperAdmin = tenant.isSuperAdmin === true;
   const [databases, setDatabases] = useState<DatabaseRow[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [removing, setRemoving] = useState<DatabaseRow | null>(null);
 
   async function refresh(): Promise<void> {
-    const [connResponse, dbsResponse] = await Promise.all([
-      apiFetch("/warehouse/connection"),
-      apiFetch("/warehouse/databases"),
-    ]);
-    const c = (await connResponse.json()) as ConnectionProjection | null;
-    const ds = (await dbsResponse.json()) as DatabaseRow[];
-    setConn(c);
-    setDatabases(ds);
+    setDatabases(await fetchWarehouseDatabases());
   }
 
   useEffect(() => {
@@ -76,31 +68,25 @@ function DatabasesSection() {
 
   return (
     <SettingsSection
-      title="Warehouse Connection"
-      hint="Register your warehouse and databases to start scanning for source values."
+      title="Warehouse databases"
+      hint="The MotherDuck token is loaded from the deployment's environment. Databases are shared across all workspaces."
     >
-      <WarehouseCard
-        connection={conn}
-        canEditCredentials={isAdmin}
-        onVerify={async () => {
-          await apiFetch("/warehouse/connection/verify", { method: "POST" });
-          await refresh();
-        }}
-        onEditCredentials={() => {
-          /* TODO T19: open credentials modal */
-        }}
-        onDelete={async () => {
-          if (!confirm("Delete this warehouse connection?")) return;
-          await apiFetch("/warehouse/connection", { method: "DELETE" });
-          await refresh();
-        }}
-      />
+      <div className="mb-3 flex items-center gap-3 text-[12px] text-ink-2">
+        <span>
+          MotherDuck · {databases.length} database{databases.length === 1 ? "" : "s"} registered
+        </span>
+        {engineer && (
+          <span className="font-mono text-[11px] text-ink-3">from env: MOTHERDUCK_TOKEN</span>
+        )}
+      </div>
+
       <DatabaseTable
         databases={databases}
-        canAdd={isAdmin || tenant.role === "editor"}
+        canAdd={isSuperAdmin}
         onAdd={() => setShowAdd(true)}
-        onRemove={(db) => setRemoving(db)}
+        onRemove={isSuperAdmin ? (db) => setRemoving(db) : undefined}
       />
+
       {showAdd && (
         <AddDatabaseDialog
           onCancel={() => setShowAdd(false)}
@@ -208,7 +194,7 @@ function ConnectionsSection() {
         <p className="text-[12.5px] text-ink-3">
           Need a fresh database?{" "}
           <Link
-            to="/app/admin/warehouses"
+            to="/app/admin/warehouse"
             className="text-accent underline-offset-2 hover:underline"
           >
             Manage warehouses →
