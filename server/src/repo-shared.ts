@@ -4,7 +4,7 @@
  * Nothing in here imports from any other repo-*.ts module. */
 
 import { pgAll, pgGet } from "./pg.ts";
-import { env, pg } from "./env.ts";
+import { pg } from "./env.ts";
 import type { ConditionalRule } from "./conditional-format-types.ts";
 import type { Ref } from "./warehouse/adapter.ts";
 
@@ -321,18 +321,36 @@ export function parseSourceTable(stored: string): Ref {
  *  raw_prod) still scans the rest instead of throwing. */
 export async function liveSources(dimId: string, tenantId: string): Promise<SourceDef[]> {
   const { getAdapter } = await import("./warehouse/registry.ts");
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
+  const rows = await pgAll<{
+    databaseName: string;
+    schemaName: string;
+    tableName: string;
+    columnName: string;
+  }>(
+    `SELECT wd.database_name AS "databaseName",
+            s.schema_name    AS "schemaName",
+            s.table_name     AS "tableName",
+            s.column_name    AS "columnName"
+       FROM ${pg("dimension_source")} s
+       JOIN ${pg("warehouse_database")} wd
+         ON wd.id = s.database_id AND wd.tenant_id = s.tenant_id
+      WHERE s.tenant_id = $1 AND s.dim_id = $2
+      ORDER BY 1, 2, 3, 4`,
+    [tenantId, dimId],
+  );
   const out: SourceDef[] = [];
-  for (const s of await sourcesOf(dimId, tenantId)) {
-    const ref = parseSourceTable(s.table);
+  for (const r of rows) {
+    const ref: Ref = { catalog: r.databaseName, schema: r.schemaName, table: r.tableName };
+    const displayTable = `${r.schemaName}.${r.tableName}`;
     try {
       if (await adapter.tableExists(ref)) {
-        out.push(s);
+        out.push({ table: displayTable, column: r.columnName });
       } else {
-        console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
+        console.warn(`scan: skipping missing source ${r.databaseName}.${displayTable}`);
       }
     } catch {
-      console.warn(`scan: skipping missing source ${env.warehouseDb}.${s.table}`);
+      console.warn(`scan: skipping missing source ${r.databaseName}.${displayTable}`);
     }
   }
   return out;

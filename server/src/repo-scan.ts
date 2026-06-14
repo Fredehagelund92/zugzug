@@ -19,6 +19,7 @@ import {
   log,
   parseSourceTable,
 } from "./repo-shared.ts";
+import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { saveDraft } from "./repo-drafts.ts";
@@ -99,14 +100,18 @@ export async function listSources(opts: {
 /** Per-schema rollup for the facet rail — turns N source columns into ~systems. */
 export async function sourceFacets(tenantId: string): Promise<SchemaFacet[]> {
   const rows = await pgAll<{ schema: string; columns: number; unmapped: number; missing: number }>(
-    `SELECT split_part(s.source_table, '.', 1) AS schema,
+    `SELECT s.schema_name AS schema,
             count(*)::int AS columns,
             COALESCE(sum(st.unmapped), 0)::int AS unmapped,
             count(*) FILTER (WHERE st.scanned_at IS NOT NULL AND NOT st.present)::int AS missing
      FROM ${pg("dimension_source")} s
      LEFT JOIN ${pg("source_stat")} st
-       ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
-       AND st.tenant_id = s.tenant_id
+       ON st.dim_id      = s.dim_id
+      AND st.tenant_id   = s.tenant_id
+      AND st.database_id = s.database_id
+      AND st.schema_name = s.schema_name
+      AND st.table_name  = s.table_name
+      AND st.column_name = s.column_name
      WHERE s.tenant_id = $1
      GROUP BY 1 ORDER BY unmapped DESC, schema`,
     [tenantId],
@@ -122,17 +127,33 @@ export async function sourceFacets(tenantId: string): Promise<SchemaFacet[]> {
 /** Refresh the cached stats for every registered source (the expensive scan,
  *  run explicitly). Returns how many sources were scanned. */
 export async function scanSources(tenantId: string): Promise<number> {
-  const regs = await pgAll<{ dimId: string; table: string; column: string; mapTable: string }>(
-    `SELECT s.dim_id AS "dimId", s.source_table AS "table", s.source_column AS column, d.map_table AS "mapTable"
-     FROM ${pg("dimension_source")} s
-     JOIN ${pg("dimension")} d ON d.id = s.dim_id AND d.tenant_id = s.tenant_id
-     WHERE s.tenant_id = $1`,
+  const regs = await pgAll<{
+    dimId: string;
+    databaseId: string;
+    catalog: string;
+    schema: string;
+    table: string;
+    column: string;
+    mapTable: string;
+  }>(
+    `SELECT s.dim_id        AS "dimId",
+            s.database_id   AS "databaseId",
+            wd.database_name AS "catalog",
+            s.schema_name   AS "schema",
+            s.table_name    AS "table",
+            s.column_name   AS "column",
+            d.map_table     AS "mapTable"
+       FROM ${pg("dimension_source")} s
+       JOIN ${pg("dimension")}          d  ON d.id  = s.dim_id      AND d.tenant_id  = s.tenant_id
+       JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id AND wd.tenant_id = s.tenant_id
+      WHERE s.tenant_id = $1`,
     [tenantId],
   );
   const SCAN_TIMEOUT_MS = 30_000;
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   for (const r of regs) {
-    const ref = parseSourceTable(r.table);
+    const ref: Ref = { catalog: r.catalog, schema: r.schema, table: r.table };
+    const displayTable = `${r.schema}.${r.table}`;
     let present: boolean,
       rows = 0,
       distinct = 0,
@@ -162,7 +183,7 @@ export async function scanSources(tenantId: string): Promise<number> {
       log({
         level: ms > 5000 ? "warn" : "info",
         msg: "scan-source",
-        table: r.table,
+        table: displayTable,
         column: r.column,
         ms,
         rows,
@@ -175,7 +196,7 @@ export async function scanSources(tenantId: string): Promise<number> {
       log({
         level: "error",
         msg: "scan-source",
-        table: r.table,
+        table: displayTable,
         column: r.column,
         ms,
         err: e instanceof Error ? e.message : String(e),
@@ -185,13 +206,27 @@ export async function scanSources(tenantId: string): Promise<number> {
     }
     await pgRun(
       `INSERT INTO ${pg("source_stat")}
-         (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, current_timestamp, $8)
-       ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO UPDATE SET
-         present = EXCLUDED.present, rows = EXCLUDED.rows,
-         distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
-         scanned_at = EXCLUDED.scanned_at`,
-      [r.dimId, r.table, r.column, present, rows, distinct, unmapped, tenantId],
+         (tenant_id, dim_id, database_id, schema_name, table_name, column_name,
+          present, rows, distinct_values, unmapped, scanned_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, current_timestamp)
+       ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
+         present         = EXCLUDED.present,
+         rows            = EXCLUDED.rows,
+         distinct_values = EXCLUDED.distinct_values,
+         unmapped        = EXCLUDED.unmapped,
+         scanned_at      = EXCLUDED.scanned_at`,
+      [
+        tenantId,
+        r.dimId,
+        r.databaseId,
+        r.schema,
+        r.table,
+        r.column,
+        present,
+        rows,
+        distinct,
+        unmapped,
+      ],
     );
   }
 
@@ -226,7 +261,7 @@ export async function autoStageExactMatches(dimId: string, tenantId: string): Pr
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
   const occRows = await adapter
     .distinctValuesWithProvenance(refs)
@@ -301,7 +336,7 @@ export async function topUnmapped(
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   const ref = parseSourceTable(table);
   const n = Math.max(1, Math.min(50, Math.round(limit)));
 
@@ -483,9 +518,8 @@ export async function searchCatalog(opts: {
   total: number;
   schemas: { schema: string; tables: number }[];
 }> {
-  void opts.tenantId; // catalog browse is global (warehouse view); tenant accepted for parity / future filtering
   if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(opts.tenantId);
   const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
   const offset = Math.max(0, opts.offset ?? 0);
 
@@ -563,7 +597,7 @@ export async function deriveCanonical(
   const external = meta.keyKind === "external_id";
   if (external && nameColumn) await addSource(dimId, table, nameColumn, tenantId);
 
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   const vals = await adapter
     .distinctValues(parseSourceTable(table), column, 5000)
     .catch(() => [] as string[]);

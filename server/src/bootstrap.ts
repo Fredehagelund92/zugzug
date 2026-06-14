@@ -9,7 +9,6 @@ import { pgRun, pgGet } from "./pg.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
-import { getAdapter } from "./warehouse/registry.ts";
 
 const seed = process.argv.includes("--seed");
 
@@ -53,7 +52,8 @@ if (n <= 1) {
 }
 
 if (seed) {
-  await getAdapter(); // warm the connection
+  // Warehouse adapter warm-up removed: the registry now lazy-loads per-tenant
+  // on first request. Bootstrap doesn't need a representative tenant id.
   await seedDemo();
   console.log("· demo dimensions seeded (Country, Channel)");
 }

@@ -335,7 +335,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return json({ databases: [], attached: false });
         }
         try {
-          const adapter = await getAdapter();
+          // Super-admin introspection: uses the seed tenant's connection as a
+          // representative warehouse. T14 will replace this with a per-connection picker.
+          const adapter = await getAdapter("default");
           // Cast to access the protected `all()` method — this is an admin-only
           // introspection path; the public adapter interface intentionally has no
           // raw SQL escape hatch, so we poke through here rather than widening it.
@@ -734,7 +736,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       // GET /api/workspace/info — adapter capability metadata for the frontend badge
       if (seg[1] === "workspace" && seg[2] === "info" && seg.length === 3 && method === "GET") {
         const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
-        const adapterInstance = await getAdapterFn();
+        const adapterInstance = await getAdapterFn(tenantCtx.tenantId);
         return json({
           adapter: adapterInstance.capabilities.id,
           writable: adapterInstance.capabilities.writable,
@@ -1268,7 +1270,9 @@ if (import.meta.main) {
     snowflake: async (creds) => new SnowflakeAdapter(creds),
   });
 
-  const adapter = await getAdapter();
+  // Startup readiness probe — uses the seed tenant as a representative.
+  // Confirms the registry CAN talk to some warehouse before accepting traffic.
+  const adapter = await getAdapter("default");
   const ok = await adapter.ping();
   if (!ok) {
     console.error("✗ warehouse adapter ping failed");
