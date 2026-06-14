@@ -191,6 +191,10 @@ export const apiTokens = app.table(
     user_id:      varchar("user_id").notNull(),
     name:         varchar("name").notNull(),
     token_hash:   varchar("token_hash").notNull(),
+    /* First 12 chars of plaintext token (e.g. "zz_abc8…"). NOT secret —
+       indexed for O(1) auth lookup. Nullable for tokens issued before this
+       migration; the auth code path falls back to a capped legacy scan. */
+    token_prefix: varchar("token_prefix", { length: 12 }),
     created_at:   timestamp("created_at").notNull(),
     last_used_at: timestamp("last_used_at"),
     revoked_at:   timestamp("revoked_at"),
@@ -198,6 +202,9 @@ export const apiTokens = app.table(
   (t) => [
     uniqueIndex("api_tokens_token_hash_unique").on(t.token_hash),
     index("api_tokens_user_id_idx").on(t.user_id),
+    index("api_tokens_prefix_idx")
+      .on(t.token_prefix)
+      .where(sql`revoked_at IS NULL`),
   ],
 );
 
@@ -300,12 +307,26 @@ export const canonicalVersion = app.table(
     /** Semantically users.id. No FK constraint — matches existing convention
      *  (repo-canonical.ts uses userId strings without enforced FKs). */
     updated_by: varchar("updated_by").notNull(),
+    /* Soft-delete: nullable. retired_at NOT NULL marks a tombstone row;
+       retired_into is the survivor key when a merge produced the tombstone,
+       NULL when the row was retired without a merge. See repo-canonical.ts
+       mergeCanonical / retireCanonical. */
+    retired_at:   timestamp("retired_at"),
+    retired_into: varchar("retired_into"),
     tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.dim_id, t.key] }),
     index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
     index("canonical_version_tenant_dim_idx").on(t.tenant_id, t.dim_id),
+    /* Pull API live-row read path (PR2). Partial over un-retired rows. */
+    index("canonical_version_pull_idx")
+      .on(t.tenant_id, t.dim_id, t.updated_at, t.key)
+      .where(sql`retired_at IS NULL`),
+    /* Pull API tombstone read path (PR2). */
+    index("canonical_version_tombstone_idx")
+      .on(t.tenant_id, t.dim_id, t.retired_at)
+      .where(sql`retired_at IS NOT NULL`),
   ],
 );
 
