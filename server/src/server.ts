@@ -679,6 +679,23 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
+    // /api/t/:slug/warehouse/... — warehouse connection and database queries
+    if (tenantSlugFromPath !== null && seg[1] === "warehouse") {
+      // GET /api/t/:slug/warehouse/connection — return the public projection or null.
+      if (seg[2] === "connection" && seg.length === 3 && method === "GET") {
+        const { getWarehouseConnection } = await import("./repo-warehouse.ts");
+        const conn = await getWarehouseConnection(tenantCtx.tenantId);
+        return json(conn);
+      }
+
+      // GET /api/t/:slug/warehouse/databases — return the list with sourceCount.
+      if (seg[2] === "databases" && seg.length === 3 && method === "GET") {
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const list = await listWarehouseDatabases(tenantCtx.tenantId);
+        return json(list);
+      }
+    }
+
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
     // not hold a tenant transaction; doing so would exhaust the pg pool.
     if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
