@@ -20,6 +20,7 @@ import { useTenant } from "../../lib/tenant-context";
 import { can } from "../../lib/permissions";
 import { apiFetch } from "../../api";
 import { WarehouseCard, type ConnectionProjection } from "../../components/warehouse/WarehouseCard";
+import { DatabaseTable, type DatabaseRow } from "../../components/warehouse/DatabaseTable";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -55,11 +56,17 @@ function DatabasesSection() {
   const tenant = useTenant();
   const isAdmin = tenant.role === "admin" || tenant.isSuperAdmin === true;
   const [conn, setConn] = useState<ConnectionProjection | null>(null);
+  const [databases, setDatabases] = useState<DatabaseRow[]>([]);
 
   async function refresh(): Promise<void> {
-    const response = await apiFetch("/warehouse/connection");
-    const c = (await response.json()) as ConnectionProjection | null;
+    const [connResponse, dbsResponse] = await Promise.all([
+      apiFetch("/warehouse/connection"),
+      apiFetch("/warehouse/databases"),
+    ]);
+    const c = (await connResponse.json()) as ConnectionProjection | null;
+    const ds = (await dbsResponse.json()) as DatabaseRow[];
     setConn(c);
+    setDatabases(ds);
   }
 
   useEffect(() => {
@@ -87,7 +94,16 @@ function DatabasesSection() {
           await refresh();
         }}
       />
-      {/* TODO T18: <DatabaseTable databases={...} /> */}
+      <DatabaseTable
+        databases={databases}
+        canAdd={isAdmin || tenant.role === "editor"}
+        onAdd={() => {
+          /* TODO T19: open AddDatabaseDialog */
+        }}
+        onRemove={(_db) => {
+          /* TODO T20: open RemoveDatabaseConfirm */
+        }}
+      />
       {/* TODO T19/T20: <AddDatabaseDialog />, <RemoveDatabaseConfirm /> */}
     </SettingsSection>
   );
