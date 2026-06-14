@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import { cx } from "../../lib/cx";
 import { IconBuilding, IconUsers, IconAudit, IconDatabase } from "../Icons";
 import type { SVGProps, ComponentType } from "react";
@@ -65,8 +65,8 @@ export function AdminSidebar() {
 
       {/* Back to app */}
       <div className="mt-6 px-3">
-        <a
-          href="/app"
+        <Link
+          to="/app"
           className="flex items-center gap-2 text-xs text-ink-3 hover:text-ink-2 transition-colors"
         >
           <svg className="h-3 w-3 shrink-0" viewBox="0 0 16 16" fill="none">
@@ -79,7 +79,7 @@ export function AdminSidebar() {
             />
           </svg>
           Back to app
-        </a>
+        </Link>
       </div>
     </nav>
   );

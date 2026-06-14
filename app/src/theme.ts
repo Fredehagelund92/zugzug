@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 
 export type Theme = "light" | "dark";
 
+const STORAGE_KEY = "zugzug:theme";
 const root = (): HTMLElement => document.documentElement;
 
 export function getTheme(): Theme {
@@ -15,6 +16,7 @@ export function getTheme(): Theme {
 
 export function setTheme(theme: Theme): void {
   root().setAttribute("data-theme", theme);
+  try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* quota / private mode */ }
 }
 
 export function toggleTheme(): void {
