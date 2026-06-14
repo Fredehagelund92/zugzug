@@ -11,5 +11,8 @@ export class DuckDbReadOnlyAdapter extends DuckDbBase implements ReadOnlyWarehou
     supportsMerge: false,
     identifierCase: "preserve",
     supportsApproximateDistinct: false,
+    supportsMultipleDatabases: true,
+    databaseTerm: "catalog",
+    maxIdentifierLength: 255,
   };
 }

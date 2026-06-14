@@ -2,7 +2,9 @@ import type {
   AdapterCapabilities,
   CatalogTable,
   ColumnMeta,
+  DatabaseDescriptor,
   DimensionSpec,
+  ProbeResult,
   Ref,
   ValueCount,
   ValueProvenance,
@@ -53,6 +55,9 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       supportsMerge: true,
       identifierCase: "upper",
       supportsApproximateDistinct: true,
+      supportsMultipleDatabases: true,
+      databaseTerm: "database",
+      maxIdentifierLength: 255,
     };
   }
 
@@ -100,6 +105,14 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       return false;
     }
   }
+
+  async listDatabases(): Promise<DatabaseDescriptor[]> {
+    throw new Error("Snowflake listDatabases not yet implemented");
+  }
+
+  async probeDatabase(_databaseName: string): Promise<ProbeResult> {
+    return { ok: false, reason: "Snowflake probeDatabase not yet implemented" };
+  }
   async tableExists(table: Ref): Promise<boolean> {
     try {
       // LIVE-VALIDATION: Snowflake supports `SELECT ... LIMIT 0` for an existence
@@ -114,8 +127,10 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
     }
   }
 
-  async listTables(opts: { schema?: string; search?: string } = {}): Promise<CatalogTable[]> {
-    const db = this.quoteIdentifier(this.creds.database);
+  async listTables(
+    opts: { schema?: string; search?: string; database?: string } = {},
+  ): Promise<CatalogTable[]> {
+    const db = this.quoteIdentifier(opts.database ?? this.creds.database);
     // LIVE-VALIDATION: INFORMATION_SCHEMA.TABLES view shape. Confirm TABLE_SCHEMA
     // and TABLE_NAME column names. Also confirm TABLE_TYPE values — we want
     // 'BASE TABLE' and 'VIEW' (Snowflake also has 'EXTERNAL TABLE', 'TEMPORARY').

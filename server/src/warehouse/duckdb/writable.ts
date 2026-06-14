@@ -24,6 +24,9 @@ export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehou
     supportsMerge: true,
     identifierCase: "preserve",
     supportsApproximateDistinct: false,
+    supportsMultipleDatabases: true,
+    databaseTerm: "catalog",
+    maxIdentifierLength: 255,
   };
 
   async ensureCanonicalTables(dim: DimensionSpec): Promise<void> {

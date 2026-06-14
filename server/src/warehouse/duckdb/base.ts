@@ -3,11 +3,14 @@ import type {
   AdapterCapabilities,
   CatalogTable,
   ColumnMeta,
+  DatabaseDescriptor,
+  ProbeResult,
   Ref,
   ValueCount,
   ValueProvenance,
 } from "../adapter.ts";
 import type { DuckDbCreds } from "../credentials.ts";
+import { withTimeout } from "../timeout.ts";
 
 // The DuckDB Node API decodes LIST columns into `DuckDBListValue` wrappers
 // rather than plain arrays. Normalize to a string[] regardless of shape.
@@ -43,9 +46,10 @@ export abstract class DuckDbBase {
   }
 
   qualifyRef(table: Ref): string {
-    const parts: string[] = [];
-    const catalog = table.catalog ?? this.creds.database;
-    if (catalog) parts.push(this.quoteIdentifier(catalog));
+    if (!table.catalog) {
+      throw new Error(`qualifyRef requires Ref.catalog (got ${JSON.stringify(table)})`);
+    }
+    const parts: string[] = [this.quoteIdentifier(table.catalog)];
     parts.push(this.quoteIdentifier(table.schema));
     parts.push(this.quoteIdentifier(table.table));
     return parts.join(".");
@@ -56,14 +60,50 @@ export abstract class DuckDbBase {
   }
 
   async ping(): Promise<boolean> {
-    // Hard 3s cap — a wedged MotherDuck ATTACH must not block liveness checks.
     try {
-      const probe = this.get<{ ok: number }>("SELECT 1 AS ok");
-      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-      const row = await Promise.race([probe, timeout]);
-      return row?.ok === 1;
+      await withTimeout(
+        async () => {
+          const conn = await this.connect();
+          await conn.runAndReadAll(`SELECT 1`);
+        },
+        5_000,
+        "ping",
+      );
+      return true;
     } catch {
       return false;
+    }
+  }
+
+  async listDatabases(): Promise<DatabaseDescriptor[]> {
+    return withTimeout(
+      async () => {
+        const conn = await this.connect();
+        const result = await conn.runAndReadAll(`SHOW DATABASES`);
+        const rows = result.getRows();
+        return rows.map((r) => ({ databaseName: String(r[0]) }));
+      },
+      10_000,
+      "listDatabases",
+    );
+  }
+
+  async probeDatabase(databaseName: string): Promise<ProbeResult> {
+    try {
+      await withTimeout(
+        async () => {
+          const conn = await this.connect();
+          const quoted = this.quoteIdentifier(databaseName);
+          await conn.runAndReadAll(
+            `SELECT 1 FROM ${quoted}.information_schema.schemata LIMIT 1`,
+          );
+        },
+        5_000,
+        "probeDatabase",
+      );
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: err instanceof Error ? err.message : String(err) };
     }
   }
 
@@ -130,35 +170,41 @@ export abstract class DuckDbBase {
     }
   }
 
-  async listTables(opts: { schema?: string; search?: string } = {}): Promise<CatalogTable[]> {
-    if (this.creds.attached && !this.creds.database) {
-      return [];
+  async listTables(
+    opts: { schema?: string; search?: string; database?: string } = {},
+  ): Promise<CatalogTable[]> {
+    if (!opts.database) {
+      throw new Error("listTables requires opts.database");
     }
-    const targetDb = this.creds.attached ? this.creds.database! : null;
-    const params: DuckDBValue[] = [];
-    let where = `name NOT LIKE '\\_dlt%' ESCAPE '\\'`;
-    if (targetDb) {
-      params.push(targetDb);
-      where += ` AND database = $${params.length}`;
-    }
-    if (opts.schema) {
-      params.push(opts.schema);
-      where += ` AND schema = $${params.length}`;
-    }
-    if (opts.search) {
-      params.push(`%${opts.search}%`);
-      const p = `$${params.length}`;
-      where += ` AND (schema ILIKE ${p} OR name ILIKE ${p} OR len(list_filter(column_names, c -> c ILIKE ${p})) > 0)`;
-    }
-    const rows = await this.all<{ schema: string; name: string; column_names: unknown }>(
-      `SELECT schema, name, column_names FROM (SHOW ALL TABLES) WHERE ${where} ORDER BY schema, name LIMIT 5000`,
-      params,
+    return withTimeout(
+      async () => {
+        const targetDb = opts.database!;
+        const params: DuckDBValue[] = [];
+        let where = `name NOT LIKE '\\_dlt%' ESCAPE '\\'`;
+        params.push(targetDb);
+        where += ` AND database = $${params.length}`;
+        if (opts.schema) {
+          params.push(opts.schema);
+          where += ` AND schema = $${params.length}`;
+        }
+        if (opts.search) {
+          params.push(`%${opts.search}%`);
+          const p = `$${params.length}`;
+          where += ` AND (schema ILIKE ${p} OR name ILIKE ${p} OR len(list_filter(column_names, c -> c ILIKE ${p})) > 0)`;
+        }
+        const rows = await this.all<{ schema: string; name: string; column_names: unknown }>(
+          `SELECT schema, name, column_names FROM (SHOW ALL TABLES) WHERE ${where} ORDER BY schema, name LIMIT 5000`,
+          params,
+        );
+        return rows.map((r) => ({
+          schema: r.schema,
+          table: r.name,
+          columns: toStringList(r.column_names),
+        }));
+      },
+      10_000,
+      "listTables",
     );
-    return rows.map((r) => ({
-      schema: r.schema,
-      table: r.name,
-      columns: toStringList(r.column_names),
-    }));
   }
 
   async listColumns(table: Ref): Promise<ColumnMeta[]> {
