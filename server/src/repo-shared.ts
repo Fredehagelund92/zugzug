@@ -263,6 +263,7 @@ export interface GridLayoutConfig {
   widths?: Record<string, number>;
   order?: string[];
   hidden?: string[];
+  sort?: { column: string; direction: "asc" | "desc" } | null;
 }
 export interface Preferences {
   publishThreshold: number;
