@@ -284,12 +284,13 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
       nameCol: string | null;
       description: string | null;
       color: string | null;
+      orderingMode: string;
     }
   >(
     `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable",
             key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind",
             name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol",
-            description, color
+            description, color, COALESCE(ordering_mode, 'derived') AS "orderingMode"
      FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
     [id, tenantId],
   );
@@ -341,25 +342,30 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
     !!meta.nameIdCol &&
     !!meta.nameCol;
 
+  const orderBy =
+    meta.orderingMode === "manual"
+      ? `ORDER BY d.position ASC NULLS LAST, variants DESC, ${meta.keyKind === "external_id" ? `d.${qid(meta.keyCol)}` : "d.label"}`
+      : `ORDER BY variants DESC, ${meta.keyKind === "external_id" ? `d.${qid(meta.keyCol)}` : "d.label"}`;
+
   // Fetch canonical rows from Postgres
   let canonRows: Record<string, unknown>[];
   if (meta.keyKind === "external_id") {
     canonRows = await pgAll<Record<string, unknown>>(
-      `SELECT d.${k} AS key, NULL AS label, true AS unresolved${fields.length ? ", " + fieldCols : ""},
+      `SELECT d.${k} AS key, NULL AS label, true AS unresolved, d.position${fields.length ? ", " + fieldCols : ""},
               COALESCE(v.n, 0)::int AS variants
        FROM ${cq(meta.dimTable)} d
        ${joins}
        LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
-       ORDER BY variants DESC, d.${k}`,
+       ${orderBy}`,
     );
   } else {
     canonRows = await pgAll<Record<string, unknown>>(
-      `SELECT d.${k} AS key, d.label, false AS unresolved${fields.length ? ", " + fieldCols : ""},
+      `SELECT d.${k} AS key, d.label, false AS unresolved, d.position${fields.length ? ", " + fieldCols : ""},
               COALESCE(v.n, 0)::int AS variants
        FROM ${cq(meta.dimTable)} d
        ${joins}
        LEFT JOIN (SELECT ${k} AS gk, count(*)::int AS n FROM ${cq(meta.mapTable)} GROUP BY 1) v ON v.gk = d.${k}
-       ORDER BY variants DESC, d.label`,
+       ${orderBy}`,
     );
   }
 
@@ -396,6 +402,7 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
     version: versions.get(String(r.key)) ?? 1,
     unresolved: !!r.unresolved,
     variants: Number(r.variants),
+    position: r.position == null ? null : String(r.position as string | bigint),
     fields: Object.fromEntries(
       allFieldKeys.map((fk) => [fk, r[fk] == null ? null : String(r[fk])]),
     ),
@@ -405,12 +412,22 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
     `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
   ).catch(() => null);
   const values = await scanValues(id, meta, tenantId);
+
+  let nextPos: string | null = null;
+  if (meta.orderingMode === "manual") {
+    const tail = await pgGet<{ p: string | null }>(
+      `SELECT MAX(position)::text AS p FROM ${cq(meta.dimTable)}`,
+    ).catch(() => null);
+    nextPos = tail?.p == null ? "1024" : String(BigInt(tail.p) + 1024n);
+  }
+
   const {
     nameTable: _nameTable,
     nameIdCol: _nameIdCol,
     nameCol: _nameCol,
     description,
     color,
+    orderingMode,
     ...metaOut
   } = meta;
   const safeColor =
@@ -419,9 +436,11 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
       : null;
   return {
     ...metaOut,
+    orderingMode,
     description: description ?? null,
     color: safeColor,
     rows: Number(rowsRow?.n ?? 0),
+    nextPosition: nextPos,
     canonical,
     values,
     fields,
