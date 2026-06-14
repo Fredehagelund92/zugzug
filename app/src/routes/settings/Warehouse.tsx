@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -18,6 +18,8 @@ import { Scans } from "./Scans";
 import { Tokens } from "./Tokens";
 import { useTenant } from "../../lib/tenant-context";
 import { can } from "../../lib/permissions";
+import { apiFetch } from "../../api";
+import { WarehouseCard, type ConnectionProjection } from "../../components/warehouse/WarehouseCard";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -46,6 +48,48 @@ function HealthBadge({ state }: { state?: ConnectionHealth["warehouse"] }) {
     <Badge tone="ok" dot>
       ok · {ago(state.lastCheckedAt)}
     </Badge>
+  );
+}
+
+function DatabasesSection() {
+  const tenant = useTenant();
+  const isAdmin = tenant.role === "admin" || tenant.isSuperAdmin === true;
+  const [conn, setConn] = useState<ConnectionProjection | null>(null);
+
+  async function refresh(): Promise<void> {
+    const response = await apiFetch("/warehouse/connection");
+    const c = (await response.json()) as ConnectionProjection | null;
+    setConn(c);
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  return (
+    <SettingsSection
+      title="Warehouse Connection"
+      hint="Register your warehouse and databases to start scanning for source values."
+    >
+      <WarehouseCard
+        connection={conn}
+        canEditCredentials={isAdmin}
+        onVerify={async () => {
+          await apiFetch("/warehouse/connection/verify", { method: "POST" });
+          await refresh();
+        }}
+        onEditCredentials={() => {
+          /* TODO T19: open credentials modal */
+        }}
+        onDelete={async () => {
+          if (!confirm("Delete this warehouse connection?")) return;
+          await apiFetch("/warehouse/connection", { method: "DELETE" });
+          await refresh();
+        }}
+      />
+      {/* TODO T18: <DatabaseTable databases={...} /> */}
+      {/* TODO T19/T20: <AddDatabaseDialog />, <RemoveDatabaseConfirm /> */}
+    </SettingsSection>
   );
 }
 
@@ -198,6 +242,7 @@ export function Warehouse() {
   const canViewTokens = can(tenant, "settings.tokens.view");
   return (
     <div className="space-y-8">
+      <DatabasesSection />
       <ConnectionsSection />
       <div id="scans"><Scans /></div>
       {canViewTokens && <div id="tokens"><Tokens /></div>}
