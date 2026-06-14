@@ -969,9 +969,10 @@ export async function mergeCanonical(
     ]);
     await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`, [real]);
     await tx.run(
-      `DELETE FROM "zugzug_app"."canonical_version"
+      `UPDATE "zugzug_app"."canonical_version"
+          SET retired_at = now(), retired_into = $4
         WHERE dim_id = $1 AND key = ANY($2::text[]) AND tenant_id = $3`,
-      [dimId, real, tenantId],
+      [dimId, real, tenantId, survivor],
     );
   });
 
