@@ -1037,6 +1037,55 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   setSingleDeleteConfirm({ key, label: target.label });
                 }
           }
+          onReorderRow={
+            dim.orderingMode === "manual" && canEdit
+              ? (rowKey, before, after) => {
+                  void reorderCanonical(activeId, rowKey, { before, after });
+                }
+              : undefined
+          }
+          onCellKeyDown={
+            dim.orderingMode === "manual" && canEdit
+              ? (e, ctx) => {
+                  const isMac = navigator.platform.toUpperCase().includes("MAC");
+                  const mod = isMac ? e.metaKey : e.ctrlKey;
+                  if (!mod || !e.shiftKey) return;
+                  const focused = ctx.cursor?.rowKey;
+                  if (!focused) return;
+                  const idx = list.findIndex((r) => r.key === focused);
+                  if (idx === -1) return;
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const before = idx > 1 ? (list[idx - 2]?.key ?? null) : null;
+                    const after = idx > 0 ? (list[idx - 1]?.key ?? null) : null;
+                    void reorderCanonical(activeId, focused, { before, after });
+                    return;
+                  }
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    const before = idx < list.length - 1 ? (list[idx + 1]?.key ?? null) : null;
+                    const after = idx < list.length - 2 ? (list[idx + 2]?.key ?? null) : null;
+                    void reorderCanonical(activeId, focused, { before, after });
+                    return;
+                  }
+                  if (e.key === "Home") {
+                    e.preventDefault();
+                    void reorderCanonical(activeId, focused, {
+                      before: null,
+                      after: list[0]?.key ?? null,
+                    });
+                    return;
+                  }
+                  if (e.key === "End") {
+                    e.preventDefault();
+                    void reorderCanonical(activeId, focused, {
+                      before: list[list.length - 1]?.key ?? null,
+                      after: null,
+                    });
+                  }
+                }
+              : undefined
+          }
           activity={activity}
           presence={presence}
         />

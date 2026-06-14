@@ -659,6 +659,26 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onClick: () => props.onInsertRow?.(rk, "below"),
           disabled: !props.onInsertRow,
         },
+        ...(props.onReorderRow
+          ? [
+              {
+                label: "Move to top",
+                onClick: () => {
+                  const idx = sortedRows.findIndex((r) => rowKey(r) === rk);
+                  const afterKey = idx > 0 ? rowKey(sortedRows[0]!) : null;
+                  props.onReorderRow?.(rk, null, afterKey);
+                },
+              } as MenuItem,
+              {
+                label: "Move to bottom",
+                onClick: () => {
+                  const last = sortedRows[sortedRows.length - 1];
+                  const beforeKey = last ? rowKey(last) : null;
+                  props.onReorderRow?.(rk, beforeKey, null);
+                },
+              } as MenuItem,
+            ]
+          : []),
         {
           label: "Delete row",
           onClick: () => props.onDeleteRow?.(rk),
@@ -810,6 +830,26 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onClick: () => props.onInsertRow?.(rk, "below"),
           disabled: !props.onInsertRow,
         },
+        ...(props.onReorderRow
+          ? [
+              {
+                label: "Move to top",
+                onClick: () => {
+                  const idx = sortedRows.findIndex((r) => rowKey(r) === rk);
+                  const afterKey = idx > 0 ? rowKey(sortedRows[0]!) : null;
+                  props.onReorderRow?.(rk, null, afterKey);
+                },
+              } as MenuItem,
+              {
+                label: "Move to bottom",
+                onClick: () => {
+                  const last = sortedRows[sortedRows.length - 1];
+                  const beforeKey = last ? rowKey(last) : null;
+                  props.onReorderRow?.(rk, beforeKey, null);
+                },
+              } as MenuItem,
+            ]
+          : []),
         {
           label: "Duplicate",
           onClick: () => props.onDuplicateRow?.(rk),
