@@ -21,6 +21,7 @@ import { can } from "../../lib/permissions";
 import { apiFetch } from "../../api";
 import { WarehouseCard, type ConnectionProjection } from "../../components/warehouse/WarehouseCard";
 import { DatabaseTable, type DatabaseRow } from "../../components/warehouse/DatabaseTable";
+import { AddDatabaseDialog } from "../../components/warehouse/AddDatabaseDialog";
 
 function ago(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -57,6 +58,7 @@ function DatabasesSection() {
   const isAdmin = tenant.role === "admin" || tenant.isSuperAdmin === true;
   const [conn, setConn] = useState<ConnectionProjection | null>(null);
   const [databases, setDatabases] = useState<DatabaseRow[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
 
   async function refresh(): Promise<void> {
     const [connResponse, dbsResponse] = await Promise.all([
@@ -97,14 +99,21 @@ function DatabasesSection() {
       <DatabaseTable
         databases={databases}
         canAdd={isAdmin || tenant.role === "editor"}
-        onAdd={() => {
-          /* TODO T19: open AddDatabaseDialog */
-        }}
+        onAdd={() => setShowAdd(true)}
         onRemove={(_db) => {
           /* TODO T20: open RemoveDatabaseConfirm */
         }}
       />
-      {/* TODO T19/T20: <AddDatabaseDialog />, <RemoveDatabaseConfirm /> */}
+      {showAdd && (
+        <AddDatabaseDialog
+          onCancel={() => setShowAdd(false)}
+          onAdded={async () => {
+            setShowAdd(false);
+            await refresh();
+          }}
+        />
+      )}
+      {/* TODO T20: <RemoveDatabaseConfirm /> */}
     </SettingsSection>
   );
 }
