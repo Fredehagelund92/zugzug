@@ -338,8 +338,7 @@ export async function liveSources(dimId: string, tenantId: string): Promise<Sour
             s.table_name     AS "tableName",
             s.column_name    AS "columnName"
        FROM ${pg("dimension_source")} s
-       JOIN ${pg("warehouse_database")} wd
-         ON wd.id = s.database_id AND wd.tenant_id = s.tenant_id
+       JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
       WHERE s.tenant_id = $1 AND s.dim_id = $2
       ORDER BY 1, 2, 3, 4`,
     [tenantId, dimId],

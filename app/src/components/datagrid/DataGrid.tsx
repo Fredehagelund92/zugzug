@@ -1105,7 +1105,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
   const onStopEdit = useCallback(() => cursor.stopEdit(), [cursor]);
 
-  // ── Row-number click → select whole row ────────────────────────────────────
+  // ── Row-number click → select row; sustained drag → reorder row ───────────
+  //
+  // Sheets/Notion pattern: a tap on the row number selects the whole row.
+  // Holding and dragging past a threshold flips into reorder mode (only when
+  // the host wired onReorderRow). The threshold prevents accidental reorder
+  // from a click-with-jitter and keeps single-click selection snappy.
+  const onReorderRowRef = useRef(props.onReorderRow);
+  onReorderRowRef.current = props.onReorderRow;
   const onRowNumPointerDown = useCallback(
     (e: React.PointerEvent, rk: string) => {
       if (e.button !== 0) return;
@@ -1124,6 +1131,85 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       pointerCursorAt.current = performance.now();
       cursor.setCursor({ rowKey: rk, field: firstCol.field, editing: false });
       e.preventDefault();
+
+      // No reorder wiring → behave as plain row-select.
+      if (!onReorderRowRef.current) return;
+
+      const startY = e.clientY;
+      const startX = e.clientX;
+      const DRAG_THRESHOLD = 5;
+      let dragging = false;
+      let indicator: HTMLDivElement | null = null;
+      let target: { before: string | null; after: string | null } | null = null;
+      let ghostClass: string | null = null;
+
+      const startDrag = () => {
+        dragging = true;
+        document.body.style.cursor = "grabbing";
+        indicator = document.createElement("div");
+        indicator.style.cssText =
+          "position:fixed;height:2px;background:var(--accent,#7c5cff);pointer-events:none;z-index:9999;display:none;border-radius:1px;box-shadow:0 0 6px color-mix(in srgb,var(--accent,#7c5cff) 40%,transparent)";
+        document.body.appendChild(indicator);
+        // Subtle ghost on the dragged row.
+        const dragged = document.querySelector<HTMLElement>(`[data-row="${CSS.escape(rk)}"]`);
+        if (dragged) {
+          ghostClass = "zz-dragging-row";
+          dragged.classList.add(ghostClass);
+        }
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        if (!dragging) {
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+          if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+          startDrag();
+        }
+        const el = document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null;
+        const rowEl = el?.closest<HTMLElement>("[data-row]");
+        if (!rowEl || rowEl.dataset.row === rk) {
+          if (indicator) indicator.style.display = "none";
+          target = null;
+          return;
+        }
+        const rect = rowEl.getBoundingClientRect();
+        const above = ev.clientY < rect.top + rect.height / 2;
+        if (indicator) {
+          indicator.style.display = "block";
+          indicator.style.left = `${rect.left}px`;
+          indicator.style.width = `${rect.width}px`;
+          indicator.style.top = `${(above ? rect.top : rect.bottom) - 1}px`;
+        }
+
+        const scroller =
+          rowEl.closest<HTMLElement>(".zz-grid-scroll") ?? (rowEl.parentElement as HTMLElement);
+        const all = Array.from(scroller.querySelectorAll<HTMLElement>("[data-row]"));
+        const idx = all.indexOf(rowEl);
+        const prevKey = idx > 0 ? all[idx - 1]?.dataset.row ?? null : null;
+        const nextKey = idx >= 0 && idx < all.length - 1 ? all[idx + 1]?.dataset.row ?? null : null;
+        const hovered = rowEl.dataset.row!;
+        target = above
+          ? { before: prevKey === rk ? null : prevKey, after: hovered }
+          : { before: hovered, after: nextKey === rk ? null : nextKey };
+        if (target.before === rk || target.after === rk) target = null;
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        if (indicator) indicator.remove();
+        document.body.style.cursor = "";
+        if (ghostClass) {
+          const dragged = document.querySelector<HTMLElement>(`[data-row="${CSS.escape(rk)}"]`);
+          dragged?.classList.remove(ghostClass);
+        }
+        if (dragging && target) onReorderRowRef.current?.(rk, target.before, target.after);
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
     },
     [cursor, orderedVisible],
   );
@@ -1207,7 +1293,10 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-colcount={orderedVisible.length}
         onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
-        className="zz-grid-scroll relative flex flex-1 flex-col min-h-0 overflow-auto outline-none"
+        className={cx(
+          "zz-grid-scroll relative flex flex-1 flex-col min-h-0 overflow-auto outline-none",
+          props.onReorderRow && "zz-row-reorderable",
+        )}
       >
         {fillHandlePos && (
           <FillHandle
@@ -1316,7 +1405,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           />
         )}
       </div>
-      {statusAgg && <StatusBar agg={statusAgg} />}
+      <StatusBar agg={statusAgg} />
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}

@@ -360,3 +360,15 @@
 .zz-grid-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Row reorder: ghost the source row + give a hint that the grab handle is the
+ * row-number gutter. Reorderable surfaces opt in via .zz-row-reorderable. */
+.zz-dragging-row {
+  opacity: 0.45;
+}
+.zz-row-reorderable [data-row-num] {
+  cursor: grab;
+}
+.zz-row-reorderable [data-row-num]:active {
+  cursor: grabbing;
+}

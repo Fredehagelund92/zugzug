@@ -66,13 +66,13 @@ export async function seedDemo(): Promise<void> {
   // for this tenant. normalizeSource() requires preferences.legacy_default_database_id
   // to be set when the source doesn't carry an explicit databaseId.
   const db = await pgGet<{ id: string }>(
-    `SELECT id FROM ${pg("warehouse_database")} WHERE tenant_id = $1 ORDER BY added_at LIMIT 1`,
-    [T],
+    `SELECT id FROM ${pg("warehouse_database")} ORDER BY added_at LIMIT 1`,
+    [],
   );
   if (db) {
     await pgRun(
-      `INSERT INTO ${pg("preferences")} (tenant_id, legacy_default_database_id, updated_at)
-       VALUES ($1, $2, now())
+      `INSERT INTO ${pg("preferences")} (tenant_id, legacy_default_database_id, publish_threshold, suggest_threshold, updated_at)
+       VALUES ($1, $2, 95, 80, now())
        ON CONFLICT (tenant_id) DO UPDATE SET legacy_default_database_id = EXCLUDED.legacy_default_database_id`,
       [T, db.id],
     );

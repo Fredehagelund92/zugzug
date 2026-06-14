@@ -21,6 +21,13 @@ SELECT database_name, MIN(id) AS survivor_id
  GROUP BY database_name;
 --> statement-breakpoint
 
+-- 2b. Drop composite FKs before repointing — survivor may live in a different
+-- tenant than the referencing row, which the composite (tenant_id, database_id)
+-- FK would reject. Single-column FKs are re-added in step 7 after dedup.
+ALTER TABLE "zugzug_app"."dimension_source"     DROP CONSTRAINT "dimension_source_database_fk";--> statement-breakpoint
+ALTER TABLE "zugzug_app"."source_stat"          DROP CONSTRAINT "source_stat_database_fk";--> statement-breakpoint
+ALTER TABLE "zugzug_app"."user_warehouse_state" DROP CONSTRAINT "user_warehouse_state_recent_db_fk";--> statement-breakpoint
+
 -- 3. Repoint FKs to survivors.
 UPDATE "zugzug_app"."dimension_source" ds
    SET database_id = s.survivor_id
@@ -55,12 +62,10 @@ DELETE FROM "zugzug_app"."warehouse_database"
  WHERE id NOT IN (SELECT survivor_id FROM _db_survivor);
 --> statement-breakpoint
 
--- 5. Drop FKs that target the composite (tenant_id, id) key on warehouse_database.
-ALTER TABLE "zugzug_app"."dimension_source"     DROP CONSTRAINT "dimension_source_database_fk";--> statement-breakpoint
-ALTER TABLE "zugzug_app"."source_stat"          DROP CONSTRAINT "source_stat_database_fk";--> statement-breakpoint
-ALTER TABLE "zugzug_app"."user_warehouse_state" DROP CONSTRAINT "user_warehouse_state_recent_db_fk";--> statement-breakpoint
-
 -- 6. Drop warehouse_database's composite PK, tenant_id, connection_id; add single-col PK + unique.
+-- Drop RLS policy first — it depends on tenant_id.
+DROP POLICY IF EXISTS "warehouse_database_tenant_isolation" ON "zugzug_app"."warehouse_database";--> statement-breakpoint
+ALTER TABLE "zugzug_app"."warehouse_database" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "zugzug_app"."warehouse_database"
   DROP CONSTRAINT "warehouse_database_tenant_id_id_pk";--> statement-breakpoint
 ALTER TABLE "zugzug_app"."warehouse_database"
@@ -84,10 +89,6 @@ ALTER TABLE "zugzug_app"."user_warehouse_state"
   ADD CONSTRAINT "user_warehouse_state_recent_db_fk"
     FOREIGN KEY ("recent_database_id") REFERENCES "zugzug_app"."warehouse_database"("id")
     ON DELETE SET NULL;--> statement-breakpoint
-
--- 8. Drop RLS on warehouse_database (deployment-global now).
-DROP POLICY IF EXISTS "warehouse_database_tenant_isolation" ON "zugzug_app"."warehouse_database";--> statement-breakpoint
-ALTER TABLE "zugzug_app"."warehouse_database" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
 
 -- 9. Drop warehouse_connection entirely.
 DROP TABLE "zugzug_app"."warehouse_connection";
