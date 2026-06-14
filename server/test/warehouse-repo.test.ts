@@ -7,7 +7,7 @@ process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect, beforeEach } from "bun:test";
-import { pgRun } from "../src/pg.ts";
+import { pgAll, pgGet, pgRun } from "../src/pg.ts";
 import { provisionTenant } from "../src/tenant.ts";
 import {
   createWarehouseConnection,
@@ -78,4 +78,68 @@ test("createWarehouseConnection rejects a second connection per tenant", async (
       credentials: { type: "duckdb", token: "md_y", writable: false }, actorUserId: "u_seed",
     }),
   ).rejects.toThrow(/already.*exists|one.*per.*tenant/i);
+});
+
+test("provisionTenant({ warehouse }) inserts connection + database rows", async () => {
+  const t = `tprov_${process.pid}`;
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
+  await provisionTenant({
+    id: t,
+    label: "Prov",
+    warehouse: {
+      adapter: "motherduck",
+      label: "Prov WH",
+      credentials: { type: "duckdb", token: "md_x", writable: false },
+      databases: [{ databaseName: "analytics" }, { databaseName: "hr" }],
+      createdBy: "u_admin",
+    },
+  });
+  const conn = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`,
+    [t],
+  );
+  expect(conn).not.toBeNull();
+  const dbs = await pgAll<{ database_name: string }>(
+    `SELECT database_name FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1 ORDER BY database_name`,
+    [t],
+  );
+  expect(dbs.map((d) => d.database_name)).toEqual(["analytics", "hr"]);
+  // Cleanup so this row doesn't leak into other suites.
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
+});
+
+test("provisionTenant({ warehouse }) rolls back tenant on warehouse failure", async () => {
+  const t = `tprov_${process.pid}_rb`;
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
+  // Duplicate databaseName under the same connection trips the
+  // warehouse_database_per_conn_unique index on the second insert,
+  // exercising the compensating DELETE path.
+  await expect(
+    provisionTenant({
+      id: t,
+      label: "Rollback",
+      warehouse: {
+        adapter: "motherduck",
+        label: "WH",
+        credentials: { type: "duckdb", token: "md_x", writable: false },
+        databases: [{ databaseName: "analytics" }, { databaseName: "analytics" }],
+        createdBy: "u_admin",
+      },
+    }),
+  ).rejects.toThrow();
+  const tenant = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."tenant" WHERE id = $1`,
+    [t],
+  );
+  expect(tenant).toBeNull();
+  // Cleanup any orphaned warehouse_database/connection rows that may have
+  // survived the failure before the rollback ran.
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [t]);
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [t]);
 });

@@ -6,6 +6,8 @@
 import { runMigrations } from "../drizzle/migrate.ts";
 import { seedDemo } from "./seed.ts";
 import { pgRun, pgGet } from "./pg.ts";
+import { env } from "./env.ts";
+import { provisionTenant } from "./tenant.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
@@ -52,6 +54,37 @@ if (n <= 1) {
 }
 
 if (seed) {
+  // Ensure the default tenant exists with a warehouse_connection + database.
+  // Migration 0011 creates the tenant row, and 0021 backfills a __PENDING__
+  // connection — but on a fresh install where migration ordering changes, or
+  // a teardown/reset, this seed step makes the provisioning explicit. Wrapped
+  // in an existence check because the default tenant is already pinned by
+  // 0011 in normal flows; we don't want to fight that path.
+  const defaultExists = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."tenant" WHERE id = 'default'`,
+  );
+  if (!defaultExists) {
+    await provisionTenant({
+      id: "default",
+      label: "Demo workspace",
+      warehouse: env.motherduckToken && env.warehouseDb
+        ? {
+            adapter: "motherduck",
+            label: "Production warehouse",
+            credentials: {
+              type: "duckdb",
+              token: env.motherduckToken,
+              attached: env.attachWarehouse,
+              writable: false,
+            },
+            databases: [{ databaseName: env.warehouseDb }],
+            createdBy: "u_system",
+          }
+        : undefined,
+    });
+    console.log("· default tenant provisioned");
+  }
+
   // Warehouse adapter warm-up removed: the registry now lazy-loads per-tenant
   // on first request. Bootstrap doesn't need a representative tenant id.
   await seedDemo();
