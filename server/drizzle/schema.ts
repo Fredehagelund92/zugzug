@@ -3,7 +3,7 @@ import {
   pgSchema,
   varchar,
   boolean,
-  bytea,
+  customType,
   bigint,
   integer,
   serial,
@@ -18,6 +18,15 @@ import {
 } from "drizzle-orm/pg-core";
 
 const app = pgSchema("zugzug_app");
+
+/* Drizzle 0.45.2 does not export a `bytea` helper from pg-core; define one
+   here so the rest of the file can keep using `bytea("col").notNull()`
+   call sites unchanged. */
+const bytea = customType<{ data: Buffer; default: false }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const dimension = app.table(
   "dimension",
