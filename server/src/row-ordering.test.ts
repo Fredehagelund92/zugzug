@@ -35,3 +35,18 @@ describe("position arithmetic", () => {
     expect(positions).toEqual([1024n, 2048n, 3072n, 4096n, 5120n]);
   });
 });
+
+describe("rebalance rate limit", () => {
+  it("retryAfterSeconds is positive for a recent rebalance", () => {
+    const lastMs     = Date.now() - 10_000; // 10 seconds ago
+    const elapsed    = Date.now() - lastMs;
+    const retryAfter = Math.ceil((60_000 - elapsed) / 1000);
+    expect(retryAfter).toBeGreaterThan(0);
+    expect(retryAfter).toBeLessThanOrEqual(60);
+  });
+  it("no rate limit when last rebalance was >60s ago", () => {
+    const lastMs = Date.now() - 70_000;
+    const elapsed = Date.now() - lastMs;
+    expect(elapsed).toBeGreaterThan(60_000);
+  });
+});

@@ -22,7 +22,7 @@ import {
   type Operation,
 } from "./auth.ts";
 import * as tables from "./tables.ts";
-import { pgAll, pgEnd, pgTxScoped } from "./pg.ts";
+import { pgAll, pgEnd, pgGet, pgTxScoped } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { createScheduler } from "./scheduler.ts";
@@ -1494,6 +1494,43 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(tenantCtx, "commit");
           if (denied) return denied;
           return json(await reqRepo.commit(id, me));
+        }
+        // POST /api/dimensions/:id/positions/rebalance
+        if (seg[3] === "positions" && seg[4] === "rebalance" && seg.length === 5 && method === "POST") {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+
+          // Atomic rate-limit check-and-set: only proceeds if last rebalance was >60s ago
+          const gateResult = await pgGet<{ last_rebalanced_at: string | null }>(
+            `UPDATE ${pg("dimension")}
+                SET last_rebalanced_at = now()
+              WHERE id = $1 AND tenant_id = $2
+                AND (last_rebalanced_at IS NULL OR last_rebalanced_at < now() - interval '60 seconds')
+              RETURNING last_rebalanced_at`,
+            [id, tenantCtx.tenantId],
+          );
+
+          if (!gateResult) {
+            const existing = await pgGet<{ last_rebalanced_at: string }>(
+              `SELECT last_rebalanced_at FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+              [id, tenantCtx.tenantId],
+            );
+            const lastMs     = existing?.last_rebalanced_at ? new Date(existing.last_rebalanced_at).getTime() : 0;
+            const retryAfter = Math.ceil((60_000 - (Date.now() - lastMs)) / 1000);
+            return json(
+              {
+                error: "REBALANCE_RATE_LIMITED",
+                lastRebalancedAt: existing?.last_rebalanced_at ?? null,
+                retryAfterSeconds: Math.max(1, retryAfter),
+              },
+              429,
+            );
+          }
+
+          const dm = await dimMeta(id, tenantCtx.tenantId);
+          if (!dm) return json({ error: "not found" }, 404);
+          const rebalanced = await rebalanceDimPositions(id, dm, me, tenantCtx.tenantId, "manual");
+          return json({ ok: true, rebalanced, rebalancedAt: gateResult.last_rebalanced_at });
         }
         // POST /api/dimensions/:id/suggest {raw_value, force_refresh?} — AI suggestion
         if (seg[3] === "suggest" && seg.length === 4 && method === "POST") {
