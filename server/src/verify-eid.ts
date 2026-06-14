@@ -49,7 +49,7 @@ registerFactories({
   duckdb: async (creds) => createDuckDbAdapter(creds),
   snowflake: async (creds) => new SnowflakeAdapter(creds),
 });
-await getAdapter(); // warm the adapter
+await getAdapter("default"); // warm the adapter (verification script — seed tenant)
 await runMigrations();
 await cleanup();
 

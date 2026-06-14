@@ -34,6 +34,57 @@ import type { ValueProvenance } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { AppError } from "./errors.ts";
 
+/** Source-registration input shapes.
+ *
+ *  - QualifiedSource is the new (database_id, schema, table, column) tuple.
+ *  - LegacySource keeps the old "schema.table" + column wire so callers (and
+ *    older endpoint clients) keep working while we migrate.
+ *
+ *  normalizeSource() turns either into a QualifiedSource, resolving the
+ *  legacy shape against preferences.legacy_default_database_id. When the
+ *  tenant has multiple databases registered and no default set, the legacy
+ *  shape is ambiguous and the caller MUST switch to the qualified shape. */
+export type LegacySource = { table: string; column: string };
+export type QualifiedSource = {
+  databaseId: string;
+  schemaName: string;
+  tableName: string;
+  columnName: string;
+};
+
+export type NormalizeSourceError =
+  | { error: string; kind: "INVALID_LEGACY_SOURCE" }
+  | { error: string; kind: "BACKEND_LEGACY_SHAPE_AMBIGUOUS" };
+
+export async function normalizeSource(
+  tenantId: string,
+  input: LegacySource | QualifiedSource,
+): Promise<QualifiedSource | NormalizeSourceError> {
+  if ("databaseId" in input) {
+    return input;
+  }
+  const parts = input.table.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return { error: "legacy source requires schema.table", kind: "INVALID_LEGACY_SOURCE" };
+  }
+  const pref = await pgGet<{ legacy_default_database_id: string | null }>(
+    `SELECT legacy_default_database_id FROM "zugzug_app"."preferences" WHERE tenant_id = $1`,
+    [tenantId],
+  );
+  if (!pref?.legacy_default_database_id) {
+    return {
+      error: "ambiguous legacy source; set preferences.legacy_default_database_id",
+      kind: "BACKEND_LEGACY_SHAPE_AMBIGUOUS",
+    };
+  }
+  return {
+    databaseId: pref.legacy_default_database_id,
+    schemaName: parts[0]!,
+    tableName: parts[1]!,
+    columnName: input.column,
+  };
+}
+
 /** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */
 type TxLike = {
   all: <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T[]>;
@@ -279,7 +330,7 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
 
   // For external_id dims with warehouse attached: resolve names from MotherDuck
   if (liveName) {
-    const adapter = await getAdapter();
+    const adapter = await getAdapter(tenantId);
     const nameMap = await adapter
       .nameResolution(parseSourceTable(meta.nameTable!), meta.nameIdCol!, meta.nameCol!)
       .catch(() => new Map<string, string>());
@@ -360,7 +411,7 @@ async function scanValues(
   if (!sources.length) return [];
 
   // 1. Warehouse: distinct raw values with provenance + row counts
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
   const occRows = await adapter
     .distinctValuesWithProvenance(refs)
@@ -441,10 +492,14 @@ async function scanValues(
 
 /** Create a dimension: register it + provision dim_/map_ (Postgres) + register
  *  its warehouse sources. Idempotent on the id. For key_kind 'external_id' the
- *  dim_ label is nullable (names are resolved live from the warehouse, not stored). */
+ *  dim_ label is nullable (names are resolved live from the warehouse, not stored).
+ *
+ *  `sources` accepts either the legacy `{ table: "schema.table", column }` shape
+ *  or the qualified `{ databaseId, schemaName, tableName, columnName }` shape.
+ *  Legacy entries are resolved via preferences.legacy_default_database_id. */
 export async function addDimension(
   name: string,
-  sources: { table: string; column: string }[] = [],
+  sources: (LegacySource | QualifiedSource)[] = [],
   opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
   userId: string,
   tenantId: string,
@@ -497,10 +552,22 @@ export async function addDimension(
     }
   }
   for (const s of sources) {
+    const normalized = await normalizeSource(tenantId, s);
+    if ("error" in normalized) {
+      throw new AppError(normalized.kind, normalized.error, 422);
+    }
     await pgRun(
-      `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
-       VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
-      [id, s.table, s.column, tenantId],
+      `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+      [
+        id,
+        tenantId,
+        normalized.databaseId,
+        normalized.schemaName,
+        normalized.tableName,
+        normalized.columnName,
+      ],
     );
   }
   return id;

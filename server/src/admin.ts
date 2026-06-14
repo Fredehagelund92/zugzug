@@ -82,7 +82,10 @@ export async function createWarehouseDatabase(name: string): Promise<string[]> {
   const v = validateWarehouseName(name);
   if (!v.ok) throw new AppError("VALIDATION_FAILED", v.reason, 400);
 
-  const adapter = (await getAdapter()) as unknown as RawSqlAdapter;
+  // Super-admin operation: uses the seed tenant's connection as a representative
+  // (CREATE DATABASE is a server-level command that targets the whole MotherDuck
+  // org, not one tenant's catalogue). T14 will replace this with a connection picker.
+  const adapter = (await getAdapter("default")) as unknown as RawSqlAdapter;
 
   // Uniqueness check — SHOW DATABASES is what the existing list route uses.
   const existing = await adapter.all<{ database_name: string }>("SHOW DATABASES");

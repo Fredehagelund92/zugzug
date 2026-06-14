@@ -148,6 +148,13 @@
       "when": 1781380457953,
       "tag": "0020_sleepy_wiccan",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1781427458096,
+      "tag": "0021_strong_wonder_man",
+      "breakpoints": true
     }
   ]
 }

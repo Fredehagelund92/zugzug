@@ -4,20 +4,34 @@ import { ComboSelect } from "./ComboSelect";
 import { IconSearch, IconX, IconChevron, IconArrowRight } from "./Icons";
 import { cx } from "../lib/cx";
 import { searchCatalog, deriveCanonical, useCanEdit, type CatalogTable } from "../store";
+import { apiFetch } from "../api";
 import type { MappingDimension } from "../data";
 
 /* CatalogExplorer — browse/search the warehouse catalog (the 1000+ tables) and
    wire a column to a dimension. Server-side search + schema facets + paginated
    "load more", so it scales regardless of catalog size; results live in local
-   state (never the global cache). */
+   state (never the global cache). The explorer is scoped to a single registered
+   warehouse database; if a caller passes `database={null}` we render a picker so
+   the user can select one before browsing. */
 
 const PAGE = 50;
 
+interface DatabaseOption {
+  id: string;
+  databaseName: string;
+  label: string | null;
+  lastProbeError: string | null;
+}
+
 export function CatalogExplorer({
   dims,
+  database,
+  onDatabaseChange,
   onClose,
 }: {
   dims: MappingDimension[];
+  database: string | null;
+  onDatabaseChange?: (id: string | null) => void;
   onClose: () => void;
 }) {
   const canEdit = useCanEdit();
@@ -29,16 +43,56 @@ export function CatalogExplorer({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [databases, setDatabases] = useState<DatabaseOption[]>([]);
+  const [internalDb, setInternalDb] = useState<string | null>(database);
   type WireState = { dim: string; n: number | null; error?: string };
   const [wired, setWired] = useState<Record<string, WireState>>({}); // "table.col" → result
   const seq = useRef(0);
 
+  const setDatabase = (id: string | null): void => {
+    setInternalDb(id);
+    onDatabaseChange?.(id);
+  };
+
+  // keep state in sync if the parent flips the database prop while the explorer
+  // is mounted (rare — the parent typically remounts the explorer to switch dbs)
+  useEffect(() => {
+    setInternalDb(database);
+  }, [database]);
+
+  // load registered databases once so the picker (and lone-db autoselect) work
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch("/warehouse/databases")
+      .then((r) => (r.ok ? (r.json() as Promise<DatabaseOption[]>) : []))
+      .then((dbs) => {
+        if (cancelled) return;
+        setDatabases(dbs);
+        if (internalDb === null && dbs.length === 1) setDatabase(dbs[0]!.id);
+      })
+      .catch(() => {
+        /* picker stays empty; explorer shows the "pick a database" state */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const load = async (append: boolean) => {
+    if (!internalDb) {
+      setRows([]);
+      setTotal(0);
+      setSchemas([]);
+      setLoading(false);
+      return;
+    }
     const ticket = ++seq.current;
     setLoading(true);
     setLoadError(null);
     try {
       const r = await searchCatalog({
+        database: internalDb,
         q,
         schema: schema ?? undefined,
         limit: PAGE,
@@ -60,12 +114,12 @@ export function CatalogExplorer({
     }
   };
 
-  // (re)search from the top on query / schema change, debounced
+  // (re)search from the top on database / query / schema change, debounced
   useEffect(() => {
     const t = setTimeout(() => load(false), 220);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, schema]);
+  }, [internalDb, q, schema]);
 
   const wire = async (table: string, column: string, dimLabel: string) => {
     const dim = dims.find((d) => d.dimension === dimLabel);
@@ -117,7 +171,7 @@ export function CatalogExplorer({
         className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* header + search */}
+        {/* header + database picker + search */}
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 md:px-5 md:py-4">
           <div>
             <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
@@ -127,14 +181,35 @@ export function CatalogExplorer({
               Wire a source
             </h2>
           </div>
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent md:ml-auto md:max-w-sm">
+          <label className="flex shrink-0 items-center gap-2 md:ml-auto">
+            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+              Database
+            </span>
+            <select
+              aria-label="Database"
+              value={internalDb ?? ""}
+              onChange={(e) => setDatabase(e.target.value || null)}
+              className="rounded-sm border border-line-2 bg-surface px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
+            >
+              <option value="">— pick a database —</option>
+              {databases.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.databaseName}
+                  {d.label ? ` — ${d.label}` : ""}
+                  {d.lastProbeError ? " (unreachable)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent md:max-w-sm">
             <IconSearch className="h-4 w-4 shrink-0" />
             <input
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search tables, columns…"
-              className="w-full bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
+              disabled={!internalDb}
+              className="w-full bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-50"
             />
           </label>
           <button
@@ -266,9 +341,13 @@ export function CatalogExplorer({
 
             {!loading && rows.length === 0 && (
               <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
-                {q || schema
-                  ? "no tables match"
-                  : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
+                {!internalDb
+                  ? databases.length === 0
+                    ? "no warehouse databases registered — add one in settings"
+                    : "pick a database above to browse its tables"
+                  : q || schema
+                    ? "no tables match"
+                    : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
               </div>
             )}
 

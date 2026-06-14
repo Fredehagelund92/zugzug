@@ -335,7 +335,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return json({ databases: [], attached: false });
         }
         try {
-          const adapter = await getAdapter();
+          // Super-admin introspection: uses the seed tenant's connection as a
+          // representative warehouse. T14 will replace this with a per-connection picker.
+          const adapter = await getAdapter("default");
           // Cast to access the protected `all()` method — this is an admin-only
           // introspection path; the public adapter interface intentionally has no
           // raw SQL escape hatch, so we poke through here rather than widening it.
@@ -677,6 +679,318 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
+    // /api/t/:slug/warehouse/... — warehouse connection and database queries
+    if (tenantSlugFromPath !== null && seg[1] === "warehouse") {
+      // /api/t/:slug/warehouse/connection — GET (T12), POST/PATCH/DELETE (T13).
+      if (seg[2] === "connection" && seg.length === 3) {
+        if (method === "GET") {
+          const { getWarehouseConnection } = await import("./repo-warehouse.ts");
+          const conn = await getWarehouseConnection(tenantCtx.tenantId);
+          return json(conn);
+        }
+
+        if (method === "POST") {
+          const denied = gateOrJson(tenantCtx, "admin_connection");
+          if (denied) return denied;
+          const { createWarehouseConnection } = await import("./repo-warehouse.ts");
+          const body = (await req.json()) as {
+            adapter: "motherduck" | "duckdb_local";
+            label: string;
+            credentials: import("./warehouse/credentials.ts").WarehouseCredentials;
+          };
+          try {
+            const created = await createWarehouseConnection({
+              tenantId: tenantCtx.tenantId,
+              adapter: body.adapter,
+              label: body.label,
+              credentials: body.credentials,
+              actorUserId: me,
+            });
+            await appendAuditAs(me, "warehouse.connection.create", body.label, {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                adapter: body.adapter,
+                label: body.label,
+                connectionId: created.id,
+              },
+            });
+            return json(created, 201);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (/already exists/.test(msg)) {
+              return json({ error: msg, kind: "ALREADY_EXISTS" }, 409);
+            }
+            throw e;
+          }
+        }
+
+        if (method === "PATCH") {
+          const denied = gateOrJson(tenantCtx, "admin_connection");
+          if (denied) return denied;
+          const ifMatch = req.headers.get("if-match");
+          if (!ifMatch) {
+            return json({ error: "If-Match header required" }, 428);
+          }
+          const expectedVersion = Number(ifMatch);
+          if (!Number.isInteger(expectedVersion)) {
+            return json({ error: "If-Match must be an integer" }, 400);
+          }
+          const body = (await req.json()) as {
+            label?: string;
+            credentials?: import("./warehouse/credentials.ts").WarehouseCredentials;
+          };
+          const { patchWarehouseConnection, getWarehouseConnection } = await import(
+            "./repo-warehouse.ts"
+          );
+          const out = await patchWarehouseConnection({
+            tenantId: tenantCtx.tenantId,
+            expectedVersion,
+            label: body.label,
+            credentials: body.credentials,
+            actorUserId: me,
+          });
+          if (!out.ok) {
+            return json({ kind: out.reason, currentVersion: out.currentVersion }, 412);
+          }
+          const changedFields: string[] = [];
+          if (body.label !== undefined) changedFields.push("label");
+          if (out.row.credentialsVersion !== expectedVersion) changedFields.push("credentials");
+          if (changedFields.length > 0) {
+            await appendAuditAs(me, "warehouse.connection.update", out.row.label, {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                adapter: out.row.adapter,
+                label: out.row.label,
+                changedFields,
+                connectionId: out.row.id,
+              },
+            });
+          }
+          // Defensive read so the projection matches the GET shape exactly.
+          const fresh = await getWarehouseConnection(tenantCtx.tenantId);
+          return json(fresh ?? out.row);
+        }
+
+        if (method === "DELETE") {
+          const denied = gateOrJson(tenantCtx, "admin_connection");
+          if (denied) return denied;
+          const { deleteWarehouseConnection, getWarehouseConnection } = await import(
+            "./repo-warehouse.ts"
+          );
+          const existing = await getWarehouseConnection(tenantCtx.tenantId);
+          const out = await deleteWarehouseConnection(tenantCtx.tenantId);
+          if (!out.ok) {
+            return json({ kind: "CONNECTION_IN_USE", databaseCount: out.databaseCount }, 409);
+          }
+          if (existing) {
+            await appendAuditAs(me, "warehouse.connection.delete", existing.label, {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                adapter: existing.adapter,
+                label: existing.label,
+                connectionId: existing.id,
+              },
+            });
+          }
+          return noContent();
+        }
+      }
+
+      // POST /api/t/:slug/warehouse/connection/verify — adapter.ping() liveness probe.
+      if (
+        seg[2] === "connection" &&
+        seg[3] === "verify" &&
+        seg.length === 4 &&
+        method === "POST"
+      ) {
+        const denied = gateOrJson(tenantCtx, "admin_connection");
+        if (denied) return denied;
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const { setVerifyResult, getWarehouseConnection } = await import("./repo-warehouse.ts");
+        try {
+          const adapter = await getAdapterFn(tenantCtx.tenantId);
+          await adapter.ping();
+          await setVerifyResult(tenantCtx.tenantId, { ok: true });
+          const fresh = await getWarehouseConnection(tenantCtx.tenantId);
+          return json({ ok: true, lastVerifiedAt: fresh?.lastVerifiedAt ?? null });
+        } catch (e) {
+          const error = e instanceof Error ? e.message : String(e);
+          await setVerifyResult(tenantCtx.tenantId, { ok: false, error });
+          return json({ ok: false, error }, 200);
+        }
+      }
+
+      // GET /api/t/:slug/warehouse/databases — return the list with sourceCount.
+      if (seg[2] === "databases" && seg.length === 3 && method === "GET") {
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const list = await listWarehouseDatabases(tenantCtx.tenantId);
+        return json(list);
+      }
+
+      // /api/t/:slug/warehouse/databases — POST register / PATCH label / DELETE.
+      // GET .../available — calls the adapter to enumerate discoverable catalogs.
+      if (seg[2] === "databases") {
+        const {
+          listWarehouseDatabases,
+          addWarehouseDatabase,
+          updateDatabaseLabel,
+          removeDatabase,
+          getWarehouseConnection,
+        } = await import("./repo-warehouse.ts");
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+
+        // GET /warehouse/databases/available — adapter discovery + registration overlay.
+        if (method === "GET" && seg[3] === "available" && seg.length === 4) {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const adapter = await getAdapterFn(tenantCtx.tenantId);
+          const registered = new Set(
+            (await listWarehouseDatabases(tenantCtx.tenantId)).map((d) => d.databaseName),
+          );
+          try {
+            const discovered = await adapter.listDatabases();
+            return json(
+              discovered.map((d) => ({
+                databaseName: d.databaseName,
+                registered: registered.has(d.databaseName),
+              })),
+            );
+          } catch (discoverErr) {
+            const msg =
+              discoverErr instanceof Error ? discoverErr.message : String(discoverErr);
+            if (msg.includes("listDatabases exceeded")) {
+              return json({ kind: "DISCOVERY_TIMED_OUT" }, 504);
+            }
+            throw discoverErr;
+          }
+        }
+
+        // POST /warehouse/databases — validate name + adapter.probeDatabase + insert.
+        if (method === "POST" && seg.length === 3) {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const body = (await req.json()) as { databaseName: string; label?: string };
+          const conn = await getWarehouseConnection(tenantCtx.tenantId);
+          if (!conn) return json({ error: "WAREHOUSE_NOT_CONFIGURED" }, 409);
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(body.databaseName)) {
+            return json(
+              { kind: "INVALID_IDENTIFIER", databaseName: body.databaseName },
+              422,
+            );
+          }
+          const adapter = await getAdapterFn(tenantCtx.tenantId);
+          let probe: { ok: true } | { ok: false; reason: string };
+          try {
+            probe = await adapter.probeDatabase(body.databaseName);
+          } catch (probeErr) {
+            const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+            if (msg.includes("probeDatabase exceeded")) {
+              return json({ kind: "PROBE_TIMED_OUT" }, 504);
+            }
+            throw probeErr;
+          }
+          if (!probe.ok) {
+            return json({ kind: "PROBE_FAILED", reason: probe.reason }, 422);
+          }
+          const wd = await addWarehouseDatabase({
+            tenantId: tenantCtx.tenantId,
+            connectionId: conn.id,
+            databaseName: body.databaseName,
+            label: body.label,
+            actorUserId: me,
+          });
+          await appendAuditAs(me, "warehouse.database.add", body.databaseName, {
+            tenantId: tenantCtx.tenantId,
+            metadata: {
+              adapter: conn.adapter,
+              label: body.label ?? null,
+              databaseId: wd.id,
+            },
+          });
+          return json(wd, 201);
+        }
+
+        // PATCH /warehouse/databases/:id — label-only edit.
+        if (method === "PATCH" && seg.length === 4) {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const body = (await req.json()) as { label?: string | null };
+          if (body.label !== undefined) {
+            await updateDatabaseLabel(tenantCtx.tenantId, seg[3]!, body.label);
+          }
+          return noContent();
+        }
+
+        // DELETE /warehouse/databases/:id — refuses while sources reference it;
+        // ?force=true escalates to admin_connection and cascades the sources.
+        if (method === "DELETE" && seg.length === 4) {
+          const force = url.searchParams.get("force") === "true";
+          const denied = gateOrJson(tenantCtx, force ? "admin_connection" : "curate");
+          if (denied) return denied;
+          let out;
+          try {
+            out = await removeDatabase(tenantCtx.tenantId, seg[3]!, { force });
+          } catch (removeErr) {
+            const msg = removeErr instanceof Error ? removeErr.message : String(removeErr);
+            if (msg === "DATABASE_NOT_FOUND") {
+              return json({ error: "DATABASE_NOT_FOUND" }, 404);
+            }
+            throw removeErr;
+          }
+          if (!out.ok) {
+            return json(
+              {
+                kind: "DATABASE_IN_USE",
+                sourceCount: out.sourceCount,
+                dimensions: out.dimensions,
+              },
+              409,
+            );
+          }
+          await appendAuditAs(
+            me,
+            "warehouse.database.remove",
+            out.snapshot.databaseName,
+            {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                databaseName: out.snapshot.databaseName,
+                databaseLabel: out.snapshot.label,
+                connectionId: out.snapshot.connectionId,
+                forced: force,
+                unboundSourceCount: out.snapshot.sourceCount,
+              },
+            },
+          );
+          return noContent();
+        }
+      }
+
+      // GET /api/t/:slug/warehouse/tables — list tables in a database.
+      if (seg[2] === "tables" && seg.length === 3 && method === "GET") {
+        const databaseId = url.searchParams.get("database");
+        if (!databaseId) return json({ error: "database query param required" }, 400);
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const dbs = await listWarehouseDatabases(tenantCtx.tenantId);
+        const db = dbs.find((d) => d.id === databaseId);
+        if (!db) return json({ error: "database not found" }, 404);
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const adapter = await getAdapterFn(tenantCtx.tenantId);
+        try {
+          const tables = await adapter.listTables({
+            database: db.databaseName,
+            schema: url.searchParams.get("schema") ?? undefined,
+            search: url.searchParams.get("search") ?? undefined,
+          });
+          return json(tables);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("listTables exceeded")) return json({ kind: "TABLES_TIMED_OUT" }, 504);
+          throw err;
+        }
+      }
+    }
+
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
     // not hold a tenant transaction; doing so would exhaust the pg pool.
     if (seg[1] === "health" && seg[2] === "connections" && seg.length === 3 && method === "GET") {
@@ -734,7 +1048,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       // GET /api/workspace/info — adapter capability metadata for the frontend badge
       if (seg[1] === "workspace" && seg[2] === "info" && seg.length === 3 && method === "GET") {
         const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
-        const adapterInstance = await getAdapterFn();
+        const adapterInstance = await getAdapterFn(tenantCtx.tenantId);
         return json({
           adapter: adapterInstance.capabilities.id,
           writable: adapterInstance.capabilities.writable,
@@ -902,13 +1216,59 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
         }
-        // POST /api/dimensions/:id/sources {table, column} — wire a warehouse column
+        // POST /api/dimensions/:id/sources — wire a warehouse column to a dim.
+        //   New shape:    { source: { databaseId, schemaName, tableName, columnName } }
+        //   Legacy shape: { source: { table: "schema.table", column } }
+        //                 or { table: "schema.table", column }   (bare legacy)
+        // Legacy resolves via preferences.legacy_default_database_id; if that is
+        // not set we return 422 BACKEND_LEGACY_SHAPE_AMBIGUOUS. On success the
+        // user's MRU (user_warehouse_state.recent_database_id) is bumped to the
+        // database we just wrote to. Legacy responses carry a Deprecation header
+        // so clients can find their wire format gradually.
         if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
-          const { table, column } = (await req.json()) as { table: string; column: string };
-          await reqRepo.addSource(id, table, column);
-          return noContent();
+          const raw = (await req.json()) as
+            | {
+                source?: import("./repo-canonical.ts").LegacySource
+                  | import("./repo-canonical.ts").QualifiedSource;
+                table?: string;
+                column?: string;
+              };
+          const source =
+            raw.source ??
+            (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
+          if (!source) return err("source required", 400);
+          const isLegacyWire =
+            !("databaseId" in source);
+          const { normalizeSource } = await import("./repo-canonical.ts");
+          const normalized = await normalizeSource(tenantCtx.tenantId, source);
+          if ("error" in normalized) {
+            return json({ kind: normalized.kind, error: normalized.error }, 422);
+          }
+          await pgRun(
+            `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+            [
+              id,
+              tenantCtx.tenantId,
+              normalized.databaseId,
+              normalized.schemaName,
+              normalized.tableName,
+              normalized.columnName,
+            ],
+          );
+          await pgRun(
+            `INSERT INTO "zugzug_app"."user_warehouse_state" (tenant_id, user_id, recent_database_id, updated_at)
+             VALUES ($1, $2, $3, now())
+             ON CONFLICT (tenant_id, user_id) DO UPDATE
+               SET recent_database_id = excluded.recent_database_id, updated_at = excluded.updated_at`,
+            [tenantCtx.tenantId, me, normalized.databaseId],
+          );
+          const responseHeaders: Record<string, string> = { ...corsHeaders };
+          if (isLegacyWire) responseHeaders["Deprecation"] = "true";
+          return new Response(null, { status: 204, headers: responseHeaders });
         }
         // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
@@ -1268,7 +1628,9 @@ if (import.meta.main) {
     snowflake: async (creds) => new SnowflakeAdapter(creds),
   });
 
-  const adapter = await getAdapter();
+  // Startup readiness probe — uses the seed tenant as a representative.
+  // Confirms the registry CAN talk to some warehouse before accepting traffic.
+  const adapter = await getAdapter("default");
   const ok = await adapter.ping();
   if (!ok) {
     console.error("✗ warehouse adapter ping failed");

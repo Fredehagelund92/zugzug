@@ -302,7 +302,7 @@ export async function commit(
   // After Postgres commit: if the warehouse adapter is writable, attempt the
   // warehouse MERGE. Failures log + surface but don't roll back Postgres.
   let warehouseSynced: "n/a" | "synced" | "failed" = "n/a";
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   if (isWritable(adapter)) {
     const dimSpec = {
       dimId,
@@ -360,7 +360,7 @@ async function rowsForUnmappedDrafts(
   // Warehouse: distinct raw values with per-source row counts.
   // Multiple sources may emit the same raw — we sum counts when summing total rows below
   // (matches the original UNION-ALL pattern's semantics: count each source-occurrence once).
-  const adapter = await getAdapter();
+  const adapter = await getAdapter(tenantId);
   const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
   const provenance = await adapter
     .distinctValuesWithProvenance(refs)

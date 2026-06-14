@@ -30,6 +30,10 @@ const motherduckToken = readRequired(
   "MOTHERDUCK_TOKEN",
   attachWarehouse ? "required (because ATTACH_WAREHOUSE=true)" : "required",
 );
+const warehouseEncryptionKey = readRequired(
+  "WAREHOUSE_ENCRYPTION_KEY",
+  "required (base64-encoded 32-byte AES-256 key; generate with `openssl rand -base64 32`)",
+);
 
 if (issues.length > 0) {
   const lines = [
@@ -50,8 +54,13 @@ if (issues.length > 0) {
 export const env = {
   databaseUrl,
   motherduckToken,
+  warehouseEncryptionKey,
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse,
+  /** Toggles the new warehouse code path. Default ON. Intended as an operator-facing
+   *  escape hatch during the rollback window (note: legacy writers were retired, so
+   *  this is documented intent without an active fallback in this release). */
+  useNewWarehouse: process.env.USE_NEW_WAREHOUSE?.trim() !== "false",
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
    *  Off by default; flip to `true` only when MotherDuck token has write access. */
   motherduckWritable: process.env.MOTHERDUCK_WRITABLE?.trim() === "true",

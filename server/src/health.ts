@@ -42,7 +42,9 @@ export async function checkHealth(opts: { force?: boolean } = {}): Promise<Healt
         return { status: "disabled" as const, lastCheckedAt: at };
       }
       try {
-        const warehouseAdapter = await getAdapter();
+        // Readiness probe — uses the seed tenant as a representative.
+        // Just confirms the registry CAN talk to some warehouse.
+        const warehouseAdapter = await getAdapter("default");
         const ok = await warehouseAdapter.ping();
         if (!ok) {
           return { status: "error" as const, lastCheckedAt: at, error: "ping returned false" };

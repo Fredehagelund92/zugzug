@@ -82,6 +82,9 @@ export function Sources() {
   const [sort, setSort] = useState<Sort>(initialSort);
   const [shown, setShown] = useState(PAGE);
   const [catalog, setCatalog] = useState(false);
+  // CatalogExplorer owns the database picker; we just remember the last pick
+  // so a returning user lands on the same db without having to reselect it.
+  const [catalogDb, setCatalogDb] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null); // expanded column drill
   const scanAction = useAsyncAction(async () => {
     try {
@@ -363,7 +366,14 @@ export function Sources() {
 
   return (
     <div className="flex h-full min-h-0 flex-col px-2 pb-3 pt-3 md:px-5 md:pb-5 md:pt-4">
-      {catalog && <CatalogExplorer dims={dims} onClose={() => setCatalog(false)} />}
+      {catalog && (
+        <CatalogExplorer
+          dims={dims}
+          database={catalogDb}
+          onDatabaseChange={setCatalogDb}
+          onClose={() => setCatalog(false)}
+        />
+      )}
 
       {/* ─────────── HEADER (above the ledger, on the canvas) ─────────── */}
       <div className="mb-3 shrink-0">
