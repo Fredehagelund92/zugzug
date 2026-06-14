@@ -207,4 +207,13 @@ export interface DataGridProps<Row> {
    *  Detail height is outside the virtualizer's estimates — fine for one open
    *  drill at a time. */
   renderRowDetail?: (row: Row) => ReactNode | null;
+  /** Linked-field menu handlers — present iff the column is an FK or lookup.
+   *  When the handler is undefined the menu still renders the item disabled,
+   *  matching the §7 "uniform shape, gated by handler" convention. */
+  onShowLinkedFields?: (fkField: string) => void;
+  onOpenTargetDimension?: (fkField: string) => void;
+  onChangeDisplayedField?: (lookupField: string) => void;
+  onManageLinkedFields?: (lookupField: string) => void;
+  onRemoveLookup?: (lookupField: string) => void;
+  onJumpToSourceColumn?: (fkField: string) => void;
 }

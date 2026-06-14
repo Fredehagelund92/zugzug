@@ -668,9 +668,68 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     }
     if (surface.kind === "header") {
       const c = orderedVisible.find((col) => col.field === surface.field);
-      return [
-        { label: "Sort ascending", onClick: () => setSort({ field: surface.field, dir: "asc" }) },
-        { label: "Sort descending", onClick: () => setSort({ field: surface.field, dir: "desc" }) },
+      const kind = c?.columnKind ?? "normal";
+
+      const sortAsc: MenuItem = {
+        label: "Sort ascending",
+        onClick: () => setSort({ field: surface.field, dir: "asc" }),
+      };
+      const sortDesc: MenuItem = {
+        label: "Sort descending",
+        onClick: () => setSort({ field: surface.field, dir: "desc" }),
+      };
+      const conditional: MenuItem = {
+        label: "Conditional formatting…",
+        onClick: () => {
+          if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
+          setRulesEditor(surface.field);
+        },
+        disabled: !props.onSaveColumnRules,
+      };
+      const hide: MenuItem = {
+        label: "Hide column",
+        onClick: () => {
+          const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
+          props.onLayoutChange?.({ hidden });
+        },
+      };
+      const sep: MenuItem = { separator: true, label: "", onClick: () => {} };
+
+      if (kind === "lookup") {
+        return [
+          sortAsc,
+          sortDesc,
+          conditional,
+          sep,
+          {
+            label: "Change displayed field…",
+            onClick: () => props.onChangeDisplayedField?.(surface.field),
+            disabled: !props.onChangeDisplayedField,
+          },
+          {
+            label: "Manage linked fields…",
+            onClick: () => props.onManageLinkedFields?.(surface.field),
+            disabled: !props.onManageLinkedFields,
+          },
+          {
+            label: "Jump to source column →",
+            onClick: () => props.onJumpToSourceColumn?.(c?.sourceField ?? surface.field),
+            disabled: !props.onJumpToSourceColumn,
+          },
+          sep,
+          hide,
+          {
+            label: "Remove this lookup",
+            onClick: () => props.onRemoveLookup?.(surface.field),
+            disabled: !props.onRemoveLookup,
+          },
+        ];
+      }
+
+      // Normal + FK share the standard column header items.
+      const base: MenuItem[] = [
+        sortAsc,
+        sortDesc,
         {
           label: "Rename",
           onClick: () => {
@@ -686,15 +745,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           },
           disabled: !props.onChangeColumnType,
         },
-        { separator: true, label: "", onClick: () => {} },
-        {
-          label: "Conditional formatting…",
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setRulesEditor(surface.field);
-          },
-          disabled: !props.onSaveColumnRules,
-        },
+        sep,
+        conditional,
         {
           label: "Edit description",
           onClick: () => {
@@ -703,20 +755,35 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           },
           disabled: !props.onSaveColumnDescription,
         },
-        { separator: true, label: "", onClick: () => {} },
-        {
-          label: "Hide column",
-          onClick: () => {
-            const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
-            props.onLayoutChange?.({ hidden });
+      ];
+
+      if (kind === "fk") {
+        base.push(
+          sep,
+          {
+            label: "Show linked fields…",
+            onClick: () => props.onShowLinkedFields?.(surface.field),
+            disabled: !props.onShowLinkedFields,
           },
-        },
+          {
+            label: "Open target dimension →",
+            onClick: () => props.onOpenTargetDimension?.(surface.field),
+            disabled: !props.onOpenTargetDimension,
+          },
+        );
+      }
+
+      base.push(
+        sep,
+        hide,
         {
           label: "Delete column",
           onClick: () => props.onDeleteColumn?.(surface.field),
           disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
         },
-      ];
+      );
+
+      return base;
     }
     if (surface.kind === "row-num") {
       const rk = surface.rowKey;
