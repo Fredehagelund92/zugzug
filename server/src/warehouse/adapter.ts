@@ -19,6 +19,9 @@ export interface AdapterCapabilities {
   readonly supportsMerge: boolean;
   readonly identifierCase: "preserve" | "upper" | "lower";
   readonly supportsApproximateDistinct: boolean;
+  readonly supportsMultipleDatabases: boolean;
+  readonly databaseTerm: "catalog" | "database" | "dataset" | "schema";
+  readonly maxIdentifierLength: number;
 }
 
 export interface CatalogTable {
@@ -36,6 +39,12 @@ export interface ValueCount {
   readonly value: string;
   readonly count: number;
 }
+
+export interface DatabaseDescriptor {
+  databaseName: string;
+}
+
+export type ProbeResult = { ok: true } | { ok: false; reason: string };
 
 export interface ValueProvenance {
   readonly value: string;
@@ -66,9 +75,11 @@ interface BaseWarehouseAdapter {
   readonly capabilities: AdapterCapabilities;
 
   ping(): Promise<boolean>;
+  listDatabases(): Promise<DatabaseDescriptor[]>;
+  probeDatabase(databaseName: string): Promise<ProbeResult>;
 
   // Catalog
-  listTables(opts?: { schema?: string; search?: string }): Promise<CatalogTable[]>;
+  listTables(opts?: { schema?: string; search?: string; database?: string }): Promise<CatalogTable[]>;
   listColumns(table: Ref): Promise<ColumnMeta[]>;
   tableExists(table: Ref): Promise<boolean>;
 
