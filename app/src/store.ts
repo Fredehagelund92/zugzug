@@ -940,6 +940,23 @@ export async function updateFieldRules(
   emit();
 }
 
+/** Persist the ordered list of display fields for an FK column. The server
+ *  validates that every entry references an existing string field on the
+ *  target dim and merges the patch into the field's stored config (so
+ *  rules / numberFormat / etc. survive). */
+export async function updateFieldDisplayFields(
+  dimId: string,
+  field: string,
+  displayFields: string[],
+): Promise<void> {
+  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify({ displayFields }) }),
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
 /** Persist a plain-text description for a field. Pass null to clear it. */
 export async function updateFieldDescription(
   dimId: string,
