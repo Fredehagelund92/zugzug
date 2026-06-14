@@ -50,6 +50,7 @@ if (issues.length > 0) {
 export const env = {
   databaseUrl,
   motherduckToken,
+  warehouseEncryptionKey: (process.env.WAREHOUSE_ENCRYPTION_KEY ?? "").trim(),
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse,
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
