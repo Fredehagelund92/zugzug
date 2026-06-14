@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "./Button";
 import { Badge } from "./Badge";
 import { Checkbox } from "./Checkbox";
@@ -26,6 +26,7 @@ import {
   deleteColumn,
   updateFieldRules,
   updateFieldDescription,
+  updateFieldDisplayFields,
   getGridLayout,
   getCachedGridLayout,
   setGridLayout,
@@ -37,6 +38,9 @@ import {
 } from "../store";
 import { usePresence } from "../lib/use-presence";
 import { useLinkedCandidates } from "../lib/use-linked-candidates";
+import { useOpenTabs } from "../lib/open-tabs";
+import { useNavLinks } from "../lib/use-tenant-navigate";
+import { ManageLinkedFieldsPopover } from "./linked/ManageLinkedFieldsPopover";
 import { ConflictBanner } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
@@ -227,6 +231,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [mergeConfirm, setMergeConfirm] = useState<{
     survivorLabel: string;
     loserCount: number;
+  } | null>(null);
+  const [linkPicker, setLinkPicker] = useState<{
+    fkField: string;
+    anchorRect: DOMRect;
   } | null>(null);
 
   const [conflicts, setConflicts] = useState<
@@ -519,6 +527,31 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         ? `Imported ${n} external-ID key${n === 1 ? "" : "s"} from ${s.table}.${s.column} (names ← ${nameCol}).`
         : `${s.table}.${s.column} has no distinct values to import.`,
     );
+  };
+
+  const navigate = useNavigate();
+  const navLinks = useNavLinks();
+  const { openTab } = useOpenTabs();
+
+  /** Right-click "Show linked fields…" on an FK column header. Anchors the
+   *  picker to the header's bounding box (resolved at click time so the
+   *  popover stays put even after subsequent re-renders shift things). */
+  const handleShowLinkedFields = (fkField: string): void => {
+    if (!canEdit) return;
+    const headerEl = document.querySelector(`[data-header="${CSS.escape(fkField)}"]`);
+    const rect = headerEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
+    setLinkPicker({ fkField, anchorRect: rect });
+  };
+
+  /** Right-click "Open target dimension →" on an FK column header. Opens the
+   *  target dim in a new tab and navigates to /tables; MasterTables's
+   *  searchParams effect picks up the active-tab change and updates the URL. */
+  const handleOpenTargetDimension = (fkField: string): void => {
+    const f = fields.find((x) => x.field === fkField);
+    const target = f?.referencedDimId;
+    if (!target) return;
+    openTab(target);
+    navigate(navLinks.tables);
   };
 
   const performBulkRemove = async () => {
@@ -820,6 +853,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 }
               : undefined
           }
+          onShowLinkedFields={canEdit ? handleShowLinkedFields : undefined}
+          onOpenTargetDimension={handleOpenTargetDimension}
           onLayoutChange={(partial) => {
             setLayout((cur) => {
               const next = { ...cur, ...partial };
@@ -883,6 +918,52 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             }}
           />
         )}
+
+        {linkPicker &&
+          (() => {
+            const fkField = fields.find((f) => f.field === linkPicker.fkField);
+            // Derive target dim from allDims (the same source useLinkedCandidates
+            // walks). We need the full field list — `field`, `label`, `type` —
+            // so the picker can render checkboxes + disable nested links.
+            const targetDim = fkField?.referencedDimId
+              ? allDims.find((d) => d.id === fkField.referencedDimId)
+              : undefined;
+            if (!fkField || !targetDim) return null;
+            const targetFields = (targetDim.fields ?? []).map((f) => ({
+              field: f.field,
+              label: f.label,
+              type: f.type,
+            }));
+            // The target's `label` column isn't in `fields` (it's a built-in
+            // canonical column), so prepend it — the picker always pins label
+            // first and uses it for the FK cell display.
+            const fieldsWithLabel = [
+              { field: "label", label: "Record", type: "text" },
+              ...targetFields.filter((f) => f.field !== "label"),
+            ];
+            return (
+              <ManageLinkedFieldsPopover
+                fkLabel={fkField.label}
+                targetFields={fieldsWithLabel}
+                current={fkField.displayFields ?? ["label"]}
+                anchorRect={linkPicker.anchorRect}
+                onCancel={() => setLinkPicker(null)}
+                onApply={async (next) => {
+                  setLinkPicker(null);
+                  try {
+                    await updateFieldDisplayFields(activeId, fkField.field, next);
+                  } catch (err) {
+                    toast(
+                      err instanceof Error
+                        ? `Couldn't update linked fields — ${err.message}`
+                        : "Couldn't update linked fields.",
+                      "error",
+                    );
+                  }
+                }}
+              />
+            );
+          })()}
 
         {!external && canEdit && (
           <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
