@@ -1097,16 +1097,39 @@ export interface CatalogResult {
 }
 
 /** Browse/search the warehouse catalog — server-side, paginated. Not cached:
- *  the explorer holds its own results, so it scales to any catalog size. */
+ *  the explorer holds its own results, so it scales to any catalog size. The
+ *  `database` is the registered warehouse_database.id (a UUID) — the server
+ *  resolves it to the catalog name on the connected adapter. When `null` we
+ *  skip the network call and return an empty result so callers can render a
+ *  "pick a database" affordance without an extra guard. */
 export async function searchCatalog(
-  opts: { q?: string; schema?: string; limit?: number; offset?: number } = {},
+  opts: { database: string | null; q?: string; schema?: string; limit?: number; offset?: number },
 ): Promise<CatalogResult> {
+  if (!opts.database) return { rows: [], total: 0, schemas: [] };
   const qs = new URLSearchParams();
-  if (opts.q) qs.set("q", opts.q);
+  qs.set("database", opts.database);
+  if (opts.q) qs.set("search", opts.q);
   if (opts.schema) qs.set("schema", opts.schema);
-  qs.set("limit", String(opts.limit ?? 50));
-  qs.set("offset", String(opts.offset ?? 0));
-  return api<CatalogResult>(`/catalog?${qs.toString()}`);
+  const tables = await api<Array<{ schema: string; table: string; columns: string[] }>>(
+    `/warehouse/tables?${qs.toString()}`,
+  );
+  // /warehouse/tables returns the full list (server caps at 5000). Apply the
+  // explorer's pagination + schema facets client-side so this function still
+  // matches the CatalogResult contract the UI expects.
+  const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const schemaCounts = new Map<string, number>();
+  for (const t of tables) schemaCounts.set(t.schema, (schemaCounts.get(t.schema) ?? 0) + 1);
+  const schemas = [...schemaCounts.entries()]
+    .map(([schema, count]) => ({ schema, tables: count }))
+    .sort((a, b) => b.tables - a.tables || a.schema.localeCompare(b.schema))
+    .slice(0, 100);
+  const rows = tables.slice(offset, offset + limit).map((t) => ({
+    schema: t.schema,
+    table: `${t.schema}.${t.table}`,
+    columns: t.columns,
+  }));
+  return { rows, total: tables.length, schemas };
 }
 
 // ---------------------------------------------------------------------------
