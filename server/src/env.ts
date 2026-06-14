@@ -57,6 +57,10 @@ export const env = {
   warehouseEncryptionKey,
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse,
+  /** Toggles the new warehouse code path. Default ON. Intended as an operator-facing
+   *  escape hatch during the rollback window (note: legacy writers were retired, so
+   *  this is documented intent without an active fallback in this release). */
+  useNewWarehouse: process.env.USE_NEW_WAREHOUSE?.trim() !== "false",
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
    *  Off by default; flip to `true` only when MotherDuck token has write access. */
   motherduckWritable: process.env.MOTHERDUCK_WRITABLE?.trim() === "true",

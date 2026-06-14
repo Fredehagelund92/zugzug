@@ -1,16 +1,13 @@
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import {
   useWorkspaceInfo,
-  useDimensions,
-  useAudit,
   useConnectionHealth,
   refreshConnectionHealth,
   type ConnectionHealth,
 } from "../../store";
-import { warehouseSyncStatusByDim } from "../dashboard-helpers";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { useEngineerMode } from "../../lib/engineer-mode";
@@ -131,13 +128,6 @@ function ConnectionsSection() {
   const { engineer } = useEngineerMode();
   const tenant = useTenant();
   const wsInfo = useWorkspaceInfo();
-  const dims = useDimensions();
-  const audit = useAudit();
-  const failedSyncCount = useMemo(() => {
-    if (!wsInfo?.writable || dims.length === 0) return 0;
-    const status = warehouseSyncStatusByDim(audit, dims);
-    return Object.values(status).filter((s) => s === "failed").length;
-  }, [wsInfo?.writable, dims, audit]);
   const adapterLabel = wsInfo ? wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1) : "…";
   const health = useConnectionHealth();
   const refreshHealth = useAsyncAction(async () => {
@@ -190,48 +180,6 @@ function ConnectionsSection() {
         ) : (
           <div className="mt-1 text-[12.5px] text-ink-2">
             Where Zug Zug looks for new values that need a master record.
-          </div>
-        )}
-      </div>
-
-      {/* Master records — where the cleaned-up records get committed */}
-      <div className="rounded-sm border border-line bg-surface-2 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-[14px] font-semibold text-ink">Master records</span>
-            <Badge tone={wsInfo?.writable ? "ok" : undefined}>
-              {wsInfo
-                ? wsInfo.writable
-                  ? `Saved to ${adapterLabel}`
-                  : "Kept in this workspace"
-                : "…"}
-            </Badge>
-          </div>
-          {failedSyncCount > 0 ? (
-            <Badge tone="warn" dot>
-              {failedSyncCount} not yet saved to warehouse
-            </Badge>
-          ) : wsInfo?.writable ? (
-            <Badge tone="ok" dot>
-              in sync
-            </Badge>
-          ) : (
-            <Badge dot>downloadable</Badge>
-          )}
-        </div>
-        {engineer ? (
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-            <span>
-              {wsInfo?.writable
-                ? `dim_* / map_* committed to ${wsInfo.warehouseDb ?? "warehouse"} via MERGE INTO`
-                : "dim_* / map_* live in Postgres; download Parquet on demand"}
-            </span>
-          </div>
-        ) : (
-          <div className="mt-1 text-[12.5px] text-ink-2">
-            {wsInfo?.writable
-              ? "Each commit also writes the master records back to your warehouse."
-              : "Each commit stays in this workspace. Download a snapshot from any table to ship the records elsewhere (e.g. to dbt)."}
           </div>
         )}
       </div>
