@@ -45,11 +45,29 @@ export const dimensionSource = app.table(
   "dimension_source",
   {
     dim_id:        varchar("dim_id").notNull(),
-    source_table:  varchar("source_table").notNull(),
-    source_column: varchar("source_column").notNull(),
     tenant_id:     varchar("tenant_id").notNull().references(() => tenant.id),
+    source_table:  varchar("source_table"),
+    source_column: varchar("source_column"),
+    database_id:   varchar("database_id"),
+    schema_name:   varchar("schema_name", { length: 255 }),
+    table_name:    varchar("table_name",  { length: 255 }),
+    column_name:   varchar("column_name", { length: 255 }),
   },
-  (t) => [primaryKey({ columns: [t.tenant_id, t.dim_id, t.source_table, t.source_column] })],
+  (t) => [
+    primaryKey({
+      columns: [t.tenant_id, t.dim_id, t.database_id, t.schema_name, t.table_name, t.column_name],
+    }),
+    index("dimension_source_dim_idx").on(t.tenant_id, t.dim_id),
+    index("dimension_source_database_idx").on(t.tenant_id, t.database_id),
+    foreignKey({
+      columns:        [t.tenant_id, t.database_id],
+      foreignColumns: [warehouseDatabase.tenant_id, warehouseDatabase.id],
+      name:           "dimension_source_database_fk",
+    }).onDelete("restrict"),
+    check("dimension_source_schema_name_nonempty", sql`length(${t.schema_name}) > 0`),
+    check("dimension_source_table_name_nonempty",  sql`length(${t.table_name})  > 0`),
+    check("dimension_source_column_name_nonempty", sql`length(${t.column_name}) > 0`),
+  ],
 );
 
 export const dimensionField = app.table(
@@ -71,16 +89,32 @@ export const sourceStat = app.table(
   "source_stat",
   {
     dim_id:          varchar("dim_id").notNull(),
-    source_table:    varchar("source_table").notNull(),
-    source_column:   varchar("source_column").notNull(),
+    tenant_id:       varchar("tenant_id").notNull().references(() => tenant.id),
+    source_table:    varchar("source_table"),
+    source_column:   varchar("source_column"),
+    database_id:     varchar("database_id"),
+    schema_name:     varchar("schema_name", { length: 255 }),
+    table_name:      varchar("table_name",  { length: 255 }),
+    column_name:     varchar("column_name", { length: 255 }),
     present:         boolean("present").notNull(),
     rows:            bigint("rows", { mode: "number" }).notNull(),
     distinct_values: bigint("distinct_values", { mode: "number" }).notNull(),
     unmapped:        bigint("unmapped", { mode: "number" }).notNull(),
     scanned_at:      timestamp("scanned_at").notNull(),
-    tenant_id:       varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [primaryKey({ columns: [t.tenant_id, t.dim_id, t.source_table, t.source_column] })],
+  (t) => [
+    primaryKey({
+      columns: [t.tenant_id, t.dim_id, t.database_id, t.schema_name, t.table_name, t.column_name],
+    }),
+    foreignKey({
+      columns:        [t.tenant_id, t.database_id],
+      foreignColumns: [warehouseDatabase.tenant_id, warehouseDatabase.id],
+      name:           "source_stat_database_fk",
+    }).onDelete("cascade"),
+    check("source_stat_schema_name_nonempty", sql`length(${t.schema_name}) > 0`),
+    check("source_stat_table_name_nonempty",  sql`length(${t.table_name})  > 0`),
+    check("source_stat_column_name_nonempty", sql`length(${t.column_name}) > 0`),
+  ],
 );
 
 export const draft = app.table(
@@ -192,6 +226,7 @@ export const preferences = app.table(
     ai_enabled:        boolean("ai_enabled").notNull().default(false),
     ai_provider:       varchar("ai_provider").notNull().default("none"),
     ai_api_key:        varchar("ai_api_key"),
+    legacy_default_database_id: varchar("legacy_default_database_id"),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
