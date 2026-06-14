@@ -173,6 +173,7 @@ export interface CanonicalValue {
   variants?: number;
   fields?: Record<string, string | null>;
   unresolved?: boolean;
+  position?: string | null;   // JSON-safe bigint string; null in derived mode
 }
 export interface SourceOccurrence {
   table: string;
@@ -195,6 +196,7 @@ export interface DimensionMeta {
   keyCol: string;
   rows: number;
   keyKind: "slug" | "external_id";
+  orderingMode: "derived" | "manual";
 }
 /** A registered warehouse source column for a dimension, with best-effort counts.
  *  `present` = the table is reachable in the warehouse (false when missing or the
@@ -299,6 +301,7 @@ export interface DimMeta {
   dimTable: string;
   mapTable: string;
   keyCol: string;
+  orderingMode: "derived" | "manual";
 }
 
 export async function sourcesOf(dimId: string, tenantId: string): Promise<SourceDef[]> {
@@ -358,7 +361,8 @@ export async function liveSources(dimId: string, tenantId: string): Promise<Sour
 
 export async function dimMeta(dimId: string, tenantId: string): Promise<DimMeta | null> {
   return pgGet<DimMeta>(
-    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol"
+    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
+            COALESCE(ordering_mode, 'derived') AS "orderingMode"
      FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );

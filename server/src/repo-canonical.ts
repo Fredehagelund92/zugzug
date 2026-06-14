@@ -527,8 +527,17 @@ export async function addDimension(
       `CREATE TABLE IF NOT EXISTS ${cq(dimTable)} (
          ${qid(keyCol)} VARCHAR PRIMARY KEY,
          ${labelDdl},
+         position BIGINT,
          tenant_id VARCHAR NOT NULL DEFAULT ${tenantLit}
        )`,
+    );
+    await pgRun(
+      `CREATE INDEX IF NOT EXISTS ${qid(`dim_${id}_position_idx`)}
+         ON ${cq(dimTable)} (position) WHERE position IS NOT NULL`,
+    );
+    await pgRun(
+      `CREATE UNIQUE INDEX IF NOT EXISTS ${qid(`dim_${id}_position_uniq`)}
+         ON ${cq(dimTable)} (position) WHERE position IS NOT NULL`,
     );
     await pgRun(
       `CREATE TABLE IF NOT EXISTS ${cq(mapTable)} (
