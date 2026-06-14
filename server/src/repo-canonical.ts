@@ -199,15 +199,17 @@ async function seedVersionRow(
   );
 }
 
-/** Delete the version row after a canonical is retired. Use inside an existing tx. */
-async function deleteVersionRow(
+/** Soft-retire the version row: set retired_at, leave retired_into NULL (no merge target). */
+async function softRetireVersionRow(
   tx: TxLike,
   dimId: string,
   key: string,
   tenantId: string,
 ): Promise<void> {
   await tx.run(
-    `DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1 AND key = $2 AND tenant_id = $3`,
+    `UPDATE "zugzug_app"."canonical_version"
+        SET retired_at = now(), retired_into = NULL
+      WHERE dim_id = $1 AND key = $2 AND tenant_id = $3`,
     [dimId, key, tenantId],
   );
 }
@@ -1012,7 +1014,7 @@ export async function retireCanonical(
 
     await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId, tenantId);
     await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
-    await deleteVersionRow(tx, dimId, key, tenantId);
+    await softRetireVersionRow(tx, dimId, key, tenantId);
     return { ok: true, variants: 0 };
   });
 

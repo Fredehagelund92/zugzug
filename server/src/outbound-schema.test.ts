@@ -6,11 +6,18 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
-import { addDimension, addCanonicalOne, mergeCanonical } from "./repo-canonical.ts";
+import {
+  addDimension,
+  addCanonicalOne,
+  mergeCanonical,
+  retireCanonical,
+} from "./repo-canonical.ts";
 
 const T = "t_outbound_sd";
 const DIM_NAME = "Outbound SD Country";
 const DIM_ID = "outbound_sd_country";
+const RETIRE_DIM_NAME = "Outbound SD Retire";
+const RETIRE_DIM_ID = "outbound_sd_retire";
 const USER_ID = "u_outbound_sd";
 
 beforeAll(async () => {
@@ -24,6 +31,8 @@ beforeAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${RETIRE_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${RETIRE_DIM_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -52,6 +61,8 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${RETIRE_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${RETIRE_DIM_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -109,5 +120,37 @@ describe("mergeCanonical soft-deletes the loser's canonical_version", () => {
     expect(survivor).not.toBeNull();
     expect(survivor!.retired_at).toBeNull();
     expect(survivor!.retired_into).toBeNull();
+  });
+});
+
+describe("retireCanonical soft-deletes the canonical_version row", () => {
+  it("retired_at is set, retired_into stays null (no merge target)", async () => {
+    const dimId = await addDimension(RETIRE_DIM_NAME, [], {}, USER_ID, T);
+    expect(dimId).toBe(RETIRE_DIM_ID);
+
+    await addCanonicalOne(dimId, "X One", "x1", USER_ID, T);
+
+    const before = await pgGet<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'x1'`,
+      [dimId, T],
+    );
+    expect(before).not.toBeNull();
+
+    const result = await retireCanonical(dimId, "x1", USER_ID, before!.version, T);
+    expect(result.ok).toBe(true);
+
+    const after = await pgGet<{
+      key: string;
+      retired_at: Date | null;
+      retired_into: string | null;
+    }>(
+      `SELECT key, retired_at, retired_into FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'x1'`,
+      [dimId, T],
+    );
+    expect(after).not.toBeNull();
+    expect(after!.retired_at).not.toBeNull();
+    expect(after!.retired_into).toBeNull();
   });
 });

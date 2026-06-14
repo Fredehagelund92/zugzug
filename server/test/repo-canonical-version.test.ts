@@ -97,16 +97,23 @@ test("renameCanonical with stale expectedVersion throws CONFLICT", async () => {
   expect(label?.label).toBe("Danmark");
 });
 
-test("retireCanonical with correct expectedVersion deletes row + version", async () => {
+test("retireCanonical with correct expectedVersion soft-retires version row", async () => {
   await addCanonicalOne(DIM, "Norway", "no", "u_canon_actor", T);
   const res = await retireCanonical(DIM, "no", "u_canon_actor", 1, T);
   expect(res.ok).toBe(true);
-  const stillThere = await pgGet<{ key: string }>(
-    `SELECT key FROM "zugzug_app"."canonical_version"
+  // Soft-delete: row persists with retired_at set; retired_into NULL (no merge target).
+  const row = await pgGet<{
+    key: string;
+    retired_at: Date | null;
+    retired_into: string | null;
+  }>(
+    `SELECT key, retired_at, retired_into FROM "zugzug_app"."canonical_version"
      WHERE dim_id = $1 AND key = $2`,
     [DIM, "no"],
   );
-  expect(stillThere).toBeNull();
+  expect(row).not.toBeNull();
+  expect(row!.retired_at).not.toBeNull();
+  expect(row!.retired_into).toBeNull();
 });
 
 test("retireCanonical with stale expectedVersion throws CONFLICT", async () => {
