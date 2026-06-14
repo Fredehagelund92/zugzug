@@ -217,4 +217,8 @@ export interface DataGridProps<Row> {
   onManageLinkedFields?: (lookupField: string) => void;
   onRemoveLookup?: (lookupField: string) => void;
   onJumpToSourceColumn?: (fkField: string) => void;
+  /** Notified whenever the active sort changes (including clear). */
+  onSortChange?: (sort: { column: string; direction: "asc" | "desc" } | null) => void;
+  /** Seed the sort state on mount. */
+  initialSort?: { column: string; direction: "asc" | "desc" } | null;
 }

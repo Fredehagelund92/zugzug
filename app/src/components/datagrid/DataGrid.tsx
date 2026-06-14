@@ -115,7 +115,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   );
 
   // ── Sort + filter state ─────────────────────────────────────────────────────
-  const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(null);
+  const [sort, setSort] = useState<{ field: string; dir: "asc" | "desc" } | null>(() => {
+    const init = props.initialSort;
+    return init ? { field: init.column, dir: init.direction } : null;
+  });
+  const isFirstSortRender = useRef(true);
+  useEffect(() => {
+    if (isFirstSortRender.current) { isFirstSortRender.current = false; return; }
+    props.onSortChange?.(sort ? { column: sort.field, direction: sort.dir } : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
   const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [rulesEditor, setRulesEditor] = useState<string | null>(null);

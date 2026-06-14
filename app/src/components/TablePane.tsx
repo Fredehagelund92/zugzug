@@ -323,6 +323,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     if (cached) setLayout(cached);
     else void getGridLayout(activeId).then(setLayout);
   }, [activeId]);
+  const [dismissedSortBanner, setDismissedSortBanner] = useState<Set<string>>(new Set());
 
   const importFileRef = useRef<HTMLInputElement>(null);
   const [pendingImport, setPendingImport] = useState<ParsedImport | null>(null);
@@ -872,6 +873,33 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           </div>
         )}
 
+        {dim.orderingMode === "manual" && !!layout.sort && !dismissedSortBanner.has(activeId) && (
+          <div className="flex h-8 shrink-0 items-center gap-2 border-b border-rule bg-surface-2 px-3 text-[12px] text-ink-2">
+            <span className="flex-1 truncate">
+              ⇅ Sorted by {layout.sort.column}{" "}
+              {layout.sort.direction === "asc" ? "↑" : "↓"} — manual order is hidden
+            </span>
+            <button
+              className="shrink-0 text-accent hover:underline"
+              onClick={() => {
+                setLayout((cur) => {
+                  const next = { ...cur, sort: null };
+                  setGridLayout(activeId, next);
+                  return next;
+                });
+              }}
+            >
+              Restore
+            </button>
+            <button
+              className="shrink-0 text-ink-3 hover:text-ink"
+              onClick={() => setDismissedSortBanner((s) => new Set([...s, activeId]))}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <DataGrid<CanonicalValue>
           rows={rowsForGrid}
           rowKey={(c) => c.key}
@@ -1088,6 +1116,22 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }
           activity={activity}
           presence={presence}
+          initialSort={layout.sort ?? undefined}
+          onSortChange={(sort) => {
+            setLayout((cur) => {
+              const next = { ...cur, sort: sort ?? null };
+              setGridLayout(activeId, next);
+              return next;
+            });
+            // Clear the per-session dismiss so the banner reappears if sort is re-applied
+            if (sort) {
+              setDismissedSortBanner((s) => {
+                const next = new Set(s);
+                next.delete(activeId);
+                return next;
+              });
+            }
+          }}
         />
 
         {addOpen && canEdit && (
