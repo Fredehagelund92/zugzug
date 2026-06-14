@@ -43,6 +43,7 @@ import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
 import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
+import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
@@ -347,29 +348,13 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       ...fields.flatMap<ColumnDef<CanonicalValue>>((f) => {
         if (f.type === "linked") {
           const target = f.referencedDimId ? linkedTargets.get(f.referencedDimId) : undefined;
-          const candidates = target?.candidates ?? [];
-          const fkCol: ColumnDef<CanonicalValue> = {
-            field: f.field,
-            label: f.label,
-            config: {
-              type: "linked",
-              targetDimId: f.referencedDimId ?? "",
-              displayFields: f.displayFields ?? ["label"],
-              candidates,
-            },
-            editable: canEdit,
-          };
-          const lookupCols: ColumnDef<CanonicalValue>[] = (f.displayFields ?? ["label"]).map(
-            (df) => {
-              return {
-                field: `${f.field}__${df}`,
-                label: `↳ ${target?.fieldLabels.get(df) ?? df}`,
-                config: { type: "text" } as const,
-                editable: false,
-              };
-            },
-          );
-          return [fkCol, ...lookupCols];
+          const fieldLabels = target?.fieldLabels ?? new Map<string, string>();
+          const [fkCol, ...lookupCols] = buildLinkedColumns(f, {
+            fieldLabels,
+            fieldExists: new Set(fieldLabels.keys()),
+            candidates: target?.candidates ?? [],
+          });
+          return [{ ...fkCol, editable: canEdit }, ...lookupCols];
         }
         return [
           {

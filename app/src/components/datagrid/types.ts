@@ -65,6 +65,12 @@ export interface ColumnDef<Row> {
   align?: "left" | "right";
   rules?: ConditionalRule[];
   description?: string;
+  /** Discriminator used by the right-click menu and rendering layer. */
+  columnKind?: "fk" | "lookup";
+  /** For lookup columns, the FK column's field name. */
+  sourceField?: string;
+  /** Lookup column whose target-dim field no longer exists. */
+  linkedStale?: boolean;
   render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
   edit?: (row: Row, ctx: EditCtx<Row>) => ReactNode;
 }
