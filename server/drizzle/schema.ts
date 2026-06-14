@@ -474,6 +474,9 @@ export const webhook = app.table(
       "webhook_events_nonempty_chk",
       sql`cardinality(${t.events}) > 0`,
     ),
+    /* v1 closed taxonomy. webhook.test is a synthetic event (NEVER stored and
+       NEVER subscribable); it is intentionally absent. Adding a type here
+       requires the same change to outbound_event_type_chk below — KEEP IN SYNC. */
     check(
       "webhook_events_known_chk",
       sql`${t.events} <@ ARRAY[
@@ -505,6 +508,9 @@ export const outboundEvent = app.table(
       t.occurred_at,
       t.id,
     ),
+    /* Keep this CHECK in sync with webhook_events_known_chk on the webhook table —
+       a webhook subscribing to a type the dispatcher cannot WRITE here would
+       silently never receive deliveries. */
     check(
       "outbound_event_type_chk",
       sql`${t.type} IN (
@@ -522,7 +528,11 @@ export const webhookDelivery = app.table(
   {
     id:                varchar("id").primaryKey(),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
+    /* No FK. Webhook DELETE pre-DLQs pending rows in application code; we keep
+       the delivery row's audit trail intact even after the parent webhook is gone. */
     webhook_id:        varchar("webhook_id").notNull(),
+    /* No FK — the 30-day outbound_event retention sweep would otherwise cascade
+       through and erase the delivery's self-contained record. See design §4.4. */
     event_id:          varchar("event_id").notNull(),
     event_type:        varchar("event_type", { length: 64 }).notNull(),
     /* Snapshot of the URL at enqueue time. A URL edit on the parent webhook
@@ -541,7 +551,9 @@ export const webhookDelivery = app.table(
     last_response_body: text("last_response_body"),
     last_error:        text("last_error"),
     payload:           jsonb("payload").notNull(),
-    signature:         varchar("signature", { length: 96 }).notNull(),
+    /* Format: "t=<unix>,kid=<current|previous>,v1=sha256=<64 hex>" — ~99 chars
+       in v1 already; use text so future scheme bumps don't require a migration. */
+    signature:         text("signature").notNull(),
     created_at:        timestamp("created_at").notNull(),
     completed_at:      timestamp("completed_at"),
   },
