@@ -156,6 +156,7 @@ async function bumpVersionOrThrow(
     `UPDATE "zugzug_app"."canonical_version"
         SET version = version + 1, updated_at = now(), updated_by = $1
       WHERE dim_id = $2 AND key = $3 AND version = $4 AND tenant_id = $5
+        AND retired_at IS NULL
     RETURNING version`,
     [userId, dimId, key, expectedVersion, tenantId],
   );
@@ -166,7 +167,8 @@ async function bumpVersionOrThrow(
             u.name, u.initials
        FROM "zugzug_app"."canonical_version" cv
        LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
-      WHERE cv.dim_id = $1 AND cv.key = $2 AND cv.tenant_id = $3`,
+      WHERE cv.dim_id = $1 AND cv.key = $2 AND cv.tenant_id = $3
+        AND cv.retired_at IS NULL`,
     [dimId, key, tenantId],
   );
   if (!cur) throw new AppError("NOT_FOUND", `canonical ${dimId}/${key} not found`, 404);
@@ -393,7 +395,7 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
   // Without this the client can't supply the right expectedVersion and every
   // second rename of a record 409s against the optimistic-concurrency check.
   const versionRows = await pgAll<{ key: string; version: number }>(
-    `SELECT key, version FROM ${pg("canonical_version")} WHERE dim_id = $1 AND tenant_id = $2`,
+    `SELECT key, version FROM ${pg("canonical_version")} WHERE dim_id = $1 AND tenant_id = $2 AND retired_at IS NULL`,
     [id, tenantId],
   );
   const versions = new Map(versionRows.map((r) => [r.key, Number(r.version)]));
@@ -931,6 +933,7 @@ export async function mergeCanonical(
           AND cv.tenant_id = '${tenantId.replace(/'/g, "''")}'
           AND cv.key = e.key
           AND cv.version = e.expected_version
+          AND cv.retired_at IS NULL
        RETURNING cv.key`,
       params,
     );
@@ -947,7 +950,8 @@ export async function mergeCanonical(
         `SELECT cv.version, cv.updated_at, cv.updated_by, u.name, u.initials
            FROM "zugzug_app"."canonical_version" cv
            LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
-          WHERE cv.dim_id = $1 AND cv.key = $2 AND cv.tenant_id = $3`,
+          WHERE cv.dim_id = $1 AND cv.key = $2 AND cv.tenant_id = $3
+            AND cv.retired_at IS NULL`,
         [dimId, missed[0]!, tenantId],
       );
       throw new AppError("CONFLICT", "One or more records were modified by another user", 409, {

@@ -11,6 +11,7 @@ import {
   addCanonicalOne,
   mergeCanonical,
   retireCanonical,
+  renameCanonical,
 } from "./repo-canonical.ts";
 
 const T = "t_outbound_sd";
@@ -18,6 +19,8 @@ const DIM_NAME = "Outbound SD Country";
 const DIM_ID = "outbound_sd_country";
 const RETIRE_DIM_NAME = "Outbound SD Retire";
 const RETIRE_DIM_ID = "outbound_sd_retire";
+const GHOST_DIM_NAME = "Outbound SD Ghost";
+const GHOST_DIM_ID = "outbound_sd_ghost";
 const USER_ID = "u_outbound_sd";
 
 beforeAll(async () => {
@@ -33,6 +36,8 @@ beforeAll(async () => {
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${RETIRE_DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${RETIRE_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${GHOST_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${GHOST_DIM_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -63,6 +68,8 @@ afterAll(async () => {
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${RETIRE_DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${RETIRE_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${GHOST_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${GHOST_DIM_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -152,5 +159,71 @@ describe("retireCanonical soft-deletes the canonical_version row", () => {
     expect(after).not.toBeNull();
     expect(after!.retired_at).not.toBeNull();
     expect(after!.retired_into).toBeNull();
+  });
+});
+
+describe("retired rows do not appear in canonical listings", () => {
+  it("after merge, version-lookup SELECT returns survivor only — no ghost row", async () => {
+    const dimId = await addDimension(GHOST_DIM_NAME, [], {}, USER_ID, T);
+    expect(dimId).toBe(GHOST_DIM_ID);
+
+    await addCanonicalOne(dimId, "Alpha", "a", USER_ID, T);
+    await addCanonicalOne(dimId, "Bravo", "b", USER_ID, T);
+
+    // Read versions exactly like the edit path does (must include both before merge).
+    const before = await pgAll<{ key: string; version: number }>(
+      `SELECT key, version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND retired_at IS NULL
+        ORDER BY key`,
+      [dimId, T],
+    );
+    expect(before.map((r) => r.key)).toEqual(["a", "b"]);
+
+    const expected: Record<string, number> = {};
+    for (const v of before) expected[v.key] = v.version;
+
+    // Merge: "b" → "a".
+    const merged = await mergeCanonical(dimId, "a", ["b"], USER_ID, expected, T);
+    expect(merged).toBe(1);
+
+    // Sanity: tombstone still exists in raw table (i.e. the test isn't accidentally hard-deleting).
+    const raw = await pgAll<{ key: string }>(
+      `SELECT key FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2
+        ORDER BY key`,
+      [dimId, T],
+    );
+    expect(raw.map((r) => r.key)).toEqual(["a", "b"]);
+
+    // The tombstone must NOT be bump-able via the optimistic-concurrency UPDATE
+    // (bumpVersionOrThrow). Look up the tombstone's CURRENT version (merge bumped
+    // it once before retiring), then try to rename with that exact version. Without
+    // `AND retired_at IS NULL` on the UPDATE, this would silently succeed and
+    // re-bump the tombstone — resurrecting the row. With the filter, this throws.
+    const tomb = await pgGet<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'b'`,
+      [dimId, T],
+    );
+    expect(tomb).not.toBeNull();
+    const tombstoneVersion = tomb!.version;
+
+    let threw = false;
+    try {
+      await renameCanonical(dimId, "b", "Resurrected", USER_ID, tombstoneVersion, T);
+    } catch {
+      threw = true;
+    }
+    expect(threw).toBe(true);
+
+    // And the tombstone's version is unchanged (no silent bump).
+    const stillTomb = await pgGet<{ version: number; retired_at: Date | null }>(
+      `SELECT version, retired_at FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'b'`,
+      [dimId, T],
+    );
+    expect(stillTomb).not.toBeNull();
+    expect(stillTomb!.retired_at).not.toBeNull();
+    expect(stillTomb!.version).toBe(tombstoneVersion);
   });
 });
