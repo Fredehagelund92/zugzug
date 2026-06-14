@@ -5,6 +5,8 @@
 import { env } from "./env.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
 import type { ImportRow } from "./repo-canonical.ts";
+import { rebalanceDimPositions } from "./repo-canonical.ts";
+import { dimMeta } from "./repo-shared.ts";
 import {
   getSessionUser,
   handleMe,
@@ -1439,6 +1441,27 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             const { value } = (await req.json()) as { value: string | null };
             await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
             return noContent();
+          }
+          // PUT /api/dimensions/:id/canonical/:key/position
+          if (seg[5] === "position" && seg.length === 6 && method === "PUT" && ck) {
+            const denied = gateOrJson(tenantCtx, "curate");
+            if (denied) return denied;
+            const { before, after } = (await req.json()) as {
+              before?: string | null;
+              after?:  string | null;
+            };
+            try {
+              const result = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
+              return json({ ok: true, position: result.position });
+            } catch (e) {
+              if (e instanceof AppError && e.message.includes("positions too tight")) {
+                const dm = await dimMeta(id, tenantCtx.tenantId);
+                if (dm) await rebalanceDimPositions(id, dm, me, tenantCtx.tenantId, "collision");
+                const result2 = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
+                return json({ ok: true, position: result2.position, rebalanced: true });
+              }
+              throw e;
+            }
           }
           if (seg.length === 5 && ck) {
             if (method === "PUT") {

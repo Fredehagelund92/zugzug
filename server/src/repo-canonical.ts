@@ -1826,6 +1826,109 @@ export async function addCanonicalOneAt(
   });
 }
 
+/** Move a canonical row to a new position in manual-ordering mode.
+ *  before / after are the keys of the immediate neighbours in the desired
+ *  final order (null = move to top/bottom). */
+export async function reorderCanonicalRow(
+  dimId:    string,
+  rowKey:   string,
+  before:   string | null | undefined,
+  after:    string | null | undefined,
+  userId:   string,
+  tenantId: string,
+): Promise<{ position: string }> {
+  const m = await dimMeta(dimId, tenantId);
+  if (!m) throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
+  if (m.orderingMode !== "manual") {
+    throw new AppError("CONFLICT", "dimension is not in manual ordering mode", 409);
+  }
+  const DIMT = cq(m.dimTable);
+  const KC   = qid(m.keyCol);
+
+  return await pgTx(async (tx) => {
+    // Verify target exists
+    const target = await tx.get<{ position: string | null }>(
+      `SELECT position FROM ${DIMT} WHERE ${KC} = $1 FOR UPDATE`,
+      [rowKey],
+    );
+    if (!target) throw new AppError("NOT_FOUND", `row ${rowKey} not found`, 404);
+
+    // Resolve anchor positions
+    let pBefore: bigint | null = null;
+    let pAfter:  bigint | null = null;
+
+    if (before != null) {
+      const br = await tx.get<{ position: string | null }>(
+        `SELECT position FROM ${DIMT} WHERE ${KC} = $1 FOR UPDATE`,
+        [before],
+      );
+      if (!br) throw new AppError("NOT_FOUND", `before anchor ${before} not found`, 404);
+      pBefore = br.position == null ? null : BigInt(br.position);
+    } else if (before === null) {
+      // Move to top: position goes before the current minimum
+      const minRow = await tx.get<{ p: string | null }>(
+        `SELECT MIN(position)::text AS p FROM ${DIMT} WHERE position IS NOT NULL AND ${KC} != $1`,
+        [rowKey],
+      );
+      pBefore = null;
+      pAfter  = minRow?.p == null ? null : BigInt(minRow.p);
+    }
+
+    if (after != null) {
+      const ar = await tx.get<{ position: string | null }>(
+        `SELECT position FROM ${DIMT} WHERE ${KC} = $1 FOR UPDATE`,
+        [after],
+      );
+      if (!ar) throw new AppError("NOT_FOUND", `after anchor ${after} not found`, 404);
+      pAfter = ar.position == null ? null : BigInt(ar.position);
+    } else if (after === null && before !== null) {
+      // Move to bottom: position goes after the current maximum
+      const maxRow = await tx.get<{ p: string | null }>(
+        `SELECT MAX(position)::text AS p FROM ${DIMT} WHERE position IS NOT NULL AND ${KC} != $1`,
+        [rowKey],
+      );
+      pBefore = maxRow?.p == null ? null : BigInt(maxRow.p);
+      pAfter  = null;
+    }
+
+    // Verify anchors are still consecutive (detect stale drag)
+    if (pBefore !== null && pAfter !== null) {
+      const between = await tx.get<{ n: number }>(
+        `SELECT count(*)::int AS n FROM ${DIMT}
+         WHERE position IS NOT NULL AND position > $1 AND position < $2 AND ${KC} != $3`,
+        [String(pBefore), String(pAfter), rowKey],
+      );
+      if ((between?.n ?? 0) > 0) {
+        throw new AppError("CONFLICT", "anchors are no longer consecutive", 409);
+      }
+    }
+
+    // Idempotent check — already in the right slot
+    const tPos = target.position == null ? null : BigInt(target.position);
+    if (tPos !== null && pBefore !== null && pAfter !== null &&
+        tPos > pBefore && tPos < pAfter) {
+      return { position: String(tPos) };
+    }
+
+    const newPos = computeInsertPosition(pBefore, pAfter);
+    if (newPos === null) {
+      throw new AppError("CONFLICT", "positions too tight, rebalance needed", 409);
+    }
+
+    await tx.run(
+      `UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`,
+      [String(newPos), rowKey],
+    );
+
+    await appendAuditAs(userId, "Reordered canonical", rowKey, {
+      tableId: dimId, rowKey, tenantId,
+      metadata: { key: rowKey, before: before ?? null, after: after ?? null },
+    });
+
+    return { position: String(newPos) };
+  });
+}
+
 /** The raw variants that resolve to a canonical key — the lineage "receipt". */
 export async function listVariants(
   dimId: string,

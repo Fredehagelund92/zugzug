@@ -175,6 +175,19 @@ export class TenantRepo {
     );
   }
 
+  reorderCanonicalRow(
+    dimId: string,
+    rowKey: string,
+    before: string | null | undefined,
+    after: string | null | undefined,
+    userId: string,
+  ): Promise<{ position: string }> {
+    this.assertRole("curate");
+    return this.withClearCtx(() =>
+      repoCanonical.reorderCanonicalRow(dimId, rowKey, before, after, userId, this.tenantId),
+    );
+  }
+
   importCanonical(
     dimId: string,
     rows: repoCanonical.ImportRow[],
