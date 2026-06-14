@@ -68,9 +68,9 @@ export async function handleCreateToken(req: Request, userId: string): Promise<R
   const hash = await Bun.password.hash(value); // argon2id default
 
   await pgRun(
-    `INSERT INTO ${pg("api_tokens")} (id, user_id, name, token_hash, created_at)
-     VALUES ($1, $2, $3, $4, current_timestamp)`,
-    [id, userId, name, hash],
+    `INSERT INTO ${pg("api_tokens")} (id, user_id, name, token_hash, token_prefix, created_at)
+     VALUES ($1, $2, $3, $4, $5, current_timestamp)`,
+    [id, userId, name, hash, value.slice(0, 12)],
   );
 
   // Value shown only at this response; never readable again.
@@ -99,39 +99,61 @@ export async function handleRevokeToken(tokenId: string, userId: string): Promis
 /** Bearer-token authentication: parse Authorization header, hash-compare against
  *  active (non-revoked) tokens. Returns the matching SessionUser or null.
  *
- *  Performance note: this iterates active tokens (argon2id is intentionally slow).
- *  In production with thousands of tokens this would need a faster lookup
- *  (e.g. unhashed prefix index); v1 prioritizes simplicity over scale. */
+ *  Fast path uses the `token_prefix` index (O(1) per request). Legacy fallback
+ *  scans NULL-prefix rows (tokens issued before the prefix column existed),
+ *  capped at 200 rows to bound worst-case argon2 cost, and logs a deprecation
+ *  warning on every hit so admins know to rotate. */
 export async function getApiTokenUser(req: Request): Promise<SessionUser | null> {
   const authHeader = req.headers.get("authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
   const token = authHeader.slice("Bearer ".length).trim();
   if (!token.startsWith(TOKEN_PREFIX)) return null;
+  const prefix12 = token.slice(0, 12);
 
-  // We must compare against every active token's hash (argon2 doesn't support
-  // pre-image lookups). Acceptable for v1 — production self-hosters have
-  // single-digit-to-tens of active tokens.
-  const candidates = await pgAll<{ id: string; user_id: string; token_hash: string }>(
+  // Fast path: O(1) prefix-indexed lookup. Hits for every token issued post-migration.
+  const fast = await pgAll<{ id: string; user_id: string; token_hash: string }>(
     `SELECT id, user_id, token_hash FROM ${pg("api_tokens")}
-     WHERE revoked_at IS NULL`,
+      WHERE token_prefix = $1 AND revoked_at IS NULL`,
+    [prefix12],
   );
-  for (const cand of candidates) {
+  for (const cand of fast) {
     if (await Bun.password.verify(token, cand.token_hash)) {
-      // Fire-and-forget last_used_at update; don't block the request on it.
       void pgRun(`UPDATE ${pg("api_tokens")} SET last_used_at = current_timestamp WHERE id = $1`, [
         cand.id,
       ]).catch(() => {});
-      const user = await pgGet<SessionUser>(
-        `SELECT id, name, email, initials,
-                is_super_admin AS "isSuperAdmin",
-                NULL::varchar AS "impersonatingTenantId"
-           FROM ${pg("users")} WHERE id = $1`,
-        [cand.user_id],
-      );
-      return user;
+      return await loadSessionUser(cand.user_id);
+    }
+  }
+
+  // Legacy slow path: capped scan of NULL-prefix rows (tokens issued before this
+  // migration). Bounded at 200 rows so worst-case auth cost stays predictable.
+  // Every hit logs a deprecation warning so admins notice and rotate.
+  const legacy = await pgAll<{ id: string; user_id: string; token_hash: string }>(
+    `SELECT id, user_id, token_hash FROM ${pg("api_tokens")}
+      WHERE token_prefix IS NULL AND revoked_at IS NULL
+      ORDER BY last_used_at DESC NULLS LAST
+      LIMIT 200`,
+  );
+  for (const cand of legacy) {
+    if (await Bun.password.verify(token, cand.token_hash)) {
+      console.warn(`[deprecation] legacy api_token authenticated; rotate token id=${cand.id}`);
+      void pgRun(`UPDATE ${pg("api_tokens")} SET last_used_at = current_timestamp WHERE id = $1`, [
+        cand.id,
+      ]).catch(() => {});
+      return await loadSessionUser(cand.user_id);
     }
   }
   return null;
+}
+
+async function loadSessionUser(userId: string): Promise<SessionUser | null> {
+  return await pgGet<SessionUser>(
+    `SELECT id, name, email, initials,
+            is_super_admin AS "isSuperAdmin",
+            NULL::varchar AS "impersonatingTenantId"
+       FROM ${pg("users")} WHERE id = $1`,
+    [userId],
+  );
 }
 
 // env import is unused inside this module but kept for future config (e.g. token TTL)
