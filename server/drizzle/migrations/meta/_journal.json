@@ -169,6 +169,13 @@
       "when": 1781461166791,
       "tag": "0023_lucky_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1781467363051,
+      "tag": "0024_outgoing_vulcan",
+      "breakpoints": true
     }
   ]
 }
