@@ -965,6 +965,30 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return noContent();
         }
       }
+
+      // GET /api/t/:slug/warehouse/tables — list tables in a database.
+      if (seg[2] === "tables" && seg.length === 3 && method === "GET") {
+        const databaseId = url.searchParams.get("database");
+        if (!databaseId) return json({ error: "database query param required" }, 400);
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const dbs = await listWarehouseDatabases(tenantCtx.tenantId);
+        const db = dbs.find((d) => d.id === databaseId);
+        if (!db) return json({ error: "database not found" }, 404);
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const adapter = await getAdapterFn(tenantCtx.tenantId);
+        try {
+          const tables = await adapter.listTables({
+            database: db.databaseName,
+            schema: url.searchParams.get("schema") ?? undefined,
+            search: url.searchParams.get("search") ?? undefined,
+          });
+          return json(tables);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("listTables exceeded")) return json({ kind: "TABLES_TIMED_OUT" }, 504);
+          throw err;
+        }
+      }
     }
 
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
