@@ -13,6 +13,7 @@ import {
   retireCanonical,
   renameCanonical,
 } from "./repo-canonical.ts";
+import { teardownTenant } from "./tenant.ts";
 
 const T = "t_outbound_sd";
 const DIM_NAME = "Outbound SD Country";
@@ -225,5 +226,59 @@ describe("retired rows do not appear in canonical listings", () => {
     expect(stillTomb).not.toBeNull();
     expect(stillTomb!.retired_at).not.toBeNull();
     expect(stillTomb!.version).toBe(tombstoneVersion);
+  });
+});
+
+describe("teardownTenant cleans up outbound integration tables", () => {
+  const TT = "t_teardown_outbound";
+
+  it("DELETEs rows from service_account, webhook, outbound_event, webhook_delivery", async () => {
+    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [TT]).catch(() => {});
+    await pgRun(
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
+       VALUES ($1, $1, 'Test Teardown', 'default', now())`,
+      [TT],
+    );
+
+    // Seed one row in each new table.
+    await pgRun(
+      `INSERT INTO "zugzug_app"."service_account"
+         (id, tenant_id, name, token_hash, token_prefix, created_at, created_by)
+       VALUES ('sa_test_td', $1, 'x', 'hash', 'zzsa_aaaa11', now(), 'u_test')`,
+      [TT],
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."webhook"
+         (id, tenant_id, url, secret_ciphertext, secret_nonce, secret_prefix,
+          events, created_at, created_by)
+       VALUES ('wh_test_td', $1, 'https://example.test/', '\\x00'::bytea, '\\x00'::bytea,
+               'whsec_aaaaaa', ARRAY['dimension.committed'], now(), 'u_test')`,
+      [TT],
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."outbound_event"
+         (id, tenant_id, type, occurred_at, payload, idem_key)
+       VALUES ('evt_test_td', $1, 'dimension.committed', now(), '{}'::jsonb, 'k_test_td')`,
+      [TT],
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."webhook_delivery"
+         (id, tenant_id, webhook_id, event_id, event_type, delivery_url,
+          signing_kid, status, payload, signature, created_at)
+       VALUES ('whd_test_td', $1, 'wh_test_td', 'evt_test_td', 'dimension.committed',
+               'https://example.test/', 'current', 'pending', '{}'::jsonb,
+               't=1,v1=sha256=00', now())`,
+      [TT],
+    );
+
+    await teardownTenant(TT);
+
+    for (const tab of ["service_account", "webhook", "outbound_event", "webhook_delivery"]) {
+      const left = await pgGet<{ n: number }>(
+        `SELECT count(*)::int AS n FROM "zugzug_app"."${tab}" WHERE tenant_id = $1`,
+        [TT],
+      );
+      expect(left!.n).toBe(0);
+    }
   });
 });

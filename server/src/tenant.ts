@@ -152,9 +152,13 @@ export async function teardownTenant(tenantId: string): Promise<void> {
       "dimension_source",
       "dimension",
       "active_sessions",
+      "outbound_event",
       "preferences",
+      "service_account",
       "tenant_member",
       "tenant_invite",
+      "webhook",
+      "webhook_delivery",
     ];
     for (const tbl of scoped) {
       await tx.run(`DELETE FROM "zugzug_app"."${tbl}" WHERE tenant_id = $1`, [tenantId]);
