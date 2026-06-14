@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { authFetch } from "../api";
 import { useMemberships } from "../store";
 import { useTenant } from "../lib/tenant-context";
 import { workspaceColor, workspaceInitials } from "../lib/workspace-colors";
@@ -75,9 +74,6 @@ export function WorkspaceSwitcher() {
     const rest = location.pathname.replace(/^\/app\/[^/]+/, "") || "";
     navigate(`/app/${slug}${rest}`);
   };
-
-  const signOut = () =>
-    authFetch("/auth/logout", { method: "POST" }).then(() => window.location.replace("/login"));
 
   return (
     <>
@@ -165,30 +161,53 @@ export function WorkspaceSwitcher() {
               </div>
             )}
 
-            {/* Footer */}
-            <div className="flex items-center gap-4 px-3.5 py-2 border-t border-line">
-              {tenant.isSuperAdmin && (
+            {/* Admin console — superAdmin only */}
+            {tenant.isSuperAdmin && (
+              <div
+                className="border-t"
+                style={{ borderColor: "color-mix(in srgb, var(--accent-2) 30%, var(--line))" }}
+              >
                 <Link
                   to="/app/admin"
                   onClick={() => setOpen(false)}
-                  className="text-[11px] text-ink-3 hover:text-ink transition-colors"
+                  className="group relative flex items-center gap-3 px-3.5 py-3 transition-all duration-150 hover:bg-accent-2-soft"
                 >
-                  Admin console
+                  {/* amber left rail on hover */}
+                  <div
+                    className="absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                    style={{ background: "var(--accent-2)" }}
+                  />
+
+                  {/* terminal icon */}
+                  <div
+                    className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center"
+                    style={{ background: "var(--accent-2-soft)", color: "var(--accent-2)" }}
+                  >
+                    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none">
+                      <path d="M2.5 5L6.5 8L2.5 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M8.5 11H13.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-medium text-ink-2 group-hover:text-ink transition-colors">
+                      Admin console
+                    </div>
+                    <div className="font-mono text-[10px] text-ink-3 tracking-wide">
+                      superadmin access
+                    </div>
+                  </div>
+
+                  <svg
+                    className="h-3 w-3 shrink-0 text-ink-3 group-hover:text-accent-2 transition-colors"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                  >
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </Link>
-              )}
-              <button
-                onClick={() => { setOpen(false); navigate(`/app/${tenant.slug}/account`); }}
-                className="text-[11px] text-ink-3 hover:text-ink transition-colors"
-              >
-                Account
-              </button>
-              <button
-                onClick={signOut}
-                className="text-[11px] text-ink-3 hover:text-ink transition-colors ml-auto"
-              >
-                Sign out
-              </button>
-            </div>
+              </div>
+            )}
           </div>
         </div>,
         document.body,

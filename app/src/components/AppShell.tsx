@@ -141,6 +141,8 @@ function UserMenu() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { slug } = useTenant();
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -220,6 +222,14 @@ function UserMenu() {
               <p className="text-[13px] font-medium text-ink">{currentUser.name}</p>
               {currentUser.email && <p className="text-[11px] text-ink-2">{currentUser.email}</p>}
             </div>
+            <button
+              type="button"
+              onClick={() => { setOpen(false); navigate(`/app/${slug}/account`); }}
+              className="w-full px-3 py-2 text-left text-[13px] text-ink-2 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              Account settings
+            </button>
+            <div className="border-t border-line" />
             <button
               type="button"
               onClick={signOut}
