@@ -554,6 +554,60 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     navigate(navLinks.tables);
   };
 
+  /** Right-click "Manage linked fields…" on a lookup column header. The lookup
+   *  column's field is `${fkField.field}__${targetField}`, so we resolve the
+   *  owning FK and reuse the FK-flow popover (same picker handles add/remove
+   *  uniformly per spec §3.2). */
+  const handleManageLinkedFields = (lookupField: string): void => {
+    const fkField = fields.find(
+      (f) => f.type === "linked" && lookupField.startsWith(`${f.field}__`),
+    );
+    if (!fkField) return;
+    handleShowLinkedFields(fkField.field);
+  };
+
+  /** Right-click "Change displayed field…" on a lookup column header. Per spec
+   *  §3.2 the picker handles add/remove uniformly, so route to the same flow. */
+  const handleChangeDisplayedField = (lookupField: string): void => {
+    handleManageLinkedFields(lookupField);
+  };
+
+  /** Right-click "Remove this lookup" on a lookup column header. Drops the one
+   *  target field from the owning FK's `displayFields` and persists. */
+  const handleRemoveLookup = async (lookupField: string): Promise<void> => {
+    if (!canEdit) return;
+    const fkField = fields.find(
+      (f) => f.type === "linked" && lookupField.startsWith(`${f.field}__`),
+    );
+    if (!fkField) return;
+    // `__` separator from buildLinkedColumns is 2 chars.
+    const targetField = lookupField.slice(fkField.field.length + 2);
+    const next = (fkField.displayFields ?? ["label"]).filter((d) => d !== targetField);
+    try {
+      await updateFieldDisplayFields(activeId, fkField.field, next);
+    } catch (err) {
+      toast(
+        `Couldn't remove lookup — ${err instanceof Error ? err.message : String(err)}`,
+        "error",
+      );
+    }
+  };
+
+  /** Right-click "Jump to source column →" on a lookup column header. The
+   *  DataGrid passes the FK column's `field` (via `sourceField`), so we just
+   *  scroll its header into view and flash it. Header cells aren't focusable
+   *  (no tabIndex), so we use the same accent-wash class records use for
+   *  Cmd-K "focus a record" — visual cue stands in for keyboard focus. */
+  const handleJumpToSourceColumn = (sourceField: string): void => {
+    const headerEl = document.querySelector<HTMLElement>(
+      `[data-header="${CSS.escape(sourceField)}"]`,
+    );
+    if (!headerEl) return;
+    headerEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    headerEl.classList.add("zz-row-flash");
+    window.setTimeout(() => headerEl.classList.remove("zz-row-flash"), 1700);
+  };
+
   const performBulkRemove = async () => {
     const targets = sel
       .map((k) => list.find((x) => x.key === k))
@@ -855,6 +909,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }
           onShowLinkedFields={canEdit ? handleShowLinkedFields : undefined}
           onOpenTargetDimension={handleOpenTargetDimension}
+          onChangeDisplayedField={canEdit ? handleChangeDisplayedField : undefined}
+          onManageLinkedFields={canEdit ? handleManageLinkedFields : undefined}
+          onRemoveLookup={canEdit ? handleRemoveLookup : undefined}
+          onJumpToSourceColumn={handleJumpToSourceColumn}
           onLayoutChange={(partial) => {
             setLayout((cur) => {
               const next = { ...cur, ...partial };
