@@ -176,6 +176,13 @@
       "when": 1781467363051,
       "tag": "0024_outgoing_vulcan",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1781600000000,
+      "tag": "0025_canonical_version_backfill",
+      "breakpoints": true
     }
   ]
 }
