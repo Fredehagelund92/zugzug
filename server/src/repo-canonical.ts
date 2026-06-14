@@ -196,7 +196,12 @@ async function seedVersionRow(
   await tx.run(
     `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
      VALUES ($1, $2, 1, now(), $3, $4)
-     ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
+     ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
+        SET retired_at  = NULL,
+            retired_into = NULL,
+            version     = "canonical_version".version + 1,
+            updated_at  = now(),
+            updated_by  = EXCLUDED.updated_by`,
     [dimId, key, userId, tenantId],
   );
 }

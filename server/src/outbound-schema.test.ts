@@ -22,6 +22,8 @@ const RETIRE_DIM_NAME = "Outbound SD Retire";
 const RETIRE_DIM_ID = "outbound_sd_retire";
 const GHOST_DIM_NAME = "Outbound SD Ghost";
 const GHOST_DIM_ID = "outbound_sd_ghost";
+const READD_DIM_NAME = "Outbound SD Readd";
+const READD_DIM_ID = "outbound_sd_readd";
 const USER_ID = "u_outbound_sd";
 
 beforeAll(async () => {
@@ -39,6 +41,8 @@ beforeAll(async () => {
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${RETIRE_DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${GHOST_DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${GHOST_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${READD_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${READD_DIM_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -71,6 +75,8 @@ afterAll(async () => {
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${RETIRE_DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${GHOST_DIM_ID}"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${GHOST_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${READD_DIM_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${READD_DIM_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -226,6 +232,66 @@ describe("retired rows do not appear in canonical listings", () => {
     expect(stillTomb).not.toBeNull();
     expect(stillTomb!.retired_at).not.toBeNull();
     expect(stillTomb!.version).toBe(tombstoneVersion);
+  });
+});
+
+describe("re-adding a previously-retired key un-tombstones the canonical_version", () => {
+  it("after retire(X) then addCanonicalOne(X), the row is visible with version > 1", async () => {
+    // Defensive: addDimension's existence check is unscoped (dim ids are globally
+    // unique), so a stale row from a different tenant would make it skip the
+    // CREATE TABLE for dim_/map_. Clear any prior registry row for this id.
+    await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [READD_DIM_ID]).catch(
+      () => {},
+    );
+    const dimId = await addDimension(READD_DIM_NAME, [], {}, USER_ID, T);
+    expect(dimId).toBe(READD_DIM_ID);
+
+    await addCanonicalOne(dimId, "Phoenix", "phoenix", USER_ID, T);
+
+    const v1Row = await pgGet<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'phoenix'`,
+      [dimId, T],
+    );
+    expect(v1Row).not.toBeNull();
+    const v1 = v1Row!.version;
+
+    const retired = await retireCanonical(dimId, "phoenix", USER_ID, v1, T);
+    expect(retired.ok).toBe(true);
+
+    const tomb = await pgGet<{ retired_at: Date | null; version: number }>(
+      `SELECT retired_at, version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'phoenix'`,
+      [dimId, T],
+    );
+    expect(tomb).not.toBeNull();
+    expect(tomb!.retired_at).not.toBeNull();
+
+    // Re-add — should un-tombstone the canonical_version row.
+    await addCanonicalOne(dimId, "Phoenix", "phoenix", USER_ID, T);
+
+    const after = await pgGet<{
+      retired_at: Date | null;
+      retired_into: string | null;
+      version: number;
+    }>(
+      `SELECT retired_at, retired_into, version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'phoenix'`,
+      [dimId, T],
+    );
+    expect(after).not.toBeNull();
+    expect(after!.retired_at).toBeNull();
+    expect(after!.retired_into).toBeNull();
+    expect(after!.version).toBeGreaterThan(v1);
+
+    // Visible through the same SELECT the edit path uses (retired_at IS NULL filter).
+    const visible = await pgGet<{ key: string; version: number }>(
+      `SELECT key, version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'phoenix' AND retired_at IS NULL`,
+      [dimId, T],
+    );
+    expect(visible).not.toBeNull();
+    expect(visible!.version).toBeGreaterThan(v1);
   });
 });
 
