@@ -13,6 +13,8 @@ import {
   IconSources,
   IconSettings,
   IconAudit,
+  IconUsers,
+  IconDatabase,
   IconChevronLeft,
   IconChevronRight,
   IconSearch,
@@ -25,7 +27,6 @@ import { RoleBadge } from "./RoleBadge";
 import { SyncPill } from "./SyncPill";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
-import { SidebarTableTree } from "./SidebarTableTree";
 import { ShortcutsOverlay } from "./datagrid";
 import { ToastStack, toast } from "./Toast";
 import { useNavLinks } from "../lib/use-tenant-navigate";
@@ -73,17 +74,64 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-function ZigRule() {
+function SidebarGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 96 8" className="h-2 w-24 text-accent" fill="none" aria-hidden="true">
-      <path
-        d="M0 4 L8 1 L16 7 L24 1 L32 7 L40 1 L48 7 L56 1 L64 7 L72 1 L80 7 L88 1 L96 4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <div className="mt-5 first:mt-0">
+      <div className="mb-1 px-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+        {label}
+      </div>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+interface SidebarLinkProps {
+  to: string;
+  label: string;
+  Icon: (p: React.SVGProps<SVGSVGElement>) => JSX.Element;
+  count?: number;
+  end?: boolean;
+  onClick?: () => void;
+}
+
+function SidebarLink({ to, label, Icon, count, end, onClick }: SidebarLinkProps) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onClick}
+      title={count != null ? `${label} · ${count}` : label}
+      className={({ isActive }) =>
+        cx(
+          "group flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-[13px] transition-colors",
+          isActive
+            ? "bg-accent-soft text-accent font-semibold"
+            : "text-ink-2 hover:bg-hover hover:text-ink",
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          <Icon
+            className={cx(
+              "h-3.5 w-3.5 shrink-0 transition-opacity",
+              isActive ? "opacity-100 text-accent" : "opacity-60 group-hover:opacity-100",
+            )}
+          />
+          <span className="flex-1">{label}</span>
+          {count != null && count > 0 && (
+            <span
+              className={cx(
+                "font-mono text-[10px]",
+                isActive ? "text-accent" : "text-ink-3",
+              )}
+            >
+              {count}
+            </span>
+          )}
+        </>
+      )}
+    </NavLink>
   );
 }
 
@@ -302,19 +350,33 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   }, [focusTab, drawerOpen]);
 
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
-  const nav = [
-    { to: navLinks.dashboard, label: "Home", Icon: IconDashboard, end: true },
-    { to: navLinks.triage, label: "Review", Icon: IconMapping, count: totalNew },
-    {
-      to: navLinks.sources,
-      label: "Sources",
-      Icon: IconSources,
-      count: undefined as number | undefined,
-    },
-    { to: navLinks.tables, label: "Tables", Icon: IconTables, count: dims.length },
-    { to: navLinks.audit, label: "Audit", Icon: IconAudit },
-    { to: navLinks.settings, label: "Settings", Icon: IconSettings },
+  const settingsBase = navLinks.settings;
+  interface NavItem {
+    to: string;
+    label: string;
+    Icon: (p: React.SVGProps<SVGSVGElement>) => JSX.Element;
+    count?: number;
+    end?: boolean;
+  }
+  const homeItem: NavItem = {
+    to: navLinks.dashboard,
+    label: "Home",
+    Icon: IconDashboard,
+    end: true,
+  };
+  const tablesGroup: NavItem[] = [
+    { to: navLinks.tables, label: "Dimensions", Icon: IconTables, count: dims.length },
+    { to: navLinks.triage, label: "Workbench", Icon: IconMapping, count: totalNew },
+    { to: navLinks.audit, label: "Activity", Icon: IconAudit },
   ];
+  const workspaceGroup: NavItem[] = [
+    { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
+    { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
+    { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
+    { to: navLinks.sources, label: "Sources", Icon: IconSources },
+  ];
+  // Flat nav — used by the command palette and the collapsed icon rail.
+  const nav: NavItem[] = [homeItem, ...tablesGroup, ...workspaceGroup];
 
   // Quick-switcher command list — navigation + every dim + every canonical
   // record across dims. Rebuilt only when dims change (canonical churn here
@@ -449,45 +511,32 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
           <div className="px-3 pt-2 pb-1">
             <WorkspaceSwitcher />
           </div>
-          <div className="flex items-center gap-2 px-5 pt-2 pb-1">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-              Master data layer
-            </span>
-          </div>
-          <div className="px-5 pb-2">
-            <ZigRule />
-          </div>
 
-          <SidebarTableTree onNavigate={isMobile ? () => setDrawerOpen(false) : undefined} />
+          <nav aria-label="Navigation" className="flex-1 overflow-y-auto px-3 pt-3">
+            <SidebarLink
+              {...homeItem}
+              onClick={isMobile ? () => setDrawerOpen(false) : undefined}
+            />
 
-          <nav className="shrink-0 border-t border-line">
-            <div className="flex items-center justify-around px-2 py-2">
-              {nav
-                .filter((n) => n.to !== navLinks.tables)
-                .map(({ to, label, Icon, count, end }) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    end={end}
-                    title={count != null ? `${label} · ${count}` : label}
-                    onClick={isMobile ? () => setDrawerOpen(false) : undefined}
-                    className={({ isActive }) =>
-                      cx(
-                        "relative grid place-items-center rounded-sm transition-colors",
-                        "h-11 w-11 max-md:h-12 max-md:w-12",
-                        isActive
-                          ? "bg-accent-wash text-accent"
-                          : "text-ink-3 hover:bg-hover hover:text-ink",
-                      )
-                    }
-                  >
-                    <Icon />
-                    {count != null && count > 0 && (
-                      <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-pill bg-accent" />
-                    )}
-                  </NavLink>
-                ))}
-            </div>
+            <SidebarGroup label="Tables">
+              {tablesGroup.map((item) => (
+                <SidebarLink
+                  key={item.to}
+                  {...item}
+                  onClick={isMobile ? () => setDrawerOpen(false) : undefined}
+                />
+              ))}
+            </SidebarGroup>
+
+            <SidebarGroup label="Workspace">
+              {workspaceGroup.map((item) => (
+                <SidebarLink
+                  key={item.to}
+                  {...item}
+                  onClick={isMobile ? () => setDrawerOpen(false) : undefined}
+                />
+              ))}
+            </SidebarGroup>
           </nav>
         </>
       )}
