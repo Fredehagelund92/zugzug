@@ -221,8 +221,9 @@ export async function commit(
   rowsRecovered: number;
   warehouseSynced: "n/a" | "synced" | "failed";
 }> {
-  const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string }>(
-    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label
+  const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string; orderingMode: string }>(
+    `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label,
+            COALESCE(ordering_mode, 'derived') AS "orderingMode"
      FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );
@@ -262,13 +263,38 @@ export async function commit(
   // stays per-tenant-implicit (dim ids are globally unique → effectively
   // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
   await pgTx(async ({ run }) => {
-    await run(
-      `INSERT INTO ${DIMT} (${key}, label)
-       SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
-       WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)`,
-      [dimId, tenantId],
-    );
+    if (meta.orderingMode === "manual") {
+      await run(
+        `WITH max_pos AS (
+           SELECT COALESCE(MAX(position), 0)::bigint AS m FROM ${DIMT}
+         ),
+         ordered AS (
+           SELECT
+             target_key   AS k,
+             target_label AS lbl,
+             MIN(created_at) AS first_seen
+           FROM ${DRAFT} d
+           WHERE d.dim_id = $1 AND d.tenant_id = $2
+             AND d.status = 'mapped' AND d.target_key IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)
+           GROUP BY target_key, target_label
+         )
+         INSERT INTO ${DIMT} (${key}, label, position)
+         SELECT
+           o.k, o.lbl,
+           (SELECT m FROM max_pos) + 1024 * row_number() OVER (ORDER BY o.first_seen, o.k)
+         FROM ordered o`,
+        [dimId, tenantId],
+      );
+    } else {
+      await run(
+        `INSERT INTO ${DIMT} (${key}, label)
+         SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
+         WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)`,
+        [dimId, tenantId],
+      );
+    }
     await run(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT d.raw, d.target_key FROM ${DRAFT} d
