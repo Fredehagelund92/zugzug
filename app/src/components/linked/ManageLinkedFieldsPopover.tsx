@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface TargetFieldOption {
   field: string;
@@ -72,7 +73,11 @@ export function ManageLinkedFieldsPopover(props: Props) {
     props.onApply(order);
   };
 
-  return (
+  // Portal to document.body so the popover escapes any scrolling/transform
+  // parents (TablePane's grid uses transformed scroll containers that would
+  // otherwise clip a `position: fixed` child). Same pattern as
+  // AddFieldPopover — coordinates from anchorRect are viewport-relative.
+  return createPortal(
     <div
       role="dialog"
       aria-label="Manage linked fields"
@@ -139,6 +144,7 @@ export function ManageLinkedFieldsPopover(props: Props) {
           Apply
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
