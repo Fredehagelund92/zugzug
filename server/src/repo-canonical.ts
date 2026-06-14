@@ -34,6 +34,41 @@ import type { ValueProvenance } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { AppError } from "./errors.ts";
 
+/** Returns the new position for an insert between pAbove and pBelow, or null
+ *  if the gap is <= 1 (caller must rebalance first).
+ *  pAbove = position of row above the insertion point (null = inserting at top).
+ *  pBelow = position of row below the insertion point (null = inserting at bottom). */
+export function computeInsertPosition(
+  pAbove: bigint | null,
+  pBelow: bigint | null,
+): bigint | null {
+  if (pAbove === null && pBelow === null) return 1024n;
+  if (pAbove === null) return pBelow! - 1024n;
+  if (pBelow === null) return pAbove + 1024n;
+  const gap = pBelow - pAbove;
+  if (gap <= 1n) return null;
+  return pAbove + gap / 2n;
+}
+
+/** Inside a pgTx: row-lock the tail position row and return max + 1024.
+ *  Returns 1024n when the dim has no positioned rows yet.
+ *  Two concurrent callers serialize at the Postgres row lock. */
+export async function nextPosition(
+  tx: { get: <T>(sql: string, params?: unknown[]) => Promise<T | null> },
+  dimTable: string,
+): Promise<bigint> {
+  const tail = await tx.get<{ position: string | null }>(
+    `SELECT position
+       FROM ${cq(dimTable)}
+       WHERE position IS NOT NULL
+       ORDER BY position DESC
+       LIMIT 1
+       FOR UPDATE`,
+  );
+  const max = tail?.position == null ? 0n : BigInt(tail.position);
+  return max + 1024n;
+}
+
 /** Source-registration input shapes.
  *
  *  - QualifiedSource is the new (database_id, schema, table, column) tuple.
