@@ -304,7 +304,12 @@ export async function autoStageExactMatches(dimId: string, tenantId: string): Pr
   return matches.length;
 }
 
-/** Register a warehouse column as a source for a dimension (idempotent). */
+/** Register a warehouse column as a source for a dimension (idempotent).
+ *
+ *  Takes the legacy `"schema.table"` + column shape and routes through
+ *  normalizeSource() so the row lands in the new
+ *  (database_id, schema, table, column) columns. Callers that already have
+ *  a database_id should write the INSERT directly. */
 export async function addSource(
   dimId: string,
   table: string,
@@ -313,10 +318,23 @@ export async function addSource(
   opts: { silent?: boolean } = {},
 ): Promise<void> {
   void opts;
+  const { normalizeSource } = await import("./repo-canonical.ts");
+  const normalized = await normalizeSource(tenantId, { table, column });
+  if ("error" in normalized) {
+    throw new Error(`${normalized.kind}: ${normalized.error}`);
+  }
   await pgRun(
-    `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
-     VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
-    [dimId, table, column, tenantId],
+    `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+    [
+      dimId,
+      tenantId,
+      normalized.databaseId,
+      normalized.schemaName,
+      normalized.tableName,
+      normalized.columnName,
+    ],
   );
 }
 

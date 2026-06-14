@@ -124,7 +124,7 @@ export class TenantRepo {
   // --- canonical (mutate) ----------------------------------------------------
   addDimension(
     name: string,
-    sources: { table: string; column: string }[] = [],
+    sources: (repoCanonical.LegacySource | repoCanonical.QualifiedSource)[] = [],
     opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
     userId: string,
   ): Promise<string> {

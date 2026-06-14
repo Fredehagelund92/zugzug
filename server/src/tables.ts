@@ -6,6 +6,7 @@
 
 import * as repo from "./repo.ts";
 import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
+import type { LegacySource, QualifiedSource } from "./repo-canonical.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
@@ -29,7 +30,7 @@ export interface CreateTableInput {
   color?: PaletteName | null;
   mode: CreateTableMode;
   columns?: ColumnDraft[]; // mode === 'blank'
-  source?: { table: string; column: string }; // mode === 'source'
+  source?: LegacySource | QualifiedSource; // mode === 'source'
   external?: { table: string; idColumn: string; nameColumn: string }; // mode === 'external_id'
 }
 
@@ -43,7 +44,18 @@ function validate(input: CreateTableInput): void {
     throw new AppError("VALIDATION_FAILED", `unknown color: ${input.color}`);
   }
   if (input.mode === "source") {
-    if (!input.source?.table || !input.source?.column) {
+    const s = input.source;
+    if (!s) {
+      throw new AppError("VALIDATION_FAILED", "source is required");
+    }
+    if ("databaseId" in s) {
+      if (!s.databaseId || !s.schemaName || !s.tableName || !s.columnName) {
+        throw new AppError(
+          "VALIDATION_FAILED",
+          "source requires databaseId + schemaName + tableName + columnName",
+        );
+      }
+    } else if (!s.table || !s.column) {
       throw new AppError("VALIDATION_FAILED", "source requires table + column");
     }
   } else if (input.mode === "external_id") {
@@ -93,6 +105,18 @@ export async function createTable(
   let fieldCount = 0;
   let derivedCount = 0;
 
+  // Resolve source ahead of the tx so a normalization failure (ambiguous legacy
+  // shape) doesn't leave a half-provisioned dimension behind.
+  let normalizedSource: QualifiedSource | null = null;
+  if (input.mode === "source" && input.source) {
+    const { normalizeSource } = await import("./repo-canonical.ts");
+    const result = await normalizeSource(tenantId, input.source);
+    if ("error" in result) {
+      throw new AppError(result.kind, result.error, 422);
+    }
+    normalizedSource = result;
+  }
+
   await pgTx(async ({ run }) => {
     // 2. Identity extras (description, color)
     await run(`UPDATE ${pg("dimension")} SET description = $1, color = $2 WHERE id = $3`, [
@@ -102,18 +126,45 @@ export async function createTable(
     ]);
 
     // 3. Source binding(s) — write directly so we stay in the pgTx connection
-    if (input.mode === "source" && input.source) {
+    if (input.mode === "source" && normalizedSource) {
       await run(
-        `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
-         VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
-        [id, input.source.table, input.source.column, tenantId],
+        `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+        [
+          id,
+          tenantId,
+          normalizedSource.databaseId,
+          normalizedSource.schemaName,
+          normalizedSource.tableName,
+          normalizedSource.columnName,
+        ],
       );
     }
     if (input.mode === "external_id" && input.external) {
+      // external_id still uses the legacy schema.table convention — leave its
+      // resolution to a follow-up task. For now, route through the legacy
+      // default database so we still write the new columns.
+      const { normalizeSource } = await import("./repo-canonical.ts");
+      const result = await normalizeSource(tenantId, {
+        table: input.external.table,
+        column: input.external.idColumn,
+      });
+      if ("error" in result) {
+        throw new AppError(result.kind, result.error, 422);
+      }
       await run(
-        `INSERT INTO ${pg("dimension_source")} (dim_id, source_table, source_column, tenant_id)
-         VALUES ($1, $2, $3, $4) ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO NOTHING`,
-        [id, input.external.table, input.external.idColumn, tenantId],
+        `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+        [
+          id,
+          tenantId,
+          result.databaseId,
+          result.schemaName,
+          result.tableName,
+          result.columnName,
+        ],
       );
       // External-ID also needs the name binding; this lives on the dimension row
       await run(
@@ -140,11 +191,15 @@ export async function createTable(
   }
 
   // 5. Seeding (source / external_id modes)
-  if (input.mode === "source" && input.source) {
+  //    deriveCanonical still takes the legacy "schema.table" string; we
+  //    reconstruct it from the normalized parts so external clients can keep
+  //    using either input shape.
+  if (input.mode === "source" && normalizedSource) {
+    const sourceTable = `${normalizedSource.schemaName}.${normalizedSource.tableName}`;
     const r = await repo.deriveCanonical(
       id,
-      input.source.table,
-      input.source.column,
+      sourceTable,
+      normalizedSource.columnName,
       undefined,
       { silent: true },
       userId,
@@ -166,11 +221,15 @@ export async function createTable(
   }
 
   // 6. Consolidated audit
+  const sourceLabel =
+    input.mode === "source" && normalizedSource
+      ? `${normalizedSource.schemaName}.${normalizedSource.tableName}.${normalizedSource.columnName}`
+      : "";
   const detail =
     input.mode === "blank"
       ? `${name} · blank · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
       : input.mode === "source"
-        ? `${name} · from ${input.source!.table}.${input.source!.column} · derived ${derivedCount}`
+        ? `${name} · from ${sourceLabel} · derived ${derivedCount}`
         : `${name} · from IDs ${input.external!.table}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
   await repo.appendAuditAs(userId, "Created table", detail, { tenantId });
 

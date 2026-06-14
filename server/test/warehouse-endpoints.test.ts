@@ -21,6 +21,9 @@ const ADMIN = `u_admin_${process.pid}`;
 
 async function cleanup(): Promise<void> {
   await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."user_warehouse_state" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
@@ -245,4 +248,121 @@ test("DELETE /warehouse/databases/:id returns 409 when sources exist (no force)"
   expect(Array.isArray(body.dimensions)).toBe(true);
   expect(body.dimensions[0]?.dimId).toBe("dim_test_t14");
   expect(body.dimensions[0]?.sources).toContain("public.orders.country");
+});
+
+/** Helper: registers a synthetic dimension so POST /sources has a target. */
+async function seedDimension(dimId: string): Promise<void> {
+  await pgRun(
+    `INSERT INTO "zugzug_app"."dimension"
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, now(), $6)
+     ON CONFLICT (tenant_id, id) DO NOTHING`,
+    [dimId, "Test Dim", `zugzug_app.dim_${dimId}`, `zugzug_app.map_${dimId}`, `${dimId}_code`, T],
+  );
+}
+
+test("POST /dimensions/:id/sources accepts the qualified shape, sets MRU, no Deprecation header", async () => {
+  const { cookie, tenantSlug, dbId } = await setupWithConnection();
+  const dimId = `dim_test_t16_qual`;
+  await seedDimension(dimId);
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/dimensions/${dimId}/sources`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({
+        source: {
+          databaseId: dbId,
+          schemaName: "raw",
+          tableName: "orders",
+          columnName: "country",
+        },
+      }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(204);
+  expect(res.headers.get("Deprecation")).toBeNull();
+  // Row landed with the new columns.
+  const { pgGet } = await import("../src/pg.ts");
+  const row = await pgGet<{
+    database_id: string;
+    schema_name: string;
+    table_name: string;
+    column_name: string;
+  }>(
+    `SELECT database_id, schema_name, table_name, column_name FROM "zugzug_app"."dimension_source"
+       WHERE tenant_id = $1 AND dim_id = $2`,
+    [T, dimId],
+  );
+  expect(row?.database_id).toBe(dbId);
+  expect(row?.schema_name).toBe("raw");
+  expect(row?.table_name).toBe("orders");
+  expect(row?.column_name).toBe("country");
+  // MRU pointer was set.
+  const mru = await pgGet<{ recent_database_id: string }>(
+    `SELECT recent_database_id FROM "zugzug_app"."user_warehouse_state"
+       WHERE tenant_id = $1 AND user_id = $2`,
+    [T, ADMIN],
+  );
+  expect(mru?.recent_database_id).toBe(dbId);
+});
+
+test("POST /dimensions/:id/sources legacy shape resolves via preferences + sets Deprecation header", async () => {
+  const { cookie, tenantSlug, dbId } = await setupWithConnection();
+  const dimId = `dim_test_t16_legacy`;
+  await seedDimension(dimId);
+  // Seed preferences with the legacy default DB pointer.
+  await pgRun(
+    `INSERT INTO "zugzug_app"."preferences"
+       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id, legacy_default_database_id)
+     VALUES (10, 5, NULL, now(), $1, $2)
+     ON CONFLICT (tenant_id) DO UPDATE
+       SET legacy_default_database_id = EXCLUDED.legacy_default_database_id`,
+    [T, dbId],
+  );
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/dimensions/${dimId}/sources`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ source: { table: "raw.shipments", column: "destination_country" } }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(204);
+  expect(res.headers.get("Deprecation")).toBe("true");
+  const { pgGet } = await import("../src/pg.ts");
+  const row = await pgGet<{
+    database_id: string;
+    schema_name: string;
+    table_name: string;
+    column_name: string;
+  }>(
+    `SELECT database_id, schema_name, table_name, column_name FROM "zugzug_app"."dimension_source"
+       WHERE tenant_id = $1 AND dim_id = $2`,
+    [T, dimId],
+  );
+  expect(row?.database_id).toBe(dbId);
+  expect(row?.schema_name).toBe("raw");
+  expect(row?.table_name).toBe("shipments");
+  expect(row?.column_name).toBe("destination_country");
+});
+
+test("POST /dimensions/:id/sources legacy shape without preferences default returns 422", async () => {
+  const { cookie, tenantSlug } = await setupWithConnection();
+  const dimId = `dim_test_t16_ambiguous`;
+  await seedDimension(dimId);
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/dimensions/${dimId}/sources`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ source: { table: "raw.shipments", column: "destination_country" } }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(422);
+  const body = await res.json();
+  expect(body.kind).toBe("BACKEND_LEGACY_SHAPE_AMBIGUOUS");
 });
