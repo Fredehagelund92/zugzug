@@ -54,12 +54,9 @@ if (n <= 1) {
 }
 
 if (seed) {
-  // Ensure the default tenant exists with a warehouse_connection + database.
-  // Migration 0011 creates the tenant row, and 0021 backfills a __PENDING__
-  // connection — but on a fresh install where migration ordering changes, or
-  // a teardown/reset, this seed step makes the provisioning explicit. Wrapped
-  // in an existence check because the default tenant is already pinned by
-  // 0011 in normal flows; we don't want to fight that path.
+  // Ensure the default tenant exists with the env-configured database registered.
+  // Migration 0011 creates the tenant row in normal flows; on a fresh
+  // install with reset migrations this seed step is the explicit fallback.
   const defaultExists = await pgGet<{ id: string }>(
     `SELECT id FROM "zugzug_app"."tenant" WHERE id = 'default'`,
   );
@@ -67,16 +64,8 @@ if (seed) {
     await provisionTenant({
       id: "default",
       label: "Demo workspace",
-      warehouse: env.motherduckToken && env.warehouseDb
+      warehouse: env.warehouseDb
         ? {
-            adapter: "motherduck",
-            label: "Production warehouse",
-            credentials: {
-              type: "duckdb",
-              token: env.motherduckToken,
-              attached: env.attachWarehouse,
-              writable: false,
-            },
             databases: [{ databaseName: env.warehouseDb }],
             createdBy: "u_system",
           }

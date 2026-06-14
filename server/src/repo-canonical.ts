@@ -371,7 +371,7 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
 
   // For external_id dims with warehouse attached: resolve names from MotherDuck
   if (liveName) {
-    const adapter = await getAdapter(tenantId);
+    const adapter = await getAdapter();
     const nameMap = await adapter
       .nameResolution(parseSourceTable(meta.nameTable!), meta.nameIdCol!, meta.nameCol!)
       .catch(() => new Map<string, string>());
@@ -465,7 +465,7 @@ async function scanValues(
   if (!sources.length) return [];
 
   // 1. Warehouse: distinct raw values with provenance + row counts
-  const adapter = await getAdapter(tenantId);
+  const adapter = await getAdapter();
   const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
   const occRows = await adapter
     .distinctValuesWithProvenance(refs)

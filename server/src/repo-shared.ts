@@ -326,7 +326,7 @@ export function parseSourceTable(stored: string): Ref {
  *  raw_prod) still scans the rest instead of throwing. */
 export async function liveSources(dimId: string, tenantId: string): Promise<SourceDef[]> {
   const { getAdapter } = await import("./warehouse/registry.ts");
-  const adapter = await getAdapter(tenantId);
+  const adapter = await getAdapter();
   const rows = await pgAll<{
     databaseName: string;
     schemaName: string;

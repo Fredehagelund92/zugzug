@@ -162,6 +162,13 @@
       "when": 1781454925459,
       "tag": "0022_groovy_sasquatch",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1781461166791,
+      "tag": "0023_lucky_tinkerer",
+      "breakpoints": true
     }
   ]
 }

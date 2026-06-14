@@ -150,7 +150,7 @@ export async function scanSources(tenantId: string): Promise<number> {
     [tenantId],
   );
   const SCAN_TIMEOUT_MS = 30_000;
-  const adapter = await getAdapter(tenantId);
+  const adapter = await getAdapter();
   for (const r of regs) {
     const ref: Ref = { catalog: r.catalog, schema: r.schema, table: r.table };
     const displayTable = `${r.schema}.${r.table}`;
@@ -261,7 +261,7 @@ export async function autoStageExactMatches(dimId: string, tenantId: string): Pr
   if (!sources.length) return 0;
 
   // Warehouse: distinct raw values
-  const adapter = await getAdapter(tenantId);
+  const adapter = await getAdapter();
   const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
   const occRows = await adapter
     .distinctValuesWithProvenance(refs)
@@ -354,7 +354,7 @@ export async function topUnmapped(
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
-  const adapter = await getAdapter(tenantId);
+  const adapter = await getAdapter();
   const ref = parseSourceTable(table);
   const n = Math.max(1, Math.min(50, Math.round(limit)));
 
@@ -537,7 +537,7 @@ export async function searchCatalog(opts: {
   schemas: { schema: string; tables: number }[];
 }> {
   if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
-  const adapter = await getAdapter(opts.tenantId);
+  const adapter = await getAdapter();
   const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
   const offset = Math.max(0, opts.offset ?? 0);
 
@@ -615,7 +615,7 @@ export async function deriveCanonical(
   const external = meta.keyKind === "external_id";
   if (external && nameColumn) await addSource(dimId, table, nameColumn, tenantId);
 
-  const adapter = await getAdapter(tenantId);
+  const adapter = await getAdapter();
   const vals = await adapter
     .distinctValues(parseSourceTable(table), column, 5000)
     .catch(() => [] as string[]);

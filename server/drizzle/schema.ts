@@ -63,8 +63,8 @@ export const dimensionSource = app.table(
     index("dimension_source_dim_idx").on(t.tenant_id, t.dim_id),
     index("dimension_source_database_idx").on(t.tenant_id, t.database_id),
     foreignKey({
-      columns:        [t.tenant_id, t.database_id],
-      foreignColumns: [warehouseDatabase.tenant_id, warehouseDatabase.id],
+      columns:        [t.database_id],
+      foreignColumns: [warehouseDatabase.id],
       name:           "dimension_source_database_fk",
     }).onDelete("restrict"),
     check("dimension_source_schema_name_nonempty", sql`length(${t.schema_name}) > 0`),
@@ -110,8 +110,8 @@ export const sourceStat = app.table(
       columns: [t.tenant_id, t.dim_id, t.database_id, t.schema_name, t.table_name, t.column_name],
     }),
     foreignKey({
-      columns:        [t.tenant_id, t.database_id],
-      foreignColumns: [warehouseDatabase.tenant_id, warehouseDatabase.id],
+      columns:        [t.database_id],
+      foreignColumns: [warehouseDatabase.id],
       name:           "source_stat_database_fk",
     }).onDelete("cascade"),
     check("source_stat_schema_name_nonempty", sql`length(${t.schema_name}) > 0`),
@@ -363,37 +363,10 @@ export const tenantInvite = app.table(
   ],
 );
 
-export const warehouseConnection = app.table(
-  "warehouse_connection",
-  {
-    id:                    varchar("id").notNull(),
-    tenant_id:             varchar("tenant_id").notNull().references(() => tenant.id),
-    adapter:               varchar("adapter").notNull(),
-    label:                 varchar("label").notNull(),
-    credentials_encrypted: text("credentials_encrypted").notNull(),
-    credentials_hash:      varchar("credentials_hash").notNull(),
-    credentials_version:   integer("credentials_version").notNull().default(1),
-    last_verified_at:      timestamp("last_verified_at"),
-    last_verify_error:     text("last_verify_error"),
-    created_at:            timestamp("created_at").notNull(),
-    created_by:            varchar("created_by").notNull(),
-  },
-  (t) => [
-    primaryKey({ columns: [t.tenant_id, t.id] }),
-    uniqueIndex("warehouse_connection_one_per_tenant").on(t.tenant_id),
-    check(
-      "warehouse_connection_adapter_chk",
-      sql`${t.adapter} IN ('motherduck', 'duckdb_local')`,
-    ),
-  ],
-);
-
 export const warehouseDatabase = app.table(
   "warehouse_database",
   {
-    id:               varchar("id").notNull(),
-    tenant_id:        varchar("tenant_id").notNull().references(() => tenant.id),
-    connection_id:    varchar("connection_id").notNull(),
+    id:               varchar("id").notNull().primaryKey(),
     database_name:    varchar("database_name", { length: 255 }).notNull(),
     label:            varchar("label", { length: 255 }),
     last_probe_at:    timestamp("last_probe_at"),
@@ -402,18 +375,7 @@ export const warehouseDatabase = app.table(
     added_by:         varchar("added_by").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.tenant_id, t.id] }),
-    uniqueIndex("warehouse_database_per_conn_unique").on(
-      t.tenant_id,
-      t.connection_id,
-      t.database_name,
-    ),
-    index("warehouse_database_conn_idx").on(t.tenant_id, t.connection_id),
-    foreignKey({
-      columns:        [t.tenant_id, t.connection_id],
-      foreignColumns: [warehouseConnection.tenant_id, warehouseConnection.id],
-      name:           "warehouse_database_connection_fk",
-    }).onDelete("cascade"),
+    uniqueIndex("warehouse_database_database_name_uniq").on(t.database_name),
   ],
 );
 
@@ -428,8 +390,8 @@ export const userWarehouseState = app.table(
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.user_id] }),
     foreignKey({
-      columns:        [t.tenant_id, t.recent_database_id],
-      foreignColumns: [warehouseDatabase.tenant_id, warehouseDatabase.id],
+      columns:        [t.recent_database_id],
+      foreignColumns: [warehouseDatabase.id],
       name:           "user_warehouse_state_recent_db_fk",
     }).onDelete("set null"),
   ],

@@ -31,7 +31,7 @@ registerFactories({
   duckdb: async (creds) => createDuckDbAdapter(creds),
   snowflake: async (creds) => new SnowflakeAdapter(creds),
 });
-await getAdapter("default"); // warm the adapter (verification script — seed tenant)
+await getAdapter(); // warm the env-configured adapter
 await runMigrations();
 
 // 1. preferences round-trip

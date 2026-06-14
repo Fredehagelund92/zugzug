@@ -23,17 +23,48 @@ function readOptional(name: string, fallback = ""): string {
   return process.env[name]?.trim() ?? fallback;
 }
 
+type WarehouseEnvOk =
+  | { ok: true; adapter: "disabled" }
+  | { ok: true; adapter: "motherduck"; motherduckToken: string };
+type WarehouseEnvErr = { ok: false; reason: string };
+export type WarehouseEnvResult = WarehouseEnvOk | WarehouseEnvErr;
+
+export function validateWarehouseEnv(vars: Record<string, string | undefined>): WarehouseEnvResult {
+  const attach = vars.ATTACH_WAREHOUSE?.trim() === "true";
+  if (!attach) return { ok: true, adapter: "disabled" };
+
+  const adapter = vars.WAREHOUSE_ADAPTER?.trim();
+  if (!adapter) {
+    return { ok: false, reason: "WAREHOUSE_ADAPTER required when ATTACH_WAREHOUSE=true" };
+  }
+  if (adapter === "snowflake") {
+    return { ok: false, reason: "Snowflake adapter is a stub; not yet supported" };
+  }
+  if (adapter !== "motherduck") {
+    return { ok: false, reason: `Unknown WAREHOUSE_ADAPTER: ${adapter}` };
+  }
+  const token = vars.MOTHERDUCK_TOKEN?.trim();
+  if (!token) {
+    return { ok: false, reason: "MOTHERDUCK_TOKEN required for motherduck adapter" };
+  }
+  return { ok: true, adapter: "motherduck", motherduckToken: token };
+}
+
 const attachWarehouse = process.env.ATTACH_WAREHOUSE?.trim() === "true";
 
 const databaseUrl = readRequired("DATABASE_URL", "required");
-const motherduckToken = readRequired(
-  "MOTHERDUCK_TOKEN",
-  attachWarehouse ? "required (because ATTACH_WAREHOUSE=true)" : "required",
-);
-const warehouseEncryptionKey = readRequired(
-  "WAREHOUSE_ENCRYPTION_KEY",
-  "required (base64-encoded 32-byte AES-256 key; generate with `openssl rand -base64 32`)",
-);
+
+const warehouseEnv = validateWarehouseEnv(process.env);
+let motherduckToken = "";
+let warehouseAdapter: "disabled" | "motherduck" = "disabled";
+if (!warehouseEnv.ok) {
+  issues.push({ name: "WAREHOUSE_ADAPTER / MOTHERDUCK_TOKEN", reason: warehouseEnv.reason });
+} else {
+  warehouseAdapter = warehouseEnv.adapter;
+  if (warehouseEnv.adapter === "motherduck") {
+    motherduckToken = warehouseEnv.motherduckToken;
+  }
+}
 
 if (issues.length > 0) {
   const lines = [
@@ -54,7 +85,7 @@ if (issues.length > 0) {
 export const env = {
   databaseUrl,
   motherduckToken,
-  warehouseEncryptionKey,
+  warehouseAdapter,
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse,
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).

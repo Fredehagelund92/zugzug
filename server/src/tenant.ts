@@ -7,8 +7,7 @@
 
 import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
 import { AppError } from "./errors.ts";
-import type { WarehouseCredentials } from "./warehouse/credentials.ts";
-import { createWarehouseConnection, addWarehouseDatabase } from "./repo-warehouse.ts";
+import { addWarehouseDatabase } from "./repo-warehouse.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
@@ -40,16 +39,12 @@ export async function provisionTenant(opts: {
   /** @deprecated placeholder write while tenant.warehouse_id column survives the rollback window */
   warehouseId?: string;
   color?: string;
-  /** When set, create a warehouse_connection + N warehouse_database rows in the
-   *  same logical operation as the tenant insert. The connection is rolled back
-   *  by a compensating DELETE on the tenant row if any of the warehouse writes
-   *  fail, so callers don't observe a half-provisioned state. */
+  /** When set, register N deployment-global warehouse_database rows in the same
+   *  logical operation as the tenant insert. Rolled back by compensating
+   *  DELETEs on the tenant row if any of the warehouse writes fail. */
   warehouse?: {
-    adapter: "motherduck" | "duckdb_local";
-    label: string;
-    credentials: WarehouseCredentials;
     databases?: Array<{ databaseName: string; label?: string }>;
-    /** user id to populate created_by on the connection row */
+    /** user id to populate added_by on the warehouse_database row(s) */
     createdBy: string;
   };
 }): Promise<TenantRecord> {
@@ -102,37 +97,17 @@ export async function provisionTenant(opts: {
   if (opts.warehouse) {
     const wh = opts.warehouse;
     try {
-      const conn = await createWarehouseConnection({
-        tenantId: id,
-        adapter: wh.adapter,
-        label: wh.label,
-        credentials: wh.credentials,
-        actorUserId: wh.createdBy,
-      });
       for (const db of wh.databases ?? []) {
         await addWarehouseDatabase({
-          tenantId: id,
-          connectionId: conn.id,
           databaseName: db.databaseName,
           label: db.label,
           actorUserId: wh.createdBy,
         });
       }
     } catch (err) {
-      // Drop dependent warehouse rows first; the tenant FK has no ON DELETE
-      // CASCADE so a bare DELETE FROM tenant would itself fail and mask the
-      // original error. Best-effort: swallow secondary failures so we can
-      // surface the original error to the caller.
-      try {
-        await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [id]);
-      } catch {
-        /* ignore: best-effort compensation */
-      }
-      try {
-        await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [id]);
-      } catch {
-        /* ignore: best-effort compensation */
-      }
+      // warehouse_database is deployment-global (no tenant_id) so we can't
+      // safely compensate by deleting rows here — they may belong to other
+      // tenants. Best-effort: roll back only the tenant row we just created.
       try {
         await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [id]);
       } catch {
