@@ -365,7 +365,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     end: true,
   };
   const tablesGroup: NavItem[] = [
-    { to: navLinks.tables, label: "Dimensions", Icon: IconTables, count: dims.length },
+    { to: navLinks.tables, label: "Tables", Icon: IconTables, count: dims.length },
     { to: navLinks.triage, label: "Workbench", Icon: IconMapping, count: totalNew },
     { to: navLinks.audit, label: "Activity", Icon: IconAudit },
   ];
@@ -518,7 +518,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
               onClick={isMobile ? () => setDrawerOpen(false) : undefined}
             />
 
-            <SidebarGroup label="Tables">
+            <SidebarGroup label="Data">
               {tablesGroup.map((item) => (
                 <SidebarLink
                   key={item.to}
