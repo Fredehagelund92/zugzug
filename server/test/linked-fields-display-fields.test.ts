@@ -15,11 +15,14 @@ import { pg } from "../src/env.ts";
 const tenantId = "default";
 const userId = "u_test";
 
+let SETUP_COUNTER = 0;
+
 async function setupLink(): Promise<{ srcDim: string; tgtDim: string; fkField: string }> {
-  const tgtDim = await repo.addDimension("Country", [], {}, userId, tenantId);
+  const tag = `${++SETUP_COUNTER}_${process.pid}`;
+  const tgtDim = await repo.addDimension(`Country_${tag}`, [], {}, userId, tenantId);
   await repo.addField(tgtDim, "ISO Code", "text", undefined, { silent: true }, userId, tenantId);
   await repo.addField(tgtDim, "Region", "text", undefined, { silent: true }, userId, tenantId);
-  const srcDim = await repo.addDimension("Partner", [], {}, userId, tenantId);
+  const srcDim = await repo.addDimension(`Partner_${tag}`, [], {}, userId, tenantId);
   await repo.addField(
     srcDim,
     "Country",
@@ -100,9 +103,14 @@ test("displayFields update tolerates stale entries that were already stored (rec
     userId,
     tenantId,
   );
-  // Simulate target-dim field rename by replacing iso_code's row via direct UPDATE
-  await pgAll(`UPDATE ${pg("dimension_field")} SET field = 'code' WHERE dim_id = $1 AND field = $2 AND tenant_id = $3`, [tgtDim, "iso_code", tenantId]);
-  // The stored displayFields still references iso_code (stale). User keeps it and adds region — must succeed.
+  // Simulate target-dim field deletion (the real "stale" scenario):
+  // ISO Code is removed from Country; the stored displayFields still references it.
+  // No repo.deleteField exists, so do a raw DELETE — uniquely-tagged dims ensure no cruft.
+  await pgAll(
+    `DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2 AND tenant_id = $3`,
+    [tgtDim, "iso_code", tenantId],
+  );
+  // The user keeps iso_code in displayFields AND adds region — must succeed (recovery path).
   await repo.updateField(
     srcDim,
     fkField,
@@ -138,12 +146,16 @@ test("displayFields update appends audit entry with before/after", async () => {
     userId,
     tenantId,
   );
-  const rows = await pgAll<{ action: string; metadata: string | null; detail: string }>(
-    `SELECT action, metadata, detail FROM ${pg("audit_log")} WHERE tenant_id = $1 AND action = $2 ORDER BY created_at DESC`,
-    [tenantId, "field.displayFields.update"],
+  const rows = await pgAll<{ action: string; metadata: string | null; detail: string; table_id: string | null }>(
+    `SELECT action, metadata, detail, table_id FROM ${pg("audit_log")}
+     WHERE tenant_id = $1 AND action = $2 AND table_id = $3 AND detail = $4
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [tenantId, "field.displayFields.update", srcDim, fkField],
   );
   expect(rows.length).toBe(1);
   expect(rows[0].detail).toBe(fkField);
+  expect(rows[0].table_id).toBe(srcDim);
   const meta = JSON.parse(rows[0].metadata ?? "{}");
   expect(meta.before).toEqual(["label"]);
   expect(meta.after).toEqual(["label", "iso_code"]);
