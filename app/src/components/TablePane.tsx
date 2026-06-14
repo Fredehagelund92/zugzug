@@ -30,12 +30,15 @@ import {
   getGridLayout,
   getCachedGridLayout,
   setGridLayout,
+  insertCanonicalAt,
+  reorderCanonical,
   useCanEdit,
   useCurrentUser,
   ConflictError,
   refreshDimAndNotify,
   type GridLayoutConfig,
 } from "../store";
+import { cx } from "../lib/cx";
 import { usePresence } from "../lib/use-presence";
 import { useLinkedCandidates } from "../lib/use-linked-candidates";
 import { useOpenTabs } from "../lib/open-tabs";
@@ -77,6 +80,49 @@ function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
     default:
       return { type: "text" };
   }
+}
+
+function DragHandleCell({
+  rowKey,
+  position,
+  canDrag,
+  engineer,
+  onDragEnd: _onDragEnd,
+}: {
+  rowKey:    string;
+  position:  string | null;
+  canDrag:   boolean;
+  engineer:  boolean;
+  onDragEnd: (before: string | null, after: string | null) => void;
+}) {
+  const tooltip = !canDrag
+    ? "Read-only access"
+    : engineer && position
+    ? `position = ${position}`
+    : undefined;
+
+  return (
+    <button
+      aria-label={`Reorder ${rowKey} — drag or use Cmd+Shift+Up/Down`}
+      title={tooltip}
+      disabled={!canDrag}
+      className={cx(
+        "flex h-full w-full items-center justify-center text-ink-3",
+        canDrag
+          ? "cursor-grab hover:text-ink active:cursor-grabbing"
+          : "cursor-default opacity-30",
+      )}
+    >
+      <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+        <circle cx="3" cy="2"  r="1.5" />
+        <circle cx="7" cy="2"  r="1.5" />
+        <circle cx="3" cy="7"  r="1.5" />
+        <circle cx="7" cy="7"  r="1.5" />
+        <circle cx="3" cy="12" r="1.5" />
+        <circle cx="7" cy="12" r="1.5" />
+      </svg>
+    </button>
+  );
 }
 
 interface TablePaneProps {
@@ -399,8 +445,29 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         if (bi === -1) return -1;
         return ai - bi;
       });
+    if (dim.orderingMode === "manual") {
+      ordered.unshift({
+        field: "__drag",
+        label: engineer ? "position" : "",
+        config: { type: "text" },
+        width: 28,
+        hidden: false,
+        editable: false,
+        render: (c: CanonicalValue) => (
+          <DragHandleCell
+            rowKey={c.key}
+            position={c.position ?? null}
+            canDrag={canEdit && !layout.sort}
+            engineer={engineer}
+            onDragEnd={(before, after) => {
+              void reorderCanonical(activeId, c.key, { before, after });
+            }}
+          />
+        ),
+      });
+    }
     return ordered;
-  }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
+  }, [fields, engineer, dim.keyCol, dim.orderingMode, external, layout, linkedTargets, canEdit, activeId]);
 
   const rowsForGrid = useMemo(
     () =>
@@ -952,9 +1019,13 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           onInsertRow={
             external || !canEdit
               ? undefined
-              : () => {
-                  addInputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                  addInputRef.current?.focus();
+              : (key, where) => {
+                  if (dim.orderingMode === "manual") {
+                    void insertCanonicalAt(activeId, "(new)", key, where);
+                  } else {
+                    addInputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                    addInputRef.current?.focus();
+                  }
                 }
           }
           onDeleteRow={

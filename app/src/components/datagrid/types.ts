@@ -172,6 +172,7 @@ export interface DataGridProps<Row> {
   /** Row operations triggered from the right-click context menu. */
   onInsertRow?: (rowKey: string, where: "above" | "below") => void;
   onDeleteRow?: (rowKey: string) => void;
+  onReorderRow?: (rowKey: string, before: string | null, after: string | null) => void;
   onDuplicateRow?: (rowKey: string) => void;
   /** Save per-column conditional formatting rules (persisted in field_config). */
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
