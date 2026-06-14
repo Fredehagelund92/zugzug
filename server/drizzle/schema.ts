@@ -8,6 +8,7 @@ import {
   serial,
   timestamp,
   primaryKey,
+  foreignKey,
   index,
   uniqueIndex,
   text,
@@ -321,5 +322,77 @@ export const tenantInvite = app.table(
     primaryKey({ columns: [t.tenant_id, t.email] }),
     index("tenant_invite_email_idx").on(t.email),
     check("tenant_invite_role_chk", sql`${t.role} IN ('admin', 'editor', 'viewer')`),
+  ],
+);
+
+export const warehouseConnection = app.table(
+  "warehouse_connection",
+  {
+    id:                    varchar("id").notNull(),
+    tenant_id:             varchar("tenant_id").notNull().references(() => tenant.id),
+    adapter:               varchar("adapter").notNull(),
+    label:                 varchar("label").notNull(),
+    credentials_encrypted: text("credentials_encrypted").notNull(),
+    credentials_hash:      varchar("credentials_hash").notNull(),
+    credentials_version:   integer("credentials_version").notNull().default(1),
+    last_verified_at:      timestamp("last_verified_at"),
+    last_verify_error:     text("last_verify_error"),
+    created_at:            timestamp("created_at").notNull(),
+    created_by:            varchar("created_by").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.id] }),
+    uniqueIndex("warehouse_connection_one_per_tenant").on(t.tenant_id),
+    check(
+      "warehouse_connection_adapter_chk",
+      sql`${t.adapter} IN ('motherduck', 'duckdb_local')`,
+    ),
+  ],
+);
+
+export const warehouseDatabase = app.table(
+  "warehouse_database",
+  {
+    id:               varchar("id").notNull(),
+    tenant_id:        varchar("tenant_id").notNull().references(() => tenant.id),
+    connection_id:    varchar("connection_id").notNull(),
+    database_name:    varchar("database_name", { length: 255 }).notNull(),
+    label:            varchar("label", { length: 255 }),
+    last_probe_at:    timestamp("last_probe_at"),
+    last_probe_error: text("last_probe_error"),
+    added_at:         timestamp("added_at").notNull(),
+    added_by:         varchar("added_by").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.id] }),
+    uniqueIndex("warehouse_database_per_conn_unique").on(
+      t.tenant_id,
+      t.connection_id,
+      t.database_name,
+    ),
+    index("warehouse_database_conn_idx").on(t.tenant_id, t.connection_id),
+    foreignKey({
+      columns:        [t.tenant_id, t.connection_id],
+      foreignColumns: [warehouseConnection.tenant_id, warehouseConnection.id],
+      name:           "warehouse_database_connection_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const userWarehouseState = app.table(
+  "user_warehouse_state",
+  {
+    user_id:            varchar("user_id").notNull(),
+    tenant_id:          varchar("tenant_id").notNull().references(() => tenant.id),
+    recent_database_id: varchar("recent_database_id"),
+    updated_at:         timestamp("updated_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.user_id] }),
+    foreignKey({
+      columns:        [t.tenant_id, t.recent_database_id],
+      foreignColumns: [warehouseDatabase.tenant_id, warehouseDatabase.id],
+      name:           "user_warehouse_state_recent_db_fk",
+    }).onDelete("set null"),
   ],
 );
