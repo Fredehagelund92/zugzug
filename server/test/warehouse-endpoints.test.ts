@@ -20,6 +20,7 @@ const T = `twh_${process.pid}`;
 const ADMIN = `u_admin_${process.pid}`;
 
 async function cleanup(): Promise<void> {
+  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
@@ -202,4 +203,46 @@ test("DELETE /warehouse/connection returns 409 while databases exist", async () 
   const body = await res.json();
   expect(body.kind).toBe("CONNECTION_IN_USE");
   expect(body.databaseCount).toBe(1);
+});
+
+test("POST /warehouse/databases rejects invalid identifier", async () => {
+  const { cookie, tenantSlug } = await setupWithConnection();
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/warehouse/databases`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ databaseName: "bad'name" }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(422);
+  const body = await res.json();
+  expect(body.kind).toBe("INVALID_IDENTIFIER");
+});
+
+test("DELETE /warehouse/databases/:id returns 409 when sources exist (no force)", async () => {
+  const { cookie, tenantSlug, dbId } = await setupWithConnection();
+  // dimension_source has no FK to `dimension` — insert directly with a synthetic dim_id.
+  await pgRun(
+    `INSERT INTO "zugzug_app"."dimension_source"
+       (tenant_id, dim_id, database_id, schema_name, table_name, column_name)
+     VALUES ($1, $2, $3, 'public', 'orders', 'country')`,
+    [T, "dim_test_t14", dbId],
+  );
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/warehouse/databases/${dbId}`, {
+      method: "DELETE",
+      headers: { cookie },
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(409);
+  const body = await res.json();
+  expect(body.kind).toBe("DATABASE_IN_USE");
+  expect(body.sourceCount).toBeGreaterThanOrEqual(1);
+  expect(Array.isArray(body.dimensions)).toBe(true);
+  expect(body.dimensions[0]?.dimId).toBe("dim_test_t14");
+  expect(body.dimensions[0]?.sources).toContain("public.orders.country");
 });

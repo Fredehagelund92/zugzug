@@ -240,6 +240,119 @@ export async function deleteWarehouseConnection(
   return { ok: true };
 }
 
+/** Update only the human label on a registered warehouse database. */
+export async function updateDatabaseLabel(
+  tenantId: string,
+  databaseId: string,
+  label: string | null,
+): Promise<void> {
+  await pgRun(
+    `UPDATE "zugzug_app"."warehouse_database"
+        SET label = $3
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, databaseId, label],
+  );
+}
+
+export type RemoveDatabaseResult =
+  | {
+      ok: true;
+      snapshot: {
+        databaseName: string;
+        label: string | null;
+        connectionId: string;
+        sourceCount: number;
+      };
+    }
+  | {
+      ok: false;
+      reason: "IN_USE";
+      sourceCount: number;
+      dimensions: { dimId: string; sources: string[] }[];
+    };
+
+/** Remove a registered warehouse database.
+ *  - 404-style: throws DATABASE_NOT_FOUND if the row is missing.
+ *  - Default: refuses when dependent dimension_source rows exist; returns the
+ *    grouped dependency list so the UI can show what's in the way.
+ *  - With { force: true }: drops the dependent dimension_source rows first
+ *    (source_stat CASCADEs off its FK), then deletes the warehouse_database row.
+ *  - Returns a snapshot of the deleted row for audit metadata. */
+export async function removeDatabase(
+  tenantId: string,
+  databaseId: string,
+  { force }: { force: boolean },
+): Promise<RemoveDatabaseResult> {
+  const row = await pgGet<{
+    database_name: string;
+    label: string | null;
+    connection_id: string;
+  }>(
+    `SELECT database_name, label, connection_id
+       FROM "zugzug_app"."warehouse_database"
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, databaseId],
+  );
+  if (!row) {
+    throw new Error("DATABASE_NOT_FOUND");
+  }
+
+  const depRows = await pgAll<{
+    dim_id: string;
+    schema_name: string;
+    table_name: string;
+    column_name: string;
+  }>(
+    `SELECT dim_id, schema_name, table_name, column_name
+       FROM "zugzug_app"."dimension_source"
+      WHERE tenant_id = $1 AND database_id = $2
+      ORDER BY dim_id, schema_name, table_name, column_name`,
+    [tenantId, databaseId],
+  );
+
+  if (depRows.length > 0 && !force) {
+    const byDim = new Map<string, string[]>();
+    for (const d of depRows) {
+      const ref = `${d.schema_name}.${d.table_name}.${d.column_name}`;
+      const list = byDim.get(d.dim_id);
+      if (list) list.push(ref);
+      else byDim.set(d.dim_id, [ref]);
+    }
+    return {
+      ok: false,
+      reason: "IN_USE",
+      sourceCount: depRows.length,
+      dimensions: Array.from(byDim, ([dimId, sources]) => ({ dimId, sources })),
+    };
+  }
+
+  // Force path (or no dependencies): cascade the dimension_source rows.
+  // source_stat references warehouse_database via FK with ON DELETE CASCADE,
+  // so it will tidy itself up when the warehouse_database row goes.
+  if (depRows.length > 0) {
+    await pgRun(
+      `DELETE FROM "zugzug_app"."dimension_source"
+        WHERE tenant_id = $1 AND database_id = $2`,
+      [tenantId, databaseId],
+    );
+  }
+  await pgRun(
+    `DELETE FROM "zugzug_app"."warehouse_database"
+      WHERE tenant_id = $1 AND id = $2`,
+    [tenantId, databaseId],
+  );
+
+  return {
+    ok: true,
+    snapshot: {
+      databaseName: row.database_name,
+      label: row.label,
+      connectionId: row.connection_id,
+      sourceCount: depRows.length,
+    },
+  };
+}
+
 /** Record the outcome of a verify (adapter.ping()) attempt on the connection row.
  *  Always updates last_verified_at = now(); sets last_verify_error to NULL on
  *  success or the error message on failure. */

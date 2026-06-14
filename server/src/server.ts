@@ -826,6 +826,145 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const list = await listWarehouseDatabases(tenantCtx.tenantId);
         return json(list);
       }
+
+      // /api/t/:slug/warehouse/databases — POST register / PATCH label / DELETE.
+      // GET .../available — calls the adapter to enumerate discoverable catalogs.
+      if (seg[2] === "databases") {
+        const {
+          listWarehouseDatabases,
+          addWarehouseDatabase,
+          updateDatabaseLabel,
+          removeDatabase,
+          getWarehouseConnection,
+        } = await import("./repo-warehouse.ts");
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+
+        // GET /warehouse/databases/available — adapter discovery + registration overlay.
+        if (method === "GET" && seg[3] === "available" && seg.length === 4) {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const adapter = await getAdapterFn(tenantCtx.tenantId);
+          const registered = new Set(
+            (await listWarehouseDatabases(tenantCtx.tenantId)).map((d) => d.databaseName),
+          );
+          try {
+            const discovered = await adapter.listDatabases();
+            return json(
+              discovered.map((d) => ({
+                databaseName: d.databaseName,
+                registered: registered.has(d.databaseName),
+              })),
+            );
+          } catch (discoverErr) {
+            const msg =
+              discoverErr instanceof Error ? discoverErr.message : String(discoverErr);
+            if (msg.includes("listDatabases exceeded")) {
+              return json({ kind: "DISCOVERY_TIMED_OUT" }, 504);
+            }
+            throw discoverErr;
+          }
+        }
+
+        // POST /warehouse/databases — validate name + adapter.probeDatabase + insert.
+        if (method === "POST" && seg.length === 3) {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const body = (await req.json()) as { databaseName: string; label?: string };
+          const conn = await getWarehouseConnection(tenantCtx.tenantId);
+          if (!conn) return json({ error: "WAREHOUSE_NOT_CONFIGURED" }, 409);
+          if (!/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(body.databaseName)) {
+            return json(
+              { kind: "INVALID_IDENTIFIER", databaseName: body.databaseName },
+              422,
+            );
+          }
+          const adapter = await getAdapterFn(tenantCtx.tenantId);
+          let probe: { ok: true } | { ok: false; reason: string };
+          try {
+            probe = await adapter.probeDatabase(body.databaseName);
+          } catch (probeErr) {
+            const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
+            if (msg.includes("probeDatabase exceeded")) {
+              return json({ kind: "PROBE_TIMED_OUT" }, 504);
+            }
+            throw probeErr;
+          }
+          if (!probe.ok) {
+            return json({ kind: "PROBE_FAILED", reason: probe.reason }, 422);
+          }
+          const wd = await addWarehouseDatabase({
+            tenantId: tenantCtx.tenantId,
+            connectionId: conn.id,
+            databaseName: body.databaseName,
+            label: body.label,
+            actorUserId: me,
+          });
+          await appendAuditAs(me, "warehouse.database.add", body.databaseName, {
+            tenantId: tenantCtx.tenantId,
+            metadata: {
+              adapter: conn.adapter,
+              label: body.label ?? null,
+              databaseId: wd.id,
+            },
+          });
+          return json(wd, 201);
+        }
+
+        // PATCH /warehouse/databases/:id — label-only edit.
+        if (method === "PATCH" && seg.length === 4) {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const body = (await req.json()) as { label?: string | null };
+          if (body.label !== undefined) {
+            await updateDatabaseLabel(tenantCtx.tenantId, seg[3]!, body.label);
+          }
+          return noContent();
+        }
+
+        // DELETE /warehouse/databases/:id — refuses while sources reference it;
+        // ?force=true escalates to admin_connection and cascades the sources.
+        if (method === "DELETE" && seg.length === 4) {
+          const force = url.searchParams.get("force") === "true";
+          const denied = gateOrJson(tenantCtx, force ? "admin_connection" : "curate");
+          if (denied) return denied;
+          let out;
+          try {
+            out = await removeDatabase(tenantCtx.tenantId, seg[3]!, { force });
+          } catch (removeErr) {
+            const msg = removeErr instanceof Error ? removeErr.message : String(removeErr);
+            if (msg === "DATABASE_NOT_FOUND") {
+              return json({ error: "DATABASE_NOT_FOUND" }, 404);
+            }
+            throw removeErr;
+          }
+          if (!out.ok) {
+            return json(
+              {
+                kind: "DATABASE_IN_USE",
+                sourceCount: out.sourceCount,
+                dimensions: out.dimensions,
+              },
+              409,
+            );
+          }
+          await appendAuditAs(
+            me,
+            "warehouse.database.remove",
+            out.snapshot.databaseName,
+            {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                databaseName: out.snapshot.databaseName,
+                databaseLabel: out.snapshot.label,
+                connectionId: out.snapshot.connectionId,
+                forced: force,
+                unboundSourceCount: out.snapshot.sourceCount,
+              },
+            },
+          );
+          return noContent();
+        }
+      }
     }
 
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
