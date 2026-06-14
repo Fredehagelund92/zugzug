@@ -30,6 +30,10 @@ const motherduckToken = readRequired(
   "MOTHERDUCK_TOKEN",
   attachWarehouse ? "required (because ATTACH_WAREHOUSE=true)" : "required",
 );
+const warehouseEncryptionKey = readRequired(
+  "WAREHOUSE_ENCRYPTION_KEY",
+  "required (base64-encoded 32-byte AES-256 key; generate with `openssl rand -base64 32`)",
+);
 
 if (issues.length > 0) {
   const lines = [
@@ -50,7 +54,7 @@ if (issues.length > 0) {
 export const env = {
   databaseUrl,
   motherduckToken,
-  warehouseEncryptionKey: (process.env.WAREHOUSE_ENCRYPTION_KEY ?? "").trim(),
+  warehouseEncryptionKey,
   warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse,
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
