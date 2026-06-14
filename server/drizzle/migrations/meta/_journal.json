@@ -155,6 +155,13 @@
       "when": 1781427458096,
       "tag": "0021_strong_wonder_man",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1781454925459,
+      "tag": "0022_groovy_sasquatch",
+      "breakpoints": true
     }
   ]
 }

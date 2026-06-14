@@ -33,11 +33,14 @@ export const dimension = app.table(
     name_col:    varchar("name_col"),
     description: varchar("description"),
     color:       varchar("color"),
+    ordering_mode:      varchar("ordering_mode").notNull().default("derived"),
+    last_rebalanced_at: timestamp("last_rebalanced_at"),
     tenant_id:   varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.id] }),
     index("dimension_tenant_idx").on(t.tenant_id),
+    check("dimension_ordering_mode_chk", sql`${t.ordering_mode} IN ('derived', 'manual')`),
   ],
 );
 
