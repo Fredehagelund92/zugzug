@@ -17,6 +17,7 @@ export interface CanonicalValue {
   variants?: number;
   fields?: Record<string, string | null>;
   unresolved?: boolean;
+  position?: string | null;
 }
 /** A predetermined option on a single-select field, with optional color. */
 export interface OptionDef {
@@ -76,6 +77,8 @@ export interface MappingDimension {
   canonical: CanonicalValue[];
   values: MappingValue[];
   fields?: FieldDef[]; // enrichment attribute columns
+  orderingMode?: "derived" | "manual";
+  nextPosition?: string | null;
 }
 
 const rowsOf = (s: SourceOccurrence[]) => s.reduce((n, o) => n + o.rows, 0);

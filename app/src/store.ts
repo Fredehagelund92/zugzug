@@ -500,6 +500,57 @@ export async function addDimension(
   return id;
 }
 
+export async function patchDimension(
+  dimId: string,
+  patch: { orderingMode?: "derived" | "manual"; description?: string | null; color?: string | null },
+): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
+export async function insertCanonicalAt(
+  dimId: string,
+  label: string,
+  anchor: string,
+  direction: "above" | "below",
+  key?: string,
+): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/canonical`, {
+    method: "POST",
+    body: JSON.stringify({ label, key, insertAt: { anchor, direction } }),
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
+export async function reorderCanonical(
+  dimId: string,
+  rowKey: string,
+  opts: { before?: string | null; after?: string | null },
+): Promise<{ position: string }> {
+  const result = await api<{ ok: boolean; position: string }>(
+    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(rowKey)}/position`,
+    {
+      method: "PUT",
+      body: JSON.stringify(opts),
+    },
+  );
+  await refreshDim(dimId);
+  emit();
+  return { position: result.position };
+}
+
+export async function rebalancePositions(dimId: string): Promise<{ rebalanced: number }> {
+  return api<{ ok: boolean; rebalanced: number }>(
+    `/dimensions/${encodeURIComponent(dimId)}/positions/rebalance`,
+    { method: "POST" },
+  );
+}
+
 export type CreateTableMode = "blank" | "source" | "external_id";
 
 export interface ColumnDraft {
@@ -975,6 +1026,7 @@ export interface GridLayoutConfig {
   widths?: Record<string, number>;
   order?: string[];
   hidden?: string[];
+  sort?: { column: string; direction: "asc" | "desc" } | null;
 }
 
 // Layout cache so re-activating a tab renders with correct column widths
