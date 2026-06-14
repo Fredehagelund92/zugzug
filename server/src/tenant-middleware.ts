@@ -40,7 +40,7 @@ export async function resolveTenantContext(opts: ResolveOpts): Promise<TenantCon
     }
     const role = await memberRole(tenant.id, opts.user.id);
     if (role) {
-      return { tenantId: tenant.id, role, isSuperAdmin: false };
+      return { tenantId: tenant.id, role, isSuperAdmin: opts.isSuperAdmin ?? false };
     }
     if (opts.isSuperAdmin) {
       return { tenantId: tenant.id, role: "admin", isSuperAdmin: true };

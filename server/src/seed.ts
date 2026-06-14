@@ -2,6 +2,8 @@
    install. Generic e-commerce examples: replace with your own dimensions
    after exploring the demo. Idempotent (safe to re-run). */
 
+import { pgGet, pgRun } from "./pg.ts";
+import { pg } from "./env.ts";
 import { addDimension, addCanonical } from "./repo.ts";
 
 const COUNTRY_SOURCES = [
@@ -60,6 +62,22 @@ const CUSTOMER_SEGMENT_CANONICAL = [
 const T = "default";
 
 export async function seedDemo(): Promise<void> {
+  // Resolve the legacy schema.table sources against the first warehouse database
+  // for this tenant. normalizeSource() requires preferences.legacy_default_database_id
+  // to be set when the source doesn't carry an explicit databaseId.
+  const db = await pgGet<{ id: string }>(
+    `SELECT id FROM ${pg("warehouse_database")} WHERE tenant_id = $1 ORDER BY added_at LIMIT 1`,
+    [T],
+  );
+  if (db) {
+    await pgRun(
+      `INSERT INTO ${pg("preferences")} (tenant_id, legacy_default_database_id, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (tenant_id) DO UPDATE SET legacy_default_database_id = EXCLUDED.legacy_default_database_id`,
+      [T, db.id],
+    );
+  }
+
   await addDimension("Country", COUNTRY_SOURCES, {}, "u_verify", T);
   await addCanonical("country", COUNTRY_CANONICAL, T);
 
