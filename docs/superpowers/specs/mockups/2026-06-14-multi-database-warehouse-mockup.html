@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zug Zug · Multi-database warehouse — mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6fc;
+    --paper: #ffffff;
+    --surface-2: #eaeef7;
+    --surface-3: #dfe5f2;
+    --ink: #0c1020;
+    --ink-2: #48526a;
+    --ink-3: #8893a8;
+    --line: rgba(12, 16, 32, 0.11);
+    --line-2: rgba(12, 16, 32, 0.20);
+    --node-line: rgba(12, 16, 32, 0.06);
+    --accent: #d6336c;
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+    --accent-2: #c68410;
+    --tint-mint: #2a8c5e;
+    --tint-coral: #c64432;
+    --tint-sky: #1b6ca8;
+    --tint-violet: #8a3fba;
+    --tint-slate: #57637c;
+    --shadow-sm: 0 1px 2px rgba(20, 30, 60, 0.08), 0 0 0 1px rgba(20, 30, 60, 0.04);
+    --shadow: 0 10px 26px -14px rgba(20, 30, 60, 0.22);
+    --shadow-lg: 0 28px 60px -22px rgba(20, 30, 60, 0.28);
+    --font-display: "Bricolage Grotesque", serif;
+    --font-body: "Hanken Grotesk", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+    --r-sm: 4px;
+    --r: 8px;
+    --r-lg: 12px;
+    --r-pill: 999px;
+  }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--font-body); }
+  .display { font-family: var(--font-display); letter-spacing: -0.012em; }
+  .mono { font-family: var(--font-mono); }
+  .kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
+  .panel { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg); }
+  .hairline { border-color: var(--line); }
+  .hairline-2 { border-color: var(--line-2); }
+  .pill { display:inline-flex; align-items:center; gap: 6px; padding: 2px 8px; border-radius: var(--r-pill); border:1px solid var(--line-2); font-size: 11px; line-height: 18px; color: var(--ink-2); background: var(--paper); }
+  .pill.ok    { color: var(--tint-mint); border-color: color-mix(in srgb, var(--tint-mint) 36%, var(--line-2)); background: color-mix(in srgb, var(--tint-mint) 8%, var(--paper)); }
+  .pill.warn  { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent-2) 38%, var(--line-2)); background: color-mix(in srgb, var(--accent-2) 10%, var(--paper)); }
+  .pill.err   { color: var(--tint-coral); border-color: color-mix(in srgb, var(--tint-coral) 36%, var(--line-2)); background: color-mix(in srgb, var(--tint-coral) 8%, var(--paper)); }
+  .pill.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 32%, var(--line-2)); background: var(--accent-soft); }
+  .dot { width:6px; height:6px; border-radius:999px; background: currentColor; display:inline-block; }
+  .btn { font-family: var(--font-body); display:inline-flex; align-items:center; gap:6px; padding: 6px 12px; border-radius: var(--r); border:1px solid var(--line-2); background: var(--paper); color: var(--ink); font-weight:500; font-size:13px; line-height:18px; cursor:pointer; }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--ink); color: white; border-color: var(--ink); }
+  .btn-primary:hover { background: #1c2240; }
+  .btn-accent { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn-accent:hover { background: color-mix(in srgb, var(--accent) 90%, black); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--ink-2); }
+  .btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+  .btn-danger { color: var(--tint-coral); border-color: color-mix(in srgb, var(--tint-coral) 40%, var(--line-2)); }
+  .btn-danger:hover { background: color-mix(in srgb, var(--tint-coral) 10%, var(--paper)); }
+  .btn-sm { padding: 4px 8px; font-size:12px; }
+  .input { font-family: var(--font-body); padding: 7px 10px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--paper); color: var(--ink); font-size: 13px; width:100%; }
+  .input:focus { outline:none; border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 12%, transparent); }
+  .label-sm { font-size: 11px; font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+  .menu-item { display:flex; align-items:center; gap:8px; padding: 6px 10px; border-radius: var(--r-sm); color: var(--ink); font-size: 13px; cursor:pointer; }
+  .menu-item:hover { background: var(--surface-2); }
+  .menu-item.danger { color: var(--tint-coral); }
+  .menu-item.danger:hover { background: color-mix(in srgb, var(--tint-coral) 10%, var(--paper)); }
+  .row-divider { border-top: 1px solid var(--line); }
+  .col-divider { border-left: 1px solid var(--line); }
+  .caption { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+  .annot { position: absolute; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--ink-3); }
+  .annot::before { content:''; position:absolute; }
+  .ringline { background-image: linear-gradient(to right, var(--line) 50%, transparent 0%); background-size: 8px 1px; background-repeat: repeat-x; height: 1px; width: 100%; }
+  .chip { display:inline-flex; align-items:center; gap:6px; padding: 6px 10px; border-radius: var(--r); border:1px solid var(--line); background: var(--paper); cursor:pointer; }
+  .chip:hover { background: var(--surface-2); }
+  .chip.selected { border-color: var(--ink); background: var(--surface-2); }
+  .chip.disabled { color: var(--ink-3); cursor: not-allowed; background: color-mix(in srgb, var(--surface-3) 60%, transparent); }
+  .field-row { display:grid; grid-template-columns: 144px 1fr; gap: 12px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+  .field-row:first-child { border-top: 0; }
+  .key { font-family: var(--font-mono); color: var(--ink-3); font-size: 11px; padding-top: 2px; }
+  .modal-bd { background: rgba(12,16,32,0.4); backdrop-filter: blur(2px); }
+  .breadcrumb { display:flex; align-items:center; gap: 8px; font-size: 12px; color: var(--ink-3); font-family: var(--font-mono); }
+  .breadcrumb a { color: var(--ink-2); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--ink); }
+  .breadcrumb .sep { color: var(--line-2); }
+  .table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .table thead th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); text-align: left; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+  .table tbody td { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 13px; vertical-align: top; }
+  .table tbody tr:last-child td { border-bottom: 0; }
+  .table .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .stack > * + * { margin-top: var(--gap, 12px); }
+  .skel { background: var(--surface-2); border-radius: var(--r-sm); height: 8px; }
+  /* topbar */
+  .topbar { display:flex; align-items:center; gap: 16px; height: 56px; padding: 0 24px; border-bottom: 1px solid var(--line); background: var(--paper); position: sticky; top: 0; z-index: 20; }
+  .ws-pill { display:inline-flex; align-items:center; gap:8px; padding: 4px 8px; border-radius: var(--r); border:1px solid var(--line-2); }
+  .ws-square { width: 14px; height: 14px; border-radius: 3px; }
+  .accent-link { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .accent-link:hover { text-decoration: underline; }
+  /* sidebar */
+  .side { width: 220px; flex: none; border-right: 1px solid var(--line); padding: 16px 14px; background: var(--paper); min-height: calc(100vh - 56px); }
+  .side .group { margin-top: 18px; }
+  .side .group:first-child { margin-top: 0; }
+  .side .item { display:flex; align-items:center; gap: 10px; padding: 7px 8px; border-radius: var(--r-sm); color: var(--ink-2); font-size: 13px; cursor: pointer; }
+  .side .item:hover { background: var(--surface-2); color: var(--ink); }
+  .side .item.active { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+  .side .item .ico { color: var(--ink-3); }
+  .side .item.active .ico { color: var(--accent); }
+  .scene-label { display:flex; align-items:center; gap: 10px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); margin: 32px 0 14px; }
+  .scene-label .num { display:inline-grid; place-items:center; width: 20px; height: 20px; border:1px solid var(--line-2); border-radius: var(--r-sm); color: var(--ink-2); font-size: 10px; }
+  .scene-label .line { flex: 1; height:1px; background: var(--line); }
+  .empty-state { text-align: center; padding: 36px 24px; color: var(--ink-2); }
+</style>
+</head>
+<body class="text-[14px]">
+
+<!-- =============================================================
+     PAGE FRAME — Zugzug topbar + workspace sidebar
+     ============================================================= -->
+<header class="topbar">
+  <div class="display font-bold text-[18px] flex items-center gap-2">
+    <span class="inline-grid place-items-center w-7 h-7 rounded-md" style="background:var(--ink); color:white; font-family:var(--font-mono); font-size:11px;">ZZ</span>
+    Zug Zug
+  </div>
+  <span class="pill mono" style="font-size:10px;">v0.6.0</span>
+  <div class="flex-1"></div>
+  <div class="ws-pill mono text-[12px]">
+    <span class="ws-square" style="background: #d6336c"></span>
+    Acme HQ
+    <svg class="ml-1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+  </div>
+  <button class="btn btn-sm" style="font-family:var(--font-mono); font-size:11px;">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    Search…
+    <span class="mono ml-1" style="background:var(--surface-2); padding:1px 6px; border-radius:var(--r-sm); font-size:10px;">⌘K</span>
+  </button>
+  <div class="flex -space-x-2">
+    <span class="inline-grid place-items-center w-7 h-7 rounded-full border-2 border-white" style="background:#c64432; color:white; font-size:11px; font-weight:600;">AB</span>
+    <span class="inline-grid place-items-center w-7 h-7 rounded-full border-2 border-white" style="background:#1b6ca8; color:white; font-size:11px; font-weight:600;">CM</span>
+    <span class="inline-grid place-items-center w-7 h-7 rounded-full border-2 border-white" style="background:#2a8c5e; color:white; font-size:11px; font-weight:600;">FH</span>
+  </div>
+</header>
+
+<div class="flex">
+  <!-- Admin sidebar -->
+  <aside class="side">
+    <div class="group">
+      <div class="kicker mb-2">Tables</div>
+      <div class="item"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h7V3H3zM14 21h7v-9h-7zM14 3v6h7V3zM3 21h7v-6H3z"/></svg></span>Dimensions</div>
+      <div class="item"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>Workbench</div>
+      <div class="item"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg></span>Activity</div>
+    </div>
+    <div class="group">
+      <div class="kicker mb-2">Workspace</div>
+      <div class="item"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span>Members</div>
+      <div class="item active"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg></span>Warehouse</div>
+      <div class="item"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg></span>Preferences</div>
+      <div class="item"><span class="ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/></svg></span>API tokens</div>
+    </div>
+  </aside>
+
+  <!-- =============================================================
+       MAIN CONTENT — one tall page holding 4 annotated scenes
+       ============================================================= -->
+  <main class="flex-1 min-w-0 px-10 py-8">
+
+    <!-- Page header -->
+    <div class="breadcrumb mb-4">
+      <a href="#">Settings</a>
+      <span class="sep">/</span>
+      <span style="color:var(--ink);">Warehouse</span>
+    </div>
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="display text-[36px] font-bold leading-tight">Warehouse</h1>
+        <p class="text-[14px] mt-1" style="color:var(--ink-2); max-width: 60ch;">
+          One warehouse connection per workspace, with as many databases registered inside it as you need. Source registration is fully qualified to <span class="mono" style="color:var(--ink);">(database · schema · table · column)</span>.
+        </p>
+      </div>
+      <div class="caption">Workspace · Acme HQ · admin only for credentials</div>
+    </div>
+
+    <!-- ===============================================
+         SCENE 1 — Warehouse card + Databases card
+         =============================================== -->
+    <div class="scene-label">
+      <span class="num">1</span>
+      Primary screen — Warehouse + Databases
+      <span class="line"></span>
+    </div>
+
+    <!-- Warehouse card -->
+    <section class="panel mb-5" style="position: relative;">
+      <div class="flex items-start gap-5 p-5">
+        <!-- Adapter glyph -->
+        <div class="flex-none w-12 h-12 rounded-[10px] grid place-items-center" style="background: color-mix(in srgb, var(--tint-violet) 14%, var(--paper)); border: 1px solid color-mix(in srgb, var(--tint-violet) 22%, var(--line));">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8a3fba" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M3 11v6c0 1.7 4 3 9 3s9-1.3 9-3v-6"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="display font-bold text-[20px]">Production warehouse</div>
+            <span class="pill ok"><span class="dot"></span>Reachable · 2 min ago</span>
+          </div>
+          <div class="flex items-center gap-4 mt-1.5 mono" style="color: var(--ink-3); font-size:11px;">
+            <span><span style="color:var(--ink-2);">Adapter</span> · MotherDuck</span>
+            <span class="opacity-30">|</span>
+            <span><span style="color:var(--ink-2);">Connected by</span> · ada@zugzug.app</span>
+            <span class="opacity-30">|</span>
+            <span><span style="color:var(--ink-2);">Since</span> · 2026-03-14</span>
+            <span class="opacity-30">|</span>
+            <span class="pill" style="font-size:10px; padding: 1px 6px;">wc_a1b2c3d4e5f60718293a4b5c6d7e8f90</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg> Verify connection</button>
+          <button class="btn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></svg> Edit credentials…</button>
+          <button class="btn btn-danger">Replace…</button>
+        </div>
+      </div>
+      <!-- Engineer-mode reveal (admin-gated; cipher details on hover only) -->
+      <div class="row-divider p-5 flex items-center gap-4" style="background: color-mix(in srgb, var(--surface-2) 60%, transparent);">
+        <span class="caption">Engineer mode</span>
+        <span class="pill" style="font-size:10px; padding: 1px 6px; color: var(--accent);">admin only</span>
+        <div class="mono text-[11px]" style="color: var(--ink-2);">credentials_version=v1</div>
+        <div class="mono text-[11px] flex items-center gap-1" style="color: var(--ink-2);" title="aes-256-gcm · nonce 12 bytes · tag 16 bytes · AAD = tenant_id:id">
+          cipher
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ink-3);"><circle cx="12" cy="12" r="9"/><path d="M12 8v0M12 11v5"/></svg>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="font-family: var(--font-mono); font-size:11px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ink-2);"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          Copy encrypted blob…
+        </button>
+        <span class="mono text-[10px]" style="color:var(--ink-3);">lock icon = confirm dialog before copy</span>
+        <div class="flex-1"></div>
+        <span class="mono text-[10px]" style="color:var(--ink-3);">env WAREHOUSE_ENCRYPTION_KEY = ✓ loaded</span>
+      </div>
+
+      <!-- Floating annotation -->
+      <div class="annot" style="left: calc(100% + 18px); top: 28px; width: 220px;">
+        <div style="border-left: 1px solid var(--line-2); padding-left: 12px;">
+          <div style="color: var(--ink-2);">status pill</div>
+          <div style="margin-top: 4px; line-height: 1.5;">colour comes from <span style="color:var(--ink);">ping()</span> + last_verify_error — turns warn (token expiring soon) or err (revoked)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Databases card -->
+    <section class="panel mb-6" style="position: relative; overflow: hidden;">
+      <div class="flex items-center justify-between p-5">
+        <div>
+          <div class="display font-bold text-[18px]">Registered databases</div>
+          <div class="text-[12px] mt-0.5" style="color: var(--ink-2);">Sources can only bind to databases that appear here. <span class="mono" style="color:var(--ink-3);">3 registered</span></div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <svg class="absolute left-2.5 top-2.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ink-3);"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input class="input" style="padding-left: 30px; width: 220px;" placeholder="Filter databases…">
+          </div>
+          <button class="btn btn-accent"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Add database</button>
+        </div>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Label</th>
+            <th class="num">Sources</th>
+            <th>Added</th>
+            <th>By</th>
+            <th style="width: 40px"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a3fba" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                <span class="mono" style="font-weight:600;">analytics_prod</span>
+              </div>
+              <div class="mono text-[10px] mt-1" style="color: var(--ink-3);">wd_5b8c0d1e2f3041526374859607a8b9c0</div>
+            </td>
+            <td><span style="color: var(--ink);">Sales DWH</span></td>
+            <td class="num"><a href="#" class="accent-link">14</a></td>
+            <td class="mono text-[12px]" style="color: var(--ink-2);">2026-03-14</td>
+            <td>
+              <div class="flex items-center gap-2">
+                <span class="inline-grid place-items-center w-6 h-6 rounded-full" style="background:#c64432; color:white; font-size:10px; font-weight:600;">AB</span>
+                <span class="text-[12px]" style="color: var(--ink-2);">ada@…</span>
+              </div>
+            </td>
+            <td>
+              <button class="btn btn-ghost btn-sm" style="padding: 4px 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1b6ca8" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                <span class="mono" style="font-weight:600;">hr_mart</span>
+              </div>
+              <div class="mono text-[10px] mt-1" style="color: var(--ink-3);">wd_3a4b5c6d7e8f9001122334455667788a</div>
+            </td>
+            <td><span style="color: var(--ink);">People analytics</span></td>
+            <td class="num"><a href="#" class="accent-link">7</a></td>
+            <td class="mono text-[12px]" style="color: var(--ink-2);">2026-04-02</td>
+            <td>
+              <div class="flex items-center gap-2">
+                <span class="inline-grid place-items-center w-6 h-6 rounded-full" style="background:#2a8c5e; color:white; font-size:10px; font-weight:600;">FH</span>
+                <span class="text-[12px]" style="color: var(--ink-2);">frederik@…</span>
+              </div>
+            </td>
+            <td>
+              <button class="btn btn-ghost btn-sm" style="padding: 4px 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <div class="flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a3fba" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                <span class="mono" style="font-weight:600;">finance_eu</span>
+                <span class="pill warn" style="font-size:10px; padding: 1px 6px;"><span class="dot"></span>Reach error</span>
+              </div>
+              <div class="mono text-[10px] mt-1" style="color: var(--ink-3);">wd_7d8e9f0011223344556677889900aabb</div>
+              <div class="text-[11px] mt-1.5" style="color: var(--tint-coral); max-width: 280px;">Last probe: catalog not found on engine. Renamed upstream?</div>
+            </td>
+            <td><span style="color: var(--ink-3); font-style: italic;">—</span></td>
+            <td class="num"><a href="#" class="accent-link">3</a></td>
+            <td class="mono text-[12px]" style="color: var(--ink-2);">2026-04-29</td>
+            <td>
+              <div class="flex items-center gap-2">
+                <span class="inline-grid place-items-center w-6 h-6 rounded-full" style="background:#1b6ca8; color:white; font-size:10px; font-weight:600;">CM</span>
+                <span class="text-[12px]" style="color: var(--ink-2);">cory@…</span>
+              </div>
+            </td>
+            <td>
+              <button class="btn btn-ghost btn-sm" style="padding: 4px 6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="row-divider p-3 flex items-center justify-between" style="background: color-mix(in srgb, var(--surface-2) 60%, transparent);">
+        <span class="caption">3 of 3 · ⌘N to add</span>
+        <span class="mono text-[11px]" style="color: var(--ink-3);">audit · warehouse.database.add · 2 today</span>
+      </div>
+
+      <!-- Floating annotation -->
+      <div class="annot" style="left: calc(100% + 18px); top: 120px; width: 220px;">
+        <div style="border-left: 1px solid var(--line-2); padding-left: 12px;">
+          <div style="color: var(--ink-2);">finance_eu</div>
+          <div style="margin-top: 4px; line-height: 1.5;">an example of a "database the engine can't find" — the row stays, scans return empty, the user can repair by unbinding sources or registering the new name</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===============================================
+         SCENE 2 — Add database dialog
+         =============================================== -->
+    <div class="scene-label">
+      <span class="num">2</span>
+      Add database — discovery + manual entry
+      <span class="line"></span>
+    </div>
+
+    <div class="relative">
+      <!-- backdrop hint -->
+      <div class="absolute inset-0 rounded-[14px]" style="background: color-mix(in srgb, var(--ink) 4%, transparent); border: 1px dashed var(--line-2);"></div>
+
+      <div class="grid grid-cols-12 gap-6 p-8">
+        <div class="col-span-7">
+          <div class="panel" style="box-shadow: var(--shadow-lg);">
+            <div class="flex items-center justify-between p-5">
+              <div>
+                <div class="kicker">Add database</div>
+                <div class="display font-bold text-[20px] mt-1">Connect a catalog inside <span style="color:var(--tint-violet);">Production warehouse</span></div>
+              </div>
+              <button class="btn btn-ghost btn-sm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+            </div>
+
+            <div class="px-5 pb-3">
+              <div class="flex items-baseline justify-between mb-2">
+                <div class="caption">Discovered on engine · adapter.listDatabases()</div>
+                <div class="mono text-[10px]" style="color: var(--ink-3);">10s timeout → manual fallback</div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span class="chip" style="opacity: 0.6;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span class="mono">analytics_prod</span>
+                  <span class="pill ok" style="font-size:10px;">registered</span>
+                </span>
+                <span class="chip" style="opacity: 0.6;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span class="mono">hr_mart</span>
+                  <span class="pill ok" style="font-size:10px;">registered</span>
+                </span>
+                <span class="chip selected">
+                  <span class="mono">finance_us</span>
+                </span>
+                <span class="chip">
+                  <span class="mono">analytics_staging</span>
+                </span>
+                <span class="chip">
+                  <span class="mono">crm_replica</span>
+                </span>
+                <span class="chip">
+                  <span class="mono">support_tickets</span>
+                </span>
+              </div>
+              <div class="mono text-[11px] mt-3" style="color: var(--ink-3);">
+                Click a chip to select it. Typing into manual entry below <span style="color: var(--ink-2);">deselects the chip</span> and re-arms the probe.
+              </div>
+            </div>
+
+            <div class="row-divider px-5 py-4">
+              <div class="caption mb-3">Manual entry — synced with chip selection</div>
+              <div class="field-row" style="padding: 0; border: 0;">
+                <div class="key">database_name</div>
+                <div>
+                  <input class="input mono" value="finance_us" style="font-weight: 500;">
+                  <div class="flex items-center gap-2 mt-2">
+                    <span class="pill ok"><span class="dot"></span>Reachable · adapter.probeDatabase()</span>
+                    <span class="mono text-[11px]" style="color: var(--ink-3);">probed 280ms ago · matches selected chip</span>
+                  </div>
+                </div>
+              </div>
+              <div class="field-row" style="padding-top: 14px;">
+                <div class="key">label</div>
+                <div>
+                  <input class="input" value="Finance US" placeholder="Optional human-friendly name">
+                  <div class="mono text-[11px] mt-2" style="color: var(--ink-3);">Shown in dropdowns. Falls back to <span style="color:var(--ink-2);">database_name</span> when blank.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row-divider px-5 py-4 flex items-center justify-end gap-2" style="background: color-mix(in srgb, var(--surface-2) 60%, transparent);">
+              <button class="btn">Test reachability</button>
+              <button class="btn btn-ghost">Cancel</button>
+              <button class="btn btn-accent">Add database</button>
+            </div>
+          </div>
+
+          <!-- Annotation under the dialog -->
+          <div class="mt-3 grid grid-cols-3 gap-3 mono text-[11px]" style="color: var(--ink-3);">
+            <div>
+              <span style="color: var(--ink-2);">discovery is a suggestion</span> — Snowflake may not enumerate; manual entry is always available.
+            </div>
+            <div>
+              <span style="color: var(--ink-2);">probe</span> — <span style="color: var(--ink);">adapter.probeDatabase(databaseName)</span> · adapter-defined. MotherDuck: information_schema.schemata. Snowflake: SHOW SCHEMAS.
+            </div>
+            <div>
+              <span style="color: var(--ink-2);">timeouts</span> — listDatabases 10s, probe 5s. On timeout the picker collapses to <span style="color: var(--ink);">"Could not enumerate — enter manually"</span> with a coral hint.
+            </div>
+          </div>
+        </div>
+
+        <!-- Side: SQL preview -->
+        <aside class="col-span-5">
+          <div class="panel p-5">
+            <div class="caption">What it writes</div>
+            <pre class="mono text-[11.5px] mt-3 p-3 rounded-[8px] leading-relaxed" style="background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); overflow:auto;"><span style="color:var(--ink-3);">-- single INSERT, scoped to (tenant_id, connection_id)</span>
+INSERT INTO <span style="color:var(--accent);">warehouse_database</span> (
+  id, tenant_id, connection_id,
+  database_name, label,
+  added_at, added_by
+) VALUES (
+  '<span style="color:var(--tint-violet);">wd_9f8e7d6c5b4a3021…</span>',
+  '<span style="color:var(--tint-mint);">t_acme</span>',
+  '<span style="color:var(--tint-violet);">wc_a1b2c3d4e5f60718…</span>',
+  'finance_us',
+  'Finance US',
+  now(), '<span style="color:var(--tint-mint);">u_ada</span>'
+)
+RETURNING id, database_name, label;</pre>
+            <div class="ringline mt-4"></div>
+            <div class="grid grid-cols-2 gap-3 mt-4">
+              <div>
+                <div class="caption">Audit</div>
+                <div class="mono text-[12px] mt-2"><span style="color:var(--accent);">warehouse.database.add</span></div>
+                <div class="text-[12px]" style="color: var(--ink-2);">finance_us · added by ada</div>
+              </div>
+              <div>
+                <div class="caption">Permissions</div>
+                <div class="text-[12px] mt-2">editor + admin</div>
+                <div class="text-[12px]" style="color: var(--ink-3);">credential edits stay admin-only.</div>
+              </div>
+            </div>
+          </div>
+          <div class="caption mt-4 text-center">hover a discovered chip → preview source count</div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- ===============================================
+         SCENE 3 — Source-registration form with database dropdown
+         =============================================== -->
+    <div class="scene-label">
+      <span class="num">3</span>
+      Adding a source — qualified to database · schema · table · column
+      <span class="line"></span>
+    </div>
+
+    <div class="grid grid-cols-12 gap-6">
+      <!-- Form -->
+      <section class="col-span-7 panel" style="position: relative;">
+        <div class="flex items-start justify-between p-5">
+          <div>
+            <div class="kicker">Bind source</div>
+            <div class="display font-bold text-[20px] mt-1">Dimension · <span style="color:var(--accent);">country</span></div>
+            <div class="text-[13px] mt-1" style="color: var(--ink-2);">Pick a warehouse column to scan for unmapped values.</div>
+          </div>
+          <span class="pill">key_kind · external_id</span>
+        </div>
+
+        <div class="px-5 pb-2">
+          <div class="field-row">
+            <div class="key">database</div>
+            <div>
+              <div class="relative">
+                <div class="input flex items-center justify-between" style="cursor: pointer;">
+                  <span class="flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a3fba" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                    <span class="mono" style="font-weight: 600;">analytics_prod</span>
+                    <span style="color: var(--ink-3);">· Sales DWH</span>
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                </div>
+                <!-- Open dropdown -->
+                <div class="panel mt-1 absolute left-0 right-0 z-10" style="box-shadow: var(--shadow-lg); padding: 6px;">
+                  <div class="menu-item" style="background: var(--surface-2);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a3fba" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                    <span class="mono">analytics_prod</span>
+                    <span style="color: var(--ink-3); margin-left: 4px;">· Sales DWH</span>
+                    <span class="flex-1"></span>
+                    <span class="mono text-[10px]" style="color: var(--ink-3);">14 sources</span>
+                  </div>
+                  <div class="menu-item">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1b6ca8" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                    <span class="mono">hr_mart</span>
+                    <span style="color: var(--ink-3); margin-left: 4px;">· People analytics</span>
+                    <span class="flex-1"></span>
+                    <span class="mono text-[10px]" style="color: var(--ink-3);">7 sources</span>
+                  </div>
+                  <div class="menu-item">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8a3fba" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                    <span class="mono">finance_eu</span>
+                    <span class="pill err" style="font-size:10px;"><span class="dot"></span>unreachable</span>
+                    <span class="flex-1"></span>
+                    <span class="mono text-[10px]" style="color: var(--ink-3);">selectable for repair</span>
+                  </div>
+                </div>
+                <div style="height: 128px;"></div>
+              </div>
+              <div class="mono text-[11px] mt-2" style="color: var(--ink-3);">
+                Defaults to your single registered database. Per-user MRU sticks via <span style="color: var(--ink-2);">user_warehouse_state.recent_database_id</span>; workspace-wide legacy default lives on <span style="color: var(--ink-2);">preferences.legacy_default_database_id</span>. Add a database in <span style="color: var(--ink-2);">Settings → Warehouse</span>.
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="key">schema</div>
+            <div>
+              <select class="input mono" style="font-weight:500;">
+                <option>sales</option><option>inventory</option><option>public</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="key">table</div>
+            <div>
+              <select class="input mono" style="font-weight:500;">
+                <option>orders</option><option>customers</option><option>shipments</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="key">column</div>
+            <div>
+              <select class="input mono" style="font-weight:500;">
+                <option>country_code</option><option>country_name</option><option>billing_country</option>
+              </select>
+              <div class="flex items-center gap-2 mt-2">
+                <span class="pill ok"><span class="dot"></span>192 distinct values · 9.4k rows</span>
+                <a href="#" class="accent-link mono text-[11px]">Sample values →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row-divider px-5 py-4 flex items-center justify-between" style="background: color-mix(in srgb, var(--surface-2) 60%, transparent);">
+          <div class="mono text-[11px]" style="color: var(--ink-3);">
+            ref · <span style="color: var(--ink);">analytics_prod . sales . orders . country_code</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-accent">Bind source</button>
+          </div>
+        </div>
+
+        <!-- Annotation -->
+        <div class="annot" style="right: calc(100% + 18px); top: 88px; width: 200px; text-align: right;">
+          <div style="border-right: 1px solid var(--line-2); padding-right: 12px;">
+            <div style="color: var(--ink-2);">database first</div>
+            <div style="margin-top: 4px; line-height: 1.5;">switching it resets schema / table / column. per-user MRU writes user_warehouse_state on bind</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Catalog drawer preview -->
+      <aside class="col-span-5">
+        <div class="panel p-5">
+          <div class="flex items-center justify-between">
+            <div class="caption">Catalog · analytics_prod</div>
+            <span class="mono text-[11px]" style="color: var(--ink-3);">listTables({database, schema})</span>
+          </div>
+          <div class="mt-3 stack" style="--gap: 6px;">
+            <details open class="rounded-[8px]" style="border: 1px solid var(--line);">
+              <summary class="px-3 py-2 cursor-pointer flex items-center justify-between mono text-[12px]" style="background: var(--surface-2); border-radius: 8px 8px 0 0;">
+                <span class="flex items-center gap-2"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg> <span style="font-weight:600;">sales</span></span>
+                <span style="color: var(--ink-3);">14 tables</span>
+              </summary>
+              <div class="px-3 py-2 stack" style="--gap: 2px;">
+                <div class="flex items-center justify-between text-[12.5px] py-1 px-2 rounded-[4px]" style="background: var(--accent-soft);">
+                  <span class="mono"><span style="color:var(--accent);">●</span> orders</span>
+                  <span class="mono text-[10px]" style="color: var(--ink-3);">9.4k</span>
+                </div>
+                <div class="flex items-center justify-between text-[12.5px] py-1 px-2"><span class="mono" style="color: var(--ink-2);">customers</span><span class="mono text-[10px]" style="color: var(--ink-3);">3.2k</span></div>
+                <div class="flex items-center justify-between text-[12.5px] py-1 px-2"><span class="mono" style="color: var(--ink-2);">shipments</span><span class="mono text-[10px]" style="color: var(--ink-3);">11k</span></div>
+                <div class="flex items-center justify-between text-[12.5px] py-1 px-2"><span class="mono" style="color: var(--ink-2);">products</span><span class="mono text-[10px]" style="color: var(--ink-3);">280</span></div>
+              </div>
+            </details>
+            <details class="rounded-[8px]" style="border: 1px solid var(--line);">
+              <summary class="px-3 py-2 cursor-pointer flex items-center justify-between mono text-[12px]" style="background: var(--surface-2); border-radius: 8px;">
+                <span class="flex items-center gap-2"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> <span style="font-weight:600;">inventory</span></span>
+                <span style="color: var(--ink-3);">5 tables</span>
+              </summary>
+            </details>
+            <details class="rounded-[8px]" style="border: 1px solid var(--line);">
+              <summary class="px-3 py-2 cursor-pointer flex items-center justify-between mono text-[12px]" style="background: var(--surface-2); border-radius: 8px;">
+                <span class="flex items-center gap-2"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg> <span style="font-weight:600;">public</span></span>
+                <span style="color: var(--ink-3);">2 tables</span>
+              </summary>
+            </details>
+          </div>
+        </div>
+        <div class="caption mt-4 text-center">browse opens scoped to the selected database</div>
+      </aside>
+    </div>
+
+    <!-- ===============================================
+         SCENE 4 — Remove database confirm
+         =============================================== -->
+    <div class="scene-label">
+      <span class="num">4</span>
+      Removing a database with dependent sources
+      <span class="line"></span>
+    </div>
+
+    <div class="grid grid-cols-12 gap-6 mb-12">
+      <!-- Left: Modal -->
+      <section class="col-span-7">
+        <div class="relative">
+          <div class="modal-bd rounded-[14px] absolute inset-0"></div>
+          <div class="panel relative" style="box-shadow: var(--shadow-lg); margin: 20px;">
+            <div class="p-5 flex items-start gap-3">
+              <span class="flex-none w-9 h-9 rounded-full grid place-items-center" style="background: color-mix(in srgb, var(--tint-coral) 14%, var(--paper)); color: var(--tint-coral);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+              </span>
+              <div class="flex-1">
+                <div class="display font-bold text-[18px]">Remove <span class="mono" style="font-size:18px;">finance_eu</span>?</div>
+                <div class="text-[13px] mt-1" style="color: var(--ink-2);">
+                  This database powers <span style="color: var(--ink);">3 sources</span> across <span style="color: var(--ink);">2 dimensions</span>. Removing it unbinds them. Canonical values stay — only the source binding goes away. You can re-bind to a different database later.
+                </div>
+              </div>
+            </div>
+
+            <div class="px-5 pb-2">
+              <div class="caption mb-2">Dependents</div>
+              <div class="stack" style="--gap: 8px;">
+                <div class="panel p-3" style="border-radius: var(--r);">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2 h-2 rounded-[2px]" style="background: var(--tint-mint);"></span>
+                      <span style="font-weight: 600;">country</span>
+                      <span class="mono text-[10px]" style="color: var(--ink-3);">dim_country</span>
+                    </div>
+                    <span class="pill" style="font-size:10px;">1 source</span>
+                  </div>
+                  <div class="row-divider mt-2 pt-2 mono text-[11.5px]" style="color: var(--ink-2);">
+                    <span style="color: var(--ink-3);">finance_eu .</span> sales <span style="color: var(--ink-3);">.</span> invoices <span style="color: var(--ink-3);">.</span> country_code
+                  </div>
+                </div>
+                <div class="panel p-3" style="border-radius: var(--r);">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="w-2 h-2 rounded-[2px]" style="background: var(--tint-sky);"></span>
+                      <span style="font-weight: 600;">product_category</span>
+                      <span class="mono text-[10px]" style="color: var(--ink-3);">dim_product_category</span>
+                    </div>
+                    <span class="pill" style="font-size:10px;">2 sources</span>
+                  </div>
+                  <div class="row-divider mt-2 pt-2 mono text-[11.5px]" style="color: var(--ink-2); line-height: 1.7;">
+                    <div><span style="color: var(--ink-3);">finance_eu .</span> sales <span style="color: var(--ink-3);">.</span> invoices <span style="color: var(--ink-3);">.</span> category</div>
+                    <div><span style="color: var(--ink-3);">finance_eu .</span> inventory <span style="color: var(--ink-3);">.</span> skus <span style="color: var(--ink-3);">.</span> category</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row-divider mt-3 p-5" style="background: color-mix(in srgb, var(--tint-coral) 5%, transparent);">
+              <div class="flex items-start gap-2 mono text-[11.5px]" style="color: var(--ink-2);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-top: 1px;"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+                <div>
+                  Sources will be removed from <span style="color: var(--ink);">dimension_source</span> in the same transaction as the database row. <span style="color:var(--ink);">source_stat</span> rows are dropped too. Audit gets <span class="mono" style="color: var(--accent);">warehouse.database.remove</span> + per-source <span class="mono" style="color: var(--accent);">dimension.source.unbind</span> entries.
+                </div>
+              </div>
+            </div>
+
+            <div class="row-divider p-4" style="background: color-mix(in srgb, var(--surface-2) 60%, transparent);">
+              <div class="flex items-center justify-between">
+                <label class="flex items-center gap-2 text-[12px]" style="color: var(--ink-2);">
+                  <input type="checkbox" style="accent-color: var(--tint-coral);"> I understand the sources will be unbound.
+                </label>
+                <div class="flex items-center gap-2">
+                  <button class="btn btn-ghost">Cancel</button>
+                  <button class="btn" disabled style="background: var(--tint-coral); color: white; border-color: var(--tint-coral); opacity: 0.45; cursor: not-allowed;">Remove and unbind 3 sources</button>
+                </div>
+              </div>
+              <div class="mono text-[10px] mt-2 flex items-center gap-2" style="color: var(--ink-3);">
+                <span class="pill" style="font-size:10px; padding: 1px 6px; color: var(--accent);">admin only</span>
+                <span>Destructive button enables once the checkbox is ticked. Editors hit a 409 here and see this same dialog with the button replaced by "Ask an admin to confirm".</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: API + audit panel -->
+      <aside class="col-span-5">
+        <div class="panel p-5">
+          <div class="caption">Server-side</div>
+          <pre class="mono text-[11.5px] mt-3 p-3 rounded-[8px] leading-relaxed" style="background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); overflow:auto;">DELETE /api/warehouse/databases/<span style="color: var(--tint-violet);">wd_7d8e9f0011223344…</span>?force=true
+
+→ <span style="color: var(--tint-mint);">204 No Content</span>
+
+<span style="color: var(--ink-3);">-- inside one tx --</span>
+DELETE FROM <span style="color:var(--accent);">dimension_source</span>
+ WHERE tenant_id = 't_acme'
+   AND database_id = '<span style="color: var(--tint-violet);">wd_7d8e9f0011223344…</span>';
+DELETE FROM <span style="color:var(--accent);">source_stat</span>
+ WHERE tenant_id = 't_acme'
+   AND database_id = '<span style="color: var(--tint-violet);">wd_7d8e9f0011223344…</span>';
+DELETE FROM <span style="color:var(--accent);">warehouse_database</span>
+ WHERE tenant_id = 't_acme'
+   AND id = '<span style="color: var(--tint-violet);">wd_7d8e9f0011223344…</span>';</pre>
+          <div class="ringline mt-4"></div>
+          <div class="caption mt-4">Without ?force=true</div>
+          <pre class="mono text-[11.5px] mt-2 p-3 rounded-[8px] leading-relaxed" style="background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); overflow:auto;">→ <span style="color: var(--tint-coral);">409 DATABASE_IN_USE</span>
+{
+  sourceCount: 3,
+  dimensions: [
+    { id: 'country',          sources: 1 },
+    { id: 'product_category', sources: 2 }
+  ]
+}</pre>
+        </div>
+
+        <div class="panel p-5 mt-4">
+          <div class="caption">Audit trail</div>
+          <div class="stack mt-3" style="--gap: 10px;">
+            <div class="flex items-start gap-3">
+              <span class="inline-grid place-items-center w-7 h-7 rounded-full" style="background:#c64432; color:white; font-size:10px; font-weight:600; flex: none;">CM</span>
+              <div class="text-[12.5px]">
+                <div><span style="font-weight: 600;">cory@acme.com</span> · <span class="mono" style="color: var(--accent);">warehouse.database.remove</span></div>
+                <div class="mono" style="color: var(--ink-3);">finance_eu · 3 sources unbound · now</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3">
+              <span class="inline-grid place-items-center w-7 h-7 rounded-full" style="background:#c64432; color:white; font-size:10px; font-weight:600; flex: none;">CM</span>
+              <div class="text-[12.5px]">
+                <div><span style="font-weight: 600;">cory@acme.com</span> · <span class="mono" style="color: var(--accent);">dimension.source.unbind</span> ×3</div>
+                <div class="mono" style="color: var(--ink-3);">country, product_category</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- =============================================== -->
+    <!-- FOOTER -->
+    <!-- =============================================== -->
+    <footer class="mt-16 pt-8 flex items-center justify-between" style="border-top: 1px solid var(--line);">
+      <div class="display font-bold text-[16px]">Zug Zug · Multi-database warehouse</div>
+      <div class="mono text-[11px]" style="color: var(--ink-3);">
+        2026-06-14 · /docs/superpowers/specs/2026-06-14-multi-database-warehouse-design.md
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

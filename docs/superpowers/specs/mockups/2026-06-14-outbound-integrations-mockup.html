@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zugzug · Integrations — outbound API design mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6fc;
+    --surface: #ffffff;
+    --surface-2: #eaeef7;
+    --surface-3: #dfe5f2;
+    --surface-elevated: #ffffff;
+    --ink: #0c1020;
+    --ink-2: #48526a;
+    --ink-3: #8893a8;
+    --line: rgba(12, 16, 32, 0.11);
+    --line-2: rgba(12, 16, 32, 0.2);
+    --node-line: rgba(12, 16, 32, 0.06);
+    --shadow-sm: 0 1px 2px rgba(20, 30, 60, 0.08), 0 0 0 1px rgba(20, 30, 60, 0.04);
+    --shadow: 0 8px 22px -10px rgba(20, 30, 60, 0.18);
+    --shadow-lg: 0 24px 50px -20px rgba(20, 30, 60, 0.22);
+    --accent: #d6336c;
+    --accent-ink: #ffffff;
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+    --accent-2: #f0a323;
+    --ok: #2a8c5e;
+    --ok-soft: color-mix(in srgb, var(--ok) 14%, transparent);
+    --warn: #c68410;
+    --warn-soft: color-mix(in srgb, var(--warn) 14%, transparent);
+    --danger: #c64432;
+    --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
+    --font-display: "Bricolage Grotesque", sans-serif;
+    --font-body: "Hanken Grotesk", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+    --r-sm: 4px;
+    --r: 8px;
+    --r-lg: 12px;
+    --r-pill: 999px;
+  }
+  html, body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-feature-settings: "ss01" on, "cv11" on; }
+  .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+  .font-mono { font-family: var(--font-mono); }
+  .kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); }
+  .ink { color: var(--ink); }
+  .ink-2 { color: var(--ink-2); }
+  .ink-3 { color: var(--ink-3); }
+  .bg-surface { background: var(--surface); }
+  .bg-surface-2 { background: var(--surface-2); }
+  .bg-surface-3 { background: var(--surface-3); }
+  .border-line { border-color: var(--line); }
+  .border-line-2 { border-color: var(--line-2); }
+  .accent { color: var(--accent); }
+  .bg-accent { background: var(--accent); color: var(--accent-ink); }
+  .bg-accent-soft { background: var(--accent-soft); }
+  .border-accent { border-color: var(--accent); }
+  .ok { color: var(--ok); }
+  .bg-ok-soft { background: var(--ok-soft); }
+  .warn { color: var(--warn); }
+  .bg-warn-soft { background: var(--warn-soft); }
+  .danger { color: var(--danger); }
+  .bg-danger-soft { background: var(--danger-soft); }
+  .border-danger { border-color: var(--danger); }
+  .ring-accent { --tw-ring-color: var(--accent); }
+
+  /* —— component primitives —— */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); }
+  .panel-2 { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); box-shadow: var(--shadow-sm); }
+  .stripe { background:
+    linear-gradient(to right, var(--line) 1px, transparent 1px) 0 0/8px 8px,
+    var(--surface-2);
+  }
+  .dotted { background-image: radial-gradient(circle, var(--line-2) 1px, transparent 1px); background-size: 8px 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--r-sm); border: 1px solid var(--line-2); font-size: 12.5px; font-weight: 500; font-family: var(--font-body); color: var(--ink); background: var(--surface); cursor: pointer; transition: 120ms; }
+  .btn:hover { background: var(--surface-2); }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn-primary:hover { background: color-mix(in srgb, var(--accent) 85%, black); }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
+  .btn-ghost:hover { background: var(--surface-2); color: var(--ink); }
+  .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
+  .btn-sm { padding: 4px 9px; font-size: 11.5px; }
+  .btn-icon { padding: 6px; }
+  .input { font-family: var(--font-mono); font-size: 12.5px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line-2); border-radius: var(--r-sm); color: var(--ink); width: 100%; }
+  .input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface-2); font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface-2); font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-2); }
+  .badge-ok { background: var(--ok-soft); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .badge-warn { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+  .badge-danger { background: var(--danger-soft); color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+  .badge-accent { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .dot { display: inline-block; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+  .codeblock { font-family: var(--font-mono); font-size: 12px; background: #0c1020; color: #eaeef7; padding: 14px 16px; border-radius: var(--r-sm); overflow-x: auto; line-height: 1.55; }
+  .codeblock .com { color: #8893a8; }
+  .codeblock .key { color: #f0a323; }
+  .codeblock .str { color: #2a8c5e; }
+  .codeblock .num { color: #d6336c; }
+  .codeblock .ident { color: #c4ccdc; }
+  .codeblock .url { color: #8b7cff; }
+  .codeblock .meth { color: #1fa9b8; font-weight: 600; }
+
+  .row-hover:hover { background: var(--surface-2); }
+  .divider { height: 1px; background: var(--line); }
+
+  /* topbar */
+  .topbar { height: 48px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 16px; }
+  .logo { width: 24px; height: 24px; background: var(--ink); color: var(--bg); border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 12px; }
+
+  /* sidebar */
+  .navlink { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 13px; color: var(--ink-2); border-radius: var(--r-sm); }
+  .navlink:hover { background: var(--surface-2); color: var(--ink); }
+  .navlink.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; position: relative; }
+  .navlink.active::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 2px; border-radius: 999px; background: var(--accent); }
+
+  /* annotation pin */
+  .pin { position: relative; }
+  .pin .cap { position: absolute; font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); background: var(--surface); padding: 2px 8px; border-radius: 999px; border: 1px dashed var(--accent); white-space: nowrap; }
+
+  /* tab strip */
+  .tab { padding: 8px 14px; font-size: 13px; color: var(--ink-3); border-bottom: 2px solid transparent; cursor: pointer; }
+  .tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+  /* scroll containers */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* annotations layer */
+  .anno { display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  .anno-arrow { color: var(--accent); }
+
+  /* code line numbers */
+  .lineno { color: var(--ink-3); user-select: none; padding-right: 16px; opacity: .55; }
+
+  /* table */
+  table.t { width: 100%; border-collapse: collapse; }
+  table.t th, table.t td { padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 12.5px; vertical-align: middle; }
+  table.t th { text-align: left; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: var(--ink-3); font-weight: 500; background: var(--surface-2); }
+  table.t tr:last-child td { border-bottom: 0; }
+  table.t tr.row-hover:hover { background: var(--surface-2); cursor: pointer; }
+
+  /* json viewer */
+  .json { font-family: var(--font-mono); font-size: 11.5px; line-height: 1.65; background: #0c1020; color: #eaeef7; padding: 14px 18px; border-radius: var(--r-sm); }
+  .json .k { color: #8b7cff; }
+  .json .s { color: #2a8c5e; }
+  .json .n { color: #d6336c; }
+  .json .b { color: #c68410; }
+  .json .p { color: #8893a8; }
+
+  /* method chips */
+  .meth { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+  .meth-get { background: #1fa9b8; color: white; }
+  .meth-post { background: #f0a323; color: white; }
+  .meth-patch { background: #8b7cff; color: white; }
+  .meth-del { background: #c64432; color: white; }
+
+  /* modal */
+  .backdrop { position: fixed; inset: 0; background: rgba(12, 16, 32, 0.5); backdrop-filter: blur(2px); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .backdrop.show { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--r); width: 540px; max-width: 92vw; box-shadow: var(--shadow-lg); border: 1px solid var(--line); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- =====================================================
+     Mockup wrapper — multiple panels stacked vertically
+     ===================================================== -->
+<div class="max-w-[1320px] mx-auto px-6 pt-8 pb-24">
+
+  <!-- ========= cover ========= -->
+  <header class="mb-8">
+    <div class="kicker mb-3">Zugzug · Design spec mockup · 2026-06-14</div>
+    <h1 class="font-display text-[40px] leading-[1.05] font-bold tracking-tight max-w-[28ch]">Outbound integrations<br>— Pull API &amp; Webhooks.</h1>
+    <p class="ink-2 mt-4 max-w-[68ch] text-[14.5px] leading-relaxed">
+      The Integrations surface adds a versioned, paginated JSON API for downstream warehouses (dbt, Fivetran) and a signed, retried webhook system for app integrations (CRM, app servers). It sits as a peer of Connections in the workspace shell — inbound vs outbound, two pages, two mental models.
+    </p>
+    <div class="flex flex-wrap items-center gap-2 mt-5">
+      <span class="chip">/api/t/:slug/v1</span>
+      <span class="chip">Bearer zzsa_</span>
+      <span class="chip">HMAC-SHA256 · kid versioned</span>
+      <span class="chip">Signed cursor</span>
+      <span class="chip">At-least-once delivery</span>
+      <span class="chip">5 attempts, tuned</span>
+      <span class="chip">600 rpm / SA</span>
+    </div>
+  </header>
+
+  <!-- =================================================================
+       PANEL 1 — Integrations / Pull API (default view)
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">1. Integrations · Pull API</h2>
+      <span class="anno">/app/acme/integrations/pull-api · default landing</span>
+    </div>
+
+    <div class="card overflow-hidden">
+      <!-- topbar -->
+      <div class="topbar">
+        <div class="logo">ZZ</div>
+        <span class="font-display font-semibold text-[14px]">Zugzug</span>
+        <span class="kicker">acme · prod</span>
+        <span class="flex-1"></span>
+        <button class="btn btn-sm btn-ghost">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          Search… <span class="font-mono text-[10px] ml-2 px-1.5 py-0.5 border border-line rounded">⌘K</span>
+        </button>
+        <div class="w-7 h-7 rounded-full bg-accent text-white grid place-items-center font-mono text-[11px]">FH</div>
+      </div>
+
+      <div class="grid grid-cols-[220px_220px_1fr] min-h-[820px]">
+        <!-- primary nav -->
+        <aside class="border-r border-line bg-[var(--surface)] p-3">
+          <div class="kicker px-3 mb-2">Workspace</div>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h7V3H3zM14 21h7v-9h-7zM14 3v6h7V3zM3 21h7v-6H3z"/></svg> Dashboard</a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg> Triage <span class="ml-auto badge">3</span></a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v12H5.2L4 18z"/></svg> Sources</a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h18M3 12h18M3 17h18"/></svg> Tables</a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 8v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/><path d="M9 12h6"/></svg> Connections</a>
+          <a class="navlink active">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 4l6 6-6 6"/><path d="M20 10H8a4 4 0 0 0-4 4v6"/></svg>
+            Integrations
+          </a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Activity</a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg> Settings</a>
+
+          <div class="divider mt-4 mb-3"></div>
+          <div class="kicker px-3 mb-2">Account</div>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg> Profile</a>
+          <a class="navlink"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h6l2-3 3 6 2-3h5"/></svg> Appearance</a>
+        </aside>
+
+        <!-- secondary nav: integrations sidebar -->
+        <aside class="border-r border-line p-3 bg-surface">
+          <div class="flex items-center justify-between px-3 pb-3">
+            <span class="kicker">Integrations</span>
+            <div class="h-px flex-1 ml-3 bg-[var(--line)]"></div>
+          </div>
+          <a class="navlink active">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h6"/></svg>
+            Pull API
+          </a>
+          <a class="navlink">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12h16"/><path d="M12 4l8 8-8 8"/><circle cx="4" cy="12" r="2"/></svg>
+            Webhooks <span class="ml-auto badge">2</span>
+          </a>
+          <a class="navlink">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            Service accounts
+          </a>
+
+          <div class="divider my-4"></div>
+          <div class="px-3 pb-2">
+            <div class="kicker mb-1">Resources</div>
+            <a class="block text-[12px] ink-2 hover:accent py-1">API reference →</a>
+            <a href="#webhook-signing-recipe" class="block text-[12px] ink-2 hover:accent py-1">Webhook signing recipe →</a>
+            <a class="block text-[12px] ink-2 hover:accent py-1">Changelog →</a>
+          </div>
+        </aside>
+
+        <!-- main content -->
+        <main class="p-7 overflow-hidden">
+          <div class="flex items-baseline justify-between mb-6">
+            <div>
+              <div class="kicker mb-1">Integrations</div>
+              <h3 class="font-display text-[24px] font-semibold">Pull API</h3>
+              <p class="ink-2 text-[13px] mt-1 max-w-[58ch]">Canonical records as a paginated JSON feed. Authenticate with a workspace-scoped service account, fetch incrementally with <span class="font-mono ink">?since</span>.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="badge"><span class="dot ok"></span> v1 · stable</span>
+              <button class="btn btn-sm">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
+                OpenAPI spec
+              </button>
+            </div>
+          </div>
+
+          <!-- base URL card -->
+          <div class="panel-2 p-5 mb-5">
+            <div class="flex items-start gap-4 flex-wrap">
+              <div class="flex-1 min-w-[280px]">
+                <div class="kicker mb-1.5">Base URL</div>
+                <div class="font-mono text-[15px] ink flex items-center gap-2">
+                  <span>https://zugzug.app/api/t/acme/v1</span>
+                  <button class="btn btn-sm btn-ghost" title="Copy">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                  </button>
+                </div>
+                <p class="ink-3 text-[12px] mt-1 font-mono">workspace · acme &middot; path-scoped tenant routing &middot; 600 req/min default budget</p>
+              </div>
+              <div class="flex items-start gap-3">
+                <div class="text-right">
+                  <div class="kicker mb-1.5">Records</div>
+                  <div class="font-display text-[22px] font-semibold leading-none">12,847</div>
+                </div>
+                <div class="text-right">
+                  <div class="kicker mb-1.5">Dimensions</div>
+                  <div class="font-display text-[22px] font-semibold leading-none">8</div>
+                </div>
+                <div class="text-right">
+                  <div class="kicker mb-1.5">Last commit</div>
+                  <div class="font-display text-[14px] font-semibold leading-tight pt-1">3m ago</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- auth section -->
+          <div class="mb-5">
+            <div class="kicker mb-2">1 · Authenticate</div>
+            <div class="codeblock">
+<span class="com"># Bearer token from a workspace-scoped service account.</span>
+<span class="com"># Tokens are pinned to a workspace — same slug must appear in /api/t/&lt;slug&gt;/.</span>
+<span class="meth">curl</span> -H <span class="str">"Authorization: Bearer zzsa_b8K3kP9mQ2vN…"</span> \
+     <span class="url">https://zugzug.app/api/t/acme/v1/dimensions</span></div>
+            <p class="ink-3 text-[12px] mt-2">Personal tokens (<span class="font-mono">zz_</span>) also work — the path's <span class="font-mono">:slug</span> picks the workspace. Service accounts persist when members leave. <a class="accent">Manage service accounts →</a></p>
+          </div>
+
+          <!-- endpoints list -->
+          <div class="kicker mb-3">2 · Endpoints</div>
+          <div class="space-y-3 mb-7">
+            <!-- endpoint 1 -->
+            <div class="panel">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+                <div class="flex items-center gap-3">
+                  <span class="meth meth-get">GET</span>
+                  <span class="font-mono text-[13px]">/v1/dimensions</span>
+                </div>
+                <span class="ink-3 text-[12px]">List all dimensions in workspace</span>
+              </div>
+              <div class="px-4 py-3 ink-2 text-[12.5px]">Returns slug, label, key kind, field schema metadata, canonical row count.</div>
+            </div>
+            <!-- endpoint 2 -->
+            <div class="panel">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+                <div class="flex items-center gap-3">
+                  <span class="meth meth-get">GET</span>
+                  <span class="font-mono text-[13px]">/v1/dimensions/<span class="accent">:slug</span>/schema</span>
+                </div>
+                <span class="ink-3 text-[12px]">Field definitions for one dim</span>
+              </div>
+            </div>
+            <!-- endpoint 3 (expanded) -->
+            <div class="panel">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-line bg-surface-2">
+                <div class="flex items-center gap-3">
+                  <span class="meth meth-get">GET</span>
+                  <span class="font-mono text-[13px]">/v1/dimensions/<span class="accent">:slug</span>/canonical</span>
+                  <span class="badge">Paginated</span>
+                </div>
+                <span class="ink-3 text-[12px]">Canonical records, with <span class="font-mono">?since=</span> + cursor</span>
+              </div>
+              <div class="px-4 py-4 grid grid-cols-2 gap-5">
+                <div>
+                  <div class="kicker mb-2">Try it (Country)</div>
+                  <div class="codeblock text-[11.5px]">
+<span class="meth">curl</span> -H <span class="str">"Authorization: Bearer zzsa_…"</span> \
+  <span class="url">"https://zugzug.app/api/t/acme/v1/</span>\
+<span class="url">dimensions/country/canonical?</span>\
+<span class="url">since=2026-06-14T00:00Z&amp;limit=200"</span></div>
+                  <div class="mt-3 flex items-center gap-2">
+                    <button class="btn btn-sm"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy curl</button>
+                    <span class="ink-3 text-[11px] font-mono">replace YOUR_TOKEN</span>
+                  </div>
+                </div>
+                <div>
+                  <div class="kicker mb-2">Sample response · 200 OK</div>
+                  <div class="json text-[10.5px] leading-[1.55] max-h-[238px] overflow-auto">
+{
+  <span class="k">"records"</span>: [
+    {
+      <span class="k">"key"</span>: <span class="s">"DE"</span>,
+      <span class="k">"label"</span>: <span class="s">"Germany"</span>,
+      <span class="k">"fields"</span>: {
+        <span class="k">"iso_code"</span>: <span class="s">"DE"</span>,
+        <span class="k">"region"</span>: <span class="s">"EMEA"</span>,
+        <span class="k">"population"</span>: <span class="n">84432670</span>,
+        <span class="k">"continent"</span>: {
+          <span class="k">"key"</span>: <span class="s">"EU"</span>,
+          <span class="k">"label"</span>: <span class="s">"Europe"</span>
+        }
+      },
+      <span class="k">"updated_at"</span>: <span class="s">"2026-06-14T11:32:04Z"</span>,
+      <span class="k">"version"</span>: <span class="n">12</span>
+    },
+    { <span class="p">// … 199 more</span> }
+  ],
+  <span class="k">"cursor"</span>: { <span class="k">"next"</span>: <span class="s">"eyJ0Ijoi…"</span> },
+  <span class="k">"meta"</span>: {
+    <span class="k">"dim_slug"</span>: <span class="s">"country"</span>,
+    <span class="k">"total_in_filter"</span>: <span class="n">248</span>,
+    <span class="k">"page_size"</span>: <span class="n">200</span>,
+    <span class="k">"current_version"</span>: <span class="n">47</span>
+  }
+}</div>
+                </div>
+              </div>
+            </div>
+            <!-- endpoint 4 -->
+            <div class="panel">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+                <div class="flex items-center gap-3">
+                  <span class="meth meth-get">GET</span>
+                  <span class="font-mono text-[13px]">/v1/dimensions/<span class="accent">:slug</span>/tombstones</span>
+                  <span class="badge">Paginated</span>
+                </div>
+                <span class="ink-3 text-[12px]">Retired / merged keys (use when webhook says <span class="font-mono">changes_truncated</span>)</span>
+              </div>
+            </div>
+            <!-- endpoint 5 -->
+            <div class="panel">
+              <div class="flex items-center justify-between px-4 py-3 border-b border-line">
+                <div class="flex items-center gap-3">
+                  <span class="meth meth-get">GET</span>
+                  <span class="font-mono text-[13px]">/v1/events</span>
+                  <span class="badge">Stream-friendly</span>
+                </div>
+                <span class="ink-3 text-[12px]">Replay any event a webhook would've fired (30d retention)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- rate limit panel -->
+          <div class="panel-2 p-4 mb-5 flex items-start gap-4 flex-wrap">
+            <div class="flex-1 min-w-[260px]">
+              <div class="kicker mb-1">Rate limits</div>
+              <p class="ink-2 text-[12.5px] leading-relaxed">Each service account gets <b class="ink font-mono">600 req/min</b> on read endpoints, <b class="ink font-mono">60 req/min</b> on webhook control plane. Configurable via <span class="font-mono ink">ZUGZUG_PULL_API_RPM</span>; <span class="font-mono">0</span> disables limiting. Exceeded budgets return <span class="font-mono ink">429</span> with <span class="font-mono ink">Retry-After</span>.</p>
+            </div>
+            <div class="codeblock text-[10.5px] min-w-[260px]">
+<span class="com"># 429 response shape</span>
+HTTP/1.1 429 Too Many Requests
+<span class="key">Retry-After</span>: <span class="num">30</span>
+
+{ <span class="key">"error"</span>: <span class="str">"rate_limited"</span>,
+  <span class="key">"retry_after_seconds"</span>: <span class="num">30</span> }</div>
+          </div>
+
+          <!-- dimensions table -->
+          <div class="kicker mb-3">3 · Your dimensions</div>
+          <div class="panel overflow-hidden mb-5">
+            <table class="t">
+              <thead>
+                <tr>
+                  <th>Dimension</th>
+                  <th>Slug</th>
+                  <th>Records</th>
+                  <th>Last commit</th>
+                  <th>Version</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="row-hover">
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent)]"></span>
+                      <span class="font-medium">Country</span>
+                    </div>
+                  </td>
+                  <td class="font-mono ink-2">country</td>
+                  <td class="font-mono ink">248</td>
+                  <td class="ink-2">3m ago · Ada Berg</td>
+                  <td class="font-mono ink-2">v47</td>
+                  <td class="text-right">
+                    <button class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>Copy curl</button>
+                  </td>
+                </tr>
+                <tr class="row-hover">
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#f0a323]"></span>
+                      <span class="font-medium">Product category</span>
+                    </div>
+                  </td>
+                  <td class="font-mono ink-2">product_category</td>
+                  <td class="font-mono ink">86</td>
+                  <td class="ink-2">2h ago · Cory Mills</td>
+                  <td class="font-mono ink-2">v19</td>
+                  <td class="text-right"><button class="btn btn-sm btn-ghost">Copy curl</button></td>
+                </tr>
+                <tr class="row-hover">
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#1fa9b8]"></span>
+                      <span class="font-medium">Channel</span>
+                    </div>
+                  </td>
+                  <td class="font-mono ink-2">channel</td>
+                  <td class="font-mono ink">14</td>
+                  <td class="ink-2">yesterday · Dana Vetra</td>
+                  <td class="font-mono ink-2">v7</td>
+                  <td class="text-right"><button class="btn btn-sm btn-ghost">Copy curl</button></td>
+                </tr>
+                <tr class="row-hover">
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#6e63e0]"></span>
+                      <span class="font-medium">Partner</span>
+                    </div>
+                  </td>
+                  <td class="font-mono ink-2">partner</td>
+                  <td class="font-mono ink">11,803</td>
+                  <td class="ink-2">12m ago · Service: Fivetran</td>
+                  <td class="font-mono ink-2">v94</td>
+                  <td class="text-right"><button class="btn btn-sm btn-ghost">Copy curl</button></td>
+                </tr>
+                <tr class="row-hover">
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#2a8c5e]"></span>
+                      <span class="font-medium">Currency</span>
+                    </div>
+                  </td>
+                  <td class="font-mono ink-2">currency</td>
+                  <td class="font-mono ink">42</td>
+                  <td class="ink-2">3d ago · Ada Berg</td>
+                  <td class="font-mono ink-2">v3</td>
+                  <td class="text-right"><button class="btn btn-sm btn-ghost">Copy curl</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- webhook signing recipe — standing reference, not behind the secret-reveal modal -->
+          <div class="panel-2 p-5 mb-5" id="webhook-signing-recipe">
+            <div class="flex items-start justify-between mb-2">
+              <div>
+                <div class="kicker mb-1">Webhook signing recipe</div>
+                <h4 class="font-display text-[15px] font-semibold">Verify HMAC signatures · permanent reference</h4>
+              </div>
+              <span class="badge text-[10px]">copy any time · no secret rotation needed</span>
+            </div>
+            <p class="ink-2 text-[12.5px] mb-3 max-w-[70ch]">The same snippet customers receive inside the secret-reveal modal. Kept here so an operator debugging a signature failure months later doesn't need to rotate a key just to retrieve it.</p>
+            <div class="codeblock text-[11px]">
+<span class="com">// Node 18+ — same as the modal; absolute skew check + length-checked hex.</span>
+<span class="key">import</span> { createHmac, timingSafeEqual } <span class="key">from</span> <span class="str">"node:crypto"</span>;
+
+<span class="key">export function</span> <span class="meth">verifyZugzugSignature</span>(<span class="ident">rawBody</span>, <span class="ident">header</span>, <span class="ident">secrets</span>) {
+  <span class="key">const</span> parts = {};
+  <span class="key">for</span> (<span class="key">const</span> seg <span class="key">of</span> <span class="ident">header</span>.split(<span class="str">","</span>)) {
+    <span class="key">const</span> eq = seg.indexOf(<span class="str">"="</span>);
+    <span class="key">if</span> (eq &gt; <span class="num">0</span>) parts[seg.slice(<span class="num">0</span>, eq).trim()] = seg.slice(eq + <span class="num">1</span>).trim();
+  }
+  <span class="key">if</span> (!parts.t || !parts.kid || !parts.v1) <span class="key">return</span> <span class="key">false</span>;
+
+  <span class="key">const</span> skew = <span class="meth">Math</span>.<span class="meth">abs</span>(<span class="meth">Date</span>.now() / <span class="num">1000</span> - <span class="key">Number</span>(parts.t));
+  <span class="key">if</span> (!<span class="key">Number</span>.<span class="meth">isFinite</span>(skew) || skew &gt; <span class="num">300</span>) <span class="key">return</span> <span class="key">false</span>;
+
+  <span class="key">const</span> m = /^sha256=([<span class="num">0</span>-<span class="num">9</span>a-f]{<span class="num">64</span>})$/.<span class="meth">exec</span>(parts.v1);
+  <span class="key">if</span> (!m) <span class="key">return</span> <span class="key">false</span>;
+  <span class="key">const</span> provided = <span class="meth">Buffer</span>.<span class="meth">from</span>(m[<span class="num">1</span>], <span class="str">"hex"</span>);
+
+  <span class="key">const</span> secret = parts.kid === <span class="str">"previous"</span> ? <span class="ident">secrets</span>.previous : <span class="ident">secrets</span>.current;
+  <span class="key">if</span> (!secret) <span class="key">return</span> <span class="key">false</span>;
+
+  <span class="key">const</span> expected = <span class="meth">createHmac</span>(<span class="str">"sha256"</span>, secret)
+    .<span class="meth">update</span>(parts.t + <span class="str">"."</span> + <span class="ident">rawBody</span>).<span class="meth">digest</span>();
+  <span class="key">if</span> (expected.length !== provided.length) <span class="key">return</span> <span class="key">false</span>;
+  <span class="key">return</span> <span class="meth">timingSafeEqual</span>(expected, provided);
+}</div>
+            <div class="mt-3 flex items-center gap-3 ink-3 text-[11px]">
+              <span class="font-mono">absolute skew check · length-bounded hex · two-key during 24h rotation grace</span>
+              <span class="ml-auto"><button class="btn btn-sm">Copy snippet</button></span>
+            </div>
+          </div>
+
+          <!-- where canonical lives card -->
+          <div class="panel-2 p-5">
+            <div class="kicker mb-2">Where canonical lives</div>
+            <p class="ink-2 text-[12.5px] leading-relaxed max-w-[68ch]">
+              Each commit folds approved drafts into <span class="font-mono ink">dim_*</span> / <span class="font-mono ink">map_*</span> tables in this workspace's Postgres. Pull API serves directly from those tables — there is no warehouse round-trip per call. For a single-file copy (dbt seed, ad-hoc), each dimension still exposes a <span class="font-mono ink">/snapshot.parquet</span> link in its Tables view.
+            </p>
+          </div>
+
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 2 — Webhooks list + delivery log + replay
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">2. Webhooks · subscribers &amp; delivery log</h2>
+      <span class="anno">/integrations/webhooks · /webhooks/wh_8f2c4b9a3e1d6f5e</span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-5">
+      <!-- Left: webhooks list -->
+      <div class="card overflow-hidden">
+        <div class="px-5 py-4 border-b border-line flex items-center justify-between">
+          <div>
+            <div class="kicker">Webhooks</div>
+            <h3 class="font-display text-[16px] font-semibold mt-1">Subscribers</h3>
+          </div>
+          <button class="btn btn-primary btn-sm">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            New webhook
+          </button>
+        </div>
+        <table class="t">
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Events</th>
+              <th>Status</th>
+              <th>Last</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="row-hover" style="background: var(--surface-2);">
+              <td>
+                <div class="font-mono text-[12px] truncate max-w-[200px]">https://api.acme.com/hooks/zz</div>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="badge badge-warn text-[10px]" title="Another row points at the same normalized URL — symmetric warning">⚠ duplicate URL</span>
+                  <span class="ink-3 text-[11px]">Sync Acme CRM</span>
+                </div>
+              </td>
+              <td>
+                <div class="flex flex-wrap gap-1">
+                  <span class="chip">dimension.committed</span>
+                  <span class="chip">+1</span>
+                </div>
+              </td>
+              <td><span class="badge badge-ok"><span class="dot"></span> Active</span></td>
+              <td class="ink-2 text-[12px]">12s ago<br><span class="font-mono ink-3 text-[11px]">200 · 84ms</span></td>
+              <td class="text-right"><svg class="w-4 h-4 ink-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"/></svg></td>
+            </tr>
+            <tr class="row-hover">
+              <td>
+                <div class="font-mono text-[12px] truncate max-w-[200px]">https://hooks.bigcorp.com/zz</div>
+                <div class="ink-3 text-[11px] mt-0.5">BigCorp PIM sync — auto-disabled: 50 consecutive failures</div>
+              </td>
+              <td><span class="chip">dimension.committed</span></td>
+              <td><span class="badge badge-danger"><span class="dot"></span> Disabled</span></td>
+              <td class="ink-2 text-[12px]">3h ago<br><span class="font-mono danger text-[11px]">502 · timeout</span></td>
+              <td class="text-right"><svg class="w-4 h-4 ink-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"/></svg></td>
+            </tr>
+            <tr class="row-hover">
+              <td>
+                <div class="font-mono text-[12px] truncate max-w-[200px]">https://staging.acme.com/zz</div>
+                <div class="ink-3 text-[11px] mt-0.5">Staging mirror — paused by admin</div>
+              </td>
+              <td>
+                <div class="flex flex-wrap gap-1">
+                  <span class="chip">dimension.committed</span>
+                  <span class="chip">canonical.deleted</span>
+                </div>
+              </td>
+              <td><span class="badge badge-warn"><span class="dot"></span> Paused</span></td>
+              <td class="ink-2 text-[12px]">1d ago<br><span class="font-mono ink-3 text-[11px]">204</span></td>
+              <td class="text-right"><svg class="w-4 h-4 ink-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"/></svg></td>
+            </tr>
+            <tr class="row-hover">
+              <td>
+                <div class="font-mono text-[12px] truncate max-w-[200px]">https://api.acme.com/hooks/zz</div>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="badge badge-warn text-[10px]" title="Another row points at the same URL">⚠ duplicate URL</span>
+                  <span class="ink-3 text-[11px]">CRM — schema-only feed</span>
+                </div>
+              </td>
+              <td><span class="chip">dimension.schema.updated</span></td>
+              <td><span class="badge badge-ok"><span class="dot"></span> Active</span></td>
+              <td class="ink-2 text-[12px]">9m ago<br><span class="font-mono ink-3 text-[11px]">200 · 73ms</span></td>
+              <td class="text-right"><svg class="w-4 h-4 ink-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 6l6 6-6 6"/></svg></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="px-5 py-3 border-t border-line flex items-center justify-between bg-surface-2">
+          <span class="ink-3 text-[11px] font-mono">2 active &middot; 1 paused &middot; 1 disabled (auto) &middot; 2 duplicate URLs</span>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2v3m0 14v3M4 12H1m22 0h-3M5 5l2 2m12 12l-2-2M5 19l2-2m12-12l-2 2"/></svg> Refresh</button>
+            <button class="btn btn-sm btn-ghost">Filter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: webhook detail with delivery log -->
+      <div class="card overflow-hidden">
+        <div class="px-5 py-4 border-b border-line">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="kicker mb-1">Webhook · wh_8f2c4b9a3e1d6f5e</div>
+              <h3 class="font-display text-[15px] font-semibold font-mono">api.acme.com/hooks/zz</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="badge badge-ok"><span class="dot"></span> Active</span>
+              <button class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 mt-3">
+            <span class="chip">dimension.committed</span>
+            <span class="chip">canonical.deleted</span>
+          </div>
+          <div class="mt-3 flex items-center gap-3 ink-2 text-[12px]">
+            <span class="font-mono">whsec_b8K3kP•••••••••••••</span>
+            <button class="btn btn-sm btn-ghost">Rotate</button>
+            <span class="ink-3">·</span>
+            <button class="btn btn-sm">Send test event</button>
+            <span class="ink-3">·</span>
+            <button class="btn btn-sm btn-ghost">Pause</button>
+          </div>
+          <!-- rotation-grace banner: shown ONLY when secret_previous_expires_at > now().
+               kid= badges live INSIDE this banner; steady-state webhooks don't show kid at all. -->
+          <div class="mt-3 panel-2 px-3 py-2 border-l-2 flex items-start gap-2" style="border-color: var(--warn);">
+            <svg class="w-3.5 h-3.5 mt-0.5 warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/></svg>
+            <div class="flex-1">
+              <div class="text-[11.5px] ink flex items-center gap-2 flex-wrap">
+                <span>Previous secret accepted for 23h 47m</span>
+                <span class="badge text-[10px]" title="Live signing key">whsec_b8K3kP•••• <span class="font-mono ml-1">kid=current</span></span>
+                <span class="badge text-[10px]" title="Previously-active key, accepted during grace window">whsec_a4F8mN•••• <span class="font-mono ml-1">kid=previous</span></span>
+              </div>
+              <div class="ink-3 text-[10.5px] font-mono mt-1">deliveries signed with kid=current; subscribers verifying with kid=previous still accepted until 2026-06-15 11:32 UTC</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- tab strip -->
+        <div class="flex border-b border-line px-2">
+          <div class="tab active">Delivery log</div>
+          <div class="tab">Overview</div>
+          <div class="tab">Settings</div>
+        </div>
+
+        <!-- log filter row -->
+        <div class="px-5 py-3 border-b border-line flex items-center gap-2 bg-surface-2">
+          <span class="badge badge-ok"><span class="dot"></span> 247 ok</span>
+          <span class="badge badge-warn"><span class="dot"></span> 3 retrying</span>
+          <span class="badge badge-danger"><span class="dot"></span> 1 dlq</span>
+          <span class="flex-1"></span>
+          <input class="input text-[11px] py-1 max-w-[180px]" placeholder="Filter by event id…">
+        </div>
+
+        <!-- delivery rows -->
+        <div>
+          <!-- success row -->
+          <div class="px-5 py-3 border-b border-line row-hover">
+            <div class="flex items-center gap-3">
+              <span class="badge badge-ok"><span class="dot"></span> 200</span>
+              <span class="font-mono text-[12px] flex-1 truncate">dimension.committed · country v47</span>
+              <span class="ink-3 text-[11px] font-mono">12s ago</span>
+              <span class="ink-3 text-[11px] font-mono">84 ms</span>
+              <button class="btn btn-sm btn-ghost btn-icon" title="Replay"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg></button>
+            </div>
+            <div class="ink-3 text-[11px] mt-1 font-mono">evt_01H8X8R6V5… · whd_01H8X8R7M2… · attempt 1/5</div>
+          </div>
+
+          <!-- expanded retry row -->
+          <div class="px-5 py-3 border-b border-line bg-[var(--surface-2)]">
+            <div class="flex items-center gap-3">
+              <span class="badge badge-warn"><span class="dot"></span> Retrying</span>
+              <span class="font-mono text-[12px] flex-1 truncate ink">dimension.committed · partner v94</span>
+              <span class="ink-3 text-[11px] font-mono">2m ago</span>
+              <span class="ink-3 text-[11px] font-mono">attempt 3/5</span>
+              <button class="btn btn-sm btn-ghost btn-icon" title="Replay"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg></button>
+            </div>
+            <div class="ink-3 text-[11px] mt-1 font-mono">evt_01H8X9KX… · next attempt in 4m 38s</div>
+
+            <!-- expanded payload -->
+            <div class="mt-3 grid grid-cols-[1fr_1fr] gap-3">
+              <div>
+                <div class="kicker mb-1.5">Last response · 502</div>
+                <div class="json text-[10.5px] max-h-[140px] overflow-auto">
+{
+  <span class="k">"error"</span>: <span class="s">"upstream_timeout"</span>,
+  <span class="k">"request_id"</span>: <span class="s">"req_4f2k8q…"</span>,
+  <span class="k">"retry_after"</span>: <span class="n">30</span>
+}</div>
+              </div>
+              <div>
+                <div class="kicker mb-1.5">Headers sent</div>
+                <div class="json text-[10.5px] max-h-[140px] overflow-auto">
+<span class="k">X-Zugzug-Event</span>: <span class="s">dimension.committed</span>
+<span class="k">X-Zugzug-Event-Id</span>: <span class="s">evt_01H8X9KX…</span>
+<span class="k">X-Zugzug-Attempt</span>: <span class="n">3</span>
+<span class="k">X-Zugzug-Signature</span>: <span class="s">t=1718363…,kid=current,v1=sha256=…</span>
+<span class="k">X-Zugzug-Workspace</span>: <span class="s">acme</span></div>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center gap-2">
+              <button class="btn btn-sm">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg>
+                Replay now
+              </button>
+              <button class="btn btn-sm btn-ghost">Copy payload</button>
+              <span class="anno-arrow anno ml-auto">↑ click row to expand</span>
+            </div>
+          </div>
+
+          <!-- success again -->
+          <div class="px-5 py-3 border-b border-line row-hover">
+            <div class="flex items-center gap-3">
+              <span class="badge badge-ok"><span class="dot"></span> 204</span>
+              <span class="font-mono text-[12px] flex-1 truncate">canonical.deleted · partner / IBM-LEGACY</span>
+              <span class="ink-3 text-[11px] font-mono">14m ago</span>
+              <span class="ink-3 text-[11px] font-mono">112 ms</span>
+              <button class="btn btn-sm btn-ghost btn-icon"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg></button>
+            </div>
+          </div>
+
+          <!-- dlq row -->
+          <div class="px-5 py-3 border-b border-line row-hover">
+            <div class="flex items-center gap-3">
+              <span class="badge badge-danger"><span class="dot"></span> DLQ</span>
+              <span class="font-mono text-[12px] flex-1 truncate">dimension.committed · channel v6</span>
+              <span class="ink-3 text-[11px] font-mono">2h ago</span>
+              <span class="ink-3 text-[11px] font-mono">5/5 failed</span>
+              <button class="btn btn-sm" title="Replay">Replay</button>
+            </div>
+            <div class="ink-3 text-[11px] mt-1 font-mono">evt_01H8X1AB… · giving up after 65m total · TLS handshake error</div>
+          </div>
+
+          <div class="px-5 py-3 border-b border-line row-hover">
+            <div class="flex items-center gap-3">
+              <span class="badge badge-ok"><span class="dot"></span> 200</span>
+              <span class="badge badge-accent text-[10px]" title="Synthetic webhook.test event fired from the UI">TEST</span>
+              <span class="font-mono text-[12px] flex-1 truncate">webhook.test · synthetic ping</span>
+              <span class="ink-3 text-[11px] font-mono">31m ago</span>
+              <span class="ink-3 text-[11px] font-mono">68 ms</span>
+              <button class="btn btn-sm btn-ghost btn-icon"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg></button>
+            </div>
+            <div class="ink-3 text-[11px] mt-1 font-mono">subscribers should branch on type === "webhook.test" and short-circuit business logic</div>
+          </div>
+
+          <div class="px-5 py-3 row-hover">
+            <div class="flex items-center gap-3">
+              <span class="badge badge-ok"><span class="dot"></span> 200</span>
+              <span class="font-mono text-[12px] flex-1 truncate">dimension.committed · country v46</span>
+              <span class="ink-3 text-[11px] font-mono">yesterday</span>
+              <span class="ink-3 text-[11px] font-mono">76 ms</span>
+              <button class="btn btn-sm btn-ghost btn-icon"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-3 border-t border-line bg-surface-2 flex items-center justify-between">
+          <span class="ink-3 text-[11px] font-mono">showing 5 of 247</span>
+          <button class="btn btn-sm btn-ghost">Load more →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 3 — Create webhook modal + secret reveal
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">3. Create webhook · two-step</h2>
+      <span class="anno">modal A → modal B (secret reveal)</span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-5">
+      <!-- Modal A: create form -->
+      <div class="card p-6 relative">
+        <div class="kicker mb-3">Modal A · create</div>
+        <h3 class="font-display text-[18px] font-semibold mb-4">New webhook</h3>
+
+        <div class="mb-5">
+          <label class="block text-[12px] font-medium ink-2 mb-1">Endpoint URL</label>
+          <input class="input" value="https://api.acme.com/hooks/zugzug">
+          <p class="text-[11px] ink-3 mt-1.5 font-mono">HTTPS required. http://localhost allowed when ZUGZUG_SELF_HOSTED=1.</p>
+        </div>
+
+        <div class="mb-5">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-[12px] font-medium ink-2">Events to subscribe</label>
+            <span class="anno-arrow anno">↑ click to toggle</span>
+          </div>
+          <div class="border border-line rounded-sm divide-y divide-[var(--line)]">
+            <label class="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" checked class="mt-0.5 accent-[var(--accent)]">
+              <div class="flex-1">
+                <div class="font-mono text-[12.5px] ink">dimension.committed</div>
+                <div class="ink-3 text-[11px]">When canonical records change after an approved commit. Most common.</div>
+              </div>
+              <span class="chip">recommended</span>
+            </label>
+            <label class="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" class="mt-0.5 accent-[var(--accent)]">
+              <div class="flex-1">
+                <div class="font-mono text-[12.5px] ink">dimension.created</div>
+                <div class="ink-3 text-[11px]">When a new master table is set up.</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" checked class="mt-0.5 accent-[var(--accent)]">
+              <div class="flex-1">
+                <div class="font-mono text-[12.5px] ink">canonical.deleted</div>
+                <div class="ink-3 text-[11px]">When a single canonical record is retired.</div>
+              </div>
+            </label>
+            <label class="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+              <input type="checkbox" class="mt-0.5 accent-[var(--accent)]">
+              <div class="flex-1">
+                <div class="font-mono text-[12.5px] ink">dimension.schema.updated</div>
+                <div class="ink-3 text-[11px]">When a field is added, renamed, or removed.</div>
+              </div>
+            </label>
+          </div>
+          <p class="text-[11px] ink-3 mt-2"><span class="font-mono">webhook.test</span> is not a subscribable event — it's fired by the <b>Send a test event</b> button on the webhook detail page once this subscription exists.</p>
+        </div>
+
+        <div class="mb-5">
+          <label class="block text-[12px] font-medium ink-2 mb-1">Description <span class="ink-3">— optional</span></label>
+          <input class="input" value="Sync into Acme CRM contacts" style="font-family: var(--font-body);">
+        </div>
+
+        <div class="panel-2 px-4 py-3 mb-5">
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 mt-0.5 ink-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+            <p class="ink-2 text-[12px]">
+              A signing secret will be generated and shown <b>once</b>. Store it in your verifying service as the HMAC key.
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2">
+          <button class="btn">Cancel</button>
+          <button class="btn btn-primary">Create webhook</button>
+        </div>
+      </div>
+
+      <!-- Modal B: secret reveal -->
+      <div class="card p-6 relative" style="border-color: var(--warn);">
+        <div class="kicker mb-3" style="color: var(--warn);">Modal B · only shown once</div>
+        <div class="flex items-start gap-3 mb-4">
+          <div class="w-10 h-10 rounded-full bg-warn-soft grid place-items-center">
+            <svg class="w-5 h-5 warn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          </div>
+          <div>
+            <h3 class="font-display text-[18px] font-semibold">Copy your signing secret</h3>
+            <p class="ink-2 text-[12.5px] mt-1">This is the only time you'll see it. We encrypt it at rest with AES-GCM under a server-side master key — we can decrypt it to sign your deliveries, but the UI cannot re-display it after this dialog closes.</p>
+          </div>
+        </div>
+
+        <div class="kicker mb-1.5">Webhook secret</div>
+        <div class="panel-2 px-3 py-3 mb-4">
+          <div class="flex items-center gap-2">
+            <code class="flex-1 font-mono text-[13.5px] ink select-all break-all">whsec_b8K3kP9mQ2vN7L4xR8jH3sT5uW8yA1zE6cD9fG2J</code>
+            <button class="btn btn-sm">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+              Copy
+            </button>
+          </div>
+        </div>
+
+        <div class="kicker mb-1.5">Verify in your handler · Node example</div>
+        <div class="codeblock text-[11px] mb-4">
+<span class="com">// Two-key verify: current always; previous valid 24h post-rotation.</span>
+<span class="com">// The same recipe lives on the Pull API page → Webhooks tab — no need to</span>
+<span class="com">// rotate a secret to retrieve it later.</span>
+<span class="key">import</span> { createHmac, timingSafeEqual } <span class="key">from</span> <span class="str">"node:crypto"</span>;
+
+<span class="key">export function</span> <span class="meth">verifyZugzugSignature</span>(<span class="ident">rawBody</span>, <span class="ident">header</span>, <span class="ident">secrets</span>) {
+  <span class="com">// "t=&lt;unix&gt;,kid=&lt;current|previous&gt;,v1=sha256=&lt;hex&gt;"</span>
+  <span class="key">const</span> parts = {};
+  <span class="key">for</span> (<span class="key">const</span> seg <span class="key">of</span> <span class="ident">header</span>.split(<span class="str">","</span>)) {
+    <span class="key">const</span> eq = seg.indexOf(<span class="str">"="</span>);
+    <span class="key">if</span> (eq &gt; <span class="num">0</span>) parts[seg.slice(<span class="num">0</span>, eq).trim()] = seg.slice(eq + <span class="num">1</span>).trim();
+  }
+  <span class="key">if</span> (!parts.t || !parts.kid || !parts.v1) <span class="key">return</span> <span class="key">false</span>;
+
+  <span class="com">// Reject clocks more than 5 min off in EITHER direction.</span>
+  <span class="key">const</span> skew = <span class="meth">Math</span>.<span class="meth">abs</span>(<span class="meth">Date</span>.now() / <span class="num">1000</span> - <span class="key">Number</span>(parts.t));
+  <span class="key">if</span> (!<span class="key">Number</span>.<span class="meth">isFinite</span>(skew) || skew &gt; <span class="num">300</span>) <span class="key">return</span> <span class="key">false</span>;
+
+  <span class="com">// v1 = "sha256=&lt;64-hex&gt;" — length + alphabet enforced before hex decode.</span>
+  <span class="key">const</span> m = /^sha256=([<span class="num">0</span>-<span class="num">9</span>a-f]{<span class="num">64</span>})$/.<span class="meth">exec</span>(parts.v1);
+  <span class="key">if</span> (!m) <span class="key">return</span> <span class="key">false</span>;
+  <span class="key">const</span> provided = <span class="meth">Buffer</span>.<span class="meth">from</span>(m[<span class="num">1</span>], <span class="str">"hex"</span>);
+
+  <span class="key">const</span> secret = parts.kid === <span class="str">"previous"</span> ? <span class="ident">secrets</span>.previous : <span class="ident">secrets</span>.current;
+  <span class="key">if</span> (!secret) <span class="key">return</span> <span class="key">false</span>;
+
+  <span class="key">const</span> expected = <span class="meth">createHmac</span>(<span class="str">"sha256"</span>, secret)
+    .<span class="meth">update</span>(parts.t + <span class="str">"."</span> + <span class="ident">rawBody</span>).<span class="meth">digest</span>();
+
+  <span class="key">if</span> (expected.length !== provided.length) <span class="key">return</span> <span class="key">false</span>; <span class="com">// belt-and-suspenders</span>
+  <span class="key">return</span> <span class="meth">timingSafeEqual</span>(expected, provided);
+}</div>
+
+        <div class="flex items-center justify-between">
+          <span class="ink-3 text-[11px] font-mono">Esc disabled · confirm required</span>
+          <button class="btn btn-primary">I've copied it</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 3b — Delete webhook (typed-URL ConfirmDialog) — same primitive
+       used for token revoke + dimension delete + member removal.
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">3b. Delete webhook · typed-URL confirm</h2>
+      <span class="anno">ConfirmDialog primitive · shared with token revoke / dim delete / member remove</span>
+    </div>
+    <div class="card p-6 max-w-[560px] mx-auto" style="border-color: var(--danger);">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-danger-soft grid place-items-center">
+          <svg class="w-5 h-5 danger" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </div>
+        <div class="flex-1">
+          <h3 class="font-display text-[18px] font-semibold">Delete this webhook?</h3>
+          <p class="ink-2 text-[12.5px] mt-1">Pending deliveries will be DLQ'd with <span class="font-mono">last_error="webhook_deleted"</span> and stay visible in the delivery log until the 30-day retention sweep. This action is irreversible.</p>
+        </div>
+      </div>
+      <div class="panel-2 px-4 py-3 mb-4">
+        <div class="kicker mb-1">Type the URL to confirm</div>
+        <div class="font-mono text-[12.5px] ink mb-2 select-all">https://api.acme.com/hooks/zz</div>
+        <input class="input" placeholder="https://api.acme.com/hooks/zz">
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="ink-3 text-[11px] font-mono">delete button enables when typed URL matches exactly</span>
+        <div class="flex items-center gap-2">
+          <button class="btn">Cancel</button>
+          <button class="btn btn-danger" disabled style="opacity:.5">Delete webhook</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 4 — Service accounts page + create flow
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">4. Service accounts · workspace-scoped credentials</h2>
+      <span class="anno">/integrations/service-accounts</span>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="px-6 py-5 border-b border-line">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="kicker mb-1">Integrations · service accounts</div>
+            <h3 class="font-display text-[20px] font-semibold">M2M tokens for the workspace</h3>
+            <p class="ink-2 text-[12.5px] mt-2 max-w-[60ch]">
+              Service-account tokens authenticate as the <span class="font-mono ink">acme</span> workspace, not as a user. They survive when members leave. For personal scripts and dbt-on-laptop, use a <a class="accent">personal API token</a> in your account instead.
+            </p>
+          </div>
+          <button class="btn btn-primary"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg> Create service account</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-[2fr_1fr]">
+        <!-- list -->
+        <div class="border-r border-line">
+          <table class="t">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Prefix</th>
+                <th>Scopes</th>
+                <th>Last used</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="row-hover">
+                <td>
+                  <div class="font-medium">Fivetran sync</div>
+                  <div class="ink-3 text-[11px] mt-0.5">Created by Ada Berg · Mar 14</div>
+                </td>
+                <td class="font-mono ink-2 text-[12px]">zzsa_b8K3kP•••</td>
+                <td><span class="chip">read</span></td>
+                <td class="ink-2 text-[12px]">12m ago<br><span class="font-mono ink-3 text-[11px]">14,213 calls / 7d</span></td>
+                <td class="font-mono ink-2 text-[12px]">2027-03-14</td>
+                <td class="text-right">
+                  <button class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+                </td>
+              </tr>
+              <tr class="row-hover">
+                <td>
+                  <div class="font-medium">dbt prod</div>
+                  <div class="ink-3 text-[11px] mt-0.5">Created by Cory Mills · Feb 02</div>
+                </td>
+                <td class="font-mono ink-2 text-[12px]">zzsa_4f2q8h•••</td>
+                <td><span class="chip">read</span></td>
+                <td class="ink-2 text-[12px]">2h ago<br><span class="font-mono ink-3 text-[11px]">3,148 calls / 7d</span></td>
+                <td class="font-mono ink-2 text-[12px]">Never</td>
+                <td class="text-right">
+                  <button class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+                </td>
+              </tr>
+              <tr class="row-hover">
+                <td>
+                  <div class="font-medium">CI / GitHub Actions</div>
+                  <div class="ink-3 text-[11px] mt-0.5">Created by Ada Berg · Jan 10</div>
+                </td>
+                <td class="font-mono ink-2 text-[12px]">zzsa_9pT2Mw•••</td>
+                <td><span class="chip">read</span></td>
+                <td class="ink-2 text-[12px]">3d ago<br><span class="font-mono ink-3 text-[11px]">216 calls / 7d</span></td>
+                <td class="font-mono warn text-[12px]">Expires in 12d</td>
+                <td class="text-right">
+                  <button class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+                </td>
+              </tr>
+              <tr class="row-hover" style="opacity:.55">
+                <td>
+                  <div class="font-medium">old hubspot bridge</div>
+                  <div class="ink-3 text-[11px] mt-0.5">Created by Cory Mills · Dec 18</div>
+                </td>
+                <td class="font-mono ink-2 text-[12px]">zzsa_7nV5Kp•••</td>
+                <td><span class="chip">read</span></td>
+                <td class="ink-3 text-[12px] line-through">Revoked Jun 02</td>
+                <td class="font-mono ink-3 text-[12px]">—</td>
+                <td class="text-right"><span class="badge">Revoked</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- create form panel (inline drawer-style) -->
+        <div class="p-5 bg-surface-2 relative">
+          <div class="absolute -left-3 top-7 anno-arrow anno">← inline create</div>
+          <div class="kicker mb-3">New service account</div>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-[12px] ink-2 mb-1">Name</label>
+              <input class="input" value="Looker prod" style="font-family: var(--font-body);">
+            </div>
+            <div>
+              <label class="block text-[12px] ink-2 mb-1">Scope</label>
+              <div class="border border-line rounded-sm divide-y divide-[var(--line)] bg-surface">
+                <label class="flex items-start gap-3 px-3 py-2.5 cursor-pointer">
+                  <input type="checkbox" checked disabled class="mt-0.5 accent-[var(--accent)]">
+                  <div class="flex-1">
+                    <div class="font-mono text-[12.5px] ink">read</div>
+                    <div class="ink-3 text-[11px]">Read canonical records + schema + events.</div>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 px-3 py-2.5 cursor-not-allowed" style="opacity:.5">
+                  <input type="checkbox" disabled class="mt-0.5 accent-[var(--accent)]">
+                  <div class="flex-1">
+                    <div class="font-mono text-[12.5px] ink">webhook:manage</div>
+                    <div class="ink-3 text-[11px]">Create / edit subscriptions via API. <span class="ink">Reserved — column allows it, v1 does not enable it.</span></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[12px] ink-2 mb-1">Expires</label>
+              <div class="grid grid-cols-3 gap-1.5">
+                <button class="btn btn-sm">90d</button>
+                <button class="btn btn-sm btn-primary">1y</button>
+                <button class="btn btn-sm">Never</button>
+              </div>
+              <p class="text-[11px] ink-3 mt-1.5 font-mono">expires 2027-06-14</p>
+            </div>
+            <button class="btn btn-primary w-full justify-center">Generate token</button>
+            <p class="text-[11px] ink-3 leading-relaxed">The token value will be shown <b>once</b>. After this dialog closes you can no longer retrieve it.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 5 — Event payload sample + signing recipe
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">5. Wire shape · dimension.committed payload</h2>
+      <span class="anno">documentation strip inside Pull API page</span>
+    </div>
+
+    <div class="grid grid-cols-[1.3fr_1fr] gap-5">
+      <div class="card overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-line">
+          <div class="flex items-center gap-2">
+            <span class="meth meth-post">POST</span>
+            <span class="font-mono text-[12.5px]">https://api.acme.com/hooks/zugzug</span>
+          </div>
+          <span class="badge"><span class="dot ok"></span> 200 OK</span>
+        </div>
+        <div class="grid grid-cols-2">
+          <div class="border-r border-line p-4">
+            <div class="kicker mb-2">Request headers</div>
+            <div class="json text-[10.5px] leading-[1.6]">
+<span class="k">Content-Type</span>: <span class="s">application/json</span>
+<span class="k">User-Agent</span>: <span class="s">Zugzug-Webhooks/1.0</span>
+<span class="k">X-Zugzug-Event</span>: <span class="s">dimension.committed</span>
+<span class="k">X-Zugzug-Event-Id</span>: <span class="s">evt_01H8X8R6V5J5VFE5G2X8X8R6V5</span>
+<span class="k">X-Zugzug-Delivery-Id</span>: <span class="s">whd_01H8X8R7M2Q3K6V8X8R6V5J5V</span>
+<span class="k">X-Zugzug-Workspace</span>: <span class="s">acme</span>
+<span class="k">X-Zugzug-Attempt</span>: <span class="n">1</span>
+<span class="k">X-Zugzug-Signature</span>: <span class="s">t=1718363524,kid=current,v1=sha256=4f2k8q1m…</span></div>
+          </div>
+          <div class="p-4">
+            <div class="kicker mb-2">Request body</div>
+            <div class="json text-[10.5px] leading-[1.55] max-h-[420px] overflow-auto">
+{
+  <span class="k">"id"</span>: <span class="s">"evt_01H8X8R6V5J5VFE5G2X8X8R6V5"</span>,
+  <span class="k">"type"</span>: <span class="s">"dimension.committed"</span>,
+  <span class="k">"api_version"</span>: <span class="s">"v1"</span>,
+  <span class="k">"workspace"</span>: {
+    <span class="k">"id"</span>:   <span class="s">"acme"</span>,                            <span class="p">// stable tenant.id (^[a-z][a-z0-9_]{0,20}$)</span>
+    <span class="k">"slug"</span>: <span class="s">"acme"</span>                             <span class="p">// renameable — join on id, render slug</span>
+  },
+  <span class="k">"occurred_at"</span>: <span class="s">"2026-06-14T11:32:04.118Z"</span>,
+  <span class="k">"data"</span>: {
+    <span class="k">"dim_slug"</span>: <span class="s">"country"</span>,
+    <span class="k">"dim_label"</span>: <span class="s">"Country"</span>,
+    <span class="k">"version"</span>: <span class="n">47</span>,
+    <span class="k">"previous_version"</span>: <span class="n">46</span>,
+    <span class="k">"committed_by"</span>: {
+      <span class="k">"id"</span>: <span class="s">"u_abc"</span>,
+      <span class="k">"name"</span>: <span class="s">"Ada Berg"</span>
+    },
+    <span class="k">"changes"</span>: {
+      <span class="k">"added"</span>:    [{ <span class="k">"key"</span>: <span class="s">"DE"</span>, <span class="k">"label"</span>: <span class="s">"Germany"</span> }],
+      <span class="k">"updated"</span>:  [{ <span class="k">"key"</span>: <span class="s">"US"</span>, <span class="k">"label"</span>: <span class="s">"United States"</span> }],
+      <span class="k">"merged"</span>:   [{ <span class="k">"from"</span>: <span class="s">"USA"</span>, <span class="k">"into"</span>: <span class="s">"US"</span> }],
+      <span class="k">"retired"</span>:  []
+    },
+    <span class="k">"summary"</span>: { <span class="k">"added"</span>: <span class="n">1</span>, <span class="k">"updated"</span>: <span class="n">1</span>, <span class="k">"merged"</span>: <span class="n">1</span>, <span class="k">"retired"</span>: <span class="n">0</span> }
+  }
+}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- right column: delivery semantics + retry table -->
+      <div class="space-y-4">
+        <div class="card p-5">
+          <div class="kicker mb-2">Delivery contract</div>
+          <ul class="space-y-2 text-[12.5px] ink-2">
+            <li class="flex items-start gap-2"><span class="dot ok mt-1.5"></span> <b class="ink">At-least-once</b> — subscribers must dedupe on <span class="font-mono">X-Zugzug-Event-Id</span>.</li>
+            <li class="flex items-start gap-2"><span class="dot ok mt-1.5"></span> <b class="ink">10s deadline</b> — enforced by AbortController; respond 2xx first, work later.</li>
+            <li class="flex items-start gap-2"><span class="dot ok mt-1.5"></span> <b class="ink">Per-commit grain</b> — one event per atomic dim version.</li>
+            <li class="flex items-start gap-2"><span class="dot ok mt-1.5"></span> <b class="ink">Auto-disable</b> when the last 50 deliveries all DLQ'd (no success between).</li>
+            <li class="flex items-start gap-2"><span class="dot ok mt-1.5"></span> <b class="ink">URL snapshot</b> — each delivery POSTs the URL recorded at enqueue; URL edits don't redirect in-flight.</li>
+            <li class="flex items-start gap-2"><span class="dot ok mt-1.5"></span> <b class="ink">Rotation grace</b> — 24h window where <span class="font-mono">kid=previous</span> is also accepted.</li>
+          </ul>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="px-5 py-3 border-b border-line flex items-center justify-between">
+            <div class="kicker">Retry schedule</div>
+            <span class="badge text-[10px]">tuned, not exponential</span>
+          </div>
+          <table class="t">
+            <thead>
+              <tr><th>Attempt</th><th>Wait</th><th>Total elapsed</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="font-mono">1</td><td class="font-mono">0s</td><td class="ink-3 font-mono">+0s</td></tr>
+              <tr><td class="font-mono">2</td><td class="font-mono">5s</td><td class="ink-3 font-mono">+5s</td></tr>
+              <tr><td class="font-mono">3</td><td class="font-mono">30s</td><td class="ink-3 font-mono">+35s</td></tr>
+              <tr><td class="font-mono">4</td><td class="font-mono">5m</td><td class="ink-3 font-mono">+5m 35s</td></tr>
+              <tr><td class="font-mono">5</td><td class="font-mono">1h</td><td class="ink-3 font-mono">+1h 5m 35s</td></tr>
+              <tr style="background: var(--danger-soft);">
+                <td colspan="3" class="text-center font-mono danger text-[11.5px]">DLQ after attempt 5 · replay from delivery log</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card p-5">
+          <div class="kicker mb-2">Event taxonomy · v1</div>
+          <ul class="space-y-1.5 text-[12px] font-mono ink-2">
+            <li class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-[var(--accent)]"></span> dimension.committed</li>
+            <li class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-[var(--accent)]"></span> dimension.created</li>
+            <li class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-[var(--accent)]"></span> dimension.schema.updated</li>
+            <li class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-[var(--accent)]"></span> canonical.deleted</li>
+            <li class="flex items-center gap-2"><span class="w-1 h-1 rounded-full bg-[var(--accent)]"></span> webhook.test</li>
+          </ul>
+          <p class="ink-3 text-[11px] mt-3">Closed taxonomy in v1, enforced both at the DB (CHECK constraint) and at POST /webhooks (400 <span class="font-mono">unknown_event_type</span>).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 6 — Connections / Integrations split (before / after)
+       ================================================================= -->
+  <section class="mb-12">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">6. IA split · Connections vs Integrations</h2>
+      <span class="anno">side-by-side before / after</span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-5">
+      <!-- before -->
+      <div class="card p-5 dotted" style="opacity:.95">
+        <div class="kicker mb-2 danger">Before · today</div>
+        <h3 class="font-display text-[16px] font-semibold mb-3">/settings/warehouse</h3>
+        <div class="space-y-2">
+          <div class="panel-2 p-3">
+            <div class="flex items-center justify-between">
+              <span class="font-medium">Warehouse</span>
+              <span class="badge badge-ok"><span class="dot"></span> ok · 2m ago</span>
+            </div>
+            <p class="ink-3 text-[12px] mt-1">Where Zug Zug looks for new values.</p>
+          </div>
+          <div class="panel-2 p-3 border-dashed" style="border-color: var(--danger);">
+            <div class="flex items-center justify-between">
+              <span class="font-medium">Master records</span>
+              <span class="badge">downloadable</span>
+            </div>
+            <p class="ink-3 text-[12px] mt-1">Where canonical records live (informational).</p>
+            <div class="anno danger mt-2">↑ misleading: no way to actually pull this out</div>
+          </div>
+          <div class="panel-2 p-3">
+            <div class="flex items-center justify-between">
+              <span class="font-medium">App</span>
+              <span class="badge badge-accent">Postgres</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- after -->
+      <div class="card p-5">
+        <div class="kicker mb-2 accent">After · this spec</div>
+        <h3 class="font-display text-[16px] font-semibold mb-3">/connections + /integrations</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <div class="kicker mb-2">Connections (inbound)</div>
+            <div class="space-y-2">
+              <div class="panel-2 p-3">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 ink-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+                  <span class="font-medium text-[13px]">Warehouse</span>
+                </div>
+                <p class="ink-3 text-[11px] mt-1">Where we read values FROM.</p>
+              </div>
+              <div class="panel-2 p-3">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 ink-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v12H5.2L4 18z"/></svg>
+                  <span class="font-medium text-[13px]">Sources</span>
+                </div>
+                <p class="ink-3 text-[11px] mt-1">Which tables feed each dim.</p>
+              </div>
+              <div class="panel-2 p-3">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 ink-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+                  <span class="font-medium text-[13px]">App state</span>
+                </div>
+                <p class="ink-3 text-[11px] mt-1">Drafts, audit, users (info).</p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="kicker mb-2">Integrations (outbound)</div>
+            <div class="space-y-2">
+              <div class="panel-2 p-3 border-accent" style="border-width:1px;">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h6"/></svg>
+                  <span class="font-medium text-[13px] accent">Pull API</span>
+                </div>
+                <p class="ink-3 text-[11px] mt-1">/v1 JSON · paginated</p>
+              </div>
+              <div class="panel-2 p-3 border-accent" style="border-width:1px;">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h16"/><path d="M12 4l8 8-8 8"/></svg>
+                  <span class="font-medium text-[13px] accent">Webhooks</span>
+                </div>
+                <p class="ink-3 text-[11px] mt-1">HMAC, retries, replay</p>
+              </div>
+              <div class="panel-2 p-3 border-accent" style="border-width:1px;">
+                <div class="flex items-center gap-2">
+                  <svg class="w-3.5 h-3.5 accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                  <span class="font-medium text-[13px] accent">Service accts</span>
+                </div>
+                <p class="ink-3 text-[11px] mt-1">Workspace M2M creds</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 panel-2 p-3">
+          <div class="kicker mb-1">Master records card · removed</div>
+          <p class="ink-2 text-[12px]">Its content moves to the <b class="accent">Pull API</b> page (which is the actual answer to "how do I get my canonical out").</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================
+       PANEL 7 — Architecture sketch
+       ================================================================= -->
+  <section class="mb-4">
+    <div class="flex items-baseline justify-between mb-3">
+      <h2 class="font-display text-[22px] font-semibold">7. Event bus · one source of truth</h2>
+      <span class="anno">data flow · server/src/repo.ts</span>
+    </div>
+
+    <div class="card p-7">
+      <div class="grid grid-cols-[1fr_180px_1fr] items-center gap-3">
+        <!-- left: writes -->
+        <div class="space-y-3">
+          <div class="panel-2 p-3 text-center">
+            <div class="kicker mb-1">UI</div>
+            <div class="font-medium text-[13px]">Approve &amp; commit</div>
+          </div>
+          <div class="text-center ink-3 text-[12px] font-mono">↓ repo-canonical.commit()</div>
+          <div class="panel-2 p-3 text-center">
+            <div class="kicker mb-1">Postgres tx</div>
+            <div class="font-medium text-[13px]">MERGE dim_/map_ + INSERT outbound_event</div>
+          </div>
+        </div>
+
+        <!-- middle: pipe -->
+        <div class="text-center">
+          <div class="kicker mb-2">outbound_event</div>
+          <div class="panel-2 p-4">
+            <div class="font-mono text-[11px] ink leading-[1.7]">
+              evt_01H8X… · dimension.committed<br>
+              evt_01H8X… · dimension.committed<br>
+              evt_01H8X… · canonical.deleted<br>
+              <span class="ink-3">…</span>
+            </div>
+          </div>
+          <div class="font-mono text-[10px] ink-3 mt-2">tenant_id + type + occurred_at</div>
+        </div>
+
+        <!-- right: readers -->
+        <div class="space-y-3">
+          <div class="panel-2 p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <svg class="w-3.5 h-3.5 accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h12l4 4v12H4z"/><path d="M8 12h8M8 16h6"/></svg>
+              <span class="font-medium text-[13px]">Pull API</span>
+            </div>
+            <p class="ink-3 text-[11px]">GET /v1/events?since=…</p>
+          </div>
+          <div class="panel-2 p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <svg class="w-3.5 h-3.5 accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12h16M12 4l8 8-8 8"/></svg>
+              <span class="font-medium text-[13px]">Webhook dispatcher</span>
+            </div>
+            <p class="ink-3 text-[11px]">SchedulerJob · 2s tick · global claim (SKIP LOCKED) · round-robin by tenant · 16-way fan-out · 10s fetch deadline outside any tx · 30s in-flight reaper</p>
+          </div>
+          <div class="panel-2 p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <svg class="w-3.5 h-3.5 ink-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              <span class="font-medium text-[13px]">Audit log</span>
+            </div>
+            <p class="ink-3 text-[11px]">Existing — fans out to dashboard.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 grid grid-cols-3 gap-3 ink-2 text-[12px]">
+        <div>
+          <div class="kicker mb-1">Why one bus</div>
+          Two readers, one source. Pull API and webhooks never drift. The event INSERT is inside the canonical-commit tx — if the event fails, the commit fails. No silent drop.
+        </div>
+        <div>
+          <div class="kicker mb-1">Why per-commit</div>
+          A 500-row import is one event with a 1.2 KB diff summary, not 500 separate POSTs. Subscribers who want row detail call the Pull API; for retired/merged keys they call <span class="font-mono">/tombstones</span>.
+        </div>
+        <div>
+          <div class="kicker mb-1">Why scheduler-as-host</div>
+          The dispatcher registers with the scheduler for lifecycle (boot/drain/stop, audit on failure) but runs its OWN concurrency model — the stock per-tenant sequential loop is sized for fast Postgres work, not 10s HTTP. Claim is a short tx that returns connections to the pool BEFORE any fetch.
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>
