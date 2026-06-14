@@ -34,12 +34,13 @@ export type Role = "admin" | "editor" | "viewer";
 export type Operation =
   | "curate" // create/update drafts
   | "commit" // commit drafts to canonical
-  | "manage_adapter"; // configure warehouse credentials
+  | "manage_adapter" // configure warehouse credentials
+  | "admin_connection"; // POST/PATCH/DELETE/verify on warehouse_connection (admin only)
 
 /** Static permission matrix. Returns true if the given role may perform op. */
 export function canMutate(role: Role, op: Operation): boolean {
   const matrix: Record<Role, Operation[]> = {
-    admin: ["curate", "commit", "manage_adapter"],
+    admin: ["curate", "commit", "manage_adapter", "admin_connection"],
     editor: ["curate", "commit"],
     viewer: [],
   };

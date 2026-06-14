@@ -681,11 +681,143 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // /api/t/:slug/warehouse/... — warehouse connection and database queries
     if (tenantSlugFromPath !== null && seg[1] === "warehouse") {
-      // GET /api/t/:slug/warehouse/connection — return the public projection or null.
-      if (seg[2] === "connection" && seg.length === 3 && method === "GET") {
-        const { getWarehouseConnection } = await import("./repo-warehouse.ts");
-        const conn = await getWarehouseConnection(tenantCtx.tenantId);
-        return json(conn);
+      // /api/t/:slug/warehouse/connection — GET (T12), POST/PATCH/DELETE (T13).
+      if (seg[2] === "connection" && seg.length === 3) {
+        if (method === "GET") {
+          const { getWarehouseConnection } = await import("./repo-warehouse.ts");
+          const conn = await getWarehouseConnection(tenantCtx.tenantId);
+          return json(conn);
+        }
+
+        if (method === "POST") {
+          const denied = gateOrJson(tenantCtx, "admin_connection");
+          if (denied) return denied;
+          const { createWarehouseConnection } = await import("./repo-warehouse.ts");
+          const body = (await req.json()) as {
+            adapter: "motherduck" | "duckdb_local";
+            label: string;
+            credentials: import("./warehouse/credentials.ts").WarehouseCredentials;
+          };
+          try {
+            const created = await createWarehouseConnection({
+              tenantId: tenantCtx.tenantId,
+              adapter: body.adapter,
+              label: body.label,
+              credentials: body.credentials,
+              actorUserId: me,
+            });
+            await appendAuditAs(me, "warehouse.connection.create", body.label, {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                adapter: body.adapter,
+                label: body.label,
+                connectionId: created.id,
+              },
+            });
+            return json(created, 201);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            if (/already exists/.test(msg)) {
+              return json({ error: msg, kind: "ALREADY_EXISTS" }, 409);
+            }
+            throw e;
+          }
+        }
+
+        if (method === "PATCH") {
+          const denied = gateOrJson(tenantCtx, "admin_connection");
+          if (denied) return denied;
+          const ifMatch = req.headers.get("if-match");
+          if (!ifMatch) {
+            return json({ error: "If-Match header required" }, 428);
+          }
+          const expectedVersion = Number(ifMatch);
+          if (!Number.isInteger(expectedVersion)) {
+            return json({ error: "If-Match must be an integer" }, 400);
+          }
+          const body = (await req.json()) as {
+            label?: string;
+            credentials?: import("./warehouse/credentials.ts").WarehouseCredentials;
+          };
+          const { patchWarehouseConnection, getWarehouseConnection } = await import(
+            "./repo-warehouse.ts"
+          );
+          const out = await patchWarehouseConnection({
+            tenantId: tenantCtx.tenantId,
+            expectedVersion,
+            label: body.label,
+            credentials: body.credentials,
+            actorUserId: me,
+          });
+          if (!out.ok) {
+            return json({ kind: out.reason, currentVersion: out.currentVersion }, 412);
+          }
+          const changedFields: string[] = [];
+          if (body.label !== undefined) changedFields.push("label");
+          if (out.row.credentialsVersion !== expectedVersion) changedFields.push("credentials");
+          if (changedFields.length > 0) {
+            await appendAuditAs(me, "warehouse.connection.update", out.row.label, {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                adapter: out.row.adapter,
+                label: out.row.label,
+                changedFields,
+                connectionId: out.row.id,
+              },
+            });
+          }
+          // Defensive read so the projection matches the GET shape exactly.
+          const fresh = await getWarehouseConnection(tenantCtx.tenantId);
+          return json(fresh ?? out.row);
+        }
+
+        if (method === "DELETE") {
+          const denied = gateOrJson(tenantCtx, "admin_connection");
+          if (denied) return denied;
+          const { deleteWarehouseConnection, getWarehouseConnection } = await import(
+            "./repo-warehouse.ts"
+          );
+          const existing = await getWarehouseConnection(tenantCtx.tenantId);
+          const out = await deleteWarehouseConnection(tenantCtx.tenantId);
+          if (!out.ok) {
+            return json({ kind: "CONNECTION_IN_USE", databaseCount: out.databaseCount }, 409);
+          }
+          if (existing) {
+            await appendAuditAs(me, "warehouse.connection.delete", existing.label, {
+              tenantId: tenantCtx.tenantId,
+              metadata: {
+                adapter: existing.adapter,
+                label: existing.label,
+                connectionId: existing.id,
+              },
+            });
+          }
+          return noContent();
+        }
+      }
+
+      // POST /api/t/:slug/warehouse/connection/verify — adapter.ping() liveness probe.
+      if (
+        seg[2] === "connection" &&
+        seg[3] === "verify" &&
+        seg.length === 4 &&
+        method === "POST"
+      ) {
+        const denied = gateOrJson(tenantCtx, "admin_connection");
+        if (denied) return denied;
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const { setVerifyResult, getWarehouseConnection } = await import("./repo-warehouse.ts");
+        try {
+          const adapter = await getAdapterFn(tenantCtx.tenantId);
+          await adapter.ping();
+          await setVerifyResult(tenantCtx.tenantId, { ok: true });
+          const fresh = await getWarehouseConnection(tenantCtx.tenantId);
+          return json({ ok: true, lastVerifiedAt: fresh?.lastVerifiedAt ?? null });
+        } catch (e) {
+          const error = e instanceof Error ? e.message : String(e);
+          await setVerifyResult(tenantCtx.tenantId, { ok: false, error });
+          return json({ ok: false, error }, 200);
+        }
       }
 
       // GET /api/t/:slug/warehouse/databases — return the list with sourceCount.

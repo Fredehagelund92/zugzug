@@ -22,6 +22,7 @@ const ADMIN = `u_admin_${process.pid}`;
 async function cleanup(): Promise<void> {
   await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."warehouse_connection" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."active_sessions" WHERE user_id = $1`, [ADMIN]);
@@ -121,4 +122,84 @@ test("GET /api/t/:slug/warehouse/databases returns the list with sourceCount=0",
   expect(body[0].id).toBe(dbId);
   expect(body[0].databaseName).toBe("analytics");
   expect(body[0].sourceCount).toBe(0);
+});
+
+test("POST /warehouse/connection encrypts the credentials and returns the projection", async () => {
+  await provisionTenant({ id: T, label: "WriteTest" });
+  await pgRun(
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, is_super_admin)
+     VALUES ($1, $2, $3, true)`,
+    [ADMIN, `Admin ${ADMIN}`, "A"],
+  );
+  const sid = `s_${ADMIN}`;
+  await pgRun(
+    `INSERT INTO "zugzug_app"."sessions" (id, user_id, expires_at) VALUES ($1, $2, now() + interval '1 hour')`,
+    [sid, ADMIN],
+  );
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${T}/warehouse/connection`, {
+      method: "POST",
+      headers: { cookie: `zz_sid=${sid}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        adapter: "motherduck",
+        label: "MyProd",
+        credentials: { type: "duckdb", token: "md_user_token", writable: false },
+      }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(201);
+  const body = await res.json();
+  expect(body.adapter).toBe("motherduck");
+  expect(body).not.toHaveProperty("credentials");
+});
+
+test("PATCH /warehouse/connection 412 on stale If-Match", async () => {
+  const { cookie, tenantSlug } = await setupWithConnection();
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/warehouse/connection`, {
+      method: "PATCH",
+      headers: { cookie, "content-type": "application/json", "If-Match": "99" },
+      body: JSON.stringify({ label: "Renamed" }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(412);
+  const body = await res.json();
+  expect(body.kind).toBe("STALE_VERSION");
+  expect(body.currentVersion).toBe(1);
+});
+
+test("PATCH /warehouse/connection with same credentials does not bump version", async () => {
+  const { cookie, tenantSlug } = await setupWithConnection();
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/warehouse/connection`, {
+      method: "PATCH",
+      headers: { cookie, "content-type": "application/json", "If-Match": "1" },
+      body: JSON.stringify({ credentials: { type: "duckdb", token: "md_x", writable: false } }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(200);
+  const body = await res.json();
+  expect(body.credentialsVersion).toBe(1);
+});
+
+test("DELETE /warehouse/connection returns 409 while databases exist", async () => {
+  const { cookie, tenantSlug } = await setupWithConnection();
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/t/${tenantSlug}/warehouse/connection`, {
+      method: "DELETE",
+      headers: { cookie },
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(409);
+  const body = await res.json();
+  expect(body.kind).toBe("CONNECTION_IN_USE");
+  expect(body.databaseCount).toBe(1);
 });
