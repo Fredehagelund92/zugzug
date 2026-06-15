@@ -31,15 +31,15 @@ const MarkBackdrop = () => (
    Token-driven (ink/line/accent), animated reveal via zz-rise. */
 const EmptyStateIllustration = () => (
   <div className="zz-rise relative mx-auto flex h-44 w-full max-w-md items-center justify-center md:h-56">
-    <svg
-      viewBox="0 0 360 200"
-      fill="none"
-      className="h-full w-full"
-      aria-hidden="true"
-    >
+    <svg viewBox="0 0 360 200" fill="none" className="h-full w-full" aria-hidden="true">
       <defs>
         <pattern id="zz-grid" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
-          <path d="M 14 0 L 0 0 0 14" className="text-line-2" stroke="currentColor" strokeWidth="0.5" />
+          <path
+            d="M 14 0 L 0 0 0 14"
+            className="text-line-2"
+            stroke="currentColor"
+            strokeWidth="0.5"
+          />
         </pattern>
       </defs>
 
@@ -53,13 +53,25 @@ const EmptyStateIllustration = () => (
         <rect x="24" y="136" width="118" height="28" rx="6" fill="var(--bg)" />
       </g>
       <g className="font-mono text-ink-2" fontSize="11" fontFamily="ui-monospace, monospace">
-        <text x="38" y="55">espn</text>
-        <text x="38" y="105">E.S.P.N</text>
-        <text x="38" y="155">Espn Inc.</text>
+        <text x="38" y="55">
+          espn
+        </text>
+        <text x="38" y="105">
+          E.S.P.N
+        </text>
+        <text x="38" y="155">
+          Espn Inc.
+        </text>
       </g>
 
       {/* Connection lines — dashed, accent */}
-      <g className="text-accent" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 4" fill="none">
+      <g
+        className="text-accent"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="3 4"
+        fill="none"
+      >
         <path d="M 142 50 C 190 50, 200 100, 218 100" />
         <path d="M 142 100 L 218 100" />
         <path d="M 142 150 C 190 150, 200 100, 218 100" />

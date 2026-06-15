@@ -237,8 +237,7 @@ export async function createTable(
   }
   if (input.mode === "external_id" && input.external) {
     const e = input.external;
-    const externalTable =
-      "databaseId" in e ? `${e.schemaName}.${e.tableName}` : e.table;
+    const externalTable = "databaseId" in e ? `${e.schemaName}.${e.tableName}` : e.table;
     const r = await repo.deriveCanonical(
       id,
       externalTable,

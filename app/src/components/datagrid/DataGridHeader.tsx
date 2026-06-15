@@ -210,9 +210,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
           </div>
         )}
         {selectionCol && (
-          <div
-            className={cx("flex items-center justify-center border-r border-line", cellPadY)}
-          >
+          <div className={cx("flex items-center justify-center border-r border-line", cellPadY)}>
             <Checkbox
               state={
                 selection!.selected.length === sortedRows.length && sortedRows.length > 0
@@ -240,11 +238,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
               role="columnheader"
               aria-colindex={idx + 1}
               aria-sort={
-                sort?.field === c.field
-                  ? sort.dir === "asc"
-                    ? "ascending"
-                    : "descending"
-                  : "none"
+                sort?.field === c.field ? (sort.dir === "asc" ? "ascending" : "descending") : "none"
               }
               className={cx(
                 "group relative flex items-center gap-1.5 px-3",
@@ -608,7 +602,9 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
           hidden={hiddenList}
           anchorRef={hiddenAnchorRef}
           onUnhide={(field) => {
-            const next = allColumns.filter((v) => v.hidden && v.field !== field).map((v) => v.field);
+            const next = allColumns
+              .filter((v) => v.hidden && v.field !== field)
+              .map((v) => v.field);
             onLayoutChange?.({ hidden: next });
           }}
           onClose={() => setHiddenOpen(false)}

@@ -14,9 +14,7 @@ describe("signPayload", () => {
     const header = signPayload("hello world", SECRET, "current", 1700000000);
     const parts = parseSignatureHeader(header);
     expect(parts).not.toBeNull();
-    const expected = createHmac("sha256", SECRET)
-      .update("1700000000.hello world")
-      .digest("hex");
+    const expected = createHmac("sha256", SECRET).update("1700000000.hello world").digest("hex");
     expect(parts!.v1.toLowerCase()).toBe(expected);
   });
 

@@ -167,7 +167,7 @@ export interface CanonicalValue {
   variants?: number;
   fields?: Record<string, string | null>;
   unresolved?: boolean;
-  position?: string | null;   // JSON-safe bigint string; null in derived mode
+  position?: string | null; // JSON-safe bigint string; null in derived mode
 }
 export interface SourceOccurrence {
   table: string;

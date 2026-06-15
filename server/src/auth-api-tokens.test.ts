@@ -51,5 +51,4 @@ describe("api_tokens.token_prefix", () => {
     expect(user).not.toBeNull();
     expect(user!.id).toBe(U);
   });
-
 });

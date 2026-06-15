@@ -10,6 +10,8 @@
 
 import type { SchedulerJob, JobResult, JobContext } from "./scheduler.ts";
 import { env } from "./env.ts";
+import { webhookDispatcherJob } from "./webhook-dispatcher.ts";
+import { outboundRetentionSweepJob } from "./outbound-retention-sweep.ts";
 
 export const scanSourcesJob: SchedulerJob = {
   name: "scan-sources",
@@ -54,8 +56,6 @@ export const autoCommitJob: SchedulerJob = {
 export function buildJobs(): SchedulerJob[] {
   const jobs: SchedulerJob[] = [scanSourcesJob, autoStageJob, autoCommitJob];
   if (env.webhooksEnabled) {
-    const { webhookDispatcherJob } = require("./webhook-dispatcher.ts");
-    const { outboundRetentionSweepJob } = require("./outbound-retention-sweep.ts");
     jobs.push(webhookDispatcherJob);
     jobs.push(outboundRetentionSweepJob);
   }

@@ -271,14 +271,7 @@ async function scheduleRetryOrDlq(
             signature = COALESCE($5, signature),
             next_attempt_at = now() + ($6::int || ' seconds')::interval
       WHERE id = $1`,
-    [
-      row.id,
-      lastError,
-      code,
-      body !== null ? truncBody(body) : null,
-      signature,
-      delaySec,
-    ],
+    [row.id, lastError, code, body !== null ? truncBody(body) : null, signature, delaySec],
   );
 }
 
@@ -289,8 +282,7 @@ async function attempt(row: ClaimedRow): Promise<void> {
     return;
   }
 
-  const rawBody =
-    typeof row.payload === "string" ? row.payload : JSON.stringify(row.payload);
+  const rawBody = typeof row.payload === "string" ? row.payload : JSON.stringify(row.payload);
   const nowSec = Math.floor(Date.now() / 1000);
   const signature = signPayload(rawBody, secret, row.signing_kid, nowSec);
 
@@ -313,17 +305,10 @@ async function attempt(row: ClaimedRow): Promise<void> {
     if (resp.ok) {
       await markSuccess(row, resp.status, body, signature);
     } else {
-      await scheduleRetryOrDlq(
-        row,
-        `http_${resp.status}`,
-        resp.status,
-        body,
-        signature,
-      );
+      await scheduleRetryOrDlq(row, `http_${resp.status}`, resp.status, body, signature);
     }
   } catch (err) {
-    const msg =
-      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
     await scheduleRetryOrDlq(row, msg, null, null, signature);
   }
 }

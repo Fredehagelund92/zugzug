@@ -7,15 +7,15 @@ let cached: Promise<WarehouseAdapter> | null = null;
 async function build(): Promise<WarehouseAdapter> {
   if (env.warehouseAdapter === "disabled") {
     return resolveAdapter({
-      type:     "duckdb",
+      type: "duckdb",
       attached: false,
       writable: false,
     });
   }
   if (env.warehouseAdapter === "motherduck") {
     return resolveAdapter({
-      type:     "duckdb",
-      token:    env.motherduckToken,
+      type: "duckdb",
+      token: env.motherduckToken,
       database: env.warehouseDb,
       attached: true,
       writable: env.motherduckWritable,

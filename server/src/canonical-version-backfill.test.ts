@@ -90,15 +90,7 @@ describe("canonical_version backfill from audit_log", () => {
       `INSERT INTO "zugzug_app"."audit_log"
          (id, created_at, user_id, action, detail, table_id, row_key, tenant_id)
        VALUES ($1, $2::timestamp, $3, 'Added canonical', $4, $5, $6, $7)`,
-      [
-        randomUUID(),
-        historicalLiteral,
-        USER_ID,
-        "Legacy Label (LEGACY)",
-        dimId,
-        legacyKey,
-        T,
-      ],
+      [randomUUID(), historicalLiteral, USER_ID, "Legacy Label (LEGACY)", dimId, legacyKey, T],
     );
     // Read back the audit row's timestamp the same way the UPSERT will — both
     // go through the same Date conversion so any tz offset cancels out.

@@ -45,9 +45,9 @@ describe("resolveMasterKey", () => {
   });
 
   it("throws when neither env nor file is set on hosted SaaS", () => {
-    expect(() =>
-      resolveMasterKey({ envKey: null, file: null, selfHosted: false }),
-    ).toThrow(/master key/i);
+    expect(() => resolveMasterKey({ envKey: null, file: null, selfHosted: false })).toThrow(
+      /master key/i,
+    );
   });
 
   it("self-host with no key + no file returns null (caller auto-generates)", () => {

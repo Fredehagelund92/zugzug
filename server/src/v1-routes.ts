@@ -78,10 +78,7 @@ export async function handleV1Route(req: Request): Promise<Response | null> {
   // Alias redirect — BEFORE auth so we don't burn quota on stale URLs.
   const alias = await lookupAliasedSlug(slugInPath);
   if (alias && alias.currentSlug !== slugInPath) {
-    const newPath = url.pathname.replace(
-      `/api/t/${slugInPath}/`,
-      `/api/t/${alias.currentSlug}/`,
-    );
+    const newPath = url.pathname.replace(`/api/t/${slugInPath}/`, `/api/t/${alias.currentSlug}/`);
     return new Response(null, {
       status: 301,
       headers: { location: newPath + url.search },

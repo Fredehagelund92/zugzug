@@ -22,7 +22,7 @@ import { AppError } from "./errors.ts";
 export interface SessionUser {
   id: string;
   name: string;
-  email: string | null;   // null for service-account synthetic users
+  email: string | null; // null for service-account synthetic users
   initials: string;
   isSuperAdmin: boolean;
   /** Set by POST /api/admin/impersonate; only honored when isSuperAdmin is true. */

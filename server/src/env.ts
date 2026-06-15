@@ -135,9 +135,7 @@ export const env = {
   anthropicApiKey: readOptional("ANTHROPIC_API_KEY"),
   /** Per-credential rate-limit budget for the /v1/ surface. Default 600
    *  req/min; set to 0 to disable. */
-  pullApiRpm: process.env.ZUGZUG_PULL_API_RPM
-    ? Number(process.env.ZUGZUG_PULL_API_RPM)
-    : 600,
+  pullApiRpm: process.env.ZUGZUG_PULL_API_RPM ? Number(process.env.ZUGZUG_PULL_API_RPM) : 600,
 };
 
 /** Qualified Postgres app-state table name: "zugzug_app"."table" */

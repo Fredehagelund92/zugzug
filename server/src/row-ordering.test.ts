@@ -38,8 +38,8 @@ describe("position arithmetic", () => {
 
 describe("rebalance rate limit", () => {
   it("retryAfterSeconds is positive for a recent rebalance", () => {
-    const lastMs     = Date.now() - 10_000; // 10 seconds ago
-    const elapsed    = Date.now() - lastMs;
+    const lastMs = Date.now() - 10_000; // 10 seconds ago
+    const elapsed = Date.now() - lastMs;
     const retryAfter = Math.ceil((60_000 - elapsed) / 1000);
     expect(retryAfter).toBeGreaterThan(0);
     expect(retryAfter).toBeLessThanOrEqual(60);

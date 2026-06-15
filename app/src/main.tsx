@@ -104,9 +104,7 @@ createRoot(root).render(
                       {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
                       <Route
                         path="/app/:tenantSlug/*"
-                        element={
-                          <TenantLayout isSuperAdmin={boot.isSuperAdmin} />
-                        }
+                        element={<TenantLayout isSuperAdmin={boot.isSuperAdmin} />}
                       >
                         <Route element={<AppShell memberships={boot.memberships} />}>
                           <Route index element={<Dashboard />} />
@@ -118,8 +116,14 @@ createRoot(root).render(
                             <Route index element={<Navigate to="general" replace />} />
                             <Route path="general" element={<General />} />
                             <Route path="members" element={<Members />} />
-                            <Route path="tokens" element={<Navigate to="../warehouse#tokens" replace />} />
-                            <Route path="scans" element={<Navigate to="../warehouse#scans" replace />} />
+                            <Route
+                              path="tokens"
+                              element={<Navigate to="../warehouse#tokens" replace />}
+                            />
+                            <Route
+                              path="scans"
+                              element={<Navigate to="../warehouse#scans" replace />}
+                            />
                             <Route path="matching" element={<Matching />} />
                             <Route path="warehouse" element={<Warehouse />} />
                             <Route path="audit" element={<Navigate to="../../audit" replace />} />
@@ -137,7 +141,10 @@ createRoot(root).render(
                             <Route path="profile" element={<Profile />} />
                             <Route path="appearance" element={<AccountAppearance />} />
                             <Route path="memberships" element={<Memberships />} />
-                            <Route path="notifications" element={<Navigate to="../memberships" replace />} />
+                            <Route
+                              path="notifications"
+                              element={<Navigate to="../memberships" replace />}
+                            />
                           </Route>
                         </Route>
                       </Route>

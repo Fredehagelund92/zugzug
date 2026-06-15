@@ -121,12 +121,7 @@ function SidebarLink({ to, label, Icon, count, end, onClick }: SidebarLinkProps)
           />
           <span className="flex-1">{label}</span>
           {count != null && count > 0 && (
-            <span
-              className={cx(
-                "font-mono text-[10px]",
-                isActive ? "text-accent" : "text-ink-3",
-              )}
-            >
+            <span className={cx("font-mono text-[10px]", isActive ? "text-accent" : "text-ink-3")}>
               {count}
             </span>
           )}
@@ -225,7 +220,10 @@ function UserMenu() {
             </div>
             <button
               type="button"
-              onClick={() => { setOpen(false); navigate(`/app/${slug}/account`); }}
+              onClick={() => {
+                setOpen(false);
+                navigate(`/app/${slug}/account`);
+              }}
               className="w-full px-3 py-2 text-left text-[13px] text-ink-2 transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               Account settings

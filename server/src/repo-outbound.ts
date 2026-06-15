@@ -345,10 +345,7 @@ export async function listTombstonesPage(
   if (rows.length > limit) {
     rows.pop();
     const tail = rows[rows.length - 1]!;
-    next = signCursor(
-      { t: tenantId, u: tail.retired_at, k: tail.key, v: 1 },
-      getCursorKey(),
-    );
+    next = signCursor({ t: tenantId, u: tail.retired_at, k: tail.key, v: 1 }, getCursorKey());
   }
 
   return {
@@ -431,10 +428,7 @@ export async function listEventsPage(
   if (rows.length > limit) {
     rows.pop();
     const tail = rows[rows.length - 1]!;
-    next = signCursor(
-      { t: tenantId, u: tail.occurred_at, k: tail.id, v: 1 },
-      getCursorKey(),
-    );
+    next = signCursor({ t: tenantId, u: tail.occurred_at, k: tail.id, v: 1 }, getCursorKey());
   }
 
   return {

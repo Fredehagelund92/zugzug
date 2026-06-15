@@ -22,8 +22,7 @@ export function GetSuggestionButton({ dimensionId, rawValue }: Props) {
       const result = await generateSuggestion(dimensionId, rawValue);
       toast(`AI suggestion: ${result.draft.target_label}`);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Couldn't generate suggestion.";
+      const message = err instanceof Error ? err.message : "Couldn't generate suggestion.";
       toast(message, "error");
     } finally {
       setLoading(false);

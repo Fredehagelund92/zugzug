@@ -21,9 +21,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -60,7 +64,11 @@ describe("dispatchOutbound — writes outbound_event row", () => {
       });
     });
 
-    const row = await pgGet<{ type: string; dim_id: string | null; payload: string | Record<string, unknown> }>(
+    const row = await pgGet<{
+      type: string;
+      dim_id: string | null;
+      payload: string | Record<string, unknown>;
+    }>(
       `SELECT type, dim_id, payload FROM "zugzug_app"."outbound_event"
         WHERE tenant_id = $1 AND idem_key = $2`,
       [T, idemKey],
@@ -76,8 +84,12 @@ describe("dispatchOutbound — writes outbound_event row", () => {
     const idemKey = `dimension.committed:dim_t2:1`;
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
-        tenantId: T, type: "dimension.committed", dimId: "dim_t2",
-        occurredAt: new Date(), payload: {}, idemKey,
+        tenantId: T,
+        type: "dimension.committed",
+        dimId: "dim_t2",
+        occurredAt: new Date(),
+        payload: {},
+        idemKey,
       });
     });
 
@@ -85,8 +97,12 @@ describe("dispatchOutbound — writes outbound_event row", () => {
     try {
       await pgTx(async (tx) => {
         await dispatchOutbound(tx, {
-          tenantId: T, type: "dimension.committed", dimId: "dim_t2",
-          occurredAt: new Date(), payload: {}, idemKey, // same key
+          tenantId: T,
+          type: "dimension.committed",
+          dimId: "dim_t2",
+          occurredAt: new Date(),
+          payload: {},
+          idemKey, // same key
         });
       });
     } catch {
@@ -104,8 +120,11 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
 
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
-        tenantId: T, type: "dimension.committed", dimId: "dim_t3",
-        occurredAt: new Date(), payload: { dim_slug: "country" },
+        tenantId: T,
+        type: "dimension.committed",
+        dimId: "dim_t3",
+        occurredAt: new Date(),
+        payload: { dim_slug: "country" },
         idemKey: `dimension.committed:dim_t3:5`,
       });
     });
@@ -128,8 +147,11 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
 
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
-        tenantId: T, type: "dimension.committed", dimId: "dim_t4",
-        occurredAt: new Date(), payload: {},
+        tenantId: T,
+        type: "dimension.committed",
+        dimId: "dim_t4",
+        occurredAt: new Date(),
+        payload: {},
         idemKey: `dimension.committed:dim_t4:1`,
       });
     });

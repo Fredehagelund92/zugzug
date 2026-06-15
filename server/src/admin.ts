@@ -50,9 +50,7 @@ export async function demoteSuperAdmin(email: string): Promise<{ id: string; ema
 
 const WAREHOUSE_NAME_RE = /^[a-z][a-z0-9_]{2,62}$/;
 
-export function validateWarehouseName(
-  name: string,
-): { ok: true } | { ok: false; reason: string } {
+export function validateWarehouseName(name: string): { ok: true } | { ok: false; reason: string } {
   if (!name) return { ok: false, reason: "name is required" };
   if (!WAREHOUSE_NAME_RE.test(name)) {
     return {

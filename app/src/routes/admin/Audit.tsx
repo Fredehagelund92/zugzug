@@ -51,17 +51,14 @@ export function Audit() {
     [params, setParams],
   );
 
-  const eventTypes = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.action))).sort(),
-    [rows],
-  );
+  const eventTypes = useMemo(() => Array.from(new Set(rows.map((r) => r.action))).sort(), [rows]);
 
   const filteredRows = useMemo(() => {
     return rows.filter((r) => {
       if (onlyElevated) {
         const elevated =
-          (r.metadata as { actor_super_admin?: boolean } | null | undefined)
-            ?.actor_super_admin === true;
+          (r.metadata as { actor_super_admin?: boolean } | null | undefined)?.actor_super_admin ===
+          true;
         if (!elevated) return false;
       }
       if (typeParam && r.action !== typeParam) return false;
@@ -180,7 +177,10 @@ export function Audit() {
         {loading ? (
           <SkeletonList rows={6} columns={[140, 100, 160, "minmax(0,1fr)"]} />
         ) : filteredRows.length === 0 ? (
-          <EmptyState title="No activity yet" body="System activity will appear here as workspaces are created and changed." />
+          <EmptyState
+            title="No activity yet"
+            body="System activity will appear here as workspaces are created and changed."
+          />
         ) : (
           <div className="border border-line divide-y divide-line bg-surface">
             <div className="grid grid-cols-[140px_100px_160px_1fr] gap-4 items-center px-5 py-2.5">

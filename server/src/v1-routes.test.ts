@@ -4,8 +4,7 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.ZUGZUG_CURSOR_KEY =
-  process.env.ZUGZUG_CURSOR_KEY ||
-  "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
+  process.env.ZUGZUG_CURSOR_KEY || "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet } from "./pg.ts";
@@ -104,13 +103,21 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."api_tokens" WHERE user_id = $1`, [ADMIN]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
   if (dimId) {
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${dimId}"`).catch(() => {});
@@ -225,9 +232,7 @@ describe("GET /api/t/:slug/v1/dimensions/:slug/schema", () => {
 
 describe("GET /api/t/:slug/v1/dimensions/:slug/tombstones", () => {
   it("returns 200 with an array (possibly empty)", async () => {
-    const res = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/tombstones`),
-    );
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/tombstones`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { tombstones: unknown[] };
     expect(Array.isArray(body.tombstones)).toBe(true);
@@ -380,12 +385,8 @@ describe("/v1/webhooks routes", () => {
       createdBy: ADMIN,
     });
     // Enqueue one delivery via test endpoint.
-    await handleV1Route(
-      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/test`, { method: "POST" }),
-    );
-    const res = await handleV1Route(
-      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/deliveries`),
-    );
+    await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/test`, { method: "POST" }));
+    const res = await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/deliveries`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { deliveries: Array<{ id: string; payload: unknown }> };
     expect(body.deliveries.length).toBeGreaterThan(0);

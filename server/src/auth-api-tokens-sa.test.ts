@@ -23,7 +23,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
@@ -68,11 +70,14 @@ describe("authenticateBearer — service account tokens", () => {
   });
 
   it("revoked zzsa_ token returns null", async () => {
-    const { value, id: saId } = await createServiceAccount({ tenantId: T, name: "Revoked", createdBy: U });
-    await pgRun(
-      `UPDATE "zugzug_app"."service_account" SET revoked_at = now() WHERE id = $1`,
-      [saId],
-    );
+    const { value, id: saId } = await createServiceAccount({
+      tenantId: T,
+      name: "Revoked",
+      createdBy: U,
+    });
+    await pgRun(`UPDATE "zugzug_app"."service_account" SET revoked_at = now() WHERE id = $1`, [
+      saId,
+    ]);
     const req = new Request("http://test/", { headers: { authorization: `Bearer ${value}` } });
     expect(await authenticateBearer(req)).toBeNull();
   });

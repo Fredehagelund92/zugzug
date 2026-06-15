@@ -135,10 +135,15 @@ export class TenantRepo {
   }
 
   updateDimensionMeta(
-    dimId:  string,
-    patch:  repoCanonical.UpdateDimensionMetaInput,
+    dimId: string,
+    patch: repoCanonical.UpdateDimensionMetaInput,
     userId: string,
-  ): Promise<{ id: string; orderingMode: string; description: string | null; color: string | null }> {
+  ): Promise<{
+    id: string;
+    orderingMode: string;
+    description: string | null;
+    color: string | null;
+  }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
       repoCanonical.updateDimensionMeta(dimId, patch, userId, this.tenantId),

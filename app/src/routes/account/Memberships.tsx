@@ -55,10 +55,7 @@ export function Memberships() {
       hint="Every workspace you belong to. Leave any to remove yourself."
     >
       {memberships.length === 0 ? (
-        <EmptyState
-          title="No memberships yet"
-          body="You haven't joined any workspaces yet."
-        />
+        <EmptyState title="No memberships yet" body="You haven't joined any workspaces yet." />
       ) : (
         <ul className="divide-y divide-line border border-line">
           {memberships.map((m) => (

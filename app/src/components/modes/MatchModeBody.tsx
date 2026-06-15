@@ -746,7 +746,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                                       className={cx(
                                         "rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
                                         d.confidence === "high" && "bg-green-100 text-green-700",
-                                        d.confidence === "medium" && "bg-yellow-100 text-yellow-700",
+                                        d.confidence === "medium" &&
+                                          "bg-yellow-100 text-yellow-700",
                                         d.confidence === "low" && "bg-red-100 text-red-700",
                                       )}
                                       title={d.reasoning ?? undefined}

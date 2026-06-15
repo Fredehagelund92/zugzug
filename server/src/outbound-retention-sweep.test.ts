@@ -79,11 +79,21 @@ beforeAll(async () => {
 });
 
 async function cleanup(): Promise<void> {
-  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id LIKE 'test_sweep_%'`).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id LIKE 'test_sweep_%'`).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id LIKE 'test_sweep_%'`).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id LIKE 'test_sweep_%'`).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id LIKE 'test_sweep_%'`).catch(() => {});
+  await pgRun(
+    `DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id LIKE 'test_sweep_%'`,
+  ).catch(() => {});
+  await pgRun(
+    `DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id LIKE 'test_sweep_%'`,
+  ).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id LIKE 'test_sweep_%'`).catch(
+    () => {},
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id LIKE 'test_sweep_%'`).catch(
+    () => {},
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id LIKE 'test_sweep_%'`).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id LIKE 'test_sweep_%'`).catch(() => {});
 }
 
@@ -99,14 +109,12 @@ describe("outboundRetentionSweepJob", () => {
 
     await outboundRetentionSweepJob.run(ctxFor(t));
 
-    const oldRow = await pgGet(
-      `SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`,
-      [oldId],
-    );
-    const freshRow = await pgGet(
-      `SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`,
-      [freshId],
-    );
+    const oldRow = await pgGet(`SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`, [
+      oldId,
+    ]);
+    const freshRow = await pgGet(`SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`, [
+      freshId,
+    ]);
     expect(oldRow).toBeNull();
     expect(freshRow).not.toBeNull();
   });
@@ -119,14 +127,12 @@ describe("outboundRetentionSweepJob", () => {
 
     await outboundRetentionSweepJob.run(ctxFor(t));
 
-    const oldRow = await pgGet(
-      `SELECT id FROM "zugzug_app"."webhook_delivery" WHERE id = $1`,
-      [oldId],
-    );
-    const freshRow = await pgGet(
-      `SELECT id FROM "zugzug_app"."webhook_delivery" WHERE id = $1`,
-      [freshId],
-    );
+    const oldRow = await pgGet(`SELECT id FROM "zugzug_app"."webhook_delivery" WHERE id = $1`, [
+      oldId,
+    ]);
+    const freshRow = await pgGet(`SELECT id FROM "zugzug_app"."webhook_delivery" WHERE id = $1`, [
+      freshId,
+    ]);
     expect(oldRow).toBeNull();
     expect(freshRow).not.toBeNull();
   });
@@ -189,10 +195,9 @@ describe("outboundRetentionSweepJob", () => {
 
     await outboundRetentionSweepJob.run(ctxFor(t));
 
-    const stillThere = await pgGet(
-      `SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`,
-      [oldEvt],
-    );
+    const stillThere = await pgGet(`SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`, [
+      oldEvt,
+    ]);
     expect(stillThere).not.toBeNull();
 
     // Now set last_sweep to 7 hours ago -> should run.
@@ -205,10 +210,9 @@ describe("outboundRetentionSweepJob", () => {
 
     await outboundRetentionSweepJob.run(ctxFor(t));
 
-    const goneNow = await pgGet(
-      `SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`,
-      [oldEvt],
-    );
+    const goneNow = await pgGet(`SELECT id FROM "zugzug_app"."outbound_event" WHERE id = $1`, [
+      oldEvt,
+    ]);
     expect(goneNow).toBeNull();
   });
 });

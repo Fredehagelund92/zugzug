@@ -79,7 +79,11 @@ interface BaseWarehouseAdapter {
   probeDatabase(databaseName: string): Promise<ProbeResult>;
 
   // Catalog
-  listTables(opts?: { schema?: string; search?: string; database?: string }): Promise<CatalogTable[]>;
+  listTables(opts?: {
+    schema?: string;
+    search?: string;
+    database?: string;
+  }): Promise<CatalogTable[]>;
   listColumns(table: Ref): Promise<ColumnMeta[]>;
   tableExists(table: Ref): Promise<boolean>;
 

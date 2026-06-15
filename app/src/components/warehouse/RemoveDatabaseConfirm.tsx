@@ -20,11 +20,7 @@ interface Dependents {
   dimensions: Array<{ dimId: string; sources: string[] }>;
 }
 
-export function RemoveDatabaseConfirm({
-  database,
-  onCancel,
-  onRemoved,
-}: Props): JSX.Element {
+export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props): JSX.Element {
   const [deps, setDeps] = useState<Dependents | null>(null);
   const [ack, setAck] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +36,10 @@ export function RemoveDatabaseConfirm({
           return;
         }
         if (r.status === 409) {
-          const body = (await r.json()) as { sourceCount?: number; dimensions?: Dependents["dimensions"] };
+          const body = (await r.json()) as {
+            sourceCount?: number;
+            dimensions?: Dependents["dimensions"];
+          };
           setDeps({
             sourceCount: body.sourceCount ?? 0,
             dimensions: body.dimensions ?? [],
@@ -116,15 +115,11 @@ export function RemoveDatabaseConfirm({
                 ))}
               </ul>
               <div className="rounded-sm border border-line bg-bg-2 p-2 text-ink-2">
-                Removing the database also removes these sources from the dimensions.
-                Canonical values stay; only the source binding goes away.
+                Removing the database also removes these sources from the dimensions. Canonical
+                values stay; only the source binding goes away.
               </div>
               <label className="mt-2 flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={ack}
-                  onChange={(e) => setAck(e.target.checked)}
-                />
+                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
                 <span>I understand the sources will be unbound.</span>
               </label>
             </>

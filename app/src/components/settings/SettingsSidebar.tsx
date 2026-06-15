@@ -2,13 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { can, type Action } from "../../lib/permissions";
 import { cx } from "../../lib/cx";
-import {
-  IconSettings,
-  IconUsers,
-  IconWand,
-  IconDatabase,
-  IconOctagonAlert,
-} from "../Icons";
+import { IconSettings, IconUsers, IconWand, IconDatabase, IconOctagonAlert } from "../Icons";
 import type { SVGProps, ComponentType } from "react";
 
 interface Item {

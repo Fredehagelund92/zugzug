@@ -8,7 +8,11 @@ import { pg } from "./env.ts";
 
 export interface DispatchInput {
   tenantId: string;
-  type: "dimension.committed" | "dimension.created" | "dimension.schema.updated" | "canonical.deleted";
+  type:
+    | "dimension.committed"
+    | "dimension.created"
+    | "dimension.schema.updated"
+    | "canonical.deleted";
   dimId?: string | null;
   occurredAt: Date;
   payload: Record<string, unknown>;
@@ -31,7 +35,15 @@ export async function dispatchOutbound(tx: TxHelpers, input: DispatchInput): Pro
     `INSERT INTO ${pg("outbound_event")}
        (id, tenant_id, type, dim_id, occurred_at, payload, idem_key)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-    [eventId, input.tenantId, input.type, input.dimId ?? null, input.occurredAt, JSON.stringify(input.payload), input.idemKey],
+    [
+      eventId,
+      input.tenantId,
+      input.type,
+      input.dimId ?? null,
+      input.occurredAt,
+      JSON.stringify(input.payload),
+      input.idemKey,
+    ],
   );
 
   // Enqueue one delivery per matching subscribed webhook (active only).
@@ -53,7 +65,15 @@ export async function dispatchOutbound(tx: TxHelpers, input: DispatchInput): Pro
           next_attempt_at, payload, signature, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, 'current', false, 'pending', 0, 5,
                  now(), $7::jsonb, '', now())`,
-      [genDeliveryId(), input.tenantId, sub.id, eventId, input.type, sub.url, JSON.stringify(input.payload)],
+      [
+        genDeliveryId(),
+        input.tenantId,
+        sub.id,
+        eventId,
+        input.type,
+        sub.url,
+        JSON.stringify(input.payload),
+      ],
     );
   }
   return eventId;

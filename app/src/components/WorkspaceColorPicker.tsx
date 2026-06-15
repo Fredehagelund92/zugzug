@@ -21,10 +21,7 @@ export function WorkspaceColorPicker({ value, onChange, disabled }: Props) {
           className="w-[22px] h-[22px] rounded-[5px] transition-transform hover:scale-110 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             background: hex,
-            boxShadow:
-              hex === selected
-                ? `0 0 0 2px var(--surface), 0 0 0 4px ${hex}`
-                : undefined,
+            boxShadow: hex === selected ? `0 0 0 2px var(--surface), 0 0 0 4px ${hex}` : undefined,
           }}
         />
       ))}

@@ -141,10 +141,7 @@ async function cleanup(): Promise<void> {
       await createTable({ name: `${SCOPE} no_pick`, mode: "source" }, "u_verify");
       throw new Error("expected error");
     } catch (e) {
-      assert(
-        e instanceof AppError,
-        `expected AppError, got ${(e as Error).message}`,
-      );
+      assert(e instanceof AppError, `expected AppError, got ${(e as Error).message}`);
       // Either MISSING_PICKER (no source) or WAREHOUSE_OFFLINE — depends on env.attachWarehouse
     }
   });

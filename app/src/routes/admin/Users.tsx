@@ -167,7 +167,10 @@ export function Users() {
         {loading ? (
           <SkeletonList rows={5} columns={[24, "minmax(0,1fr)", 160, 80, 100, 120]} />
         ) : filteredUsers.length === 0 ? (
-          <EmptyState title="No users found" body="Try a different search term, filter, or invite teammates from a workspace." />
+          <EmptyState
+            title="No users found"
+            body="Try a different search term, filter, or invite teammates from a workspace."
+          />
         ) : (
           <div className="border border-line divide-y divide-line bg-surface">
             <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5">

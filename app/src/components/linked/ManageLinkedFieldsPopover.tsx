@@ -47,9 +47,7 @@ export function ManageLinkedFieldsPopover(props: Props) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (q === "") return sortedFields;
-    return sortedFields.filter(
-      (f) => f.field === "label" || f.label.toLowerCase().includes(q),
-    );
+    return sortedFields.filter((f) => f.field === "label" || f.label.toLowerCase().includes(q));
   }, [sortedFields, query]);
 
   const toggle = (field: string): void => {
@@ -108,9 +106,7 @@ export function ManageLinkedFieldsPopover(props: Props) {
                 disabled ? "opacity-60" : ""
               }`}
               title={
-                f.type === "linked"
-                  ? "Lookups through another link are not supported"
-                  : undefined
+                f.type === "linked" ? "Lookups through another link are not supported" : undefined
               }
             >
               <span className="flex items-center gap-2">

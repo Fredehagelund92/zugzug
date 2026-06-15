@@ -1,24 +1,24 @@
 // server/src/ai-providers/anthropic.ts
 
-import Anthropic from '@anthropic-ai/sdk'
-import type { AIProvider, SuggestionRequest, SuggestionResponse } from './types'
+import Anthropic from "@anthropic-ai/sdk";
+import type { AIProvider, SuggestionRequest, SuggestionResponse } from "./types";
 import {
   RateLimitError,
   InvalidAPIKeyError,
   AIProviderError,
   AIResponseParseError,
-} from './openai'
+} from "./openai";
 
 export class AnthropicProvider implements AIProvider {
-  private client: Anthropic
+  private client: Anthropic;
 
   constructor(apiKey: string) {
-    if (!apiKey) throw new Error('Anthropic API key is required')
-    this.client = new Anthropic({ apiKey })
+    if (!apiKey) throw new Error("Anthropic API key is required");
+    this.client = new Anthropic({ apiKey });
   }
 
   async suggestMapping(request: SuggestionRequest): Promise<SuggestionResponse> {
-    const { dimensionName, rawValue, existingCanonicalValues } = request
+    const { dimensionName, rawValue, existingCanonicalValues } = request;
 
     const prompt = `You are a data quality specialist. Map the raw value to the most likely canonical value.
 
@@ -26,7 +26,10 @@ Dimension: ${dimensionName}
 Raw value: "${rawValue}"
 
 Existing canonical values in this dimension:
-${existingCanonicalValues.slice(0, 30).map((v) => `- ${v}`).join('\n')}
+${existingCanonicalValues
+  .slice(0, 30)
+  .map((v) => `- ${v}`)
+  .join("\n")}
 
 Respond with valid JSON (no markdown, no extra text):
 {
@@ -40,49 +43,46 @@ Confidence guidelines:
 - "medium": plausible but requires some interpretation or there's ambiguity
 - "low": unclear, requires human domain knowledge, or unlikely to be correct
 
-Always prefer a canonical value that already exists in the dimension if reasonable.`
+Always prefer a canonical value that already exists in the dimension if reasonable.`;
 
-    let message: Anthropic.Message
+    let message: Anthropic.Message;
     try {
       message = await this.client.messages.create({
-        model: 'claude-haiku-4-5',
+        model: "claude-haiku-4-5",
         max_tokens: 256,
-        messages: [{ role: 'user', content: prompt }],
-      })
+        messages: [{ role: "user", content: prompt }],
+      });
     } catch (err) {
       if (err instanceof Anthropic.RateLimitError) {
-        throw new RateLimitError('Anthropic rate limit exceeded')
+        throw new RateLimitError("Anthropic rate limit exceeded");
       }
       if (err instanceof Anthropic.AuthenticationError) {
-        throw new InvalidAPIKeyError('Anthropic API key is invalid')
+        throw new InvalidAPIKeyError("Anthropic API key is invalid");
       }
       if (err instanceof Anthropic.APIError) {
-        throw new AIProviderError(`Anthropic API error: ${err.message}`)
+        throw new AIProviderError(`Anthropic API error: ${err.message}`);
       }
-      throw err
+      throw err;
     }
 
-    const textBlock = message.content.find((b) => b.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') {
-      throw new AIProviderError('Anthropic returned no text content')
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      throw new AIProviderError("Anthropic returned no text content");
     }
 
-    let parsed: SuggestionResponse
+    let parsed: SuggestionResponse;
     try {
-      parsed = JSON.parse(textBlock.text)
+      parsed = JSON.parse(textBlock.text);
     } catch {
-      throw new AIResponseParseError(`Failed to parse Anthropic response: ${textBlock.text}`)
+      throw new AIResponseParseError(`Failed to parse Anthropic response: ${textBlock.text}`);
     }
 
-    if (
-      !parsed.canonical ||
-      !['high', 'medium', 'low'].includes(parsed.confidence)
-    ) {
+    if (!parsed.canonical || !["high", "medium", "low"].includes(parsed.confidence)) {
       throw new AIResponseParseError(
         `Anthropic response missing required fields: ${JSON.stringify(parsed)}`,
-      )
+      );
     }
 
-    return parsed
+    return parsed;
   }
 }

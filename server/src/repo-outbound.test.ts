@@ -4,16 +4,11 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.ZUGZUG_CURSOR_KEY =
-  process.env.ZUGZUG_CURSOR_KEY ||
-  "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
+  process.env.ZUGZUG_CURSOR_KEY || "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
-import {
-  addDimension,
-  mergeCanonical,
-  retireCanonical,
-} from "./repo-canonical.ts";
+import { addDimension, mergeCanonical, retireCanonical } from "./repo-canonical.ts";
 
 // Pull API requires both dim_* row + canonical_version row. The bulk `addCanonical`
 // helper only writes the former, so seed both directly to keep keys verbatim
@@ -81,8 +76,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
   for (const id of createdDims) {
@@ -168,10 +167,14 @@ describe("listCanonicalPage", () => {
 
   it("excludes soft-deleted rows", async () => {
     const dimId = await makeDim("OutSoftDel");
-    await addCanonical(dimId, [
-      { key: "A", label: "Alpha" },
-      { key: "B", label: "Beta" },
-    ], T);
+    await addCanonical(
+      dimId,
+      [
+        { key: "A", label: "Alpha" },
+        { key: "B", label: "Beta" },
+      ],
+      T,
+    );
     const versions = await pgAll<{ key: string; version: number }>(
       `SELECT key, version FROM "zugzug_app"."canonical_version"
        WHERE dim_id = $1 AND tenant_id = $2`,
@@ -218,11 +221,15 @@ describe("getCanonicalRow", () => {
 describe("listTombstonesPage", () => {
   it("returns retired keys with retired_at + retired_into", async () => {
     const dimId = await makeDim("OutTombs");
-    await addCanonical(dimId, [
-      { key: "SURV", label: "Survivor" },
-      { key: "MERGED", label: "Merged" },
-      { key: "RETIRED", label: "Retired" },
-    ], T);
+    await addCanonical(
+      dimId,
+      [
+        { key: "SURV", label: "Survivor" },
+        { key: "MERGED", label: "Merged" },
+        { key: "RETIRED", label: "Retired" },
+      ],
+      T,
+    );
     const versions = await pgAll<{ key: string; version: number }>(
       `SELECT key, version FROM "zugzug_app"."canonical_version"
        WHERE dim_id = $1 AND tenant_id = $2`,
