@@ -348,3 +348,121 @@ describe("teardownTenant cleans up outbound integration tables", () => {
     }
   });
 });
+
+describe("retireCanonical fires canonical.deleted outbound event inside the tx", () => {
+  const DEL_DIM_NAME = "Outbound SD Delete";
+  const DEL_DIM_ID = "outbound_sd_delete";
+  const REF_DIM_NAME = "Outbound SD Refuse";
+  const REF_DIM_ID = "outbound_sd_refuse";
+
+  async function cleanup() {
+    await pgRun(
+      `DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1 AND type = 'canonical.deleted'`,
+      [T],
+    ).catch(() => {});
+    for (const id of [DEL_DIM_ID, REF_DIM_ID]) {
+      await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1`, [id]).catch(
+        () => {},
+      );
+      await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE dim_id = $1`, [id]).catch(
+        () => {},
+      );
+      await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [id]).catch(() => {});
+      // dim_/map_ live in the canonical schema ("zugzug"), not the app schema.
+      await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${id}"`).catch(() => {});
+      await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${id}"`).catch(() => {});
+      await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${id}"`).catch(() => {});
+      await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${id}"`).catch(() => {});
+    }
+  }
+
+  it("writes outbound_event with dim_slug/key/label/deleted_by when retire succeeds", async () => {
+    await cleanup();
+    const dimId = await addDimension(DEL_DIM_NAME, [], {}, USER_ID, T);
+    expect(dimId).toBe(DEL_DIM_ID);
+
+    // addCanonicalOne(label="Beta") → slug() lowercases to key "beta".
+    await addCanonicalOne(dimId, "Beta", undefined, USER_ID, T);
+
+    const v = await pgGet<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'beta'`,
+      [dimId, T],
+    );
+    expect(v).not.toBeNull();
+
+    const result = await retireCanonical(dimId, "beta", USER_ID, v!.version, T);
+    expect(result.ok).toBe(true);
+
+    const evt = await pgGet<{
+      type: string;
+      dim_id: string | null;
+      payload: unknown;
+      idem_key: string;
+    }>(
+      `SELECT type, dim_id, payload, idem_key FROM "zugzug_app"."outbound_event"
+        WHERE tenant_id = $1 AND type = 'canonical.deleted' AND dim_id = $2`,
+      [T, dimId],
+    );
+    expect(evt).not.toBeNull();
+    expect(evt!.type).toBe("canonical.deleted");
+    expect(evt!.dim_id).toBe(dimId);
+    expect(evt!.idem_key.startsWith(`canonical.deleted:${dimId}:beta:`)).toBe(true);
+
+    const payload =
+      typeof evt!.payload === "string"
+        ? (JSON.parse(evt!.payload) as Record<string, unknown>)
+        : (evt!.payload as Record<string, unknown>);
+    expect(payload.dim_slug).toBe(dimId);
+    expect(payload.key).toBe("beta");
+    expect(payload.label).toBe("Beta");
+    const deletedBy = payload.deleted_by as { id: string } | undefined;
+    expect(deletedBy?.id).toBe(USER_ID);
+
+    await cleanup();
+  });
+
+  it("does NOT write an outbound_event when retire is refused due to live variants", async () => {
+    await cleanup();
+    const dimId = await addDimension(REF_DIM_NAME, [], {}, USER_ID, T);
+    expect(dimId).toBe(REF_DIM_ID);
+
+    await addCanonicalOne(dimId, "Gamma", undefined, USER_ID, T);
+
+    const m = await pgGet<{ map_table: string; key_col: string }>(
+      `SELECT map_table, key_col FROM "zugzug_app"."dimension"
+        WHERE id = $1 AND tenant_id = $2`,
+      [dimId, T],
+    );
+    expect(m).not.toBeNull();
+
+    // Seed a raw variant pointing at "gamma" so retire refuses.
+    // m.map_table is schema-qualified, e.g. "zugzug_app.map_outbound_sd_refuse".
+    const [schemaName, tableName] = m!.map_table.split(".");
+    await pgRun(
+      `INSERT INTO "${schemaName}"."${tableName}" (raw, "${m!.key_col}", tenant_id)
+       VALUES ($1, $2, $3)`,
+      ["g-raw", "gamma", T],
+    );
+
+    const v = await pgGet<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."canonical_version"
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = 'gamma'`,
+      [dimId, T],
+    );
+    expect(v).not.toBeNull();
+
+    const result = await retireCanonical(dimId, "gamma", USER_ID, v!.version, T);
+    expect(result.ok).toBe(false);
+    expect(result.variants).toBeGreaterThan(0);
+
+    const count = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
+        WHERE tenant_id = $1 AND type = 'canonical.deleted' AND dim_id = $2`,
+      [T, dimId],
+    );
+    expect(count!.n).toBe(0);
+
+    await cleanup();
+  });
+});
