@@ -6,24 +6,17 @@ import { checkRateLimit } from "./rate-limit.ts";
 const CRED = "sa_test_rate_limit";
 
 beforeAll(async () => {
-  await pgRun(
-    `DELETE FROM "zugzug_app"."auth_credential_quota" WHERE credential_id = $1`,
-    [CRED],
-  ).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."auth_credential_quota" WHERE credential_id = $1`, [
+    CRED,
+  ]).catch(() => {});
 });
 
 beforeEach(async () => {
-  await pgRun(
-    `DELETE FROM "zugzug_app"."auth_credential_quota" WHERE credential_id = $1`,
-    [CRED],
-  );
+  await pgRun(`DELETE FROM "zugzug_app"."auth_credential_quota" WHERE credential_id = $1`, [CRED]);
 });
 
 afterAll(async () => {
-  await pgRun(
-    `DELETE FROM "zugzug_app"."auth_credential_quota" WHERE credential_id = $1`,
-    [CRED],
-  );
+  await pgRun(`DELETE FROM "zugzug_app"."auth_credential_quota" WHERE credential_id = $1`, [CRED]);
 });
 
 describe("checkRateLimit — fixed-window counter", () => {

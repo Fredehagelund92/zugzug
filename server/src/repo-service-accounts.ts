@@ -56,21 +56,24 @@ export async function createServiceAccount(input: CreateInput): Promise<CreateRe
         created_at, created_by, expires_at)
      VALUES ($1, $2, $3, $4, $5, ARRAY['read']::varchar[],
              current_timestamp, $6, ($7::timestamptz AT TIME ZONE 'UTC'))`,
-    [id, input.tenantId, input.name.trim(), hash, value.slice(0, 12), input.createdBy, input.expiresAt ?? null],
+    [
+      id,
+      input.tenantId,
+      input.name.trim(),
+      hash,
+      value.slice(0, 12),
+      input.createdBy,
+      input.expiresAt ?? null,
+    ],
   );
-  await appendAuditAs(
-    input.createdBy,
-    "Created service account",
-    input.name.trim(),
-    {
-      tenantId: input.tenantId,
-      metadata: {
-        service_account_id: id,
-        scopes: ["read"],
-        expires_at: input.expiresAt?.toISOString() ?? null,
-      },
+  await appendAuditAs(input.createdBy, "Created service account", input.name.trim(), {
+    tenantId: input.tenantId,
+    metadata: {
+      service_account_id: id,
+      scopes: ["read"],
+      expires_at: input.expiresAt?.toISOString() ?? null,
     },
-  );
+  });
   return { id, value };
 }
 
@@ -124,14 +127,9 @@ export async function revokeServiceAccount(
     [id, tenantId],
   );
   if (!row) return false;
-  await appendAuditAs(
-    userId,
-    "Revoked service account",
-    row.name,
-    {
-      tenantId,
-      metadata: { service_account_id: id },
-    },
-  );
+  await appendAuditAs(userId, "Revoked service account", row.name, {
+    tenantId,
+    metadata: { service_account_id: id },
+  });
   return true;
 }

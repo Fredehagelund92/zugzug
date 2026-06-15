@@ -35,18 +35,16 @@ beforeAll(async () => {
 afterAll(async () => {
   server.stop(true);
   // Clean test tenants we created (prefix test_disp_)
-  await pgRun(
-    `DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id LIKE 'test_disp_%'`,
-  ).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id LIKE 'test_disp_%'`).catch(
+    () => {},
+  );
   await pgRun(
     `DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id LIKE 'test_disp_%'`,
   ).catch(() => {});
-  await pgRun(
-    `DELETE FROM "zugzug_app"."webhook" WHERE tenant_id LIKE 'test_disp_%'`,
-  ).catch(() => {});
-  await pgRun(
-    `DELETE FROM "zugzug_app"."tenant" WHERE id LIKE 'test_disp_%'`,
-  ).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id LIKE 'test_disp_%'`).catch(
+    () => {},
+  );
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id LIKE 'test_disp_%'`).catch(() => {});
 });
 
 beforeEach(() => {

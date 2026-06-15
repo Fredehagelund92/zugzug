@@ -94,9 +94,7 @@ export abstract class DuckDbBase {
         async () => {
           const conn = await this.connect();
           const quoted = this.quoteIdentifier(databaseName);
-          await conn.runAndReadAll(
-            `SELECT 1 FROM ${quoted}.information_schema.schemata LIMIT 1`,
-          );
+          await conn.runAndReadAll(`SELECT 1 FROM ${quoted}.information_schema.schemata LIMIT 1`);
         },
         5_000,
         "probeDatabase",

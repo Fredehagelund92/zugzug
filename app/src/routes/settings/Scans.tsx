@@ -118,10 +118,7 @@ export function Scans() {
             </div>
             <div className="flex items-center gap-2">
               {scanNow.isPending && (
-                <span
-                  className="font-mono text-[10.5px] text-ink-3"
-                  aria-live="polite"
-                >
+                <span className="font-mono text-[10.5px] text-ink-3" aria-live="polite">
                   scanning…
                 </span>
               )}
@@ -133,7 +130,10 @@ export function Scans() {
         )}
 
         {!status && !statusError && prefs.scanSchedule && (
-          <SkeletonRow columns={[16, "minmax(0,1fr)", 80]} className="rounded-sm border border-line bg-surface-2 py-3" />
+          <SkeletonRow
+            columns={[16, "minmax(0,1fr)", 80]}
+            className="rounded-sm border border-line bg-surface-2 py-3"
+          />
         )}
 
         {statusError && (

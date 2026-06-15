@@ -39,10 +39,7 @@ import { AppError } from "./errors.ts";
  *  if the gap is <= 1 (caller must rebalance first).
  *  pAbove = position of row above the insertion point (null = inserting at top).
  *  pBelow = position of row below the insertion point (null = inserting at bottom). */
-export function computeInsertPosition(
-  pAbove: bigint | null,
-  pBelow: bigint | null,
-): bigint | null {
+export function computeInsertPosition(pAbove: bigint | null, pBelow: bigint | null): bigint | null {
   if (pAbove === null && pBelow === null) return 1024n;
   if (pAbove === null) return pBelow! - 1024n;
   if (pBelow === null) return pAbove + 1024n;
@@ -604,14 +601,7 @@ export async function addDimension(
       `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
-      [
-        id,
-        tenantId,
-        s.databaseId,
-        s.schemaName,
-        s.tableName,
-        s.columnName,
-      ],
+      [id, tenantId, s.databaseId, s.schemaName, s.tableName, s.columnName],
     );
   }
   return id;
@@ -1123,7 +1113,8 @@ export async function updateField(
 
     if ("targetDimId" in incomingParsed) {
       const incomingTarget = String(incomingParsed.targetDimId ?? "");
-      const currentTarget = typeof currentCfg.targetDimId === "string" ? currentCfg.targetDimId : "";
+      const currentTarget =
+        typeof currentCfg.targetDimId === "string" ? currentCfg.targetDimId : "";
       if (currentTarget !== "" && incomingTarget !== "" && incomingTarget !== currentTarget) {
         throw new Error("targetDimId is immutable after creation; delete and recreate the field");
       }
@@ -1604,20 +1595,20 @@ export async function setFieldValue(
 
 export interface UpdateDimensionMetaInput {
   orderingMode?: "derived" | "manual";
-  description?:  string | null;
-  color?:        string | null;
+  description?: string | null;
+  color?: string | null;
 }
 
 export async function updateDimensionMeta(
-  dimId:    string,
-  patch:    UpdateDimensionMetaInput,
-  userId:   string,
+  dimId: string,
+  patch: UpdateDimensionMetaInput,
+  userId: string,
   tenantId: string,
 ): Promise<{ id: string; orderingMode: string; description: string | null; color: string | null }> {
   const current = await pgGet<{
     dimTable: string;
-    keyCol:   string;
-    keyKind:  string;
+    keyCol: string;
+    keyKind: string;
     mapTable: string;
     orderingMode: string;
     description: string | null;
@@ -1638,27 +1629,30 @@ export async function updateDimensionMeta(
       throw new AppError("VALIDATION_FAILED", `unknown color: ${patch.color}`, 422);
     }
   }
-  if (patch.orderingMode !== undefined &&
-      patch.orderingMode !== "derived" && patch.orderingMode !== "manual") {
+  if (
+    patch.orderingMode !== undefined &&
+    patch.orderingMode !== "derived" &&
+    patch.orderingMode !== "manual"
+  ) {
     throw new AppError("VALIDATION_FAILED", `unknown orderingMode: ${patch.orderingMode}`, 422);
   }
 
-  const modeChanges = patch.orderingMode !== undefined && patch.orderingMode !== current.orderingMode;
+  const modeChanges =
+    patch.orderingMode !== undefined && patch.orderingMode !== current.orderingMode;
 
   // Build SET clause for scalar fields only
-  const sets: string[]  = [];
+  const sets: string[] = [];
   const vals: unknown[] = [dimId, tenantId];
-  let p = 3;
   if (patch.description !== undefined) {
-    sets.push(`description = $${p++}`);
+    sets.push(`description = $${vals.length + 1}`);
     vals.push(patch.description?.trim() || null);
   }
   if (patch.color !== undefined) {
-    sets.push(`color = $${p++}`);
+    sets.push(`color = $${vals.length + 1}`);
     vals.push(patch.color ?? null);
   }
   if (modeChanges) {
-    sets.push(`ordering_mode = $${p++}`);
+    sets.push(`ordering_mode = $${vals.length + 1}`);
     vals.push(patch.orderingMode!);
   }
   if (sets.length > 0) {
@@ -1670,7 +1664,7 @@ export async function updateDimensionMeta(
 
   if (modeChanges) {
     const DIMT = cq(current.dimTable);
-    const k    = qid(current.keyCol);
+    const k = qid(current.keyCol);
     const tiebreak = current.keyKind === "external_id" ? k : "d.label";
 
     if (patch.orderingMode === "manual") {
@@ -1681,13 +1675,14 @@ export async function updateDimensionMeta(
          ORDER BY COALESCE(v.n, 0) DESC, ${tiebreak}`,
       );
       for (let i = 0; i < rows.length; i++) {
-        await pgRun(
-          `UPDATE ${DIMT} SET position = $1 WHERE ${k} = $2`,
-          [(i + 1) * 1024, rows[i]!.key],
-        );
+        await pgRun(`UPDATE ${DIMT} SET position = $1 WHERE ${k} = $2`, [
+          (i + 1) * 1024,
+          rows[i]!.key,
+        ]);
       }
       await appendAuditAs(userId, "Switched ordering mode", `derived → manual`, {
-        tableId: dimId, tenantId,
+        tableId: dimId,
+        tenantId,
         metadata: { from: "derived", to: "manual", backfilledRows: rows.length },
       });
     } else {
@@ -1697,18 +1692,18 @@ export async function updateDimensionMeta(
          SELECT count(*)::int AS n FROM upd`,
       ).catch(() => ({ n: 0 }));
       await appendAuditAs(userId, "Switched ordering mode", `manual → derived`, {
-        tableId: dimId, tenantId,
+        tableId: dimId,
+        tenantId,
         metadata: { from: "manual", to: "derived", nulledRows: result?.n ?? 0 },
       });
     }
   }
 
   return {
-    id:           dimId,
+    id: dimId,
     orderingMode: modeChanges ? patch.orderingMode! : current.orderingMode,
-    description:  patch.description !== undefined
-      ? (patch.description?.trim() || null)
-      : current.description,
+    description:
+      patch.description !== undefined ? patch.description?.trim() || null : current.description,
     color: patch.color !== undefined ? (patch.color ?? null) : current.color,
   };
 }
@@ -1718,23 +1713,27 @@ export async function updateDimensionMeta(
 // ---------------------------------------------------------------------------
 
 export async function rebalanceDimPositions(
-  dimId:    string,
-  m:        { dimTable: string; keyCol: string },
-  userId:   string,
+  dimId: string,
+  m: { dimTable: string; keyCol: string },
+  userId: string,
   tenantId: string,
-  trigger:  "manual" | "collision" | "threshold",
+  trigger: "manual" | "collision" | "threshold",
 ): Promise<number> {
   const DIMT = cq(m.dimTable);
-  const KC   = qid(m.keyCol);
+  const KC = qid(m.keyCol);
   const rows = await pgAll<{ key: string }>(
     `SELECT ${KC} AS key FROM ${DIMT} WHERE position IS NOT NULL ORDER BY position ASC`,
   );
   for (let i = 0; i < rows.length; i++) {
-    await pgRun(`UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`, [(i + 1) * 1024, rows[i]!.key]);
+    await pgRun(`UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`, [
+      (i + 1) * 1024,
+      rows[i]!.key,
+    ]);
   }
   if (trigger !== "collision") {
     await appendAuditAs(userId, "Rebalanced positions", `${rows.length} rows`, {
-      tableId: dimId, tenantId,
+      tableId: dimId,
+      tenantId,
       metadata: { rebalancedRows: rows.length, trigger },
     });
   }
@@ -1742,22 +1741,22 @@ export async function rebalanceDimPositions(
 }
 
 export async function addCanonicalOneAt(
-  dimId:     string,
-  label:     string,
-  key:       string | undefined,
-  insertAt:  { anchor: string; direction: "above" | "below" },
-  userId:    string,
-  tenantId:  string,
+  dimId: string,
+  label: string,
+  key: string | undefined,
+  insertAt: { anchor: string; direction: "above" | "below" },
+  userId: string,
+  tenantId: string,
 ): Promise<void> {
   const m = await dimMeta(dimId, tenantId);
   if (!m) return;
   if (m.orderingMode !== "manual") {
     return addCanonicalOne(dimId, label, key, userId, tenantId);
   }
-  const k    = (key && slug(key)) || slug(label);
+  const k = (key && slug(key)) || slug(label);
   if (!k) return;
   const DIMT = cq(m.dimTable);
-  const KC   = qid(m.keyCol);
+  const KC = qid(m.keyCol);
 
   const anchor = await pgGet<{ position: string | null }>(
     `SELECT position FROM ${DIMT} WHERE ${KC} = $1`,
@@ -1787,8 +1786,8 @@ export async function addCanonicalOneAt(
   }
 
   const pAbove = insertAt.direction === "above" ? neighbourPos : anchorPos;
-  const pBelow = insertAt.direction === "above" ? anchorPos    : neighbourPos;
-  let newPos   = computeInsertPosition(pAbove, pBelow);
+  const pBelow = insertAt.direction === "above" ? anchorPos : neighbourPos;
+  let newPos = computeInsertPosition(pAbove, pBelow);
 
   if (newPos === null) {
     await rebalanceDimPositions(dimId, m, userId, tenantId, "collision");
@@ -1796,20 +1795,25 @@ export async function addCanonicalOneAt(
       `SELECT position FROM ${DIMT} WHERE ${KC} = $1`,
       [insertAt.anchor],
     );
-    if (!refreshed?.position) throw new AppError("NOT_FOUND", `anchor ${insertAt.anchor} not found after rebalance`, 404);
+    if (!refreshed?.position)
+      throw new AppError("NOT_FOUND", `anchor ${insertAt.anchor} not found after rebalance`, 404);
     const ap2 = BigInt(refreshed.position);
     if (insertAt.direction === "above") {
       const prev2 = await pgGet<{ position: string | null }>(
         `SELECT position FROM ${DIMT} WHERE position IS NOT NULL AND position < $1 ORDER BY position DESC LIMIT 1`,
         [String(ap2)],
       );
-      newPos = computeInsertPosition(prev2?.position == null ? null : BigInt(prev2.position), ap2) ?? (ap2 - 512n);
+      newPos =
+        computeInsertPosition(prev2?.position == null ? null : BigInt(prev2.position), ap2) ??
+        ap2 - 512n;
     } else {
       const next2 = await pgGet<{ position: string | null }>(
         `SELECT position FROM ${DIMT} WHERE position IS NOT NULL AND position > $1 ORDER BY position ASC LIMIT 1`,
         [String(ap2)],
       );
-      newPos = computeInsertPosition(ap2, next2?.position == null ? null : BigInt(next2.position)) ?? (ap2 + 512n);
+      newPos =
+        computeInsertPosition(ap2, next2?.position == null ? null : BigInt(next2.position)) ??
+        ap2 + 512n;
     }
   }
 
@@ -1823,7 +1827,9 @@ export async function addCanonicalOneAt(
   });
 
   await appendAuditAs(userId, "Inserted canonical at position", `${label} (${k})`, {
-    tableId: dimId, rowKey: k, tenantId,
+    tableId: dimId,
+    rowKey: k,
+    tenantId,
     metadata: { key: k, anchor: insertAt.anchor, direction: insertAt.direction },
   });
 }
@@ -1832,11 +1838,11 @@ export async function addCanonicalOneAt(
  *  before / after are the keys of the immediate neighbours in the desired
  *  final order (null = move to top/bottom). */
 export async function reorderCanonicalRow(
-  dimId:    string,
-  rowKey:   string,
-  before:   string | null | undefined,
-  after:    string | null | undefined,
-  userId:   string,
+  dimId: string,
+  rowKey: string,
+  before: string | null | undefined,
+  after: string | null | undefined,
+  userId: string,
   tenantId: string,
 ): Promise<{ position: string }> {
   const m = await dimMeta(dimId, tenantId);
@@ -1845,7 +1851,7 @@ export async function reorderCanonicalRow(
     throw new AppError("CONFLICT", "dimension is not in manual ordering mode", 409);
   }
   const DIMT = cq(m.dimTable);
-  const KC   = qid(m.keyCol);
+  const KC = qid(m.keyCol);
 
   return await pgTx(async (tx) => {
     // Verify target exists
@@ -1857,7 +1863,7 @@ export async function reorderCanonicalRow(
 
     // Resolve anchor positions
     let pBefore: bigint | null = null;
-    let pAfter:  bigint | null = null;
+    let pAfter: bigint | null = null;
 
     if (before != null) {
       const br = await tx.get<{ position: string | null }>(
@@ -1873,7 +1879,7 @@ export async function reorderCanonicalRow(
         [rowKey],
       );
       pBefore = null;
-      pAfter  = minRow?.p == null ? null : BigInt(minRow.p);
+      pAfter = minRow?.p == null ? null : BigInt(minRow.p);
     }
 
     if (after != null) {
@@ -1890,7 +1896,7 @@ export async function reorderCanonicalRow(
         [rowKey],
       );
       pBefore = maxRow?.p == null ? null : BigInt(maxRow.p);
-      pAfter  = null;
+      pAfter = null;
     }
 
     // Verify anchors are still consecutive (detect stale drag)
@@ -1907,8 +1913,7 @@ export async function reorderCanonicalRow(
 
     // Idempotent check — already in the right slot
     const tPos = target.position == null ? null : BigInt(target.position);
-    if (tPos !== null && pBefore !== null && pAfter !== null &&
-        tPos > pBefore && tPos < pAfter) {
+    if (tPos !== null && pBefore !== null && pAfter !== null && tPos > pBefore && tPos < pAfter) {
       return { position: String(tPos) };
     }
 
@@ -1917,13 +1922,12 @@ export async function reorderCanonicalRow(
       throw new AppError("CONFLICT", "positions too tight, rebalance needed", 409);
     }
 
-    await tx.run(
-      `UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`,
-      [String(newPos), rowKey],
-    );
+    await tx.run(`UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`, [String(newPos), rowKey]);
 
     await appendAuditAs(userId, "Reordered canonical", rowKey, {
-      tableId: dimId, rowKey, tenantId,
+      tableId: dimId,
+      rowKey,
+      tenantId,
       metadata: { key: rowKey, before: before ?? null, after: after ?? null },
     });
 

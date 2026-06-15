@@ -95,7 +95,10 @@ export async function listDeliveries(
   opts: ListDeliveriesOpts = {},
 ): Promise<{ deliveries: DeliverySummary[] }> {
   const role: Role = opts.role ?? "admin";
-  const limit = Math.max(1, Math.min(200, Number.isFinite(opts.limit) ? (opts.limit as number) : 50));
+  const limit = Math.max(
+    1,
+    Math.min(200, Number.isFinite(opts.limit) ? (opts.limit as number) : 50),
+  );
   const params: unknown[] = [tenantId, webhookId];
   let statusFilter = "";
   if (opts.status) {
@@ -203,9 +206,7 @@ export async function replayDelivery(
 
   const newId = `whd_${crypto.randomUUID().replace(/-/g, "")}`;
   const payloadStr =
-    typeof original.payload === "string"
-      ? original.payload
-      : JSON.stringify(original.payload);
+    typeof original.payload === "string" ? original.payload : JSON.stringify(original.payload);
   await pgRun(
     `INSERT INTO ${pg("webhook_delivery")}
        (id, tenant_id, webhook_id, event_id, event_type, delivery_url,

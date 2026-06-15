@@ -6,11 +6,11 @@ import type { WarehouseAdapter } from "./adapter.ts";
 function fakeAdapter(): WarehouseAdapter {
   return {
     ping: async () => undefined,
-    listDatabases:    async () => [],
-    probeDatabase:    async () => ({ ok: true as const }),
-    listTables:       async () => [],
+    listDatabases: async () => [],
+    probeDatabase: async () => ({ ok: true as const }),
+    listTables: async () => [],
     distinctValuesWithProvenance: async () => [],
-    nameResolution:   async () => new Map(),
+    nameResolution: async () => new Map(),
   } as unknown as WarehouseAdapter;
 }
 
@@ -26,7 +26,9 @@ describe("getAdapter singleton", () => {
         constructed++;
         return fakeAdapter();
       },
-      snowflake: async () => { throw new Error("nope"); },
+      snowflake: async () => {
+        throw new Error("nope");
+      },
     });
     const a = await getAdapter();
     const b = await getAdapter();

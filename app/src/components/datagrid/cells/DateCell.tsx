@@ -257,10 +257,7 @@ function Editor<Row>({ value, initial, commit, cancel, anchorRef }: DateEditorPr
           </div>
           <div className="grid grid-cols-7 gap-0.5">
             {WEEKDAYS.map((w) => (
-              <div
-                key={w}
-                className="py-0.5 text-center font-mono text-[10px] text-ink-3"
-              >
+              <div key={w} className="py-0.5 text-center font-mono text-[10px] text-ink-3">
                 {w}
               </div>
             ))}

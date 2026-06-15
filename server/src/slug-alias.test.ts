@@ -13,7 +13,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."tenant_slug_alias" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."tenant_slug_alias" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
 

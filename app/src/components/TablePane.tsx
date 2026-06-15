@@ -792,7 +792,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               />
               <div>
                 <div className="font-medium">Derived</div>
-                <div className="text-[12px] text-ink-3">Sort by variant count, then alphabetically. Best for reference data.</div>
+                <div className="text-[12px] text-ink-3">
+                  Sort by variant count, then alphabetically. Best for reference data.
+                </div>
               </div>
             </label>
             <label className="flex cursor-pointer items-start gap-2">
@@ -811,7 +813,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 <div className="text-[12px] text-ink-3">
                   Persisted drag-orderable order. Best for workflow stages.
                   {dim.orderingMode === "manual" && (
-                    <> Currently {list.length} row{list.length === 1 ? "" : "s"} positioned.</>
+                    <>
+                      {" "}
+                      Currently {list.length} row{list.length === 1 ? "" : "s"} positioned.
+                    </>
                   )}
                 </div>
               </div>
@@ -886,8 +891,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         {dim.orderingMode === "manual" && !!layout.sort && !dismissedSortBanner.has(activeId) && (
           <div className="flex h-8 shrink-0 items-center gap-2 border-b border-rule bg-surface-2 px-3 text-[12px] text-ink-2">
             <span className="flex-1 truncate">
-              ⇅ Sorted by {layout.sort.column}{" "}
-              {layout.sort.direction === "asc" ? "↑" : "↓"} — manual order is hidden
+              ⇅ Sorted by {layout.sort.column} {layout.sort.direction === "asc" ? "↑" : "↓"} —
+              manual order is hidden
             </span>
             <button
               className="shrink-0 text-accent hover:underline"
@@ -1370,9 +1375,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
 
       <ConfirmDialog
         open={deleteColumnConfirm !== null}
-        title={
-          deleteColumnConfirm ? `Delete "${deleteColumnConfirm.label}"?` : "Delete column?"
-        }
+        title={deleteColumnConfirm ? `Delete "${deleteColumnConfirm.label}"?` : "Delete column?"}
         body={
           deleteColumnConfirm && (
             <>

@@ -50,7 +50,7 @@ import {
   countAdmins,
   removeMember,
   updateTenantLabel,
-  updateTenantColor,    // ← add
+  updateTenantColor, // ← add
   updateTenantSlug,
   leaveTenant,
 } from "./tenant.ts";
@@ -235,7 +235,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
   if (pathname === "/api/me/memberships" && method === "GET") {
     const memberships = await listMembershipsForUser(sessionUser.id);
-    let workspaces: { slug: string; label: string; role: "admin" | "editor" | "viewer"; color: string | null }[];
+    let workspaces: {
+      slug: string;
+      label: string;
+      role: "admin" | "editor" | "viewer";
+      color: string | null;
+    }[];
     if (sessionUser.isSuperAdmin) {
       const allTenants = await listTenants();
       const memberMap = new Map(memberships.map((m) => [m.tenant.id, m.role]));
@@ -345,9 +350,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
         const databases = await listWarehouseDatabases();
         return json({
-          adapter:        env.warehouseAdapter,
+          adapter: env.warehouseAdapter,
           configuredFrom: "env",
-          envVarName:     env.warehouseAdapter === "motherduck" ? "MOTHERDUCK_TOKEN" : null,
+          envVarName: env.warehouseAdapter === "motherduck" ? "MOTHERDUCK_TOKEN" : null,
           bootValidation: { ok: true },
           databases,
         });
@@ -447,7 +452,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     // GET /api/warehouse/databases/available — adapter discovery + registration overlay.
     // Super-admin only (write-adjacent).
     if (seg[2] === "databases" && seg[3] === "available" && seg.length === 4 && method === "GET") {
-      if (!sessionUser.isSuperAdmin) return json({ error: "forbidden", reason: "super_admin_required" }, 403);
+      if (!sessionUser.isSuperAdmin)
+        return json({ error: "forbidden", reason: "super_admin_required" }, 403);
       const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
       const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
       const adapter = await getAdapterFn();
@@ -457,19 +463,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json(
           discovered.map((d) => ({
             databaseName: d.databaseName,
-            registered:   registered.has(d.databaseName),
+            registered: registered.has(d.databaseName),
           })),
         );
       } catch (discoverErr) {
         const msg = discoverErr instanceof Error ? discoverErr.message : String(discoverErr);
-        if (msg.includes("listDatabases exceeded")) return json({ kind: "DISCOVERY_TIMED_OUT" }, 504);
+        if (msg.includes("listDatabases exceeded"))
+          return json({ kind: "DISCOVERY_TIMED_OUT" }, 504);
         throw discoverErr;
       }
     }
 
     // POST /api/warehouse/databases — super-admin only
     if (seg[2] === "databases" && seg.length === 3 && method === "POST") {
-      if (!sessionUser.isSuperAdmin) return json({ error: "forbidden", reason: "super_admin_required" }, 403);
+      if (!sessionUser.isSuperAdmin)
+        return json({ error: "forbidden", reason: "super_admin_required" }, 403);
       const body = (await req.json()) as { databaseName: string; label?: string };
       if (!/^[A-Za-z_][A-Za-z0-9_]{0,254}$/.test(body.databaseName)) {
         return json({ kind: "INVALID_IDENTIFIER", databaseName: body.databaseName }, 422);
@@ -488,8 +496,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (!probe.ok) return json({ kind: "PROBE_FAILED", reason: probe.reason }, 422);
       const wd = await addWarehouseDatabase({
         databaseName: body.databaseName,
-        label:        body.label,
-        actorUserId:  me,
+        label: body.label,
+        actorUserId: me,
       });
       await appendAuditAs(me, "warehouse.database.add", body.databaseName, {
         metadata: { label: body.label ?? null, databaseId: wd.id },
@@ -499,7 +507,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // PATCH /api/warehouse/databases/:id — super-admin only
     if (seg[2] === "databases" && seg.length === 4 && method === "PATCH") {
-      if (!sessionUser.isSuperAdmin) return json({ error: "forbidden", reason: "super_admin_required" }, 403);
+      if (!sessionUser.isSuperAdmin)
+        return json({ error: "forbidden", reason: "super_admin_required" }, 403);
       const body = (await req.json()) as { label?: string | null };
       if (body.label !== undefined) {
         const { updateDatabaseLabel } = await import("./repo-warehouse.ts");
@@ -510,7 +519,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // DELETE /api/warehouse/databases/:id — super-admin only
     if (seg[2] === "databases" && seg.length === 4 && method === "DELETE") {
-      if (!sessionUser.isSuperAdmin) return json({ error: "forbidden", reason: "super_admin_required" }, 403);
+      if (!sessionUser.isSuperAdmin)
+        return json({ error: "forbidden", reason: "super_admin_required" }, 403);
       const force = url.searchParams.get("force") === "true";
       const { removeDatabase } = await import("./repo-warehouse.ts");
       let out;
@@ -529,9 +539,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
       await appendAuditAs(me, "warehouse.database.remove", out.snapshot.databaseName, {
         metadata: {
-          databaseName:       out.snapshot.databaseName,
-          databaseLabel:      out.snapshot.label,
-          forced:             force,
+          databaseName: out.snapshot.databaseName,
+          databaseLabel: out.snapshot.label,
+          forced: force,
           unboundSourceCount: out.snapshot.sourceCount,
         },
       });
@@ -701,15 +711,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         );
         if (!exists) return json({ error: "not_found" }, 404);
         await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
-        await appendAuditAs(
-          me,
-          "member.role",
-          `set ${targetUserId} role to ${body.role}`,
-          {
-            tenantId: tenantCtx.tenantId,
-            metadata: { actor_super_admin: gate.elevated, target_user_id: targetUserId },
-          },
-        );
+        await appendAuditAs(me, "member.role", `set ${targetUserId} role to ${body.role}`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated, target_user_id: targetUserId },
+        });
         return new Response(null, { status: 204, headers: corsHeaders });
       }
       // DELETE /api/t/:slug/team/members/:userId
@@ -740,15 +745,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (!gate.ok) return json({ error: "forbidden" }, 403);
         const body = (await req.json()) as { email: string; role: "admin" | "editor" | "viewer" };
         await createInvite(tenantCtx.tenantId, body.email, body.role, me);
-        await appendAuditAs(
-          me,
-          "invite.create",
-          `invited ${body.email} as ${body.role}`,
-          {
-            tenantId: tenantCtx.tenantId,
-            metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
-          },
-        );
+        await appendAuditAs(me, "invite.create", `invited ${body.email} as ${body.role}`, {
+          tenantId: tenantCtx.tenantId,
+          metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
+        });
         return json({ ok: true }, 201);
       }
       // DELETE /api/t/:slug/team/invites/:email
@@ -992,7 +992,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const patch = (await req.json()) as import("./repo-canonical.ts").UpdateDimensionMetaInput;
+          const patch =
+            (await req.json()) as import("./repo-canonical.ts").UpdateDimensionMetaInput;
           const dim = await reqRepo.updateDimensionMeta(id, patch, me);
           return json({ ok: true, dim });
         }
@@ -1256,7 +1257,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             if (denied) return denied;
             const { before, after } = (await req.json()) as {
               before?: string | null;
-              after?:  string | null;
+              after?: string | null;
             };
             try {
               const result = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
@@ -1304,7 +1305,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return json(await reqRepo.commit(id, me));
         }
         // POST /api/dimensions/:id/positions/rebalance
-        if (seg[3] === "positions" && seg[4] === "rebalance" && seg.length === 5 && method === "POST") {
+        if (
+          seg[3] === "positions" &&
+          seg[4] === "rebalance" &&
+          seg.length === 5 &&
+          method === "POST"
+        ) {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
 
@@ -1323,7 +1329,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               `SELECT last_rebalanced_at FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
               [id, tenantCtx.tenantId],
             );
-            const lastMs     = existing?.last_rebalanced_at ? new Date(existing.last_rebalanced_at).getTime() : 0;
+            const lastMs = existing?.last_rebalanced_at
+              ? new Date(existing.last_rebalanced_at).getTime()
+              : 0;
             const retryAfter = Math.ceil((60_000 - (Date.now() - lastMs)) / 1000);
             return json(
               {
@@ -1434,8 +1442,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               return json(
                 {
                   error: "RATE_LIMITED",
-                  detail:
-                    "AI provider rate limit exceeded; try again in a few seconds",
+                  detail: "AI provider rate limit exceeded; try again in a few seconds",
                 },
                 429,
               );
@@ -1455,8 +1462,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               return json(
                 {
                   error: "AI_SERVICE_ERROR",
-                  detail:
-                    "AI service is temporarily unavailable; please try again",
+                  detail: "AI service is temporarily unavailable; please try again",
                 },
                 500,
               );

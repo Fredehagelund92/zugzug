@@ -7,11 +7,7 @@
 
 import { pgGet, pgRun } from "./pg.ts";
 import { pg as pgTable } from "./env.ts";
-import {
-  getAIProvider,
-  InvalidAPIKeyError,
-  type AIProviderType,
-} from "./ai-providers/index.ts";
+import { getAIProvider, InvalidAPIKeyError, type AIProviderType } from "./ai-providers/index.ts";
 
 export interface SuggestionContext {
   dimensionId: string;
@@ -60,9 +56,7 @@ export async function generateSuggestion(
     throw new AINotEnabledError("AI is not enabled for this workspace");
   }
   if (!config.ai_api_key) {
-    throw new InvalidAPIKeyError(
-      "AI API key is not configured for this workspace",
-    );
+    throw new InvalidAPIKeyError("AI API key is not configured for this workspace");
   }
 
   const provider = getAIProvider(config.ai_provider, config.ai_api_key);
@@ -175,8 +169,7 @@ async function getTenantAIConfig(tenantId: string): Promise<TenantAIConfig> {
     return { ai_enabled: false, ai_provider: "openai" };
   }
 
-  const provider: AIProviderType =
-    row.ai_provider === "anthropic" ? "anthropic" : "openai";
+  const provider: AIProviderType = row.ai_provider === "anthropic" ? "anthropic" : "openai";
 
   return {
     ai_enabled: row.ai_enabled,

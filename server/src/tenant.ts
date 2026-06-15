@@ -13,8 +13,16 @@ import { recordSlugAlias } from "./slug-alias.ts";
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
 export const WORKSPACE_COLORS = [
-  "#6366f1", "#8b5cf6", "#ec4899", "#ef4444", "#f97316",
-  "#f59e0b", "#10b981", "#14b8a6", "#3b82f6", "#64748b",
+  "#6366f1",
+  "#8b5cf6",
+  "#ec4899",
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#10b981",
+  "#14b8a6",
+  "#3b82f6",
+  "#64748b",
 ] as const;
 
 function assertValidColor(color: string): void {

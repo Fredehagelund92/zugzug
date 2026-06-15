@@ -212,8 +212,14 @@ export function Warehouse() {
     <div className="space-y-8">
       <DatabasesSection />
       <ConnectionsSection />
-      <div id="scans"><Scans /></div>
-      {canViewTokens && <div id="tokens"><Tokens /></div>}
+      <div id="scans">
+        <Scans />
+      </div>
+      {canViewTokens && (
+        <div id="tokens">
+          <Tokens />
+        </div>
+      )}
     </div>
   );
 }

@@ -158,8 +158,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
             cancel={() => onStopEdit()}
             options={c.config.options}
             onCreate={async (label: string, color) => {
-              if (!onAddColumnOption)
-                return c.config.type === "select" ? c.config.options : [];
+              if (!onAddColumnOption) return c.config.type === "select" ? c.config.options : [];
               return await onAddColumnOption(c.field, label, color);
             }}
           />
@@ -222,10 +221,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
   );
 }
 
-function gridCellAreEqual<Row>(
-  prev: GridCellProps<Row>,
-  next: GridCellProps<Row>,
-): boolean {
+function gridCellAreEqual<Row>(prev: GridCellProps<Row>, next: GridCellProps<Row>): boolean {
   return (
     prev.row === next.row &&
     prev.column === next.column &&
@@ -379,9 +375,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         const inRangeCell = cellInRange(rk, c.field);
         const value = getValue(row, c.field);
         const isLastCol = idx === columns.length - 1;
-        const isFirstPinned = !!(
-          c.pinnedLeft && !columns.slice(0, idx).some((x) => x.pinnedLeft)
-        );
+        const isFirstPinned = !!(c.pinnedLeft && !columns.slice(0, idx).some((x) => x.pinnedLeft));
         const ruleStyle: RuleStyle | undefined = evaluation.cellStyles.get(c.field);
         return (
           <GridCell

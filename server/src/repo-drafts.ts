@@ -110,11 +110,13 @@ export async function createDraft(
   input: CreateDraftInput,
   userId: string,
   tenantId: string,
-): Promise<Draft & {
-  source: "user" | "ai";
-  confidence: "high" | "medium" | "low" | null;
-  reasoning: string | null;
-}> {
+): Promise<
+  Draft & {
+    source: "user" | "ai";
+    confidence: "high" | "medium" | "low" | null;
+    reasoning: string | null;
+  }
+> {
   const {
     dim_id,
     raw,
@@ -179,10 +181,9 @@ export async function createDraft(
     throw new Error(`createDraft: failed to read back inserted draft ${dim_id}/${raw}`);
   }
 
-  const user = await pgGet<User>(
-    `SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`,
-    [row.uid],
-  );
+  const user = await pgGet<User>(`SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`, [
+    row.uid,
+  ]);
 
   return {
     dimId: row.dimId,
@@ -222,7 +223,13 @@ export async function commit(
   rowsRecovered: number;
   warehouseSynced: "n/a" | "synced" | "failed";
 }> {
-  const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; label: string; orderingMode: string }>(
+  const meta = await pgGet<{
+    dimTable: string;
+    mapTable: string;
+    keyCol: string;
+    label: string;
+    orderingMode: string;
+  }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label,
             COALESCE(ordering_mode, 'derived') AS "orderingMode"
      FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,

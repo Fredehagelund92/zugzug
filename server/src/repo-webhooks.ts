@@ -9,10 +9,7 @@
 
 import { pg, env } from "./env.ts";
 import { pgRun, pgGet, pgAll, pgTx } from "./pg.ts";
-import {
-  generateWebhookSecret,
-  encryptWebhookSecret,
-} from "./webhook-secrets.ts";
+import { generateWebhookSecret, encryptWebhookSecret } from "./webhook-secrets.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 
 /* ---------- URL validation ---------- */
@@ -154,9 +151,7 @@ function toSummary(r: SummaryRow): WebhookSummary {
 
 /* ---------- createWebhook ---------- */
 
-export async function createWebhook(
-  input: CreateWebhookInput,
-): Promise<CreateWebhookResult> {
+export async function createWebhook(input: CreateWebhookInput): Promise<CreateWebhookResult> {
   const url = normalizeAndValidateUrl(input.url);
   validateEvents(input.events);
 
@@ -211,10 +206,7 @@ export async function listWebhooks(tenantId: string): Promise<WebhookSummary[]> 
 
 /* ---------- getWebhook ---------- */
 
-export async function getWebhook(
-  tenantId: string,
-  id: string,
-): Promise<WebhookSummary | null> {
+export async function getWebhook(tenantId: string, id: string): Promise<WebhookSummary | null> {
   const row = await pgGet<SummaryRow>(
     `SELECT ${SUMMARY_COLS}
        FROM ${pg("webhook")}
@@ -311,10 +303,7 @@ export async function deleteWebhook(
           AND status IN ('pending', 'in_flight', 'retry')`,
       [id, tenantId],
     );
-    await tx.run(
-      `DELETE FROM ${pg("webhook")} WHERE id = $1 AND tenant_id = $2`,
-      [id, tenantId],
-    );
+    await tx.run(`DELETE FROM ${pg("webhook")} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
     return wh;
   });
   if (!result) return false;
@@ -328,9 +317,7 @@ export async function deleteWebhook(
 
 /* ---------- rotateSecret ---------- */
 
-export async function rotateSecret(
-  input: RotateSecretInput,
-): Promise<RotateSecretResult> {
+export async function rotateSecret(input: RotateSecretInput): Promise<RotateSecretResult> {
   const existing = await pgGet<{ url: string }>(
     `SELECT url FROM ${pg("webhook")} WHERE id = $1 AND tenant_id = $2`,
     [input.id, input.tenantId],
@@ -373,11 +360,7 @@ export async function rotateSecret(
 
 /* ---------- pauseWebhook ---------- */
 
-export async function pauseWebhook(
-  tenantId: string,
-  id: string,
-  userId: string,
-): Promise<boolean> {
+export async function pauseWebhook(tenantId: string, id: string, userId: string): Promise<boolean> {
   const row = await pgGet<{ url: string }>(
     `UPDATE ${pg("webhook")}
         SET status = 'paused',

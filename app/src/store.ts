@@ -502,7 +502,11 @@ export async function addDimension(
 
 export async function patchDimension(
   dimId: string,
-  patch: { orderingMode?: "derived" | "manual"; description?: string | null; color?: string | null },
+  patch: {
+    orderingMode?: "derived" | "manual";
+    description?: string | null;
+    color?: string | null;
+  },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}`, {
     method: "PATCH",
@@ -1171,9 +1175,13 @@ export interface CatalogResult {
  *  resolves it to the catalog name on the connected adapter. When `null` we
  *  skip the network call and return an empty result so callers can render a
  *  "pick a database" affordance without an extra guard. */
-export async function searchCatalog(
-  opts: { database: string | null; q?: string; schema?: string; limit?: number; offset?: number },
-): Promise<CatalogResult> {
+export async function searchCatalog(opts: {
+  database: string | null;
+  q?: string;
+  schema?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<CatalogResult> {
   if (!opts.database) return { rows: [], total: 0, schemas: [] };
   const qs = new URLSearchParams();
   qs.set("database", opts.database);
@@ -1284,9 +1292,7 @@ async function refetchCurrentUser(): Promise<void> {
 async function refetchMemberships(): Promise<void> {
   const res = await authFetch("/me/memberships");
   if (!res.ok) return;
-  const body = (await res.json().catch(() => null)) as
-    | { memberships?: MembershipLite[] }
-    | null;
+  const body = (await res.json().catch(() => null)) as { memberships?: MembershipLite[] } | null;
   if (body && Array.isArray(body.memberships)) {
     memberships = body.memberships;
     emit();

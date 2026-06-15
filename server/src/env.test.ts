@@ -22,7 +22,7 @@ describe("validateWarehouseEnv", () => {
 
   it("ATTACH_WAREHOUSE=true + WAREHOUSE_ADAPTER=motherduck + no token: fails", () => {
     const result = validateWarehouseEnv({
-      ATTACH_WAREHOUSE:  "true",
+      ATTACH_WAREHOUSE: "true",
       WAREHOUSE_ADAPTER: "motherduck",
     });
     expect(result.ok).toBe(false);
@@ -33,9 +33,9 @@ describe("validateWarehouseEnv", () => {
 
   it("ATTACH_WAREHOUSE=true + WAREHOUSE_ADAPTER=motherduck + token: ok", () => {
     const result = validateWarehouseEnv({
-      ATTACH_WAREHOUSE:  "true",
+      ATTACH_WAREHOUSE: "true",
       WAREHOUSE_ADAPTER: "motherduck",
-      MOTHERDUCK_TOKEN:  "test-token",
+      MOTHERDUCK_TOKEN: "test-token",
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -45,7 +45,7 @@ describe("validateWarehouseEnv", () => {
 
   it("WAREHOUSE_ADAPTER=snowflake: fails (stub not supported)", () => {
     const result = validateWarehouseEnv({
-      ATTACH_WAREHOUSE:  "true",
+      ATTACH_WAREHOUSE: "true",
       WAREHOUSE_ADAPTER: "snowflake",
     });
     expect(result.ok).toBe(false);
@@ -56,7 +56,7 @@ describe("validateWarehouseEnv", () => {
 
   it("WAREHOUSE_ADAPTER=unknown: fails", () => {
     const result = validateWarehouseEnv({
-      ATTACH_WAREHOUSE:  "true",
+      ATTACH_WAREHOUSE: "true",
       WAREHOUSE_ADAPTER: "bigquery",
     });
     expect(result.ok).toBe(false);
@@ -67,9 +67,9 @@ describe("validateWarehouseEnv", () => {
 
   it("empty MOTHERDUCK_TOKEN treated as unset", () => {
     const result = validateWarehouseEnv({
-      ATTACH_WAREHOUSE:  "true",
+      ATTACH_WAREHOUSE: "true",
       WAREHOUSE_ADAPTER: "motherduck",
-      MOTHERDUCK_TOKEN:  "",
+      MOTHERDUCK_TOKEN: "",
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {

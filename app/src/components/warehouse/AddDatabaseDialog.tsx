@@ -25,7 +25,9 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
   useEffect(() => {
     authFetch("/warehouse/databases/available")
       .then((r) =>
-        r.ok ? (r.json() as Promise<Discovered[]>) : Promise.reject(new Error(`status ${r.status}`)),
+        r.ok
+          ? (r.json() as Promise<Discovered[]>)
+          : Promise.reject(new Error(`status ${r.status}`)),
       )
       .then(setDiscovered)
       .catch(() => setDiscoverFailed(true));
@@ -62,9 +64,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
     if (r.ok) {
       props.onAdded();
     } else {
-      const body = await r
-        .json()
-        .catch(() => ({}) as { reason?: string; kind?: string });
+      const body = await r.json().catch(() => ({}) as { reason?: string; kind?: string });
       setProbeError(
         (body as { reason?: string; kind?: string }).reason ??
           (body as { kind?: string }).kind ??
@@ -91,9 +91,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
               Discovered
             </div>
             {discoverFailed ? (
-              <div className="text-[12.5px] text-ink-2">
-                Could not enumerate — enter manually.
-              </div>
+              <div className="text-[12.5px] text-ink-2">Could not enumerate — enter manually.</div>
             ) : discovered.length === 0 ? (
               <div className="text-[12.5px] text-ink-2">Loading…</div>
             ) : (

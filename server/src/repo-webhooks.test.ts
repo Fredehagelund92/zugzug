@@ -33,7 +33,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -160,12 +162,8 @@ describe("listWebhooks + getWebhook", () => {
     expect(found).toBeDefined();
     expect(found!.secretPrefix).toBe(created.value.slice(0, 12));
     // No ciphertext-shaped property
-    expect(
-      (found as unknown as { secret_ciphertext?: unknown }).secret_ciphertext,
-    ).toBeUndefined();
-    expect(
-      (found as unknown as { secretCiphertext?: unknown }).secretCiphertext,
-    ).toBeUndefined();
+    expect((found as unknown as { secret_ciphertext?: unknown }).secret_ciphertext).toBeUndefined();
+    expect((found as unknown as { secretCiphertext?: unknown }).secretCiphertext).toBeUndefined();
   });
 
   it("listWebhooks is tenant-scoped (no cross-tenant leakage)", async () => {
@@ -359,9 +357,9 @@ describe("rotateSecret", () => {
   });
 
   it("throws webhook_not_found for unknown id", async () => {
-    await expect(
-      rotateSecret({ tenantId: T, id: "wh_missing", userId: U }),
-    ).rejects.toThrow(/webhook_not_found/);
+    await expect(rotateSecret({ tenantId: T, id: "wh_missing", userId: U })).rejects.toThrow(
+      /webhook_not_found/,
+    );
   });
 });
 

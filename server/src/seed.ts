@@ -80,9 +80,8 @@ export async function seedDemo(): Promise<void> {
   // addSource() needs a registered warehouse_database to resolve schema.table.
   // In dev without ATTACH_WAREHOUSE, skip source attachment.
   const hasWarehouse =
-    (await pgGet<{ id: string }>(
-      `SELECT id FROM "zugzug_app"."warehouse_database" LIMIT 1`,
-    )) != null;
+    (await pgGet<{ id: string }>(`SELECT id FROM "zugzug_app"."warehouse_database" LIMIT 1`)) !=
+    null;
   await seedDimension("Country", "country", COUNTRY_SOURCES, COUNTRY_CANONICAL, hasWarehouse);
   await seedDimension(
     "Product Category",

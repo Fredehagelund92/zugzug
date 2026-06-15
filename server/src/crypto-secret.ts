@@ -53,7 +53,9 @@ export function resolveMasterKey(opts: ResolveOpts): Buffer | null {
   if (opts.envKey) {
     const buf = Buffer.from(opts.envKey, "base64");
     if (buf.length !== 32) {
-      throw new Error("ZUGZUG_WEBHOOK_MASTER_KEY must decode to 32 bytes (base64 of 32 random bytes)");
+      throw new Error(
+        "ZUGZUG_WEBHOOK_MASTER_KEY must decode to 32 bytes (base64 of 32 random bytes)",
+      );
     }
     return buf;
   }
@@ -61,7 +63,9 @@ export function resolveMasterKey(opts: ResolveOpts): Buffer | null {
     const raw = readFileSync(opts.file).toString("utf8").trim();
     const buf = Buffer.from(raw, "base64");
     if (buf.length !== 32) {
-      throw new Error(`ZUGZUG_WEBHOOK_MASTER_KEY_FILE (${opts.file}) must contain base64 of 32 bytes`);
+      throw new Error(
+        `ZUGZUG_WEBHOOK_MASTER_KEY_FILE (${opts.file}) must contain base64 of 32 bytes`,
+      );
     }
     return buf;
   }

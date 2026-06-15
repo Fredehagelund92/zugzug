@@ -46,11 +46,7 @@ export function verifyCursor(
     return { ok: false, reason: "cursor_invalid" };
   }
   const dot = cursor.indexOf(".");
-  if (
-    dot <= 0 ||
-    dot === cursor.length - 1 ||
-    cursor.indexOf(".", dot + 1) >= 0
-  ) {
+  if (dot <= 0 || dot === cursor.length - 1 || cursor.indexOf(".", dot + 1) >= 0) {
     return { ok: false, reason: "cursor_invalid" };
   }
   const bodyB64 = cursor.slice(0, dot);
@@ -63,9 +59,7 @@ export function verifyCursor(
   } catch {
     return { ok: false, reason: "cursor_invalid" };
   }
-  const expected = createHmac("sha256", keyBuffer(keyB64))
-    .update(bodyBuf)
-    .digest();
+  const expected = createHmac("sha256", keyBuffer(keyB64)).update(bodyBuf).digest();
   if (expected.length !== sigBuf.length || !timingSafeEqual(expected, sigBuf)) {
     return { ok: false, reason: "cursor_invalid" };
   }

@@ -22,14 +22,10 @@ describe("runWithConcurrency", () => {
   });
 
   it("errors in a work item resolve that slot to null", async () => {
-    const out = await runWithConcurrency(
-      [1, 2, 3],
-      2,
-      async (n) => {
-        if (n === 2) throw new Error("boom");
-        return n;
-      },
-    );
+    const out = await runWithConcurrency([1, 2, 3], 2, async (n) => {
+      if (n === 2) throw new Error("boom");
+      return n;
+    });
     expect(out).toEqual([1, null, 3]);
   });
 

@@ -112,7 +112,11 @@ export function Workspaces() {
       {/* Workspace list */}
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <SkeletonList rows={4} columns={[20, 160, "minmax(0,1fr)", 140, 72, 120]} data-testid="workspaces-skeleton" />
+          <SkeletonList
+            rows={4}
+            columns={[20, 160, "minmax(0,1fr)", 140, 72, 120]}
+            data-testid="workspaces-skeleton"
+          />
         ) : tenants.length === 0 ? (
           <EmptyState
             title="No workspaces yet"
@@ -274,7 +278,9 @@ export function Workspaces() {
                       : "??"}
                   </span>
                 </div>
-                <span className="text-xs text-ink-2 truncate max-w-[140px]">{label || "Preview"}</span>
+                <span className="text-xs text-ink-2 truncate max-w-[140px]">
+                  {label || "Preview"}
+                </span>
               </div>
             </div>
           </div>
