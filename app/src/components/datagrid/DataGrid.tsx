@@ -28,6 +28,69 @@ interface RangeState {
   focus: RangeCorner;
 }
 
+// ── RangeOutline — absolute border around the current range. Re-measures on
+// every render (range changes propagate via selector deps), so during a fill
+// drag the rectangle grows in lockstep with setRange. Dashed while dragging
+// so the extension reads as a preview rather than a committed selection.
+function RangeOutline({
+  topLeftSelector,
+  bottomRightSelector,
+  containerRef,
+  dragging,
+}: {
+  topLeftSelector: string;
+  bottomRightSelector: string;
+  containerRef: React.RefObject<HTMLDivElement>;
+  dragging: boolean;
+}) {
+  const [rect, setRect] = useState<{
+    top:    number;
+    left:   number;
+    width:  number;
+    height: number;
+  } | null>(null);
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const update = () => {
+      const tl = container.querySelector<HTMLElement>(topLeftSelector);
+      const br = container.querySelector<HTMLElement>(bottomRightSelector);
+      if (!tl || !br) {
+        setRect(null);
+        return;
+      }
+      const cRect = container.getBoundingClientRect();
+      const tlRect = tl.getBoundingClientRect();
+      const brRect = br.getBoundingClientRect();
+      setRect({
+        top:    tlRect.top - cRect.top + container.scrollTop,
+        left:   tlRect.left - cRect.left + container.scrollLeft,
+        width:  brRect.right - tlRect.left,
+        height: brRect.bottom - tlRect.top,
+      });
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    container.addEventListener("scroll", update);
+    return () => {
+      ro.disconnect();
+      container.removeEventListener("scroll", update);
+    };
+  }, [topLeftSelector, bottomRightSelector, containerRef]);
+  if (!rect) return null;
+  return (
+    <div
+      data-range-outline=""
+      style={{ position: "absolute", ...rect }}
+      className={cx(
+        "pointer-events-none z-[15] rounded-[2px] border-[2px] border-accent",
+        dragging && "border-dashed",
+      )}
+    />
+  );
+}
+
 // ── FillHandle — absolutely-positioned 8×8 accent square ────────────────────
 function FillHandle({
   targetSelector,
@@ -311,16 +374,26 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     flashCell,
   });
 
-  // Selector for the bottom-right cell of the current range (used to anchor
-  // the fill handle square). Recalculated whenever the range changes.
-  const fillHandlePos = useMemo(() => {
+  // Selectors for the top-left and bottom-right cells of the current range.
+  // Used to anchor the fill handle (bottom-right) and the range outline (both
+  // corners). Recalculated whenever the range changes — during a fill drag
+  // this means the outline rect grows as setRange advances the focus row.
+  const rangeCornerSelectors = useMemo(() => {
     if (!range) return null;
     const bounds = computeRangeBounds(range);
+    const firstRow = sortedRows[bounds.minRow];
     const lastRow = sortedRows[bounds.maxRow];
+    const firstCol = orderedVisible[bounds.minCol];
     const lastCol = orderedVisible[bounds.maxCol];
-    if (!lastRow || !lastCol) return null;
-    return `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`;
+    if (!firstRow || !lastRow || !firstCol || !lastCol) return null;
+    const multiCell = bounds.minRow !== bounds.maxRow || bounds.minCol !== bounds.maxCol;
+    return {
+      topLeft:     `[data-cell="${attrEsc(`${rowKey(firstRow)}::${firstCol.field}`)}"]`,
+      bottomRight: `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`,
+      multiCell,
+    };
   }, [range, sortedRows, orderedVisible, rowKey, computeRangeBounds]);
+  const fillHandlePos = rangeCornerSelectors?.bottomRight ?? null;
 
   // ── Conditional formatting ─────────────────────────────────────────────────
   const condFmt = useConditionalFormatting(orderedVisible, getValue);
@@ -1298,6 +1371,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           props.onReorderRow && "zz-row-reorderable",
         )}
       >
+        {rangeCornerSelectors?.multiCell && (
+          <RangeOutline
+            topLeftSelector={rangeCornerSelectors.topLeft}
+            bottomRightSelector={rangeCornerSelectors.bottomRight}
+            containerRef={cursor.ref}
+            dragging={fillHandle.dragging}
+          />
+        )}
         {fillHandlePos && (
           <FillHandle
             targetSelector={fillHandlePos}
