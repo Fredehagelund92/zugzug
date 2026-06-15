@@ -24,6 +24,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -95,7 +96,7 @@ describe("listServiceAccounts", () => {
 
   it("does NOT return revoked rows", async () => {
     const r = await createServiceAccount({ tenantId: T, name: "to_revoke", createdBy: U });
-    await revokeServiceAccount(T, r.id);
+    await revokeServiceAccount(T, r.id, U);
     const list = await listServiceAccounts(T);
     expect(list.find((sa) => sa.id === r.id)).toBeUndefined();
   });
@@ -110,6 +111,7 @@ describe("listServiceAccounts", () => {
     const r = await createServiceAccount({ tenantId: tt, name: "other_tenant", createdBy: U });
     const list = await listServiceAccounts(T);
     expect(list.find((sa) => sa.id === r.id)).toBeUndefined();
+    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [tt]);
     await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [tt]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [tt]);
   });
@@ -118,7 +120,7 @@ describe("listServiceAccounts", () => {
 describe("revokeServiceAccount", () => {
   it("sets revoked_at on matching row, returns true", async () => {
     const r = await createServiceAccount({ tenantId: T, name: "revoke_target", createdBy: U });
-    const ok = await revokeServiceAccount(T, r.id);
+    const ok = await revokeServiceAccount(T, r.id, U);
     expect(ok).toBe(true);
     const row = await pgGet<{ revoked_at: Date | null }>(
       `SELECT revoked_at FROM "zugzug_app"."service_account" WHERE id = $1`,
@@ -129,12 +131,45 @@ describe("revokeServiceAccount", () => {
 
   it("returns false for wrong-tenant id", async () => {
     const r = await createServiceAccount({ tenantId: T, name: "for_other_tenant", createdBy: U });
-    const ok = await revokeServiceAccount("other_tenant", r.id);
+    const ok = await revokeServiceAccount("other_tenant", r.id, U);
     expect(ok).toBe(false);
     const row = await pgGet<{ revoked_at: Date | null }>(
       `SELECT revoked_at FROM "zugzug_app"."service_account" WHERE id = $1`,
       [r.id],
     );
     expect(row!.revoked_at).toBeNull();
+  });
+});
+
+describe("audit rows", () => {
+  it("createServiceAccount writes an audit row", async () => {
+    const before = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."audit_log"
+        WHERE tenant_id = $1 AND action = 'Created service account'`,
+      [T],
+    );
+    await createServiceAccount({ tenantId: T, name: "audit_create", createdBy: U });
+    const after = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."audit_log"
+        WHERE tenant_id = $1 AND action = 'Created service account'`,
+      [T],
+    );
+    expect(after!.n).toBe(before!.n + 1);
+  });
+
+  it("revokeServiceAccount writes an audit row", async () => {
+    const r = await createServiceAccount({ tenantId: T, name: "audit_revoke", createdBy: U });
+    const before = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."audit_log"
+        WHERE tenant_id = $1 AND action = 'Revoked service account'`,
+      [T],
+    );
+    await revokeServiceAccount(T, r.id, U);
+    const after = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."audit_log"
+        WHERE tenant_id = $1 AND action = 'Revoked service account'`,
+      [T],
+    );
+    expect(after!.n).toBe(before!.n + 1);
   });
 });

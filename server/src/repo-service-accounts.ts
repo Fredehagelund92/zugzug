@@ -7,6 +7,7 @@
 
 import { pg } from "./env.ts";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
+import { appendAuditAs } from "./repo-meta.ts";
 
 const SA_PREFIX = "zzsa_";
 
@@ -57,6 +58,19 @@ export async function createServiceAccount(input: CreateInput): Promise<CreateRe
              current_timestamp, $6, ($7::timestamptz AT TIME ZONE 'UTC'))`,
     [id, input.tenantId, input.name.trim(), hash, value.slice(0, 12), input.createdBy, input.expiresAt ?? null],
   );
+  await appendAuditAs(
+    input.createdBy,
+    "Created service account",
+    input.name.trim(),
+    {
+      tenantId: input.tenantId,
+      metadata: {
+        service_account_id: id,
+        scopes: ["read"],
+        expires_at: input.expiresAt?.toISOString() ?? null,
+      },
+    },
+  );
   return { id, value };
 }
 
@@ -97,13 +111,27 @@ export async function listServiceAccounts(tenantId: string): Promise<ServiceAcco
 }
 
 /** Returns true if the row matched the tenant AND was newly revoked. */
-export async function revokeServiceAccount(tenantId: string, id: string): Promise<boolean> {
-  const row = await pgGet<{ revoked: boolean }>(
+export async function revokeServiceAccount(
+  tenantId: string,
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  const row = await pgGet<{ revoked: boolean; name: string }>(
     `UPDATE ${pg("service_account")}
         SET revoked_at = current_timestamp
       WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL
-      RETURNING true AS revoked`,
+      RETURNING true AS revoked, name`,
     [id, tenantId],
   );
-  return !!row;
+  if (!row) return false;
+  await appendAuditAs(
+    userId,
+    "Revoked service account",
+    row.name,
+    {
+      tenantId,
+      metadata: { service_account_id: id },
+    },
+  );
+  return true;
 }
