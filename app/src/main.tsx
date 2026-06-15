@@ -28,6 +28,11 @@ import { Workspaces } from "./routes/admin/Workspaces";
 import { Users as AdminUsers } from "./routes/admin/Users";
 import { Audit as AdminAudit } from "./routes/admin/Audit";
 import { Warehouses as AdminWarehouses } from "./routes/admin/Warehouses";
+import { IntegrationsLayout } from "./routes/integrations/IntegrationsLayout";
+import { PullApi } from "./routes/integrations/PullApi";
+import { Webhooks } from "./routes/integrations/Webhooks";
+import { WebhookDetail } from "./routes/integrations/WebhookDetail";
+import { ServiceAccounts } from "./routes/integrations/ServiceAccounts";
 import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
 import { Appearance as AccountAppearance } from "./routes/account/Appearance";
@@ -119,6 +124,13 @@ createRoot(root).render(
                             <Route path="warehouse" element={<Warehouse />} />
                             <Route path="audit" element={<Navigate to="../../audit" replace />} />
                             <Route path="danger" element={<Danger />} />
+                          </Route>
+                          <Route path="integrations" element={<IntegrationsLayout />}>
+                            <Route index element={<Navigate to="pull-api" replace />} />
+                            <Route path="pull-api" element={<PullApi />} />
+                            <Route path="webhooks" element={<Webhooks />} />
+                            <Route path="webhooks/:id" element={<WebhookDetail />} />
+                            <Route path="service-accounts" element={<ServiceAccounts />} />
                           </Route>
                           <Route path="account" element={<Account />}>
                             <Route index element={<Navigate to="profile" replace />} />
