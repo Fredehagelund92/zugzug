@@ -72,7 +72,7 @@ export async function removeDatabase(
   opts:       { force: boolean } = { force: false },
 ): Promise<
   | { ok: true; snapshot: { databaseName: string; label: string | null; sourceCount: number } }
-  | { ok: false; sourceCount: number; dimensions: string[] }
+  | { ok: false; sourceCount: number; dimensions: Array<{ dimId: string; sources: string[] }> }
 > {
   const row = await pgGet<{ database_name: string; label: string | null }>(
     `SELECT database_name, label FROM "zugzug_app"."warehouse_database" WHERE id = $1`,
@@ -80,12 +80,24 @@ export async function removeDatabase(
   );
   if (!row) throw new Error("DATABASE_NOT_FOUND");
 
-  const sources = await pgAll<{ dim_id: string }>(
-    `SELECT DISTINCT dim_id FROM "zugzug_app"."dimension_source" WHERE database_id = $1`,
+  const sources = await pgAll<{ dim_id: string; schema_name: string; table_name: string; column_name: string }>(
+    `SELECT dim_id, schema_name, table_name, column_name
+       FROM "zugzug_app"."dimension_source"
+      WHERE database_id = $1`,
     [databaseId],
   );
   if (sources.length > 0 && !opts.force) {
-    return { ok: false, sourceCount: sources.length, dimensions: sources.map((s) => s.dim_id) };
+    const byDim = new Map<string, string[]>();
+    for (const s of sources) {
+      const arr = byDim.get(s.dim_id) ?? [];
+      arr.push(`${s.schema_name}.${s.table_name}.${s.column_name}`);
+      byDim.set(s.dim_id, arr);
+    }
+    return {
+      ok:          false,
+      sourceCount: sources.length,
+      dimensions:  Array.from(byDim, ([dimId, sources]) => ({ dimId, sources })),
+    };
   }
 
   if (opts.force) {

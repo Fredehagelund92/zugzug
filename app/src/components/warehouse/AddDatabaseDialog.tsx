@@ -34,7 +34,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
   const canAdd =
     (selectedChip !== null &&
       !discovered.find((d) => d.databaseName === selectedChip)?.registered) ||
-    (name.length > 0 && probeOk === true);
+    (selectedChip === null && name.length > 0);
 
   const onPickChip = (n: string): void => {
     if (discovered.find((d) => d.databaseName === n)?.registered) return;
