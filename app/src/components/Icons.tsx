@@ -254,3 +254,9 @@ export const IconBuilding = (p: SVGProps<SVGSVGElement>) => (
     <path d="M9 6h.01M9 10h.01M9 14h.01M14 6h.01M14 10h.01M14 14h.01M9 22v-4h6v4" />
   </Base>
 );
+export const IconIntegrations = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M8 12h8M12 8l4 4-4 4" />
+  </Base>
+);
