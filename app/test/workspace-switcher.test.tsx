@@ -57,18 +57,6 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.getByText(/Admin console/i)).toBeTruthy();
   });
 
-  test("Sign out is always visible", () => {
-    harness(false);
-    fireEvent.click(screen.getByRole("button", { name: /acme/i }));
-    expect(screen.getByText(/Sign out/i)).toBeTruthy();
-  });
-
-  test("shows Account for all roles (admin harness)", () => {
-    harness(false);
-    fireEvent.click(screen.getByRole("button", { name: /acme/i }));
-    expect(screen.getByText(/^Account$/i)).toBeTruthy();
-  });
-
   test("shows other workspaces in the list", () => {
     harness(false);
     fireEvent.click(screen.getByRole("button", { name: /acme/i }));

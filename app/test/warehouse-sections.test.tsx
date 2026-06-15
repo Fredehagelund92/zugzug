@@ -33,7 +33,11 @@ vi.mock("../src/store", () => ({
   },
   subscribeInvalidate: vi.fn(() => () => undefined),
 }));
-vi.mock("../src/api", () => ({ apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })) }));
+vi.mock("../src/api", () => ({
+  apiFetch: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
+  authFetch: vi.fn(async () => new Response("", { status: 200 })),
+  fetchWarehouseDatabases: vi.fn(async () => []),
+}));
 vi.mock("../src/lib/engineer-mode", () => ({ useEngineerMode: () => ({ engineer: false }) }));
 
 function harness(role: "viewer" | "editor" | "admin") {

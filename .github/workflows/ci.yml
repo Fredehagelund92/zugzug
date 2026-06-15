@@ -53,6 +53,14 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run format:check
+      - name: Apply migrations to test DB
+        run: bun run drizzle/migrate.ts
+        env:
+          DATABASE_URL: postgres://zugzug:zugzug@localhost:55432/zugzug_test
+          MOTHERDUCK_TOKEN: dummy-for-ci
+          GOOGLE_CLIENT_ID: dummy
+          GOOGLE_CLIENT_SECRET: dummy
+          ATTACH_WAREHOUSE: "false"
       - run: bun run test
         env:
           DATABASE_URL: postgres://zugzug:zugzug@localhost:55432/zugzug_test

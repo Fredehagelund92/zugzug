@@ -7,13 +7,13 @@ const apiCalls: Array<{ path: string; init?: RequestInit }> = [];
 const responses: Array<(path: string, init?: RequestInit) => Response> = [];
 
 vi.mock("../src/api", () => ({
-  apiFetch: async (path: string, init?: RequestInit) => {
+  apiFetch: async () => new Response(null, { status: 204 }),
+  authFetch: async (path: string, init?: RequestInit) => {
     apiCalls.push({ path, init });
     const next = responses.shift();
     if (next) return next(path, init);
     return new Response(null, { status: 204 });
   },
-  authFetch: async () => new Response(""),
 }));
 
 const sample: DatabaseRow = {

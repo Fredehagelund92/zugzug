@@ -12,7 +12,7 @@ describe("AdminSidebar", () => {
         </Routes>
       </MemoryRouter>,
     );
-    for (const label of ["Workspaces", "Users", "Audit", "Warehouses"]) {
+    for (const label of ["Workspaces", "Users", "Audit", "Warehouse"]) {
       expect(screen.getByText(new RegExp(`^${label}$`, "i"))).toBeTruthy();
     }
   });
