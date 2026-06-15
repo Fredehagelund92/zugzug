@@ -306,8 +306,8 @@ test("POST /dimensions/:id/sources accepts the qualified shape, sets MRU, no Dep
   expect(mru?.recent_database_id).toBe(dbId);
 });
 
-test("POST /dimensions/:id/sources rejects bare 'schema.table' shape with 400", async () => {
-  const { cookie, tenantSlug } = await setupWithConnection();
+test("POST /dimensions/:id/sources bare {table,column} resolves via the first warehouse_database", async () => {
+  const { cookie, tenantSlug, dbId } = await setupWithConnection();
   const dimId = `dim_test_t16_bareshape`;
   await seedDimension(dimId);
   const { handle } = await import("../src/server.ts");
@@ -319,5 +319,20 @@ test("POST /dimensions/:id/sources rejects bare 'schema.table' shape with 400", 
     }),
     () => {},
   );
-  expect(res.status).toBe(400);
+  expect(res.status).toBe(204);
+  const { pgGet } = await import("../src/pg.ts");
+  const row = await pgGet<{
+    database_id: string;
+    schema_name: string;
+    table_name: string;
+    column_name: string;
+  }>(
+    `SELECT database_id, schema_name, table_name, column_name FROM "zugzug_app"."dimension_source"
+       WHERE tenant_id = $1 AND dim_id = $2`,
+    [T, dimId],
+  );
+  expect(row?.database_id).toBe(dbId);
+  expect(row?.schema_name).toBe("raw");
+  expect(row?.table_name).toBe("shipments");
+  expect(row?.column_name).toBe("destination_country");
 });
