@@ -183,6 +183,13 @@
       "when": 1781600000000,
       "tag": "0025_canonical_version_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1781497446953,
+      "tag": "0026_zippy_bill_hollister",
+      "breakpoints": true
     }
   ]
 }
