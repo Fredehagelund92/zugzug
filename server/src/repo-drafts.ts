@@ -20,6 +20,7 @@ import {
   pg,
 } from "./repo-shared.ts";
 import { appendAuditAs } from "./repo-meta.ts";
+import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { isWritable } from "./warehouse/adapter.ts";
 import type { ValueProvenance } from "./warehouse/adapter.ts";
@@ -262,9 +263,9 @@ export async function commit(
   // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
   // stays per-tenant-implicit (dim ids are globally unique → effectively
   // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
-  await pgTx(async ({ run }) => {
+  await pgTx(async (tx) => {
     if (meta.orderingMode === "manual") {
-      await run(
+      await tx.run(
         `WITH max_pos AS (
            SELECT COALESCE(MAX(position), 0)::bigint AS m FROM ${DIMT}
          ),
@@ -287,7 +288,7 @@ export async function commit(
         [dimId, tenantId],
       );
     } else {
-      await run(
+      await tx.run(
         `INSERT INTO ${DIMT} (${key}, label)
          SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
          WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
@@ -295,17 +296,56 @@ export async function commit(
         [dimId, tenantId],
       );
     }
-    await run(
+    await tx.run(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT d.raw, d.target_key FROM ${DRAFT} d
        WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`,
       [dimId, tenantId],
     );
-    await run(`DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`, [
-      dimId,
+    await tx.run(
+      `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
+      [dimId, tenantId],
+    );
+
+    // Outbound event for downstream subscribers (PR3). Uses a count-based
+    // per-(tenant, dim, type) monotonic counter — simpler than extracting
+    // payload->>'version' from a jsonb column and equally correct since we
+    // only insert one dimension.committed event per commit() inside this tx.
+    const versionRow = await tx.get<{ v: number }>(
+      `SELECT count(*)::int + 1 AS v
+         FROM ${pg("outbound_event")}
+        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+      [tenantId, dimId],
+    );
+    const v = versionRow?.v ?? 1;
+    const committedBy = await tx.get<{ name: string }>(
+      `SELECT name FROM ${pg("users")} WHERE id = $1`,
+      [userId],
+    );
+    const addedKeys = approvedDrafts.map((d) => ({ key: d.key, label: d.label ?? d.key }));
+    await dispatchOutbound(tx, {
       tenantId,
-    ]);
+      type: "dimension.committed",
+      dimId,
+      occurredAt: new Date(),
+      payload: {
+        dim_slug: dimId,
+        dim_label: meta.label,
+        version: v,
+        previous_version: v - 1,
+        committed_by: { id: userId, name: committedBy?.name ?? userId },
+        changes: {
+          added: addedKeys.slice(0, 200),
+          updated: [],
+          merged: [],
+          retired: [],
+        },
+        summary: { added: addedKeys.length, updated: 0, merged: 0, retired: 0 },
+        ...(addedKeys.length > 200 ? { changes_truncated: true } : {}),
+      },
+      idemKey: `dimension.committed:${dimId}:${v}`,
+    });
   });
 
   // Per-row audit: one entry per distinct target_key so each canonical row
