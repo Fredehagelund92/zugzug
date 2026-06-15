@@ -209,11 +209,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
   // Session gate — all other /api/* routes require a valid session
   let sessionUser;
+  let saCtx: import("./auth-api-tokens.ts").ServiceAccountCtx | null = null;
   try {
     sessionUser = await getSessionUser(req);
     if (!sessionUser) {
-      const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-      sessionUser = await getApiTokenUser(req);
+      const { authenticateBearer } = await import("./auth-api-tokens.ts");
+      const authed = await authenticateBearer(req);
+      if (authed) {
+        sessionUser = authed.user;
+        saCtx = authed.serviceAccount ?? null;
+      }
     }
   } catch (e) {
     return err(e, 503);
@@ -540,6 +545,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       user: sessionUser,
       isSuperAdmin: sessionUser.isSuperAdmin,
       impersonatingTenantId: sessionUser.impersonatingTenantId,
+      serviceAccount: saCtx ?? undefined,
     });
   } catch (e) {
     if (e instanceof AppError) {
