@@ -138,7 +138,11 @@ SELECT 'wc_' || replace(gen_random_uuid()::text, '-', ''),
        now(),
        current_setting('zugzug.bootstrap_admin')
   FROM "zugzug_app"."tenant" t
- WHERE t.deleted_at IS NULL;
+ WHERE t.deleted_at IS NULL
+   -- Skip backfill on a fresh install: no real users → no dimension_source
+   -- data to reshape, so leave warehouse_connection/database empty for tests
+   -- and bootstrap to populate explicitly.
+   AND EXISTS (SELECT 1 FROM "zugzug_app"."users");
 
 -- 4) Backfill one database per tenant from current_setting('zugzug.warehouse_db').
 INSERT INTO "zugzug_app"."warehouse_database"

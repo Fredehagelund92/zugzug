@@ -44,11 +44,11 @@ export async function listSources(opts: {
   if (opts.q) {
     params.push(`%${opts.q}%`);
     const p = `$${params.length}`;
-    where.push(`(s.source_table ILIKE ${p} OR s.source_column ILIKE ${p})`);
+    where.push(`((s.schema_name || '.' || s.table_name) ILIKE ${p} OR s.column_name ILIKE ${p})`);
   }
   if (opts.schema) {
     params.push(opts.schema);
-    where.push(`split_part(s.source_table, '.', 1) = $${params.length}`);
+    where.push(`s.schema_name = $${params.length}`);
   }
   if (opts.status === "needs") where.push(`COALESCE(st.unmapped, 0) > 0`);
   else if (opts.status === "clean")
@@ -67,7 +67,9 @@ export async function listSources(opts: {
     scanned: boolean;
     scannedAt: string | null;
   }>(
-    `SELECT s.dim_id AS "dimId", d.label AS dimension, s.source_table AS "table", s.source_column AS column,
+    `SELECT s.dim_id AS "dimId", d.label AS dimension,
+            (s.schema_name || '.' || s.table_name) AS "table",
+            s.column_name AS column,
             COALESCE(st.present, false) AS present,
             COALESCE(st.rows, 0)::int AS rows,
             COALESCE(st.distinct_values, 0)::int AS values,
@@ -77,10 +79,14 @@ export async function listSources(opts: {
      FROM ${pg("dimension_source")} s
      JOIN ${pg("dimension")} d ON d.id = s.dim_id AND d.tenant_id = s.tenant_id
      LEFT JOIN ${pg("source_stat")} st
-       ON st.dim_id = s.dim_id AND st.source_table = s.source_table AND st.source_column = s.source_column
-       AND st.tenant_id = s.tenant_id
+       ON st.dim_id = s.dim_id
+      AND st.database_id = s.database_id
+      AND st.schema_name = s.schema_name
+      AND st.table_name  = s.table_name
+      AND st.column_name = s.column_name
+      AND st.tenant_id = s.tenant_id
      WHERE ${where.join(" AND ")}
-     ORDER BY COALESCE(st.unmapped, 0) DESC, s.source_table, s.source_column
+     ORDER BY COALESCE(st.unmapped, 0) DESC, s.schema_name, s.table_name, s.column_name
      LIMIT 1000`,
     params,
   );
@@ -397,8 +403,10 @@ export async function anyScanDue(
                    AND NOT EXISTS (
                      SELECT 1 FROM ${pg("source_stat")} st
                      WHERE st.dim_id = ds.dim_id
-                       AND st.source_table = ds.source_table
-                       AND st.source_column = ds.source_column
+                       AND st.database_id = ds.database_id
+                       AND st.schema_name = ds.schema_name
+                       AND st.table_name  = ds.table_name
+                       AND st.column_name = ds.column_name
                        AND st.tenant_id = ds.tenant_id
                    )
                )
@@ -449,8 +457,10 @@ export async function anyScanDue(
                  AND NOT EXISTS (
                  SELECT 1 FROM ${pg("source_stat")} st2
                  WHERE st2.dim_id = ds.dim_id
-                   AND st2.source_table = ds.source_table
-                   AND st2.source_column = ds.source_column
+                   AND st2.database_id = ds.database_id
+                   AND st2.schema_name = ds.schema_name
+                   AND st2.table_name  = ds.table_name
+                   AND st2.column_name = ds.column_name
                    AND st2.tenant_id = ds.tenant_id
                )) AS unscanned_count
        FROM ${pg("preferences")} p WHERE p.tenant_id = $1`,
@@ -494,8 +504,10 @@ export async function scanStatus(tenantId: string = "default"): Promise<ScanStat
        FROM ${pg("dimension_source")} s
        LEFT JOIN ${pg("source_stat")} st
          ON  st.dim_id = s.dim_id
-         AND st.source_table  = s.source_table
-         AND st.source_column = s.source_column
+         AND st.database_id = s.database_id
+         AND st.schema_name = s.schema_name
+         AND st.table_name  = s.table_name
+         AND st.column_name = s.column_name
          AND st.tenant_id = s.tenant_id
        ${tenantFilterSources}`,
       params,
