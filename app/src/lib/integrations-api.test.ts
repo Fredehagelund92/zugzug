@@ -45,3 +45,45 @@ describe("createWebhook", () => {
       .rejects.toMatchObject({ code: "https_required", status: 400 });
   });
 });
+
+describe("deleteWebhook", () => {
+  it("returns undefined for a 204 response", async () => {
+    FETCH.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await expect(api.deleteWebhook("wh_1")).resolves.toBeUndefined();
+  });
+});
+
+describe("listDeliveries", () => {
+  it("encodes query params and unwraps deliveries", async () => {
+    FETCH.mockResolvedValueOnce(new Response(JSON.stringify({ deliveries: [{ id: "whd_1" }] }), { status: 200 }));
+    const out = await api.listDeliveries("wh_1", { status: "dlq", limit: 25 });
+    expect(FETCH).toHaveBeenCalledWith(
+      "/api/t/acme/v1/webhooks/wh_1/deliveries?status=dlq&limit=25",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(out).toEqual([{ id: "whd_1" }]);
+  });
+});
+
+describe("network errors", () => {
+  it("propagates fetch rejection", async () => {
+    FETCH.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(api.listWebhooks()).rejects.toThrow("Failed to fetch");
+  });
+});
+
+describe("listServiceAccounts", () => {
+  it("unwraps the service_accounts envelope", async () => {
+    FETCH.mockResolvedValueOnce(new Response(JSON.stringify({ service_accounts: [{ id: "sa_1" }] }), { status: 200 }));
+    const out = await api.listServiceAccounts();
+    expect(out).toEqual([{ id: "sa_1" }]);
+  });
+});
+
+describe("listDimensions", () => {
+  it("unwraps the dimensions envelope", async () => {
+    FETCH.mockResolvedValueOnce(new Response(JSON.stringify({ dimensions: [{ id: "d1", slug: "country" }] }), { status: 200 }));
+    const out = await api.listDimensions();
+    expect(out).toEqual([{ id: "d1", slug: "country" }]);
+  });
+});
