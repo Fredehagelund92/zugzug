@@ -1,7 +1,112 @@
-// Stub — full implementation lands in Task 10 of PR4.
-export function CreateWebhookModal(_: {
+import { useState } from "react";
+import { Button } from "../../components/Button";
+import { Checkbox } from "../../components/Checkbox";
+import { FormField } from "../../components/FormField";
+import { createWebhook, IntegrationsApiError, type WebhookEvent } from "../../lib/integrations-api";
+
+interface Props {
   onClose: () => void;
   onCreated: (out: { id: string; value: string }) => void;
-}) {
-  return null;
+}
+
+const EVENTS: { value: WebhookEvent; label: string; hint: string }[] = [
+  { value: "dimension.committed",      label: "dimension.committed",      hint: "When canonical records change." },
+  { value: "dimension.created",        label: "dimension.created",        hint: "When a new dimension is set up." },
+  { value: "canonical.deleted",        label: "canonical.deleted",        hint: "When a single record is retired." },
+  { value: "dimension.schema.updated", label: "dimension.schema.updated", hint: "When a dimension's field schema changes." },
+];
+
+export function CreateWebhookModal({ onClose, onCreated }: Props) {
+  const [url, setUrl] = useState("");
+  const [events, setEvents] = useState<WebhookEvent[]>(["dimension.committed"]);
+  const [description, setDescription] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const out = await createWebhook({ url, events, description: description || null });
+      onCreated(out);
+    } catch (e) {
+      const msg = e instanceof IntegrationsApiError ? e.code : "create_failed";
+      setError(humanError(msg));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-[520px] rounded-sm border border-line bg-surface p-5 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-display text-[15px] font-semibold text-ink">New webhook</h2>
+
+        <FormField label="Endpoint URL" hint="HTTPS required.">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://api.acme.com/zugzug"
+            className="w-full rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px]"
+          />
+        </FormField>
+
+        <fieldset>
+          <legend className="text-[12px] text-ink-2 mb-1">Events to subscribe</legend>
+          <div className="space-y-1">
+            {EVENTS.map((e) => (
+              <label key={e.value} className="flex items-center gap-2 text-[13px]">
+                <Checkbox
+                  state={events.includes(e.value) ? "on" : "off"}
+                  onClick={() => setEvents((prev) => prev.includes(e.value) ? prev.filter((x) => x !== e.value) : [...prev, e.value])}
+                />
+                <span className="font-mono">{e.label}</span>
+                <span className="text-ink-3">{e.hint}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <FormField label="Description (optional)">
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Sync into Acme CRM"
+            className="w-full rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px]"
+          />
+        </FormField>
+
+        <p className="text-[12px] text-ink-3">
+          Signing secret will be generated and shown once. Test events can be sent from the
+          webhook detail page once the subscription exists.
+        </p>
+
+        {error && <p className="text-[12px] text-danger">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button onClick={() => void submit()} loading={submitting} disabled={!url || events.length === 0}>
+            Create webhook
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function humanError(code: string): string {
+  switch (code) {
+    case "invalid_url":    return "That URL doesn't parse.";
+    case "https_required": return "URL must use https://.";
+    case "events_empty":   return "Pick at least one event.";
+    default:               return code.startsWith("events_unknown")
+                                  ? "One of the selected events isn't supported by this server."
+                                  : `Could not create webhook (${code}).`;
+  }
 }
