@@ -32,6 +32,7 @@ import {
 } from "./repo-shared.ts";
 import type { ValueProvenance } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
+import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { AppError } from "./errors.ts";
 
 /** Returns the new position for an insert between pAbove and pBelow, or null
@@ -1022,8 +1023,36 @@ export async function retireCanonical(
     if (variants > 0) return { ok: false, variants };
 
     await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId, tenantId);
+
+    // Read the label BEFORE the DELETE so the outbound event carries the
+    // human-facing name as it existed at the time of retirement. Each dim
+    // has its own dim_<slug> table so (key) is the natural identifier here.
+    const labelRow = await tx.get<{ label: string }>(
+      `SELECT label FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`,
+      [key],
+    );
+
     await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${qid(m.keyCol)} = $1`, [key]);
     await softRetireVersionRow(tx, dimId, key, tenantId);
+
+    // Atomic outbound event — fails the tx if the INSERT does (design §3.1).
+    const firedAt = new Date();
+    await dispatchOutbound(tx, {
+      tenantId,
+      type: "canonical.deleted",
+      dimId,
+      occurredAt: firedAt,
+      payload: {
+        dim_slug: dimId,
+        key,
+        label: labelRow?.label ?? key,
+        deleted_by: { id: userId },
+      },
+      // Includes timestamp so concurrent retire calls of the same key (e.g.
+      // re-add then re-retire) produce distinct idem keys.
+      idemKey: `canonical.deleted:${dimId}:${key}:${firedAt.getTime()}`,
+    });
+
     return { ok: true, variants: 0 };
   });
 
