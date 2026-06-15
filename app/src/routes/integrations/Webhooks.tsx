@@ -46,7 +46,7 @@ export function Webhooks() {
   const [items, setItems] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
-  const [secret, setSecret] = useState<{ value: string; webhookId: string } | null>(null);
+  const [secret, setSecret] = useState<{ value: string } | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -78,7 +78,7 @@ export function Webhooks() {
             onClose={() => setShowCreate(false)}
             onCreated={(out) => {
               setShowCreate(false);
-              setSecret({ value: out.value, webhookId: out.id });
+              setSecret({ value: out.value });
               void refresh();
             }}
           />
@@ -151,7 +151,7 @@ export function Webhooks() {
           onClose={() => setShowCreate(false)}
           onCreated={(out) => {
             setShowCreate(false);
-            setSecret({ value: out.value, webhookId: out.id });
+            setSecret({ value: out.value });
             void refresh();
           }}
         />

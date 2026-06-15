@@ -15,8 +15,15 @@ import {
   reactivateWebhook,
   rotateSecret,
   sendTestEvent,
+  humanError,
+  IntegrationsApiError,
   type Webhook,
 } from "../../lib/integrations-api";
+
+function toastError(e: unknown, fallback: string): void {
+  const code = e instanceof IntegrationsApiError ? e.code : fallback;
+  toast(humanError(code), "error");
+}
 import { SecretRevealModal } from "./SecretRevealModal";
 import { DeliveryLog } from "./DeliveryLog";
 import { SigningRecipeBlock } from "../../components/integrations/SigningRecipeBlock";
@@ -79,7 +86,7 @@ export function WebhookDetail() {
                   await reactivateWebhook(id);
                   await refresh();
                 } catch (e) {
-                  toast(`Couldn't reactivate: ${(e as Error).message}`, "error");
+                  toastError(e, "load_failed");
                 }
               }}
             >
@@ -119,7 +126,7 @@ export function WebhookDetail() {
                     await patchWebhook(id, { status: "paused" });
                     await refresh();
                   } catch (e) {
-                    toast(`Couldn't pause: ${(e as Error).message}`, "error");
+                    toastError(e, "load_failed");
                   }
                 }}
               >
@@ -134,7 +141,7 @@ export function WebhookDetail() {
                     await patchWebhook(id, { status: "active" });
                     await refresh();
                   } catch (e) {
-                    toast(`Couldn't resume: ${(e as Error).message}`, "error");
+                    toastError(e, "load_failed");
                   }
                 }}
               >
@@ -167,7 +174,7 @@ export function WebhookDetail() {
                     setSecret(r.value);
                     await refresh();
                   } catch (e) {
-                    toast(`Couldn't rotate secret: ${(e as Error).message}`, "error");
+                    toastError(e, "load_failed");
                   }
                 }}
               >
@@ -201,7 +208,7 @@ export function WebhookDetail() {
                 await sendTestEvent(id);
                 await refresh();
               } catch (e) {
-                toast(`Couldn't send test event: ${(e as Error).message}`, "error");
+                toastError(e, "load_failed");
               }
             }}
           >
@@ -246,7 +253,7 @@ export function WebhookDetail() {
             await deleteWebhook(id);
             navigate("/integrations/webhooks");
           } catch (e) {
-            toast(`Couldn't delete: ${(e as Error).message}`, "error");
+            toastError(e, "load_failed");
             setConfirmDelete(false);
           }
         }}

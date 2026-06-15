@@ -7,6 +7,41 @@ export class IntegrationsApiError extends Error {
   }
 }
 
+/** Map a server error code to a friendly sentence for toasts and inline errors.
+ *  Falls through to a generic "Action failed (code)." for any unknown code so
+ *  the user sees the raw code only as a last resort. */
+export function humanError(code: string): string {
+  if (code.startsWith("events_unknown")) {
+    return "One of the selected events isn't supported by this server.";
+  }
+  switch (code) {
+    case "invalid_url":         return "That URL doesn't parse.";
+    case "https_required":      return "URL must use https://.";
+    case "events_empty":        return "Pick at least one event.";
+    case "name_required":       return "Name is required.";
+    case "expires_invalid":     return "Expiry date is invalid.";
+    case "invalid_json":        return "Request body was not valid JSON.";
+    case "unauthorized":        return "You're signed out — please sign in again.";
+    case "forbidden":
+    case "admin_required":      return "You don't have permission for that.";
+    case "editor_required":     return "Editor or higher required.";
+    case "not_found":
+    case "webhook_not_found":   return "That item no longer exists.";
+    case "rate_limited":        return "Too many requests — try again in a moment.";
+    case "load_failed":         return "Couldn't load — try again.";
+    case "create_failed":       return "Couldn't create — try again.";
+    case "revoke_failed":       return "Couldn't revoke — try again.";
+    case "status_invalid":      return "That status isn't allowed.";
+    case "status_disabled_not_allowed":
+                                return "You can't manually disable a webhook — it auto-disables on repeated failures.";
+    case "cursor_invalid":
+    case "cursor_mismatch":     return "Pagination cursor expired — start over.";
+    case "tenant_not_found":    return "Workspace not found.";
+    case "tenant_mismatch":     return "Workspace mismatch.";
+    default:                    return `Action failed (${code}).`;
+  }
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await apiFetch(path);
   if (!res.ok) throw await toError(res);
@@ -95,7 +130,6 @@ export interface ServiceAccount {
 }
 
 export interface DimensionSummary {
-  id: string;
   slug: string;
   label: string;
   key_kind: string;
@@ -142,8 +176,14 @@ export async function listServiceAccounts(): Promise<ServiceAccount[]> {
   const { service_accounts } = await get<{ service_accounts: ServiceAccount[] }>("/v1/service-accounts");
   return service_accounts;
 }
+export interface CreatedServiceAccount {
+  id: string;
+  name: string;
+  value: string;
+  scopes: string[];
+}
 export const createServiceAccount = (body: { name: string; expires_at: string | null }) =>
-  send<{ service_account: ServiceAccount; value: string }>("/v1/service-accounts", "POST", body);
+  send<CreatedServiceAccount>("/v1/service-accounts", "POST", body);
 export const revokeServiceAccount = (id: string) =>
   send<void>(`/v1/service-accounts/${encodeURIComponent(id)}`, "DELETE");
 

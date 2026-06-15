@@ -8,6 +8,8 @@ import { toast } from "../../components/Toast";
 import {
   listDeliveries,
   replayDelivery,
+  humanError,
+  IntegrationsApiError,
   type WebhookDelivery,
 } from "../../lib/integrations-api";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
@@ -39,7 +41,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
     try {
       setRows(await listDeliveries(webhookId, { limit: 50 }));
     } catch (e) {
-      toast(`Couldn't load deliveries: ${(e as Error).message}`, "error");
+      toast(humanError(e instanceof IntegrationsApiError ? e.code : "load_failed"), "error");
     } finally {
       setLoading(false);
     }
@@ -124,7 +126,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
                               await refresh();
                             } catch (e) {
                               toast(
-                                `Couldn't replay delivery: ${(e as Error).message}`,
+                                humanError(e instanceof IntegrationsApiError ? e.code : "load_failed"),
                                 "error",
                               );
                             }

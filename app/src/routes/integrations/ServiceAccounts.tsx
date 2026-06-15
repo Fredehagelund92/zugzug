@@ -10,7 +10,7 @@ import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { toast } from "../../components/Toast";
 import {
   listServiceAccounts, createServiceAccount, revokeServiceAccount,
-  type ServiceAccount, IntegrationsApiError,
+  humanError, type ServiceAccount, IntegrationsApiError,
 } from "../../lib/integrations-api";
 import { SecretRevealModal } from "./SecretRevealModal";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
@@ -53,9 +53,10 @@ export function ServiceAccounts() {
       setName(""); setShowForm(false);
       await refresh();
     } catch (e) {
-      const msg = e instanceof IntegrationsApiError ? e.code : "create_failed";
+      const code = e instanceof IntegrationsApiError ? e.code : "create_failed";
+      const msg = humanError(code);
       setCreateError(msg);
-      toast(`Failed to create service account: ${msg}`, "error");
+      toast(msg, "error");
     }
   };
 
@@ -66,8 +67,8 @@ export function ServiceAccounts() {
       setRevoke(null);
       await refresh();
     } catch (e) {
-      const msg = e instanceof IntegrationsApiError ? e.code : "revoke_failed";
-      toast(`Failed to revoke service account: ${msg}`, "error");
+      const code = e instanceof IntegrationsApiError ? e.code : "revoke_failed";
+      toast(humanError(code), "error");
     }
   };
 

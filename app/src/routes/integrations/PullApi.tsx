@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { SegControl } from "../../components/SegControl";
 import { Button } from "../../components/Button";
@@ -89,9 +90,9 @@ export function PullApi() {
             <h3 className="font-display text-[14px] font-semibold text-ink">Authentication</h3>
             <p className="text-[13px] text-ink-2">
               Every request needs a bearer token from the{" "}
-              <a href="service-accounts" className="text-accent underline-offset-2 hover:underline">
+              <Link to="../service-accounts" className="text-accent underline-offset-2 hover:underline">
                 Service accounts
-              </a>{" "}
+              </Link>{" "}
               page.
             </p>
             <pre className="px-3 py-2 rounded-sm bg-surface text-[12px] font-mono overflow-x-auto">
@@ -123,7 +124,7 @@ export function PullApi() {
                   {dims.map((d) => {
                     const cmd = `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/dimensions/${d.slug}/canonical`;
                     return (
-                      <tr key={d.id} className="border-t border-line">
+                      <tr key={d.slug} className="border-t border-line">
                         <td className="py-2 font-mono">{d.slug}</td>
                         <td>{d.label}</td>
                         <td>{d.canonical_count}</td>
@@ -200,7 +201,7 @@ function WebhookRecipeTab() {
       </p>
       <SigningRecipeBlock />
       <p className="text-[13px] text-ink-2">
-        See <a href="webhooks" className="text-accent underline-offset-2 hover:underline">Webhooks</a>{" "}
+        See <Link to="../webhooks" className="text-accent underline-offset-2 hover:underline">Webhooks</Link>{" "}
         to create or manage subscriptions.
       </p>
     </div>

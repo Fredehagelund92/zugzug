@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "../../components/Button";
 import { Checkbox } from "../../components/Checkbox";
 import { FormField } from "../../components/FormField";
-import { createWebhook, IntegrationsApiError, type WebhookEvent } from "../../lib/integrations-api";
+import { createWebhook, humanError, IntegrationsApiError, type WebhookEvent } from "../../lib/integrations-api";
 
 interface Props {
   onClose: () => void;
@@ -30,8 +30,8 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
       const out = await createWebhook({ url, events, description: description || null });
       onCreated(out);
     } catch (e) {
-      const msg = e instanceof IntegrationsApiError ? e.code : "create_failed";
-      setError(humanError(msg));
+      const code = e instanceof IntegrationsApiError ? e.code : "create_failed";
+      setError(humanError(code));
     } finally {
       setSubmitting(false);
     }
@@ -100,13 +100,3 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
   );
 }
 
-function humanError(code: string): string {
-  switch (code) {
-    case "invalid_url":    return "That URL doesn't parse.";
-    case "https_required": return "URL must use https://.";
-    case "events_empty":   return "Pick at least one event.";
-    default:               return code.startsWith("events_unknown")
-                                  ? "One of the selected events isn't supported by this server."
-                                  : `Could not create webhook (${code}).`;
-  }
-}
