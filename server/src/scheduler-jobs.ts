@@ -55,8 +55,9 @@ export function buildJobs(): SchedulerJob[] {
   const jobs: SchedulerJob[] = [scanSourcesJob, autoStageJob, autoCommitJob];
   if (env.webhooksEnabled) {
     const { webhookDispatcherJob } = require("./webhook-dispatcher.ts");
+    const { outboundRetentionSweepJob } = require("./outbound-retention-sweep.ts");
     jobs.push(webhookDispatcherJob);
-    // Task 10 will push outboundRetentionSweepJob here.
+    jobs.push(outboundRetentionSweepJob);
   }
   return jobs;
 }
