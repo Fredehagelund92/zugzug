@@ -9,8 +9,8 @@ const U = "u_test_sa";
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'Auth SA Test', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
     [T],
   );
   await pgRun(
@@ -117,8 +117,8 @@ describe("resolveTenantContext — service account context", () => {
   it("rejects when the SA's tenant does NOT match the URL slug", async () => {
     const tt = "test_sa_mismatch";
     await pgRun(
-      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-       VALUES ($1, $1, 'Mismatch', 'default', now()) ON CONFLICT DO NOTHING`,
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
       [tt],
     );
     const { value } = await createServiceAccount({ tenantId: tt, name: "Wrong", createdBy: U });

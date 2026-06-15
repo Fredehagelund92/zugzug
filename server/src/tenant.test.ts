@@ -42,8 +42,8 @@ describe("updateTenantSlug — alias hook", () => {
 
   beforeAll(async () => {
     await pgRun(
-      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-       VALUES ($1, $2, 'Rename Hook', 'default', now()) ON CONFLICT DO NOTHING`,
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $2, 'Rename Hook', now()) ON CONFLICT DO NOTHING`,
       [TID, OLD],
     );
   });

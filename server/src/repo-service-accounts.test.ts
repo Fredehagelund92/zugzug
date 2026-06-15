@@ -11,8 +11,8 @@ const U = "u_test_sa_repo";
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'SA Repo Test', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
     [T],
   );
   await pgRun(
@@ -106,8 +106,8 @@ describe("listServiceAccounts", () => {
   it("is scoped to tenant — no leakage", async () => {
     const tt = "test_sa_repo_other";
     await pgRun(
-      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-       VALUES ($1, $1, 'Other', 'default', now()) ON CONFLICT DO NOTHING`,
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
       [tt],
     );
     const r = await createServiceAccount({ tenantId: tt, name: "other_tenant", createdBy: U });

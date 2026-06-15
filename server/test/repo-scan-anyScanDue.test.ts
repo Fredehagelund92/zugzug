@@ -48,13 +48,13 @@ test("anyScanDue returns false when most-recent scan is within cadence window", 
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
   await pgRun(
     `INSERT INTO zugzug_app.source_stat
-       (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
-     VALUES ($1, $2, $3, true, 100, 50, 5, $4, 'default')
-     ON CONFLICT (tenant_id, dim_id, source_table, source_column) DO UPDATE SET
+       (dim_id, database_id, schema_name, table_name, column_name, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+     VALUES ($1, 'whd_test', 'public', 'partners', 'partner_id', true, 100, 50, 5, $2, 'default')
+     ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
        present = EXCLUDED.present, rows = EXCLUDED.rows,
        distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
        scanned_at = EXCLUDED.scanned_at`,
-    [dimId, "public.partners", "partner_id", tenMinutesAgo],
+    [dimId, tenMinutesAgo],
   );
 
   // anyScanDue returns false (most recent scan is 10 min ago, within hourly window)
@@ -81,9 +81,9 @@ test("anyScanDue returns true when a newly-registered source has never been scan
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
   await pgRun(
     `INSERT INTO zugzug_app.source_stat
-       (dim_id, source_table, source_column, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
-     VALUES ($1, $2, $3, true, 100, 50, 5, $4, 'default')`,
-    [dimId, "public.partners", "partner_id", tenMinutesAgo],
+       (dim_id, database_id, schema_name, table_name, column_name, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+     VALUES ($1, 'whd_test', 'public', 'partners', 'partner_id', true, 100, 50, 5, $2, 'default')`,
+    [dimId, tenMinutesAgo],
   );
 
   // With the bug: anyScanDue returns false (MAX(scanned_at) is 10 min ago, within window)

@@ -26,8 +26,8 @@ const testContext: SuggestionContext = {
 async function createTestTenant(tenantId: string): Promise<void> {
   try {
     await pgRun(
-      `INSERT INTO ${pgTable("tenant")} (id, name, created_at)
-       VALUES ($1, $1, now())
+      `INSERT INTO ${pgTable("tenant")} (id, slug, label, created_at)
+       VALUES ($1, $1, $1, now())
        ON CONFLICT (id) DO NOTHING`,
       [tenantId]
     );
@@ -97,7 +97,7 @@ async function insertCachedSuggestion(
 }
 
 test("integration — cache hit returns cached suggestion marked cached=true", async () => {
-  const tenantId = `tenant_cache_hit_${Date.now()}`;
+  const tenantId = "t_sg_cachehit";
 
   // Setup
   await createTestTenant(tenantId);
@@ -125,7 +125,7 @@ test("integration — cache hit returns cached suggestion marked cached=true", a
 });
 
 test("integration — cache miss throws error when AI disabled", async () => {
-  const tenantId = `tenant_no_cache_${Date.now()}`;
+  const tenantId = "t_sg_nocache";
 
   // Setup
   await createTestTenant(tenantId);
@@ -155,7 +155,7 @@ test("integration — cache miss throws error when AI disabled", async () => {
 });
 
 test("integration — cache miss with no API key throws InvalidAPIKeyError", async () => {
-  const tenantId = `tenant_no_key_${Date.now()}`;
+  const tenantId = "t_sg_nokey";
 
   // Setup
   await createTestTenant(tenantId);
@@ -185,7 +185,7 @@ test("integration — cache miss with no API key throws InvalidAPIKeyError", asy
 });
 
 test("integration — forceRefresh=true bypasses cache and hits config check", async () => {
-  const tenantId = `tenant_force_refresh_${Date.now()}`;
+  const tenantId = "t_sg_refresh";
 
   // Setup: Create cache entry but it should be bypassed
   await createTestTenant(tenantId);
@@ -223,7 +223,7 @@ test("integration — forceRefresh=true bypasses cache and hits config check", a
 });
 
 test("integration — confidence score conversion in cache read", async () => {
-  const tenantId = `tenant_confidence_${Date.now()}`;
+  const tenantId = "t_sg_confidence";
 
   // Setup
   await createTestTenant(tenantId);
@@ -249,7 +249,7 @@ test("integration — confidence score conversion in cache read", async () => {
 });
 
 test("integration — cache hit increments hits counter", async () => {
-  const tenantId = `tenant_hit_counter_${Date.now()}`;
+  const tenantId = "t_sg_counter";
 
   // Setup
   await createTestTenant(tenantId);

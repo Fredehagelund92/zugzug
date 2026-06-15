@@ -7,8 +7,8 @@ const TENANT_PREFIX = "test_sweep_";
 
 async function seedTenant(t: string): Promise<void> {
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'Sweep', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
     [t],
   );
   await pgRun(

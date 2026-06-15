@@ -131,10 +131,10 @@ test("parseFieldConfig returns ratingMax for rating type", async () => {
   const { parseFieldConfig } = await import("../src/repo-shared.ts");
   expect(parseFieldConfig("rating", '{"ratingMax":5}')).toEqual({ ratingMax: 5 });
   expect(parseFieldConfig("rating", null)).toEqual({ ratingMax: 5 }); // default
-  expect(parseFieldConfig("number", '{"format":"integer"}')).toEqual({
+  expect(parseFieldConfig("number", '{"numberFormat":{"format":"integer"}}')).toEqual({
     numberFormat: { format: "integer" },
   });
-  expect(parseFieldConfig("select", '[{"label":"A","color":null}]')).toEqual({
+  expect(parseFieldConfig("select", '{"options":[{"label":"A","color":null}]}')).toEqual({
     options: [{ label: "A", color: null }],
   });
   expect(parseFieldConfig("text", null)).toEqual({});

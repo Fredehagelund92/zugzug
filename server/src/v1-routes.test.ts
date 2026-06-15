@@ -58,8 +58,8 @@ let adminToken: string;
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $2, 'V1 Routes', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $2, 'V1 Routes', now()) ON CONFLICT DO NOTHING`,
     [T, SLUG],
   );
   await pgRun(
@@ -266,8 +266,8 @@ describe("tenant mismatch — SA from a different workspace", () => {
   it("returns 403 with tenant_mismatch", async () => {
     const OT = "test_v1_other";
     await pgRun(
-      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-       VALUES ($1, $1, 'Other', 'default', now()) ON CONFLICT DO NOTHING`,
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
       [OT],
     );
     const { value } = await createServiceAccount({
