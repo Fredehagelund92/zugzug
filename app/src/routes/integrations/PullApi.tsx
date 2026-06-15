@@ -1,3 +1,208 @@
+import { useEffect, useState } from "react";
+import { useTenant } from "../../lib/tenant-context";
+import { SegControl } from "../../components/SegControl";
+import { Button } from "../../components/Button";
+import { SkeletonList } from "../../components/Skeleton";
+import { listDimensions, IntegrationsApiError, type DimensionSummary } from "../../lib/integrations-api";
+import { SigningRecipeBlock } from "../../components/integrations/SigningRecipeBlock";
+import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
+
+const BASE_URL_PLACEHOLDER = "https://<host>";
+
+function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? "Copied" : label}
+    </Button>
+  );
+}
+
 export function PullApi() {
-  return <div className="text-ink-2 text-sm">Pull API page — coming next task.</div>;
+  const tenant = useTenant();
+  const [tab, setTab] = useState<"endpoints" | "webhooks">("endpoints");
+  const [dims, setDims] = useState<DimensionSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await listDimensions();
+        if (!cancelled) setDims(list);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof IntegrationsApiError ? e.code : "load_failed");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const baseUrl = `${typeof window === "undefined" ? BASE_URL_PLACEHOLDER : window.location.origin}/api/t/${tenant.slug}/v1`;
+  const firstSlug = dims[0]?.slug ?? "country";
+
+  return (
+    <div className="space-y-6">
+      <SegControl
+        value={tab}
+        onChange={(v) => setTab((v ?? "endpoints") as typeof tab)}
+        options={[
+          { value: "endpoints", label: "Endpoints" },
+          { value: "webhooks", label: "Webhook signing recipe" },
+        ]}
+      />
+
+      {tab === "endpoints" && (
+        <>
+          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+            <h2 className="font-display text-[15px] font-semibold text-ink">
+              Your canonical records, available as a JSON API
+            </h2>
+            <p className="text-[13px] text-ink-2">
+              Use this to sync into dbt, Fivetran, or any ETL pipeline. Authenticate with a service
+              account from this workspace.
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface text-[12px] font-mono">{baseUrl}</code>
+              <CopyButton text={baseUrl} />
+            </div>
+            <DeveloperDetails id="pull-api-banner" summary="Developer details">
+              <div>
+                Event store: <code>outbound_event</code> table.
+              </div>
+            </DeveloperDetails>
+          </section>
+
+          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+            <h3 className="font-display text-[14px] font-semibold text-ink">Authentication</h3>
+            <p className="text-[13px] text-ink-2">
+              Every request needs a bearer token from the{" "}
+              <a href="service-accounts" className="text-accent underline-offset-2 hover:underline">
+                Service accounts
+              </a>{" "}
+              page.
+            </p>
+            <pre className="px-3 py-2 rounded-sm bg-surface text-[12px] font-mono overflow-x-auto">
+{`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
+     ${baseUrl}/dimensions`}
+            </pre>
+          </section>
+
+          <EndpointCards baseUrl={baseUrl} firstSlug={firstSlug} />
+
+          <section className="rounded-sm border border-line bg-surface-2 p-4">
+            <h3 className="font-display text-[14px] font-semibold text-ink mb-3">Dimensions in this workspace</h3>
+            {loading ? (
+              <SkeletonList rows={3} columns={[1, 1, 80, 120, 80]} />
+            ) : error ? (
+              <p className="text-[13px] text-danger">Could not load dimensions: {error}</p>
+            ) : (
+              <table className="w-full text-[13px]">
+                <thead className="text-ink-3 text-left">
+                  <tr>
+                    <th className="py-1.5">Slug</th>
+                    <th>Label</th>
+                    <th>Records</th>
+                    <th>Last commit</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dims.map((d) => {
+                    const cmd = `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/dimensions/${d.slug}/canonical`;
+                    return (
+                      <tr key={d.id} className="border-t border-line">
+                        <td className="py-2 font-mono">{d.slug}</td>
+                        <td>{d.label}</td>
+                        <td>{d.canonical_count}</td>
+                        <td>{d.last_committed_at ? d.last_committed_at.slice(0, 10) : "—"}</td>
+                        <td className="text-right">
+                          <CopyButton text={cmd} label="Copy curl" />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+            <h3 className="font-display text-[14px] font-semibold text-ink">Pagination + incremental sync</h3>
+            <p className="text-[13px] text-ink-2">
+              All paginated endpoints accept <code>?since=&lt;ISO&gt;</code> (inclusive lower bound)
+              and return a HMAC-signed cursor in <code>cursor.next</code>. Resume by passing{" "}
+              <code>?cursor=&lt;value&gt;</code>. Cursors invalidated by server-key rotation return{" "}
+              <code>400 cursor_invalid</code>; consumers should resync from <code>?since=</code>.
+            </p>
+          </section>
+
+          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+            <h3 className="font-display text-[14px] font-semibold text-ink">Rate limits</h3>
+            <p className="text-[13px] text-ink-2">
+              600 req/min per credential by default (configurable via <code>ZUGZUG_PULL_API_RPM</code>).
+              Exceeding returns <code>429</code> with <code>Retry-After</code> seconds.
+            </p>
+          </section>
+        </>
+      )}
+
+      {tab === "webhooks" && <WebhookRecipeTab />}
+    </div>
+  );
+}
+
+function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: string }) {
+  const ENDPOINTS: { sig: string; desc: string }[] = [
+    { sig: `GET /v1/dimensions`, desc: "List this workspace's dimensions." },
+    { sig: `GET /v1/dimensions/${firstSlug}/schema`, desc: "Get a dimension's field schema." },
+    { sig: `GET /v1/dimensions/${firstSlug}/canonical`, desc: "Paginated canonical records. Supports ?since= and ?cursor=." },
+    { sig: `GET /v1/dimensions/${firstSlug}/tombstones`, desc: "Paginated retired/merged keys. Used when a webhook reports changes_truncated." },
+  ];
+  return (
+    <section className="space-y-3">
+      <h3 className="font-display text-[14px] font-semibold text-ink">Endpoints</h3>
+      {ENDPOINTS.map((e) => (
+        <div key={e.sig} className="rounded-sm border border-line bg-surface-2 p-4">
+          <code className="text-[12px] font-mono">{e.sig}</code>
+          <p className="mt-1 text-[12.5px] text-ink-2">{e.desc}</p>
+          <details className="mt-2">
+            <summary className="text-[12px] text-ink-3 cursor-pointer">Sample response</summary>
+            <pre className="mt-2 p-2 rounded-sm bg-surface text-[11.5px] font-mono overflow-x-auto">
+{`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${e.sig.replace("GET ", "")}`}
+            </pre>
+          </details>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function WebhookRecipeTab() {
+  return (
+    <div className="space-y-4">
+      <p className="text-[13px] text-ink-2">
+        Webhooks POST a JSON payload signed with HMAC-SHA256. The header contains a timestamp
+        (<code>t=</code>), a key id (<code>kid=current</code> or <code>previous</code>), and the
+        signature (<code>v1=sha256=...</code>). Copy this verifier verbatim:
+      </p>
+      <SigningRecipeBlock />
+      <p className="text-[13px] text-ink-2">
+        See <a href="webhooks" className="text-accent underline-offset-2 hover:underline">Webhooks</a>{" "}
+        to create or manage subscriptions.
+      </p>
+    </div>
+  );
 }
