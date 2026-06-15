@@ -12,6 +12,7 @@
    keep dispatching". */
 
 import { authenticateBearer, type ServiceAccountCtx } from "./auth-api-tokens.ts";
+import { getSessionUser } from "./auth.ts";
 import { lookupAliasedSlug } from "./slug-alias.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { checkRateLimit } from "./rate-limit.ts";
@@ -87,8 +88,15 @@ export async function handleV1Route(req: Request): Promise<Response | null> {
     });
   }
 
-  // Auth.
-  const authed = await authenticateBearer(req);
+  // Auth. Bearer (SA or personal token) is the primary path for /v1/. UI traffic
+  // on cookies falls back so the same handlers serve both surfaces; SA-only
+  // semantics (synthetic viewer role, scope gates) only kick in when the bearer
+  // branch resolved a service account.
+  let authed = await authenticateBearer(req);
+  if (!authed) {
+    const sessionUser = await getSessionUser(req);
+    if (sessionUser) authed = { user: sessionUser };
+  }
   if (!authed) return jsonError(401, "unauthorized");
 
   // Rate limit (per credential id).
