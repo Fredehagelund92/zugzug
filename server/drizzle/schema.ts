@@ -608,3 +608,44 @@ export const webhookDelivery = app.table(
     ),
   ],
 );
+
+/* ---------- Outbound integrations PR2 ---------- */
+
+export const tenantSlugAlias = app.table(
+  "tenant_slug_alias",
+  {
+    /* Old slug becomes the lookup key — its primary use is "given a stale URL,
+       which tenant should we redirect to?". The slug is globally unique so a
+       single-column PK is enough; no tenant_id PK component needed. */
+    old_slug:   varchar("old_slug").primaryKey(),
+    tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
+    created_at: timestamp("created_at").notNull(),
+    /* 30-day window from rename time. After expiry the alias is dropped (by
+       the same outboundRetentionSweepJob that PR3 will introduce; until then,
+       expired rows just stay around and are filtered out at read time). */
+    expires_at: timestamp("expires_at").notNull(),
+  },
+  (t) => [
+    index("tenant_slug_alias_tenant_idx").on(t.tenant_id),
+    index("tenant_slug_alias_expires_idx").on(t.expires_at),
+  ],
+);
+
+export const authCredentialQuota = app.table(
+  "auth_credential_quota",
+  {
+    /* credential_id is either a service_account.id (sa_…) or an api_tokens.id
+       (tok_…). No FK — credential rows can be revoked but their quota row
+       should outlive that for end-of-minute accounting. We rely on the
+       cleanup pass in outboundRetentionSweepJob (PR3) for housekeeping. */
+    credential_id:      varchar("credential_id").primaryKey(),
+    /* Start of the current rate-limit window (1-minute fixed-window in v1).
+       Each request rolls this forward when the wall clock has crossed a
+       minute boundary. */
+    window_started_at:  timestamp("window_started_at").notNull(),
+    count:              integer("count").notNull().default(0),
+  },
+  (t) => [
+    index("auth_credential_quota_window_idx").on(t.window_started_at),
+  ],
+);
