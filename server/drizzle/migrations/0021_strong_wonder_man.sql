@@ -16,7 +16,12 @@ BEGIN
     FROM zugzug_app.users
    WHERE is_super_admin = true
    ORDER BY id LIMIT 1;
-  IF admin_id IS NULL THEN
+  -- Only require a super-admin when there is data to backfill. A fresh
+  -- install (no tenants) skips this so initial bootstrap can run before
+  -- any user has been promoted to super-admin.
+  IF admin_id IS NULL AND EXISTS (
+       SELECT 1 FROM zugzug_app.tenant WHERE deleted_at IS NULL
+     ) THEN
     RAISE EXCEPTION
       '[warehouse_multi_db] preflight A: no super-admin user found. '
       'Create one (bun run bootstrap -- --seed) and re-run.';
