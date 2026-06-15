@@ -4,7 +4,11 @@ import { useTenant } from "../../lib/tenant-context";
 import { SegControl } from "../../components/SegControl";
 import { Button } from "../../components/Button";
 import { SkeletonList } from "../../components/Skeleton";
-import { listDimensions, IntegrationsApiError, type DimensionSummary } from "../../lib/integrations-api";
+import {
+  listDimensions,
+  IntegrationsApiError,
+  type DimensionSummary,
+} from "../../lib/integrations-api";
 import { SigningRecipeBlock } from "../../components/integrations/SigningRecipeBlock";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
 
@@ -76,7 +80,9 @@ export function PullApi() {
               account from this workspace.
             </p>
             <div className="flex items-center gap-2 mt-2">
-              <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface text-[12px] font-mono">{baseUrl}</code>
+              <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface text-[12px] font-mono">
+                {baseUrl}
+              </code>
               <CopyButton text={baseUrl} />
             </div>
             <DeveloperDetails id="pull-api-banner" summary="Developer details">
@@ -90,13 +96,16 @@ export function PullApi() {
             <h3 className="font-display text-[14px] font-semibold text-ink">Authentication</h3>
             <p className="text-[13px] text-ink-2">
               Every request needs a bearer token from the{" "}
-              <Link to="../service-accounts" className="text-accent underline-offset-2 hover:underline">
+              <Link
+                to="../service-accounts"
+                className="text-accent underline-offset-2 hover:underline"
+              >
                 Service accounts
               </Link>{" "}
               page.
             </p>
             <pre className="px-3 py-2 rounded-sm bg-surface text-[12px] font-mono overflow-x-auto">
-{`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
+              {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
      ${baseUrl}/dimensions`}
             </pre>
           </section>
@@ -104,7 +113,9 @@ export function PullApi() {
           <EndpointCards baseUrl={baseUrl} firstSlug={firstSlug} />
 
           <section className="rounded-sm border border-line bg-surface-2 p-4">
-            <h3 className="font-display text-[14px] font-semibold text-ink mb-3">Dimensions in this workspace</h3>
+            <h3 className="font-display text-[14px] font-semibold text-ink mb-3">
+              Dimensions in this workspace
+            </h3>
             {loading ? (
               <SkeletonList rows={3} columns={[1, 1, 80, 120, 80]} />
             ) : error ? (
@@ -141,7 +152,9 @@ export function PullApi() {
           </section>
 
           <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
-            <h3 className="font-display text-[14px] font-semibold text-ink">Pagination + incremental sync</h3>
+            <h3 className="font-display text-[14px] font-semibold text-ink">
+              Pagination + incremental sync
+            </h3>
             <p className="text-[13px] text-ink-2">
               All paginated endpoints accept <code>?since=&lt;ISO&gt;</code> (inclusive lower bound)
               and return a HMAC-signed cursor in <code>cursor.next</code>. Resume by passing{" "}
@@ -153,8 +166,9 @@ export function PullApi() {
           <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
             <h3 className="font-display text-[14px] font-semibold text-ink">Rate limits</h3>
             <p className="text-[13px] text-ink-2">
-              600 req/min per credential by default (configurable via <code>ZUGZUG_PULL_API_RPM</code>).
-              Exceeding returns <code>429</code> with <code>Retry-After</code> seconds.
+              600 req/min per credential by default (configurable via{" "}
+              <code>ZUGZUG_PULL_API_RPM</code>). Exceeding returns <code>429</code> with{" "}
+              <code>Retry-After</code> seconds.
             </p>
           </section>
         </>
@@ -169,8 +183,14 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
   const ENDPOINTS: { sig: string; desc: string }[] = [
     { sig: `GET /v1/dimensions`, desc: "List this workspace's dimensions." },
     { sig: `GET /v1/dimensions/${firstSlug}/schema`, desc: "Get a dimension's field schema." },
-    { sig: `GET /v1/dimensions/${firstSlug}/canonical`, desc: "Paginated canonical records. Supports ?since= and ?cursor=." },
-    { sig: `GET /v1/dimensions/${firstSlug}/tombstones`, desc: "Paginated retired/merged keys. Used when a webhook reports changes_truncated." },
+    {
+      sig: `GET /v1/dimensions/${firstSlug}/canonical`,
+      desc: "Paginated canonical records. Supports ?since= and ?cursor=.",
+    },
+    {
+      sig: `GET /v1/dimensions/${firstSlug}/tombstones`,
+      desc: "Paginated retired/merged keys. Used when a webhook reports changes_truncated.",
+    },
   ];
   return (
     <section className="space-y-3">
@@ -182,7 +202,7 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
           <details className="mt-2">
             <summary className="text-[12px] text-ink-3 cursor-pointer">Sample response</summary>
             <pre className="mt-2 p-2 rounded-sm bg-surface text-[11.5px] font-mono overflow-x-auto">
-{`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${e.sig.replace("GET ", "")}`}
+              {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${e.sig.replace("GET ", "")}`}
             </pre>
           </details>
         </div>
@@ -195,13 +215,16 @@ function WebhookRecipeTab() {
   return (
     <div className="space-y-4">
       <p className="text-[13px] text-ink-2">
-        Webhooks POST a JSON payload signed with HMAC-SHA256. The header contains a timestamp
-        (<code>t=</code>), a key id (<code>kid=current</code> or <code>previous</code>), and the
+        Webhooks POST a JSON payload signed with HMAC-SHA256. The header contains a timestamp (
+        <code>t=</code>), a key id (<code>kid=current</code> or <code>previous</code>), and the
         signature (<code>v1=sha256=...</code>). Copy this verifier verbatim:
       </p>
       <SigningRecipeBlock />
       <p className="text-[13px] text-ink-2">
-        See <Link to="../webhooks" className="text-accent underline-offset-2 hover:underline">Webhooks</Link>{" "}
+        See{" "}
+        <Link to="../webhooks" className="text-accent underline-offset-2 hover:underline">
+          Webhooks
+        </Link>{" "}
         to create or manage subscriptions.
       </p>
     </div>

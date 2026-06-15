@@ -4,8 +4,7 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID = "test-stub";
 process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.ZUGZUG_CURSOR_KEY =
-  process.env.ZUGZUG_CURSOR_KEY ||
-  "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
+  process.env.ZUGZUG_CURSOR_KEY || "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun } from "./pg.ts";
@@ -89,9 +88,7 @@ describe("v1 session-cookie fallback", () => {
   });
 
   it("no auth at all returns 401", async () => {
-    const res = await handleV1Route(
-      new Request(`http://test/api/t/${SLUG}/v1/webhooks`),
-    );
+    const res = await handleV1Route(new Request(`http://test/api/t/${SLUG}/v1/webhooks`));
     expect(res!.status).toBe(401);
   });
 

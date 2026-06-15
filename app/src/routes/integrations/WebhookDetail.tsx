@@ -76,7 +76,8 @@ export function WebhookDetail() {
       {w.status === "disabled" && (
         <div className="rounded-sm border border-danger bg-danger-soft p-3 flex items-center justify-between">
           <div className="text-[13px]">
-            Auto-disabled: <span className="text-ink-2">{w.disabled_reason ?? "consecutive failures"}</span>
+            Auto-disabled:{" "}
+            <span className="text-ink-2">{w.disabled_reason ?? "consecutive failures"}</span>
           </div>
           {canEdit && (
             <Button
@@ -110,11 +111,7 @@ export function WebhookDetail() {
         </Row>
         <Row label="Status">
           <div className="flex items-center gap-2">
-            <Badge
-              tone={
-                w.status === "active" ? "ok" : w.status === "paused" ? "warn" : "danger"
-              }
-            >
+            <Badge tone={w.status === "active" ? "ok" : w.status === "paused" ? "warn" : "danger"}>
               {w.status[0].toUpperCase() + w.status.slice(1)}
             </Badge>
             {canEdit && w.status === "active" && (
@@ -199,8 +196,8 @@ export function WebhookDetail() {
         <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
           <h3 className="font-display text-[14px] font-semibold text-ink">Send a test event</h3>
           <p className="text-[13px] text-ink-2">
-            POSTs a synthetic <code>webhook.test</code> payload to the endpoint. Marked with a
-            TEST badge in the delivery log; does not count toward auto-disable.
+            POSTs a synthetic <code>webhook.test</code> payload to the endpoint. Marked with a TEST
+            badge in the delivery log; does not count toward auto-disable.
           </p>
           <Button
             onClick={async () => {
@@ -240,8 +237,8 @@ export function WebhookDetail() {
         title="Delete webhook?"
         body={
           <p>
-            Type the URL <code className="font-mono">{w.url}</code> to confirm deletion. This
-            cannot be undone; the endpoint will stop receiving events immediately.
+            Type the URL <code className="font-mono">{w.url}</code> to confirm deletion. This cannot
+            be undone; the endpoint will stop receiving events immediately.
           </p>
         }
         confirmLabel="Delete"

@@ -48,7 +48,9 @@ export function SigningRecipeBlock() {
           {copied ? "Copied" : "Copy"}
         </Button>
       </div>
-      <pre className="p-3 overflow-x-auto text-[12px] leading-relaxed font-mono text-ink">{RECIPE}</pre>
+      <pre className="p-3 overflow-x-auto text-[12px] leading-relaxed font-mono text-ink">
+        {RECIPE}
+      </pre>
     </div>
   );
 }

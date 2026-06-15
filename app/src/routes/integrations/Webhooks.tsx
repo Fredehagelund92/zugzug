@@ -142,9 +142,7 @@ export function Webhooks() {
         </tbody>
       </table>
 
-      {dupSet.size > 0 && (
-        <p className="text-[12px] text-ink-3">{dupSet.size} duplicate URLs</p>
-      )}
+      {dupSet.size > 0 && <p className="text-[12px] text-ink-3">{dupSet.size} duplicate URLs</p>}
 
       {showCreate && (
         <CreateWebhookModal
