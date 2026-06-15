@@ -137,6 +137,11 @@ export const env = {
   devBypassAuth: process.env.DEV_BYPASS_AUTH?.trim() === "true",
   /** Optional: Anthropic API key for AI features. Soft-fail (empty string when absent). */
   anthropicApiKey: readOptional("ANTHROPIC_API_KEY"),
+  /** Per-credential rate-limit budget for the /v1/ surface. Default 600
+   *  req/min; set to 0 to disable. */
+  pullApiRpm: process.env.ZUGZUG_PULL_API_RPM
+    ? Number(process.env.ZUGZUG_PULL_API_RPM)
+    : 600,
 };
 
 /** Qualified Postgres app-state table name: "zugzug_app"."table" */

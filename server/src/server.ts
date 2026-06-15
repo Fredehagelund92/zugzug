@@ -116,6 +116,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       },
     });
 
+  // PR2: /api/t/:slug/v1/... dispatch
+  const { handleV1Route } = await import("./v1-routes.ts");
+  const v1Response = await handleV1Route(req);
+  if (v1Response) return v1Response;
+
   if (pathname === "/health" || pathname === "/api/health") {
     try {
       await pgAll(`SELECT 1`);
