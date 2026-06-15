@@ -2,6 +2,7 @@ import { AppError } from "./errors.ts";
 import { tenantBySlug, memberRole } from "./tenant.ts";
 import { pgGet } from "./pg.ts";
 import type { SessionUser } from "./auth.ts";
+import type { ServiceAccountCtx } from "./auth-api-tokens.ts";
 
 export interface TenantContext {
   tenantId: string;
@@ -16,6 +17,8 @@ export interface ResolveOpts {
   isSuperAdmin?: boolean;
   /** When set + isSuperAdmin, legacy /api/* paths resolve to this tenant. */
   impersonatingTenantId?: string | null;
+  /** Set by authenticateBearer for zzsa_ tokens; short-circuits resolution with a viewer role bound to the SA's tenant. */
+  serviceAccount?: ServiceAccountCtx;
 }
 
 const TENANT_PATH_RE = /^\/api\/t\/([^/]+)\//;
@@ -34,6 +37,20 @@ export async function resolveTenantContext(opts: ResolveOpts): Promise<TenantCon
   const m = TENANT_PATH_RE.exec(opts.pathname);
   if (m) {
     const slug = decodeURIComponent(m[1]!);
+    if (opts.serviceAccount) {
+      const tenant = await tenantBySlug(slug);
+      if (!tenant) {
+        throw new AppError("NOT_FOUND", `No tenant for slug ${slug}`, 404);
+      }
+      if (tenant.id !== opts.serviceAccount.tenantId) {
+        throw new AppError(
+          "FORBIDDEN",
+          "Service-account token is bound to a different tenant",
+          403,
+        );
+      }
+      return { tenantId: tenant.id, role: "viewer", isSuperAdmin: false };
+    }
     const tenant = await tenantBySlug(slug);
     if (!tenant) {
       throw new AppError("NOT_FOUND", `workspace '${slug}' not found`, 404);
