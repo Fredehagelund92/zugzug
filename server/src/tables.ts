@@ -6,7 +6,7 @@
 
 import * as repo from "./repo.ts";
 import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
-import type { LegacySource, QualifiedSource } from "./repo-canonical.ts";
+import type { QualifiedSource } from "./repo-canonical.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
@@ -30,7 +30,7 @@ export interface CreateTableInput {
   color?: PaletteName | null;
   mode: CreateTableMode;
   columns?: ColumnDraft[]; // mode === 'blank'
-  source?: LegacySource | QualifiedSource; // mode === 'source'
+  source?: QualifiedSource; // mode === 'source'
   external?: { table: string; idColumn: string; nameColumn: string }; // mode === 'external_id'
 }
 
@@ -42,18 +42,11 @@ function validate(input: CreateTableInput): void {
   }
   if (input.mode === "source") {
     const s = input.source;
-    if (!s) {
-      throw new AppError("VALIDATION_FAILED", "source is required");
-    }
-    if ("databaseId" in s) {
-      if (!s.databaseId || !s.schemaName || !s.tableName || !s.columnName) {
-        throw new AppError(
-          "VALIDATION_FAILED",
-          "source requires databaseId + schemaName + tableName + columnName",
-        );
-      }
-    } else if (!s.table || !s.column) {
-      throw new AppError("VALIDATION_FAILED", "source requires table + column");
+    if (!s || !s.databaseId || !s.schemaName || !s.tableName || !s.columnName) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        "source requires databaseId + schemaName + tableName + columnName",
+      );
     }
   } else if (input.mode === "external_id") {
     const e = input.external;
@@ -102,17 +95,8 @@ export async function createTable(
   let fieldCount = 0;
   let derivedCount = 0;
 
-  // Resolve source ahead of the tx so a normalization failure (ambiguous legacy
-  // shape) doesn't leave a half-provisioned dimension behind.
-  let normalizedSource: QualifiedSource | null = null;
-  if (input.mode === "source" && input.source) {
-    const { normalizeSource } = await import("./repo-canonical.ts");
-    const result = await normalizeSource(tenantId, input.source);
-    if ("error" in result) {
-      throw new AppError(result.kind, result.error, 422);
-    }
-    normalizedSource = result;
-  }
+  const normalizedSource: QualifiedSource | null =
+    input.mode === "source" && input.source ? input.source : null;
 
   await pgTx(async ({ run }) => {
     // 2. Identity extras (description, color)
@@ -139,29 +123,19 @@ export async function createTable(
       );
     }
     if (input.mode === "external_id" && input.external) {
-      // external_id still uses the legacy schema.table convention — leave its
-      // resolution to a follow-up task. For now, route through the legacy
-      // default database so we still write the new columns.
-      const { normalizeSource } = await import("./repo-canonical.ts");
-      const result = await normalizeSource(tenantId, {
-        table: input.external.table,
-        column: input.external.idColumn,
-      });
-      if ("error" in result) {
-        throw new AppError(result.kind, result.error, 422);
+      // external_id still uses the bare "schema.table" convention. Phase E
+      // will move this to qualified (databaseId + schemaName + tableName).
+      const parts = input.external.table.split(".");
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${input.external.table}`, 422);
       }
+      const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+      const databaseId = await resolveDefaultDatabase(tenantId);
       await run(
         `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
          VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
-        [
-          id,
-          tenantId,
-          result.databaseId,
-          result.schemaName,
-          result.tableName,
-          result.columnName,
-        ],
+        [id, tenantId, databaseId, parts[0], parts[1], input.external.idColumn],
       );
       // External-ID also needs the name binding; this lives on the dimension row
       await run(

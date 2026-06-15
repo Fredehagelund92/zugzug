@@ -245,7 +245,6 @@ export const preferences = app.table(
     ai_enabled:        boolean("ai_enabled").notNull().default(false),
     ai_provider:       varchar("ai_provider").notNull().default("none"),
     ai_api_key:        varchar("ai_api_key"),
-    legacy_default_database_id: varchar("legacy_default_database_id"),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [

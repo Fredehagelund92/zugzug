@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."preferences" DROP COLUMN "legacy_default_database_id";

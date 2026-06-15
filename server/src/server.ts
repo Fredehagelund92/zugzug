@@ -1017,34 +1017,27 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           }
         }
         // POST /api/dimensions/:id/sources — wire a warehouse column to a dim.
-        //   New shape:    { source: { databaseId, schemaName, tableName, columnName } }
-        //   Legacy shape: { source: { table: "schema.table", column } }
-        //                 or { table: "schema.table", column }   (bare legacy)
-        // Legacy resolves via preferences.legacy_default_database_id; if that is
-        // not set we return 422 BACKEND_LEGACY_SHAPE_AMBIGUOUS. On success the
-        // user's MRU (user_warehouse_state.recent_database_id) is bumped to the
-        // database we just wrote to. Legacy responses carry a Deprecation header
-        // so clients can find their wire format gradually.
+        //   Body: { source: { databaseId, schemaName, tableName, columnName } }
+        // Bumps the user's MRU (user_warehouse_state.recent_database_id) to the
+        // database we just wrote to.
         if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
-          const raw = (await req.json()) as
-            | {
-                source?: import("./repo-canonical.ts").LegacySource
-                  | import("./repo-canonical.ts").QualifiedSource;
-                table?: string;
-                column?: string;
-              };
-          const source =
-            raw.source ??
-            (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
-          if (!source) return err("source required", 400);
-          const isLegacyWire =
-            !("databaseId" in source);
-          const { normalizeSource } = await import("./repo-canonical.ts");
-          const normalized = await normalizeSource(tenantCtx.tenantId, source);
-          if ("error" in normalized) {
-            return json({ kind: normalized.kind, error: normalized.error }, 422);
+          const raw = (await req.json()) as {
+            source?: import("./repo-canonical.ts").QualifiedSource;
+          };
+          const source = raw.source;
+          if (
+            !source ||
+            !source.databaseId ||
+            !source.schemaName ||
+            !source.tableName ||
+            !source.columnName
+          ) {
+            return err(
+              "source requires databaseId + schemaName + tableName + columnName",
+              400,
+            );
           }
           await pgRun(
             `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
@@ -1053,10 +1046,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             [
               id,
               tenantCtx.tenantId,
-              normalized.databaseId,
-              normalized.schemaName,
-              normalized.tableName,
-              normalized.columnName,
+              source.databaseId,
+              source.schemaName,
+              source.tableName,
+              source.columnName,
             ],
           );
           await pgRun(
@@ -1064,11 +1057,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
              VALUES ($1, $2, $3, now())
              ON CONFLICT (tenant_id, user_id) DO UPDATE
                SET recent_database_id = excluded.recent_database_id, updated_at = excluded.updated_at`,
-            [tenantCtx.tenantId, me, normalized.databaseId],
+            [tenantCtx.tenantId, me, source.databaseId],
           );
-          const responseHeaders: Record<string, string> = { ...corsHeaders };
-          if (isLegacyWire) responseHeaders["Deprecation"] = "true";
-          return new Response(null, { status: 204, headers: responseHeaders });
+          return new Response(null, { status: 204, headers: corsHeaders });
         }
         // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {

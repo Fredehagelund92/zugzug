@@ -2,9 +2,8 @@
    install. Generic e-commerce examples: replace with your own dimensions
    after exploring the demo. Idempotent (safe to re-run). */
 
-import { pgGet, pgRun } from "./pg.ts";
-import { pg } from "./env.ts";
-import { addDimension, addCanonical } from "./repo.ts";
+import { pgGet } from "./pg.ts";
+import { addDimension, addCanonical, addSource } from "./repo.ts";
 
 const COUNTRY_SOURCES = [
   { table: "raw.orders", column: "shipping_country" },
@@ -61,29 +60,42 @@ const CUSTOMER_SEGMENT_CANONICAL = [
 
 const T = "default";
 
-export async function seedDemo(): Promise<void> {
-  // Resolve the legacy schema.table sources against the first warehouse database
-  // for this tenant. normalizeSource() requires preferences.legacy_default_database_id
-  // to be set when the source doesn't carry an explicit databaseId.
-  const db = await pgGet<{ id: string }>(
-    `SELECT id FROM ${pg("warehouse_database")} ORDER BY added_at LIMIT 1`,
-    [],
-  );
-  if (db) {
-    await pgRun(
-      `INSERT INTO ${pg("preferences")} (tenant_id, legacy_default_database_id, publish_threshold, suggest_threshold, updated_at)
-       VALUES ($1, $2, 95, 80, now())
-       ON CONFLICT (tenant_id) DO UPDATE SET legacy_default_database_id = EXCLUDED.legacy_default_database_id`,
-      [T, db.id],
-    );
+async function seedDimension(
+  name: string,
+  dimKey: string,
+  sources: Array<{ table: string; column: string }>,
+  canonical: Array<{ key: string; label: string }>,
+  hasWarehouse: boolean,
+): Promise<void> {
+  await addDimension(name, [], {}, "u_verify", T);
+  if (hasWarehouse) {
+    for (const s of sources) {
+      await addSource(dimKey, s.table, s.column, T);
+    }
   }
+  await addCanonical(dimKey, canonical, T);
+}
 
-  await addDimension("Country", COUNTRY_SOURCES, {}, "u_verify", T);
-  await addCanonical("country", COUNTRY_CANONICAL, T);
-
-  await addDimension("Product Category", PRODUCT_CATEGORY_SOURCES, {}, "u_verify", T);
-  await addCanonical("product_category", PRODUCT_CATEGORY_CANONICAL, T);
-
-  await addDimension("Customer Segment", CUSTOMER_SEGMENT_SOURCES, {}, "u_verify", T);
-  await addCanonical("customer_segment", CUSTOMER_SEGMENT_CANONICAL, T);
+export async function seedDemo(): Promise<void> {
+  // addSource() needs a registered warehouse_database to resolve schema.table.
+  // In dev without ATTACH_WAREHOUSE, skip source attachment.
+  const hasWarehouse =
+    (await pgGet<{ id: string }>(
+      `SELECT id FROM "zugzug_app"."warehouse_database" LIMIT 1`,
+    )) != null;
+  await seedDimension("Country", "country", COUNTRY_SOURCES, COUNTRY_CANONICAL, hasWarehouse);
+  await seedDimension(
+    "Product Category",
+    "product_category",
+    PRODUCT_CATEGORY_SOURCES,
+    PRODUCT_CATEGORY_CANONICAL,
+    hasWarehouse,
+  );
+  await seedDimension(
+    "Customer Segment",
+    "customer_segment",
+    CUSTOMER_SEGMENT_SOURCES,
+    CUSTOMER_SEGMENT_CANONICAL,
+    hasWarehouse,
+  );
 }

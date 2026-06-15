@@ -190,6 +190,13 @@
       "when": 1781506311641,
       "tag": "0026_token_prefix_not_null",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1781506786893,
+      "tag": "0027_drop_legacy_default_database_id",
+      "breakpoints": true
     }
   ]
 }
