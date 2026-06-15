@@ -48,3 +48,15 @@ export const autoCommitJob: SchedulerJob = {
     return { rowsScanned: totalCommitted };
   },
 };
+
+/** Build the scheduler's job list. Webhook dispatcher + retention sweep
+ *  opt in via WEBHOOKS_ENABLED=1. */
+export function buildJobs(): SchedulerJob[] {
+  const jobs: SchedulerJob[] = [scanSourcesJob, autoStageJob, autoCommitJob];
+  if (env.webhooksEnabled) {
+    const { webhookDispatcherJob } = require("./webhook-dispatcher.ts");
+    jobs.push(webhookDispatcherJob);
+    // Task 10 will push outboundRetentionSweepJob here.
+  }
+  return jobs;
+}
