@@ -34,9 +34,6 @@ export interface CreateTableInput {
   external?: { table: string; idColumn: string; nameColumn: string }; // mode === 'external_id'
 }
 
-/** @deprecated — use AppError directly */
-export const CreateTableError = AppError;
-
 function validate(input: CreateTableInput): void {
   const name = (input.name ?? "").trim();
   if (!name) throw new AppError("VALIDATION_FAILED", "name is required");

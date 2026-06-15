@@ -126,10 +126,6 @@ export const env = {
   },
   /** Email domain restriction — applied in BOTH modes. Empty = unrestricted. */
   allowedDomain: readOptional("ALLOWED_DOMAIN") || readOptional("OIDC_ALLOWED_DOMAIN"),
-  /** @deprecated — replaced by OIDC_CLIENT_ID. Kept as optional for transition; not read by new code. */
-  googleClientId: readOptional("GOOGLE_CLIENT_ID"),
-  /** @deprecated — replaced by OIDC_CLIENT_SECRET. */
-  googleClientSecret: readOptional("GOOGLE_CLIENT_SECRET"),
   /** Public origin of this app — used to build the OAuth redirect_uri.
    *  In dev: http://localhost:5173 (Vite proxies /api). In prod: https://yourapp.com */
   origin: (readOptional("ORIGIN") || "http://localhost:5173").replace(/\/$/, ""),

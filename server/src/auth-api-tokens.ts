@@ -98,11 +98,7 @@ export async function handleRevokeToken(tokenId: string, userId: string): Promis
 
 /** Bearer-token authentication: parse Authorization header, hash-compare against
  *  active (non-revoked) tokens. Returns the matching SessionUser or null.
- *
- *  Fast path uses the `token_prefix` index (O(1) per request). Legacy fallback
- *  scans NULL-prefix rows (tokens issued before the prefix column existed),
- *  capped at 200 rows to bound worst-case argon2 cost, and logs a deprecation
- *  warning on every hit so admins know to rotate. */
+ *  O(1) per request via the `token_prefix` index. */
 export async function getApiTokenUser(req: Request): Promise<SessionUser | null> {
   const authHeader = req.headers.get("authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
@@ -110,33 +106,13 @@ export async function getApiTokenUser(req: Request): Promise<SessionUser | null>
   if (!token.startsWith(TOKEN_PREFIX)) return null;
   const prefix12 = token.slice(0, 12);
 
-  // Fast path: O(1) prefix-indexed lookup. Hits for every token issued post-migration.
-  const fast = await pgAll<{ id: string; user_id: string; token_hash: string }>(
+  const candidates = await pgAll<{ id: string; user_id: string; token_hash: string }>(
     `SELECT id, user_id, token_hash FROM ${pg("api_tokens")}
       WHERE token_prefix = $1 AND revoked_at IS NULL`,
     [prefix12],
   );
-  for (const cand of fast) {
+  for (const cand of candidates) {
     if (await Bun.password.verify(token, cand.token_hash)) {
-      void pgRun(`UPDATE ${pg("api_tokens")} SET last_used_at = current_timestamp WHERE id = $1`, [
-        cand.id,
-      ]).catch(() => {});
-      return await loadSessionUser(cand.user_id);
-    }
-  }
-
-  // Legacy slow path: capped scan of NULL-prefix rows (tokens issued before this
-  // migration). Bounded at 200 rows so worst-case auth cost stays predictable.
-  // Every hit logs a deprecation warning so admins notice and rotate.
-  const legacy = await pgAll<{ id: string; user_id: string; token_hash: string }>(
-    `SELECT id, user_id, token_hash FROM ${pg("api_tokens")}
-      WHERE token_prefix IS NULL AND revoked_at IS NULL
-      ORDER BY last_used_at DESC NULLS LAST
-      LIMIT 200`,
-  );
-  for (const cand of legacy) {
-    if (await Bun.password.verify(token, cand.token_hash)) {
-      console.warn(`[deprecation] legacy api_token authenticated; rotate token id=${cand.id}`);
       void pgRun(`UPDATE ${pg("api_tokens")} SET last_used_at = current_timestamp WHERE id = $1`, [
         cand.id,
       ]).catch(() => {});

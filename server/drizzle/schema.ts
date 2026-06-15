@@ -201,9 +201,8 @@ export const apiTokens = app.table(
     name:         varchar("name").notNull(),
     token_hash:   varchar("token_hash").notNull(),
     /* First 12 chars of plaintext token (e.g. "zz_abc8…"). NOT secret —
-       indexed for O(1) auth lookup. Nullable for tokens issued before this
-       migration; the auth code path falls back to a capped legacy scan. */
-    token_prefix: varchar("token_prefix", { length: 12 }),
+       indexed for O(1) auth lookup. */
+    token_prefix: varchar("token_prefix", { length: 12 }).notNull(),
     created_at:   timestamp("created_at").notNull(),
     last_used_at: timestamp("last_used_at"),
     revoked_at:   timestamp("revoked_at"),

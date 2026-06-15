@@ -3,7 +3,8 @@
 
    Run: `bun run verify-tables`. */
 
-import { createTable, CreateTableError } from "./tables.ts";
+import { createTable } from "./tables.ts";
+import { AppError } from "./errors.ts";
 import * as repo from "./repo.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { pg } from "./env.ts";
@@ -115,7 +116,7 @@ async function cleanup(): Promise<void> {
       throw new Error("expected NAME_TAKEN");
     } catch (e) {
       assert(
-        e instanceof CreateTableError && e.code === "NAME_TAKEN",
+        e instanceof AppError && e.code === "NAME_TAKEN",
         `expected NAME_TAKEN, got ${(e as Error).message}`,
       );
     }
@@ -128,7 +129,7 @@ async function cleanup(): Promise<void> {
       throw new Error("expected INVALID");
     } catch (e) {
       assert(
-        e instanceof CreateTableError && e.code === "VALIDATION_FAILED",
+        e instanceof AppError && e.code === "VALIDATION_FAILED",
         `expected VALIDATION_FAILED, got ${(e as Error).message}`,
       );
     }
@@ -141,34 +142,11 @@ async function cleanup(): Promise<void> {
       throw new Error("expected error");
     } catch (e) {
       assert(
-        e instanceof CreateTableError,
-        `expected CreateTableError, got ${(e as Error).message}`,
+        e instanceof AppError,
+        `expected AppError, got ${(e as Error).message}`,
       );
       // Either MISSING_PICKER (no source) or WAREHOUSE_OFFLINE — depends on env.attachWarehouse
     }
-  });
-
-  // ─── 5. Lazy option migration: legacy string[] reads as OptionDef[] ──────
-  await step("legacy string[] options read as {label, color: null}", async () => {
-    // Create a fresh dimension and a select field with empty options via the silent path
-    const legacyName = `${SCOPE} legacy`;
-    const legacyId = await repo.addDimension(legacyName, [], { silent: true }, "u_verify", T);
-    await repo.addField(legacyId, "Status", "select", undefined, { silent: true }, "u_verify", T);
-    // Overwrite the options JSON with the LEGACY string[] shape to simulate pre-T5 data
-    await pgRun(
-      `UPDATE ${pg("dimension_field")} SET field_config = $1 WHERE dim_id = $2 AND field = 'status'`,
-      [JSON.stringify(["open", "closed"]), legacyId],
-    );
-    const fields = await repo.listFields(legacyId, T);
-    const status = fields.find((f) => f.field === "status");
-    assert(
-      status?.options?.length === 2,
-      `expected 2 lifted options, got ${status?.options?.length}`,
-    );
-    assert(
-      status?.options?.[0].label === "open" && status.options[0].color === null,
-      "first option lifted with null color",
-    );
   });
 
   await step("cleanup", cleanup);

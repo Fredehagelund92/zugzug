@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."api_tokens" ALTER COLUMN "token_prefix" SET NOT NULL;

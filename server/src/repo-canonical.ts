@@ -1090,10 +1090,6 @@ export async function updateField(
     // Read the existing field_config, parse it, shallow-merge with the incoming
     // JSON, then write back — so PATCHes with one key (e.g. rules) don't wipe
     // the rest of the column's config (options, numberFormat, ratingMax, …).
-    //
-    // Normalization: select columns legacy-store their options as a bare JSON
-    // array ("[{…}]"). We lift that into {"options":[…]} so all types share a
-    // uniform object envelope that tolerates extra keys like "rules".
     const existing = await pgGet<{ field_config: string | null; type: string }>(
       `SELECT field_config, type FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2 AND tenant_id = $3`,
       [dimId, field, tenantId],
@@ -1102,10 +1098,7 @@ export async function updateField(
     if (existing?.field_config) {
       try {
         const parsed: unknown = JSON.parse(existing.field_config);
-        if (Array.isArray(parsed)) {
-          // Legacy bare-array format (select options). Lift to object envelope.
-          currentCfg = { options: parsed };
-        } else if (parsed !== null && typeof parsed === "object") {
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
           currentCfg = parsed as Record<string, unknown>;
         }
       } catch {
@@ -1178,10 +1171,7 @@ export async function updateField(
     if (typeof updates.fieldConfig === "string") {
       try {
         const parsed: unknown = JSON.parse(updates.fieldConfig);
-        if (Array.isArray(parsed)) {
-          // Caller sent a bare array — treat it as the options list (select compat)
-          incomingCfg = { options: parsed };
-        } else if (parsed !== null && typeof parsed === "object") {
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
           incomingCfg = parsed as Record<string, unknown>;
         }
       } catch {
@@ -1263,9 +1253,9 @@ export async function addField(
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
   const optsJson =
     t === "select"
-      ? JSON.stringify(options ?? [])
+      ? JSON.stringify({ options: options ?? [] })
       : t === "number" && opts.numberFormat != null
-        ? JSON.stringify(opts.numberFormat)
+        ? JSON.stringify({ numberFormat: opts.numberFormat })
         : t === "rating"
           ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
           : t === "linked"

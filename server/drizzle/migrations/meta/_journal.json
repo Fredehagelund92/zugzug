@@ -183,6 +183,13 @@
       "when": 1781600000000,
       "tag": "0025_canonical_version_backfill",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1781506311641,
+      "tag": "0026_token_prefix_not_null",
+      "breakpoints": true
     }
   ]
 }
