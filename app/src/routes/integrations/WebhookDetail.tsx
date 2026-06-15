@@ -6,6 +6,8 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { SkeletonList } from "../../components/Skeleton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { toast } from "../../components/Toast";
+import { useTenantNavigate } from "../../lib/use-tenant-navigate";
 import {
   getWebhook,
   patchWebhook,
@@ -30,6 +32,7 @@ export function WebhookDetail() {
   const { id = "" } = useParams();
   const tenant = useTenant();
   const canEdit = can(tenant, "integrations.webhooks.edit");
+  const navigate = useTenantNavigate();
 
   const [w, setW] = useState<Webhook | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,8 +75,12 @@ export function WebhookDetail() {
             <Button
               size="sm"
               onClick={async () => {
-                await reactivateWebhook(id);
-                await refresh();
+                try {
+                  await reactivateWebhook(id);
+                  await refresh();
+                } catch (e) {
+                  toast(`Couldn't reactivate: ${(e as Error).message}`, "error");
+                }
               }}
             >
               Reactivate
@@ -108,8 +115,12 @@ export function WebhookDetail() {
                 size="sm"
                 variant="ghost"
                 onClick={async () => {
-                  await patchWebhook(id, { status: "paused" });
-                  await refresh();
+                  try {
+                    await patchWebhook(id, { status: "paused" });
+                    await refresh();
+                  } catch (e) {
+                    toast(`Couldn't pause: ${(e as Error).message}`, "error");
+                  }
                 }}
               >
                 Pause
@@ -119,8 +130,12 @@ export function WebhookDetail() {
               <Button
                 size="sm"
                 onClick={async () => {
-                  await patchWebhook(id, { status: "active" });
-                  await refresh();
+                  try {
+                    await patchWebhook(id, { status: "active" });
+                    await refresh();
+                  } catch (e) {
+                    toast(`Couldn't resume: ${(e as Error).message}`, "error");
+                  }
                 }}
               >
                 Resume
@@ -147,9 +162,13 @@ export function WebhookDetail() {
                 size="sm"
                 variant="ghost"
                 onClick={async () => {
-                  const r = await rotateSecret(id);
-                  setSecret(r.value);
-                  await refresh();
+                  try {
+                    const r = await rotateSecret(id);
+                    setSecret(r.value);
+                    await refresh();
+                  } catch (e) {
+                    toast(`Couldn't rotate secret: ${(e as Error).message}`, "error");
+                  }
                 }}
               >
                 Rotate
@@ -178,8 +197,12 @@ export function WebhookDetail() {
           </p>
           <Button
             onClick={async () => {
-              await sendTestEvent(id);
-              await refresh();
+              try {
+                await sendTestEvent(id);
+                await refresh();
+              } catch (e) {
+                toast(`Couldn't send test event: ${(e as Error).message}`, "error");
+              }
             }}
           >
             Send test event
@@ -219,9 +242,13 @@ export function WebhookDetail() {
         danger
         onCancel={() => setConfirmDelete(false)}
         onConfirm={async () => {
-          await deleteWebhook(id);
-          setConfirmDelete(false);
-          window.history.back();
+          try {
+            await deleteWebhook(id);
+            navigate("/integrations/webhooks");
+          } catch (e) {
+            toast(`Couldn't delete: ${(e as Error).message}`, "error");
+            setConfirmDelete(false);
+          }
         }}
       />
     </div>
