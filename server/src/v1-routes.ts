@@ -29,6 +29,21 @@ import {
   listServiceAccounts,
   revokeServiceAccount,
 } from "./repo-service-accounts.ts";
+import {
+  createWebhook,
+  listWebhooks,
+  getWebhook,
+  patchWebhook,
+  deleteWebhook,
+  rotateSecret,
+  reactivateWebhook,
+} from "./repo-webhooks.ts";
+import {
+  sendTestEvent,
+  listDeliveries,
+  getDelivery,
+  replayDelivery,
+} from "./repo-webhook-deliveries.ts";
 
 const V1_PREFIX = /^\/api\/t\/([^/]+)\/v1(?:\/.*)?$/;
 
@@ -231,6 +246,138 @@ async function dispatch(
       const ok = await revokeServiceAccount(ctx.tenantId, decodeURIComponent(v1[1]!), userId);
       if (!ok) return jsonError(404, "not_found");
       return new Response(null, { status: 204 });
+    }
+  }
+
+  // /v1/webhooks — admin-only for mutations; editor+ for reads
+  if (v1[0] === "webhooks") {
+    // GET /v1/webhooks — editor+
+    if (v1.length === 1 && method === "GET") {
+      if (ctx.role === "viewer") return jsonError(403, "editor_required");
+      return json({ webhooks: await listWebhooks(ctx.tenantId) });
+    }
+
+    // POST /v1/webhooks — admin only
+    if (v1.length === 1 && method === "POST") {
+      if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+      let body: { url?: string; events?: string[]; description?: string | null };
+      try {
+        body = (await req.json()) as typeof body;
+      } catch {
+        return jsonError(400, "invalid_json");
+      }
+      try {
+        const r = await createWebhook({
+          tenantId: ctx.tenantId,
+          url: body.url ?? "",
+          events: body.events ?? [],
+          description: body.description ?? null,
+          createdBy: userId,
+        });
+        return json({ id: r.id, value: r.value }, 201);
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (
+          msg === "invalid_url" ||
+          msg === "https_required" ||
+          msg === "events_empty" ||
+          msg.startsWith("events_unknown")
+        ) {
+          return jsonError(400, msg);
+        }
+        throw e;
+      }
+    }
+
+    // /v1/webhooks/:id
+    if (v1.length === 2) {
+      const id = decodeURIComponent(v1[1]!);
+      if (method === "GET") {
+        if (ctx.role === "viewer") return jsonError(403, "editor_required");
+        const wh = await getWebhook(ctx.tenantId, id);
+        return wh ? json(wh) : jsonError(404, "not_found");
+      }
+      if (method === "PATCH") {
+        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        let body: Record<string, unknown>;
+        try {
+          body = (await req.json()) as Record<string, unknown>;
+        } catch {
+          return jsonError(400, "invalid_json");
+        }
+        try {
+          const ok = await patchWebhook(ctx.tenantId, id, body, userId);
+          return ok ? new Response(null, { status: 204 }) : jsonError(404, "not_found");
+        } catch (e) {
+          const msg = (e as Error).message;
+          if (
+            msg === "invalid_url" ||
+            msg === "https_required" ||
+            msg === "events_empty" ||
+            msg === "status_invalid" ||
+            msg === "status_disabled_not_allowed" ||
+            msg.startsWith("events_unknown")
+          ) {
+            return jsonError(400, msg);
+          }
+          throw e;
+        }
+      }
+      if (method === "DELETE") {
+        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        const ok = await deleteWebhook(ctx.tenantId, id, userId);
+        return ok ? new Response(null, { status: 204 }) : jsonError(404, "not_found");
+      }
+    }
+
+    // /v1/webhooks/:id/{reactivate|rotate-secret|test|deliveries}
+    if (v1.length === 3) {
+      const id = decodeURIComponent(v1[1]!);
+      const action = v1[2];
+      if (action === "reactivate" && method === "POST") {
+        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        const ok = await reactivateWebhook(ctx.tenantId, id, userId);
+        return ok ? new Response(null, { status: 204 }) : jsonError(404, "not_found");
+      }
+      if (action === "rotate-secret" && method === "POST") {
+        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        try {
+          const r = await rotateSecret({ tenantId: ctx.tenantId, id, userId });
+          return json({ value: r.value, previous_expires_at: r.previousExpiresAt });
+        } catch (e) {
+          if ((e as Error).message === "webhook_not_found") return jsonError(404, "not_found");
+          throw e;
+        }
+      }
+      if (action === "test" && method === "POST") {
+        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        const r = await sendTestEvent(ctx.tenantId, id, userId);
+        return r ? json(r) : jsonError(404, "not_found");
+      }
+      if (action === "deliveries" && method === "GET") {
+        if (ctx.role === "viewer") return jsonError(403, "editor_required");
+        const limitRaw = Number(url.searchParams.get("limit") ?? "");
+        const out = await listDeliveries(ctx.tenantId, id, {
+          status: url.searchParams.get("status") ?? undefined,
+          limit: Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined,
+          role: ctx.role,
+        });
+        return json(out);
+      }
+    }
+  }
+
+  // /v1/webhook-deliveries/:id, /v1/webhook-deliveries/:id/replay
+  if (v1[0] === "webhook-deliveries") {
+    if (ctx.role === "viewer") return jsonError(403, "editor_required");
+    if (v1.length === 2 && method === "GET") {
+      const d = await getDelivery(ctx.tenantId, decodeURIComponent(v1[1]!), ctx.role);
+      return d ? json(d) : jsonError(404, "not_found");
+    }
+    if (v1.length === 3 && v1[2] === "replay" && method === "POST") {
+      if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+      const r = await replayDelivery(ctx.tenantId, decodeURIComponent(v1[1]!), userId);
+      return r ? json({ delivery_id: r.id }, 202) : jsonError(404, "not_found");
     }
   }
 
