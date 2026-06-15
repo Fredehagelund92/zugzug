@@ -26,7 +26,7 @@ import { pgAll, pgEnd, pgGet, pgTxScoped } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 import { createScheduler } from "./scheduler.ts";
-import { scanSourcesJob, autoStageJob, autoCommitJob } from "./scheduler-jobs.ts";
+import { buildJobs } from "./scheduler-jobs.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
@@ -1524,7 +1524,7 @@ if (import.meta.main) {
       const probe = new TenantRepo(tenantId, "admin", true);
       return probe.anyScanDue(new Date());
     },
-    jobs: [scanSourcesJob, autoStageJob, autoCommitJob],
+    jobs: buildJobs(),
   });
   scheduler.start();
   console.log("· scheduler started (1m tick)");
