@@ -46,10 +46,9 @@ export abstract class DuckDbBase {
   }
 
   qualifyRef(table: Ref): string {
-    if (!table.catalog) {
-      throw new Error(`qualifyRef requires Ref.catalog (got ${JSON.stringify(table)})`);
-    }
-    const parts: string[] = [this.quoteIdentifier(table.catalog)];
+    const catalog = table.catalog ?? this.creds.database;
+    const parts: string[] = [];
+    if (catalog) parts.push(this.quoteIdentifier(catalog));
     parts.push(this.quoteIdentifier(table.schema));
     parts.push(this.quoteIdentifier(table.table));
     return parts.join(".");
@@ -171,12 +170,12 @@ export abstract class DuckDbBase {
   async listTables(
     opts: { schema?: string; search?: string; database?: string } = {},
   ): Promise<CatalogTable[]> {
-    if (!opts.database) {
-      throw new Error("listTables requires opts.database");
+    const targetDb = opts.database ?? this.creds.database;
+    if (!targetDb) {
+      throw new Error("listTables requires opts.database (no creds.database fallback)");
     }
     return withTimeout(
       async () => {
-        const targetDb = opts.database!;
         const params: DuckDBValue[] = [];
         let where = `name NOT LIKE '\\_dlt%' ESCAPE '\\'`;
         params.push(targetDb);

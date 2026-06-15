@@ -73,7 +73,7 @@ test("tableExists returns true for existing, false for missing", async () => {
 
 test("listTables returns schema+table with columns inline", async () => {
   const a = await withFixture();
-  const tables = await a.listTables({ schema: "raw" });
+  const tables = await a.listTables({ schema: "raw", database: "memory" });
   const partners = tables.find((t) => t.table === "partners");
   expect(partners).toBeDefined();
   expect(partners?.schema).toBe("raw");
@@ -148,16 +148,16 @@ test("listTables: search filters across schema, table name, and column names", a
   const a = await withFixture();
 
   // Search by schema name (matches everything in `raw`)
-  const bySchema = await a.listTables({ search: "raw" });
+  const bySchema = await a.listTables({ search: "raw", database: "memory" });
   expect(bySchema.length).toBeGreaterThanOrEqual(2); // partners + countries
 
   // Search by table name fragment
-  const byTable = await a.listTables({ search: "partner" });
+  const byTable = await a.listTables({ search: "partner", database: "memory" });
   expect(byTable.some((t) => t.table === "partners")).toBe(true);
   expect(byTable.some((t) => t.table === "countries")).toBe(false);
 
   // Search by column name (only `partners` has a `region` column)
-  const byColumn = await a.listTables({ search: "region" });
+  const byColumn = await a.listTables({ search: "region", database: "memory" });
   expect(byColumn.some((t) => t.table === "partners")).toBe(true);
   expect(byColumn.some((t) => t.table === "countries")).toBe(false);
 });

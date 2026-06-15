@@ -1428,7 +1428,7 @@ export async function changeColumnType(
         newType === "select"
           ? JSON.stringify(finalOptions ?? [])
           : newType === "number" && opts.numberFormat != null
-            ? JSON.stringify(opts.numberFormat)
+            ? JSON.stringify({ numberFormat: opts.numberFormat })
             : newType === "rating"
               ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
               : null,
