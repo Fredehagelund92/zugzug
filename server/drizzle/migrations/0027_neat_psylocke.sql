@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."preferences" ADD COLUMN "last_outbound_sweep_at" timestamp;

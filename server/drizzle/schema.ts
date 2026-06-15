@@ -247,6 +247,7 @@ export const preferences = app.table(
     ai_provider:       varchar("ai_provider").notNull().default("none"),
     ai_api_key:        varchar("ai_api_key"),
     legacy_default_database_id: varchar("legacy_default_database_id"),
+    last_outbound_sweep_at: timestamp("last_outbound_sweep_at"),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
