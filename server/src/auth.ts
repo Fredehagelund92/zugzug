@@ -261,6 +261,25 @@ export function requireAdmin(
   return { ok: false };
 }
 
+export type Scope = "read" | "webhook:manage";
+
+export interface ScopedRequest {
+  serviceAccount?: { scopes: string[] };
+}
+
+/** Pre-role gate for SA requests. If the caller is NOT a service account
+ *  (i.e. cookie or personal-token authenticated), the scope check is a
+ *  no-op — the existing role gates take over. SA tokens must carry the
+ *  scope explicitly OR the route returns 403 scope_insufficient. */
+export function requireScope(
+  req: ScopedRequest,
+  required: Scope,
+): { ok: true } | { ok: false; status: 403; error: "scope_insufficient" } {
+  if (!req.serviceAccount) return { ok: true };
+  if (req.serviceAccount.scopes.includes(required)) return { ok: true };
+  return { ok: false, status: 403, error: "scope_insufficient" };
+}
+
 export async function countSuperAdmins(): Promise<number> {
   const row = await get<{ n: number }>(
     `SELECT COUNT(*)::int AS n FROM ${pg("users")} WHERE is_super_admin = true`,
