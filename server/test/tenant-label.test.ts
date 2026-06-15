@@ -14,6 +14,9 @@ const U_IDS = ["u_label_admin_e2e", "u_label_editor_e2e"];
 async function cleanup(): Promise<void> {
   for (const t of T_IDS) {
     await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [t]);
+    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
+    await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [t]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."tenant_slug_alias" WHERE tenant_id = $1`, [t]).catch(() => {});
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
   }
   for (const u of U_IDS) {

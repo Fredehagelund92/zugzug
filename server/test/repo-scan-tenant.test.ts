@@ -13,25 +13,37 @@ const TA = "tsc_a";
 const TB = "tsc_b";
 const DIM = "tsc_dim";
 
+const WH_DB_ID = "whd_scantest";
+
 async function cleanup(): Promise<void> {
   await pgRun(`DROP TABLE IF EXISTS "zugzug_canonical"."dim_${DIM}"`);
   await pgRun(`DROP TABLE IF EXISTS "zugzug_canonical"."map_${DIM}"`);
   for (const t of [TA, TB]) {
     await pgRun(`DELETE FROM "zugzug_app"."source_stat" WHERE tenant_id = $1`, [t]);
+    await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
-    await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."dimension_field" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
   }
+  await pgRun(`DELETE FROM "zugzug_app"."warehouse_database" WHERE id = $1`, [WH_DB_ID]);
+}
+
+async function seedWarehouseDb(): Promise<void> {
+  await pgRun(
+    `INSERT INTO "zugzug_app"."warehouse_database" (id, database_name, added_at, added_by)
+     VALUES ($1, 'test_db', now(), 'u_system') ON CONFLICT DO NOTHING`,
+    [WH_DB_ID],
+  );
 }
 beforeEach(cleanup);
 afterAll(cleanup);
 
 test("listSources returns only sources owned by the calling tenant", async () => {
+  await seedWarehouseDb();
   await provisionTenant({ id: TA, label: "A" });
   await provisionTenant({ id: TB, label: "B" });
   await canonical.addDimension(DIM, [], { keyKind: "slug", silent: true }, "u_test", TA);

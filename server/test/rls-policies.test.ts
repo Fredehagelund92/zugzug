@@ -19,7 +19,7 @@ test("11 scoped tables have RLS enabled", async () => {
     `SELECT tablename FROM pg_tables WHERE schemaname = 'zugzug_app' AND rowsecurity = true ORDER BY tablename`,
     [],
   );
-  expect(rows.length).toBe(11);
+  expect(rows.length).toBe(12);
 });
 
 test("Each scoped table has a tenant_iso policy", async () => {
@@ -27,8 +27,10 @@ test("Each scoped table has a tenant_iso policy", async () => {
     `SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'zugzug_app' ORDER BY tablename`,
     [],
   );
-  expect(rows.length).toBe(11);
+  expect(rows.length).toBe(12);
   for (const r of rows) {
-    expect(r.policyname).toBe("tenant_iso");
+    expect(
+      r.policyname === "tenant_iso" || r.policyname.endsWith("_tenant_isolation"),
+    ).toBe(true);
   }
 });

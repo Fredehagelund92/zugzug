@@ -21,8 +21,8 @@ let saToken: string;
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $2, 'V1 Session Auth', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $2, 'V1 Session Auth', now()) ON CONFLICT DO NOTHING`,
     [T, SLUG],
   );
   await pgRun(

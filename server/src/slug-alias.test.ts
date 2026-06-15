@@ -6,8 +6,8 @@ const T = "test_slug_alias";
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, 'slug_after', 'Aliased', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, 'slug_after', 'Aliased', now()) ON CONFLICT DO NOTHING`,
     [T],
   );
 });

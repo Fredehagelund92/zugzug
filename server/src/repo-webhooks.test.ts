@@ -19,8 +19,8 @@ const U = "u_test_wh";
 beforeAll(async () => {
   _setMasterKeyForTest(Buffer.from(generateMasterKeyB64(), "base64"));
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'WH Repo', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
     [T],
   );
   await pgRun(
@@ -169,8 +169,8 @@ describe("listWebhooks + getWebhook", () => {
   it("listWebhooks is tenant-scoped (no cross-tenant leakage)", async () => {
     const tt = "test_repo_wh_oth";
     await pgRun(
-      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-       VALUES ($1, $1, 'Other', 'default', now()) ON CONFLICT DO NOTHING`,
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
       [tt],
     );
     const created = await createWebhook({

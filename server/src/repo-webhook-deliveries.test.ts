@@ -66,8 +66,8 @@ async function seedDelivery(
 beforeAll(async () => {
   _setMasterKeyForTest(Buffer.from(generateMasterKeyB64(), "base64"));
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'WHD Repo', 'default', now()) ON CONFLICT DO NOTHING`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Sweep', now()) ON CONFLICT DO NOTHING`,
     [T],
   );
   await pgRun(
