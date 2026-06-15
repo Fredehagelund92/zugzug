@@ -228,7 +228,7 @@ async function dispatch(
       return json({ id: created.id, name, value: created.value, scopes: ["read"] }, 201);
     }
     if (v1.length === 2 && method === "DELETE") {
-      const ok = await revokeServiceAccount(ctx.tenantId, decodeURIComponent(v1[1]!));
+      const ok = await revokeServiceAccount(ctx.tenantId, decodeURIComponent(v1[1]!), userId);
       if (!ok) return jsonError(404, "not_found");
       return new Response(null, { status: 204 });
     }

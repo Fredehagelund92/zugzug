@@ -247,6 +247,7 @@ describe("tenant mismatch — SA from a different workspace", () => {
     const res = await handleV1Route(req);
     expect(res!.status).toBe(403);
 
+    await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [OT]);
     await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [OT]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [OT]);
   });
