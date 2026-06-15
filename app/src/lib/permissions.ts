@@ -16,6 +16,13 @@ export type Action =
   | "settings.audit.view"
   | "settings.danger.leave"
   | "settings.danger.delete"
+  | "integrations.pull_api.view"
+  | "integrations.webhooks.view"
+  | "integrations.webhooks.delivery_log_view"
+  | "integrations.webhooks.delivery_payload_view"
+  | "integrations.webhooks.edit"
+  | "integrations.service_accounts.view"
+  | "integrations.service_accounts.edit"
   | "admin.view";
 
 export function can(t: TenantContextValue, action: Action): boolean {
@@ -48,6 +55,19 @@ export function can(t: TenantContextValue, action: Action): boolean {
     case "settings.members.edit":
     case "settings.tokens.edit":
     case "settings.danger.delete":
+      return t.role === "admin";
+
+    case "integrations.pull_api.view":
+    case "integrations.webhooks.view":
+    case "integrations.webhooks.delivery_log_view":
+      return true;
+
+    case "integrations.webhooks.delivery_payload_view":
+    case "integrations.service_accounts.view":
+      return t.role === "editor" || t.role === "admin";
+
+    case "integrations.webhooks.edit":
+    case "integrations.service_accounts.edit":
       return t.role === "admin";
 
     case "admin.view":
