@@ -15,6 +15,7 @@ import {
   IconAudit,
   IconUsers,
   IconDatabase,
+  IconIntegrations,
   IconChevronLeft,
   IconChevronRight,
   IconSearch,
@@ -382,6 +383,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const workspaceGroup: NavItem[] = [
     { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
     { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
+    { to: navLinks.integrations, label: "Integrations", Icon: IconIntegrations },
     { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
     { to: navLinks.sources, label: "Sources", Icon: IconSources },
   ];
@@ -448,6 +450,15 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       icon: <IconSettings className="h-4 w-4" />,
       action: () => navigate(navLinks.settings),
       keywords: "workspace preferences team",
+      priority: true,
+    });
+    out.push({
+      id: "nav:integrations",
+      group: "Navigate",
+      label: "Integrations",
+      icon: <IconIntegrations className="h-4 w-4" />,
+      action: () => navigate(navLinks.integrations),
+      keywords: "webhooks pull api service accounts integrations",
       priority: true,
     });
 
