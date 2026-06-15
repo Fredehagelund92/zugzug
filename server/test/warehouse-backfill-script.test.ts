@@ -3,8 +3,6 @@ process.env.MOTHERDUCK_TOKEN = "md_test_token_xyz";
 process.env.WAREHOUSE_DB = "analytics";
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.WAREHOUSE_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd=";
-process.env.GOOGLE_CLIENT_ID = "test-stub";
-process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect, beforeEach } from "bun:test";
 import { pgRun, pgGet, pgAll } from "../src/pg.ts";

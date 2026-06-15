@@ -70,17 +70,9 @@ export async function nextPosition(
   return max + 1024n;
 }
 
-/** Source-registration input shapes.
- *
- *  - QualifiedSource is the new (database_id, schema, table, column) tuple.
- *  - LegacySource keeps the old "schema.table" + column wire so callers (and
- *    older endpoint clients) keep working while we migrate.
- *
- *  normalizeSource() turns either into a QualifiedSource, resolving the
- *  legacy shape against preferences.legacy_default_database_id. When the
- *  tenant has multiple databases registered and no default set, the legacy
- *  shape is ambiguous and the caller MUST switch to the qualified shape. */
-export type LegacySource = { table: string; column: string };
+/** Qualified source — (database_id, schema, table, column). The only source
+ *  registration shape; callers handing in a bare "schema.table" string must
+ *  resolve it to a databaseId themselves (see resolveDefaultDatabase below). */
 export type QualifiedSource = {
   databaseId: string;
   schemaName: string;
@@ -88,37 +80,23 @@ export type QualifiedSource = {
   columnName: string;
 };
 
-export type NormalizeSourceError =
-  | { error: string; kind: "INVALID_LEGACY_SOURCE" }
-  | { error: string; kind: "BACKEND_LEGACY_SHAPE_AMBIGUOUS" };
-
-export async function normalizeSource(
-  tenantId: string,
-  input: LegacySource | QualifiedSource,
-): Promise<QualifiedSource | NormalizeSourceError> {
-  if ("databaseId" in input) {
-    return input;
-  }
-  const parts = input.table.split(".");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    return { error: "legacy source requires schema.table", kind: "INVALID_LEGACY_SOURCE" };
-  }
-  const pref = await pgGet<{ legacy_default_database_id: string | null }>(
-    `SELECT legacy_default_database_id FROM "zugzug_app"."preferences" WHERE tenant_id = $1`,
-    [tenantId],
+/** Pick the tenant's default warehouse database: the first one registered.
+ *  Used by internal helpers that take bare "schema.table" strings (seed,
+ *  deriveCanonical) and need to land a row in dimension_source. Throws if
+ *  the tenant has no warehouse_database registered. */
+export async function resolveDefaultDatabase(tenantId: string): Promise<string> {
+  void tenantId; // warehouse_database is deployment-global, not tenant-scoped
+  const row = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."warehouse_database" ORDER BY added_at LIMIT 1`,
   );
-  if (!pref?.legacy_default_database_id) {
-    return {
-      error: "ambiguous legacy source; set preferences.legacy_default_database_id",
-      kind: "BACKEND_LEGACY_SHAPE_AMBIGUOUS",
-    };
+  if (!row) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "no warehouse database registered; cannot resolve bare schema.table source",
+      422,
+    );
   }
-  return {
-    databaseId: pref.legacy_default_database_id,
-    schemaName: parts[0]!,
-    tableName: parts[1]!,
-    columnName: input.column,
-  };
+  return row.id;
 }
 
 /** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */
@@ -554,16 +532,13 @@ async function scanValues(
   return results.slice(0, 500);
 }
 
-/** Create a dimension: register it + provision dim_/map_ (Postgres) + register
- *  its warehouse sources. Idempotent on the id. For key_kind 'external_id' the
- *  dim_ label is nullable (names are resolved live from the warehouse, not stored).
- *
- *  `sources` accepts either the legacy `{ table: "schema.table", column }` shape
- *  or the qualified `{ databaseId, schemaName, tableName, columnName }` shape.
- *  Legacy entries are resolved via preferences.legacy_default_database_id. */
+/** Create a dimension: register it + provision dim_/map_ (Postgres). Idempotent
+ *  on the id. For key_kind 'external_id' the dim_ label is nullable (names are
+ *  resolved live from the warehouse, not stored). Source bindings are added
+ *  separately via addSource() / dimension_source inserts. */
 export async function addDimension(
   name: string,
-  sources: (LegacySource | QualifiedSource)[] = [],
+  sources: QualifiedSource[] = [],
   opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
   userId: string,
   tenantId: string,
@@ -625,10 +600,6 @@ export async function addDimension(
     }
   }
   for (const s of sources) {
-    const normalized = await normalizeSource(tenantId, s);
-    if ("error" in normalized) {
-      throw new AppError(normalized.kind, normalized.error, 422);
-    }
     await pgRun(
       `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -636,10 +607,10 @@ export async function addDimension(
       [
         id,
         tenantId,
-        normalized.databaseId,
-        normalized.schemaName,
-        normalized.tableName,
-        normalized.columnName,
+        s.databaseId,
+        s.schemaName,
+        s.tableName,
+        s.columnName,
       ],
     );
   }
@@ -1119,10 +1090,6 @@ export async function updateField(
     // Read the existing field_config, parse it, shallow-merge with the incoming
     // JSON, then write back — so PATCHes with one key (e.g. rules) don't wipe
     // the rest of the column's config (options, numberFormat, ratingMax, …).
-    //
-    // Normalization: select columns legacy-store their options as a bare JSON
-    // array ("[{…}]"). We lift that into {"options":[…]} so all types share a
-    // uniform object envelope that tolerates extra keys like "rules".
     const existing = await pgGet<{ field_config: string | null; type: string }>(
       `SELECT field_config, type FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2 AND tenant_id = $3`,
       [dimId, field, tenantId],
@@ -1131,10 +1098,7 @@ export async function updateField(
     if (existing?.field_config) {
       try {
         const parsed: unknown = JSON.parse(existing.field_config);
-        if (Array.isArray(parsed)) {
-          // Legacy bare-array format (select options). Lift to object envelope.
-          currentCfg = { options: parsed };
-        } else if (parsed !== null && typeof parsed === "object") {
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
           currentCfg = parsed as Record<string, unknown>;
         }
       } catch {
@@ -1207,10 +1171,7 @@ export async function updateField(
     if (typeof updates.fieldConfig === "string") {
       try {
         const parsed: unknown = JSON.parse(updates.fieldConfig);
-        if (Array.isArray(parsed)) {
-          // Caller sent a bare array — treat it as the options list (select compat)
-          incomingCfg = { options: parsed };
-        } else if (parsed !== null && typeof parsed === "object") {
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
           incomingCfg = parsed as Record<string, unknown>;
         }
       } catch {
@@ -1292,9 +1253,9 @@ export async function addField(
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
   const optsJson =
     t === "select"
-      ? JSON.stringify(options ?? [])
+      ? JSON.stringify({ options: options ?? [] })
       : t === "number" && opts.numberFormat != null
-        ? JSON.stringify(opts.numberFormat)
+        ? JSON.stringify({ numberFormat: opts.numberFormat })
         : t === "rating"
           ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
           : t === "linked"

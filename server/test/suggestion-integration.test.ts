@@ -9,8 +9,6 @@
 process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
-process.env.GOOGLE_CLIENT_ID = "test-stub";
-process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect, beforeEach } from "bun:test";
 import { generateSuggestion, AINotEnabledError, type SuggestionContext } from "../src/suggestion.ts";

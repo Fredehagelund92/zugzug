@@ -201,9 +201,8 @@ export const apiTokens = app.table(
     name:         varchar("name").notNull(),
     token_hash:   varchar("token_hash").notNull(),
     /* First 12 chars of plaintext token (e.g. "zz_abc8…"). NOT secret —
-       indexed for O(1) auth lookup. Nullable for tokens issued before this
-       migration; the auth code path falls back to a capped legacy scan. */
-    token_prefix: varchar("token_prefix", { length: 12 }),
+       indexed for O(1) auth lookup. */
+    token_prefix: varchar("token_prefix", { length: 12 }).notNull(),
     created_at:   timestamp("created_at").notNull(),
     last_used_at: timestamp("last_used_at"),
     revoked_at:   timestamp("revoked_at"),
@@ -246,8 +245,6 @@ export const preferences = app.table(
     ai_enabled:        boolean("ai_enabled").notNull().default(false),
     ai_provider:       varchar("ai_provider").notNull().default("none"),
     ai_api_key:        varchar("ai_api_key"),
-    legacy_default_database_id: varchar("legacy_default_database_id"),
-    last_outbound_sweep_at: timestamp("last_outbound_sweep_at"),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
@@ -349,7 +346,6 @@ export const tenant = app.table(
     slug:         varchar("slug").notNull(),
     label:        varchar("label").notNull(),
     color:        varchar("color"),
-    warehouse_id: varchar("warehouse_id").notNull(),
     created_at:   timestamp("created_at").notNull(),
     deleted_at:   timestamp("deleted_at"),
   },

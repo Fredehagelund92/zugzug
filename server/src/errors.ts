@@ -12,8 +12,6 @@ export type ErrorCode =
   | "SELF_DEMOTE"
   | "LAST_SUPER_ADMIN"
   | "READ_ONLY_TOKEN"
-  | "INVALID_LEGACY_SOURCE"
-  | "BACKEND_LEGACY_SHAPE_AMBIGUOUS"
   | "INTERNAL";
 
 export class AppError extends Error {

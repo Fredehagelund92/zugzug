@@ -1,8 +1,6 @@
 process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
-process.env.GOOGLE_CLIENT_ID = "test-stub";
-process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { pgGet, pgAll, pgRun } from "../src/pg.ts";
@@ -42,12 +40,11 @@ afterAll(async () => {
 });
 
 test("Deploy 1 migration seeded the 'default' tenant", async () => {
-  const row = await pgGet<{ id: string; slug: string; label: string; warehouse_id: string }>(
-    `SELECT id, slug, label, warehouse_id FROM "zugzug_app"."tenant" WHERE id = 'default'`,
+  const row = await pgGet<{ id: string; slug: string; label: string }>(
+    `SELECT id, slug, label FROM "zugzug_app"."tenant" WHERE id = 'default'`,
   );
   expect(row?.id).toBe("default");
   expect(row?.slug).toBe("default");
-  expect(row?.warehouse_id).toBe("default");
 });
 
 test("Deploy 1 migration created tenant_member rows for pre-existing users with their role", async () => {

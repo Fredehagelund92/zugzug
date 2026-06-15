@@ -32,19 +32,16 @@ export interface OptionDef {
  *  `[{ label, color: null }]`; the new `{ label, color }` shape passes through.
  *  Non-array / malformed JSON returns `undefined`. */
 export function parseOptions(raw: unknown): OptionDef[] | undefined {
-  let arr: unknown = raw;
-  if (typeof arr === "string" && arr.length > 0) {
+  let parsed: unknown = raw;
+  if (typeof parsed === "string" && parsed.length > 0) {
     try {
-      arr = JSON.parse(arr);
+      parsed = JSON.parse(parsed);
     } catch {
       return undefined;
     }
   }
-  // Support both the legacy bare-array format ("[{...}]") and the merged-object
-  // format ("{\"options\":[...]}") produced by the server-side merge path.
-  if (arr != null && typeof arr === "object" && !Array.isArray(arr) && "options" in arr) {
-    arr = (arr as { options: unknown }).options;
-  }
+  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  const arr = (parsed as { options?: unknown }).options;
   if (!Array.isArray(arr)) return undefined;
   return arr.map((o) => {
     if (typeof o === "string") return { label: o, color: null };
@@ -73,19 +70,16 @@ export type NumberFormat =
 const VALID_FORMATS = ["integer", "decimal", "percent", "currency", "compact", "duration"];
 
 export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
-  let obj: unknown = raw;
-  if (typeof obj === "string" && obj.length > 0) {
+  let parsed: unknown = raw;
+  if (typeof parsed === "string" && parsed.length > 0) {
     try {
-      obj = JSON.parse(obj);
+      parsed = JSON.parse(parsed);
     } catch {
       return undefined;
     }
   }
-  // Support the merged-object format ("{\"numberFormat\":{...}}") produced by
-  // the server-side merge path alongside the legacy direct-object format.
-  if (obj != null && typeof obj === "object" && !Array.isArray(obj) && "numberFormat" in obj) {
-    obj = (obj as { numberFormat: unknown }).numberFormat;
-  }
+  if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  const obj = (parsed as { numberFormat?: unknown }).numberFormat;
   if (
     obj == null ||
     typeof obj !== "object" ||

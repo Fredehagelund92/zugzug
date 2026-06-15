@@ -12,6 +12,11 @@ import * as repo from "../src/repo.ts";
 
 beforeEach(async () => {
   await resetDb();
+  // addSource() resolves database via warehouse_database; seed one for tests.
+  await pgRun(
+    `INSERT INTO zugzug_app.warehouse_database (id, database_name, added_at, added_by)
+     VALUES ('whd_test', 'test_db', now(), 'u_system') ON CONFLICT DO NOTHING`,
+  );
 });
 
 test("anyScanDue returns true when no sources are wired (lastScan is null)", async () => {

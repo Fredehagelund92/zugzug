@@ -1,8 +1,6 @@
 process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
-process.env.GOOGLE_CLIENT_ID = "test-stub";
-process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { pgGet, pgAll, pgRun } from "../src/pg.ts";
@@ -34,18 +32,17 @@ afterAll(async () => {
   }
 });
 
-test("provisionTenant creates a tenant row with slug = id and pointing at default warehouse", async () => {
+test("provisionTenant creates a tenant row with slug = id", async () => {
   const t = await provisionTenant({ id: "tprov_a", label: "Test A" });
   expect(t.id).toBe("tprov_a");
   expect(t.slug).toBe("tprov_a");
   expect(t.label).toBe("Test A");
-  expect(t.warehouse_id).toBe("default");
 
-  const row = await pgGet<{ id: string; slug: string; label: string; warehouse_id: string }>(
-    `SELECT id, slug, label, warehouse_id FROM "zugzug_app"."tenant" WHERE id = $1`,
+  const row = await pgGet<{ id: string; slug: string; label: string }>(
+    `SELECT id, slug, label FROM "zugzug_app"."tenant" WHERE id = $1`,
     ["tprov_a"],
   );
-  expect(row).toEqual({ id: "tprov_a", slug: "tprov_a", label: "Test A", warehouse_id: "default" });
+  expect(row).toEqual({ id: "tprov_a", slug: "tprov_a", label: "Test A" });
 });
 
 test("provisionTenant with a duplicate id rejects with a clear error", async () => {

@@ -174,33 +174,13 @@ async function resolveServiceAccountToken(token: string): Promise<AuthedRequest 
 async function resolvePersonalToken(token: string): Promise<SessionUser | null> {
   const prefix12 = token.slice(0, 12);
 
-  // Fast path: O(1) prefix-indexed lookup. Hits for every token issued post-migration.
-  const fast = await pgAll<{ id: string; user_id: string; token_hash: string }>(
+  const candidates = await pgAll<{ id: string; user_id: string; token_hash: string }>(
     `SELECT id, user_id, token_hash FROM ${pg("api_tokens")}
       WHERE token_prefix = $1 AND revoked_at IS NULL`,
     [prefix12],
   );
-  for (const cand of fast) {
+  for (const cand of candidates) {
     if (await Bun.password.verify(token, cand.token_hash)) {
-      void pgRun(`UPDATE ${pg("api_tokens")} SET last_used_at = current_timestamp WHERE id = $1`, [
-        cand.id,
-      ]).catch(() => {});
-      return await loadSessionUser(cand.user_id);
-    }
-  }
-
-  // Legacy slow path: capped scan of NULL-prefix rows (tokens issued before this
-  // migration). Bounded at 200 rows so worst-case auth cost stays predictable.
-  // Every hit logs a deprecation warning so admins notice and rotate.
-  const legacy = await pgAll<{ id: string; user_id: string; token_hash: string }>(
-    `SELECT id, user_id, token_hash FROM ${pg("api_tokens")}
-      WHERE token_prefix IS NULL AND revoked_at IS NULL
-      ORDER BY last_used_at DESC NULLS LAST
-      LIMIT 200`,
-  );
-  for (const cand of legacy) {
-    if (await Bun.password.verify(token, cand.token_hash)) {
-      console.warn(`[deprecation] legacy api_token authenticated; rotate token id=${cand.id}`);
       void pgRun(`UPDATE ${pg("api_tokens")} SET last_used_at = current_timestamp WHERE id = $1`, [
         cand.id,
       ]).catch(() => {});

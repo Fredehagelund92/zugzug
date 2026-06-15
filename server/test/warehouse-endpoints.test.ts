@@ -3,8 +3,6 @@ process.env.MOTHERDUCK_TOKEN = "md_test";
 process.env.WAREHOUSE_DB = "analytics";
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.WAREHOUSE_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd=";
-process.env.GOOGLE_CLIENT_ID = "test-stub";
-process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.AUTH_MODE = "password";
 process.env.ALLOWED_DOMAIN = "example.com";
 
@@ -308,19 +306,10 @@ test("POST /dimensions/:id/sources accepts the qualified shape, sets MRU, no Dep
   expect(mru?.recent_database_id).toBe(dbId);
 });
 
-test("POST /dimensions/:id/sources legacy shape resolves via preferences + sets Deprecation header", async () => {
+test("POST /dimensions/:id/sources bare {table,column} resolves via the first warehouse_database", async () => {
   const { cookie, tenantSlug, dbId } = await setupWithConnection();
-  const dimId = `dim_test_t16_legacy`;
+  const dimId = `dim_test_t16_bareshape`;
   await seedDimension(dimId);
-  // Seed preferences with the legacy default DB pointer.
-  await pgRun(
-    `INSERT INTO "zugzug_app"."preferences"
-       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id, legacy_default_database_id)
-     VALUES (10, 5, NULL, now(), $1, $2)
-     ON CONFLICT (tenant_id) DO UPDATE
-       SET legacy_default_database_id = EXCLUDED.legacy_default_database_id`,
-    [T, dbId],
-  );
   const { handle } = await import("../src/server.ts");
   const res = await handle(
     new Request(`http://localhost/api/t/${tenantSlug}/dimensions/${dimId}/sources`, {
@@ -331,7 +320,6 @@ test("POST /dimensions/:id/sources legacy shape resolves via preferences + sets 
     () => {},
   );
   expect(res.status).toBe(204);
-  expect(res.headers.get("Deprecation")).toBe("true");
   const { pgGet } = await import("../src/pg.ts");
   const row = await pgGet<{
     database_id: string;
@@ -347,22 +335,4 @@ test("POST /dimensions/:id/sources legacy shape resolves via preferences + sets 
   expect(row?.schema_name).toBe("raw");
   expect(row?.table_name).toBe("shipments");
   expect(row?.column_name).toBe("destination_country");
-});
-
-test("POST /dimensions/:id/sources legacy shape without preferences default returns 422", async () => {
-  const { cookie, tenantSlug } = await setupWithConnection();
-  const dimId = `dim_test_t16_ambiguous`;
-  await seedDimension(dimId);
-  const { handle } = await import("../src/server.ts");
-  const res = await handle(
-    new Request(`http://localhost/api/t/${tenantSlug}/dimensions/${dimId}/sources`, {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ source: { table: "raw.shipments", column: "destination_country" } }),
-    }),
-    () => {},
-  );
-  expect(res.status).toBe(422);
-  const body = await res.json();
-  expect(body.kind).toBe("BACKEND_LEGACY_SHAPE_AMBIGUOUS");
 });

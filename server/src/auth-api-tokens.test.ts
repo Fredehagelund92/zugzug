@@ -52,23 +52,4 @@ describe("api_tokens.token_prefix", () => {
     expect(user!.id).toBe(U);
   });
 
-  it("getApiTokenUser falls back to legacy scan for NULL-prefix tokens", async () => {
-    // Simulate a pre-migration token: insert directly with token_prefix = NULL.
-    const value = `zz_${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")}`;
-    const hash = await Bun.password.hash(value);
-    const id = `tok_legacy_${crypto.randomUUID().replace(/-/g, "")}`;
-    await pgRun(
-      `INSERT INTO "zugzug_app"."api_tokens"
-         (id, user_id, name, token_hash, token_prefix, created_at)
-       VALUES ($1, $2, 'legacy', $3, NULL, now())`,
-      [id, U, hash],
-    );
-
-    const authReq = new Request("http://test/", {
-      headers: { authorization: `Bearer ${value}` },
-    });
-    const user = await getApiTokenUser(authReq);
-    expect(user).not.toBeNull();
-    expect(user!.id).toBe(U);
-  });
 });

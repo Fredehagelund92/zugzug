@@ -1,8 +1,6 @@
 process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
-process.env.GOOGLE_CLIENT_ID = "test-stub";
-process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 process.env.AUTH_MODE = "password";
 process.env.ALLOWED_DOMAIN = "example.com";
 
@@ -22,7 +20,7 @@ beforeEach(cleanup);
 afterAll(cleanup);
 
 test("pgTxScoped sets app.tenant_id and pgGet inside reads it via current_setting", async () => {
-  await provisionTenant({ id: "t_txroute_e2e", slug: "t_txroute", label: "TxRoute", warehouseId: "default" });
+  await provisionTenant({ id: "t_txroute_e2e", slug: "t_txroute", label: "TxRoute" });
   await pgTxScoped("t_txroute_e2e", async () => {
     const row = await pgGet<{ v: string }>(
       `SELECT current_setting('app.tenant_id') AS v`,
@@ -42,7 +40,7 @@ test("pgGet outside pgTxScoped uses the pool (no app.tenant_id)", async () => {
 });
 
 test("pgContext.tx is populated inside pgTxScoped", async () => {
-  await provisionTenant({ id: "t_txroute_e2e", slug: "t_txroute", label: "TxRoute", warehouseId: "default" });
+  await provisionTenant({ id: "t_txroute_e2e", slug: "t_txroute", label: "TxRoute" });
   let observedTx: unknown = null;
   await pgTxScoped("t_txroute_e2e", async () => {
     observedTx = pgContext.getStore()?.tx;

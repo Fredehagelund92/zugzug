@@ -23,6 +23,7 @@ import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { saveDraft } from "./repo-drafts.ts";
+import { AppError } from "./errors.ts";
 
 export interface UnmappedSample {
   raw: string;
@@ -306,10 +307,11 @@ export async function autoStageExactMatches(dimId: string, tenantId: string): Pr
 
 /** Register a warehouse column as a source for a dimension (idempotent).
  *
- *  Takes the legacy `"schema.table"` + column shape and routes through
- *  normalizeSource() so the row lands in the new
- *  (database_id, schema, table, column) columns. Callers that already have
- *  a database_id should write the INSERT directly. */
+ *  Takes the convenience `"schema.table"` + column shape (used by seed and
+ *  deriveCanonical). Resolves the warehouse database via
+ *  resolveDefaultDatabase() — the first registered warehouse_database for
+ *  the deployment. Callers that already hold a databaseId should write the
+ *  INSERT directly with that ID. */
 export async function addSource(
   dimId: string,
   table: string,
@@ -318,23 +320,17 @@ export async function addSource(
   opts: { silent?: boolean } = {},
 ): Promise<void> {
   void opts;
-  const { normalizeSource } = await import("./repo-canonical.ts");
-  const normalized = await normalizeSource(tenantId, { table, column });
-  if ("error" in normalized) {
-    throw new Error(`${normalized.kind}: ${normalized.error}`);
+  const parts = table.split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${table}`, 422);
   }
+  const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+  const databaseId = await resolveDefaultDatabase(tenantId);
   await pgRun(
     `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
-    [
-      dimId,
-      tenantId,
-      normalized.databaseId,
-      normalized.schemaName,
-      normalized.tableName,
-      normalized.columnName,
-    ],
+    [dimId, tenantId, databaseId, parts[0], parts[1], column],
   );
 }
 
