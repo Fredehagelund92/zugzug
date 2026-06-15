@@ -14,7 +14,7 @@ export function SecretRevealModal({ value, onClose, title = "Copy your signing s
         onKeyDown={(e) => { if (e.key === "Escape") e.stopPropagation(); }}
       >
         <h2 className="font-display text-[15px] font-semibold text-ink">{title}</h2>
-        <p className="text-[13px] text-ink-2">This is the only time you'll see this value.</p>
+        <p className="text-[13px] text-ink-2">This is the only time you&apos;ll see this value.</p>
         <div className="flex items-center gap-2">
           <code className="flex-1 rounded-sm bg-surface-2 px-2 py-1.5 font-mono text-[12px] break-all">{value}</code>
           <Button
@@ -27,7 +27,7 @@ export function SecretRevealModal({ value, onClose, title = "Copy your signing s
         </div>
         <div className="flex justify-end">
           <Button onClick={onClose} disabled={!copied} title={copied ? undefined : "Copy the secret first"}>
-            I've copied it
+            I&apos;ve copied it
           </Button>
         </div>
       </div>
