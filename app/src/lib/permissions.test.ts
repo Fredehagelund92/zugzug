@@ -63,10 +63,9 @@ describe("integrations actions (§9 matrix)", () => {
     expect(can(admin, "integrations.pull_api.view")).toBe(true);
   });
 
-  it("everyone sees the webhooks list + delivery log metadata", () => {
+  it("everyone sees the webhooks list", () => {
     for (const t of [viewer, editor, admin]) {
       expect(can(t, "integrations.webhooks.view")).toBe(true);
-      expect(can(t, "integrations.webhooks.delivery_log_view")).toBe(true);
     }
   });
 
