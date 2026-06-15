@@ -8,6 +8,7 @@
 import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
 import { AppError } from "./errors.ts";
 import { addWarehouseDatabase } from "./repo-warehouse.ts";
+import { recordSlugAlias } from "./slug-alias.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
@@ -405,6 +406,17 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
   if (existing) {
     throw new AppError("ALREADY_EXISTS", `slug '${next}' is taken`, 409);
   }
+  const current = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."tenant" WHERE slug = $1 AND deleted_at IS NULL`,
+    [currentSlug],
+  );
+  if (!current) {
+    throw new AppError("NOT_FOUND", `tenant '${currentSlug}' not found`, 404);
+  }
+  // PR2 Task 12: persists old slug for 30-day redirect grace window.
+  // Fired before the UPDATE so an UPDATE failure leaves a benign alias row
+  // pointing at the unchanged slug. Idempotent on old_slug.
+  await recordSlugAlias(currentSlug, current.id);
   await pgRun(`UPDATE "zugzug_app"."tenant" SET slug = $1 WHERE slug = $2`, [next, currentSlug]);
 }
 
