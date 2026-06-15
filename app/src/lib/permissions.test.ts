@@ -14,6 +14,8 @@ const EDIT_ACTIONS: Action[] = [
   "settings.scans.edit",
   "settings.matching.edit",
   "settings.danger.delete",
+  "integrations.webhooks.edit",
+  "integrations.service_accounts.edit",
 ];
 
 describe("can()", () => {
@@ -47,5 +49,45 @@ describe("can()", () => {
   it("admin.view requires the super-admin flag", () => {
     expect(can(ctx("admin", false), "admin.view")).toBe(false);
     expect(can(ctx("viewer", true), "admin.view")).toBe(true);
+  });
+});
+
+describe("integrations actions (§9 matrix)", () => {
+  const viewer = ctx("viewer");
+  const editor = ctx("editor");
+  const admin = ctx("admin");
+
+  it("everyone sees the Pull API docs page", () => {
+    expect(can(viewer, "integrations.pull_api.view")).toBe(true);
+    expect(can(editor, "integrations.pull_api.view")).toBe(true);
+    expect(can(admin, "integrations.pull_api.view")).toBe(true);
+  });
+
+  it("everyone sees the webhooks list + delivery log metadata", () => {
+    for (const t of [viewer, editor, admin]) {
+      expect(can(t, "integrations.webhooks.view")).toBe(true);
+      expect(can(t, "integrations.webhooks.delivery_log_view")).toBe(true);
+    }
+  });
+
+  it("viewer cannot see delivery payloads; editor and admin can", () => {
+    expect(can(viewer, "integrations.webhooks.delivery_payload_view")).toBe(false);
+    expect(can(editor, "integrations.webhooks.delivery_payload_view")).toBe(true);
+    expect(can(admin, "integrations.webhooks.delivery_payload_view")).toBe(true);
+  });
+
+  it("only admin can edit webhooks", () => {
+    expect(can(viewer, "integrations.webhooks.edit")).toBe(false);
+    expect(can(editor, "integrations.webhooks.edit")).toBe(false);
+    expect(can(admin, "integrations.webhooks.edit")).toBe(true);
+  });
+
+  it("viewer cannot see service accounts; editor sees, admin edits", () => {
+    expect(can(viewer, "integrations.service_accounts.view")).toBe(false);
+    expect(can(editor, "integrations.service_accounts.view")).toBe(true);
+    expect(can(admin, "integrations.service_accounts.view")).toBe(true);
+    expect(can(viewer, "integrations.service_accounts.edit")).toBe(false);
+    expect(can(editor, "integrations.service_accounts.edit")).toBe(false);
+    expect(can(admin, "integrations.service_accounts.edit")).toBe(true);
   });
 });
