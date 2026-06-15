@@ -2,7 +2,12 @@ import { useState } from "react";
 import { Button } from "../../components/Button";
 import { Checkbox } from "../../components/Checkbox";
 import { FormField } from "../../components/FormField";
-import { createWebhook, humanError, IntegrationsApiError, type WebhookEvent } from "../../lib/integrations-api";
+import {
+  createWebhook,
+  humanError,
+  IntegrationsApiError,
+  type WebhookEvent,
+} from "../../lib/integrations-api";
 
 interface Props {
   onClose: () => void;
@@ -10,10 +15,26 @@ interface Props {
 }
 
 const EVENTS: { value: WebhookEvent; label: string; hint: string }[] = [
-  { value: "dimension.committed",      label: "dimension.committed",      hint: "When canonical records change." },
-  { value: "dimension.created",        label: "dimension.created",        hint: "When a new dimension is set up." },
-  { value: "canonical.deleted",        label: "canonical.deleted",        hint: "When a single record is retired." },
-  { value: "dimension.schema.updated", label: "dimension.schema.updated", hint: "When a dimension's field schema changes." },
+  {
+    value: "dimension.committed",
+    label: "dimension.committed",
+    hint: "When canonical records change.",
+  },
+  {
+    value: "dimension.created",
+    label: "dimension.created",
+    hint: "When a new dimension is set up.",
+  },
+  {
+    value: "canonical.deleted",
+    label: "canonical.deleted",
+    hint: "When a single record is retired.",
+  },
+  {
+    value: "dimension.schema.updated",
+    label: "dimension.schema.updated",
+    hint: "When a dimension's field schema changes.",
+  },
 ];
 
 export function CreateWebhookModal({ onClose, onCreated }: Props) {
@@ -38,7 +59,10 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -64,7 +88,13 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
               <label key={e.value} className="flex items-center gap-2 text-[13px]">
                 <Checkbox
                   state={events.includes(e.value) ? "on" : "off"}
-                  onClick={() => setEvents((prev) => prev.includes(e.value) ? prev.filter((x) => x !== e.value) : [...prev, e.value])}
+                  onClick={() =>
+                    setEvents((prev) =>
+                      prev.includes(e.value)
+                        ? prev.filter((x) => x !== e.value)
+                        : [...prev, e.value],
+                    )
+                  }
                 />
                 <span className="font-mono">{e.label}</span>
                 <span className="text-ink-3">{e.hint}</span>
@@ -83,15 +113,21 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
         </FormField>
 
         <p className="text-[12px] text-ink-3">
-          Signing secret will be generated and shown once. Test events can be sent from the
-          webhook detail page once the subscription exists.
+          Signing secret will be generated and shown once. Test events can be sent from the webhook
+          detail page once the subscription exists.
         </p>
 
         {error && <p className="text-[12px] text-danger">{error}</p>}
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose} disabled={submitting}>Cancel</Button>
-          <Button onClick={() => void submit()} loading={submitting} disabled={!url || events.length === 0}>
+          <Button variant="ghost" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => void submit()}
+            loading={submitting}
+            disabled={!url || events.length === 0}
+          >
             Create webhook
           </Button>
         </div>
@@ -99,4 +135,3 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
     </div>
   );
 }
-

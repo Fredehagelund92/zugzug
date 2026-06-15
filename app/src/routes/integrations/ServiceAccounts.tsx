@@ -9,16 +9,20 @@ import { FormField } from "../../components/FormField";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { toast } from "../../components/Toast";
 import {
-  listServiceAccounts, createServiceAccount, revokeServiceAccount,
-  humanError, type ServiceAccount, IntegrationsApiError,
+  listServiceAccounts,
+  createServiceAccount,
+  revokeServiceAccount,
+  humanError,
+  type ServiceAccount,
+  IntegrationsApiError,
 } from "../../lib/integrations-api";
 import { SecretRevealModal } from "./SecretRevealModal";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
 
 const EXPIRY_OPTIONS = [
-  { label: "Never",   value: "never" as const, days: null as number | null },
-  { label: "90 days", value: "90d"   as const, days: 90 },
-  { label: "1 year",  value: "1y"    as const, days: 365 },
+  { label: "Never", value: "never" as const, days: null as number | null },
+  { label: "90 days", value: "90d" as const, days: 90 },
+  { label: "1 year", value: "1y" as const, days: 365 },
 ];
 
 export function ServiceAccounts() {
@@ -30,13 +34,19 @@ export function ServiceAccounts() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
-  const [expiry, setExpiry] = useState<typeof EXPIRY_OPTIONS[number]>(EXPIRY_OPTIONS[1]);
+  const [expiry, setExpiry] = useState<(typeof EXPIRY_OPTIONS)[number]>(EXPIRY_OPTIONS[1]);
   const [createError, setCreateError] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [revoke, setRevoke] = useState<{ id: string; name: string } | null>(null);
 
-  const refresh = async () => { setLoading(true); setItems(await listServiceAccounts()); setLoading(false); };
-  useEffect(() => { if (canView) void refresh(); }, [canView]);
+  const refresh = async () => {
+    setLoading(true);
+    setItems(await listServiceAccounts());
+    setLoading(false);
+  };
+  useEffect(() => {
+    if (canView) void refresh();
+  }, [canView]);
 
   if (!canView) {
     return <p className="text-[13px] text-ink-3">Service accounts are admin-only.</p>;
@@ -47,10 +57,12 @@ export function ServiceAccounts() {
   const submit = async () => {
     setCreateError(null);
     try {
-      const exp = expiry.days == null ? null : new Date(Date.now() + expiry.days * 86_400_000).toISOString();
+      const exp =
+        expiry.days == null ? null : new Date(Date.now() + expiry.days * 86_400_000).toISOString();
       const out = await createServiceAccount({ name: name.trim(), expires_at: exp });
       setSecret(out.value);
-      setName(""); setShowForm(false);
+      setName("");
+      setShowForm(false);
       await refresh();
     } catch (e) {
       const code = e instanceof IntegrationsApiError ? e.code : "create_failed";
@@ -76,7 +88,9 @@ export function ServiceAccounts() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-[15px] font-semibold text-ink">Service accounts</h2>
-        {canEdit && !showForm && <Button onClick={() => setShowForm(true)}>+ New service account</Button>}
+        {canEdit && !showForm && (
+          <Button onClick={() => setShowForm(true)}>+ New service account</Button>
+        )}
       </div>
 
       {showForm && (
@@ -110,8 +124,19 @@ export function ServiceAccounts() {
           </FormField>
           {createError && <p className="text-[12px] text-danger">{createError}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => { setShowForm(false); setName(""); setCreateError(null); }}>Cancel</Button>
-            <Button onClick={() => void submit()} disabled={!name.trim()}>Create</Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowForm(false);
+                setName("");
+                setCreateError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={() => void submit()} disabled={!name.trim()}>
+              Create
+            </Button>
           </div>
         </div>
       )}
@@ -120,14 +145,20 @@ export function ServiceAccounts() {
         <EmptyState
           title="No service accounts yet"
           body="Workspace-scoped credentials. Persist when team members leave."
-          action={canEdit ? <Button onClick={() => setShowForm(true)}>Create one</Button> : undefined}
+          action={
+            canEdit ? <Button onClick={() => setShowForm(true)}>Create one</Button> : undefined
+          }
         />
       ) : (
         <table className="w-full text-[13px]">
           <thead className="text-ink-3 text-left">
             <tr>
-              <th className="py-2">Name</th><th>Prefix</th><th>Scopes</th>
-              <th>Last used</th><th>Expires</th><th></th>
+              <th className="py-2">Name</th>
+              <th>Prefix</th>
+              <th>Scopes</th>
+              <th>Last used</th>
+              <th>Expires</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -135,14 +166,21 @@ export function ServiceAccounts() {
               <tr key={sa.id} className="border-t border-line">
                 <td className="py-2">{sa.name}</td>
                 <td className="font-mono text-[12px]">{sa.token_prefix}•••</td>
-                <td>{sa.scopes.map((s) => <Badge key={s}>{s}</Badge>)}</td>
+                <td>
+                  {sa.scopes.map((s) => (
+                    <Badge key={s}>{s}</Badge>
+                  ))}
+                </td>
                 <td>{sa.last_used_at?.slice(0, 10) ?? "never"}</td>
                 <td>{sa.expires_at?.slice(0, 10) ?? "never"}</td>
                 <td className="text-right">
                   {canEdit && (
-                    <Button size="sm" variant="ghost"
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       className="text-danger hover:text-danger"
-                      onClick={() => setRevoke({ id: sa.id, name: sa.name })}>
+                      onClick={() => setRevoke({ id: sa.id, name: sa.name })}
+                    >
                       Revoke
                     </Button>
                   )}
@@ -154,15 +192,29 @@ export function ServiceAccounts() {
       )}
 
       <DeveloperDetails id="sa-list" summary="Developer details">
-        <div>Token format: <code>zzsa_*</code>; argon2id-hashed at rest; prefix-indexed lookup for the auth fast path.</div>
+        <div>
+          Token format: <code>zzsa_*</code>; argon2id-hashed at rest; prefix-indexed lookup for the
+          auth fast path.
+        </div>
       </DeveloperDetails>
 
-      {secret && <SecretRevealModal value={secret} onClose={() => setSecret(null)} title="Copy your service account token" />}
+      {secret && (
+        <SecretRevealModal
+          value={secret}
+          onClose={() => setSecret(null)}
+          title="Copy your service account token"
+        />
+      )}
       {revoke && (
         <ConfirmDialog
           open
           title={`Revoke ${revoke.name}?`}
-          body={<p>This will immediately invalidate the token. Any integration using it will start receiving 401 errors.</p>}
+          body={
+            <p>
+              This will immediately invalidate the token. Any integration using it will start
+              receiving 401 errors.
+            </p>
+          }
           confirmLabel="Revoke"
           danger
           onCancel={() => setRevoke(null)}

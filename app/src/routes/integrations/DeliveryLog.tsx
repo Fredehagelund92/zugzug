@@ -17,10 +17,7 @@ import { DeveloperDetails } from "../../components/integrations/DeveloperDetails
 /** Map delivery status → Badge tone. Tones are constrained to those actually
  *  defined in Badge.tsx (`ok` | `warn` | `danger`); transient states fall
  *  back to the neutral default. */
-const STATUS_TONE: Record<
-  WebhookDelivery["status"],
-  "ok" | "danger" | undefined
-> = {
+const STATUS_TONE: Record<WebhookDelivery["status"], "ok" | "danger" | undefined> = {
   success: "ok",
   dlq: "danger",
   retry: undefined,
@@ -111,9 +108,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
                     {r.attempts}/{r.max_attempts}
                   </td>
                   <td>{r.last_response_code ?? "—"}</td>
-                  <td className="text-ink-2">
-                    {r.created_at.slice(0, 19).replace("T", " ")}
-                  </td>
+                  <td className="text-ink-2">{r.created_at.slice(0, 19).replace("T", " ")}</td>
                   {canSeePayload && (
                     <td className="text-right">
                       {canReplay && (
@@ -126,7 +121,9 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
                               await refresh();
                             } catch (e) {
                               toast(
-                                humanError(e instanceof IntegrationsApiError ? e.code : "load_failed"),
+                                humanError(
+                                  e instanceof IntegrationsApiError ? e.code : "load_failed",
+                                ),
                                 "error",
                               );
                             }
@@ -156,10 +153,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
                           label="Response body"
                           value={r.last_response_body ?? r.last_error ?? "—"}
                         />
-                        <DeveloperDetails
-                          id={`delivery-${r.id}`}
-                          summary="Developer details"
-                        >
+                        <DeveloperDetails id={`delivery-${r.id}`} summary="Developer details">
                           <div>id: {r.id}</div>
                           <div>signing_kid: {r.signing_kid}</div>
                           <div>next_attempt_at: {r.next_attempt_at ?? "—"}</div>
@@ -173,9 +167,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
           })}
         </tbody>
       </table>
-      {rows.length === 0 && (
-        <p className="text-[12px] text-ink-3">No deliveries yet.</p>
-      )}
+      {rows.length === 0 && <p className="text-[12px] text-ink-3">No deliveries yet.</p>}
     </section>
   );
 }

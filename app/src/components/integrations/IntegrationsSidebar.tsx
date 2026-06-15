@@ -13,9 +13,24 @@ interface Item {
 }
 
 const ITEMS: Item[] = [
-  { label: "Pull API",         to: "pull-api",         action: "integrations.pull_api.view",        Icon: IconIntegrations },
-  { label: "Webhooks",         to: "webhooks",         action: "integrations.webhooks.view",        Icon: IconIntegrations },
-  { label: "Service accounts", to: "service-accounts", action: "integrations.service_accounts.view", Icon: IconIntegrations },
+  {
+    label: "Pull API",
+    to: "pull-api",
+    action: "integrations.pull_api.view",
+    Icon: IconIntegrations,
+  },
+  {
+    label: "Webhooks",
+    to: "webhooks",
+    action: "integrations.webhooks.view",
+    Icon: IconIntegrations,
+  },
+  {
+    label: "Service accounts",
+    to: "service-accounts",
+    action: "integrations.service_accounts.view",
+    Icon: IconIntegrations,
+  },
 ];
 
 export function IntegrationsSidebar() {

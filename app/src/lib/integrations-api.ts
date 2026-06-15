@@ -1,7 +1,11 @@
 import { apiFetch } from "../api";
 
 export class IntegrationsApiError extends Error {
-  constructor(public code: string, public status: number, message?: string) {
+  constructor(
+    public code: string,
+    public status: number,
+    message?: string,
+  ) {
     super(message ?? code);
     this.name = "IntegrationsApiError";
   }
@@ -15,30 +19,49 @@ export function humanError(code: string): string {
     return "One of the selected events isn't supported by this server.";
   }
   switch (code) {
-    case "invalid_url":         return "That URL doesn't parse.";
-    case "https_required":      return "URL must use https://.";
-    case "events_empty":        return "Pick at least one event.";
-    case "name_required":       return "Name is required.";
-    case "expires_invalid":     return "Expiry date is invalid.";
-    case "invalid_json":        return "Request body was not valid JSON.";
-    case "unauthorized":        return "You're signed out — please sign in again.";
+    case "invalid_url":
+      return "That URL doesn't parse.";
+    case "https_required":
+      return "URL must use https://.";
+    case "events_empty":
+      return "Pick at least one event.";
+    case "name_required":
+      return "Name is required.";
+    case "expires_invalid":
+      return "Expiry date is invalid.";
+    case "invalid_json":
+      return "Request body was not valid JSON.";
+    case "unauthorized":
+      return "You're signed out — please sign in again.";
     case "forbidden":
-    case "admin_required":      return "You don't have permission for that.";
-    case "editor_required":     return "Editor or higher required.";
+    case "admin_required":
+      return "You don't have permission for that.";
+    case "editor_required":
+      return "Editor or higher required.";
     case "not_found":
-    case "webhook_not_found":   return "That item no longer exists.";
-    case "rate_limited":        return "Too many requests — try again in a moment.";
-    case "load_failed":         return "Couldn't load — try again.";
-    case "create_failed":       return "Couldn't create — try again.";
-    case "revoke_failed":       return "Couldn't revoke — try again.";
-    case "status_invalid":      return "That status isn't allowed.";
+    case "webhook_not_found":
+      return "That item no longer exists.";
+    case "rate_limited":
+      return "Too many requests — try again in a moment.";
+    case "load_failed":
+      return "Couldn't load — try again.";
+    case "create_failed":
+      return "Couldn't create — try again.";
+    case "revoke_failed":
+      return "Couldn't revoke — try again.";
+    case "status_invalid":
+      return "That status isn't allowed.";
     case "status_disabled_not_allowed":
-                                return "You can't manually disable a webhook — it auto-disables on repeated failures.";
+      return "You can't manually disable a webhook — it auto-disables on repeated failures.";
     case "cursor_invalid":
-    case "cursor_mismatch":     return "Pagination cursor expired — start over.";
-    case "tenant_not_found":    return "Workspace not found.";
-    case "tenant_mismatch":     return "Workspace mismatch.";
-    default:                    return `Action failed (${code}).`;
+    case "cursor_mismatch":
+      return "Pagination cursor expired — start over.";
+    case "tenant_not_found":
+      return "Workspace not found.";
+    case "tenant_mismatch":
+      return "Workspace mismatch.";
+    default:
+      return `Action failed (${code}).`;
   }
 }
 
@@ -65,7 +88,9 @@ async function toError(res: Response): Promise<IntegrationsApiError> {
   try {
     const body = (await res.json()) as { error?: string };
     if (body.error) code = body.error;
-  } catch { /* not JSON */ }
+  } catch {
+    /* not JSON */
+  }
   return new IntegrationsApiError(code, res.status);
 }
 
@@ -112,8 +137,8 @@ export interface WebhookDelivery {
   last_response_code: number | null;
   last_response_body: string | null;
   last_error: string | null;
-  payload: unknown | null;        // null when caller role = viewer
-  signature: string | null;       // null when caller role = viewer
+  payload: unknown | null; // null when caller role = viewer
+  signature: string | null; // null when caller role = viewer
   created_at: string;
   completed_at: string | null;
 }
@@ -143,21 +168,37 @@ export async function listWebhooks(): Promise<Webhook[]> {
   const { webhooks } = await get<{ webhooks: Webhook[] }>("/v1/webhooks");
   return webhooks;
 }
-export const getWebhook    = (id: string) => get<Webhook>(`/v1/webhooks/${encodeURIComponent(id)}`);
-export const createWebhook = (body: { url: string; events: WebhookEvent[]; description: string | null }) =>
-  send<{ id: string; value: string }>("/v1/webhooks", "POST", body);
-export const patchWebhook  = (id: string, body: Partial<{ url: string; events: WebhookEvent[]; status: WebhookStatus; description: string | null }>) =>
-  send<void>(`/v1/webhooks/${encodeURIComponent(id)}`, "PATCH", body);
+export const getWebhook = (id: string) => get<Webhook>(`/v1/webhooks/${encodeURIComponent(id)}`);
+export const createWebhook = (body: {
+  url: string;
+  events: WebhookEvent[];
+  description: string | null;
+}) => send<{ id: string; value: string }>("/v1/webhooks", "POST", body);
+export const patchWebhook = (
+  id: string,
+  body: Partial<{
+    url: string;
+    events: WebhookEvent[];
+    status: WebhookStatus;
+    description: string | null;
+  }>,
+) => send<void>(`/v1/webhooks/${encodeURIComponent(id)}`, "PATCH", body);
 export const deleteWebhook = (id: string) =>
   send<void>(`/v1/webhooks/${encodeURIComponent(id)}`, "DELETE");
 export const reactivateWebhook = (id: string) =>
   send<void>(`/v1/webhooks/${encodeURIComponent(id)}/reactivate`, "POST");
 export const rotateSecret = (id: string) =>
-  send<{ value: string; previous_expires_at: string }>(`/v1/webhooks/${encodeURIComponent(id)}/rotate-secret`, "POST");
+  send<{ value: string; previous_expires_at: string }>(
+    `/v1/webhooks/${encodeURIComponent(id)}/rotate-secret`,
+    "POST",
+  );
 export const sendTestEvent = (id: string) =>
   send<{ delivery_id: string }>(`/v1/webhooks/${encodeURIComponent(id)}/test`, "POST");
 
-export async function listDeliveries(id: string, params: { status?: string; limit?: number } = {}): Promise<WebhookDelivery[]> {
+export async function listDeliveries(
+  id: string,
+  params: { status?: string; limit?: number } = {},
+): Promise<WebhookDelivery[]> {
   const qs = new URLSearchParams();
   if (params.status) qs.set("status", params.status);
   if (params.limit) qs.set("limit", String(params.limit));
@@ -173,7 +214,9 @@ export const replayDelivery = (id: string) =>
 /* ---------- service accounts ---------- */
 
 export async function listServiceAccounts(): Promise<ServiceAccount[]> {
-  const { service_accounts } = await get<{ service_accounts: ServiceAccount[] }>("/v1/service-accounts");
+  const { service_accounts } = await get<{ service_accounts: ServiceAccount[] }>(
+    "/v1/service-accounts",
+  );
   return service_accounts;
 }
 export interface CreatedServiceAccount {
