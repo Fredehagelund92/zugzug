@@ -20,6 +20,9 @@ import type { TenantRepo } from "./tenant-repo.ts";
 export interface SchedulerJob {
   /** Stable name for logging + scan_run.source_id; e.g., "scan-sources" */
   name: string;
+  /** "global" jobs run once per tick across all tenants — they do their own
+   *  cross-tenant claims. Default "per-tenant": iterated once per active tenant. */
+  scope?: "per-tenant" | "global";
   /** Returns rowsScanned-ish metadata (or empty object). Throws on hard failure. */
   run(ctx: JobContext): Promise<JobResult>;
 }
@@ -142,6 +145,23 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
     });
 
     try {
+      // Lazy import to dodge any circular module load between scheduler.ts and
+      // tenant-repo.ts → repo-* modules.
+      const { TenantRepo } = await import("./tenant-repo.ts");
+
+      // Phase 1: global jobs run once per tick with a dummy context (tenantId="*").
+      // Used by jobs that do their own cross-tenant claim (e.g. webhook dispatcher
+      // SKIP LOCKED across all tenants in a single query).
+      for (const job of jobs) {
+        if (job.scope !== "global") continue;
+        const ctx: JobContext = {
+          signal: abortController.signal,
+          tenantId: "*",
+          repo: {} as TenantRepo,
+        };
+        await recordScanRun(job.name, "*", () => job.run(ctx));
+      }
+
       let tenants: Array<{ id: string }>;
       try {
         tenants = await listTenants();
@@ -149,10 +169,6 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
         console.error("· scheduler: listTenants failed:", e);
         return;
       }
-
-      // Lazy import to dodge any circular module load between scheduler.ts and
-      // tenant-repo.ts → repo-* modules.
-      const { TenantRepo } = await import("./tenant-repo.ts");
 
       for (const t of tenants) {
         if (shouldRun !== undefined) {
@@ -175,6 +191,7 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
               repo,
             };
             for (const job of jobs) {
+              if (job.scope === "global") continue;
               await recordScanRun(`${t.id}:${job.name}`, t.id, () => job.run(ctx));
             }
           });
