@@ -27,8 +27,8 @@ beforeAll(async () => {
 
   // Seed tenant + user (audit_log FKs users).
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'CV Backfill', 'default', now())`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'CV Backfill', now())`,
     [T],
   );
   await pgRun(

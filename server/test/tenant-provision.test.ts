@@ -32,18 +32,17 @@ afterAll(async () => {
   }
 });
 
-test("provisionTenant creates a tenant row with slug = id and pointing at default warehouse", async () => {
+test("provisionTenant creates a tenant row with slug = id", async () => {
   const t = await provisionTenant({ id: "tprov_a", label: "Test A" });
   expect(t.id).toBe("tprov_a");
   expect(t.slug).toBe("tprov_a");
   expect(t.label).toBe("Test A");
-  expect(t.warehouse_id).toBe("default");
 
-  const row = await pgGet<{ id: string; slug: string; label: string; warehouse_id: string }>(
-    `SELECT id, slug, label, warehouse_id FROM "zugzug_app"."tenant" WHERE id = $1`,
+  const row = await pgGet<{ id: string; slug: string; label: string }>(
+    `SELECT id, slug, label FROM "zugzug_app"."tenant" WHERE id = $1`,
     ["tprov_a"],
   );
-  expect(row).toEqual({ id: "tprov_a", slug: "tprov_a", label: "Test A", warehouse_id: "default" });
+  expect(row).toEqual({ id: "tprov_a", slug: "tprov_a", label: "Test A" });
 });
 
 test("provisionTenant with a duplicate id rejects with a clear error", async () => {

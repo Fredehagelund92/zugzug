@@ -47,8 +47,8 @@ beforeAll(async () => {
 
   // Seed tenant + user (audit_log FKs users).
   await pgRun(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-     VALUES ($1, $1, 'Outbound SD', 'default', now())`,
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Outbound SD', now())`,
     [T],
   );
   await pgRun(
@@ -299,8 +299,8 @@ describe("teardownTenant cleans up outbound integration tables", () => {
   it("DELETEs rows from service_account, webhook, outbound_event, webhook_delivery", async () => {
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [TT]).catch(() => {});
     await pgRun(
-      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, warehouse_id, created_at)
-       VALUES ($1, $1, 'Test Teardown', 'default', now())`,
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $1, 'Test Teardown', now())`,
       [TT],
     );
 

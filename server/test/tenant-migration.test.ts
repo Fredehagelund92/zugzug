@@ -40,12 +40,11 @@ afterAll(async () => {
 });
 
 test("Deploy 1 migration seeded the 'default' tenant", async () => {
-  const row = await pgGet<{ id: string; slug: string; label: string; warehouse_id: string }>(
-    `SELECT id, slug, label, warehouse_id FROM "zugzug_app"."tenant" WHERE id = 'default'`,
+  const row = await pgGet<{ id: string; slug: string; label: string }>(
+    `SELECT id, slug, label FROM "zugzug_app"."tenant" WHERE id = 'default'`,
   );
   expect(row?.id).toBe("default");
   expect(row?.slug).toBe("default");
-  expect(row?.warehouse_id).toBe("default");
 });
 
 test("Deploy 1 migration created tenant_member rows for pre-existing users with their role", async () => {

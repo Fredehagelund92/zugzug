@@ -262,14 +262,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             id: string;
             label: string;
             slug?: string;
-            warehouseId?: string;
             color?: string;
           };
           const tenant = await provisionTenant({
             id: body.id,
             label: body.label,
             slug: body.slug,
-            warehouseId: body.warehouseId,
             color: body.color,
           });
           return json(tenant, 201);

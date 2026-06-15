@@ -27,7 +27,6 @@ export interface TenantRecord {
   slug: string;
   label: string;
   color: string | null;
-  warehouse_id: string;
   created_at: Date;
 }
 
@@ -36,8 +35,6 @@ export async function provisionTenant(opts: {
   label: string;
   /** Optional URL slug; defaults to id (per Decision 1 in the spec, slug == id in phase 1). */
   slug?: string;
-  /** @deprecated placeholder write while tenant.warehouse_id column survives the rollback window */
-  warehouseId?: string;
   color?: string;
   /** When set, register N deployment-global warehouse_database rows in the same
    *  logical operation as the tenant insert. Rolled back by compensating
@@ -51,7 +48,6 @@ export async function provisionTenant(opts: {
   const id = opts.id.trim();
   const slug = (opts.slug ?? id).trim();
   const label = opts.label.trim();
-  const warehouseId = (opts.warehouseId ?? "default").trim();
   const color = opts.color ?? null;
 
   if (!TENANT_ID_RE.test(id)) {
@@ -79,11 +75,11 @@ export async function provisionTenant(opts: {
   // tenant_slug_unique index. No row back ⇒ somebody (possibly a concurrent
   // call) already owns that id or slug.
   const row = await pgGet<TenantRecord>(
-    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, color, warehouse_id, created_at)
-     VALUES ($1, $2, $3, $4, $5, now())
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, color, created_at)
+     VALUES ($1, $2, $3, $4, now())
      ON CONFLICT DO NOTHING
-     RETURNING id, slug, label, color, warehouse_id, created_at`,
-    [id, slug, label, color, warehouseId],
+     RETURNING id, slug, label, color, created_at`,
+    [id, slug, label, color],
   );
   if (!row) {
     throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists (id or slug taken)`, 409);
@@ -170,7 +166,7 @@ export async function teardownTenant(tenantId: string): Promise<void> {
 
 export async function listTenants(): Promise<TenantRecord[]> {
   return pgAll<TenantRecord>(
-    `SELECT id, slug, label, color, warehouse_id, created_at
+    `SELECT id, slug, label, color, created_at
        FROM "zugzug_app"."tenant"
       WHERE deleted_at IS NULL
       ORDER BY id`,
@@ -184,7 +180,7 @@ export interface TenantAdminRow extends TenantRecord {
 
 export async function listTenantsForAdmin(): Promise<TenantAdminRow[]> {
   return pgAll<TenantAdminRow>(
-    `SELECT t.id, t.slug, t.label, t.color, t.warehouse_id, t.created_at,
+    `SELECT t.id, t.slug, t.label, t.color, t.created_at,
             (SELECT count(*)::int FROM "zugzug_app"."tenant_member" tm
               WHERE tm.tenant_id = t.id) AS member_count,
             (SELECT max(created_at) FROM "zugzug_app"."audit_log" a
@@ -202,7 +198,7 @@ export interface Membership {
 
 export async function tenantBySlug(slug: string): Promise<TenantRecord | null> {
   return pgGet<TenantRecord>(
-    `SELECT id, slug, label, color, warehouse_id, created_at
+    `SELECT id, slug, label, color, created_at
        FROM "zugzug_app"."tenant"
       WHERE slug = $1 AND deleted_at IS NULL`,
     [slug],
@@ -215,11 +211,10 @@ export async function listMembershipsForUser(userId: string): Promise<Membership
     slug: string;
     label: string;
     color: string | null;
-    warehouse_id: string;
     created_at: Date;
     role: "admin" | "editor" | "viewer";
   }>(
-    `SELECT t.id AS tid, t.slug, t.label, t.color, t.warehouse_id, t.created_at, tm.role
+    `SELECT t.id AS tid, t.slug, t.label, t.color, t.created_at, tm.role
        FROM "zugzug_app"."tenant_member" tm
        JOIN "zugzug_app"."tenant" t ON t.id = tm.tenant_id
       WHERE tm.user_id = $1 AND t.deleted_at IS NULL
@@ -232,7 +227,6 @@ export async function listMembershipsForUser(userId: string): Promise<Membership
       slug: r.slug,
       label: r.label,
       color: r.color,
-      warehouse_id: r.warehouse_id,
       created_at: r.created_at,
     },
     role: r.role,

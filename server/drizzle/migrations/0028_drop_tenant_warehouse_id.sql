@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."tenant" DROP COLUMN "warehouse_id";
