@@ -16,12 +16,12 @@ BEGIN
     FROM zugzug_app.users
    WHERE is_super_admin = true
    ORDER BY id LIMIT 1;
-  -- Only require a super-admin when there is data to backfill. A fresh
-  -- install (no tenants) skips this so initial bootstrap can run before
-  -- any user has been promoted to super-admin.
-  IF admin_id IS NULL AND EXISTS (
-       SELECT 1 FROM zugzug_app.tenant WHERE deleted_at IS NULL
-     ) THEN
+  -- Only require a super-admin when there are real users to draw from.
+  -- Fresh installs (no users) skip this — bootstrap runs migrations
+  -- before seeding the system user, and the backfill below falls back
+  -- to a placeholder owner that the seed step or backfill script
+  -- reconciles later.
+  IF admin_id IS NULL AND EXISTS (SELECT 1 FROM zugzug_app.users) THEN
     RAISE EXCEPTION
       '[warehouse_multi_db] preflight A: no super-admin user found. '
       'Create one (bun run bootstrap -- --seed) and re-run.';
@@ -121,7 +121,9 @@ DO $$
 DECLARE admin_id varchar;
 BEGIN
   SELECT id INTO admin_id FROM zugzug_app.users WHERE is_super_admin = true ORDER BY id LIMIT 1;
-  PERFORM set_config('zugzug.bootstrap_admin', admin_id, true);
+  -- Fresh install fallback: bootstrap upserts u_system after migrations,
+  -- and the warehouse-backfill script reassigns ownership for real users.
+  PERFORM set_config('zugzug.bootstrap_admin', coalesce(admin_id, 'u_system'), true);
 END $$;
 
 INSERT INTO "zugzug_app"."warehouse_connection"
