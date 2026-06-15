@@ -13,6 +13,9 @@ import { handleV1Route } from "./v1-routes.ts";
 import { addDimension } from "./repo-canonical.ts";
 import { createServiceAccount } from "./repo-service-accounts.ts";
 import { recordSlugAlias } from "./slug-alias.ts";
+import { createWebhook } from "./repo-webhooks.ts";
+import { _setMasterKeyForTest } from "./webhook-secrets.ts";
+import { generateMasterKeyB64 } from "./crypto-secret.ts";
 
 const T = "test_v1_routes";
 const SLUG = "v1routes";
@@ -52,6 +55,7 @@ async function seedCanonical(
 
 let dimId: string;
 let saToken: string;
+let adminToken: string;
 
 beforeAll(async () => {
   await pgRun(
@@ -84,9 +88,24 @@ beforeAll(async () => {
 
   const created = await createServiceAccount({ tenantId: T, name: "v1-test", createdBy: ADMIN });
   saToken = created.value;
+
+  // Personal API token for ADMIN — used by webhook routes (SA = viewer role).
+  _setMasterKeyForTest(Buffer.from(generateMasterKeyB64(), "base64"));
+  const rawBytes = new Uint8Array(32);
+  crypto.getRandomValues(rawBytes);
+  adminToken = `zz_${Buffer.from(rawBytes).toString("base64url")}`;
+  const hash = await Bun.password.hash(adminToken);
+  await pgRun(
+    `INSERT INTO "zugzug_app"."api_tokens" (id, user_id, name, token_hash, token_prefix, created_at)
+     VALUES ($1, $2, 'admin-pat', $3, $4, current_timestamp)`,
+    [`tok_${crypto.randomUUID().replace(/-/g, "")}`, ADMIN, hash, adminToken.slice(0, 12)],
+  );
 });
 
 afterAll(async () => {
+  await pgRun(`DELETE FROM "zugzug_app"."api_tokens" WHERE user_id = $1`, [ADMIN]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -107,6 +126,16 @@ function authedReq(path: string, init: RequestInit = {}): Request {
     headers: {
       ...(init.headers as Record<string, string> | undefined),
       authorization: `Bearer ${saToken}`,
+    },
+  });
+}
+
+function adminReq(path: string, init: RequestInit = {}): Request {
+  return new Request(`http://test${path}`, {
+    ...init,
+    headers: {
+      ...(init.headers as Record<string, string> | undefined),
+      authorization: `Bearer ${adminToken}`,
     },
   });
 }
@@ -250,6 +279,151 @@ describe("tenant mismatch — SA from a different workspace", () => {
     await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [OT]);
     await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [OT]);
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [OT]);
+  });
+});
+
+describe("/v1/webhooks routes", () => {
+  it("POST /v1/webhooks creates a webhook (201, returns id + value)", async () => {
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://example.test/wh/create",
+          events: ["dimension.committed"],
+          description: "v1 test",
+        }),
+      }),
+    );
+    expect(res!.status).toBe(201);
+    const body = (await res!.json()) as { id: string; value: string };
+    expect(body.id.startsWith("wh_")).toBe(true);
+    expect(body.value.startsWith("whsec_")).toBe(true);
+  });
+
+  it("POST /v1/webhooks rejects http:// (400 https_required)", async () => {
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "http://evil.test/x",
+          events: ["dimension.committed"],
+        }),
+      }),
+    );
+    expect(res!.status).toBe(400);
+    const body = (await res!.json()) as { error: string };
+    expect(body.error).toBe("https_required");
+  });
+
+  it("POST /v1/webhooks via SA returns 403 admin_required", async () => {
+    const res = await handleV1Route(
+      authedReq(`/api/t/${SLUG}/v1/webhooks`, {
+        method: "POST",
+        body: JSON.stringify({ url: "https://x.test/", events: ["dimension.committed"] }),
+      }),
+    );
+    expect(res!.status).toBe(403);
+  });
+
+  it("GET /v1/webhooks lists webhooks (200)", async () => {
+    const res = await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks`));
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as { webhooks: Array<{ id: string }> };
+    expect(Array.isArray(body.webhooks)).toBe(true);
+  });
+
+  it("PATCH /v1/webhooks/:id updates fields (204)", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/patch",
+      events: ["dimension.committed"],
+      createdBy: ADMIN,
+    });
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "paused" }),
+      }),
+    );
+    expect(res!.status).toBe(204);
+  });
+
+  it("POST /v1/webhooks/:id/test enqueues a test delivery (200)", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/testev",
+      events: ["dimension.committed"],
+      createdBy: ADMIN,
+    });
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/test`, { method: "POST" }),
+    );
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as { delivery_id: string };
+    expect(body.delivery_id.startsWith("whd_")).toBe(true);
+    const row = await pgGet<{ is_test: boolean; event_type: string }>(
+      `SELECT is_test, event_type FROM "zugzug_app"."webhook_delivery" WHERE id = $1`,
+      [body.delivery_id],
+    );
+    expect(row!.is_test).toBe(true);
+    expect(row!.event_type).toBe("webhook.test");
+  });
+
+  it("GET /v1/webhooks/:id/deliveries lists deliveries (200)", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/del-list",
+      events: ["dimension.committed"],
+      createdBy: ADMIN,
+    });
+    // Enqueue one delivery via test endpoint.
+    await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/test`, { method: "POST" }),
+    );
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/deliveries`),
+    );
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as { deliveries: Array<{ id: string; payload: unknown }> };
+    expect(body.deliveries.length).toBeGreaterThan(0);
+    expect(body.deliveries[0]!.payload).not.toBeNull();
+  });
+
+  it("POST /v1/webhook-deliveries/:id/replay clones the row (202)", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/replay",
+      events: ["dimension.committed"],
+      createdBy: ADMIN,
+    });
+    const t = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/test`, { method: "POST" }),
+    );
+    const { delivery_id } = (await t!.json()) as { delivery_id: string };
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhook-deliveries/${delivery_id}/replay`, {
+        method: "POST",
+      }),
+    );
+    expect(res!.status).toBe(202);
+    const body = (await res!.json()) as { delivery_id: string };
+    expect(body.delivery_id).not.toBe(delivery_id);
+  });
+
+  it("DELETE /v1/webhooks/:id removes the webhook (204)", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/delete",
+      events: ["dimension.committed"],
+      createdBy: ADMIN,
+    });
+    const res = await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`, { method: "DELETE" }),
+    );
+    expect(res!.status).toBe(204);
   });
 });
 
