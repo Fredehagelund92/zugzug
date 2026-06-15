@@ -44,9 +44,9 @@ function RangeOutline({
   dragging: boolean;
 }) {
   const [rect, setRect] = useState<{
-    top:    number;
-    left:   number;
-    width:  number;
+    top: number;
+    left: number;
+    width: number;
     height: number;
   } | null>(null);
   useLayoutEffect(() => {
@@ -63,9 +63,9 @@ function RangeOutline({
       const tlRect = tl.getBoundingClientRect();
       const brRect = br.getBoundingClientRect();
       setRect({
-        top:    tlRect.top - cRect.top + container.scrollTop,
-        left:   tlRect.left - cRect.left + container.scrollLeft,
-        width:  brRect.right - tlRect.left,
+        top: tlRect.top - cRect.top + container.scrollTop,
+        left: tlRect.left - cRect.left + container.scrollLeft,
+        width: brRect.right - tlRect.left,
         height: brRect.bottom - tlRect.top,
       });
     };
@@ -184,9 +184,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   });
   const isFirstSortRender = useRef(true);
   useEffect(() => {
-    if (isFirstSortRender.current) { isFirstSortRender.current = false; return; }
+    if (isFirstSortRender.current) {
+      isFirstSortRender.current = false;
+      return;
+    }
     props.onSortChange?.(sort ? { column: sort.field, direction: sort.dir } : null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
   const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -388,7 +391,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     if (!firstRow || !lastRow || !firstCol || !lastCol) return null;
     const multiCell = bounds.minRow !== bounds.maxRow || bounds.minCol !== bounds.maxCol;
     return {
-      topLeft:     `[data-cell="${attrEsc(`${rowKey(firstRow)}::${firstCol.field}`)}"]`,
+      topLeft: `[data-cell="${attrEsc(`${rowKey(firstRow)}::${firstCol.field}`)}"]`,
       bottomRight: `[data-cell="${attrEsc(`${rowKey(lastRow)}::${lastCol.field}`)}"]`,
       multiCell,
     };
@@ -509,9 +512,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (!root) return;
       if (hoverFieldRef.current === field) return;
       if (hoverFieldRef.current) {
-        root
-          .querySelectorAll(".zz-col-hover")
-          .forEach((el) => el.classList.remove("zz-col-hover"));
+        root.querySelectorAll(".zz-col-hover").forEach((el) => el.classList.remove("zz-col-hover"));
       }
       hoverFieldRef.current = field;
       if (field) {
@@ -875,15 +876,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         );
       }
 
-      base.push(
-        sep,
-        hide,
-        {
-          label: "Delete column",
-          onClick: () => props.onDeleteColumn?.(surface.field),
-          disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
-        },
-      );
+      base.push(sep, hide, {
+        label: "Delete column",
+        onClick: () => props.onDeleteColumn?.(surface.field),
+        disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
+      });
 
       return base;
     }
@@ -1144,14 +1141,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     ],
   );
 
-  const selectedSet = useMemo(
-    () => new Set(selection?.selected ?? []),
-    [selection?.selected],
-  );
-  const isSelected = useCallback(
-    (rk: string) => selectedSet.has(rk),
-    [selectedSet],
-  );
+  const selectedSet = useMemo(() => new Set(selection?.selected ?? []), [selection?.selected]);
+  const isSelected = useCallback((rk: string) => selectedSet.has(rk), [selectedSet]);
 
   const onToggleSelect = useCallback(
     (rk: string) => {
@@ -1258,8 +1249,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           rowEl.closest<HTMLElement>(".zz-grid-scroll") ?? (rowEl.parentElement as HTMLElement);
         const all = Array.from(scroller.querySelectorAll<HTMLElement>("[data-row]"));
         const idx = all.indexOf(rowEl);
-        const prevKey = idx > 0 ? all[idx - 1]?.dataset.row ?? null : null;
-        const nextKey = idx >= 0 && idx < all.length - 1 ? all[idx + 1]?.dataset.row ?? null : null;
+        const prevKey = idx > 0 ? (all[idx - 1]?.dataset.row ?? null) : null;
+        const nextKey =
+          idx >= 0 && idx < all.length - 1 ? (all[idx + 1]?.dataset.row ?? null) : null;
         const hovered = rowEl.dataset.row!;
         target = above
           ? { before: prevKey === rk ? null : prevKey, after: hovered }
