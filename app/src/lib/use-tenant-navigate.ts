@@ -27,6 +27,10 @@ export function useNavLinks() {
       tables: `/app/${slug}/tables`,
       audit: `/app/${slug}/audit`,
       settings: `/app/${slug}/settings`,
+      integrations: `/app/${slug}/integrations`,
+      integrationsPullApi: `/app/${slug}/integrations/pull-api`,
+      integrationsWebhooks: `/app/${slug}/integrations/webhooks`,
+      integrationsServiceAccounts: `/app/${slug}/integrations/service-accounts`,
       table: (dimId: string, mode?: "match" | "review") =>
         `/app/${slug}/tables?open=${dimId}&active=${dimId}${mode ? `&mode=${mode}` : ""}`,
       tablesFocus: (key: string) => `/app/${slug}/tables?focus=${encodeURIComponent(key)}`,
