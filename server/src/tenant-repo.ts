@@ -402,7 +402,7 @@ export class TenantRepo {
     return this.withClearCtx(() => repoScan.dimensionsWithWiredSources(this.tenantId));
   }
 
-  autoStageExactMatches(dimId: string): Promise<number> {
+  autoStageExactMatches(dimId: string): Promise<{ matched: number; unmatched: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() => repoScan.autoStageExactMatches(dimId, this.tenantId));
   }
@@ -451,9 +451,9 @@ export class TenantRepo {
     table: string,
     column: string,
     nameColumn: string | undefined,
-    opts: { silent?: boolean } = {},
+    opts: { silent?: boolean; force?: boolean } = {},
     userId: string,
-  ): Promise<{ derived: number }> {
+  ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
     this.assertRole("commit");
     return this.withClearCtx(() =>
       repoScan.deriveCanonical(dimId, table, column, nameColumn, opts, userId, this.tenantId),

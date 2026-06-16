@@ -17,7 +17,8 @@ import {
   env,
   pg,
   log,
-  parseSourceTable,
+  refOf,
+  refForRegisteredTable,
 } from "./repo-shared.ts";
 import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
@@ -156,88 +157,108 @@ export async function scanSources(tenantId: string): Promise<number> {
       WHERE s.tenant_id = $1`,
     [tenantId],
   );
-  const SCAN_TIMEOUT_MS = 30_000;
   const adapter = await getAdapter();
   for (const r of regs) {
-    const ref: Ref = { catalog: r.catalog, schema: r.schema, table: r.table };
-    const displayTable = `${r.schema}.${r.table}`;
-    let present: boolean,
-      rows = 0,
-      distinct = 0,
-      unmapped = 0;
-    const t0 = performance.now();
-    try {
-      const stats = await Promise.race([
-        adapter.columnStats(ref, r.column),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("scan timeout")), SCAN_TIMEOUT_MS),
-        ),
-      ]);
-      present = true;
-      rows = stats.rows;
-      distinct = stats.distinct;
-      if (distinct > 0) {
-        try {
-          const whRaws = await adapter.distinctValues(ref, r.column, 100000);
-          const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(r.mapTable)}`);
-          const mappedSet = new Set(mappedRows.map((m) => m.raw.toLowerCase()));
-          unmapped = whRaws.filter((w) => !mappedSet.has(w.toLowerCase())).length;
-        } catch {
-          /* either side missing — leave at 0 */
-        }
-      }
-      const ms = Math.round(performance.now() - t0);
-      log({
-        level: ms > 5000 ? "warn" : "info",
-        msg: "scan-source",
-        table: displayTable,
-        column: r.column,
-        ms,
-        rows,
-        distinct,
-        unmapped,
-      });
-    } catch (e) {
-      const ms = Math.round(performance.now() - t0);
-      const timedOut = e instanceof Error && e.message === "scan timeout";
-      log({
-        level: "error",
-        msg: "scan-source",
-        table: displayTable,
-        column: r.column,
-        ms,
-        err: e instanceof Error ? e.message : String(e),
-        timedOut,
-      });
-      present = false;
-    }
-    await pgRun(
-      `INSERT INTO ${pg("source_stat")}
-         (tenant_id, dim_id, database_id, schema_name, table_name, column_name,
-          present, rows, distinct_values, unmapped, scanned_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, current_timestamp)
-       ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
-         present         = EXCLUDED.present,
-         rows            = EXCLUDED.rows,
-         distinct_values = EXCLUDED.distinct_values,
-         unmapped        = EXCLUDED.unmapped,
-         scanned_at      = EXCLUDED.scanned_at`,
-      [
-        tenantId,
-        r.dimId,
-        r.databaseId,
-        r.schema,
-        r.table,
-        r.column,
-        present,
-        rows,
-        distinct,
-        unmapped,
-      ],
-    );
+    await scanOneSource(r, adapter, tenantId);
   }
 
   return regs.length;
+}
+
+type ScanReg = {
+  dimId: string;
+  databaseId: string;
+  catalog: string;
+  schema: string;
+  table: string;
+  column: string;
+  mapTable: string;
+};
+
+/** Scan a single registered source and upsert its row in source_stat. Shared
+ *  by scanSources (bulk) and the auto-scan path in deriveCanonical (per-wire). */
+async function scanOneSource(
+  r: ScanReg,
+  adapter: Awaited<ReturnType<typeof getAdapter>>,
+  tenantId: string,
+): Promise<void> {
+  const SCAN_TIMEOUT_MS = 30_000;
+  const ref: Ref = { catalog: r.catalog, schema: r.schema, table: r.table };
+  const displayTable = `${r.schema}.${r.table}`;
+  let present: boolean;
+  let rows = 0;
+  let distinct = 0;
+  let unmapped = 0;
+  const t0 = performance.now();
+  try {
+    const stats = await Promise.race([
+      adapter.columnStats(ref, r.column),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("scan timeout")), SCAN_TIMEOUT_MS),
+      ),
+    ]);
+    present = true;
+    rows = stats.rows;
+    distinct = stats.distinct;
+    if (distinct > 0) {
+      try {
+        const whRaws = await adapter.distinctValues(ref, r.column, 100000);
+        const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(r.mapTable)}`);
+        const mappedSet = new Set(mappedRows.map((m) => m.raw.toLowerCase()));
+        unmapped = whRaws.filter((w) => !mappedSet.has(w.toLowerCase())).length;
+      } catch {
+        /* either side missing — leave at 0 */
+      }
+    }
+    const ms = Math.round(performance.now() - t0);
+    log({
+      level: ms > 5000 ? "warn" : "info",
+      msg: "scan-source",
+      table: displayTable,
+      column: r.column,
+      ms,
+      rows,
+      distinct,
+      unmapped,
+    });
+  } catch (e) {
+    const ms = Math.round(performance.now() - t0);
+    const timedOut = e instanceof Error && e.message === "scan timeout";
+    log({
+      level: "error",
+      msg: "scan-source",
+      table: displayTable,
+      column: r.column,
+      ms,
+      err: e instanceof Error ? e.message : String(e),
+      timedOut,
+    });
+    present = false;
+  }
+  await pgRun(
+    `INSERT INTO ${pg("source_stat")}
+       (tenant_id, dim_id, database_id, schema_name, table_name, column_name,
+        present, rows, distinct_values, unmapped, scanned_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, current_timestamp)
+     ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
+       present         = EXCLUDED.present,
+       rows            = EXCLUDED.rows,
+       distinct_values = EXCLUDED.distinct_values,
+       unmapped        = EXCLUDED.unmapped,
+       scanned_at      = EXCLUDED.scanned_at`,
+    [
+      tenantId,
+      r.dimId,
+      r.databaseId,
+      r.schema,
+      r.table,
+      r.column,
+      present,
+      rows,
+      distinct,
+      unmapped,
+    ],
+  );
 }
 
 /** List dimension IDs that have at least one wired source. Used by the
@@ -254,26 +275,29 @@ export async function dimensionsWithWiredSources(tenantId: string): Promise<stri
  *  case-insensitively matches an existing canonical label and is not yet in
  *  the dimension's lookup table. The match is deterministic — no AI, no fuzzy
  *  — so it always lands above any reasonable publish threshold. */
-export async function autoStageExactMatches(dimId: string, tenantId: string): Promise<number> {
+export async function autoStageExactMatches(
+  dimId: string,
+  tenantId: string,
+): Promise<{ matched: number; unmatched: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
             COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );
-  if (!meta) return 0;
-  if (meta.keyKind === "external_id") return 0;
+  if (!meta) return { matched: 0, unmatched: 0 };
+  if (meta.keyKind === "external_id") return { matched: 0, unmatched: 0 };
 
   const sources = await liveSources(dimId, tenantId);
-  if (!sources.length) return 0;
+  if (!sources.length) return { matched: 0, unmatched: 0 };
 
   // Warehouse: distinct raw values
   const adapter = await getAdapter();
-  const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
+  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
   const occRows = await adapter
     .distinctValuesWithProvenance(refs)
     .catch(() => [] as { value: string }[]);
-  if (!occRows.length) return 0;
+  if (!occRows.length) return { matched: 0, unmatched: 0 };
   const warehouseRaws = [...new Set(occRows.map((r) => r.value))];
 
   // Postgres: canonical labels
@@ -291,14 +315,16 @@ export async function autoStageExactMatches(dimId: string, tenantId: string): Pr
 
   // JS: find exact case-insensitive matches not yet mapped
   const matches: { raw: string; key: string; label: string }[] = [];
+  let unmatched = 0;
   for (const raw of warehouseRaws) {
     const lower = raw.toLowerCase();
     if (mappedSet.has(lower)) continue;
     const canon = labelToCanon.get(lower);
     if (canon) matches.push({ raw, key: canon.key, label: canon.label });
+    else unmatched++;
   }
 
-  if (!matches.length) return 0;
+  if (!matches.length) return { matched: 0, unmatched };
   for (const m of matches) {
     await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system", tenantId);
   }
@@ -308,7 +334,7 @@ export async function autoStageExactMatches(dimId: string, tenantId: string): Pr
     `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`,
     { tenantId },
   );
-  return matches.length;
+  return { matched: matches.length, unmatched };
 }
 
 /** Register a warehouse column as a source for a dimension (idempotent).
@@ -356,8 +382,9 @@ export async function topUnmapped(
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
+  const ref = await refForRegisteredTable(dimId, table, tenantId);
+  if (!ref) return [];
   const adapter = await getAdapter();
-  const ref = parseSourceTable(table);
   const n = Math.max(1, Math.min(50, Math.round(limit)));
 
   const occ = await adapter
@@ -421,7 +448,6 @@ export async function anyScanDue(
                ) < (
                  $1::timestamp - (
                    CASE p.scan_schedule
-                     WHEN '15m'    THEN INTERVAL '15 minutes'
                      WHEN 'hourly' THEN INTERVAL '1 hour'
                      ELSE INTERVAL '1 day'
                    END
@@ -478,7 +504,7 @@ export async function anyScanDue(
   if (!sched) return false;
   if (unscannedCount > 0) return true; // unscanned registered source → due immediately
   if (!lastScan) return true; // never scanned → run immediately
-  const dueMs = sched === "15m" ? 15 * 60_000 : sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
+  const dueMs = sched === "hourly" ? 60 * 60_000 : 24 * 60 * 60_000;
   return now.getTime() - lastScan.getTime() >= dueMs;
 }
 
@@ -598,36 +624,97 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
   }
 }
 
-/** Derive (bootstrap) a dimension's canonical set from a source column's distinct
- *  values. For a 'slug' dimension each distinct value seeds a slug-keyed canonical
- *  (US/us collapse) mapped 1:1. For an 'external_id' dimension the source column IS
- *  the ID column: each distinct ID seeds a canonical keyed by the raw ID (no slug),
- *  self-mapped id→id, and the name binding (table, id_col, name_col) is persisted so
- *  the name resolves live on read. Returns how many canonical records resulted. */
+/** Derive (bootstrap) or connect a source column to a dimension.
+ *
+ *  Mode is auto-detected from the target dim:
+ *   - **seed** (dim is empty): each distinct value populates the canonical table
+ *     and is auto-mapped 1:1 in the map table. Slug dims collapse US/us;
+ *     external_id dims also persist the name-column binding.
+ *   - **connect** (dim already has records): only register the source and refresh
+ *     stats. Values land in Triage / Match Values, where exact-label hits get
+ *     auto-staged and the rest are mapped by the operator. This is what you want
+ *     for every source after the first — otherwise wiring source #2 would create
+ *     duplicate canonical records, defeating the whole point of dedup.
+ *
+ *  Pass `opts.force: true` to seed even when the dim already has records — only
+ *  use when bootstrapping a dim from multiple equally-trusted sources. */
 export async function deriveCanonical(
   dimId: string,
   table: string,
   column: string,
   nameColumn: string | undefined,
-  opts: { silent?: boolean } = {},
+  opts: { silent?: boolean; force?: boolean } = {},
   userId: string,
   tenantId: string,
-): Promise<{ derived: number }> {
+): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
      FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );
-  if (!meta) return { derived: 0 };
+  if (!meta) return { derived: 0, mode: "seed", matched: 0, unmatched: 0 };
   await addSource(dimId, table, column, tenantId);
   const external = meta.keyKind === "external_id";
   if (external && nameColumn) await addSource(dimId, table, nameColumn, tenantId);
 
+  const seeded = await pgGet<{ n: number }>(`SELECT 1 AS n FROM ${cq(meta.dimTable)} LIMIT 1`);
+  const mode: "seed" | "connect" = seeded && !opts.force ? "connect" : "seed";
+
+  if (mode === "connect") {
+    if (external && nameColumn) {
+      // Persist the name binding even in connect mode — the new source may be the
+      // first one carrying names. Won't clobber if already set.
+      await pgRun(
+        `UPDATE ${pg("dimension")} SET name_table = COALESCE(name_table, $1),
+                                       name_id_col = COALESCE(name_id_col, $2),
+                                       name_col = COALESCE(name_col, $3)
+         WHERE id = $4 AND tenant_id = $5`,
+        [table, column, nameColumn, dimId, tenantId],
+      );
+    }
+    const cols = external && nameColumn ? [column, nameColumn] : [column];
+    await scanWiredSources(dimId, table, cols, tenantId);
+    // Inline the auto-stage so the caller gets real outcome counts immediately,
+    // instead of waiting for the scheduler tick.
+    const { matched, unmatched } = await autoStageExactMatches(dimId, tenantId);
+    if (!opts.silent) {
+      const summary =
+        matched === 0 && unmatched === 0
+          ? `${table}.${column} → ${meta.dimTable} — no new values`
+          : `${table}.${column} → ${meta.dimTable} — ${matched} matched, ${unmatched} to review`;
+      await appendAuditAs(userId, "Connected source", summary, { tenantId });
+    }
+    return { derived: 0, mode, matched, unmatched };
+  }
+
+  // Resolve the warehouse catalog from the just-registered source. Throws if
+  // the source isn't registered (shouldn't happen post-addSource).
+  const ref = await refForRegisteredTable(dimId, table, tenantId);
+  if (!ref) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `could not resolve warehouse database for ${table}`,
+      422,
+    );
+  }
+
   const adapter = await getAdapter();
-  const vals = await adapter
-    .distinctValues(parseSourceTable(table), column, 5000)
-    .catch(() => [] as string[]);
-  if (!vals.length) return { derived: 0 };
+  // Let warehouse errors propagate — callers (CatalogExplorer.wire,
+  // Sources.deriveAction) need to see why a column "has no rows" rather than
+  // getting a misleading 0. A genuinely empty column still returns [].
+  const vals = await adapter.distinctValues(ref, column, 5000);
+  if (!vals.length) {
+    log({
+      level: "warn",
+      msg: "derive-canonical: distinctValues returned 0",
+      dimId,
+      table,
+      column,
+      hint: "column may be all NULL/empty, or warehouse not attached",
+    });
+    await scanWiredSources(dimId, table, [column, ...(external && nameColumn ? [nameColumn] : [])], tenantId);
+    return { derived: 0, mode, matched: 0, unmatched: 0 };
+  }
 
   const key = qid(meta.keyCol);
 
@@ -657,7 +744,8 @@ export async function deriveCanonical(
         `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`,
         { tenantId },
       );
-    return { derived: ids.length };
+    await scanWiredSources(dimId, table, [column, ...(nameColumn ? [nameColumn] : [])], tenantId);
+    return { derived: ids.length, mode, matched: 0, unmatched: 0 };
   }
 
   const dimByKey = new Map<string, string>(); // key → label (first wins)
@@ -684,5 +772,52 @@ export async function deriveCanonical(
       `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
       { tenantId },
     );
-  return { derived: dimByKey.size };
+  await scanWiredSources(dimId, table, [column], tenantId);
+  return { derived: dimByKey.size, mode, matched: 0, unmatched: 0 };
+}
+
+/** Populate source_stat for the just-wired columns so the Sources ledger
+ *  shows real rows/distinct/unmapped immediately, instead of requiring the
+ *  operator to click "Scan all". Errors are logged but never thrown — the
+ *  derive itself already succeeded. */
+async function scanWiredSources(
+  dimId: string,
+  table: string,
+  columns: string[],
+  tenantId: string,
+): Promise<void> {
+  if (!columns.length) return;
+  const parts = table.split(".");
+  if (parts.length !== 2) return;
+  const regs = await pgAll<ScanReg>(
+    `SELECT s.dim_id         AS "dimId",
+            s.database_id    AS "databaseId",
+            wd.database_name AS "catalog",
+            s.schema_name    AS "schema",
+            s.table_name     AS "table",
+            s.column_name    AS "column",
+            d.map_table      AS "mapTable"
+       FROM ${pg("dimension_source")} s
+       JOIN ${pg("dimension")}          d  ON d.id  = s.dim_id      AND d.tenant_id  = s.tenant_id
+       JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
+      WHERE s.tenant_id   = $1
+        AND s.dim_id      = $2
+        AND s.schema_name = $3
+        AND s.table_name  = $4
+        AND s.column_name = ANY($5::text[])`,
+    [tenantId, dimId, parts[0], parts[1], columns],
+  );
+  if (!regs.length) return;
+  try {
+    const adapter = await getAdapter();
+    for (const r of regs) await scanOneSource(r, adapter, tenantId);
+  } catch (e) {
+    log({
+      level: "warn",
+      msg: "auto-scan-after-derive failed",
+      dimId,
+      table,
+      err: e instanceof Error ? e.message : String(e),
+    });
+  }
 }

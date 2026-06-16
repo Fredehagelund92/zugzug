@@ -28,8 +28,8 @@ export const autoStageJob: SchedulerJob = {
     const dimIds = await ctx.repo.dimensionsWithWiredSources();
     let totalStaged = 0;
     for (const id of dimIds) {
-      const staged = await ctx.repo.autoStageExactMatches(id);
-      totalStaged += staged;
+      const { matched } = await ctx.repo.autoStageExactMatches(id);
+      totalStaged += matched;
     }
     return { rowsScanned: totalStaged };
   },
