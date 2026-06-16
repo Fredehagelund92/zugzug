@@ -675,8 +675,24 @@ export async function deriveCanonical(
     const cols = external && nameColumn ? [column, nameColumn] : [column];
     await scanWiredSources(dimId, table, cols, tenantId);
     // Inline the auto-stage so the caller gets real outcome counts immediately,
-    // instead of waiting for the scheduler tick.
-    const { matched, unmatched } = await autoStageExactMatches(dimId, tenantId);
+    // instead of waiting for the scheduler tick. The source is already
+    // registered above; if auto-stage fails (warehouse blip, draft conflict),
+    // the connect itself still succeeded — surface zero counts rather than
+    // 5xx'ing the whole request. The scheduler will retry on the next tick.
+    let matched = 0;
+    let unmatched = 0;
+    try {
+      ({ matched, unmatched } = await autoStageExactMatches(dimId, tenantId));
+    } catch (err) {
+      log({
+        level: "warn",
+        msg: "derive-canonical: inline auto-stage failed",
+        dimId,
+        table,
+        column,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
     if (!opts.silent) {
       const summary =
         matched === 0 && unmatched === 0
