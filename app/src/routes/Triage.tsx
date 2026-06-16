@@ -451,11 +451,12 @@ function CrossDimInbox(p: CrossDimInboxProps) {
 
   return (
     <div
-      className="zz-rise flex min-h-0 flex-1 flex-col rounded-lg border border-line bg-surface"
+      className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface"
       style={{ animationDelay: "150ms" }}
     >
-      {/* toolbar — sticky filter chips */}
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
+      {/* toolbar — pinned at the top of the panel; the DataGrid below owns the
+          only scroll surface, so the toolbar stays put without `sticky`. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           {FILTERS.map((f) => (
             <button
