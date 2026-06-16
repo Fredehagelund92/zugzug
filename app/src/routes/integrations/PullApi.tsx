@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
-import { SegControl } from "../../components/SegControl";
 import { Button } from "../../components/Button";
 import { SkeletonList } from "../../components/Skeleton";
 import {
@@ -9,7 +8,6 @@ import {
   IntegrationsApiError,
   type DimensionSummary,
 } from "../../lib/integrations-api";
-import { SigningRecipeBlock } from "../../components/integrations/SigningRecipeBlock";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
 
 const BASE_URL_PLACEHOLDER = "https://<host>";
@@ -31,9 +29,37 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
   );
 }
 
+function relativeDay(iso: string | null): string {
+  if (!iso) return "—";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return iso.slice(0, 10);
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 30) return `${days}d ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
+function MiniCopy({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="px-1.5 py-0.5 rounded-sm text-[11px] text-ink-2 hover:bg-surface hover:text-ink transition-colors"
+    >
+      {copied ? "Copied" : label}
+    </button>
+  );
+}
+
 export function PullApi() {
   const tenant = useTenant();
-  const [tab, setTab] = useState<"endpoints" | "webhooks">("endpoints");
   const [dims, setDims] = useState<DimensionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,121 +86,125 @@ export function PullApi() {
 
   return (
     <div className="space-y-6">
-      <SegControl
-        value={tab}
-        onChange={(v) => setTab((v ?? "endpoints") as typeof tab)}
-        options={[
-          { value: "endpoints", label: "Endpoints" },
-          { value: "webhooks", label: "Webhook signing recipe" },
-        ]}
-      />
+      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+        <h2 className="font-display text-[15px] font-semibold text-ink">
+          Your canonical records, available as a JSON API
+        </h2>
+        <p className="text-[13px] text-ink-2">
+          Use this to sync into dbt, Fivetran, or any ETL pipeline. Authenticate with a service
+          account from this workspace.
+        </p>
+        <div className="flex items-center gap-2 mt-2">
+          <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface text-[12px] font-mono">
+            {baseUrl}
+          </code>
+          <CopyButton text={baseUrl} />
+        </div>
+        <DeveloperDetails id="pull-api-banner" summary="Developer details">
+          <div>
+            Event store: <code>outbound_event</code> table.
+          </div>
+        </DeveloperDetails>
+      </section>
 
-      {tab === "endpoints" && (
-        <>
-          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
-            <h2 className="font-display text-[15px] font-semibold text-ink">
-              Your canonical records, available as a JSON API
-            </h2>
-            <p className="text-[13px] text-ink-2">
-              Use this to sync into dbt, Fivetran, or any ETL pipeline. Authenticate with a service
-              account from this workspace.
-            </p>
-            <div className="flex items-center gap-2 mt-2">
-              <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface text-[12px] font-mono">
-                {baseUrl}
-              </code>
-              <CopyButton text={baseUrl} />
-            </div>
-            <DeveloperDetails id="pull-api-banner" summary="Developer details">
-              <div>
-                Event store: <code>outbound_event</code> table.
-              </div>
-            </DeveloperDetails>
-          </section>
-
-          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
-            <h3 className="font-display text-[14px] font-semibold text-ink">Authentication</h3>
-            <p className="text-[13px] text-ink-2">
-              Every request needs a bearer token from the{" "}
-              <Link
-                to="../service-accounts"
-                className="text-accent underline-offset-2 hover:underline"
-              >
-                Service accounts
-              </Link>{" "}
-              page.
-            </p>
-            <pre className="px-3 py-2 rounded-sm bg-surface text-[12px] font-mono overflow-x-auto">
-              {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
+      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+        <h3 className="font-display text-[14px] font-semibold text-ink">Authentication</h3>
+        <p className="text-[13px] text-ink-2">
+          Every request needs a bearer token from the{" "}
+          <Link to="../service-accounts" className="text-accent underline-offset-2 hover:underline">
+            Service accounts
+          </Link>{" "}
+          page.
+        </p>
+        <pre className="px-3 py-2 rounded-sm bg-surface text-[12px] font-mono overflow-x-auto">
+          {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
      ${baseUrl}/dimensions`}
-            </pre>
-          </section>
+        </pre>
+      </section>
 
-          <EndpointCards baseUrl={baseUrl} firstSlug={firstSlug} />
+      <EndpointCards baseUrl={baseUrl} firstSlug={firstSlug} />
 
-          <section className="rounded-sm border border-line bg-surface-2 p-4">
-            <h3 className="font-display text-[14px] font-semibold text-ink mb-3">
-              Dimensions in this workspace
-            </h3>
-            {loading ? (
-              <SkeletonList rows={3} columns={[1, 1, 80, 120, 80]} />
-            ) : error ? (
-              <p className="text-[13px] text-danger">Could not load dimensions: {error}</p>
-            ) : (
-              <table className="w-full text-[13px]">
-                <thead className="text-ink-3 text-left">
-                  <tr>
-                    <th className="py-1.5">Slug</th>
-                    <th>Label</th>
-                    <th>Records</th>
-                    <th>Last commit</th>
-                    <th></th>
+      <section className="rounded-sm border border-line bg-surface-2 p-4">
+        <h3 className="font-display text-[14px] font-semibold text-ink mb-3">
+          Dimensions in this workspace
+        </h3>
+        {loading ? (
+          <SkeletonList rows={3} columns={[120, 1, 70, 90, 180]} />
+        ) : error ? (
+          <p className="text-[13px] text-danger">Could not load dimensions: {error}</p>
+        ) : dims.length === 0 ? (
+          <p className="text-[13px] text-ink-2">
+            No dimensions yet. Create one in{" "}
+            <Link to="../../tables" className="text-accent underline-offset-2 hover:underline">
+              Master tables
+            </Link>{" "}
+            and they'll appear here.
+          </p>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead className="text-ink-2 text-left">
+              <tr className="text-[11px] uppercase tracking-wider">
+                <th className="py-1.5 font-medium">Slug</th>
+                <th className="font-medium">Label</th>
+                <th className="font-medium text-right pr-4">Records</th>
+                <th className="font-medium">Last commit</th>
+                <th className="font-medium text-right">Copy curl</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dims.map((d) => {
+                const curlFor = (path: string) =>
+                  `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/dimensions/${d.slug}/${path}`;
+                return (
+                  <tr
+                    key={d.slug}
+                    className="border-t border-line hover:bg-surface/60 transition-colors"
+                  >
+                    <td className="py-2 font-mono">{d.slug}</td>
+                    <td>{d.label}</td>
+                    <td className="text-right pr-4 tabular-nums">
+                      {d.canonical_count.toLocaleString()}
+                    </td>
+                    <td
+                      className={d.last_committed_at ? "text-ink" : "text-ink-3"}
+                      title={d.last_committed_at ?? undefined}
+                    >
+                      {relativeDay(d.last_committed_at)}
+                    </td>
+                    <td className="text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <MiniCopy text={curlFor("canonical")} label="canonical" />
+                        <MiniCopy text={curlFor("schema")} label="schema" />
+                        <MiniCopy text={curlFor("tombstones")} label="tombstones" />
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {dims.map((d) => {
-                    const cmd = `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/dimensions/${d.slug}/canonical`;
-                    return (
-                      <tr key={d.slug} className="border-t border-line">
-                        <td className="py-2 font-mono">{d.slug}</td>
-                        <td>{d.label}</td>
-                        <td>{d.canonical_count}</td>
-                        <td>{d.last_committed_at ? d.last_committed_at.slice(0, 10) : "—"}</td>
-                        <td className="text-right">
-                          <CopyButton text={cmd} label="Copy curl" />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </section>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </section>
 
-          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
-            <h3 className="font-display text-[14px] font-semibold text-ink">
-              Pagination + incremental sync
-            </h3>
-            <p className="text-[13px] text-ink-2">
-              All paginated endpoints accept <code>?since=&lt;ISO&gt;</code> (inclusive lower bound)
-              and return a HMAC-signed cursor in <code>cursor.next</code>. Resume by passing{" "}
-              <code>?cursor=&lt;value&gt;</code>. Cursors invalidated by server-key rotation return{" "}
-              <code>400 cursor_invalid</code>; consumers should resync from <code>?since=</code>.
-            </p>
-          </section>
+      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+        <h3 className="font-display text-[14px] font-semibold text-ink">
+          Pagination + incremental sync
+        </h3>
+        <p className="text-[13px] text-ink-2">
+          All paginated endpoints accept <code>?since=&lt;ISO&gt;</code> (inclusive lower bound) and
+          return a HMAC-signed cursor in <code>cursor.next</code>. Resume by passing{" "}
+          <code>?cursor=&lt;value&gt;</code>. Cursors invalidated by server-key rotation return{" "}
+          <code>400 cursor_invalid</code>; consumers should resync from <code>?since=</code>.
+        </p>
+      </section>
 
-          <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
-            <h3 className="font-display text-[14px] font-semibold text-ink">Rate limits</h3>
-            <p className="text-[13px] text-ink-2">
-              600 req/min per credential by default (configurable via{" "}
-              <code>ZUGZUG_PULL_API_RPM</code>). Exceeding returns <code>429</code> with{" "}
-              <code>Retry-After</code> seconds.
-            </p>
-          </section>
-        </>
-      )}
-
-      {tab === "webhooks" && <WebhookRecipeTab />}
+      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+        <h3 className="font-display text-[14px] font-semibold text-ink">Rate limits</h3>
+        <p className="text-[13px] text-ink-2">
+          600 req/min per credential by default (configurable via <code>ZUGZUG_PULL_API_RPM</code>).
+          Exceeding returns <code>429</code> with <code>Retry-After</code> seconds.
+        </p>
+      </section>
     </div>
   );
 }
@@ -208,25 +238,5 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
         </div>
       ))}
     </section>
-  );
-}
-
-function WebhookRecipeTab() {
-  return (
-    <div className="space-y-4">
-      <p className="text-[13px] text-ink-2">
-        Webhooks POST a JSON payload signed with HMAC-SHA256. The header contains a timestamp (
-        <code>t=</code>), a key id (<code>kid=current</code> or <code>previous</code>), and the
-        signature (<code>v1=sha256=...</code>). Copy this verifier verbatim:
-      </p>
-      <SigningRecipeBlock />
-      <p className="text-[13px] text-ink-2">
-        See{" "}
-        <Link to="../webhooks" className="text-accent underline-offset-2 hover:underline">
-          Webhooks
-        </Link>{" "}
-        to create or manage subscriptions.
-      </p>
-    </div>
   );
 }

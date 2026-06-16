@@ -3,7 +3,6 @@
    <LedgerRow>/<ExpandedDrill> components consume one source of truth. */
 
 export const SCHED_LABEL: Record<string, string> = {
-  "15m": "auto 15m",
   hourly: "auto hourly",
   daily: "auto daily",
 };

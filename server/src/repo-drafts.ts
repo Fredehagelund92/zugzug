@@ -12,7 +12,7 @@ import {
   qid,
   cq,
   liveSources,
-  parseSourceTable,
+  refOf,
   pgAll,
   pgGet,
   pgRun,
@@ -267,10 +267,34 @@ export async function commit(
     [dimId, tenantId],
   );
 
+  // Identify remaps (raw already mapped but to a different target_key) so we
+  // can record them separately in the outbound event and audit log.
+  const remappedDrafts = await pgAll<{ raw: string; from_key: string; to_key: string }>(
+    `SELECT d.raw, m.${key} AS from_key, d.target_key AS to_key
+     FROM ${DRAFT} d
+     JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
+     WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
+       AND d.target_key IS NOT NULL AND m.${key} <> d.target_key`,
+    [dimId, tenantId],
+  );
+
   // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
   // stays per-tenant-implicit (dim ids are globally unique → effectively
   // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
   await pgTx(async (tx) => {
+    // Update existing map rows whose target has changed (remaps).
+    if (remappedDrafts.length > 0) {
+      await tx.run(
+        `UPDATE ${MAPT} m
+         SET ${key} = d.target_key
+         FROM ${DRAFT} d
+         WHERE lower(m.raw) = lower(d.raw)
+           AND d.dim_id = $1 AND d.tenant_id = $2
+           AND d.status = 'mapped' AND d.target_key IS NOT NULL
+           AND m.${key} <> d.target_key`,
+        [dimId, tenantId],
+      );
+    }
     if (meta.orderingMode === "manual") {
       await tx.run(
         `WITH max_pos AS (
@@ -330,7 +354,15 @@ export async function commit(
       `SELECT name FROM ${pg("users")} WHERE id = $1`,
       [userId],
     );
-    const addedKeys = approvedDrafts.map((d) => ({ key: d.key, label: d.label ?? d.key }));
+    const remappedRaws = new Set(remappedDrafts.map((r) => r.raw.toLowerCase()));
+    const addedKeys = approvedDrafts
+      .filter((d) => !remappedRaws.has(d.raw.toLowerCase()))
+      .map((d) => ({ key: d.key, label: d.label ?? d.key }));
+    const remappedKeys = remappedDrafts.map((r) => ({
+      raw: r.raw,
+      from_key: r.from_key,
+      to_key: r.to_key,
+    }));
     await dispatchOutbound(tx, {
       tenantId,
       type: "dimension.committed",
@@ -344,12 +376,13 @@ export async function commit(
         committed_by: { id: userId, name: committedBy?.name ?? userId },
         changes: {
           added: addedKeys.slice(0, 200),
+          remapped: remappedKeys.slice(0, 200),
           updated: [],
           merged: [],
           retired: [],
         },
-        summary: { added: addedKeys.length, updated: 0, merged: 0, retired: 0 },
-        ...(addedKeys.length > 200 ? { changes_truncated: true } : {}),
+        summary: { added: addedKeys.length, remapped: remappedKeys.length, updated: 0, merged: 0, retired: 0 },
+        ...((addedKeys.length > 200 || remappedKeys.length > 200) ? { changes_truncated: true } : {}),
       },
       idemKey: `dimension.committed:${dimId}:${v}`,
     });
@@ -434,7 +467,7 @@ async function rowsForUnmappedDrafts(
   // Multiple sources may emit the same raw — we sum counts when summing total rows below
   // (matches the original UNION-ALL pattern's semantics: count each source-occurrence once).
   const adapter = await getAdapter();
-  const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
+  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
   const provenance = await adapter
     .distinctValuesWithProvenance(refs)
     .catch(() => [] as ValueProvenance[]);

@@ -117,14 +117,13 @@ let currentUserFull: CurrentUser | null = null;
 export interface Preferences {
   publishThreshold: number;
   suggestThreshold: number;
-  scanSchedule: "15m" | "hourly" | "daily" | null;
+  scanSchedule: "hourly" | "daily" | null;
 }
 
 export interface WorkspaceInfo {
   adapter: "duckdb" | "snowflake";
   writable: boolean;
   canonicalMode: "warehouse" | "postgres-export";
-  warehouseDb: string | null;
   defaultEngineerMode: boolean;
 }
 
@@ -138,7 +137,6 @@ function isWorkspaceInfo(x: unknown): x is WorkspaceInfo {
     (o.adapter === "duckdb" || o.adapter === "snowflake") &&
     typeof o.writable === "boolean" &&
     (o.canonicalMode === "warehouse" || o.canonicalMode === "postgres-export") &&
-    (o.warehouseDb === null || typeof o.warehouseDb === "string") &&
     typeof o.defaultEngineerMode === "boolean"
   );
 }
@@ -184,6 +182,7 @@ function resetStore(): void {
     clearTimeout(savedDecayTimer);
     savedDecayTimer = null;
   }
+  storeLoading = true;
   emitSync();
   emit();
 }
@@ -252,6 +251,7 @@ let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
 let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null };
+let storeLoading = true;
 
 const listeners = new Set<() => void>();
 const subscribe = (l: () => void) => {
@@ -420,6 +420,7 @@ export async function initStore(): Promise<void> {
     refreshConnectionHealth(),
   ]);
   await refreshDrafts();
+  storeLoading = false;
   emit();
 }
 
@@ -465,6 +466,10 @@ export function useCurrentUser(): CurrentUser | null {
     () => currentUserFull,
     () => currentUserFull,
   );
+}
+
+export function useStoreLoading(): boolean {
+  return useSyncExternalStore(subscribe, () => storeLoading, () => storeLoading);
 }
 
 /** Convenience: true when the current user may mutate state in the active workspace.
@@ -792,23 +797,29 @@ export async function fetchUnmappedSample(
   return api<UnmappedSample[]>(`/sources/unmapped?${qs.toString()}`);
 }
 
-/** Seed a dimension's canonical set from a source column's distinct values
- *  (also wires the column). Returns how many canonical records resulted. */
+/** Wire a source column to a dimension. If the dim is empty, the distinct values
+ *  seed the canonical table 1:1 (mode "seed"). If the dim already has records,
+ *  only the source is registered — values land in Match Values for triage
+ *  (mode "connect"). Pass `force` to seed regardless (bootstrap-from-many). */
 export async function deriveCanonical(
   dimId: string,
   table: string,
   column: string,
   nameColumn?: string,
-): Promise<number> {
-  const { derived } = await api<{ derived: number }>(
+  opts: { force?: boolean } = {},
+): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
+  const res = await api<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }>(
     `/dimensions/${encodeURIComponent(dimId)}/derive`,
-    { method: "POST", body: JSON.stringify({ table, column, nameColumn }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ table, column, nameColumn, force: opts.force }),
+    },
   );
   await refreshDim(dimId);
   await refreshSources();
   await refreshAudit();
   emit();
-  return derived;
+  return res;
 }
 
 /* ---- canonical record management (governed, persisted) ---- */
@@ -1125,39 +1136,6 @@ export async function setFieldValue(
   }
 }
 
-export interface ApiToken {
-  id: string;
-  name: string;
-  created_at: string;
-  last_used_at: string | null;
-}
-
-export interface CreatedApiToken extends ApiToken {
-  value: string; // shown once at creation
-}
-
-export async function listApiTokens(): Promise<ApiToken[]> {
-  const r = await apiFetch("/tokens");
-  if (!r.ok) throw new Error(`list_tokens_${r.status}`);
-  const body = (await r.json()) as { tokens: ApiToken[] };
-  return body.tokens;
-}
-
-export async function createApiToken(name: string): Promise<CreatedApiToken> {
-  const r = await apiFetch("/tokens", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  if (!r.ok) throw new Error(`create_token_${r.status}`);
-  return (await r.json()) as CreatedApiToken;
-}
-
-export async function revokeApiToken(id: string): Promise<void> {
-  const r = await apiFetch(`/tokens/${id}`, { method: "DELETE" });
-  if (!r.ok) throw new Error(`revoke_token_${r.status}`);
-}
-
 export interface CatalogTable {
   schema: string;
   table: string;
@@ -1315,7 +1293,6 @@ export type InvalidateKey =
   | "tenant"
   | "memberships"
   | "members"
-  | "tokens"
   | "scans"
   | "audit"
   | "warehouses"
@@ -1372,9 +1349,6 @@ export const invalidate = {
   },
   members: (slug?: string): void => {
     fireInvalidate("members", slug);
-  },
-  tokens: (slug?: string): void => {
-    fireInvalidate("tokens", slug);
   },
   scans: async (slug?: string): Promise<void> => {
     await refetchPreferences();

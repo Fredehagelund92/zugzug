@@ -1,34 +1,53 @@
-# CLAUDE.md — Zug Zug (repo: zugzug)
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-Master-data value reconciliation on MotherDuck. Reads your warehouse, lets a team
-reconcile messy source values to canonical values, writes results to its own store
-(never back to the warehouse). Full design: `app/ARCHITECTURE.md`.
+Tradeoff: These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-## Layout
-- `server/` — Bun + `@duckdb/node-api` backend. One DuckDB conn ATTACHes the stores. API :8787.
-- `app/` — React 18 + Vite + Tailwind v4 UI. :5173 (Vite proxies `/api`).
+1. Think Before Coding
+Don't assume. Don't hide confusion. Surface tradeoffs.
 
-## Run
-- `cd server && bun run bootstrap -- --seed`  (once) then `bun run start`
-- `cd app && bun run dev`
-- Typecheck: `bun run typecheck` in either package.
+Before implementing:
 
-## Three stores (see ARCHITECTURE.md)
-- Warehouse = MotherDuck, **read-only**, scanned for distinct values.
-- Canonical `dim_/map_` + app state (registry, drafts, audit, users) = **Postgres**.
-- DuckDB = warehouse-only interface (MotherDuck ATTACH). Does NOT attach Postgres.
+State your assumptions explicitly. If uncertain, ask.
+If multiple interpretations exist, present them - don't pick silently.
+If a simpler approach exists, say so. Push back when warranted.
+If something is unclear, stop. Name what's confusing. Ask.
+2. Simplicity First
+Minimum code that solves the problem. Nothing speculative.
 
-## Data access — hard rules (follow for every feature)
-- **OLTP → `postgres.js`** (`server/src/pg.ts`). Every pure-Postgres query (drafts, audit, users, sessions, preferences, dimension registry, canonical tables) uses the native `postgres.js` client. Never use DuckDB to query Postgres.
-- **Warehouse → DuckDB** (`server/src/db.ts`). DuckDB only talks to MotherDuck. Use it for `DISTINCT` scans, catalog browsing, and anything that reads warehouse tables.
-- **Cross-store joins → application code**. When a query needs warehouse data AND Postgres data (e.g. "which warehouse values are unmapped?"), do two fetches and join in TypeScript. Do not re-introduce a DuckDB Postgres ATTACH.
-- **Schema changes → Drizzle migration**. All DDL for the 12 static app-state tables lives in `server/drizzle/schema.ts`. Run `bun run db:generate` after schema edits; commit the generated migration. Dynamic `dim_*/map_*` tables (created per-dimension in `addDimension`) stay as imperative DDL.
+No features beyond what was asked.
+No abstractions for single-use code.
+No "flexibility" or "configurability" that wasn't requested.
+No error handling for impossible scenarios.
+If you write 200 lines and it could be 50, rewrite it.
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-## Gotchas
-- MotherDuck token is read-only (`read_scaling`) → canonical `dim_/map_` live in Postgres; `commit()` is single-catalog/atomic.
-- Warehouse scan gated by `ATTACH_WAREHOUSE` (off by default). Off → scan functions return nothing; Postgres-only machinery still runs. See `server/.env.example`.
-- `app/src/store.ts` annotates each export with the SQL it represents — read it before changing data flow.
+3. Surgical Changes
+Touch only what you must. Clean up only your own mess.
 
-## Master-table convention
-- A canonical record = `key` (stable ID) + `label` (renameable name). Never persist the name as a link — names change (`renameCanonical` exists); IDs don't.
-- A dimension's `key` MAY be an external warehouse ID (e.g. `partner_id`), not a name-derived slug. When it is, **always display the human name alongside the key** so users can see what they're mapping toward — store the ID, render the name.
+When editing existing code:
+
+Don't "improve" adjacent code, comments, or formatting.
+Don't refactor things that aren't broken.
+Match existing style, even if you'd do it differently.
+If you notice unrelated dead code, mention it - don't delete it.
+When your changes create orphans:
+
+Remove imports/variables/functions that YOUR changes made unused.
+Don't remove pre-existing dead code unless asked.
+The test: Every changed line should trace directly to the user's request.
+
+4. Goal-Driven Execution
+Define success criteria. Loop until verified.
+
+Transform tasks into verifiable goals:
+
+"Add validation" → "Write tests for invalid inputs, then make them pass"
+"Fix the bug" → "Write a test that reproduces it, then make it pass"
+"Refactor X" → "Ensure tests pass before and after"
+For multi-step tasks, state a brief plan:
+
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.

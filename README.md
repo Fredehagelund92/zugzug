@@ -100,7 +100,7 @@ Two modes, switched by environment variable:
 
 **OIDC mode:** Set `OIDC_ISSUER_URL` to any compliant provider (Google Workspace, Okta, Authentik, Keycloak). The sign-in page shows an SSO button automatically.
 
-**API tokens:** Generated per-user in Settings → API Tokens. Pass as `Authorization: Bearer <token>`. Intended for dbt CI and scripts.
+**API tokens:** Generated per workspace in Integrations → Service accounts (`zzsa_*`). Pass as `Authorization: Bearer <token>`. Scoped to one workspace; intended for dbt CI and scripts.
 
 See `server/.env.example` for all auth options.
 

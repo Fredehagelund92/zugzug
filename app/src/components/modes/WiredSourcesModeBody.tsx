@@ -29,19 +29,36 @@ export function WiredSourcesModeBody({ dim }: Props) {
   const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
   const canEdit = useCanEdit();
   const nav = useNavLinks();
+  const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+    if (result.mode === "seed") {
+      if ((result.derived ?? 0) > 0) {
+        return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;
+      }
+      return "no values yet";
+    }
+    const m = result.matched ?? 0;
+    const u = result.unmatched ?? 0;
+    if (m > 0 && u > 0) {
+      return `${m} matched, ${u} to review`;
+    }
+    if (m > 0) {
+      return `${m} matched, all done`;
+    }
+    if (u > 0) {
+      return `${u} to review`;
+    }
+    return "no new values";
+  };
+
   const deriveAction = useAsyncAction(async (dimId: string, table: string, column: string) => {
     try {
-      const n = await deriveCanonical(dimId, table, column);
-      toast(
-        n > 0
-          ? `Imported ${n} record${n === 1 ? "" : "s"} from ${table}.${column}`
-          : `${table}.${column} has no rows to import`,
-      );
+      const result = await deriveCanonical(dimId, table, column);
+      toast(`Re-scanned ${table}.${column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(
         e instanceof Error
-          ? `Couldn't import ${table}.${column}: ${e.message}`
-          : `Couldn't import ${table}.${column}.`,
+          ? `Couldn't re-scan ${table}.${column}: ${e.message}`
+          : `Couldn't re-scan ${table}.${column}.`,
         "error",
       );
       throw e;

@@ -15,11 +15,9 @@ interface Props {
 export function AddDatabaseDialog(props: Props): JSX.Element {
   const [discovered, setDiscovered] = useState<Discovered[]>([]);
   const [discoverFailed, setDiscoverFailed] = useState(false);
-  const [selectedChip, setSelectedChip] = useState<string | null>(null);
-  const [name, setName] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
   const [label, setLabel] = useState("");
-  const [probeOk, setProbeOk] = useState<boolean | null>(null);
-  const [probeError, setProbeError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -33,46 +31,25 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
       .catch(() => setDiscoverFailed(true));
   }, []);
 
-  const canAdd =
-    (selectedChip !== null &&
-      !discovered.find((d) => d.databaseName === selectedChip)?.registered) ||
-    (selectedChip === null && name.length > 0);
-
-  const onPickChip = (n: string): void => {
-    if (discovered.find((d) => d.databaseName === n)?.registered) return;
-    setSelectedChip(n);
-    setName(n);
-    setProbeOk(true);
-    setProbeError(null);
-  };
-
-  const onChangeName = (v: string): void => {
-    setName(v);
-    setSelectedChip(null);
-    setProbeOk(null);
-    setProbeError(null);
-  };
-
   const onSubmit = async (): Promise<void> => {
+    if (!selected) return;
     setBusy(true);
+    setError(null);
     const r = await authFetch("/warehouse/databases", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ databaseName: name, label: label || undefined }),
+      body: JSON.stringify({ databaseName: selected, label: label || undefined }),
     });
     setBusy(false);
     if (r.ok) {
       props.onAdded();
     } else {
-      const body = await r.json().catch(() => ({}) as { reason?: string; kind?: string });
-      setProbeError(
-        (body as { reason?: string; kind?: string }).reason ??
-          (body as { kind?: string }).kind ??
-          "Add failed",
-      );
-      setProbeOk(false);
+      const body = (await r.json().catch(() => ({}))) as { reason?: string; kind?: string };
+      setError(body.reason ?? body.kind ?? "Add failed");
     }
   };
+
+  const addable = discovered.filter((d) => !d.registered);
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
@@ -88,23 +65,29 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
         <div className="space-y-4 p-4">
           <div>
             <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-              Discovered
+              Discovered in MotherDuck
             </div>
             {discoverFailed ? (
-              <div className="text-[12.5px] text-ink-2">Could not enumerate — enter manually.</div>
+              <div className="text-[12.5px] text-danger">
+                Could not enumerate databases — check server logs.
+              </div>
             ) : discovered.length === 0 ? (
               <div className="text-[12.5px] text-ink-2">Loading…</div>
+            ) : addable.length === 0 ? (
+              <div className="text-[12.5px] text-ink-2">
+                All discovered databases are already registered.
+              </div>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {discovered.map((d) => (
                   <button
                     key={d.databaseName}
                     data-chip={d.databaseName}
-                    onClick={() => onPickChip(d.databaseName)}
+                    onClick={() => !d.registered && setSelected(d.databaseName)}
                     disabled={d.registered}
                     title={d.registered ? "Already registered" : undefined}
                     className={`rounded-pill border px-3 py-1 font-mono text-[11px] ${
-                      selectedChip === d.databaseName
+                      selected === d.databaseName
                         ? "border-accent bg-accent-soft text-accent"
                         : "border-line-2 text-ink hover:bg-bg-2"
                     } disabled:opacity-50`}
@@ -115,30 +98,25 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
               </div>
             )}
           </div>
-          <div>
-            <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-              Manual entry
-            </div>
-            <input
-              name="databaseName"
-              value={name}
-              onChange={(e) => onChangeName(e.target.value)}
-              placeholder="database name"
-              className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] outline-none focus:border-accent"
-            />
-            <input
-              name="label"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="label (optional)"
-              className="mt-2 w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] outline-none focus:border-accent"
-            />
-            {probeOk === false && probeError && (
-              <div className="mt-2 rounded-sm border border-danger bg-danger-soft p-2 font-mono text-[11px] text-danger">
-                {probeError}
+          {selected && (
+            <div>
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                Label (optional)
               </div>
-            )}
-          </div>
+              <input
+                name="label"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. Production raw"
+                className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] outline-none focus:border-accent"
+              />
+            </div>
+          )}
+          {error && (
+            <div className="rounded-sm border border-danger bg-danger-soft p-2 font-mono text-[11px] text-danger">
+              {error}
+            </div>
+          )}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-line p-3">
           <button
@@ -149,7 +127,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
           </button>
           <button
             onClick={() => void onSubmit()}
-            disabled={!canAdd || busy}
+            disabled={!selected || busy}
             className="rounded-sm border border-accent bg-accent px-3 py-1 font-mono text-[11px] text-bg hover:opacity-90 disabled:opacity-50"
           >
             Add database

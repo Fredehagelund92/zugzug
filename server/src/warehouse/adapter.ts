@@ -77,6 +77,8 @@ interface BaseWarehouseAdapter {
   ping(): Promise<boolean>;
   listDatabases(): Promise<DatabaseDescriptor[]>;
   probeDatabase(databaseName: string): Promise<ProbeResult>;
+  /** Per-database user-schema counts. Excludes system schemas (information_schema, pg_*, etc.). */
+  schemaCounts(): Promise<Map<string, number>>;
 
   // Catalog
   listTables(opts?: {

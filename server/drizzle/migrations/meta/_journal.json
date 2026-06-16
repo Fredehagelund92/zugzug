@@ -204,6 +204,27 @@
       "when": 1781511169634,
       "tag": "0028_aberrant_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1781551490651,
+      "tag": "0029_typical_skreet",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1781800000000,
+      "tag": "0030_drop_15m_scan",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1781800001000,
+      "tag": "0031_warehouse_db_added_by_nullable",
+      "breakpoints": true
     }
   ]
 }

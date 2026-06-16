@@ -282,13 +282,15 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   }, [dim.id, visible, setFilter]);
 
   // the staged drafts awaiting commit (incl. teammates' work) — the review
-  // set. Scoped to still-uncommitted (new) values, matching what commit()
-  // actually folds.
+  // set. Includes new mappings and remaps (draft target differs from current).
   const stagedDrafts = useMemo(
     () =>
-      listDrafts(dim.id).filter(
-        (d) => d.status === "mapped" && dim.values.find((v) => v.value === d.raw)?.status === "new",
-      ),
+      listDrafts(dim.id).filter((d) => {
+        if (d.status !== "mapped") return false;
+        const v = dim.values.find((val) => val.value === d.raw);
+        if (!v) return false;
+        return !v.current || v.current !== d.targetLabel;
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [dim, allDrafts],
   );

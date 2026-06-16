@@ -6,10 +6,15 @@ import { env } from "../src/env.ts";
 
 export async function runMigrations(): Promise<void> {
   const client = postgres(env.databaseUrl, { max: 1 });
-  // Set the warehouse_db session var so the warehouse-multi-db migration's
-  // preflight can read current_setting('zugzug.warehouse_db', true) without
-  // depending on out-of-band psql -v flags.
-  await client.unsafe(`SET zugzug.warehouse_db = '${env.warehouseDb.replace(/'/g, "''")}'`);
+  // Legacy migration 0021 reads current_setting('zugzug.warehouse_db', true).
+  // Only relevant on installs that still need the one-time backfill; on fresh
+  // installs the migration's preflights skip when there are no rows to backfill.
+  // We pass WAREHOUSE_DB through here for back-compat without re-introducing it
+  // as a runtime config (env.warehouseDb is gone — UI registrations are source of truth).
+  const legacyWarehouseDb = (process.env.WAREHOUSE_DB ?? "").trim();
+  await client.unsafe(
+    `SET zugzug.warehouse_db = '${legacyWarehouseDb.replace(/'/g, "''")}'`,
+  );
   const db = drizzle(client);
   await migrate(db, {
     migrationsFolder: resolve(import.meta.dir, "migrations"),

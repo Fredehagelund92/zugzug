@@ -1,5 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { pgAll, pgGet, pgRun } from "./pg.ts";
+import { getAdapter } from "./warehouse/registry.ts";
+
+// MotherDuck SHOW DATABASES surfaces system catalogs that aren't user data
+// — exclude them so they never appear as registerable sources.
+const SYSTEM_CATALOG_NAMES = new Set(["memory", "system", "temp"]);
+function isSystemCatalog(name: string): boolean {
+  if (SYSTEM_CATALOG_NAMES.has(name)) return true;
+  if (/_information_schema$/i.test(name)) return true;
+  return false;
+}
 
 export interface DatabaseRow {
   id: string;
@@ -7,6 +17,8 @@ export interface DatabaseRow {
   label: string | null;
   addedAt: Date;
   sourceCount: number;
+  /** Live count from the warehouse — `null` if the adapter call failed. */
+  schemaCount: number | null;
   lastProbeAt: Date | null;
   lastProbeError: string | null;
 }
@@ -15,8 +27,23 @@ function newId(prefix: "wd"): string {
   return `${prefix}_${randomUUID().replace(/-/g, "")}`;
 }
 
+/** Discover databases visible to the warehouse adapter, marking which are
+ *  already registered. Filters system catalogs (memory, *_information_schema). */
+export async function discoverDatabases(): Promise<
+  Array<{ databaseName: string; registered: boolean }>
+> {
+  const adapter = await getAdapter();
+  const raw = (await adapter.listDatabases()).map((d) => d.databaseName);
+  const discovered = raw.filter((n) => !isSystemCatalog(n));
+  const registered = new Set((await listWarehouseDatabases()).map((d) => d.databaseName));
+  return discovered.map((databaseName) => ({
+    databaseName,
+    registered: registered.has(databaseName),
+  }));
+}
+
 export async function listWarehouseDatabases(): Promise<DatabaseRow[]> {
-  return pgAll<DatabaseRow>(
+  const rows = await pgAll<Omit<DatabaseRow, "schemaCount">>(
     `SELECT wd.id            AS "id",
             wd.database_name AS "databaseName",
             wd.label         AS "label",
@@ -28,6 +55,20 @@ export async function listWarehouseDatabases(): Promise<DatabaseRow[]> {
        FROM "zugzug_app"."warehouse_database" wd
       ORDER BY wd.added_at`,
   );
+  let counts: Map<string, number> | null = null;
+  try {
+    const adapter = await getAdapter();
+    counts = await adapter.schemaCounts();
+  } catch (err) {
+    console.warn(
+      "[warehouse] schemaCounts failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+  return rows.map((r) => ({
+    ...r,
+    schemaCount: counts ? (counts.get(r.databaseName) ?? 0) : null,
+  }));
 }
 
 export async function addWarehouseDatabase(opts: {

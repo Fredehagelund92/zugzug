@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "./Button";
 import { ComboSelect } from "./ComboSelect";
 import { IconSearch, IconX, IconChevron, IconArrowRight } from "./Icons";
 import { cx } from "../lib/cx";
 import { searchCatalog, deriveCanonical, useCanEdit, type CatalogTable } from "../store";
-import { apiFetch } from "../api";
+import { fetchWarehouseDatabases } from "../api";
 import type { MappingDimension } from "../data";
 
 /* CatalogExplorer — browse/search the warehouse catalog (the 1000+ tables) and
@@ -21,7 +22,30 @@ interface DatabaseOption {
   databaseName: string;
   label: string | null;
   lastProbeError: string | null;
+  sourceCount?: number;
+  schemaCount?: number | null;
 }
+
+const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+  if (result.mode === "seed") {
+    if ((result.derived ?? 0) > 0) {
+      return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;
+    }
+    return "no values yet";
+  }
+  const m = result.matched ?? 0;
+  const u = result.unmatched ?? 0;
+  if (m > 0 && u > 0) {
+    return `${m} matched, ${u} to review`;
+  }
+  if (m > 0) {
+    return `${m} matched, all done`;
+  }
+  if (u > 0) {
+    return `${u} to review`;
+  }
+  return "no new values";
+};
 
 export function CatalogExplorer({
   dims,
@@ -45,7 +69,7 @@ export function CatalogExplorer({
   const [open, setOpen] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseOption[]>([]);
   const [internalDb, setInternalDb] = useState<string | null>(database);
-  type WireState = { dim: string; n: number | null; error?: string };
+  type WireState = { dim: string; n: number | null; mode?: "seed" | "connect"; matched?: number; unmatched?: number; error?: string };
   const [wired, setWired] = useState<Record<string, WireState>>({}); // "table.col" → result
   const seq = useRef(0);
 
@@ -63,8 +87,7 @@ export function CatalogExplorer({
   // load registered databases once so the picker (and lone-db autoselect) work
   useEffect(() => {
     let cancelled = false;
-    apiFetch("/warehouse/databases")
-      .then((r) => (r.ok ? (r.json() as Promise<DatabaseOption[]>) : []))
+    fetchWarehouseDatabases()
       .then((dbs) => {
         if (cancelled) return;
         setDatabases(dbs);
@@ -127,8 +150,8 @@ export function CatalogExplorer({
     const key = `${table}.${column}`;
     setWired((w) => ({ ...w, [key]: { dim: dimLabel, n: null } })); // pending
     try {
-      const n = await deriveCanonical(dim.id, table, column); // wire + seed canonical
-      setWired((w) => ({ ...w, [key]: { dim: dimLabel, n } }));
+      const { derived, mode, matched, unmatched } = await deriveCanonical(dim.id, table, column);
+      setWired((w) => ({ ...w, [key]: { dim: dimLabel, n: derived, mode, matched, unmatched } }));
     } catch (err) {
       setWired((w) => ({
         ...w,
@@ -150,6 +173,8 @@ export function CatalogExplorer({
   };
 
   const dimOptions = dims.map((d) => d.dimension);
+  const activeDb = databases.find((d) => d.id === internalDb) ?? null;
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -181,37 +206,89 @@ export function CatalogExplorer({
               Wire a source
             </h2>
           </div>
-          <label className="flex shrink-0 items-center gap-2 md:ml-auto">
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-              Database
-            </span>
-            <select
-              aria-label="Database"
-              value={internalDb ?? ""}
-              onChange={(e) => setDatabase(e.target.value || null)}
-              className="rounded-sm border border-line-2 bg-surface px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
-            >
-              <option value="">— pick a database —</option>
-              {databases.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.databaseName}
-                  {d.label ? ` — ${d.label}` : ""}
-                  {d.lastProbeError ? " (unreachable)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent md:max-w-sm">
-            <IconSearch className="h-4 w-4 shrink-0" />
-            <input
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search tables, columns…"
-              disabled={!internalDb}
-              className="w-full bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-50"
-            />
-          </label>
+          {activeDb && databases.length > 1 ? (
+            <div className="relative md:ml-auto">
+              <button
+                type="button"
+                onClick={() => setSwitcherOpen((v) => !v)}
+                className="group flex items-center gap-2 rounded-sm border border-line-2 bg-surface px-2.5 py-1.5 text-left transition-colors hover:border-ink-3"
+              >
+                <span className="grid h-5 w-5 place-items-center rounded-[2px] bg-accent/15 font-mono text-[10px] font-bold text-accent">
+                  {activeDb.databaseName.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="flex flex-col leading-tight">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                    Database
+                  </span>
+                  <span className="font-mono text-[11.5px] text-ink">
+                    {activeDb.databaseName}
+                  </span>
+                </span>
+                <IconChevron
+                  className={cx(
+                    "h-3 w-3 text-ink-3 transition-transform",
+                    switcherOpen && "rotate-180",
+                  )}
+                />
+              </button>
+              {switcherOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setSwitcherOpen(false)}
+                  />
+                  <div className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop">
+                    {databases.map((d) => (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => {
+                          setDatabase(d.id);
+                          setSwitcherOpen(false);
+                        }}
+                        className={cx(
+                          "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-hover",
+                          d.id === internalDb && "bg-hover",
+                        )}
+                      >
+                        <span className="grid h-5 w-5 place-items-center rounded-[2px] bg-accent/15 font-mono text-[10px] font-bold text-accent">
+                          {d.databaseName.slice(0, 1).toUpperCase()}
+                        </span>
+                        <span className="flex min-w-0 flex-col leading-tight">
+                          <span className="truncate font-mono text-[11.5px] text-ink">
+                            {d.databaseName}
+                          </span>
+                          {d.label && (
+                            <span className="truncate font-mono text-[10px] text-ink-3">
+                              {d.label}
+                            </span>
+                          )}
+                        </span>
+                        {d.lastProbeError && (
+                          <span className="ml-auto font-mono text-[9.5px] uppercase tracking-wider text-danger">
+                            offline
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+          {internalDb && (
+            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent md:max-w-sm">
+              <IconSearch className="h-4 w-4 shrink-0" />
+              <input
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search tables, columns…"
+                className="w-full bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
+              />
+            </label>
+          )}
+          {!internalDb && <div className="md:ml-auto" />}
           <button
             type="button"
             onClick={onClose}
@@ -222,6 +299,106 @@ export function CatalogExplorer({
           </button>
         </div>
 
+        {!internalDb ? (
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 md:px-10 md:py-10">
+            <div className="mx-auto max-w-2xl">
+              <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+                Step 1 of 2
+              </div>
+              <h3 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-ink">
+                Choose a database to browse
+              </h3>
+              <p className="mt-1.5 max-w-md font-mono text-[12px] leading-relaxed text-ink-3">
+                Each registered warehouse database holds its own catalog of tables. Pick one to
+                start wiring columns into dimensions.
+              </p>
+
+              {databases.length === 0 ? (
+                <div className="mt-7 rounded-sm border border-dashed border-line-2 bg-surface/40 px-6 py-10 text-center">
+                  <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3">
+                    Nothing registered yet
+                  </div>
+                  <p className="mx-auto mt-2 max-w-sm font-mono text-[12px] text-ink-2">
+                    No warehouse databases have been registered yet. An admin can add one from
+                    settings.
+                  </p>
+                  <Link
+                    to="../settings/warehouse"
+                    onClick={onClose}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-sm border border-line-2 bg-surface px-3 py-1.5 font-mono text-[11px] text-ink transition-colors hover:border-accent hover:text-accent"
+                  >
+                    Open warehouse settings
+                    <IconArrowRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              ) : (
+                <ul className="mt-6 grid gap-2.5 sm:grid-cols-2">
+                  {databases.map((d) => {
+                    const unreachable = !!d.lastProbeError;
+                    return (
+                      <li key={d.id}>
+                        <button
+                          type="button"
+                          onClick={() => setDatabase(d.id)}
+                          disabled={unreachable}
+                          className={cx(
+                            "group relative flex w-full items-start gap-3 rounded-sm border border-line-2 bg-surface px-4 py-3.5 text-left transition-all",
+                            unreachable
+                              ? "cursor-not-allowed opacity-60"
+                              : "hover:-translate-y-px hover:border-accent hover:bg-surface-elevated hover:shadow-pop",
+                          )}
+                        >
+                          <span
+                            className={cx(
+                              "grid h-9 w-9 shrink-0 place-items-center rounded-sm font-mono text-sm font-extrabold",
+                              unreachable
+                                ? "bg-line text-ink-3"
+                                : "bg-accent/15 text-accent group-hover:bg-accent group-hover:text-accent-contrast",
+                            )}
+                          >
+                            {d.databaseName.slice(0, 1).toUpperCase()}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-mono text-[13px] font-semibold text-ink">
+                                {d.databaseName}
+                              </span>
+                              {unreachable && (
+                                <span className="shrink-0 rounded-[2px] bg-danger-soft px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-danger">
+                                  unreachable
+                                </span>
+                              )}
+                            </div>
+                            {d.label && (
+                              <div className="truncate font-mono text-[11px] text-ink-3">
+                                {d.label}
+                              </div>
+                            )}
+                            <div className="mt-1.5 flex items-center gap-3 font-mono text-[10.5px] uppercase tracking-wider text-ink-3">
+                              {typeof d.schemaCount === "number" && (
+                                <span>
+                                  {d.schemaCount} schema{d.schemaCount === 1 ? "" : "s"}
+                                </span>
+                              )}
+                              {typeof d.sourceCount === "number" && (
+                                <span>
+                                  {d.sourceCount} wired
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {!unreachable && (
+                            <IconArrowRight className="mt-1 h-3.5 w-3.5 shrink-0 text-ink-3 transition-all group-hover:translate-x-0.5 group-hover:text-accent" />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : (
         <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[180px_1fr]">
           {/* schema facets — horizontal scroll strip on mobile, side rail on desktop */}
           <div className="flex overflow-x-auto border-b border-line bg-surface/40 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:border-r md:py-2">
@@ -318,14 +495,14 @@ export function CatalogExplorer({
                               <span className="flex items-center justify-end gap-1.5 font-mono text-[10.5px] text-ok">
                                 <IconArrowRight className="h-3 w-3" />
                                 {wired[key].n === null
-                                  ? `seeding ${wired[key].dim}…`
-                                  : `${wired[key].dim} · seeded ${wired[key].n}`}
+                                  ? `connecting ${wired[key].dim}…`
+                                  : `Connected ${c} to ${wired[key].dim} · ${outcomeText({ mode: wired[key].mode as "seed" | "connect", derived: wired[key].n ?? undefined, matched: wired[key].matched, unmatched: wired[key].unmatched })}`}
                               </span>
                             ) : (
                               <ComboSelect
                                 options={dimOptions}
                                 value={null}
-                                placeholder="add to table…"
+                                placeholder="connect to table…"
                                 onPick={canEdit ? (d) => wire(t.table, c, d) : undefined}
                                 disabled={!canEdit}
                               />
@@ -341,13 +518,9 @@ export function CatalogExplorer({
 
             {!loading && rows.length === 0 && (
               <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
-                {!internalDb
-                  ? databases.length === 0
-                    ? "no warehouse databases registered — add one in settings"
-                    : "pick a database above to browse its tables"
-                  : q || schema
-                    ? "no tables match"
-                    : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
+                {q || schema
+                  ? "no tables match"
+                  : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
               </div>
             )}
 
@@ -363,6 +536,7 @@ export function CatalogExplorer({
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

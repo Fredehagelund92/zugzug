@@ -47,11 +47,16 @@ export abstract class DuckDbBase {
 
   qualifyRef(table: Ref): string {
     const catalog = table.catalog ?? this.creds.database;
-    const parts: string[] = [];
-    if (catalog) parts.push(this.quoteIdentifier(catalog));
-    parts.push(this.quoteIdentifier(table.schema));
-    parts.push(this.quoteIdentifier(table.table));
-    return parts.join(".");
+    if (!catalog) {
+      throw new Error(
+        `qualifyRef: missing catalog for ${table.schema}.${table.table} — caller must pass Ref.catalog (resolved from warehouse_database).`,
+      );
+    }
+    return [
+      this.quoteIdentifier(catalog),
+      this.quoteIdentifier(table.schema),
+      this.quoteIdentifier(table.table),
+    ].join(".");
   }
 
   castToString(expr: string): string {
@@ -87,6 +92,29 @@ export abstract class DuckDbBase {
     );
   }
 
+  async schemaCounts(): Promise<Map<string, number>> {
+    return withTimeout(
+      async () => {
+        const conn = await this.connect();
+        // duckdb_schemas() is global across attached catalogs and exposes the
+        // `internal` flag so we drop information_schema / pg_catalog / etc.
+        const result = await conn.runAndReadAll(
+          `SELECT database_name, count(*)::BIGINT AS n
+             FROM duckdb_schemas()
+            WHERE NOT internal
+            GROUP BY database_name`,
+        );
+        const out = new Map<string, number>();
+        for (const r of result.getRows()) {
+          out.set(String(r[0]), Number(r[1]));
+        }
+        return out;
+      },
+      10_000,
+      "schemaCounts",
+    );
+  }
+
   async probeDatabase(databaseName: string): Promise<ProbeResult> {
     try {
       await withTimeout(
@@ -110,14 +138,20 @@ export abstract class DuckDbBase {
     if (this.conn) return this.conn;
     if (this.connecting) return this.connecting;
     this.connecting = (async () => {
-      const inst = await DuckDBInstance.create(this.creds.path ?? ":memory:");
+      // When attaching MotherDuck, open the instance directly against `md:` (with the
+      // token in env) so every MD database appears as a first-class catalog in
+      // SHOW DATABASES — mirrors `duckdb.connect("md:?motherduck_token=...")`.
+      // A `:memory:` instance with `ATTACH 'md:'` only surfaces `md_information_schema`.
+      const useMd = this.creds.attached && this.creds.token;
+      // Token via connection string (mirrors `duckdb.connect("md:?motherduck_token=...")`);
+      // env var alone is unreliable during DuckDBInstance.create — extension load order
+      // can race the env read and fall through to SSO browser auth.
+      if (useMd) process.env.motherduck_token = this.creds.token;
+      const path = useMd
+        ? `md:?motherduck_token=${encodeURIComponent(this.creds.token!)}`
+        : (this.creds.path ?? ":memory:");
+      const inst = await DuckDBInstance.create(path);
       const c = await inst.connect();
-      if (this.creds.attached && this.creds.token) {
-        await c.run(`INSTALL motherduck`);
-        await c.run(`LOAD motherduck`);
-        process.env.motherduck_token = this.creds.token;
-        await c.run(`ATTACH IF NOT EXISTS 'md:'`);
-      }
       this.conn = c;
       return c;
     })();

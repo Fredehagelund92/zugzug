@@ -16,7 +16,7 @@ function harness(role: "viewer" | "editor" | "admin", path = "/app/acme/settings
           <Route path="members" element={<div>Members</div>} />
           <Route path="matching" element={<div>Matching</div>} />
           <Route path="warehouse" element={<div>Warehouse</div>} />
-          <Route path="tokens" element={<Navigate to="../warehouse#tokens" replace />} />
+          <Route path="tokens" element={<Navigate to="../../integrations/service-accounts" replace />} />
           <Route path="scans" element={<Navigate to="../warehouse#scans" replace />} />
           <Route path="audit" element={<div>Audit</div>} />
           <Route path="danger" element={<div>Danger</div>} />

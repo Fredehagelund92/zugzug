@@ -372,3 +372,13 @@
 .zz-row-reorderable [data-row-num]:active {
   cursor: grabbing;
 }
+
+/* Shiki dual-theme: default is dark; light theme override via [data-theme="light"]. */
+.shiki-host,
+.shiki-host span {
+  color: var(--shiki-dark);
+}
+[data-theme="light"] .shiki-host,
+[data-theme="light"] .shiki-host span {
+  color: var(--shiki-light);
+}

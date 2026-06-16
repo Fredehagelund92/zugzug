@@ -19,6 +19,7 @@ import {
   dkey,
   useWorkspaceInfo,
   useCanEdit,
+  useStoreLoading,
 } from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, DataGrid, Chip } from "../components/datagrid";
@@ -61,9 +62,41 @@ function flashRow(selector: string): void {
   });
 }
 
+function TriageLoader() {
+  return (
+    <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-4 md:px-5 md:pb-5">
+      <div className="mb-3 shrink-0 animate-pulse space-y-2">
+        <div className="h-2.5 w-16 rounded-sm bg-surface-3" />
+        <div className="h-6 w-48 rounded-sm bg-surface-3" />
+      </div>
+      <div className="flex min-h-0 flex-1 animate-pulse flex-col rounded-lg border border-line bg-surface">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+          {[80, 48, 48].map((w, i) => (
+            <div key={i} className="h-5 rounded-sm bg-surface-3" style={{ width: w }} />
+          ))}
+        </div>
+        <div className="flex-1 divide-y divide-line overflow-hidden">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-3">
+              <div className="h-3 w-20 rounded-sm bg-surface-3" />
+              <div className="h-3 w-24 rounded-sm bg-surface-3" />
+              <div className="ml-auto flex gap-2">
+                <div className="h-5 w-14 rounded-sm bg-surface-3" />
+                <div className="h-5 w-10 rounded-sm bg-surface-3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Triage() {
   const dims = useDimensions();
+  const loading = useStoreLoading();
   const create = useCreateTableModal();
+  if (loading) return <TriageLoader />;
   if (dims.length === 0) return <NoTablesYet from="triage" onCreateRequested={create.open} />;
   return (
     <UndoStackProvider scopeKey="triage">
@@ -258,7 +291,7 @@ function TriageInner() {
         if (d.status !== "mapped") return false;
         const dim = dimById.get(d.dimId);
         const v = dim?.values.find((x) => x.value === d.raw);
-        return !!(v && !v.current);
+        return !!v && (!v.current || v.current !== d.targetLabel);
       }),
     [allDrafts, dimById],
   );

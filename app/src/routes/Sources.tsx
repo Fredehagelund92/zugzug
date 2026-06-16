@@ -14,6 +14,7 @@ import {
   scanSources,
   deriveCanonical,
   useCanEdit,
+  useStoreLoading,
   type SourceInfo,
 } from "../store";
 import { useSourcesCursor } from "./use-sources-cursor";
@@ -61,6 +62,37 @@ interface SchemaGroup {
   worstScore: number; // for ranking
 }
 
+function SourcesLoader() {
+  return (
+    <div className="flex h-full min-h-0 flex-col px-2 pb-3 pt-3 md:px-5 md:pb-5 md:pt-4">
+      <div className="mb-3 shrink-0 animate-pulse space-y-2">
+        <div className="h-2.5 w-14 rounded-sm bg-surface-3" />
+        <div className="h-5 w-72 rounded-sm bg-surface-3" />
+      </div>
+      <div className="flex-1 animate-pulse overflow-hidden rounded-lg border border-line bg-surface">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+          {[64, 48, 48, 64].map((w, i) => (
+            <div key={i} className="h-5 rounded-sm bg-surface-3" style={{ width: w }} />
+          ))}
+        </div>
+        <div className="divide-y divide-line">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="space-y-2 px-4 py-3">
+              <div className="h-3.5 w-24 rounded-sm bg-surface-3" />
+              {Array.from({ length: 2 }).map((_, j) => (
+                <div key={j} className="flex items-center gap-3 pl-4">
+                  <div className="h-3 w-36 rounded-sm bg-surface-3" />
+                  <div className="ml-auto h-3 w-16 rounded-sm bg-surface-3" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Sources() {
   const sources = useSources();
   const dims = useDimensions();
@@ -94,13 +126,40 @@ export function Sources() {
       toast(e instanceof Error ? e.message : "Couldn't scan.", "error");
     }
   });
+  const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+    if (result.mode === "seed") {
+      if ((result.derived ?? 0) > 0) {
+        return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;
+      }
+      return "no values yet";
+    }
+    const m = result.matched ?? 0;
+    const u = result.unmatched ?? 0;
+    if (m > 0 && u > 0) {
+      return `${m} matched, ${u} to review`;
+    }
+    if (m > 0) {
+      return `${m} matched, all done`;
+    }
+    if (u > 0) {
+      return `${u} to review`;
+    }
+    return "no new values";
+  };
+
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {
-    const n = await deriveCanonical(s.dimId, s.table, s.column);
-    toast(
-      n > 0
-        ? `Imported ${n} record${n === 1 ? "" : "s"} into ${s.dimension} from ${s.table}.${s.column}`
-        : `${s.table}.${s.column} has no rows to import`,
-    );
+    try {
+      const result = await deriveCanonical(s.dimId, s.table, s.column);
+      toast(`Connected ${s.table}.${s.column} to ${s.dimension} · ${outcomeText(result)}`);
+    } catch (e) {
+      toast(
+        e instanceof Error
+          ? `Couldn't connect ${s.table}.${s.column}: ${e.message}`
+          : `Couldn't connect ${s.table}.${s.column}.`,
+        "error",
+      );
+      throw e;
+    }
   });
   const [openSchemas, setOpenSchemas] = useState<Set<string>>(new Set());
   const [openInit, setOpenInit] = useState(false);
@@ -309,6 +368,8 @@ export function Sources() {
     [visibleKeys, visibleGroups],
   );
 
+  const loading = useStoreLoading();
+
   const cursor = useSourcesCursor({
     visibleKeys,
     rowsWithUnmapped,
@@ -364,6 +425,8 @@ export function Sources() {
   const totalFilteredCols = groups.reduce((n, g) => n + g.totalCols, 0);
   const totalFilteredUnmapped = groups.reduce((n, g) => n + g.unmapped, 0);
 
+  if (loading) return <SourcesLoader />;
+
   return (
     <div className="flex h-full min-h-0 flex-col px-2 pb-3 pt-3 md:px-5 md:pb-5 md:pt-4">
       {catalog && (
@@ -407,7 +470,7 @@ export function Sources() {
                 onClick={() => setCatalog(true)}
                 disabled={!canEdit}
               >
-                Browse warehouse
+                Add source
               </Button>
             </div>
           }

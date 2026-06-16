@@ -6,8 +6,6 @@ export type Action =
   | "settings.general.edit"
   | "settings.members.view"
   | "settings.members.edit"
-  | "settings.tokens.view"
-  | "settings.tokens.edit"
   | "settings.scans.view"
   | "settings.scans.edit"
   | "settings.matching.view"
@@ -43,16 +41,12 @@ export function can(t: TenantContextValue, action: Action): boolean {
     case "settings.audit.view":
       return true;
 
-    case "settings.tokens.view":
-      return t.role === "editor" || t.role === "admin";
-
     case "settings.scans.edit":
     case "settings.matching.edit":
       return t.role === "editor" || t.role === "admin";
 
     case "settings.general.edit":
     case "settings.members.edit":
-    case "settings.tokens.edit":
     case "settings.danger.delete":
       return t.role === "admin";
 

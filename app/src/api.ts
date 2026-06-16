@@ -55,6 +55,7 @@ export async function fetchWarehouseDatabases(): Promise<
     lastProbeAt: string | null;
     lastProbeError: string | null;
     sourceCount: number;
+    schemaCount: number | null;
   }>
 > {
   const res = await authFetch("/warehouse/databases");

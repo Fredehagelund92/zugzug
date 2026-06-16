@@ -86,7 +86,6 @@ export const env = {
   databaseUrl,
   motherduckToken,
   warehouseAdapter,
-  warehouseDb: process.env.WAREHOUSE_DB?.trim() || "analytics",
   attachWarehouse,
   /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
    *  Off by default; flip to `true` only when MotherDuck token has write access. */

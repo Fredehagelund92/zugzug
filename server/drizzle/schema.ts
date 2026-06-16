@@ -193,29 +193,6 @@ export const users = app.table(
   ],
 );
 
-export const apiTokens = app.table(
-  "api_tokens",
-  {
-    id:           varchar("id").primaryKey(),
-    user_id:      varchar("user_id").notNull(),
-    name:         varchar("name").notNull(),
-    token_hash:   varchar("token_hash").notNull(),
-    /* First 12 chars of plaintext token (e.g. "zz_abc8…"). NOT secret —
-       indexed for O(1) auth lookup. */
-    token_prefix: varchar("token_prefix", { length: 12 }).notNull(),
-    created_at:   timestamp("created_at").notNull(),
-    last_used_at: timestamp("last_used_at"),
-    revoked_at:   timestamp("revoked_at"),
-  },
-  (t) => [
-    uniqueIndex("api_tokens_token_hash_unique").on(t.token_hash),
-    index("api_tokens_user_id_idx").on(t.user_id),
-    index("api_tokens_prefix_idx")
-      .on(t.token_prefix)
-      .where(sql`revoked_at IS NULL`),
-  ],
-);
-
 export const activeSessions = app.table("active_sessions", {
   user_id:   varchar("user_id").primaryKey(),
   last_seen: timestamp("last_seen").notNull(),
@@ -401,7 +378,7 @@ export const warehouseDatabase = app.table(
     last_probe_at:    timestamp("last_probe_at"),
     last_probe_error: text("last_probe_error"),
     added_at:         timestamp("added_at").notNull(),
-    added_by:         varchar("added_by").notNull(),
+    added_by:         varchar("added_by"),
   },
   (t) => [
     uniqueIndex("warehouse_database_database_name_uniq").on(t.database_name),
@@ -632,10 +609,10 @@ export const tenantSlugAlias = app.table(
 export const authCredentialQuota = app.table(
   "auth_credential_quota",
   {
-    /* credential_id is either a service_account.id (sa_…) or an api_tokens.id
-       (tok_…). No FK — credential rows can be revoked but their quota row
-       should outlive that for end-of-minute accounting. We rely on the
-       cleanup pass in outboundRetentionSweepJob (PR3) for housekeeping. */
+    /* credential_id is a service_account.id (sa_…). No FK — SA rows can be
+       revoked but their quota row should outlive that for end-of-minute
+       accounting. We rely on the cleanup pass in outboundRetentionSweepJob
+       (PR3) for housekeeping. */
     credential_id:      varchar("credential_id").primaryKey(),
     /* Start of the current rate-limit window (1-minute fixed-window in v1).
        Each request rolls this forward when the wall clock has crossed a

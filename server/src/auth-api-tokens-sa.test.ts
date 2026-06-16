@@ -47,26 +47,12 @@ describe("authenticateBearer — service account tokens", () => {
     expect(authed!.serviceAccount!.scopes).toEqual(["read"]);
   });
 
-  it("zz_ personal token still authenticates and serviceAccount is undefined", async () => {
+  it("non-SA prefix is rejected (personal access tokens were removed)", async () => {
     const value = `zz_${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64url")}`;
-    const hash = await Bun.password.hash(value);
-    const id = `tok_sa_${crypto.randomUUID().replace(/-/g, "")}`;
-    await pgRun(
-      `INSERT INTO "zugzug_app"."api_tokens"
-         (id, user_id, name, token_hash, token_prefix, created_at)
-       VALUES ($1, $2, 'personal', $3, $4, now())`,
-      [id, U, hash, value.slice(0, 12)],
-    );
-
     const req = new Request("http://test/", {
       headers: { authorization: `Bearer ${value}` },
     });
-    const authed = await authenticateBearer(req);
-    expect(authed).not.toBeNull();
-    expect(authed!.user.id).toBe(U);
-    expect(authed!.serviceAccount).toBeUndefined();
-
-    await pgRun(`DELETE FROM "zugzug_app"."api_tokens" WHERE id = $1`, [id]);
+    expect(await authenticateBearer(req)).toBeNull();
   });
 
   it("revoked zzsa_ token returns null", async () => {

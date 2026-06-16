@@ -16,7 +16,8 @@ import {
   type SourceOccurrence,
   type NumberFormat,
   PALETTE_NAMES,
-  parseSourceTable,
+  refOf,
+  refForRegisteredTable,
   slug,
   qid,
   cq,
@@ -356,14 +357,17 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
 
   // For external_id dims with warehouse attached: resolve names from MotherDuck
   if (liveName) {
-    const adapter = await getAdapter();
-    const nameMap = await adapter
-      .nameResolution(parseSourceTable(meta.nameTable!), meta.nameIdCol!, meta.nameCol!)
-      .catch(() => new Map<string, string>());
-    for (const r of canonRows) {
-      const key = String(r.key);
-      r.label = nameMap.get(key) ?? null;
-      r.unresolved = !nameMap.has(key);
+    const nameRef = await refForRegisteredTable(id, meta.nameTable!, tenantId);
+    if (nameRef) {
+      const adapter = await getAdapter();
+      const nameMap = await adapter
+        .nameResolution(nameRef, meta.nameIdCol!, meta.nameCol!)
+        .catch(() => new Map<string, string>());
+      for (const r of canonRows) {
+        const key = String(r.key);
+        r.label = nameMap.get(key) ?? null;
+        r.unresolved = !nameMap.has(key);
+      }
     }
   }
 
@@ -451,7 +455,7 @@ async function scanValues(
 
   // 1. Warehouse: distinct raw values with provenance + row counts
   const adapter = await getAdapter();
-  const refs = sources.map((s) => ({ table: parseSourceTable(s.table), column: s.column }));
+  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
   const occRows = await adapter
     .distinctValuesWithProvenance(refs)
     .catch(() => [] as ValueProvenance[]);
@@ -488,10 +492,13 @@ async function scanValues(
     !!meta.nameCol;
   const nameMap = new Map<string, string>();
   if (liveName) {
-    const resolved = await adapter
-      .nameResolution(parseSourceTable(meta.nameTable!), meta.nameIdCol!, meta.nameCol!)
-      .catch(() => new Map<string, string>());
-    for (const [k, v] of resolved) nameMap.set(k, v);
+    const nameRef = await refForRegisteredTable(dimId, meta.nameTable!, tenantId);
+    if (nameRef) {
+      const resolved = await adapter
+        .nameResolution(nameRef, meta.nameIdCol!, meta.nameCol!)
+        .catch(() => new Map<string, string>());
+      for (const [k, v] of resolved) nameMap.set(k, v);
+    }
   }
 
   // 4. Postgres: all canonical labels (slug dims)

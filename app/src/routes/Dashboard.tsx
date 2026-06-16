@@ -9,7 +9,7 @@ import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { valueRows } from "../data";
-import { useDimensions, useAudit, useDrafts, useWorkspaceInfo } from "../store";
+import { useDimensions, useAudit, useDrafts, useWorkspaceInfo, useStoreLoading } from "../store";
 import {
   type FilterKey,
   type SortKey,
@@ -124,11 +124,42 @@ function fmtK(n: number): string {
   return `${Math.round(n / 1000)}k`;
 }
 
+function DashboardSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-[var(--wide)] animate-pulse space-y-6 p-3 md:space-y-8 md:p-8">
+      <div className="space-y-2">
+        <div className="h-2.5 w-16 rounded-sm bg-surface-3" />
+        <div className="h-7 w-36 rounded-sm bg-surface-3" />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="space-y-2 rounded-sm border border-line bg-surface p-4">
+            <div className="h-2.5 w-16 rounded-sm bg-surface-3" />
+            <div className="h-7 w-12 rounded-sm bg-surface-3" />
+          </div>
+        ))}
+      </div>
+      <div className="overflow-hidden rounded-sm border border-line">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 border-b border-line px-4 py-3 last:border-0">
+            <div className="h-2 w-2 shrink-0 rounded-pill bg-surface-3" />
+            <div className="h-3 w-28 rounded-sm bg-surface-3" />
+            <div className="h-2 w-16 rounded-sm bg-surface-3" />
+            <div className="ml-auto h-3 w-10 rounded-sm bg-surface-3" />
+            <div className="h-3 w-10 rounded-sm bg-surface-3" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Dashboard() {
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();
   const wsInfo = useWorkspaceInfo();
+  const loading = useStoreLoading();
   const navigate = useNavigate();
   const nav = useNavLinks();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
@@ -236,6 +267,8 @@ export function Dashboard() {
       dir: rowsAtRisk > 0 ? "warn" : undefined,
     },
   ];
+
+  if (loading) return <DashboardSkeleton />;
 
   if (dims.length === 0) {
     return (
