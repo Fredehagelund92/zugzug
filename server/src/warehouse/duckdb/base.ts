@@ -219,9 +219,19 @@ export abstract class DuckDbBase {
           where += ` AND schema = $${params.length}`;
         }
         if (opts.search) {
-          params.push(`%${opts.search}%`);
-          const p = `$${params.length}`;
-          where += ` AND (schema ILIKE ${p} OR name ILIKE ${p} OR len(list_filter(column_names, c -> c ILIKE ${p})) > 0)`;
+          const dot = opts.search.indexOf(".");
+          if (dot >= 0) {
+            // Qualified search "schema.table" — match parts against schema/name.
+            params.push(`%${opts.search.slice(0, dot)}%`);
+            const ps = `$${params.length}`;
+            params.push(`%${opts.search.slice(dot + 1)}%`);
+            const pt = `$${params.length}`;
+            where += ` AND schema ILIKE ${ps} AND name ILIKE ${pt}`;
+          } else {
+            params.push(`%${opts.search}%`);
+            const p = `$${params.length}`;
+            where += ` AND (schema ILIKE ${p} OR name ILIKE ${p} OR len(list_filter(column_names, c -> c ILIKE ${p})) > 0)`;
+          }
         }
         const rows = await this.all<{ schema: string; name: string; column_names: unknown }>(
           `SELECT schema, name, column_names FROM (SHOW ALL TABLES) WHERE ${where} ORDER BY schema, name LIMIT 5000`,

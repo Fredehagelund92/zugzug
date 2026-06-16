@@ -150,11 +150,19 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       tableBinds.push(opts.schema);
       tableWhere += ` AND TABLE_SCHEMA = ?`;
     }
+    const qualifiedDot = opts.search ? opts.search.indexOf(".") : -1;
     if (opts.search) {
-      tableBinds.push(`%${opts.search}%`);
-      tableWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ?)`;
-      // Bind the same pattern twice (Snowflake ILIKE doesn't deduplicate binds).
-      tableBinds.push(`%${opts.search}%`);
+      if (qualifiedDot >= 0) {
+        // Qualified search "schema.table" — match parts separately.
+        tableBinds.push(`%${opts.search.slice(0, qualifiedDot)}%`);
+        tableBinds.push(`%${opts.search.slice(qualifiedDot + 1)}%`);
+        tableWhere += ` AND TABLE_SCHEMA ILIKE ? AND TABLE_NAME ILIKE ?`;
+      } else {
+        tableBinds.push(`%${opts.search}%`);
+        tableWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ?)`;
+        // Bind the same pattern twice (Snowflake ILIKE doesn't deduplicate binds).
+        tableBinds.push(`%${opts.search}%`);
+      }
     }
     const tableRows = await this._getConnection().execute({
       sqlText: `SELECT TABLE_SCHEMA, TABLE_NAME
@@ -176,10 +184,17 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
     // Apply the same search filter to columns so a search by column name surfaces
     // the parent table (matches Phase 1 DuckDB behavior).
     if (opts.search) {
-      colBinds.push(`%${opts.search}%`);
-      colWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ? OR COLUMN_NAME ILIKE ?)`;
-      colBinds.push(`%${opts.search}%`);
-      colBinds.push(`%${opts.search}%`);
+      if (qualifiedDot >= 0) {
+        // Qualified search "schema.table" — restrict by schema+table, skip column match.
+        colBinds.push(`%${opts.search.slice(0, qualifiedDot)}%`);
+        colBinds.push(`%${opts.search.slice(qualifiedDot + 1)}%`);
+        colWhere += ` AND TABLE_SCHEMA ILIKE ? AND TABLE_NAME ILIKE ?`;
+      } else {
+        colBinds.push(`%${opts.search}%`);
+        colWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ? OR COLUMN_NAME ILIKE ?)`;
+        colBinds.push(`%${opts.search}%`);
+        colBinds.push(`%${opts.search}%`);
+      }
     }
     const colRows = await this._getConnection().execute({
       sqlText: `SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
