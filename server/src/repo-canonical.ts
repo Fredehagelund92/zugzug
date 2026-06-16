@@ -533,7 +533,9 @@ async function scanValues(
     const bRows = b.sources.reduce((s, x) => s + x.rows, 0);
     return bRows - aRows;
   });
-  return results.slice(0, 500);
+  // Payload-safety cap. Sorted unmapped-first by row-count desc, so the cutoff
+  // (when it bites) drops the lowest-impact values rather than random ones.
+  return results.slice(0, 20000);
 }
 
 /** Create a dimension: register it + provision dim_/map_ (Postgres). Idempotent
