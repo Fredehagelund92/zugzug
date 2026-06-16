@@ -132,11 +132,19 @@ export function Dashboard() {
   const navigate = useNavigate();
   const nav = useNavLinks();
   const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
-  const staged = Object.values(draftsMap).filter(
-    (d) =>
-      d.status === "mapped" &&
-      dims.find((s) => s.id === d.dimId)?.values.find((v) => v.value === d.raw)?.status === "new",
+  const staged = useMemo(
+    () =>
+      Object.values(draftsMap).filter((d) => {
+        if (d.status !== "mapped") return false;
+        const dim = dims.find((s) => s.id === d.dimId);
+        const v = dim?.values.find((x) => x.value === d.raw);
+        return !!v && (!v.current || v.current !== d.targetLabel);
+      }),
+    [draftsMap, dims],
   );
+
+  // Dim ids that have at least one staged draft (for filter + row highlighting)
+  const stagedDimIds = useMemo(() => new Set(staged.map((d) => d.dimId)), [staged]);
 
   // Live KPI derivations — replace the static fixtures.
   // Values mapped = total raw-value entries already in the map tables.
@@ -154,14 +162,16 @@ export function Dashboard() {
   );
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
-  const attentionTables = dims.filter((d) => d.values.some((v) => v.status === "new")).length;
-  const cleanTables = dims.length - attentionTables;
+  const tablesWithNew = dims.filter((d) => d.values.some((v) => v.status === "new")).length;
+  const attentionTables = dims.filter(
+    (d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id),
+  );
+  const cleanTables = dims.filter(
+    (d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id),
+  );
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("urgency");
-
-  // Dim ids that have at least one staged draft (for filter + row highlighting)
-  const stagedDimIds = useMemo(() => new Set(staged.map((d) => d.dimId)), [staged]);
 
   // Staged drafts grouped by dimId for the inline flag in table rows
   const stagedByDim = useMemo(() => {
@@ -174,7 +184,7 @@ export function Dashboard() {
   }, [staged]);
 
   const visibleDims = useMemo(
-    () => applySort(applyFilter(dims, filter, stagedDimIds), sort),
+    () => applySort(applyFilter(dims, filter, stagedDimIds), sort, stagedDimIds),
     [dims, filter, sort, stagedDimIds],
   );
 
@@ -200,8 +210,8 @@ export function Dashboard() {
     {
       label: "Tables",
       value: String(dims.length),
-      delta: `${attentionTables} active · ${cleanTables} clean`,
-      dir: attentionTables > 0 ? "warn" : undefined,
+      delta: `${attentionTables.length} active · ${cleanTables.length} clean`,
+      dir: attentionTables.length > 0 ? "warn" : undefined,
     },
     {
       label: "Values mapped",
@@ -215,7 +225,7 @@ export function Dashboard() {
       featured: totalNew > 0,
       delta:
         totalNew > 0
-          ? `across ${attentionTables} table${attentionTables === 1 ? "" : "s"}`
+          ? `across ${tablesWithNew} table${tablesWithNew === 1 ? "" : "s"}`
           : undefined,
       dir: totalNew > 0 ? "warn" : undefined,
     },
@@ -313,16 +323,12 @@ export function Dashboard() {
             {
               key: "attention" as FilterKey,
               label: "Needs attention",
-              count: dims.filter(
-                (d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id),
-              ).length,
+              count: attentionTables.length,
             },
             {
               key: "clean" as FilterKey,
               label: "Clean",
-              count: dims.filter(
-                (d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id),
-              ).length,
+              count: cleanTables.length,
             },
           ] as const
         ).map(({ key, label, count }) => (

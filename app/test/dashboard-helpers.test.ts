@@ -93,6 +93,13 @@ describe("urgencyScore", () => {
     const oneNew: MappingDimension = { ...dirtyDim, values: [dirtyDim.values[0], dirtyDim.values[2]] };
     expect(urgencyScore(dirtyDim)).toBeGreaterThan(urgencyScore(oneNew));
   });
+  test("staged clean dim scores above clean unstaged dim", () => {
+    expect(urgencyScore(cleanDim, true)).toBeGreaterThan(urgencyScore(cleanDim, false));
+  });
+  test("any dim with one new value outranks a staged-only dim", () => {
+    const oneNew: MappingDimension = { ...dirtyDim, values: [dirtyDim.values[0], dirtyDim.values[2]] };
+    expect(urgencyScore(oneNew, false)).toBeGreaterThan(urgencyScore(cleanDim, true));
+  });
 });
 
 // ── coverageColor ─────────────────────────────────────────────────────────────
@@ -180,6 +187,16 @@ describe("applySort", () => {
     const input = [cleanDim, dirtyDim];
     applySort(input, "urgency");
     expect(input[0].id).toBe("post_type");
+  });
+  test("'urgency' ranks a staged clean dim above an unstaged clean dim", () => {
+    const otherClean: MappingDimension = {
+      ...cleanDim,
+      id: "other_clean",
+      dimension: "Other Clean",
+    };
+    const result = applySort([otherClean, cleanDim], "urgency", new Set(["post_type"]));
+    expect(result[0].id).toBe("post_type");
+    expect(result[1].id).toBe("other_clean");
   });
 });
 
