@@ -353,7 +353,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               if (e.key === "Escape") commit(c.label);
             }}
             onBlur={(e) => commit(e.target.value.trim())}
-            className="w-full border-b-2 border-b-accent bg-transparent px-1 py-1 font-display text-[14px] font-semibold text-ink outline-none"
+            className="w-full bg-transparent px-1 font-display text-[14px] font-semibold text-ink outline-none"
           />
         ),
       },

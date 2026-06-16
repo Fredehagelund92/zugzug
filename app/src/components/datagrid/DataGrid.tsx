@@ -115,9 +115,12 @@ function FillHandle({
       }
       const cRect = container.getBoundingClientRect();
       const tRect = target.getBoundingClientRect();
+      // Fully inset the handle within the cell so it doesn't extend past the
+      // cell's right/bottom edge into the scroll container's overflow area,
+      // which would trigger a spurious scrollbar on the rightmost column.
       setPos({
-        top: tRect.bottom - cRect.top + container.scrollTop - 4,
-        left: tRect.right - cRect.left + container.scrollLeft - 4,
+        top: tRect.bottom - cRect.top + container.scrollTop - 8,
+        left: tRect.right - cRect.left + container.scrollLeft - 8,
       });
     };
     update();
