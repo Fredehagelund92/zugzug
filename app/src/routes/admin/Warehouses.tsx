@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { authFetch } from "../../api";
+import { useMemberships } from "../../store";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { Badge } from "../../components/Badge";
 
 interface AdminWarehouseProjection {
-  adapter: "disabled" | "motherduck" | string;
+  adapter: "disabled" | "motherduck";
   configuredFrom: "env";
   envVarName: string | null;
   bootValidation: { ok: boolean; reason?: string };
@@ -24,6 +25,15 @@ interface AdminWarehouseProjection {
 export function Warehouses() {
   const [data, setData] = useState<AdminWarehouseProjection | null>(null);
   const [loading, setLoading] = useState(true);
+  const memberships = useMemberships();
+  // Admin console lives outside a tenant context, so we can't use a relative
+  // settings link. Send the user to the first workspace they're a member of;
+  // if they have none (super-admin not yet provisioned anywhere), drop them
+  // at the workspace switcher and let it resolve.
+  const settingsHref =
+    memberships.length > 0
+      ? `/app/${memberships[0]!.slug}/settings/warehouse`
+      : "/app";
 
   useEffect(() => {
     void (async () => {
@@ -99,7 +109,7 @@ export function Warehouses() {
           <p className="text-[12.5px] text-ink-3">
             Need to add or remove a database?{" "}
             <Link
-              to="/app/settings/warehouse"
+              to={settingsHref}
               className="text-accent underline-offset-2 hover:underline"
             >
               Open Settings → Warehouse →
