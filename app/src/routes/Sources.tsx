@@ -150,12 +150,12 @@ export function Sources() {
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {
     try {
       const result = await deriveCanonical(s.dimId, s.table, s.column);
-      toast(`Connected ${s.table}.${s.column} to ${s.dimension} · ${outcomeText(result)}`);
+      toast(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(
         e instanceof Error
-          ? `Couldn't connect ${s.table}.${s.column}: ${e.message}`
-          : `Couldn't connect ${s.table}.${s.column}.`,
+          ? `Couldn't re-scan ${s.table}.${s.column}: ${e.message}`
+          : `Couldn't re-scan ${s.table}.${s.column}.`,
         "error",
       );
       throw e;
