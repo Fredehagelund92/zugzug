@@ -30,12 +30,22 @@ export function WiredSourcesModeBody({ dim }: Props) {
   const canEdit = useCanEdit();
   const nav = useNavLinks();
   const deriveAction = useAsyncAction(async (dimId: string, table: string, column: string) => {
-    const n = await deriveCanonical(dimId, table, column);
-    toast(
-      n > 0
-        ? `Imported ${n} record${n === 1 ? "" : "s"} from ${table}.${column}`
-        : `${table}.${column} has no rows to import`,
-    );
+    try {
+      const n = await deriveCanonical(dimId, table, column);
+      toast(
+        n > 0
+          ? `Imported ${n} record${n === 1 ? "" : "s"} from ${table}.${column}`
+          : `${table}.${column} has no rows to import`,
+      );
+    } catch (e) {
+      toast(
+        e instanceof Error
+          ? `Couldn't import ${table}.${column}: ${e.message}`
+          : `Couldn't import ${table}.${column}.`,
+        "error",
+      );
+      throw e;
+    }
   });
 
   // Per-dim accent for the left stripe + kicker. Falls back to brand accent
