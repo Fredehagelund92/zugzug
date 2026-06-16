@@ -474,7 +474,7 @@ export function CatalogExplorer({
                                 className="flex items-center justify-end gap-2 font-mono text-[10.5px] text-danger"
                                 title={wired[key].error}
                               >
-                                <span className="truncate">wire failed</span>
+                                <span className="truncate">connect failed</span>
                                 <button
                                   type="button"
                                   onClick={() => wire(t.table, c, wired[key].dim)}
@@ -485,7 +485,7 @@ export function CatalogExplorer({
                                 <button
                                   type="button"
                                   onClick={() => clearWireError(key)}
-                                  aria-label="Dismiss wire error"
+                                  aria-label="Dismiss connect error"
                                   className="text-ink-3 transition-colors hover:text-ink"
                                 >
                                   <IconX className="h-3 w-3" />
