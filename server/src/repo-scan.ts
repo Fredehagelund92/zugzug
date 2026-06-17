@@ -202,9 +202,7 @@ async function materializeOneDim(
     return;
   }
   const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
-  const occRows = await adapter
-    .distinctValuesWithProvenance(refs)
-    .catch(() => [] as { value: string; sourceIndex: number; count: number }[]);
+  const occRows = await adapter.distinctValuesWithProvenance(refs);
   const occurrences = occRows
     .map((r) => {
       const src = sources[r.sourceIndex];
@@ -349,14 +347,14 @@ export async function autoStageExactMatches(
   const sources = await liveSources(dimId, tenantId);
   if (!sources.length) return { matched: 0, unmatched: 0 };
 
-  // Warehouse: distinct raw values
-  const adapter = await getAdapter();
-  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
-  const occRows = await adapter
-    .distinctValuesWithProvenance(refs)
-    .catch(() => [] as { value: string }[]);
-  if (!occRows.length) return { matched: 0, unmatched: 0 };
-  const warehouseRaws = [...new Set(occRows.map((r) => r.value))];
+  // Materialized: distinct raw values from dim_scan_value
+  const rows = await pgAll<{ raw: string }>(
+    `SELECT raw FROM zugzug_app.dim_scan_value
+       WHERE tenant_id = $1 AND dim_id = $2`,
+    [tenantId, dimId],
+  );
+  if (!rows.length) return { matched: 0, unmatched: 0 };
+  const warehouseRaws = rows.map((r) => r.raw);
 
   // Postgres: canonical labels
   const canonRows = await pgAll<{ key: string; label: string }>(
