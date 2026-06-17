@@ -6,7 +6,6 @@
 import { runMigrations } from "../drizzle/migrate.ts";
 import { seedDemo } from "./seed.ts";
 import { pgRun, pgGet } from "./pg.ts";
-import { env } from "./env.ts";
 import { provisionTenant } from "./tenant.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
@@ -64,14 +63,8 @@ if (seed) {
     await provisionTenant({
       id: "default",
       label: "Demo workspace",
-      warehouse: env.warehouseDb
-        ? {
-            databases: [{ databaseName: env.warehouseDb }],
-            createdBy: "u_system",
-          }
-        : undefined,
     });
-    console.log("· default tenant provisioned");
+    console.log("· default tenant provisioned (register warehouse databases via the UI)");
   }
 
   // Warehouse adapter warm-up removed: the registry now lazy-loads per-tenant

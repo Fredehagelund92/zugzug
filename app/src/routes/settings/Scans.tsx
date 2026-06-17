@@ -69,15 +69,23 @@ export function Scans() {
   });
 
   const handleScheduleChange = (next: string | null) => {
-    void setPreferences({
+    setPreferences({
       ...prefs,
-      scanSchedule: next as "15m" | "hourly" | "daily" | null,
-    }).then(() => invalidate.scans(tenant.slug));
+      scanSchedule: next as "hourly" | "daily" | null,
+    })
+      .then(() => invalidate.scans(tenant.slug))
+      .catch((e) => {
+        toast(
+          e instanceof Error
+            ? `Couldn't update schedule: ${e.message}`
+            : "Couldn't update schedule.",
+          "error",
+        );
+      });
   };
 
   const scheduleOptions = [
     { value: null, label: "Off" },
-    { value: "15m", label: "15 min" },
     { value: "hourly", label: "Hourly" },
     { value: "daily", label: "Daily" },
   ];

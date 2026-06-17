@@ -128,8 +128,8 @@ export function LedgerRow({
         <div className="flex items-center justify-end gap-1.5">
           <button
             type="button"
-            aria-label={`Import records from ${row.table}.${row.column}`}
-            title="Import records from this column"
+            aria-label={`Re-scan ${row.table}.${row.column}`}
+            title="Re-scan this column"
             disabled={!canEdit || !!busy}
             onClick={(e) => {
               e.preventDefault();
@@ -185,8 +185,8 @@ export function LedgerRow({
           </div>
           <button
             type="button"
-            aria-label={`Import records from ${row.table}.${row.column}`}
-            title="Import records from this column"
+            aria-label={`Re-scan ${row.table}.${row.column}`}
+            title="Re-scan this column"
             disabled={!canEdit || !!busy}
             onClick={(e) => {
               e.preventDefault();

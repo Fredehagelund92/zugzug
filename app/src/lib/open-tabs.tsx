@@ -8,7 +8,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { useDimensions } from "../store";
+import { useDimensions, useStoreLoading } from "../store";
 import { scopedKey } from "./tenant-storage";
 
 declare const __tabId: unique symbol;
@@ -172,11 +172,13 @@ export function OpenTabsProvider({ slug, children }: { slug: string; children: R
   const storageKey = scopedKey(STORAGE_KEY_BASE, slug);
   const [state, dispatch] = useReducer(reducer, undefined, () => readStored(storageKey));
   const dims = useDimensions();
+  const storeLoading = useStoreLoading();
 
   useEffect(() => {
+    if (storeLoading) return;
     const validDimIds = new Set(dims.map((d) => d.id));
     dispatch({ type: "prune", validDimIds });
-  }, [dims]);
+  }, [dims, storeLoading]);
 
   const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {

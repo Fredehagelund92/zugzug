@@ -16,7 +16,6 @@ async function build(): Promise<WarehouseAdapter> {
     return resolveAdapter({
       type: "duckdb",
       token: env.motherduckToken,
-      database: env.warehouseDb,
       attached: true,
       writable: env.motherduckWritable,
     });

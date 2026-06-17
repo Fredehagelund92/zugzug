@@ -23,7 +23,7 @@ import {
   IconMenu,
   IconX,
 } from "./Icons";
-import { useDimensions, currentUser } from "../store";
+import { useDimensions, useWorkspaceInfo, currentUser } from "../store";
 import { RoleBadge } from "./RoleBadge";
 import { SyncPill } from "./SyncPill";
 import { useEngineerMode } from "../lib/engineer-mode";
@@ -245,7 +245,13 @@ function UserMenu() {
 
 export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const dims = useDimensions();
+  const wsInfo = useWorkspaceInfo();
   const { engineer } = useEngineerMode();
+  const engineerLabel = wsInfo
+    ? wsInfo.adapter === "duckdb"
+      ? "motherduck"
+      : wsInfo.adapter
+    : "…";
   const { slug, role: tenantRole } = useTenant();
   const paletteKey = scopedKey(PALETTE_RECENTS_KEY, slug);
   const [collapsed, toggle] = useNavCollapsed();
@@ -358,7 +364,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [focusTab, drawerOpen]);
 
-  const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
+  const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
   const settingsBase = navLinks.settings;
   interface NavItem {
     to: string;
@@ -462,7 +468,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
 
     // Section 2: jump to a table's Match mode
     for (const d of dims) {
-      const newCount = d.values.filter((v) => v.status === "new").length;
+      const newCount = d.counts.newCount;
       out.push({
         id: `dim:${d.id}`,
         group: "Tables",
@@ -573,7 +579,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
           )}
         >
           <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-          {(!collapsed || isMobile) && <span>{engineer ? "analytics.duckdb" : "Connected"}</span>}
+          {(!collapsed || isMobile) && <span>{engineer ? engineerLabel : "Connected"}</span>}
         </div>
       </div>
     </>

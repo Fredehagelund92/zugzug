@@ -116,7 +116,7 @@ export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePan
 /** Records mode has only the "new" status for canonical values right now —
  *  treat any value whose status is missing as "mapped" for the badge count. */
 function countNewForDim(dim: MappingDimension): number {
-  return dim.values.filter((v) => v.status === "new").length;
+  return dim.counts.newCount;
 }
 
 function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
@@ -353,7 +353,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               if (e.key === "Escape") commit(c.label);
             }}
             onBlur={(e) => commit(e.target.value.trim())}
-            className="w-full border-b-2 border-b-accent bg-transparent px-1 py-1 font-display text-[14px] font-semibold text-ink outline-none"
+            className="w-full bg-transparent px-1 font-display text-[14px] font-semibold text-ink outline-none"
           />
         ),
       },
@@ -518,17 +518,34 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     }
   };
 
+  const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+    if (result.mode === "seed") {
+      if ((result.derived ?? 0) > 0) {
+        return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;
+      }
+      return "no values yet";
+    }
+    const m = result.matched ?? 0;
+    const u = result.unmatched ?? 0;
+    if (m > 0 && u > 0) {
+      return `${m} matched, ${u} to review`;
+    }
+    if (m > 0) {
+      return `${m} matched, all done`;
+    }
+    if (u > 0) {
+      return `${u} to review`;
+    }
+    return "no new values";
+  };
+
   const derive = async (opt: string) => {
     const s = wired.find((w) => `${w.table}.${w.column}` === opt);
     if (!s || busy) return;
     setBusy(true);
-    const n = await deriveCanonical(activeId, s.table, s.column);
+    const result = await deriveCanonical(activeId, s.table, s.column);
     setBusy(false);
-    flash(
-      n > 0
-        ? `Imported ${n} record${n === 1 ? "" : "s"} from ${s.table}.${s.column}.`
-        : `${s.table}.${s.column} has no rows to import.`,
-    );
+    flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)}`);
   };
 
   const deriveExternal = async (idColOpt: string, nameColOpt: string) => {
@@ -536,13 +553,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     const nameCol = nameColOpt.split(".").slice(1).join(".");
     if (!s || !nameCol || busy) return;
     setBusy(true);
-    const n = await deriveCanonical(activeId, s.table, s.column, nameCol);
+    const result = await deriveCanonical(activeId, s.table, s.column, nameCol);
     setBusy(false);
-    flash(
-      n > 0
-        ? `Imported ${n} external-ID key${n === 1 ? "" : "s"} from ${s.table}.${s.column} (names ← ${nameCol}).`
-        : `${s.table}.${s.column} has no distinct values to import.`,
-    );
+    flash(`Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)}`);
   };
 
   const navigate = useNavigate();
@@ -737,7 +750,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <ComboSelect
                 options={sourceOpts}
                 value={null}
-                placeholder="import from source…"
+                placeholder="re-scan source…"
                 onPick={derive}
               />
             </div>
@@ -766,7 +779,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}
                 className="max-md:w-full"
               >
-                Import
+                Re-scan
               </Button>
             </div>
           )}

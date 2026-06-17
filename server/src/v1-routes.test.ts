@@ -15,6 +15,7 @@ import { recordSlugAlias } from "./slug-alias.ts";
 import { createWebhook } from "./repo-webhooks.ts";
 import { _setMasterKeyForTest } from "./webhook-secrets.ts";
 import { generateMasterKeyB64 } from "./crypto-secret.ts";
+import { issueSession } from "./auth.ts";
 
 const T = "test_v1_routes";
 const SLUG = "v1routes";
@@ -54,7 +55,7 @@ async function seedCanonical(
 
 let dimId: string;
 let saToken: string;
-let adminToken: string;
+let adminSessionId: string;
 
 beforeAll(async () => {
   await pgRun(
@@ -88,21 +89,14 @@ beforeAll(async () => {
   const created = await createServiceAccount({ tenantId: T, name: "v1-test", createdBy: ADMIN });
   saToken = created.value;
 
-  // Personal API token for ADMIN — used by webhook routes (SA = viewer role).
+  // Cookie session for ADMIN — used by webhook routes that require admin role
+  // (SAs synthesize a viewer role, so they can't drive admin-only mutations).
   _setMasterKeyForTest(Buffer.from(generateMasterKeyB64(), "base64"));
-  const rawBytes = new Uint8Array(32);
-  crypto.getRandomValues(rawBytes);
-  adminToken = `zz_${Buffer.from(rawBytes).toString("base64url")}`;
-  const hash = await Bun.password.hash(adminToken);
-  await pgRun(
-    `INSERT INTO "zugzug_app"."api_tokens" (id, user_id, name, token_hash, token_prefix, created_at)
-     VALUES ($1, $2, 'admin-pat', $3, $4, current_timestamp)`,
-    [`tok_${crypto.randomUUID().replace(/-/g, "")}`, ADMIN, hash, adminToken.slice(0, 12)],
-  );
+  ({ sessionId: adminSessionId } = await issueSession(ADMIN));
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."api_tokens" WHERE user_id = $1`, [ADMIN]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [ADMIN]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."webhook_delivery" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
@@ -142,7 +136,7 @@ function adminReq(path: string, init: RequestInit = {}): Request {
     ...init,
     headers: {
       ...(init.headers as Record<string, string> | undefined),
-      authorization: `Bearer ${adminToken}`,
+      cookie: `zz_sid=${adminSessionId}`,
     },
   });
 }

@@ -12,8 +12,6 @@ const MATRIX: Record<Action, Record<"viewer" | "editor" | "admin", boolean>> = {
   "settings.general.edit":  { viewer: false, editor: false, admin: true },
   "settings.members.view":  { viewer: true,  editor: true,  admin: true },
   "settings.members.edit":  { viewer: false, editor: false, admin: true },
-  "settings.tokens.view":   { viewer: false, editor: true,  admin: true },
-  "settings.tokens.edit":   { viewer: false, editor: false, admin: true },
   "settings.scans.view":    { viewer: true,  editor: true,  admin: true },
   "settings.scans.edit":    { viewer: false, editor: true,  admin: true },
   "settings.matching.view": { viewer: true,  editor: true,  admin: true },
@@ -42,6 +40,6 @@ describe("can()", () => {
   // Per 2026-06-13 spec Section A.1: super-admin gets every workspace +
   // account affordance regardless of workspace role.
   test("super-admin entering as viewer is elevated for settings edits via tenant context", () => {
-    expect(can(t("viewer", true), "settings.tokens.edit")).toBe(true);
+    expect(can(t("viewer", true), "settings.general.edit")).toBe(true);
   });
 });

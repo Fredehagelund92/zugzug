@@ -156,10 +156,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       let sessionUser;
       try {
         sessionUser = await getSessionUser(req);
-        if (!sessionUser) {
-          const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-          sessionUser = await getApiTokenUser(req);
-        }
       } catch (e) {
         return err(e, 503);
       }
@@ -449,32 +445,24 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       return json(await listWarehouseDatabases());
     }
 
-    // GET /api/warehouse/databases/available — adapter discovery + registration overlay.
-    // Super-admin only (write-adjacent).
+    // GET /api/warehouse/databases/available — adapter-discovered databases with
+    // a `registered` flag, so the Add picker can grey out already-added ones.
     if (seg[2] === "databases" && seg[3] === "available" && seg.length === 4 && method === "GET") {
       if (!sessionUser.isSuperAdmin)
         return json({ error: "forbidden", reason: "super_admin_required" }, 403);
-      const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
-      const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
-      const adapter = await getAdapterFn();
-      const registered = new Set((await listWarehouseDatabases()).map((d) => d.databaseName));
+      const { discoverDatabases } = await import("./repo-warehouse.ts");
       try {
-        const discovered = await adapter.listDatabases();
-        return json(
-          discovered.map((d) => ({
-            databaseName: d.databaseName,
-            registered: registered.has(d.databaseName),
-          })),
-        );
-      } catch (discoverErr) {
-        const msg = discoverErr instanceof Error ? discoverErr.message : String(discoverErr);
+        return json(await discoverDatabases());
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("listDatabases exceeded"))
           return json({ kind: "DISCOVERY_TIMED_OUT" }, 504);
-        throw discoverErr;
+        throw err;
       }
     }
 
-    // POST /api/warehouse/databases — super-admin only
+    // POST /api/warehouse/databases — super-admin picks one of the discovered
+    // databases. No probe step: discovery already proved it exists.
     if (seg[2] === "databases" && seg.length === 3 && method === "POST") {
       if (!sessionUser.isSuperAdmin)
         return json({ error: "forbidden", reason: "super_admin_required" }, 403);
@@ -483,17 +471,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json({ kind: "INVALID_IDENTIFIER", databaseName: body.databaseName }, 422);
       }
       const { addWarehouseDatabase } = await import("./repo-warehouse.ts");
-      const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
-      const adapter = await getAdapterFn();
-      let probe: { ok: true } | { ok: false; reason: string };
-      try {
-        probe = await adapter.probeDatabase(body.databaseName);
-      } catch (probeErr) {
-        const msg = probeErr instanceof Error ? probeErr.message : String(probeErr);
-        if (msg.includes("probeDatabase exceeded")) return json({ kind: "PROBE_TIMED_OUT" }, 504);
-        throw probeErr;
-      }
-      if (!probe.ok) return json({ kind: "PROBE_FAILED", reason: probe.reason }, 422);
       const wd = await addWarehouseDatabase({
         databaseName: body.databaseName,
         label: body.label,
@@ -573,22 +550,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     if (seg[1] === "auth" && seg[2] === "change-password" && method === "POST") {
       const { handleChangePassword } = await import("./auth-password.ts");
       return handleChangePassword(req, me);
-    }
-
-    // API token management (authenticated; session-required not bearer-required)
-    if (seg[1] === "tokens") {
-      if (seg.length === 2 && method === "GET") {
-        const { handleListTokens } = await import("./auth-api-tokens.ts");
-        return handleListTokens(me);
-      }
-      if (seg.length === 2 && method === "POST") {
-        const { handleCreateToken } = await import("./auth-api-tokens.ts");
-        return handleCreateToken(req, me);
-      }
-      if (seg.length === 3 && method === "DELETE") {
-        const { handleRevokeToken } = await import("./auth-api-tokens.ts");
-        return handleRevokeToken(seg[2], me);
-      }
     }
 
     // PATCH /api/t/:slug — rename workspace label and/or set color (admin only)
@@ -808,7 +769,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const p = (await req.json()) as {
             publishThreshold: number;
             suggestThreshold: number;
-            scanSchedule: "15m" | "hourly" | "daily" | null;
+            scanSchedule: "hourly" | "daily" | null;
           };
           await reqRepo.setPreferences(p);
           return noContent();
@@ -854,7 +815,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           adapter: adapterInstance.capabilities.id,
           writable: adapterInstance.capabilities.writable,
           canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
-          warehouseDb: env.warehouseDb || null,
           defaultEngineerMode: env.defaultEngineerMode,
         });
       }
@@ -967,7 +927,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (method === "GET") {
             if (url.searchParams.get("full") === "true") {
               const metas = await reqRepo.listDimensions();
-              const fulls = await Promise.all(metas.map((m) => reqRepo.getDimension(m.id)));
+              const scalars = await reqRepo.getDimScanScalars();
+              const fulls = await Promise.all(
+                metas.map((m) => reqRepo.getDimension(m.id, { scalars })),
+              );
               return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
             }
             return json(await reqRepo.listDimensions());
@@ -987,6 +950,30 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg.length === 3 && id && method === "GET") {
           const dim = await reqRepo.getDimension(id);
           return dim ? json(dim) : json({ error: "not found" }, 404);
+        }
+        // GET /api/dimensions/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
+        if (seg[3] === "scan-values" && seg.length === 4 && id && method === "GET") {
+          const filter = url.searchParams.get("filter") ?? "new";
+          if (filter !== "new" && filter !== "mapped" && filter !== "all") {
+            return json({ error: "invalid_filter" }, 400);
+          }
+          const q = url.searchParams.get("q");
+          const after = url.searchParams.get("after");
+          const limit = Math.min(
+            500,
+            Math.max(1, Number(url.searchParams.get("limit") ?? 100)),
+          );
+          return json(
+            await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }),
+          );
+        }
+        // POST /api/dimensions/:id/scan — rescan this dim's wired sources and
+        // re-materialize its dim_scan_value rows. Faster than POST /api/sources/scan.
+        if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          if (denied) return denied;
+          await reqRepo.scanOneDim(id);
+          return json({ ok: true });
         }
         // PATCH /api/dimensions/:id — update orderingMode / description / color
         if (seg.length === 3 && id && method === "PATCH") {
@@ -1093,12 +1080,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const { table, column, nameColumn } = (await req.json()) as {
+          const { table, column, nameColumn, force } = (await req.json()) as {
             table: string;
             column: string;
             nameColumn?: string;
+            force?: boolean;
           };
-          return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, {}, me));
+          return json(
+            await reqRepo.deriveCanonical(id, table, column, nameColumn, { force }, me),
+          );
         }
         // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
@@ -1570,10 +1560,6 @@ if (import.meta.main) {
         let session: SessionUser | null;
         try {
           session = await getSessionUser(req);
-          if (!session) {
-            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-            session = await getApiTokenUser(req);
-          }
         } catch {
           return new Response("auth error", { status: 503 });
         }
@@ -1602,10 +1588,6 @@ if (import.meta.main) {
         let session: SessionUser | null;
         try {
           session = await getSessionUser(req);
-          if (!session) {
-            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-            session = await getApiTokenUser(req);
-          }
         } catch {
           return new Response("auth error", { status: 503 });
         }

@@ -9,6 +9,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { listWebhooks, type Webhook, type WebhookStatus } from "../../lib/integrations-api";
 import { CreateWebhookModal } from "./CreateWebhookModal";
 import { SecretRevealModal } from "./SecretRevealModal";
+import { WebhookVerificationReference } from "../../components/integrations/WebhookVerificationReference";
 
 export function computeDuplicateUrlSet(rows: Array<{ id: string; url: string }>): Set<string> {
   const counts = new Map<string, string[]>();
@@ -63,7 +64,7 @@ export function Webhooks() {
 
   if (items.length === 0) {
     return (
-      <>
+      <div className="space-y-4">
         <EmptyState
           title="No webhooks yet"
           body="Subscribe an endpoint to receive a signed POST when canonical records change."
@@ -73,6 +74,7 @@ export function Webhooks() {
             ) : undefined
           }
         />
+        <WebhookVerificationReference />
         {showCreate && (
           <CreateWebhookModal
             onClose={() => setShowCreate(false)}
@@ -84,16 +86,18 @@ export function Webhooks() {
           />
         )}
         {secret && <SecretRevealModal value={secret.value} onClose={() => setSecret(null)} />}
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-[15px] font-semibold text-ink">Webhooks</h2>
         {canEdit && <Button onClick={() => setShowCreate(true)}>+ New webhook</Button>}
       </div>
+
+      <WebhookVerificationReference />
 
       <table className="w-full text-[13px]">
         <thead className="text-ink-3 text-left">

@@ -97,9 +97,9 @@ export function useGridCursor<Row>({
   const [cursor, setCursor] = useState<Cursor | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  // visible navigable columns (skip hidden + non-editable pinned utility columns)
+  // visible navigable columns — all non-hidden columns, including read-only ones
   const navCols = useMemo(
-    () => columns.filter((c) => !c.hidden && c.editable !== false),
+    () => columns.filter((c) => !c.hidden),
     [columns],
   );
 
@@ -156,8 +156,14 @@ export function useGridCursor<Row>({
   );
 
   const startEdit = useCallback(
-    (initial?: string) => setCursor((c) => (c ? { ...c, editing: true, initial } : c)),
-    [],
+    (initial?: string) =>
+      setCursor((c) => {
+        if (!c) return c;
+        const col = navCols.find((col) => col.field === c.field);
+        if (!col || col.editable === false) return c;
+        return { ...c, editing: true, initial };
+      }),
+    [navCols],
   );
   const stopEdit = useCallback(
     () => setCursor((c) => (c ? { ...c, editing: false, initial: undefined } : c)),

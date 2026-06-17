@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
 import { TablePane } from "../components/TablePane";
-import { useDimensions, useSources, useCanEdit } from "../store";
+import { useDimensions, useSources, useCanEdit, useStoreLoading } from "../store";
 import { useOpenTabs, dimIdFromTabId } from "../lib/open-tabs";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import { availableModes, type Mode } from "../lib/available-modes";
@@ -17,6 +17,7 @@ import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
 
 export function MasterTables() {
   const dims = useDimensions();
+  const loading = useStoreLoading();
   const [searchParams, setSearchParams] = useSearchParams();
   const { tabs, activeId: activeTabId, openTab } = useOpenTabs();
   const create = useCreateTableModal();
@@ -130,6 +131,19 @@ export function MasterTables() {
       setSearchParams(next, { replace: true });
     }
   }, [tabs, activeTabId, perTabMode, dimById, setSearchParams]);
+
+  if (loading) {
+    return (
+      <div className="flex h-full min-h-0 animate-pulse flex-col">
+        <div className="flex h-10 shrink-0 items-center gap-2 border-b border-line px-3">
+          {[80, 72, 64].map((w, i) => (
+            <div key={i} className="h-4 rounded-sm bg-surface-3" style={{ width: w }} />
+          ))}
+        </div>
+        <div className="flex-1 bg-surface" />
+      </div>
+    );
+  }
 
   if (dims.length === 0) {
     return (

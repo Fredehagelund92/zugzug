@@ -4,6 +4,7 @@ export interface DatabaseRow {
   label: string | null;
   addedAt: string;
   sourceCount: number;
+  schemaCount: number | null;
   lastProbeAt: string | null;
   lastProbeError: string | null;
 }
@@ -31,7 +32,7 @@ export function DatabaseTable(props: Props): JSX.Element {
       </div>
       {props.databases.length === 0 ? (
         <div className="p-4 text-[12.5px] text-ink-2">
-          Most warehouses ship with one main catalog — add it to start mapping sources.
+          No databases registered yet — click "+ Add database" to pick one discovered in MotherDuck.
         </div>
       ) : (
         <table className="w-full">
@@ -39,7 +40,7 @@ export function DatabaseTable(props: Props): JSX.Element {
             <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
               <th className="p-3">Name</th>
               <th className="p-3">Label</th>
-              <th className="p-3">Sources</th>
+              <th className="p-3">Schemas</th>
               <th className="p-3" />
             </tr>
           </thead>
@@ -49,7 +50,9 @@ export function DatabaseTable(props: Props): JSX.Element {
                 <td className="p-3 font-mono text-[12px] text-ink">{d.databaseName}</td>
                 <td className="p-3 italic text-ink-2">{d.label ?? "—"}</td>
                 <td className="p-3 text-ink-2">
-                  {d.sourceCount} source{d.sourceCount === 1 ? "" : "s"}
+                  {d.schemaCount === null
+                    ? "—"
+                    : `${d.schemaCount} schema${d.schemaCount === 1 ? "" : "s"}`}
                 </td>
                 <td className="p-3 text-right">
                   {d.lastProbeError && (

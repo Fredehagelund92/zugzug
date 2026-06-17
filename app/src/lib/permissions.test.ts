@@ -9,8 +9,6 @@ function ctx(role: "admin" | "editor" | "viewer", isSuperAdmin = false): TenantC
 const EDIT_ACTIONS: Action[] = [
   "settings.general.edit",
   "settings.members.edit",
-  "settings.tokens.edit",
-  "settings.tokens.view",
   "settings.scans.edit",
   "settings.matching.edit",
   "settings.danger.delete",

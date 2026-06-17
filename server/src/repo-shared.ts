@@ -206,7 +206,7 @@ export interface SourceInfo {
   values: number;
   unmapped: number;
   scanned: boolean;
-  schedule?: string | null; // null | '15m' | 'hourly' | 'daily'
+  schedule?: string | null; // null | 'hourly' | 'daily'
   scannedAt?: string | null; // ISO timestamp of last scan
 }
 export interface SchemaFacet {
@@ -225,7 +225,14 @@ export interface MappingDimension extends DimensionMeta {
   color: PaletteName | null;
   nextPosition: string | null;
   canonical: CanonicalValue[];
-  values: MappingValue[];
+  counts: {
+    newCount: number;
+    mappedCount: number;
+    totalDistinct: number;
+    unmappedRowsTotal: number;
+    mappedRowsTotal: number;
+    scannedAt: string | null;
+  };
   fields: FieldDef[];
 }
 export interface Draft {
@@ -262,7 +269,7 @@ export interface GridLayoutConfig {
 export interface Preferences {
   publishThreshold: number;
   suggestThreshold: number;
-  scanSchedule: "15m" | "hourly" | "daily" | null;
+  scanSchedule: "hourly" | "daily" | null;
 }
 
 /* ---- shared helpers ---- */
@@ -289,8 +296,44 @@ export const rel = (secs: number): string => {
 };
 
 export interface SourceDef {
+  /** Convenience "schema.table" — for display and audit; queries should use refOf(s) instead. */
   table: string;
   column: string;
+  /** Warehouse catalog (database_name from the warehouse_database registration). */
+  databaseName: string;
+  /** Schema part of `table`. */
+  schemaName: string;
+  /** Table part of `table`. */
+  tableName: string;
+}
+
+/** Adapter Ref derived from a registered source — carries the catalog so
+ *  qualifyRef can never fall back to a stale env default. */
+export function refOf(s: { databaseName: string; schemaName: string; tableName: string }): Ref {
+  return { catalog: s.databaseName, schema: s.schemaName, table: s.tableName };
+}
+
+/** Resolve an adapter Ref for a bare 'schema.table' string by looking up the
+ *  warehouse catalog from any dimension_source row that already registered
+ *  this (dim, schema, table). Used for nameTable / topUnmapped / similar where
+ *  the caller has a stored string but no databaseId in hand. */
+export async function refForRegisteredTable(
+  dimId: string,
+  stored: string,
+  tenantId: string,
+): Promise<Ref | null> {
+  const parts = stored.split(".");
+  if (parts.length !== 2) return null;
+  const row = await pgGet<{ catalog: string }>(
+    `SELECT wd.database_name AS "catalog"
+       FROM ${pg("dimension_source")} s
+       JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
+      WHERE s.tenant_id = $1 AND s.dim_id = $2
+        AND s.schema_name = $3 AND s.table_name = $4
+      LIMIT 1`,
+    [tenantId, dimId, parts[0], parts[1]],
+  );
+  return row ? { catalog: row.catalog, schema: parts[0], table: parts[1] } : null;
 }
 
 export interface DimMeta {
@@ -301,23 +344,34 @@ export interface DimMeta {
 }
 
 export async function sourcesOf(dimId: string, tenantId: string): Promise<SourceDef[]> {
-  return pgAll<SourceDef>(
-    `SELECT source_table AS "table", source_column AS column FROM ${pg("dimension_source")} WHERE dim_id = $1 AND tenant_id = $2 ORDER BY 1,2`,
+  const rows = await pgAll<{
+    databaseName: string;
+    schemaName: string;
+    tableName: string;
+    columnName: string;
+  }>(
+    `SELECT wd.database_name AS "databaseName",
+            s.schema_name    AS "schemaName",
+            s.table_name     AS "tableName",
+            s.column_name    AS "columnName"
+       FROM ${pg("dimension_source")} s
+       JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
+      WHERE s.dim_id = $1 AND s.tenant_id = $2
+      ORDER BY 1, 2, 3, 4`,
     [dimId, tenantId],
   );
-}
-
-/** Parse a stored 'schema.table' (or 'table') string into the adapter's Ref. */
-export function parseSourceTable(stored: string): Ref {
-  const parts = stored.split(".");
-  if (parts.length === 3) return { catalog: parts[0], schema: parts[1], table: parts[2] };
-  if (parts.length === 2) return { schema: parts[0], table: parts[1] };
-  return { schema: "main", table: stored };
+  return rows.map((r) => ({
+    table: `${r.schemaName}.${r.tableName}`,
+    column: r.columnName,
+    databaseName: r.databaseName,
+    schemaName: r.schemaName,
+    tableName: r.tableName,
+  }));
 }
 
 /** Keep only sources whose warehouse table actually resolves — a dimension
- *  registered against tables absent in this WAREHOUSE_DB (e.g. raw_dev vs
- *  raw_prod) still scans the rest instead of throwing. */
+ *  registered against tables absent in the relevant warehouse_database still
+ *  scans the rest instead of throwing. */
 export async function liveSources(dimId: string, tenantId: string): Promise<SourceDef[]> {
   const { getAdapter } = await import("./warehouse/registry.ts");
   const adapter = await getAdapter();
@@ -343,7 +397,13 @@ export async function liveSources(dimId: string, tenantId: string): Promise<Sour
     const displayTable = `${r.schemaName}.${r.tableName}`;
     try {
       if (await adapter.tableExists(ref)) {
-        out.push({ table: displayTable, column: r.columnName });
+        out.push({
+          table: displayTable,
+          column: r.columnName,
+          databaseName: r.databaseName,
+          schemaName: r.schemaName,
+          tableName: r.tableName,
+        });
       } else {
         console.warn(`scan: skipping missing source ${r.databaseName}.${displayTable}`);
       }

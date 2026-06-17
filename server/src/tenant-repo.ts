@@ -4,6 +4,7 @@ import * as repoMeta from "./repo-meta.ts";
 import * as repoCanonical from "./repo-canonical.ts";
 import * as repoDrafts from "./repo-drafts.ts";
 import * as repoScan from "./repo-scan.ts";
+import * as repoDimScan from "./repo-dim-scan.ts";
 import * as repoAiHint from "./repo-ai-hint.ts";
 import * as repoActivity from "./repo-activity.ts";
 import type {
@@ -97,8 +98,11 @@ export class TenantRepo {
     return this.withClearCtx(() => repoCanonical.listDimensions(this.tenantId));
   }
 
-  getDimension(id: string): Promise<MappingDimension | null> {
-    return this.withClearCtx(() => repoCanonical.getDimension(id, this.tenantId));
+  getDimension(
+    id: string,
+    opts?: { scalars?: repoDimScan.DimScanScalars[] },
+  ): Promise<MappingDimension | null> {
+    return this.withClearCtx(() => repoCanonical.getDimension(id, this.tenantId, opts));
   }
 
   /** Lightweight dimension lookup — id + label only. Used by AI suggest flow
@@ -398,11 +402,16 @@ export class TenantRepo {
     return this.withClearCtx(() => repoScan.scanSources(this.tenantId));
   }
 
+  scanOneDim(dimId: string): Promise<void> {
+    this.assertRole("manage_adapter");
+    return this.withClearCtx(() => repoScan.scanOneDim(dimId, this.tenantId));
+  }
+
   dimensionsWithWiredSources(): Promise<string[]> {
     return this.withClearCtx(() => repoScan.dimensionsWithWiredSources(this.tenantId));
   }
 
-  autoStageExactMatches(dimId: string): Promise<number> {
+  autoStageExactMatches(dimId: string): Promise<{ matched: number; unmatched: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() => repoScan.autoStageExactMatches(dimId, this.tenantId));
   }
@@ -446,14 +455,27 @@ export class TenantRepo {
     return this.withClearCtx(() => repoScan.searchCatalog({ ...opts, tenantId: this.tenantId }));
   }
 
+  getDimScanScalars(): Promise<repoDimScan.DimScanScalars[]> {
+    return this.withClearCtx(() => repoDimScan.getDimScanScalars(this.tenantId));
+  }
+
+  getDimScanValuesPage(
+    dimId: string,
+    opts: repoDimScan.PageOpts,
+  ): Promise<repoDimScan.ValuesPage> {
+    return this.withClearCtx(() =>
+      repoDimScan.getDimScanValuesPage(this.tenantId, dimId, opts),
+    );
+  }
+
   deriveCanonical(
     dimId: string,
     table: string,
     column: string,
     nameColumn: string | undefined,
-    opts: { silent?: boolean } = {},
+    opts: { silent?: boolean; force?: boolean } = {},
     userId: string,
-  ): Promise<{ derived: number }> {
+  ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
     this.assertRole("commit");
     return this.withClearCtx(() =>
       repoScan.deriveCanonical(dimId, table, column, nameColumn, opts, userId, this.tenantId),

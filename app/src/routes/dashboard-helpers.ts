@@ -11,20 +11,29 @@ export type SortKey = "urgency" | "coverage" | "name" | "rows";
  * This function counts mapping entries — use it only for per-dim health display.
  */
 export function coveragePct(dim: MappingDimension): number {
-  if (dim.values.length === 0) return 100;
-  return Math.round(
-    (dim.values.filter((v) => v.status === "mapped").length / dim.values.length) * 100,
-  );
+  const total = dim.counts.totalDistinct;
+  if (total === 0) return 100;
+  return Math.round((dim.counts.mappedCount / total) * 100);
 }
 
 /**
  * Higher = more urgent. Drives the default "Urgency" sort.
  * Formula: newCount * 1000 + (100 - coveragePct) so tables with new values always
  * outrank clean ones, and within those, worse coverage floats higher.
+ *
+ * `isStaged` signals that the dim has at least one staged draft (e.g. a remap of
+ * a previously-mapped value) but no unmapped values. Such dims would otherwise
+ * score 0 and sink to the bottom of the Urgency sort, even though the dashboard
+ * tags them as "needs attention". We add a mid-tier boost of 500 that's bigger
+ * than the worst-coverage spread (0–100) but smaller than newCount=1's
+ * contribution (1000), so staged-only dims rank above all clean dims and below
+ * any dim with even one new value.
  */
-export function urgencyScore(dim: MappingDimension): number {
-  const newCount = dim.values.filter((v) => v.status === "new").length;
-  return newCount * 1000 + (100 - coveragePct(dim));
+export function urgencyScore(dim: MappingDimension, isStaged: boolean = false): number {
+  const newCount = dim.counts.newCount;
+  const baseUrgency = newCount * 1000 + (100 - coveragePct(dim));
+  const stagedBoost = isStaged && newCount === 0 ? 500 : 0;
+  return baseUrgency + stagedBoost;
 }
 
 /** CSS color var to use for coverage bars and percentage text. */
@@ -65,18 +74,25 @@ export function applyFilter(
 ): MappingDimension[] {
   if (filter === "all") return dims;
   if (filter === "attention") {
-    return dims.filter((d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id));
+    return dims.filter((d) => d.counts.newCount > 0 || stagedDimIds.has(d.id));
   }
   // "clean"
-  return dims.filter((d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id));
+  return dims.filter((d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id));
 }
 
 /** Sort dims. Returns a new array — never mutates the input. */
-export function applySort(dims: MappingDimension[], sort: SortKey): MappingDimension[] {
+export function applySort(
+  dims: MappingDimension[],
+  sort: SortKey,
+  stagedDimIds: Set<string> = new Set(),
+): MappingDimension[] {
   const copy = [...dims];
   switch (sort) {
     case "urgency":
-      return copy.sort((a, b) => urgencyScore(b) - urgencyScore(a));
+      return copy.sort(
+        (a, b) =>
+          urgencyScore(b, stagedDimIds.has(b.id)) - urgencyScore(a, stagedDimIds.has(a.id)),
+      );
     case "coverage":
       return copy.sort((a, b) => coveragePct(a) - coveragePct(b));
     case "name":

@@ -118,7 +118,7 @@ createRoot(root).render(
                             <Route path="members" element={<Members />} />
                             <Route
                               path="tokens"
-                              element={<Navigate to="../warehouse#tokens" replace />}
+                              element={<Navigate to="../../integrations/service-accounts" replace />}
                             />
                             <Route
                               path="scans"

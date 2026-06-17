@@ -160,6 +160,11 @@ test("listTables: search filters across schema, table name, and column names", a
   const byColumn = await a.listTables({ search: "region", database: "memory" });
   expect(byColumn.some((t) => t.table === "partners")).toBe(true);
   expect(byColumn.some((t) => t.table === "countries")).toBe(false);
+
+  // Qualified "schema.table" search matches schema and table parts together
+  const qualified = await a.listTables({ search: "raw.partner", database: "memory" });
+  expect(qualified.some((t) => t.schema === "raw" && t.table === "partners")).toBe(true);
+  expect(qualified.some((t) => t.table === "countries")).toBe(false);
 });
 
 test("distinctValuesWithProvenance merges multiple sources and tags sourceIndex", async () => {

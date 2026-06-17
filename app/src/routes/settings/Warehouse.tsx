@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -12,9 +12,7 @@ import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { useEngineerMode } from "../../lib/engineer-mode";
 import { Scans } from "./Scans";
-import { Tokens } from "./Tokens";
 import { useTenant } from "../../lib/tenant-context";
-import { can } from "../../lib/permissions";
 import { fetchWarehouseDatabases } from "../../api";
 import { DatabaseTable, type DatabaseRow } from "../../components/warehouse/DatabaseTable";
 import { AddDatabaseDialog } from "../../components/warehouse/AddDatabaseDialog";
@@ -57,35 +55,52 @@ function DatabasesSection() {
   const [databases, setDatabases] = useState<DatabaseRow[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [removing, setRemoving] = useState<DatabaseRow | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
 
-  async function refresh(): Promise<void> {
-    setDatabases(await fetchWarehouseDatabases());
-  }
+  const refresh = useCallback(async (): Promise<void> => {
+    setDbError(null);
+    try {
+      setDatabases(await fetchWarehouseDatabases());
+    } catch (err) {
+      setDbError(err instanceof Error ? err.message : "Could not reach the server.");
+    }
+  }, []);
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [refresh]);
 
   return (
     <SettingsSection
       title="Warehouse databases"
-      hint="The MotherDuck token is loaded from the deployment's environment. Databases are shared across all workspaces."
+      hint="Pick which MotherDuck databases this deployment uses. The token is loaded from the environment; databases are shared across all workspaces."
     >
-      <div className="mb-3 flex items-center gap-3 text-[12px] text-ink-2">
-        <span>
-          MotherDuck · {databases.length} database{databases.length === 1 ? "" : "s"} registered
-        </span>
-        {engineer && (
-          <span className="font-mono text-[11px] text-ink-3">from env: MOTHERDUCK_TOKEN</span>
-        )}
-      </div>
+      {!dbError && (
+        <div className="mb-3 flex items-center gap-3 text-[12px] text-ink-2">
+          <span>
+            MotherDuck · {databases.length} database{databases.length === 1 ? "" : "s"} registered
+          </span>
+          {engineer && (
+            <span className="font-mono text-[11px] text-ink-3">from env: MOTHERDUCK_TOKEN</span>
+          )}
+        </div>
+      )}
 
-      <DatabaseTable
-        databases={databases}
-        canAdd={isSuperAdmin}
-        onAdd={() => setShowAdd(true)}
-        onRemove={isSuperAdmin ? (db) => setRemoving(db) : undefined}
-      />
+      {dbError ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+          <span>Couldn&rsquo;t load databases — {dbError}</span>
+          <Button variant="ghost" size="sm" onClick={() => void refresh()}>
+            Retry
+          </Button>
+        </div>
+      ) : (
+        <DatabaseTable
+          databases={databases}
+          canAdd={isSuperAdmin}
+          onAdd={() => setShowAdd(true)}
+          onRemove={isSuperAdmin ? (db) => setRemoving(db) : undefined}
+        />
+      )}
 
       {showAdd && (
         <AddDatabaseDialog
@@ -114,7 +129,11 @@ function ConnectionsSection() {
   const { engineer } = useEngineerMode();
   const tenant = useTenant();
   const wsInfo = useWorkspaceInfo();
-  const adapterLabel = wsInfo ? wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1) : "…";
+  const adapterLabel = wsInfo
+    ? wsInfo.adapter === "duckdb"
+      ? "MotherDuck"
+      : wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1)
+    : "…";
   const health = useConnectionHealth();
   const refreshHealth = useAsyncAction(async () => {
     await refreshConnectionHealth({ force: true });
@@ -151,12 +170,6 @@ function ConnectionsSection() {
         </div>
         {engineer ? (
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
-            {wsInfo?.warehouseDb && (
-              <>
-                <span>{wsInfo.warehouseDb}</span>
-                <span>·</span>
-              </>
-            )}
             <span>
               {wsInfo?.writable
                 ? "scanned for source values & writes canonical via MERGE"
@@ -206,8 +219,6 @@ function ConnectionsSection() {
 }
 
 export function Warehouse() {
-  const tenant = useTenant();
-  const canViewTokens = can(tenant, "settings.tokens.view");
   return (
     <div className="space-y-8">
       <DatabasesSection />
@@ -215,11 +226,6 @@ export function Warehouse() {
       <div id="scans">
         <Scans />
       </div>
-      {canViewTokens && (
-        <div id="tokens">
-          <Tokens />
-        </div>
-      )}
     </div>
   );
 }

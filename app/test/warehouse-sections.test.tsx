@@ -16,15 +16,11 @@ vi.mock("../src/store", () => ({
   usePreferences: () => ({ scanSchedule: null, publishThreshold: 0.9, suggestThreshold: 0.6 }),
   setPreferences: vi.fn(),
   scanSources: vi.fn(async () => 0),
-  listApiTokens: vi.fn(async () => []),
-  createApiToken: vi.fn(),
-  revokeApiToken: vi.fn(),
   invalidate: {
     currentUser: vi.fn(),
     tenant: vi.fn(),
     memberships: vi.fn(),
     members: vi.fn(),
-    tokens: vi.fn(),
     scans: vi.fn(),
     audit: vi.fn(),
     warehouses: vi.fn(),
@@ -58,21 +54,14 @@ function harness(role: "viewer" | "editor" | "admin") {
 }
 
 describe("Warehouse page (folded sections)", () => {
-  test("admin sees Connections + Scans + Tokens sections", () => {
+  test("admin sees Connections + Scans, no API tokens section", () => {
     harness("admin");
     expect(screen.getByText("Connections")).toBeInTheDocument();
     expect(screen.getByText("Scans")).toBeInTheDocument();
-    expect(screen.getByText("API tokens")).toBeInTheDocument();
+    expect(screen.queryByText("API tokens")).toBeNull();
   });
 
-  test("editor sees Connections + Scans + Tokens", () => {
-    harness("editor");
-    expect(screen.getByText("Connections")).toBeInTheDocument();
-    expect(screen.getByText("Scans")).toBeInTheDocument();
-    expect(screen.getByText("API tokens")).toBeInTheDocument();
-  });
-
-  test("viewer sees Connections + Scans but NOT Tokens", () => {
+  test("viewer sees the same surfaces", () => {
     harness("viewer");
     expect(screen.getByText("Connections")).toBeInTheDocument();
     expect(screen.getByText("Scans")).toBeInTheDocument();

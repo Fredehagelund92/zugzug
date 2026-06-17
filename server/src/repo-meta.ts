@@ -101,7 +101,7 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
      ORDER BY id LIMIT 1`,
     [tenantId],
   );
-  const validSchedule = ["15m", "hourly", "daily"] as const;
+  const validSchedule = ["hourly", "daily"] as const;
   const sched = row?.scan_schedule ?? null;
   return {
     publishThreshold: row?.publish_threshold ?? 95,
@@ -113,7 +113,7 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
 }
 
 export async function setPreferences(p: Preferences, tenantId: string = "default"): Promise<void> {
-  const valid = p.scanSchedule === null || ["15m", "hourly", "daily"].includes(p.scanSchedule);
+  const valid = p.scanSchedule === null || ["hourly", "daily"].includes(p.scanSchedule);
   if (!valid) throw new Error(`invalid scanSchedule: ${String(p.scanSchedule)}`);
 
   await pgRun(

@@ -6,11 +6,10 @@ import { Button } from "../Button";
 import { Checkbox } from "../Checkbox";
 import { ComboSelect } from "../ComboSelect";
 import { DataGrid, useUndoStack } from "../datagrid";
-import { IconArrowRight, IconCheck, IconWand, IconX } from "../Icons";
+import { IconArrowRight, IconCheck, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
 import { useEngineerMode } from "../../lib/engineer-mode";
-import { valueRows } from "../../data";
-import type { MappingDimension, MappingValue } from "../../data";
+import type { MappingDimension, MappingValue, SourceOccurrence } from "../../data";
 import { matchColumns } from "./match-columns";
 import {
   commit,
@@ -23,11 +22,15 @@ import {
   useCanEdit,
 } from "../../store";
 import { GetSuggestionButton } from "../GetSuggestionButton";
+import { toast } from "../Toast";
+import { useDimValuesPage, type ScanValueRow } from "../../lib/use-dim-values-page";
+import { useAiHint } from "../../lib/use-ai-hint";
 
-/* MatchModeBody — the per-tab single-dim Match workbench. Lifted from the
-   monolithic Mapping route so each open table mounts its own scoped instance
-   under TablePane's UndoStackProvider. Cross-dim triage lives in /app/triage
-   now; this body only ever knows about one `dim`. */
+/* MatchModeBody — per-tab single-dim Match workbench. Lazy-fetches a paginated
+   page of scan_value rows via useDimValuesPage; the eager `dim.values` array
+   is gone now. AI suggestions are fetched per focused cursor row (`useAiHint`);
+   the bulk-row "automap" affordance is dropped because it required eager
+   per-row suggestions that aren't in the paged payload. */
 
 type RStatus = "mapped" | "new" | "skipped";
 type ValueState = Record<string, { target: string | null; status: RStatus }>;
@@ -36,10 +39,7 @@ type Filter = "new" | "all" | "mapped";
 // Escape a string for use inside a double-quoted CSS attribute selector.
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
-// Brief accent-wash on a row after the user acted on it (Accept/Skip/Pick).
-// Defers to next frame so React has rendered any state-driven className
-// change before we layer the animation on top; the force-reflow lets a
-// rapid second action on the same row retrigger the animation.
+// Brief accent-wash on a row after the user acted on it.
 function flashRow(selector: string): void {
   requestAnimationFrame(() => {
     const el = document.querySelector<HTMLElement>(selector);
@@ -78,6 +78,25 @@ interface MatchModeBodyProps {
   isActive: boolean;
 }
 
+// Adapt a paged ScanValueRow into the shape `matchColumns` expects — the
+// existing DataGrid + column defs are typed on MappingValue. Suggestion /
+// confidence default to empty (no per-row AI in the paged payload).
+function adaptRow(r: ScanValueRow): MappingValue {
+  const sources: SourceOccurrence[] = r.occurrences.map((o) => ({
+    table: o.table,
+    column: o.column,
+    rows: o.rows,
+  }));
+  return {
+    value: r.raw,
+    status: r.isMapped ? "mapped" : "new",
+    current: r.mappedLabel,
+    suggestion: null,
+    confidence: 0,
+    sources,
+  };
+}
+
 export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const allDrafts = useDrafts();
   const { engineer } = useEngineerMode();
@@ -87,46 +106,72 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const nav = useNavLinks();
 
   const [sel, setSel] = useState<string[]>([]);
-  // Filter persists in session so re-opening a tab keeps the user's last lens.
-  // Per-dim scoping isn't needed — most users keep "new" anyway and the win is
-  // not having the filter snap back on every dim switch.
   const [filter, setFilter] = useSessionState<Filter>("zz:mapping:filter", "new");
+  const [searchText, setSearchText] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
-  const [flash, setFlash] = useState<{ n: number; rows: number } | null>(null);
+  const [flash, setFlash] = useState<{ n: number } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
-  const [autoFlash, setAutoFlash] = useState<number | null>(null);
+  const [cursorRaw, setCursorRaw] = useState<string | null>(null);
 
-  const byVal = (v: string) => dim.values.find((r) => r.value === v)!;
+  // Paged fetch — re-keys on (dim.id, filter, q).
+  const valuesPage = useDimValuesPage({
+    dimId: dim.id,
+    filter,
+    q: searchText || undefined,
+  });
+
+  // Focus-refetch: when the user returns to the tab, reload so other curators'
+  // edits show up.
+  useEffect(() => {
+    const onFocus = () => valuesPage.refetch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [valuesPage]);
+
+  // AI hint for the cursor row only — mirrors Triage. Powers the `A` shortcut
+  // (accept suggestion) when no per-row suggestion is available eagerly.
+  const aiHint = useAiHint(dim.id, cursorRaw ?? "", cursorRaw !== null);
+
+  // Per-page lookup. Returns null when the row isn't in the loaded window —
+  // callers must handle that (e.g. accept on a not-loaded row is a no-op).
+  const byVal = (v: string): ScanValueRow | null =>
+    valuesPage.items.find((r) => r.raw === v) ?? null;
+
   const keyFor = (label: string) =>
     dim.canonical.find((c) => c.label === label)?.key ??
     label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   const options = useMemo(() => dim.canonical.map((c) => c.label), [dim.canonical]);
   const external = dim.keyKind === "external_id";
 
-  // committed truth (dim) overlaid with each value's pending draft, if any
+  // Committed truth (from the loaded page) overlaid with each value's pending
+  // draft. Only covers the loaded window — that's all the grid renders anyway.
   const state: ValueState = useMemo(
     () =>
       Object.fromEntries(
-        dim.values.map((v) => {
-          const d = allDrafts[dkey(dim.id, v.value)];
+        valuesPage.items.map((v) => {
+          const d = allDrafts[dkey(dim.id, v.raw)];
           return [
-            v.value,
+            v.raw,
             d
               ? { target: d.targetLabel, status: d.status }
-              : { target: v.current, status: v.current ? "mapped" : "new" },
+              : { target: v.mappedLabel, status: v.isMapped ? "mapped" : "new" },
           ];
         }),
       ),
-    [dim, allDrafts],
+    [valuesPage.items, allDrafts, dim.id],
   );
 
-  const counts = useMemo(() => {
-    const c = { all: dim.values.length, new: 0, mapped: 0, skipped: 0 };
-    for (const v of dim.values) c[state[v.value]?.status ?? "new"]++;
-    return c;
-  }, [dim, state]);
+  // Counts come from the server-side scalars (queue size for the whole dim,
+  // independent of the loaded page or active search). With search active,
+  // chip counts still reflect the underlying dim — they're the queue size,
+  // not the search view.
+  const counts = {
+    all: dim.counts.totalDistinct,
+    new: dim.counts.newCount,
+    mapped: dim.counts.mappedCount,
+  };
 
   const stageMap = (v: string, label: string) => {
     const prev = allDrafts[dkey(dim.id, v)];
@@ -141,10 +186,16 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     });
     return saveDraft(dim.id, v, "mapped", label, keyFor(label));
   };
+  // Accept relies on the per-cursor AI hint — same pattern as Triage's
+  // acceptCross. No per-row suggestion in the paged payload, so accepting a
+  // non-cursor row (e.g. via bulk Accept) is a no-op + toast.
   const accept = (v: string) => {
-    const r = byVal(v);
-    if (!r.suggestion) return;
-    void stageMap(v, r.suggestion);
+    const suggestion = cursorRaw === v ? aiHint.hint?.suggestion : null;
+    if (!suggestion) {
+      toast(`No suggestion to accept for "${v}".`, "error");
+      return;
+    }
+    void stageMap(v, suggestion);
     flashRow(`[data-row="${attrEsc(v)}"]`);
   };
   const pick = (v: string, t: string) => {
@@ -152,8 +203,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     flashRow(`[data-row="${attrEsc(v)}"]`);
   };
   // Skip without the row flash — bulkApply uses this so a skipped selection
-  // doesn't fire N flash animations. The single-action `skip` below composes
-  // this + flashRow.
+  // doesn't fire N flash animations.
   const skipPersist = (v: string) => {
     const prev = allDrafts[dkey(dim.id, v)];
     undo.push({
@@ -182,24 +232,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     });
     return discardDraft(dim.id, v);
   };
-  // Bulk operations: collect saveDraft promises, fire in parallel, wrap every
-  // per-value undo entry in one compound entry. One Cmd+Z restores the whole
-  // batch and N values commit as 1 network round-trip instead of N sequential.
-  const automap = async () => {
-    const matches = dim.values.filter(
-      (r) => r.suggestion && r.confidence >= 90 && state[r.value].status === "new",
-    );
-    if (matches.length === 0) return;
-    const label = `auto-match ${matches.length} value${matches.length === 1 ? "" : "s"}`;
-    undo.beginTransaction(label);
-    try {
-      await Promise.all(matches.map((r) => stageMap(r.value, r.suggestion!)));
-    } finally {
-      undo.endTransaction();
-      setAutoFlash(matches.length);
-      setTimeout(() => setAutoFlash(null), 2600);
-    }
-  };
   const bulkApply = async (label: string, fn: (v: string) => unknown) => {
     if (sel.length === 0) return;
     const values = [...sel];
@@ -212,8 +244,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     }
   };
 
-  // Drop a single staged draft from the review panel. Undo-able so reviewers
-  // can take a value back.
+  // Drop a single staged draft from the review panel. Undo-able.
   const discardStaged = (raw: string) => {
     const prev = allDrafts[dkey(dim.id, raw)];
     if (!prev) return;
@@ -226,14 +257,16 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     void discardDraft(dim.id, raw);
   };
 
-  const visible = dim.values.filter((v) => filter === "all" || state[v.value]?.status === filter);
+  // Visible rows — adapted from the paged ScanValueRow into the shape
+  // matchColumns/DataGrid expects. Server filter already narrows to
+  // new/all/mapped; the loaded page is the visible set.
+  const visible = useMemo(() => valuesPage.items.map(adaptRow), [valuesPage.items]);
   const visIds = visible.map((v) => v.value);
   const allSel = visIds.length > 0 && visIds.every((id) => sel.includes(id));
   const headState: "on" | "off" | "mixed" = allSel ? "on" : sel.length ? "mixed" : "off";
 
-  // Columns for the DataGrid — value+provenance (with drill toggle), target
-  // (ComboSelect editor), confidence, status. The grid owns cursor + keyboard
-  // navigation; Match-specific single-key actions arrive via onCellKeyDown.
+  // Columns for the DataGrid. Suggestion/confidence cols still render but are
+  // always null/0 — the paged payload has no per-row AI data.
   const columns = useMemo(
     () =>
       matchColumns({
@@ -249,29 +282,26 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   );
 
   // ── Deep-linking ─────────────────────────────────────────────────────────
-  // URL ?value=… points at a specific row so a teammate can Slack a link to a
-  // mapping decision. The grid cursor is internal to DataGrid now, so instead
-  // of pinning a cursor we scroll the row into view + flash it (same pattern
-  // as RecordsBody's ?focus=). Consumed once; only when this pane is the
-  // active tab. Cursor→URL mirroring is gone with the host-owned cursor.
+  // URL ?value=… points at a specific row. Without an eager values list we
+  // can't pre-validate existence; best-effort: when the row appears in the
+  // currently-loaded page, scroll + flash. If filtered out, widen to "all".
   const initialUrlValueRef = useRef<string | null>(isActive ? searchParams.get("value") : null);
   useEffect(() => {
     const pinned = initialUrlValueRef.current;
     if (!pinned) return;
-    const targetRow = dim.values.find((r) => r.value === pinned);
-    if (!targetRow) return;
-    // If the deep-linked row exists but is filtered out (e.g. already-mapped
-    // value under the default "new" lens), widen the filter first so the next
-    // pass actually finds it in `visible`. Don't consume the ref until the
-    // row is renderable.
-    if (!visible.some((r) => r.value === pinned)) {
-      setFilter("all");
+    if (valuesPage.loading) return;
+    const inPage = valuesPage.items.some((r) => r.raw === pinned);
+    if (!inPage) {
+      // Widen the lens once in case the value exists but is filtered out.
+      if (filter !== "all") {
+        setFilter("all");
+        return;
+      }
+      // Give up — value not in loaded window.
+      initialUrlValueRef.current = null;
       return;
     }
     initialUrlValueRef.current = null;
-    // Note: rows below the virtualization window have no [data-row] yet —
-    // querySelector returns null, scroll no-ops. Same limitation as
-    // RecordsBody's ?focus=. Acceptable for the common case.
     requestAnimationFrame(() => {
       document
         .querySelector<HTMLElement>(`[data-row="${attrEsc(pinned)}"]`)
@@ -279,18 +309,15 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     });
     flashRow(`[data-row="${attrEsc(pinned)}"]`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dim.id, visible, setFilter]);
+  }, [dim.id, valuesPage.items, valuesPage.loading, filter]);
 
-  // the staged drafts awaiting commit (incl. teammates' work) — the review
-  // set. Scoped to still-uncommitted (new) values, matching what commit()
-  // actually folds.
+  // staged drafts awaiting commit — the review set. Without eager values we
+  // can't filter against current warehouse state (that drop-no-op semantics
+  // landed in Triage too); the server reconciles on commit.
   const stagedDrafts = useMemo(
-    () =>
-      listDrafts(dim.id).filter(
-        (d) => d.status === "mapped" && dim.values.find((v) => v.value === d.raw)?.status === "new",
-      ),
+    () => listDrafts(dim.id).filter((d) => d.status === "mapped"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dim, allDrafts],
+    [dim.id, allDrafts],
   );
   const staged = stagedDrafts.map((d) => ({ raw: d.raw, label: d.targetLabel! }));
 
@@ -310,23 +337,16 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const approveAndCommit = async () => {
     setCommitError(null);
     if (staged.length === 0) return;
-    // Optimistic flash — predict count + warehouse rows before the server
-    // round-trip so the success moment lands on click, not 50ms later.
-    // Reverted on failure.
-    const predictedRows = stagedDrafts.reduce((n, d) => {
-      const v = dim.values.find((x) => x.value === d.raw);
-      return n + (v ? valueRows(v) : 0);
-    }, 0);
-    setFlash({ n: staged.length, rows: predictedRows });
+    setFlash({ n: staged.length });
     setShowSql(false);
     setReview(false);
     try {
-      const res = await commit(dim.id); // server folds drafts + returns rows recovered
+      const res = await commit(dim.id);
       if (!res.committed) {
         setFlash(null);
         return;
       }
-      setFlash({ n: res.committed, rows: res.rowsRecovered });
+      setFlash({ n: res.committed });
       setTimeout(() => setFlash(null), 2800);
     } catch (err) {
       setFlash(null);
@@ -346,24 +366,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
-      {/* small left-aligned toolbar above the body — owns Auto-match per spec § 1 */}
-      {counts.new > 0 && canEdit && (
-        <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            icon={<IconWand className="h-3.5 w-3.5" />}
-            onClick={automap}
-            className="zz-glow-sm"
-          >
-            {autoFlash !== null ? `✓ Auto-matched ${autoFlash}` : "Auto-match new values"}
-          </Button>
-        </div>
-      )}
-
-      {/* workbench — single-dim mode. DataGrid owns the cursor + keyboard
-          navigation; Match-specific single-key actions hook in below via
-          onCellKeyDown. */}
       <div className="flex flex-1 flex-col min-h-0">
         {/* toolbar / bulk bar */}
         <div className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3">
@@ -391,6 +393,13 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   </button>
                 ))}
               </div>
+              <input
+                type="search"
+                placeholder="Search raw values…"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"
+              />
               {counts.new > 0 && (
                 <Badge tone="warn" dot>
                   {counts.new} need review
@@ -409,8 +418,13 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     void bulkApply(
                       `accept ${sel.length} match${sel.length === 1 ? "" : "es"}`,
                       (v) => {
-                        const r = byVal(v);
-                        return r.suggestion ? stageMap(v, r.suggestion) : undefined;
+                        // No per-row suggestion in the paged payload — bulk
+                        // accept can only land for the cursor row, which is
+                        // not how bulk works. Surface a single toast.
+                        if (cursorRaw === v && aiHint.hint?.suggestion) {
+                          return stageMap(v, aiHint.hint.suggestion);
+                        }
+                        return undefined;
                       },
                     )
                   }
@@ -466,6 +480,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               ? (state[r.value]?.target ?? "")
               : (r as unknown as Record<string, unknown>)[field]
           }
+          onCursorChange={(c) => setCursorRaw(c?.rowKey ?? null)}
           onCommit={
             canEdit
               ? async (rowKey, field, value) => {
@@ -482,8 +497,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               return;
             }
             if (!v) return;
-            // Plain letter shortcuts must NOT fire with modifiers — ⌘R must
-            // keep meaning "reload", ⌘S "save page", etc.
             const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
             if (!plain) return;
             const k = e.key.toLowerCase();
@@ -504,6 +517,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           renderRowDetail={(r) => {
             if (open !== r.value) return null;
             const row = state[r.value];
+            const scan = byVal(r.value);
+            const totalRows = scan?.totalRows ?? 0;
             return (
               <div className="px-4 py-3 pl-[52px]">
                 <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
@@ -521,13 +536,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       </span>
                       <span className="text-ink-3 tabular-nums">
                         {o.rows.toLocaleString()} rows
-                        {r.firstSeen ? ` · seen ${r.firstSeen}` : ""}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-3 font-mono text-[10.5px] text-ink-3">
-                  {row.target ? (
+                  {row?.target ? (
                     engineer ? (
                       <>
                         → writes{" "}
@@ -544,13 +558,13 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     )
                   ) : engineer ? (
                     <>
-                      ⚠ unresolved — these {valueRows(r).toLocaleString()} rows currently{" "}
+                      ⚠ unresolved — these {totalRows.toLocaleString()} rows currently{" "}
                       <span className="text-danger">LEFT JOIN to NULL</span>
                     </>
                   ) : (
                     <>
                       ⚠ <span className="text-danger">Unmapped</span> —{" "}
-                      {valueRows(r).toLocaleString()} downstream rows are missing this value
+                      {totalRows.toLocaleString()} downstream rows are missing this value
                     </>
                   )}
                 </div>
@@ -567,8 +581,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     </div>
                   ) : null;
                 })()}
-                {/* Show AI suggestion button for unmapped values with no existing suggestion */}
-                {state[r.value]?.status === "new" && !r.suggestion && canEdit && (
+                {state[r.value]?.status === "new" && canEdit && (
                   <div className="mt-2">
                     <GetSuggestionButton dimensionId={dim.id} rawValue={r.value} />
                   </div>
@@ -577,7 +590,18 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             );
           }}
           empty={
-            filter === "new" ? (
+            valuesPage.loading ? (
+              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+                loading…
+              </div>
+            ) : valuesPage.error ? (
+              <div className="px-4 py-12 text-center font-mono text-[12px] text-danger">
+                Failed to load values: {valuesPage.error}{" "}
+                <button onClick={() => valuesPage.refetch()} className="text-accent hover:underline">
+                  retry
+                </button>
+              </div>
+            ) : filter === "new" ? (
               <div className="px-4 py-10 text-center">
                 <div className="font-display text-[18px] font-semibold text-ink">
                   {dim.dimension} is fully matched 🎉
@@ -600,6 +624,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             )
           }
         />
+
+        {/* Infinite-scroll sentinel + pager footer mirror Triage's pattern. */}
+        <ScrollSentinel page={valuesPage} />
 
         {/* review & commit footer — drafts stage in Postgres, commit batch-MERGEs to DuckDB */}
         <div className="sticky bottom-0 z-10 border-t border-line bg-surface">
@@ -628,8 +655,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   ✓ {flash.n} {engineer ? "draft" : "change"}
                   {flash.n === 1 ? "" : "s"}{" "}
                   {engineer ? <>merged into {dim.mapTable}</> : <>published to {dim.dimension}</>}
-                  {" · "}
-                  {flash.rows.toLocaleString()} rows recovered
                 </span>
               ) : staged.length > 0 ? (
                 engineer ? (
@@ -702,8 +727,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
                 Staged for review · {stagedDrafts.length}
               </div>
-              {/* Grouped by target canonical record so duplicates collapse into
-                  "→ X (N)" and the reviewer can scan what's about to land. */}
               <div className="mt-1 max-h-64 overflow-y-auto px-5 pb-2">
                 {(() => {
                   const byTarget = new Map<string, typeof stagedDrafts>();
@@ -794,5 +817,34 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* Infinite-scroll sentinel — observes a 1px div under the grid; when it
+   intersects the viewport, advance the pager. Same shape as Triage's. */
+function ScrollSentinel({ page }: { page: ReturnType<typeof useDimValuesPage> }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) page.loadMore();
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [page]);
+  return (
+    <>
+      <div ref={ref} />
+      {page.loading && page.items.length > 0 && (
+        <div className="px-4 py-3 text-center font-mono text-[11px] text-ink-3">loading…</div>
+      )}
+      {!page.hasMore && page.items.length > 0 && (
+        <div className="px-4 py-3 text-center font-mono text-[10px] text-ink-3">end of list</div>
+      )}
+    </>
   );
 }

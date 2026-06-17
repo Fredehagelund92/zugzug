@@ -69,6 +69,11 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
 
   qualifyRef(table: Ref): string {
     const catalog = table.catalog ?? this.creds.database;
+    if (!catalog) {
+      throw new Error(
+        `qualifyRef: missing catalog for ${table.schema}.${table.table} — caller must pass Ref.catalog (resolved from warehouse_database).`,
+      );
+    }
     return `${this.quoteIdentifier(catalog)}.${this.quoteIdentifier(table.schema)}.${this.quoteIdentifier(table.table)}`;
   }
 
@@ -113,6 +118,9 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
   async probeDatabase(_databaseName: string): Promise<ProbeResult> {
     return { ok: false, reason: "Snowflake probeDatabase not yet implemented" };
   }
+  async schemaCounts(): Promise<Map<string, number>> {
+    throw new Error("Snowflake schemaCounts not yet implemented");
+  }
   async tableExists(table: Ref): Promise<boolean> {
     try {
       // LIVE-VALIDATION: Snowflake supports `SELECT ... LIMIT 0` for an existence
@@ -130,7 +138,9 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
   async listTables(
     opts: { schema?: string; search?: string; database?: string } = {},
   ): Promise<CatalogTable[]> {
-    const db = this.quoteIdentifier(opts.database ?? this.creds.database);
+    const dbName = opts.database ?? this.creds.database;
+    if (!dbName) throw new Error("listTables: missing database (no creds.database fallback)");
+    const db = this.quoteIdentifier(dbName);
     // LIVE-VALIDATION: INFORMATION_SCHEMA.TABLES view shape. Confirm TABLE_SCHEMA
     // and TABLE_NAME column names. Also confirm TABLE_TYPE values — we want
     // 'BASE TABLE' and 'VIEW' (Snowflake also has 'EXTERNAL TABLE', 'TEMPORARY').
@@ -140,11 +150,19 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       tableBinds.push(opts.schema);
       tableWhere += ` AND TABLE_SCHEMA = ?`;
     }
+    const qualifiedDot = opts.search ? opts.search.indexOf(".") : -1;
     if (opts.search) {
-      tableBinds.push(`%${opts.search}%`);
-      tableWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ?)`;
-      // Bind the same pattern twice (Snowflake ILIKE doesn't deduplicate binds).
-      tableBinds.push(`%${opts.search}%`);
+      if (qualifiedDot >= 0) {
+        // Qualified search "schema.table" — match parts separately.
+        tableBinds.push(`%${opts.search.slice(0, qualifiedDot)}%`);
+        tableBinds.push(`%${opts.search.slice(qualifiedDot + 1)}%`);
+        tableWhere += ` AND TABLE_SCHEMA ILIKE ? AND TABLE_NAME ILIKE ?`;
+      } else {
+        tableBinds.push(`%${opts.search}%`);
+        tableWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ?)`;
+        // Bind the same pattern twice (Snowflake ILIKE doesn't deduplicate binds).
+        tableBinds.push(`%${opts.search}%`);
+      }
     }
     const tableRows = await this._getConnection().execute({
       sqlText: `SELECT TABLE_SCHEMA, TABLE_NAME
@@ -166,10 +184,17 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
     // Apply the same search filter to columns so a search by column name surfaces
     // the parent table (matches Phase 1 DuckDB behavior).
     if (opts.search) {
-      colBinds.push(`%${opts.search}%`);
-      colWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ? OR COLUMN_NAME ILIKE ?)`;
-      colBinds.push(`%${opts.search}%`);
-      colBinds.push(`%${opts.search}%`);
+      if (qualifiedDot >= 0) {
+        // Qualified search "schema.table" — restrict by schema+table, skip column match.
+        colBinds.push(`%${opts.search.slice(0, qualifiedDot)}%`);
+        colBinds.push(`%${opts.search.slice(qualifiedDot + 1)}%`);
+        colWhere += ` AND TABLE_SCHEMA ILIKE ? AND TABLE_NAME ILIKE ?`;
+      } else {
+        colBinds.push(`%${opts.search}%`);
+        colWhere += ` AND (TABLE_SCHEMA ILIKE ? OR TABLE_NAME ILIKE ? OR COLUMN_NAME ILIKE ?)`;
+        colBinds.push(`%${opts.search}%`);
+        colBinds.push(`%${opts.search}%`);
+      }
     }
     const colRows = await this._getConnection().execute({
       sqlText: `SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME
@@ -218,7 +243,9 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
   }
 
   async listColumns(table: Ref): Promise<ColumnMeta[]> {
-    const db = this.quoteIdentifier(table.catalog ?? this.creds.database);
+    const dbName = table.catalog ?? this.creds.database;
+    if (!dbName) throw new Error("listColumns: missing catalog (no creds.database fallback)");
+    const db = this.quoteIdentifier(dbName);
     // LIVE-VALIDATION: Snowflake exposes DATA_TYPE on INFORMATION_SCHEMA.COLUMNS;
     // confirm casing (NUMBER vs INT, VARCHAR vs TEXT) doesn't surprise consumers.
     const rows = await this._getConnection().execute({

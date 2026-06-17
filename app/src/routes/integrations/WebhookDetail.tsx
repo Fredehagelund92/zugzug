@@ -26,7 +26,6 @@ function toastError(e: unknown, fallback: string): void {
 }
 import { SecretRevealModal } from "./SecretRevealModal";
 import { DeliveryLog } from "./DeliveryLog";
-import { SigningRecipeBlock } from "../../components/integrations/SigningRecipeBlock";
 
 /** Kid badge is only meaningful during the 24h rotation grace window: the
  *  previous secret is still accepted until `secret_previous_expires_at`. */
@@ -182,13 +181,10 @@ export function WebhookDetail() {
         </Row>
         <p className="text-[12px] text-ink-3 pt-1">
           Verify deliveries with the{" "}
-          <Link
-            to="../../pull-api?tab=webhooks"
-            className="text-accent underline-offset-2 hover:underline"
-          >
+          <Link to=".." className="text-accent underline-offset-2 hover:underline">
             signing recipe
-          </Link>
-          .
+          </Link>{" "}
+          on the Webhooks page.
         </p>
       </section>
 
@@ -215,15 +211,6 @@ export function WebhookDetail() {
       )}
 
       <DeliveryLog webhookId={id} />
-
-      <details className="rounded-sm border border-line bg-surface-2 p-4">
-        <summary className="font-display text-[14px] font-semibold text-ink cursor-pointer">
-          Webhook signing recipe
-        </summary>
-        <div className="mt-3">
-          <SigningRecipeBlock />
-        </div>
-      </details>
 
       {secret && (
         <SecretRevealModal
