@@ -136,7 +136,7 @@ export async function getDimScanScalars(tenantId: string): Promise<DimScanScalar
              ON m.tenant_id = v.tenant_id AND LOWER(m.raw) = v.raw_lower
            WHERE v.tenant_id = $1 AND v.dim_id = $2`,
         [tenantId, r.dimId],
-      ).catch(() => [{ n: 0 }]);
+      );
       mapped = Number(m[0]?.n ?? 0);
     }
     out.push({
