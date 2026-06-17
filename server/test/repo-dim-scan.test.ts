@@ -2,7 +2,11 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { pgRun, pgAll } from "../src/pg.ts";
-import { materializeDimScanValues } from "../src/repo-dim-scan.ts";
+import {
+  materializeDimScanValues,
+  getDimScanScalars,
+  getDimScanValuesPage,
+} from "../src/repo-dim-scan.ts";
 
 const TENANT = "t_test_dim_scan";
 const DIM = "d_color";
@@ -19,12 +23,18 @@ beforeAll(async () => {
 afterAll(async () => {
   await pgRun(`DELETE FROM zugzug_app.dim_scan_occurrence WHERE tenant_id = $1`, [TENANT]);
   await pgRun(`DELETE FROM zugzug_app.dim_scan_value      WHERE tenant_id = $1`, [TENANT]);
+  await pgRun(`DELETE FROM zugzug_app.dimension           WHERE tenant_id = $1`, [TENANT]);
+  await pgRun(`DROP TABLE IF EXISTS zugzug_app.map_test_color`);
+  await pgRun(`DROP TABLE IF EXISTS zugzug_app.dim_test_color`);
   await pgRun(`DELETE FROM zugzug_app.tenant              WHERE id        = $1`, [TENANT]);
 });
 
 beforeEach(async () => {
   await pgRun(`DELETE FROM zugzug_app.dim_scan_occurrence WHERE tenant_id = $1`, [TENANT]);
   await pgRun(`DELETE FROM zugzug_app.dim_scan_value      WHERE tenant_id = $1`, [TENANT]);
+  await pgRun(`DELETE FROM zugzug_app.dimension           WHERE tenant_id = $1`, [TENANT]);
+  await pgRun(`DROP TABLE IF EXISTS zugzug_app.map_test_color`);
+  await pgRun(`DROP TABLE IF EXISTS zugzug_app.dim_test_color`);
 });
 
 test("materializeDimScanValues writes one value per distinct raw with summed rows", async () => {
@@ -111,4 +121,106 @@ test("materializeDimScanValues handles >10k occurrences without exceeding bind-p
     )
   )[0];
   expect(count).toBe(12000);
+});
+
+test("getDimScanScalars returns per-dim totals joined against map_<dim>", async () => {
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.map_test_color
+               (tenant_id varchar, raw varchar, color_code varchar)`);
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.dim_test_color
+               (color_code varchar PRIMARY KEY, label varchar)`);
+  await pgRun(
+    `INSERT INTO zugzug_app.map_test_color (tenant_id, raw, color_code)
+     VALUES ($1, 'Red', 'RED') ON CONFLICT DO NOTHING`,
+    [TENANT],
+  );
+  await pgRun(
+    `INSERT INTO zugzug_app.dimension
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
+     VALUES ($1, 'Color', 'zugzug_app.dim_test_color',
+             'zugzug_app.map_test_color', 'color_code', current_timestamp, $2)
+     ON CONFLICT DO NOTHING`,
+    [DIM, TENANT],
+  );
+
+  await materializeDimScanValues(DIM, TENANT, {
+    occurrences: [
+      { raw: "Red",   table: "raw.a", column: "c", rows: 100 },
+      { raw: "Blue",  table: "raw.a", column: "c", rows:  50 },
+      { raw: "Green", table: "raw.a", column: "c", rows:  30 },
+    ],
+    scannedAt: new Date("2026-06-17T10:00:00Z"),
+  });
+
+  const scalars = await getDimScanScalars(TENANT);
+  const row = scalars.find((r) => r.dimId === DIM);
+  expect(row).toBeDefined();
+  expect(row!.totalDistinct).toBe(3);
+  expect(row!.mappedCount).toBe(1);
+  expect(row!.newCount).toBe(2);
+  expect(row!.scannedAt).toBeInstanceOf(Date);
+});
+
+test("getDimScanValuesPage paginates unmapped first by total_rows desc", async () => {
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.map_test_color
+               (tenant_id varchar, raw varchar, color_code varchar)`);
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.dim_test_color
+               (color_code varchar PRIMARY KEY, label varchar)`);
+  await pgRun(
+    `INSERT INTO zugzug_app.dimension
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
+     VALUES ($1, 'Color', 'zugzug_app.dim_test_color',
+             'zugzug_app.map_test_color', 'color_code', current_timestamp, $2)
+     ON CONFLICT DO NOTHING`,
+    [DIM, TENANT],
+  );
+
+  await materializeDimScanValues(DIM, TENANT, {
+    occurrences: Array.from({ length: 30 }, (_, i) => ({
+      raw: `v${String(i).padStart(2, "0")}`,
+      table: "raw.a",
+      column: "c",
+      rows: 1000 - i,
+    })),
+    scannedAt: new Date(),
+  });
+
+  const page1 = await getDimScanValuesPage(TENANT, DIM, { filter: "new", limit: 10 });
+  expect(page1.items).toHaveLength(10);
+  expect(page1.items[0].raw).toBe("v00");
+  expect(page1.items[9].raw).toBe("v09");
+  expect(page1.hasMore).toBe(true);
+
+  const page2 = await getDimScanValuesPage(TENANT, DIM, {
+    filter: "new",
+    limit: 10,
+    after: page1.nextCursor,
+  });
+  expect(page2.items[0].raw).toBe("v10");
+});
+
+test("getDimScanValuesPage q substring matches case-insensitively", async () => {
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.map_test_color
+               (tenant_id varchar, raw varchar, color_code varchar)`);
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.dim_test_color
+               (color_code varchar PRIMARY KEY, label varchar)`);
+  await pgRun(
+    `INSERT INTO zugzug_app.dimension
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
+     VALUES ($1, 'Color', 'zugzug_app.dim_test_color',
+             'zugzug_app.map_test_color', 'color_code', current_timestamp, $2)
+     ON CONFLICT DO NOTHING`,
+    [DIM, TENANT],
+  );
+
+  await materializeDimScanValues(DIM, TENANT, {
+    occurrences: [
+      { raw: "ACME Corp",  table: "raw.a", column: "c", rows: 10 },
+      { raw: "acme Inc",   table: "raw.a", column: "c", rows: 20 },
+      { raw: "Globex",     table: "raw.a", column: "c", rows: 30 },
+    ],
+    scannedAt: new Date(),
+  });
+
+  const page = await getDimScanValuesPage(TENANT, DIM, { filter: "all", limit: 50, q: "acme" });
+  expect(page.items.map((i) => i.raw).sort()).toEqual(["ACME Corp", "acme Inc"]);
 });
