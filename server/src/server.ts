@@ -927,7 +927,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (method === "GET") {
             if (url.searchParams.get("full") === "true") {
               const metas = await reqRepo.listDimensions();
-              const fulls = await Promise.all(metas.map((m) => reqRepo.getDimension(m.id)));
+              const scalars = await reqRepo.getDimScanScalars();
+              const fulls = await Promise.all(
+                metas.map((m) => reqRepo.getDimension(m.id, { scalars })),
+              );
               return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
             }
             return json(await reqRepo.listDimensions());
@@ -947,6 +950,22 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg.length === 3 && id && method === "GET") {
           const dim = await reqRepo.getDimension(id);
           return dim ? json(dim) : json({ error: "not found" }, 404);
+        }
+        // GET /api/dimensions/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
+        if (seg[3] === "scan-values" && seg.length === 4 && id && method === "GET") {
+          const filter = url.searchParams.get("filter") ?? "new";
+          if (filter !== "new" && filter !== "mapped" && filter !== "all") {
+            return json({ error: "invalid_filter" }, 400);
+          }
+          const q = url.searchParams.get("q");
+          const after = url.searchParams.get("after");
+          const limit = Math.min(
+            500,
+            Math.max(1, Number(url.searchParams.get("limit") ?? 100)),
+          );
+          return json(
+            await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }),
+          );
         }
         // PATCH /api/dimensions/:id — update orderingMode / description / color
         if (seg.length === 3 && id && method === "PATCH") {
