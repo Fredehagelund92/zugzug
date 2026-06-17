@@ -46,7 +46,7 @@ export function useDimValuesPage(opts: UseDimValuesPageOpts): UseDimValuesPage {
         const params = new URLSearchParams({ filter, limit: "100" });
         if (q) params.set("q", q);
         if (after) params.set("after", after);
-        const r = await apiFetch(`/api/dimensions/${encodeURIComponent(dimId)}/scan-values?${params}`);
+        const r = await apiFetch(`/dimensions/${encodeURIComponent(dimId)}/scan-values?${params}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const body = (await r.json()) as {
           items: ScanValueRow[];

@@ -178,6 +178,31 @@ export async function scanSources(tenantId: string): Promise<number> {
   return regs.length;
 }
 
+/** Rescan a single dim — rescans its registered sources, then re-materializes
+ *  its dim_scan_value/dim_scan_occurrence rows. Faster than scanSources when
+ *  the user only wants to refresh one table. */
+export async function scanOneDim(dimId: string, tenantId: string): Promise<void> {
+  const regs = await pgAll<ScanReg>(
+    `SELECT s.dim_id        AS "dimId",
+            s.database_id   AS "databaseId",
+            wd.database_name AS "catalog",
+            s.schema_name   AS "schema",
+            s.table_name    AS "table",
+            s.column_name   AS "column",
+            d.map_table     AS "mapTable"
+       FROM ${pg("dimension_source")} s
+       JOIN ${pg("dimension")}          d  ON d.id  = s.dim_id      AND d.tenant_id  = s.tenant_id
+       JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
+      WHERE s.tenant_id = $1 AND s.dim_id = $2`,
+    [tenantId, dimId],
+  );
+  const adapter = await getAdapter();
+  for (const r of regs) {
+    await scanOneSource(r, adapter, tenantId);
+  }
+  await materializeOneDim(dimId, adapter, tenantId);
+}
+
 /** Run the warehouse provenance query for one dim and write the result into
  *  dim_scan_value + dim_scan_occurrence. Idempotent — replaces prior rows. */
 async function materializeOneDim(

@@ -402,6 +402,11 @@ export class TenantRepo {
     return this.withClearCtx(() => repoScan.scanSources(this.tenantId));
   }
 
+  scanOneDim(dimId: string): Promise<void> {
+    this.assertRole("manage_adapter");
+    return this.withClearCtx(() => repoScan.scanOneDim(dimId, this.tenantId));
+  }
+
   dimensionsWithWiredSources(): Promise<string[]> {
     return this.withClearCtx(() => repoScan.dimensionsWithWiredSources(this.tenantId));
   }

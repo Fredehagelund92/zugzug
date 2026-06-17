@@ -967,6 +967,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }),
           );
         }
+        // POST /api/dimensions/:id/scan — rescan this dim's wired sources and
+        // re-materialize its dim_scan_value rows. Faster than POST /api/sources/scan.
+        if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          if (denied) return denied;
+          await reqRepo.scanOneDim(id);
+          return json({ ok: true });
+        }
         // PATCH /api/dimensions/:id — update orderingMode / description / color
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");

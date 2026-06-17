@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
@@ -7,7 +7,6 @@ import { PageHeader } from "../components/PageHeader";
 import { IconArrowRight, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { toast } from "../components/Toast";
-import { valueRows } from "../data";
 import { GetSuggestionButton } from "../components/GetSuggestionButton";
 import type { MappingDimension } from "../data";
 import {
@@ -22,35 +21,24 @@ import {
   useStoreLoading,
 } from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
-import { UndoStackProvider, useUndoStack, DataGrid, Chip } from "../components/datagrid";
-import { crossDimColumns } from "../components/modes/match-columns";
+import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import { useAiHint, type AiHint } from "../lib/use-ai-hint";
 import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
+import { ComboSelect } from "../components/ComboSelect";
+import { useDimValuesPage, type ScanValueRow } from "../lib/use-dim-values-page";
+import { apiFetch } from "../api";
 
-/* Triage — cross-dimension inbox lifted out of Mapping.tsx (the all-dim view).
-   Surfaces every unmapped source value across every table, ranked by blast
-   radius (unmapped × log10(rows) per dim, then by confidence asc). Each
-   accept/skip/pick lands as a per-user DRAFT in Postgres; ⌘↵ batch-commits
-   the entire queue to DuckDB across all touched dims. The "Triage" surface
-   tag on every undo entry lets ⌘Z preview which surface it will land on. */
+/* Triage — per-dim sectioned inbox. Each ranked dim gets a section header; only
+   the *active* section lazy-fetches its scan_value page via useDimValuesPage.
+   Switching sections re-keys the hook. Search (?q=) filters server-side; the
+   ?filter= URL key roundtrips new/all/mapped. Per-section Rescan button calls
+   POST /api/dimensions/:id/scan, then refetches. */
 
-type RStatus = "mapped" | "new" | "skipped";
 type Filter = "new" | "all" | "mapped";
-type CrossRow = {
-  dimId: string;
-  dimName: string;
-  dimRows: number;
-  raw: string;
-  suggestion: string | null;
-  confidence: number;
-  status: RStatus;
-  target: string | null;
-};
+type RStatus = "mapped" | "new" | "skipped";
 
-// Escape a string for use inside a double-quoted CSS attribute selector.
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-// Brief accent-wash on a row after the user acted on it (Accept/Skip/Pick).
 function flashRow(selector: string): void {
   requestAnimationFrame(() => {
     const el = document.querySelector<HTMLElement>(selector);
@@ -112,13 +100,15 @@ function TriageInner() {
   const wsInfo = useWorkspaceInfo();
   const canEdit = useCanEdit();
 
-  // URL ?filter= state — round-trips; "new" is the default and is omitted.
+  // URL ?filter= and ?q= state — both round-trip.
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = ((): Filter => {
     const v = searchParams.get("filter");
     return v === "new" || v === "all" || v === "mapped" ? v : "new";
   })();
   const [filter, setFilterBase] = useState<Filter>(initialFilter);
+  const [searchText, setSearchTextBase] = useState<string>(searchParams.get("q") ?? "");
+
   const setFilter = useCallback(
     (f: Filter) => {
       setFilterBase(f);
@@ -127,6 +117,21 @@ function TriageInner() {
           const next = new URLSearchParams(prev);
           if (f !== "new") next.set("filter", f);
           else next.delete("filter");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const setSearchText = useCallback(
+    (q: string) => {
+      setSearchTextBase(q);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (q) next.set("q", q);
+          else next.delete("q");
           return next;
         },
         { replace: true },
@@ -148,57 +153,41 @@ function TriageInner() {
 
   const aiHint = useAiHint(cursor?.dimId ?? "", cursor?.raw ?? "", cursor !== null);
 
-  // every value across every dimension, normalized into one queue ranked
-  // by impact (unmapped × log10(rows) per-dim, then by confidence ascending).
   const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
-  const crossDimRows = useMemo<CrossRow[]>(() => {
-    const dimScore = new Map<string, number>();
-    for (const d of dims) {
-      let unmapped = 0;
-      for (const v of d.values) {
-        const draft = allDrafts[dkey(d.id, v.value)];
-        const status = draft ? draft.status : v.current ? "mapped" : "new";
-        if (status === "new") unmapped++;
-      }
-      dimScore.set(d.id, unmapped * Math.log10(Math.max(10, d.rows)));
-    }
-    const out: CrossRow[] = [];
-    for (const d of dims) {
-      for (const v of d.values) {
-        const draft = allDrafts[dkey(d.id, v.value)];
-        const status: RStatus = draft ? draft.status : v.current ? "mapped" : "new";
-        out.push({
-          dimId: d.id,
-          dimName: d.dimension,
-          dimRows: d.rows,
-          raw: v.value,
-          suggestion: v.suggestion ?? null,
-          confidence: v.confidence ?? 0,
-          status,
-          target: draft ? draft.targetLabel : v.current,
-        });
-      }
-    }
-    out.sort((a, b) => {
-      const sa = dimScore.get(a.dimId) ?? 0;
-      const sb = dimScore.get(b.dimId) ?? 0;
-      if (sa !== sb) return sb - sa;
-      return (a.confidence || 0) - (b.confidence || 0); // lower confidence first within a dim
-    });
-    return out;
-  }, [dims, allDrafts]);
 
-  const visibleCross = useMemo(
-    () => crossDimRows.filter((r) => filter === "all" || r.status === filter),
-    [crossDimRows, filter],
+  // Rank dims by impact using the scalar newCount × log10(rows). When filter is
+  // "new", drop dims with no unmapped values; otherwise show them all.
+  const rankedDims = useMemo(
+    () =>
+      [...dims]
+        .map((d) => ({ d, score: d.counts.newCount * Math.log10(Math.max(10, d.rows)) }))
+        .filter((x) => (filter === "new" ? x.d.counts.newCount > 0 : true))
+        .sort((a, b) => b.score - a.score),
+    [dims, filter],
   );
-  const crossCounts = useMemo(() => {
-    const c = { all: crossDimRows.length, new: 0, mapped: 0, skipped: 0 };
-    for (const r of crossDimRows) c[r.status]++;
-    return c;
-  }, [crossDimRows]);
 
-  // ── cross-dimension handlers ─────────────────────────────────────────────
+  const [activeDimIdx, setActiveDimIdx] = useState(0);
+  // Clamp active idx when ranking changes (filter switch can shorten the list).
+  useEffect(() => {
+    if (activeDimIdx >= rankedDims.length) setActiveDimIdx(0);
+  }, [rankedDims.length, activeDimIdx]);
+
+  const activeDim = rankedDims[activeDimIdx]?.d ?? null;
+  const valuesPage = useDimValuesPage({
+    dimId: activeDim?.id ?? null,
+    filter,
+    q: searchText || undefined,
+  });
+
+  // Focus-refetch: when the user returns to the tab, reload the active section
+  // so other curators' edits show up.
+  useEffect(() => {
+    const onFocus = () => valuesPage.refetch();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [valuesPage]);
+
+  // ── action handlers (per dim) ────────────────────────────────────────────
   const keyForLabelIn = (dimId: string, label: string) => {
     const d = dimById.get(dimId);
     return (
@@ -220,14 +209,16 @@ function TriageInner() {
     return saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label));
   };
   const acceptCross = (dimId: string, raw: string) => {
-    const d = dimById.get(dimId);
-    const v = d?.values.find((x) => x.value === raw);
-    const suggestion = v?.suggestion ?? aiHint.hint?.suggestion;
+    // No per-row suggestion in the scan-values payload — accept relies on the
+    // AI hint for the focused cursor row.
+    const suggestion = aiHint.hint?.suggestion;
     if (!suggestion) {
       toast(`No suggestion to accept for "${raw}".`, "error");
       return;
     }
-    stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
+    stageMapCross(dimId, raw, suggestion).catch((err) =>
+      reportDraftError(`accept "${raw}"`, err),
+    );
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
@@ -255,7 +246,6 @@ function TriageInner() {
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
-  // Drop a single staged draft from the review panel — undo-able.
   const discardCross = (dimId: string, raw: string) => {
     const prev = allDrafts[dkey(dimId, raw)];
     if (!prev) return;
@@ -267,49 +257,41 @@ function TriageInner() {
     });
     discardDraft(dimId, raw).catch((err) => reportDraftError(`discard "${raw}"`, err));
   };
+  // Advance within the active section's loaded items, wrapping to the next
+  // unmapped raw value.
   const advanceCrossNext = useCallback(
-    (fromDimId: string | null, fromRaw: string | null) => {
-      const rows = visibleCross;
-      if (rows.length === 0) return;
-      const fromKey = fromDimId && fromRaw ? `${fromDimId}::${fromRaw}` : null;
-      const idx = fromKey ? rows.findIndex((r) => `${r.dimId}::${r.raw}` === fromKey) : -1;
+    (_fromDimId: string | null, fromRaw: string | null) => {
+      const rows = valuesPage.items;
+      if (rows.length === 0 || !activeDim) return;
+      const idx = fromRaw ? rows.findIndex((r) => r.raw === fromRaw) : -1;
       for (let i = 1; i <= rows.length; i++) {
         const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
-        if (rows[j].status === "new") {
-          setCursor({ dimId: rows[j].dimId, raw: rows[j].raw });
+        const r = rows[j];
+        const draft = allDrafts[dkey(activeDim.id, r.raw)];
+        const status: RStatus = draft ? draft.status : r.isMapped ? "mapped" : "new";
+        if (status === "new") {
+          setCursor({ dimId: activeDim.id, raw: r.raw });
           return;
         }
       }
     },
-    [visibleCross, setCursor],
+    [valuesPage.items, activeDim, allDrafts],
   );
 
   // staged drafts across ALL dimensions — drives the commit footer
+  // Cannot inspect dim values here (they're not loaded eagerly anymore); accept
+  // any "mapped" draft as staged. The server reconciles on commit.
   const stagedAllDrafts = useMemo(
-    () =>
-      Object.values(allDrafts).filter((d) => {
-        if (d.status !== "mapped") return false;
-        const dim = dimById.get(d.dimId);
-        const v = dim?.values.find((x) => x.value === d.raw);
-        return !!v && (!v.current || v.current !== d.targetLabel);
-      }),
-    [allDrafts, dimById],
+    () => Object.values(allDrafts).filter((d) => d.status === "mapped"),
+    [allDrafts],
   );
   const approveAndCommitAll = async () => {
     setCommitError(null);
     const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
     if (dimIds.length === 0) return;
     setCommitting(true);
-    // Optimistic flash — predict count + warehouse rows before the server roundtrip
-    // so the success moment lands on click. Reverted on failure.
-    const predictedRows = stagedAllDrafts.reduce((n, d) => {
-      const v = dimById.get(d.dimId)?.values.find((x) => x.value === d.raw);
-      return n + (v ? valueRows(v) : 0);
-    }, 0);
     const n0 = stagedAllDrafts.length;
-    toast(
-      `${n0} change${n0 === 1 ? "" : "s"} published · ${predictedRows.toLocaleString()} rows recovered`,
-    );
+    toast(`${n0} change${n0 === 1 ? "" : "s"} published`);
     try {
       let total = 0,
         totalRows = 0;
@@ -318,10 +300,7 @@ function TriageInner() {
         total += res.committed;
         totalRows += res.rowsRecovered;
       }
-      if (total === 0) {
-        // nothing was actually committed — clear the optimistic flash
-        return;
-      }
+      if (total === 0) return;
       toast(
         `✓ ${total} change${total === 1 ? "" : "s"} published · ${totalRows.toLocaleString()} rows recovered`,
       );
@@ -336,10 +315,16 @@ function TriageInner() {
     }
   };
 
-  // header count metadata — number of distinct tables that still have unmapped work
-  const dimsWithWork = useMemo(
-    () => new Set(visibleCross.filter((r) => r.status === "new").map((r) => r.dimId)).size,
-    [visibleCross],
+  const triggerRescan = useCallback(async (dimId: string) => {
+    const r = await apiFetch(`/dimensions/${encodeURIComponent(dimId)}/scan`, { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  }, []);
+  const [rescanning, setRescanning] = useState(false);
+
+  // ── render ───────────────────────────────────────────────────────────────
+  const totalNew = useMemo(
+    () => rankedDims.reduce((n, x) => n + x.d.counts.newCount, 0),
+    [rankedDims],
   );
 
   return (
@@ -351,7 +336,8 @@ function TriageInner() {
             <>
               Review{" "}
               <span className="font-mono text-[14px] text-ink-3">
-                · {crossCounts.new} across {dimsWithWork} table{dimsWithWork === 1 ? "" : "s"}
+                · {totalNew} across {rankedDims.length} table
+                {rankedDims.length === 1 ? "" : "s"}
               </span>
             </>
           }
@@ -359,46 +345,413 @@ function TriageInner() {
         />
       </div>
 
-      <CrossDimInbox
-        rows={visibleCross}
-        counts={crossCounts}
-        filter={filter}
-        setFilter={setFilter}
-        cursor={cursor}
-        setCursor={setCursor}
-        accept={acceptCross}
-        skip={skipCross}
-        pick={pickCross}
-        advanceNext={advanceCrossNext}
-        dimById={dimById}
-        stagedDrafts={stagedAllDrafts}
-        discard={discardCross}
-        commitAll={approveAndCommitAll}
-        committing={committing}
-        commitError={commitError}
-        setCommitError={setCommitError}
-        draftError={draftError}
-        setDraftError={setDraftError}
-        undo={undo}
-        aiHint={aiHint}
-        wsInfo={wsInfo}
-        canEdit={canEdit}
-      />
+      <div
+        className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface"
+        style={{ animationDelay: "150ms" }}
+      >
+        {/* toolbar */}
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(["new", "all", "mapped"] as Filter[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setFilter(k)}
+                className={cx(
+                  "min-h-[44px] rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors md:min-h-0",
+                  filter === k
+                    ? "bg-accent-wash text-accent"
+                    : "text-ink-3 hover:bg-hover hover:text-ink-2",
+                )}
+              >
+                {k === "new" ? "Needs review" : k === "all" ? "All" : "Mapped"}
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            placeholder="Search raw values…"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"
+          />
+          <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
+            ranked by impact · ↑↓ navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
+          </span>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          {rankedDims.length === 0 ? (
+            <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
+          ) : (
+            rankedDims.map((rd, i) => (
+              <DimSection
+                key={rd.d.id}
+                dim={rd.d}
+                isActive={i === activeDimIdx}
+                onActivate={() => setActiveDimIdx(i)}
+                page={i === activeDimIdx ? valuesPage : null}
+                drafts={allDrafts}
+                canEdit={canEdit}
+                cursor={cursor}
+                setCursor={setCursor}
+                onAccept={(raw) => acceptCross(rd.d.id, raw)}
+                onSkip={(raw) => skipCross(rd.d.id, raw)}
+                onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
+                onCommitAll={approveAndCommitAll}
+                aiHint={i === activeDimIdx ? aiHint : { hint: null, loading: false, error: false }}
+                rescanning={rescanning && i === activeDimIdx}
+                onRescan={async () => {
+                  setRescanning(true);
+                  try {
+                    await triggerRescan(rd.d.id);
+                    valuesPage.refetch();
+                    toast("Rescan complete");
+                  } catch (err) {
+                    toast(
+                      err instanceof Error ? `Rescan failed: ${err.message}` : "Rescan failed",
+                      "error",
+                    );
+                  } finally {
+                    setRescanning(false);
+                  }
+                }}
+              />
+            ))
+          )}
+        </div>
+
+        <CrossDimFooter
+          dimById={dimById}
+          stagedDrafts={stagedAllDrafts}
+          discard={discardCross}
+          commitAll={approveAndCommitAll}
+          committing={committing}
+          commitError={commitError}
+          setCommitError={setCommitError}
+          draftError={draftError}
+          setDraftError={setDraftError}
+          undo={undo}
+          wsInfo={wsInfo}
+          canEdit={canEdit}
+        />
+      </div>
     </div>
   );
 }
 
-interface CrossDimInboxProps {
-  rows: CrossRow[];
-  counts: { all: number; new: number; mapped: number; skipped: number };
+function EmptyState({
+  filter,
+  onSwitchToNew,
+}: {
   filter: Filter;
-  setFilter: (f: Filter) => void;
+  onSwitchToNew: () => void;
+}) {
+  const nav = useNavLinks();
+  if (filter === "new")
+    return (
+      <div className="px-4 py-12 text-center">
+        <div className="font-display text-[18px] font-semibold text-ink">
+          Nothing to review today. 🎯
+        </div>
+        <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
+          Curate records in{" "}
+          <Link to={nav.tables} className="text-accent hover:underline">
+            Tables
+          </Link>
+          , or{" "}
+          <Link to={nav.sources} className="text-accent hover:underline">
+            connect more sources
+          </Link>
+          .
+        </p>
+      </div>
+    );
+  if (filter === "mapped")
+    return (
+      <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+        Nothing has been mapped yet.{" "}
+        <button onClick={onSwitchToNew} className="text-accent hover:underline">
+          View needs review →
+        </button>
+      </div>
+    );
+  return (
+    <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
+      no tables yet
+    </div>
+  );
+}
+
+// ── DimSection ───────────────────────────────────────────────────────────────
+interface DimSectionProps {
+  dim: MappingDimension;
+  isActive: boolean;
+  onActivate: () => void;
+  page: ReturnType<typeof useDimValuesPage> | null;
+  drafts: Record<string, Draft>;
+  canEdit: boolean;
   cursor: { dimId: string; raw: string } | null;
   setCursor: (c: { dimId: string; raw: string } | null) => void;
-  accept: (dimId: string, raw: string) => void;
-  skip: (dimId: string, raw: string) => void;
-  pick: (dimId: string, raw: string, label: string) => void;
-  advanceNext: (fromDimId: string | null, fromRaw: string | null) => void;
+  onAccept: (raw: string) => void;
+  onSkip: (raw: string) => void;
+  onPick: (raw: string, label: string) => void;
+  onCommitAll: () => void;
+  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
+  rescanning: boolean;
+  onRescan: () => void;
+}
+
+function DimSection(p: DimSectionProps) {
+  const { dim } = p;
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // Infinite scroll — sentinel at the bottom of the loaded list calls loadMore.
+  useEffect(() => {
+    if (!p.isActive || !p.page) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) p.page?.loadMore();
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [p.isActive, p.page]);
+
+  return (
+    <section className="border-b border-line last:border-b-0">
+      <button
+        type="button"
+        onClick={p.onActivate}
+        className={cx(
+          "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
+          p.isActive ? "bg-surface-2" : "hover:bg-hover",
+        )}
+      >
+        <Chip label={dim.dimension} bucket="chip-3" />
+        <span className="font-mono text-[11px] text-ink-2 tabular-nums">
+          {dim.counts.newCount} unmapped / {dim.counts.totalDistinct} distinct ·{" "}
+          {dim.counts.unmappedRowsTotal.toLocaleString()} rows at risk
+        </span>
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
+          {p.isActive ? "▾ active" : "▸ expand"}
+        </span>
+      </button>
+
+      {p.isActive && p.page && (
+        <>
+          {dim.counts.scannedAt && (
+            <div className="flex items-center justify-between border-t border-line bg-surface-2 px-4 py-2 text-[11px] text-ink-3">
+              <span className="font-mono">
+                As of {new Date(dim.counts.scannedAt).toLocaleString()}
+              </span>
+              {p.canEdit && (
+                <Button variant="ghost" size="sm" loading={p.rescanning} onClick={p.onRescan}>
+                  Re-scan
+                </Button>
+              )}
+            </div>
+          )}
+          <DimSectionBody
+            dim={dim}
+            page={p.page}
+            drafts={p.drafts}
+            canEdit={p.canEdit}
+            cursor={p.cursor}
+            setCursor={p.setCursor}
+            onAccept={p.onAccept}
+            onSkip={p.onSkip}
+            onPick={p.onPick}
+            onCommitAll={p.onCommitAll}
+            aiHint={p.aiHint}
+            sentinelRef={sentinelRef}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+interface DimSectionBodyProps {
+  dim: MappingDimension;
+  page: ReturnType<typeof useDimValuesPage>;
+  drafts: Record<string, Draft>;
+  canEdit: boolean;
+  cursor: { dimId: string; raw: string } | null;
+  setCursor: (c: { dimId: string; raw: string } | null) => void;
+  onAccept: (raw: string) => void;
+  onSkip: (raw: string) => void;
+  onPick: (raw: string, label: string) => void;
+  onCommitAll: () => void;
+  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
+  sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
+}
+
+function DimSectionBody(p: DimSectionBodyProps) {
+  const options = useMemo(() => p.dim.canonical.map((c) => c.label), [p.dim.canonical]);
+  const [editingRaw, setEditingRaw] = useState<string | null>(null);
+
+  const rowStatus = (r: ScanValueRow): { status: RStatus; target: string | null } => {
+    const draft = p.drafts[dkey(p.dim.id, r.raw)];
+    if (draft)
+      return {
+        status: draft.status,
+        target: draft.targetLabel,
+      };
+    return {
+      status: r.isMapped ? "mapped" : "new",
+      target: r.mappedLabel,
+    };
+  };
+
+  const focus = (raw: string) => p.setCursor({ dimId: p.dim.id, raw });
+
+  const onKeyDown = (e: React.KeyboardEvent<HTMLLIElement>, raw: string) => {
+    if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      p.onCommitAll();
+      return;
+    }
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+    if (!plain) return;
+    const k = e.key.toLowerCase();
+    if (p.canEdit && k === "a") {
+      e.preventDefault();
+      p.onAccept(raw);
+    } else if (p.canEdit && k === "s") {
+      e.preventDefault();
+      p.onSkip(raw);
+    } else if (p.canEdit && (k === "m" || k === "enter")) {
+      e.preventDefault();
+      setEditingRaw(raw);
+    } else if (k === "n") {
+      e.preventDefault();
+      // advance handled in parent via onAccept/onSkip; for plain "n" with no
+      // action, walk forward one row in the current page.
+      const idx = p.page.items.findIndex((x) => x.raw === raw);
+      const next = p.page.items[(idx + 1) % p.page.items.length];
+      if (next) focus(next.raw);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const idx = p.page.items.findIndex((x) => x.raw === raw);
+      const next = p.page.items[Math.min(p.page.items.length - 1, idx + 1)];
+      if (next) focus(next.raw);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const idx = p.page.items.findIndex((x) => x.raw === raw);
+      const prev = p.page.items[Math.max(0, idx - 1)];
+      if (prev) focus(prev.raw);
+    }
+  };
+
+  if (p.page.error) {
+    return (
+      <div className="border-t border-line px-4 py-6 text-center font-mono text-[12px] text-danger">
+        Failed to load values: {p.page.error}{" "}
+        <button onClick={() => p.page.refetch()} className="text-accent hover:underline">
+          retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!p.page.loading && p.page.items.length === 0) {
+    return (
+      <div className="border-t border-line px-4 py-6 text-center font-mono text-[12px] text-ink-3">
+        no values in this view
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t border-line">
+      <ul className="divide-y divide-line">
+        {p.page.items.map((r) => {
+          const { status, target } = rowStatus(r);
+          const isCursor =
+            p.cursor && p.cursor.dimId === p.dim.id && p.cursor.raw === r.raw;
+          return (
+            <li
+              key={r.raw}
+              tabIndex={0}
+              role="row"
+              data-row-key={`${p.dim.id}::${r.raw}`}
+              onFocus={() => focus(r.raw)}
+              onClick={() => focus(r.raw)}
+              onKeyDown={(e) => onKeyDown(e, r.raw)}
+              className={cx(
+                "flex flex-col gap-1 px-4 py-2.5 outline-none transition-colors",
+                isCursor ? "bg-accent-wash/30" : "hover:bg-hover",
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-mono text-[13px] text-ink">{r.raw}</span>
+                  <span className="block font-mono text-[10px] text-ink-3 tabular-nums">
+                    {r.totalRows.toLocaleString()} rows
+                    {r.occurrences[0] &&
+                      ` · ${r.occurrences[0].table}.${r.occurrences[0].column}`}
+                    {r.occurrences.length > 1 && ` +${r.occurrences.length - 1}`}
+                  </span>
+                </span>
+                <span className="w-56 truncate font-display text-[13px] text-ink">
+                  {editingRaw === r.raw ? (
+                    <ComboSelect
+                      options={options}
+                      value={target}
+                      suggestion={null}
+                      onPick={(t) => {
+                        setEditingRaw(null);
+                        p.onPick(r.raw, t);
+                      }}
+                      onClose={() => setEditingRaw(null)}
+                    />
+                  ) : target ? (
+                    target
+                  ) : (
+                    <span className="font-mono text-[12px] text-ink-3">—</span>
+                  )}
+                </span>
+                <span className="w-20">
+                  {status === "mapped" ? (
+                    <Chip label="Mapped" bucket="chip-1" dot />
+                  ) : status === "skipped" ? (
+                    <Chip label="Skipped" bucket="chip-5" />
+                  ) : (
+                    <Chip label="New" bucket="chip-2" dot />
+                  )}
+                </span>
+              </div>
+              {isCursor && !target && (
+                <div className="flex flex-col gap-2 pl-1 pt-1">
+                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
+                  {status === "new" && p.canEdit && (
+                    <GetSuggestionButton dimensionId={p.dim.id} rawValue={r.raw} />
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <div ref={p.sentinelRef} />
+      {p.page.loading && (
+        <div className="px-4 py-3 text-center font-mono text-[11px] text-ink-3">loading…</div>
+      )}
+      {!p.page.hasMore && p.page.items.length > 0 && (
+        <div className="px-4 py-3 text-center font-mono text-[10px] text-ink-3">
+          end of list
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── footer ───────────────────────────────────────────────────────────────────
+interface FooterProps {
   dimById: Map<string, MappingDimension>;
   stagedDrafts: Draft[];
   discard: (dimId: string, raw: string) => void;
@@ -409,194 +762,13 @@ interface CrossDimInboxProps {
   draftError: string | null;
   setDraftError: (e: string | null) => void;
   undo: ReturnType<typeof useUndoStack>;
-  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   wsInfo: WorkspaceInfo | null;
   canEdit: boolean;
 }
 
-function CrossDimInbox(p: CrossDimInboxProps) {
-  const FILTERS: { k: Filter; label: string; n: number }[] = [
-    { k: "new", label: "Needs review", n: p.counts.new },
-    { k: "all", label: "All", n: p.counts.all },
-    { k: "mapped", label: "Mapped", n: p.counts.mapped },
-  ];
-  const nav = useNavLinks();
-
-  // Per-dim option list — DataGrid asks for it per-row via the factory closure
-  const columns = useMemo(
-    () =>
-      crossDimColumns({
-        optionsFor: (dimId) => p.dimById.get(dimId)?.canonical.map((c) => c.label) ?? [],
-        canEdit: p.canEdit,
-      }),
-    [p.dimById, p.canEdit],
-  );
-
-  // Bridge DataGrid's internal cursor to p.cursor so the parent's useAiHint
-  // (keyed off the focused row's dimId+raw) still fires on arrow navigation.
-  const onCursorChange = useCallback(
-    (c: { rowKey: string; field: string } | null) => {
-      if (!c) {
-        p.setCursor(null);
-        return;
-      }
-      const [dimId, ...rest] = c.rowKey.split("::");
-      // raw values can contain "::"; rejoin everything after the first delim.
-      if (!dimId) return;
-      p.setCursor({ dimId, raw: rest.join("::") });
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [p.setCursor],
-  );
-
-  return (
-    <div
-      className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface"
-      style={{ animationDelay: "150ms" }}
-    >
-      {/* toolbar — pinned at the top of the panel; the DataGrid below owns the
-          only scroll surface, so the toolbar stays put without `sticky`. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {FILTERS.map((f) => (
-            <button
-              key={f.k}
-              type="button"
-              onClick={() => p.setFilter(f.k)}
-              className={cx(
-                "min-h-[44px] rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors md:min-h-0",
-                p.filter === f.k
-                  ? "bg-accent-wash text-accent"
-                  : "text-ink-3 hover:bg-hover hover:text-ink-2",
-              )}
-            >
-              {f.label} <span className="opacity-60">{f.n}</span>
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
-          ranked by impact · ↑↓ navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
-        </span>
-      </div>
-
-      {/* scroll region — DataGrid owns its own virtualization + sticky header;
-          CrossDimFooter pins to the panel bottom. */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {p.rows.length === 0 ? (
-          <>
-            {p.filter === "new" && (
-              <div className="px-4 py-12 text-center">
-                <div className="font-display text-[18px] font-semibold text-ink">
-                  Nothing to review today. 🎯
-                </div>
-                <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
-                  Curate records in{" "}
-                  <Link to={nav.tables} className="text-accent hover:underline">
-                    Tables
-                  </Link>
-                  , or{" "}
-                  <Link to={nav.sources} className="text-accent hover:underline">
-                    wire more sources
-                  </Link>
-                  .
-                </p>
-              </div>
-            )}
-            {p.filter === "mapped" && (
-              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-                Nothing has been mapped yet.{" "}
-                <button onClick={() => p.setFilter("new")} className="text-accent hover:underline">
-                  View needs review →
-                </button>
-              </div>
-            )}
-            {p.filter === "all" && (
-              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-                no values in this view
-              </div>
-            )}
-          </>
-        ) : (
-          <DataGrid<CrossRow>
-            rows={p.rows}
-            rowKey={(r) => `${r.dimId}::${r.raw}`}
-            columns={columns}
-            getValue={(r, field) => (r as unknown as Record<string, unknown>)[field]}
-            onCursorChange={onCursorChange}
-            onCommit={
-              p.canEdit
-                ? async (rowKey, field, value) => {
-                    if (field !== "target" || typeof value !== "string" || !value) return;
-                    const [dimId, ...rest] = rowKey.split("::");
-                    if (!dimId) return;
-                    p.pick(dimId, rest.join("::"), value);
-                  }
-                : undefined
-            }
-            onCellKeyDown={(e, ctx) => {
-              if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                e.preventDefault();
-                p.commitAll();
-                return;
-              }
-              const rk = ctx.cursor?.rowKey;
-              if (!rk) return;
-              const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
-              if (!plain) return;
-              const [dimId, ...rest] = rk.split("::");
-              if (!dimId) return;
-              const raw = rest.join("::");
-              const k = e.key.toLowerCase();
-              if (p.canEdit && k === "a") {
-                e.preventDefault();
-                p.accept(dimId, raw);
-              } else if (p.canEdit && k === "s") {
-                e.preventDefault();
-                p.skip(dimId, raw);
-              } else if (p.canEdit && k === "m") {
-                e.preventDefault();
-                ctx.startEdit();
-              } else if (k === "n") {
-                e.preventDefault();
-                p.advanceNext(dimId, raw);
-              }
-            }}
-            renderRowDetail={(r) => {
-              const key = `${r.dimId}::${r.raw}`;
-              const isCursor = p.cursor && `${p.cursor.dimId}::${p.cursor.raw}` === key;
-              if (!isCursor || r.target) return null;
-              return (
-                <div className="flex flex-col gap-2">
-                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
-                  {r.status === "new" && !r.suggestion && p.canEdit && (
-                    <GetSuggestionButton dimensionId={r.dimId} rawValue={r.raw} />
-                  )}
-                </div>
-              );
-            }}
-            empty={
-              <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-                no values in this view
-              </div>
-            }
-          />
-        )}
-      </div>
-      {/* /scroll region */}
-
-      <CrossDimFooter p={p} />
-    </div>
-  );
-}
-
-// Footer + expandable review panel. Split out so the review panel state is
-// scoped tightly and the cross-dim grid body stays readable.
-function CrossDimFooter({ p }: { p: CrossDimInboxProps }) {
+function CrossDimFooter(p: FooterProps) {
   const [review, setReview] = useState(false);
   const stagedCount = p.stagedDrafts.length;
-  // Group staged drafts by dim → target so the reviewer can scan what's about
-  // to land, sorted by dim with most-staged first. Within a dim, group by the
-  // canonical target so duplicates collapse into a single "→ X (N)" line.
   const grouped = useMemo(() => {
     const byDim = new Map<string, Draft[]>();
     for (const d of p.stagedDrafts) {
