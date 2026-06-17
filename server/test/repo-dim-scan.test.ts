@@ -95,3 +95,20 @@ test("materializeDimScanValues with empty occurrences clears the dim", async () 
   );
   expect(values).toHaveLength(0);
 });
+
+test("materializeDimScanValues handles >10k occurrences without exceeding bind-param limit", async () => {
+  const occurrences = Array.from({ length: 12000 }, (_, i) => ({
+    raw: `v${i}`,
+    table: "raw.a",
+    column: "c",
+    rows: 1,
+  }));
+  await materializeDimScanValues(DIM, TENANT, { occurrences, scannedAt: new Date() });
+  const { count } = (
+    await pgAll<{ count: number }>(
+      `SELECT COUNT(*)::int as count FROM zugzug_app.dim_scan_value WHERE tenant_id = $1 AND dim_id = $2`,
+      [TENANT, DIM],
+    )
+  )[0];
+  expect(count).toBe(12000);
+});
