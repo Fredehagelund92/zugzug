@@ -294,7 +294,7 @@ export const dimScanValue = app.table(
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw_lower] }),
-    index("dim_scan_value_dim_rows_idx").on(t.tenant_id, t.dim_id, t.total_rows),
+    index("dim_scan_value_dim_rows_idx").on(t.tenant_id, t.dim_id, t.total_rows.desc(), t.raw_lower),
     check("dim_scan_value_raw_nonempty",      sql`length(${t.raw}) > 0`),
     check("dim_scan_value_total_rows_nonneg", sql`${t.total_rows} >= 0`),
   ],
