@@ -24,6 +24,7 @@ import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { saveDraft } from "./repo-drafts.ts";
+import { materializeDimScanValues } from "./repo-dim-scan.ts";
 import { AppError } from "./errors.ts";
 
 export interface UnmappedSample {
@@ -162,7 +163,64 @@ export async function scanSources(tenantId: string): Promise<number> {
     await scanOneSource(r, adapter, tenantId);
   }
 
+  const dimIds = [...new Set(regs.map((r) => r.dimId))];
+  for (const dimId of dimIds) {
+    await materializeOneDim(dimId, adapter, tenantId).catch((e) => {
+      log({
+        level: "error",
+        msg: "materialize-dim",
+        dimId,
+        err: e instanceof Error ? e.message : String(e),
+      });
+    });
+  }
+
   return regs.length;
+}
+
+/** Run the warehouse provenance query for one dim and write the result into
+ *  dim_scan_value + dim_scan_occurrence. Idempotent — replaces prior rows. */
+async function materializeOneDim(
+  dimId: string,
+  adapter: Awaited<ReturnType<typeof getAdapter>>,
+  tenantId: string,
+): Promise<void> {
+  const t0 = performance.now();
+  const sources = await liveSources(dimId, tenantId);
+  if (!sources.length) {
+    await materializeDimScanValues(dimId, tenantId, {
+      occurrences: [],
+      scannedAt: new Date(),
+    });
+    log({
+      level: "info",
+      msg: "materialize-dim",
+      dimId,
+      distinct: 0,
+      ms: Math.round(performance.now() - t0),
+    });
+    return;
+  }
+  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
+  const occRows = await adapter
+    .distinctValuesWithProvenance(refs)
+    .catch(() => [] as { value: string; sourceIndex: number; count: number }[]);
+  const occurrences = occRows
+    .map((r) => {
+      const src = sources[r.sourceIndex];
+      if (!src) return null;
+      return { raw: r.value, table: src.table, column: src.column, rows: r.count };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+  await materializeDimScanValues(dimId, tenantId, { occurrences, scannedAt: new Date() });
+  log({
+    level: "info",
+    msg: "materialize-dim",
+    dimId,
+    distinct: new Set(occurrences.map((o) => o.raw.toLowerCase())).size,
+    occurrences: occurrences.length,
+    ms: Math.round(performance.now() - t0),
+  });
 }
 
 type ScanReg = {
@@ -827,6 +885,14 @@ async function scanWiredSources(
   try {
     const adapter = await getAdapter();
     for (const r of regs) await scanOneSource(r, adapter, tenantId);
+    await materializeOneDim(dimId, adapter, tenantId).catch((e) => {
+      log({
+        level: "error",
+        msg: "materialize-dim-on-derive",
+        dimId,
+        err: e instanceof Error ? e.message : String(e),
+      });
+    });
   } catch (e) {
     log({
       level: "warn",

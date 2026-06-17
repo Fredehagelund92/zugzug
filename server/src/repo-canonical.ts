@@ -9,19 +9,15 @@ import {
   type DimensionMeta,
   type MappingDimension,
   type CanonicalValue,
-  type MappingValue,
   type FieldDef,
   type OptionDef,
   type PaletteName,
-  type SourceOccurrence,
   type NumberFormat,
   PALETTE_NAMES,
-  refOf,
   refForRegisteredTable,
   slug,
   qid,
   cq,
-  liveSources,
   dimMeta,
   parseFieldConfig,
   pgAll,
@@ -31,7 +27,7 @@ import {
   env,
   pg,
 } from "./repo-shared.ts";
-import type { ValueProvenance } from "./warehouse/adapter.ts";
+import { getDimScanScalars, type DimScanScalars } from "./repo-dim-scan.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { AppError } from "./errors.ts";
@@ -262,7 +258,11 @@ export async function getCanonicalValues(
   return rows.map((r) => r.label);
 }
 
-export async function getDimension(id: string, tenantId: string): Promise<MappingDimension | null> {
+export async function getDimension(
+  id: string,
+  tenantId: string,
+  opts?: { scalars?: DimScanScalars[] },
+): Promise<MappingDimension | null> {
   const meta = await pgGet<
     Omit<DimensionMeta, "rows"> & {
       nameTable: string | null;
@@ -400,7 +400,14 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
   const rowsRow = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
   ).catch(() => null);
-  const values = await scanValues(id, meta, tenantId);
+  const scalars = opts?.scalars ?? (await getDimScanScalars(tenantId));
+  const my = scalars.find((s) => s.dimId === id);
+  const counts = {
+    newCount: my?.newCount ?? 0,
+    mappedCount: my?.mappedCount ?? 0,
+    totalDistinct: my?.totalDistinct ?? 0,
+    scannedAt: my?.scannedAt ? my.scannedAt.toISOString() : null,
+  };
 
   let nextPos: string | null = null;
   if (meta.orderingMode === "manual") {
@@ -431,109 +438,9 @@ export async function getDimension(id: string, tenantId: string): Promise<Mappin
     rows: Number(rowsRow?.n ?? 0),
     nextPosition: nextPos,
     canonical,
-    values,
+    counts,
     fields,
   };
-}
-
-/** Distinct warehouse values for a dimension WITH provenance, tagged mapped/new
- *  by cross-referencing the Postgres crosswalk. Two-fetch + JS pattern. */
-async function scanValues(
-  dimId: string,
-  meta: Omit<DimensionMeta, "rows"> & {
-    nameTable?: string | null;
-    nameIdCol?: string | null;
-    nameCol?: string | null;
-  },
-  tenantId: string,
-): Promise<MappingValue[]> {
-  let sources = await liveSources(dimId, tenantId);
-  if (meta.keyKind === "external_id" && meta.nameTable && meta.nameCol) {
-    sources = sources.filter((s) => !(s.table === meta.nameTable && s.column === meta.nameCol));
-  }
-  if (!sources.length) return [];
-
-  // 1. Warehouse: distinct raw values with provenance + row counts
-  const adapter = await getAdapter();
-  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
-  const occRows = await adapter
-    .distinctValuesWithProvenance(refs)
-    .catch(() => [] as ValueProvenance[]);
-  if (!occRows.length) return [];
-
-  // sourceIndex maps back to the original SourceDef so the UI shows schema.table.
-  const occMap = new Map<string, { tbl: string; col: string; rows: number }[]>();
-  for (const r of occRows) {
-    const src = sources[r.sourceIndex];
-    if (!src) continue;
-    const key = r.value.toLowerCase();
-    const entry = occMap.get(key) ?? [];
-    entry.push({ tbl: src.table, col: src.column, rows: r.count });
-    occMap.set(key, entry);
-  }
-  const raws = new Map<string, string>();
-  for (const r of occRows) {
-    if (!raws.has(r.value.toLowerCase())) raws.set(r.value.toLowerCase(), r.value);
-  }
-
-  // 2. Postgres: all mapped raws for this dimension
-  const mappedRows = await pgAll<{ raw: string; key: string }>(
-    `SELECT raw, ${qid(meta.keyCol)} AS key FROM ${cq(meta.mapTable)}`,
-  ).catch(() => [] as { raw: string; key: string }[]);
-  const mappedSet = new Map<string, string>(); // lowercase raw → canonical key
-  for (const r of mappedRows) mappedSet.set(r.raw.toLowerCase(), r.key);
-
-  // 3. Optionally fetch live canonical names (external_id + warehouse attached)
-  const liveName =
-    meta.keyKind === "external_id" &&
-    env.attachWarehouse &&
-    !!meta.nameTable &&
-    !!meta.nameIdCol &&
-    !!meta.nameCol;
-  const nameMap = new Map<string, string>();
-  if (liveName) {
-    const nameRef = await refForRegisteredTable(dimId, meta.nameTable!, tenantId);
-    if (nameRef) {
-      const resolved = await adapter
-        .nameResolution(nameRef, meta.nameIdCol!, meta.nameCol!)
-        .catch(() => new Map<string, string>());
-      for (const [k, v] of resolved) nameMap.set(k, v);
-    }
-  }
-
-  // 4. Postgres: all canonical labels (slug dims)
-  const labelMap = new Map<string, string>(); // canonical key → label
-  if (!liveName && meta.keyKind !== "external_id") {
-    const dimRows = await pgAll<{ key: string; label: string }>(
-      `SELECT ${qid(meta.keyCol)} AS key, label FROM ${cq(meta.dimTable)}`,
-    ).catch(() => [] as { key: string; label: string }[]);
-    for (const r of dimRows) labelMap.set(r.key, r.label);
-  }
-
-  // 5. Build result (unmapped first, then mapped; sorted by row count desc within each group)
-  const results: MappingValue[] = [];
-  for (const [lowerRaw, raw] of raws) {
-    const srcs: SourceOccurrence[] = (occMap.get(lowerRaw) ?? []).map((o) => ({
-      table: o.tbl,
-      column: o.col,
-      rows: o.rows,
-    }));
-    const canonKey = mappedSet.get(lowerRaw) ?? null;
-    const status: "mapped" | "new" = canonKey ? "mapped" : "new";
-    const current = canonKey
-      ? liveName
-        ? (nameMap.get(canonKey) ?? null)
-        : (labelMap.get(canonKey) ?? null)
-      : null;
-    results.push({ value: raw, status, current, suggestion: null, confidence: 0, sources: srcs });
-  }
-  results.sort((a, b) => {
-    if (a.status !== b.status) return a.status === "new" ? -1 : 1;
-    const aRows = a.sources.reduce((s, x) => s + x.rows, 0);
-    const bRows = b.sources.reduce((s, x) => s + x.rows, 0);
-    return bRows - aRows;
-  });
-  return results.slice(0, 500);
 }
 
 /** Create a dimension: register it + provision dim_/map_ (Postgres). Idempotent

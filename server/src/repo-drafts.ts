@@ -11,8 +11,6 @@ import {
   rel,
   qid,
   cq,
-  liveSources,
-  refOf,
   pgAll,
   pgGet,
   pgRun,
@@ -23,7 +21,6 @@ import { appendAuditAs } from "./repo-meta.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { isWritable } from "./warehouse/adapter.ts";
-import type { ValueProvenance } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
 export async function listDrafts(dimId: string, tenantId: string): Promise<Draft[]> {
@@ -454,24 +451,27 @@ export async function commit(
   return { committed, rowsRecovered, warehouseSynced };
 }
 
-/** Warehouse rows for raws that have a mapped draft but aren't yet in the map. */
+/** Warehouse rows for raws that have a mapped draft but aren't yet in the map.
+ *  Reads materialized dim_scan_occurrence rather than re-querying the warehouse. */
 async function rowsForUnmappedDrafts(
   dimId: string,
   tenantId: string,
   mapTable: string,
 ): Promise<number> {
-  const sources = await liveSources(dimId, tenantId);
-  if (!sources.length) return 0;
-
-  // Warehouse: distinct raw values with per-source row counts.
-  // Multiple sources may emit the same raw — we sum counts when summing total rows below
-  // (matches the original UNION-ALL pattern's semantics: count each source-occurrence once).
-  const adapter = await getAdapter();
-  const refs = sources.map((s) => ({ table: refOf(s), column: s.column }));
-  const provenance = await adapter
-    .distinctValuesWithProvenance(refs)
-    .catch(() => [] as ValueProvenance[]);
-  if (!provenance.length) return 0;
+  const occRows = await pgAll<{
+    raw: string;
+    table_name: string;
+    column_name: string;
+    rows: number;
+  }>(
+    `SELECT v.raw, o.table_name, o.column_name, o.rows
+       FROM zugzug_app.dim_scan_value v
+       JOIN zugzug_app.dim_scan_occurrence o
+         ON o.tenant_id = v.tenant_id AND o.dim_id = v.dim_id AND o.raw_lower = v.raw_lower
+       WHERE v.tenant_id = $1 AND v.dim_id = $2`,
+    [tenantId, dimId],
+  );
+  if (!occRows.length) return 0;
 
   // Postgres: draft raws for this dimension with status=mapped
   const draftRows = await pgAll<{ raw: string }>(
@@ -486,12 +486,12 @@ async function rowsForUnmappedDrafts(
   );
   const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
 
-  // Sum rows for warehouse values that are in a draft but not yet mapped.
-  // Iterate per-occurrence (not per-distinct-raw) to preserve the original UNION-ALL sum.
+  // Sum rows for raws that are in a draft but not yet mapped.
+  // Iterate per-occurrence to preserve the original UNION-ALL sum semantics.
   let total = 0;
-  for (const p of provenance) {
-    const lower = p.value.toLowerCase();
-    if (draftSet.has(lower) && !mappedSet.has(lower)) total += p.count;
+  for (const o of occRows) {
+    const lower = o.raw.toLowerCase();
+    if (draftSet.has(lower) && !mappedSet.has(lower)) total += Number(o.rows);
   }
   return total;
 }

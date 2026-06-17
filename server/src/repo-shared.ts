@@ -225,7 +225,12 @@ export interface MappingDimension extends DimensionMeta {
   color: PaletteName | null;
   nextPosition: string | null;
   canonical: CanonicalValue[];
-  values: MappingValue[];
+  counts: {
+    newCount: number;
+    mappedCount: number;
+    totalDistinct: number;
+    scannedAt: string | null;
+  };
   fields: FieldDef[];
 }
 export interface Draft {
