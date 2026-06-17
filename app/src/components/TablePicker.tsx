@@ -14,9 +14,7 @@ import { PALETTE } from "../lib/palette";
 const DROPDOWN_W = 320;
 
 function stats(d: MappingDimension) {
-  const total = d.values.length;
-  const mapped = d.values.filter((v) => v.current).length;
-  const fresh = d.values.filter((v) => v.status === "new").length;
+  const { newCount: fresh, mappedCount: mapped, totalDistinct: total } = d.counts;
   return { total, fresh, pct: total ? Math.round((mapped / total) * 100) : 0 };
 }
 

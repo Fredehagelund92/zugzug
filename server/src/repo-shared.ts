@@ -229,6 +229,8 @@ export interface MappingDimension extends DimensionMeta {
     newCount: number;
     mappedCount: number;
     totalDistinct: number;
+    unmappedRowsTotal: number;
+    mappedRowsTotal: number;
     scannedAt: string | null;
   };
   fields: FieldDef[];

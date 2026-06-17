@@ -406,6 +406,8 @@ export async function getDimension(
     newCount: my?.newCount ?? 0,
     mappedCount: my?.mappedCount ?? 0,
     totalDistinct: my?.totalDistinct ?? 0,
+    unmappedRowsTotal: my?.unmappedRowsTotal ?? 0,
+    mappedRowsTotal: my?.mappedRowsTotal ?? 0,
     scannedAt: my?.scannedAt ? my.scannedAt.toISOString() : null,
   };
 

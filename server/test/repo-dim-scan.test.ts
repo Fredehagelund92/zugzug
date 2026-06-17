@@ -157,6 +157,8 @@ test("getDimScanScalars returns per-dim totals joined against map_<dim>", async 
   expect(row!.totalDistinct).toBe(3);
   expect(row!.mappedCount).toBe(1);
   expect(row!.newCount).toBe(2);
+  expect(row!.mappedRowsTotal).toBe(100);
+  expect(row!.unmappedRowsTotal).toBe(80);
   expect(row!.scannedAt).toBeInstanceOf(Date);
 });
 

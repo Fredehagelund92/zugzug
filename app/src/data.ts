@@ -75,7 +75,20 @@ export interface MappingDimension {
   color?: PaletteName | null;
   rows: number; // rows already in the map table
   canonical: CanonicalValue[];
-  values: MappingValue[];
+  counts: {
+    /** distinct raw values seen in scan that aren't in the map table */
+    newCount: number;
+    /** distinct raw values already in the map table */
+    mappedCount: number;
+    /** newCount + mappedCount */
+    totalDistinct: number;
+    /** SUM(total_rows) for unmapped values (warehouse rows currently NULL downstream) */
+    unmappedRowsTotal: number;
+    /** SUM(total_rows) for mapped values */
+    mappedRowsTotal: number;
+    /** ISO timestamp of the most recent scan that produced these counts */
+    scannedAt: string | null;
+  };
   fields?: FieldDef[]; // enrichment attribute columns
   orderingMode?: "derived" | "manual";
   nextPosition?: string | null;
@@ -92,6 +105,14 @@ export const mappingSeeds: MappingDimension[] = [
     mapTable: "zugzug.map_country",
     keyCol: "country_code",
     rows: 4421,
+    counts: {
+      newCount: 7,
+      mappedCount: 2,
+      totalDistinct: 9,
+      unmappedRowsTotal: 6951,
+      mappedRowsTotal: 182600,
+      scannedAt: null,
+    },
     canonical: [
       { key: "US", label: "United States", version: 1 },
       { key: "GB", label: "United Kingdom", version: 1 },
@@ -103,93 +124,6 @@ export const mappingSeeds: MappingDimension[] = [
       { key: "BD", label: "Bangladesh", version: 1 },
       { key: "GP", label: "Guadeloupe", version: 1 },
     ],
-    values: [
-      {
-        value: "United States",
-        status: "mapped",
-        current: "United States",
-        suggestion: null,
-        confidence: 0,
-        sources: [
-          { table: "ga4.sessions", column: "country", rows: 96400 },
-          { table: "stripe.charges", column: "billing_country", rows: 32000 },
-        ],
-      },
-      {
-        value: "GB",
-        status: "mapped",
-        current: "United Kingdom",
-        suggestion: null,
-        confidence: 0,
-        sources: [{ table: "ga4.sessions", column: "country", rows: 54200 }],
-      },
-      {
-        value: "🇺🇸",
-        status: "new",
-        current: null,
-        suggestion: "United States",
-        confidence: 93,
-        firstSeen: "2d ago",
-        sources: [
-          { table: "shopify.orders", column: "ship_country", rows: 2100 },
-          { table: "stripe.charges", column: "billing_country", rows: 1020 },
-        ],
-      },
-      {
-        value: "Estados Unidos",
-        status: "new",
-        current: null,
-        suggestion: "United States",
-        confidence: 88,
-        firstSeen: "2d ago",
-        sources: [{ table: "salesforce.account", column: "billing_country", rows: 1840 }],
-      },
-      {
-        value: "America",
-        status: "new",
-        current: null,
-        suggestion: "United States",
-        confidence: 72,
-        firstSeen: "5d ago",
-        sources: [{ table: "hubspot.contacts", column: "country", rows: 910 }],
-      },
-      {
-        value: "Norge",
-        status: "new",
-        current: null,
-        suggestion: "Norway",
-        confidence: 84,
-        firstSeen: "1d ago",
-        sources: [{ table: "stripe.charges", column: "billing_country", rows: 611 }],
-      },
-      {
-        value: "Vereinigte Staaten",
-        status: "new",
-        current: null,
-        suggestion: "United States",
-        confidence: 69,
-        firstSeen: "5d ago",
-        sources: [{ table: "salesforce.account", column: "billing_country", rows: 240 }],
-      },
-      {
-        value: "বাংলাদেশ",
-        status: "new",
-        current: null,
-        suggestion: "Bangladesh",
-        confidence: 95,
-        firstSeen: "3h ago",
-        sources: [{ table: "shopify.orders", column: "ship_country", rows: 188 }],
-      },
-      {
-        value: "971",
-        status: "new",
-        current: null,
-        suggestion: "Guadeloupe",
-        confidence: 40,
-        firstSeen: "3h ago",
-        sources: [{ table: "netsuite.customers", column: "billaddr_country", rows: 42 }],
-      },
-    ],
   },
   {
     id: "state",
@@ -198,6 +132,14 @@ export const mappingSeeds: MappingDimension[] = [
     mapTable: "zugzug.map_us_state",
     keyCol: "state_code",
     rows: 76,
+    counts: {
+      newCount: 5,
+      mappedCount: 2,
+      totalDistinct: 7,
+      unmappedRowsTotal: 10816,
+      mappedRowsTotal: 10210,
+      scannedAt: null,
+    },
     canonical: [
       { key: "CA", label: "California", version: 1 },
       { key: "AK", label: "Alaska", version: 1 },
@@ -207,72 +149,6 @@ export const mappingSeeds: MappingDimension[] = [
       { key: "NY", label: "New York", version: 1 },
       { key: "BC", label: "Baja California", version: 1 },
     ],
-    values: [
-      {
-        value: "California",
-        status: "mapped",
-        current: "California",
-        suggestion: null,
-        confidence: 0,
-        sources: [{ table: "salesforce.account", column: "billing_state", rows: 9800 }],
-      },
-      {
-        value: "Baja California",
-        status: "mapped",
-        current: "Baja California",
-        suggestion: null,
-        confidence: 0,
-        sources: [{ table: "shopify.orders", column: "ship_province", rows: 410 }],
-      },
-      {
-        value: "CA",
-        status: "new",
-        current: null,
-        suggestion: "California",
-        confidence: 96,
-        firstSeen: "1d ago",
-        sources: [
-          { table: "ga4.sessions", column: "region", rows: 5200 },
-          { table: "stripe.charges", column: "card_state", rows: 2000 },
-        ],
-      },
-      {
-        value: "N.Y.",
-        status: "new",
-        current: null,
-        suggestion: "New York",
-        confidence: 88,
-        firstSeen: "1d ago",
-        sources: [{ table: "hubspot.contacts", column: "state", rows: 2100 }],
-      },
-      {
-        value: "New York State",
-        status: "new",
-        current: null,
-        suggestion: "New York",
-        confidence: 90,
-        firstSeen: "4d ago",
-        sources: [{ table: "salesforce.account", column: "billing_state", rows: 880 }],
-      },
-      {
-        value: "AK",
-        status: "new",
-        current: null,
-        suggestion: "Alaska",
-        confidence: 95,
-        firstSeen: "4d ago",
-        sources: [{ table: "ga4.sessions", column: "region", rows: 540 }],
-      },
-      {
-        value: "Cali",
-        status: "new",
-        current: null,
-        suggestion: "California",
-        confidence: 58,
-        firstSeen: "6h ago",
-        sources: [{ table: "hubspot.contacts", column: "state", rows: 96 }],
-      },
-    ],
   },
   {
     id: "post_type",
@@ -281,6 +157,14 @@ export const mappingSeeds: MappingDimension[] = [
     mapTable: "zugzug.map_sprout_post_type",
     keyCol: "post_type",
     rows: 44,
+    counts: {
+      newCount: 5,
+      mappedCount: 2,
+      totalDistinct: 7,
+      unmappedRowsTotal: 11880,
+      mappedRowsTotal: 60000,
+      scannedAt: null,
+    },
     canonical: [
       { key: "tweet", label: "Tweet", version: 1 },
       { key: "retweet", label: "Retweet", version: 1 },
@@ -289,69 +173,6 @@ export const mappingSeeds: MappingDimension[] = [
       { key: "ig_media", label: "IG Media", version: 1 },
       { key: "tiktok_video", label: "Tiktok Video", version: 1 },
       { key: "story", label: "Story", version: 1 },
-    ],
-    values: [
-      {
-        value: "TWEET",
-        status: "mapped",
-        current: "Tweet",
-        suggestion: null,
-        confidence: 0,
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 41200 }],
-      },
-      {
-        value: "FACEBOOK_POST",
-        status: "mapped",
-        current: "Regular FB Post",
-        suggestion: null,
-        confidence: 0,
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 18800 }],
-      },
-      {
-        value: "RETWEET",
-        status: "new",
-        current: null,
-        suggestion: "Retweet",
-        confidence: 97,
-        firstSeen: "2d ago",
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 6400 }],
-      },
-      {
-        value: "TIKTOK_VIDEO",
-        status: "new",
-        current: null,
-        suggestion: "Tiktok Video",
-        confidence: 92,
-        firstSeen: "2d ago",
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 3100 }],
-      },
-      {
-        value: "INSTAGRAM_REEL",
-        status: "new",
-        current: null,
-        suggestion: "IG Media",
-        confidence: 64,
-        firstSeen: "1d ago",
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 1450 }],
-      },
-      {
-        value: "FB_STORY",
-        status: "new",
-        current: null,
-        suggestion: "Story",
-        confidence: 70,
-        firstSeen: "1d ago",
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 720 }],
-      },
-      {
-        value: "LINKEDIN_POST",
-        status: "new",
-        current: null,
-        suggestion: null,
-        confidence: 0,
-        firstSeen: "5h ago",
-        sources: [{ table: "sprout.messages", column: "post_type", rows: 210 }],
-      },
     ],
   },
 ];

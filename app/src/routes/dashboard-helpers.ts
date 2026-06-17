@@ -11,10 +11,9 @@ export type SortKey = "urgency" | "coverage" | "name" | "rows";
  * This function counts mapping entries — use it only for per-dim health display.
  */
 export function coveragePct(dim: MappingDimension): number {
-  if (dim.values.length === 0) return 100;
-  return Math.round(
-    (dim.values.filter((v) => v.status === "mapped").length / dim.values.length) * 100,
-  );
+  const total = dim.counts.totalDistinct;
+  if (total === 0) return 100;
+  return Math.round((dim.counts.mappedCount / total) * 100);
 }
 
 /**
@@ -31,7 +30,7 @@ export function coveragePct(dim: MappingDimension): number {
  * any dim with even one new value.
  */
 export function urgencyScore(dim: MappingDimension, isStaged: boolean = false): number {
-  const newCount = dim.values.filter((v) => v.status === "new").length;
+  const newCount = dim.counts.newCount;
   const baseUrgency = newCount * 1000 + (100 - coveragePct(dim));
   const stagedBoost = isStaged && newCount === 0 ? 500 : 0;
   return baseUrgency + stagedBoost;
@@ -75,10 +74,10 @@ export function applyFilter(
 ): MappingDimension[] {
   if (filter === "all") return dims;
   if (filter === "attention") {
-    return dims.filter((d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id));
+    return dims.filter((d) => d.counts.newCount > 0 || stagedDimIds.has(d.id));
   }
   // "clean"
-  return dims.filter((d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id));
+  return dims.filter((d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id));
 }
 
 /** Sort dims. Returns a new array — never mutates the input. */

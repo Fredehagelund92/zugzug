@@ -8,7 +8,6 @@ import { Mark } from "../components/Mark";
 import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { valueRows } from "../data";
 import { useDimensions, useAudit, useDrafts, useWorkspaceInfo, useStoreLoading } from "../store";
 import {
   type FilterKey,
@@ -162,16 +161,15 @@ export function Dashboard() {
   const loading = useStoreLoading();
   const navigate = useNavigate();
   const nav = useNavLinks();
-  const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
+  const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
+  // Treat every mapped draft as "staged" for dashboard urgency purposes. The
+  // old per-value staleness check (raw already mapped to the same target) needed
+  // the full values list; with paginated scan values we can't do that on the
+  // client without a fetch per draft, and the cost of an occasional false
+  // positive on the dashboard is negligible.
   const staged = useMemo(
-    () =>
-      Object.values(draftsMap).filter((d) => {
-        if (d.status !== "mapped") return false;
-        const dim = dims.find((s) => s.id === d.dimId);
-        const v = dim?.values.find((x) => x.value === d.raw);
-        return !!v && (!v.current || v.current !== d.targetLabel);
-      }),
-    [draftsMap, dims],
+    () => Object.values(draftsMap).filter((d) => d.status === "mapped"),
+    [draftsMap],
   );
 
   // Dim ids that have at least one staged draft (for filter + row highlighting)
@@ -182,23 +180,16 @@ export function Dashboard() {
   // Rows at risk = warehouse source rows behind currently-unmapped values.
   // Coverage = mapped rows / (mapped rows + at-risk rows).
   const valuesMapped = dims.reduce((n, d) => n + d.rows, 0);
-  const rowsAtRisk = dims.reduce(
-    (n, d) => n + d.values.filter((v) => v.status === "new").reduce((m, v) => m + valueRows(v), 0),
-    0,
-  );
-  const rowsMapped = dims.reduce(
-    (n, d) =>
-      n + d.values.filter((v) => v.status === "mapped").reduce((m, v) => m + valueRows(v), 0),
-    0,
-  );
+  const rowsAtRisk = dims.reduce((n, d) => n + d.counts.unmappedRowsTotal, 0);
+  const rowsMapped = dims.reduce((n, d) => n + d.counts.mappedRowsTotal, 0);
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
-  const tablesWithNew = dims.filter((d) => d.values.some((v) => v.status === "new")).length;
+  const tablesWithNew = dims.filter((d) => d.counts.newCount > 0).length;
   const attentionTables = dims.filter(
-    (d) => d.values.some((v) => v.status === "new") || stagedDimIds.has(d.id),
+    (d) => d.counts.newCount > 0 || stagedDimIds.has(d.id),
   );
   const cleanTables = dims.filter(
-    (d) => !d.values.some((v) => v.status === "new") && !stagedDimIds.has(d.id),
+    (d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id),
   );
 
   const [filter, setFilter] = useState<FilterKey>("all");
@@ -441,7 +432,7 @@ export function Dashboard() {
             {visibleDims.map((dim) => {
               const pct = coveragePct(dim);
               const color = coverageColor(pct);
-              const newCount = dim.values.filter((v) => v.status === "new").length;
+              const newCount = dim.counts.newCount;
               const dimStaged = stagedByDim[dim.id] ?? [];
               const isStaged = dimStaged.length > 0;
               const lastAudit = lastAuditByDim[dim.id] ?? null;

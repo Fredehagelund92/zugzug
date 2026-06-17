@@ -364,7 +364,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [focusTab, drawerOpen]);
 
-  const totalNew = dims.reduce((n, s) => n + s.values.filter((v) => v.status === "new").length, 0);
+  const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
   const settingsBase = navLinks.settings;
   interface NavItem {
     to: string;
@@ -468,7 +468,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
 
     // Section 2: jump to a table's Match mode
     for (const d of dims) {
-      const newCount = d.values.filter((v) => v.status === "new").length;
+      const newCount = d.counts.newCount;
       out.push({
         id: `dim:${d.id}`,
         group: "Tables",

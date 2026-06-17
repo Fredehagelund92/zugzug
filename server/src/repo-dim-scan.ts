@@ -103,6 +103,10 @@ export interface DimScanScalars {
   totalDistinct: number;
   mappedCount: number;
   newCount: number;
+  /** SUM(total_rows) for values without a row in map_<dim>. */
+  unmappedRowsTotal: number;
+  /** SUM(total_rows) for values already mapped. */
+  mappedRowsTotal: number;
   scannedAt: Date | null;
 }
 
@@ -116,8 +120,16 @@ export async function getDimScanScalars(tenantId: string): Promise<DimScanScalar
   );
   const mapByDim = new Map(dims.map((d) => [d.dimId, d.mapTable]));
 
-  const rows = await pgAll<{ dimId: string; total: number; scannedAt: Date | null }>(
-    `SELECT dim_id AS "dimId", COUNT(*)::bigint AS total, MAX(scanned_at) AS "scannedAt"
+  const rows = await pgAll<{
+    dimId: string;
+    total: number;
+    rowsTotal: number;
+    scannedAt: Date | null;
+  }>(
+    `SELECT dim_id AS "dimId",
+            COUNT(*)::bigint           AS total,
+            COALESCE(SUM(total_rows), 0)::bigint AS "rowsTotal",
+            MAX(scanned_at)            AS "scannedAt"
        FROM zugzug_app.dim_scan_value
        WHERE tenant_id = $1
        GROUP BY dim_id`,
@@ -128,9 +140,11 @@ export async function getDimScanScalars(tenantId: string): Promise<DimScanScalar
   for (const r of rows) {
     const mapTable = mapByDim.get(r.dimId);
     let mapped = 0;
+    let mappedRows = 0;
     if (mapTable) {
-      const m = await pgAll<{ n: number }>(
-        `SELECT COUNT(*)::bigint AS n
+      const m = await pgAll<{ n: number; rows: number }>(
+        `SELECT COUNT(*)::bigint              AS n,
+                COALESCE(SUM(v.total_rows), 0)::bigint AS rows
            FROM zugzug_app.dim_scan_value v
            JOIN ${cq(mapTable)} m
              ON m.tenant_id = v.tenant_id AND LOWER(m.raw) = v.raw_lower
@@ -138,12 +152,16 @@ export async function getDimScanScalars(tenantId: string): Promise<DimScanScalar
         [tenantId, r.dimId],
       );
       mapped = Number(m[0]?.n ?? 0);
+      mappedRows = Number(m[0]?.rows ?? 0);
     }
+    const rowsTotal = Number(r.rowsTotal);
     out.push({
       dimId: r.dimId,
       totalDistinct: Number(r.total),
       mappedCount: mapped,
       newCount: Number(r.total) - mapped,
+      mappedRowsTotal: mappedRows,
+      unmappedRowsTotal: rowsTotal - mappedRows,
       scannedAt: r.scannedAt,
     });
   }

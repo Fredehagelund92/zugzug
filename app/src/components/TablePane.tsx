@@ -116,7 +116,7 @@ export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePan
 /** Records mode has only the "new" status for canonical values right now —
  *  treat any value whose status is missing as "mapped" for the badge count. */
 function countNewForDim(dim: MappingDimension): number {
-  return dim.values.filter((v) => v.status === "new").length;
+  return dim.counts.newCount;
 }
 
 function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
