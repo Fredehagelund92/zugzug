@@ -282,6 +282,42 @@ export const scanRuns = app.table(
   ],
 );
 
+export const dimScanValue = app.table(
+  "dim_scan_value",
+  {
+    tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
+    dim_id:     varchar("dim_id").notNull(),
+    raw:        varchar("raw").notNull(),
+    raw_lower:  varchar("raw_lower").notNull(),
+    total_rows: bigint("total_rows", { mode: "number" }).notNull(),
+    scanned_at: timestamp("scanned_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw_lower] }),
+    index("dim_scan_value_dim_rows_idx").on(t.tenant_id, t.dim_id, t.total_rows),
+    check("dim_scan_value_raw_nonempty",      sql`length(${t.raw}) > 0`),
+    check("dim_scan_value_total_rows_nonneg", sql`${t.total_rows} >= 0`),
+  ],
+);
+
+export const dimScanOccurrence = app.table(
+  "dim_scan_occurrence",
+  {
+    tenant_id:   varchar("tenant_id").notNull().references(() => tenant.id),
+    dim_id:      varchar("dim_id").notNull(),
+    raw_lower:   varchar("raw_lower").notNull(),
+    table_name:  varchar("table_name").notNull(),
+    column_name: varchar("column_name").notNull(),
+    rows:        bigint("rows", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.tenant_id, t.dim_id, t.raw_lower, t.table_name, t.column_name],
+    }),
+    check("dim_scan_occurrence_rows_nonneg", sql`${t.rows} >= 0`),
+  ],
+);
+
 export const canonicalVersion = app.table(
   "canonical_version",
   {
