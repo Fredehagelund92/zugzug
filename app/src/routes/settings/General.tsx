@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { usePageTitle } from "../../hooks/usePageTitle";
 import { useNavigate } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { apiFetch } from "../../api";
@@ -14,6 +15,7 @@ import { cx } from "../../lib/cx";
 import { WorkspaceColorPicker } from "../../components/WorkspaceColorPicker";
 
 export function General() {
+  usePageTitle("Workspace settings");
   const tenant = useTenant();
   const navigate = useNavigate();
   const canEdit = can(tenant, "settings.general.edit");

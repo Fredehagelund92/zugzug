@@ -592,6 +592,12 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
         isMobile ? undefined : { gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }
       }
     >
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-sm focus:bg-surface focus:px-3 focus:py-2 focus:text-ink"
+      >
+        Skip to main content
+      </a>
       {/* Desktop sidebar — hidden on mobile (drawer takes over) */}
       <aside className="hidden md:flex flex-col overflow-hidden border-r border-line bg-surface">
         <div
@@ -708,7 +714,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
           </div>
         </header>
 
-        <main className="zz-canvas flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+        <main id="main" tabIndex={-1} className="zz-canvas flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
           <Outlet context={{ memberships }} />
         </main>
       </div>

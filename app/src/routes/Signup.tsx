@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { authFetch } from "../api";
 import { Mark } from "../components/Mark";
@@ -14,6 +15,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function Signup() {
+  usePageTitle("Sign up");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

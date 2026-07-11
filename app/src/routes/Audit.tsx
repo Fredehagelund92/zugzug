@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useAudit } from "../store";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
 import { AuditTimeline } from "../components/AuditTimeline";
 
 export function Audit() {
+  usePageTitle("Activity");
   const audit = useAudit();
   const [query, setQuery] = useState("");
   const [actor, setActor] = useState<string>("");

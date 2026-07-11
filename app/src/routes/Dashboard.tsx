@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useNavigate } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Kpi } from "../components/Kpi";
@@ -154,6 +155,7 @@ function DashboardSkeleton() {
 }
 
 export function Dashboard() {
+  usePageTitle("Home");
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();

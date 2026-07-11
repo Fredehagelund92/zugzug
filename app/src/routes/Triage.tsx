@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
@@ -81,6 +82,7 @@ function TriageLoader() {
 }
 
 export function Triage() {
+  usePageTitle("Review");
   const dims = useDimensions();
   const loading = useStoreLoading();
   const create = useCreateTableModal();

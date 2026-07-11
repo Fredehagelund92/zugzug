@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { authFetch } from "../api";
 import { Mark } from "../components/Mark";
@@ -15,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function Login() {
+  usePageTitle("Sign in");
   const error = new URLSearchParams(window.location.search).get("error");
   const authConfig = useAuthConfig();
   const [devBypass, setDevBypass] = useState(false);

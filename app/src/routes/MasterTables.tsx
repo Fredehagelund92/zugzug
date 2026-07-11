@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { useSearchParams } from "react-router-dom";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
@@ -16,6 +17,7 @@ import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
    tab switches without a coordination layer. */
 
 export function MasterTables() {
+  usePageTitle("Tables");
   const dims = useDimensions();
   const loading = useStoreLoading();
   const [searchParams, setSearchParams] = useSearchParams();

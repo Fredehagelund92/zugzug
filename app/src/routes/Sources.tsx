@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
@@ -94,6 +95,7 @@ function SourcesLoader() {
 }
 
 export function Sources() {
+  usePageTitle("Sources");
   const sources = useSources();
   const dims = useDimensions();
   const canEdit = useCanEdit();
