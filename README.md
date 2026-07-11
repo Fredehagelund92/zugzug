@@ -6,6 +6,8 @@
 
 Your warehouse accumulates raw strings that nobody agrees on: "BCG", "B.C.G.", "Boston Consulting Group". dbt has no primitive to reconcile them. Existing MDM tools (Tamr, Stibo, Reltio) are enterprise-priced and closed-source. Zugzug is the gap between "messy values land in the warehouse" and "dbt models join clean dimensions." A team curates raw values to canonical IDs via a browser UI; results land in `dim_<x>` / `map_<x>` tables dbt can join directly.
 
+The same grid maintains the dimensions themselves as governed reference tables — the canonical Country or Currency list your dashboards and finance close depend on — edited in place like a spreadsheet, with roles, audit history, and CSV import/export. Not entity resolution, not an app builder: curated lists and the mappings into them, materialized where dbt can join them.
+
 ```
 warehouse (read-only)
         |

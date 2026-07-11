@@ -1,0 +1,1245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Zugzug — warehouse-native master data, open source</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b14;
+    --surface: #0f1526;
+    --surface-2: #182240;
+    --surface-3: #243056;
+    --ink: #eaeef7;
+    --ink-2: #9ba7bf;
+    --ink-3: #5b6884;
+    --line: rgba(255,255,255,.10);
+    --line-2: rgba(255,255,255,.17);
+    --accent: #d6336c;
+    --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+    --amber: #f0a323;
+    --mint: #30a46c;
+    --coral: #e8523a;
+    --teal: #1fa9b8;
+    --violet: #a24ee0;
+    --wh-snow: #29b5e8;
+    --wh-bq:   #4285f4;
+    --wh-dbx:  #ff3621;
+    --wh-md:   #ffd75e;
+    --wh-pg:   #4169e1;
+    --wh-rs:   #c925d1;
+    --font-display: "Bricolage Grotesque", sans-serif;
+    --font-body: "Hanken Grotesk", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15.5px/1.6 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-soft); color: var(--ink); }
+
+  /* ===== nav ===== */
+  .nav {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 28px;
+    padding: 16px 36px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+  }
+  .nav .brand {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.022em;
+  }
+  .nav .brand sup {
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: var(--accent);
+    letter-spacing: 0.16em;
+    margin-left: 6px;
+    text-transform: uppercase;
+    vertical-align: super;
+  }
+  .nav ul {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; gap: 22px;
+    font: 500 13px/1 var(--font-body);
+  }
+  .nav a {
+    color: var(--ink-2);
+    text-decoration: none;
+    transition: color .12s;
+  }
+  .nav a:hover { color: var(--ink); }
+  .nav .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .nav .gh {
+    display: inline-flex; align-items: center; gap: 8px;
+    font: 600 12px/1 var(--font-mono);
+    color: var(--ink-2);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 7px 10px;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+  }
+  .nav .gh .stars {
+    color: var(--ink-3);
+    border-left: 1px solid var(--line);
+    padding-left: 8px;
+    margin-left: 4px;
+  }
+  .nav .docs-btn {
+    font: 600 12px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    background: var(--accent);
+    color: #fff;
+    padding: 7px 12px;
+    border: 0;
+    text-decoration: none;
+  }
+
+  /* ===== generic ===== */
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 36px;
+  }
+  .section-label {
+    display: flex; align-items: center; gap: 14px;
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--ink-3);
+    margin-bottom: 18px;
+  }
+  .section-label .num {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .section-label .rule {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.028em;
+    line-height: 1.05;
+  }
+  .lede {
+    color: var(--ink-2);
+    font-size: 18px;
+    line-height: 1.55;
+    max-width: 64ch;
+  }
+
+  /* ===== hero ===== */
+  .hero {
+    padding: 80px 0 90px;
+    border-bottom: 1px solid var(--line);
+    background-image:
+      radial-gradient(at 100% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 55%),
+      radial-gradient(at 0% 100%, color-mix(in srgb, var(--violet) 6%, transparent), transparent 55%);
+  }
+  .hero .pre {
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--accent);
+    margin-bottom: 22px;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(46px, 7vw, 88px);
+    letter-spacing: -0.038em;
+    line-height: 0.94;
+    margin: 0 0 24px;
+    max-width: 13ch;
+  }
+  .hero h1 i {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .hero p.tag {
+    font-size: 20px;
+    color: var(--ink-2);
+    max-width: 56ch;
+    line-height: 1.5;
+    margin: 0 0 38px;
+  }
+  .hero p.tag b { color: var(--ink); font-weight: 600; }
+  .hero .install {
+    display: inline-flex;
+    align-items: stretch;
+    background: var(--surface);
+    border: 1px solid var(--line-2);
+  }
+  .hero .install .prompt {
+    color: var(--ink-3);
+    font: 500 14px/1 var(--font-mono);
+    padding: 14px 14px 14px 16px;
+    border-right: 1px solid var(--line);
+  }
+  .hero .install code {
+    padding: 14px 18px 14px 14px;
+    font: 500 14px/1 var(--font-mono);
+    color: var(--ink);
+  }
+  .hero .install code .pink { color: var(--accent); }
+  .hero .install button {
+    background: var(--surface-2);
+    border: 0; border-left: 1px solid var(--line);
+    color: var(--ink-2);
+    padding: 0 16px;
+    font: 600 11px/1 var(--font-mono);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+  .hero .install button:hover { color: var(--ink); }
+  .hero .meta {
+    display: flex;
+    gap: 36px;
+    margin-top: 40px;
+    flex-wrap: wrap;
+    font: 500 12px/1.4 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+  .hero .meta b { color: var(--ink); font-weight: 600; }
+  .hero .meta span { display: inline-flex; flex-direction: column; gap: 6px; }
+  .hero .meta .v { color: var(--ink); font-family: var(--font-display); font-size: 18px; letter-spacing: -0.01em; text-transform: none; }
+
+  .warehouse-strip {
+    margin-top: 32px;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    padding: 14px 18px;
+    border: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    backdrop-filter: blur(6px);
+    max-width: max-content;
+  }
+  .warehouse-strip .strip-label {
+    font: 500 10px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--ink-3);
+    padding-right: 8px;
+    border-right: 1px solid var(--line);
+  }
+  .warehouse-strip .wh {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font: 500 13px/1 var(--font-body);
+    color: var(--ink-2);
+  }
+  .warehouse-strip .wh .mark {
+    width: 9px; height: 9px;
+    display: inline-block;
+    transform: rotate(45deg);
+  }
+
+  /* ===== 4-step "how it works" ===== */
+  .how {
+    padding: 84px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .how h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.4vw, 40px);
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    margin: 0 0 14px;
+    max-width: 18ch;
+  }
+  .how .lede { margin-bottom: 56px; }
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 24px 24px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .step::before {
+    content: attr(data-num);
+    position: absolute;
+    right: 14px; top: 12px;
+    font: 700 10px/1 var(--font-mono);
+    color: var(--ink-3);
+    letter-spacing: 0.14em;
+  }
+  .step h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: -0.015em;
+    margin: 26px 0 8px;
+  }
+  .step p {
+    color: var(--ink-2);
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .step .pip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px; height: 38px;
+    background: var(--surface-2);
+    color: var(--ink);
+  }
+  .step .pip svg { width: 18px; height: 18px; }
+  .step:nth-child(1) .pip { color: var(--accent); background: var(--accent-soft); }
+  .step:nth-child(2) .pip { color: var(--teal); background: color-mix(in srgb, var(--teal) 16%, transparent); }
+  .step:nth-child(3) .pip { color: var(--amber); background: color-mix(in srgb, var(--amber) 16%, transparent); }
+  .step:nth-child(4) .pip { color: var(--mint); background: color-mix(in srgb, var(--mint) 16%, transparent); }
+
+  /* ===== yaml + table side-by-side ===== */
+  .pair {
+    padding: 84px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .pair-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 26px;
+    align-items: stretch;
+    margin-top: 36px;
+  }
+  .pair h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.4vw, 40px);
+    letter-spacing: -0.025em;
+    margin: 0 0 14px;
+    max-width: 22ch;
+  }
+  .pair h2 i { color: var(--accent); font-style: normal; }
+  .code-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: flex; flex-direction: column;
+    min-height: 460px;
+  }
+  .code-card .head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font: 500 12px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+  .code-card .head .dot {
+    width: 8px; height: 8px;
+    background: var(--ink-3);
+    display: inline-block;
+  }
+  .code-card .head .dot.live { background: var(--mint); animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+  pre {
+    margin: 0;
+    padding: 22px 24px;
+    font: 500 13.5px/1.65 var(--font-mono);
+    color: var(--ink-2);
+    white-space: pre-wrap;
+    flex: 1;
+    overflow: auto;
+  }
+  .yaml .k { color: var(--accent); }
+  .yaml .s { color: var(--mint); }
+  .yaml .n { color: var(--amber); }
+  .yaml .c { color: var(--ink-3); font-style: italic; }
+  .yaml .b { color: var(--ink); font-weight: 600; }
+
+  .arrow {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--ink-3);
+    font-family: var(--font-mono);
+  }
+  .arrow svg { width: 28px; height: 28px; }
+
+  /* ===== golden record table ===== */
+  .gold {
+    display: flex; flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    min-height: 460px;
+  }
+  .gold .head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    font: 500 12px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+  .gold .head .live { color: var(--mint); }
+  table {
+    width: 100%; border-collapse: collapse;
+    font: 500 13px/1.4 var(--font-mono);
+  }
+  table th, table td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  table th {
+    color: var(--ink-3);
+    font: 600 10.5px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    background: var(--surface-2);
+  }
+  table td.id { color: var(--accent); }
+  table td.muted { color: var(--ink-3); }
+  table .src {
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .src.sf { background: #00a1e0; }
+  .src.hs { background: #ff7a59; }
+  .src.ns { background: var(--mint); }
+
+  /* ===== terminal ===== */
+  .term {
+    padding: 84px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .term h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.4vw, 40px);
+    letter-spacing: -0.025em;
+    margin: 0 0 14px;
+  }
+  .terminal {
+    margin-top: 36px;
+    background: #050811;
+    border: 1px solid var(--line);
+    font: 500 13.5px/1.7 var(--font-mono);
+    color: var(--ink-2);
+  }
+  .terminal .bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--line);
+    font: 500 11px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+  .terminal .bar .dots {
+    display: inline-flex; gap: 6px;
+  }
+  .terminal .bar .dots i {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--line-2);
+    display: inline-block;
+  }
+  .terminal pre {
+    padding: 22px 24px;
+    background: transparent;
+    color: var(--ink-2);
+  }
+  .terminal .prompt { color: var(--accent); }
+  .terminal .ok { color: var(--mint); }
+  .terminal .warn { color: var(--amber); }
+  .terminal .fail { color: var(--coral); }
+  .terminal .dim { color: var(--ink-3); }
+  .terminal .hi { color: var(--ink); }
+  .terminal .src-sf { color: #4cb8e8; }
+  .terminal .src-hs { color: #ff967e; }
+  .terminal .src-ns { color: var(--mint); }
+
+  /* ===== optional UI ===== */
+  .optional {
+    padding: 84px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .optional .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 56px;
+    align-items: center;
+    margin-top: 32px;
+  }
+  .optional h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.4vw, 40px);
+    letter-spacing: -0.025em;
+    margin: 0 0 14px;
+    max-width: 18ch;
+  }
+  .optional .small {
+    color: var(--ink-3);
+    font-size: 13px;
+    margin-top: 18px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+  }
+  .preview {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 36px 32px;
+    position: relative;
+  }
+  .preview .stamp {
+    position: absolute;
+    top: 12px; right: 14px;
+    font: 600 10px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+  }
+  .preview h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.015em;
+    line-height: 1.18;
+    margin: 12px 0 26px;
+    text-align: center;
+  }
+  .preview .two {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .preview .opt {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 16px;
+  }
+  .preview .opt .v {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+  }
+  .preview .opt .sub {
+    color: var(--ink-2);
+    font-size: 12.5px;
+  }
+  .preview .opt .src {
+    margin-top: 12px;
+    font: 500 10.5px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+  }
+  .preview .skip {
+    text-align: center;
+    margin-top: 14px;
+    font: 500 11px/1 var(--font-mono);
+    color: var(--ink-3);
+  }
+
+  /* ===== architecture ===== */
+  .arch {
+    padding: 84px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .arch h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.4vw, 40px);
+    letter-spacing: -0.025em;
+    margin: 0 0 14px;
+  }
+  .arch-diagram {
+    margin-top: 38px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .layer {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 18px;
+    align-items: stretch;
+  }
+  .layer .name {
+    display: flex; flex-direction: column; justify-content: center;
+    font: 600 11px/1.3 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+  }
+  .layer .name b {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.01em;
+    text-transform: none;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .layer .boxes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .layer .box {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 12px 14px;
+    font: 500 12px/1.35 var(--font-mono);
+    color: var(--ink-2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .layer .box .marker {
+    width: 6px; height: 6px;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .layer.connectors .marker { background: var(--teal); }
+  .layer.core .marker { background: var(--accent); }
+  .layer.surface .marker { background: var(--mint); }
+  .layer .arrow-down {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--ink-3);
+    font: 600 12px/1 var(--font-mono);
+  }
+  .arch-diagram .divider {
+    text-align: center;
+    color: var(--ink-3);
+    font: 500 10px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    position: relative;
+    margin: 4px 0;
+  }
+  .arch-diagram .divider::before,
+  .arch-diagram .divider::after {
+    content: "";
+    position: absolute; top: 50%;
+    width: calc(50% - 80px); height: 1px;
+    background: var(--line);
+  }
+  .arch-diagram .divider::before { left: 0; }
+  .arch-diagram .divider::after { right: 0; }
+
+  /* ===== manifesto ===== */
+  .manifesto {
+    padding: 100px 0;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 4%, transparent), transparent);
+  }
+  .manifesto h2 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(32px, 4vw, 52px);
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin: 0 0 56px;
+    max-width: 22ch;
+  }
+  .manifesto h2 i { font-style: normal; color: var(--accent); }
+  .credos {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  .credo {
+    border-top: 2px solid var(--accent);
+    padding-top: 20px;
+  }
+  .credo .n {
+    font: 600 11px/1 var(--font-mono);
+    color: var(--accent);
+    letter-spacing: 0.22em;
+    margin-bottom: 14px;
+  }
+  .credo h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+    margin: 0 0 12px;
+  }
+  .credo p {
+    color: var(--ink-2);
+    font-size: 14.5px;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  /* ===== get started ===== */
+  .start {
+    padding: 84px 0 96px;
+  }
+  .start h2 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(28px, 3.4vw, 40px);
+    letter-spacing: -0.025em;
+    margin: 0 0 32px;
+  }
+  .ways {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+  .way {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 22px 22px 24px;
+  }
+  .way h3 {
+    font: 600 11px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    margin: 0 0 14px;
+  }
+  .way .cmd {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    padding: 12px 14px;
+    font: 500 13px/1.5 var(--font-mono);
+    color: var(--ink);
+    word-break: break-all;
+  }
+  .way .cmd .dim { color: var(--ink-3); }
+  .way p {
+    margin: 14px 0 0;
+    color: var(--ink-2);
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  footer.foot {
+    border-top: 1px solid var(--line);
+    padding: 28px 36px;
+    font: 500 12px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  footer.foot a { color: var(--ink-3); text-decoration: none; margin-left: 22px; }
+  footer.foot a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- ============ nav ============ -->
+<nav class="nav">
+  <div class="brand">zugzug <sup>v0.4 · alpha</sup></div>
+  <ul>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#define">Define</a></li>
+    <li><a href="#reconcile">Reconcile</a></li>
+    <li><a href="#ui">Steward UI</a></li>
+    <li><a href="#arch">Architecture</a></li>
+    <li><a href="#start">Get started</a></li>
+  </ul>
+  <div class="right">
+    <a class="gh" href="#">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.08.55-.17.55-.38v-1.4c-2.22.48-2.69-1.07-2.69-1.07-.36-.92-.89-1.16-.89-1.16-.72-.5.06-.49.06-.49.8.06 1.22.83 1.22.83.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.77-.2-3.64-.89-3.64-3.94 0-.87.31-1.59.82-2.15-.08-.2-.36-1.01.08-2.11 0 0 .67-.21 2.2.82a7.66 7.66 0 0 1 4 0c1.53-1.03 2.2-.82 2.2-.82.44 1.1.16 1.91.08 2.11.51.56.82 1.28.82 2.15 0 3.07-1.87 3.74-3.65 3.94.29.25.54.74.54 1.49v2.2c0 .22.15.47.55.39A8 8 0 0 0 8 0z"/></svg>
+      GitHub
+      <span class="stars">★ 2.4k</span>
+    </a>
+    <a class="docs-btn" href="#">Docs</a>
+  </div>
+</nav>
+
+<!-- ============ hero ============ -->
+<section class="hero">
+  <div class="wrap">
+    <div class="pre">Warehouse-native master data · open source</div>
+    <h1>After ELT.<br><i>Before BI.</i></h1>
+    <p class="tag">
+      Your data is already in <b>Snowflake</b>, <b>BigQuery</b>, <b>Databricks</b>, or <b>MotherDuck</b>.
+      Zugzug is the missing layer that turns it into <b>one trusted record per customer</b> —
+      defined in yaml, materialized as a real table right back in the warehouse you already pay for.
+      No new pipeline. No data leaves.
+    </p>
+
+    <div class="install">
+      <span class="prompt">$</span>
+      <code><span class="pink">brew install</span> zugzug &amp;&amp; zugzug connect <span class="pink">snowflake</span></code>
+      <button>copy</button>
+    </div>
+
+    <div class="warehouse-strip">
+      <span class="strip-label">Runs against</span>
+      <span class="wh"><span class="mark" style="background:var(--wh-snow)"></span>Snowflake</span>
+      <span class="wh"><span class="mark" style="background:var(--wh-bq)"></span>BigQuery</span>
+      <span class="wh"><span class="mark" style="background:var(--wh-dbx)"></span>Databricks</span>
+      <span class="wh"><span class="mark" style="background:var(--wh-md)"></span>MotherDuck</span>
+      <span class="wh"><span class="mark" style="background:var(--wh-pg)"></span>Postgres</span>
+      <span class="wh"><span class="mark" style="background:var(--wh-rs)"></span>Redshift</span>
+    </div>
+
+    <div class="meta">
+      <span>
+        <b class="v">Zero data movement</b>
+        Reads &amp; writes in your warehouse
+      </span>
+      <span>
+        <b class="v">~40MB binary</b>
+        Single Go process, no Kubernetes
+      </span>
+      <span>
+        <b class="v">Apache 2.0</b>
+        Free forever for self-hosters
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ how it works ============ -->
+<section class="how" id="how">
+  <div class="wrap">
+    <div class="section-label"><span class="num">01</span><span>How it works</span><span class="rule"></span></div>
+    <h2>Four steps. No new pipeline.</h2>
+    <p class="lede">Zugzug runs <i>inside</i> the warehouse you already have. It reads the raw tables your ELT already loaded, decides who Acme is, and writes the answer back as a real SQL table. No data leaves. No platform team required.</p>
+
+    <div class="steps">
+
+      <article class="step" data-num="01">
+        <span class="pip">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3h10v3H3zM3 7.5h10v3H3zM3 12h6v1H3z" stroke-linejoin="round"/></svg>
+        </span>
+        <h3>Define</h3>
+        <p>Describe your entities — customer, product, location — in <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--accent)">zugzug.yaml</code>. Version-control it like any other config.</p>
+      </article>
+
+      <article class="step" data-num="02">
+        <span class="pip">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="8" cy="4.5" rx="5" ry="2"/><path d="M3 4.5v7c0 1.1 2.2 2 5 2s5-.9 5-2v-7" /><path d="M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/></svg>
+        </span>
+        <h3>Point</h3>
+        <p>Tell Zugzug which warehouse tables are which. <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--accent)">raw.salesforce.account</code>, <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--accent)">raw.hubspot.companies</code> — whatever Fivetran or your dbt models already produced.</p>
+      </article>
+
+      <article class="step" data-num="03">
+        <span class="pip">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 11l4-4 3 3 3-5M10 5h3v3" stroke-linejoin="round" stroke-linecap="round"/></svg>
+        </span>
+        <h3>Reconcile</h3>
+        <p>Match, merge, and apply your survivorship rules — all computed as warehouse SQL. What rules can't decide goes to a steward queue.</p>
+      </article>
+
+      <article class="step" data-num="04">
+        <span class="pip">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8.5l3.2 3.2L13 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h3>Query</h3>
+        <p>Your dbt models join <code style="font-family:var(--font-mono);font-size:12.5px;color:var(--accent)">analytics.golden.customer</code> like any other table. Looker, Hex, Mode — everything just works.</p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ define + golden table pair ============ -->
+<section class="pair" id="define">
+  <div class="wrap">
+    <div class="section-label"><span class="num">02</span><span>Define your model</span><span class="rule"></span></div>
+    <h2>One yaml file. <i>One warehouse table</i> per entity.</h2>
+    <p class="lede" style="max-width:60ch">
+      You describe what a customer is, which warehouse tables it lives in, and who wins when sources disagree. Zugzug compiles that into SQL, runs it in your warehouse, and writes the result back as a materialized table.
+    </p>
+
+    <div class="pair-grid">
+
+      <!-- yaml -->
+      <div class="code-card">
+        <div class="head"><span class="dot"></span> zugzug.yaml</div>
+        <pre class="yaml"><span class="c"># Where the raw data already lives — your ELT put it there</span>
+<span class="k">warehouse</span>: <span class="s">snowflake</span>
+<span class="k">sources</span>:
+  <span class="k">salesforce</span>: <span class="s">raw.salesforce.account</span>
+  <span class="k">hubspot</span>:    <span class="s">raw.hubspot.companies</span>
+  <span class="k">netsuite</span>:   <span class="s">raw.netsuite.customer</span>
+
+<span class="c"># What a customer is in our world</span>
+<span class="k">entity</span>: <span class="b">customer</span>
+<span class="k">key</span>:    [duns, vat_id, normalized_name]
+
+<span class="k">fields</span>:
+  <span class="k">legal_name</span>:
+    <span class="k">winner</span>: <span class="s">most_recent_confirmed</span>
+    <span class="k">prefer</span>: [salesforce, hubspot]
+
+  <span class="k">primary_email</span>:
+    <span class="k">winner</span>:   <span class="s">majority_match</span>
+    <span class="k">validate</span>: [<span class="s">deliverable</span>]
+
+  <span class="k">headquarters</span>:
+    <span class="k">winner</span>:   <span class="s">defer_to_steward</span>
+    <span class="k">fallback</span>: <span class="s">freshest</span>
+
+  <span class="k">annual_revenue</span>:
+    <span class="k">from</span>: <span class="s">netsuite</span>   <span class="c"># single source of truth</span>
+
+<span class="k">match</span>:
+  <span class="k">strong</span>: [duns, vat_id]            <span class="c"># auto-merge</span>
+  <span class="k">fuzzy</span>:  [normalized_name, hq]    <span class="c"># ≥ 0.85 → queue</span>
+  <span class="k">block</span>:  [country]                <span class="c"># never cross</span>
+
+<span class="k">publish</span>:
+  <span class="k">table</span>: <span class="s">analytics.golden.customer</span>   <span class="c"># written back here</span>
+  <span class="k">grant</span>: [<span class="s">dbt_role</span>, <span class="s">looker_role</span>]</pre>
+      </div>
+
+      <div class="arrow">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M4 16h22M22 10l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <!-- golden output -->
+      <div class="gold">
+        <div class="head"><span class="dot live"></span> analytics.golden.customer <span style="margin-left:14px;color:var(--ink-3)">· snowflake · acme.us-east-1</span><span style="margin-left:auto;color:var(--mint)">1,284 rows · synced 2m</span></div>
+        <div style="overflow:auto;flex:1">
+        <table>
+          <thead>
+            <tr>
+              <th>id</th>
+              <th>legal_name</th>
+              <th>primary_email</th>
+              <th>headquarters</th>
+              <th>sources</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="id">cus_0042</td>
+              <td>Acme Holdings, GmbH</td>
+              <td>billing@acme-de.com</td>
+              <td>Berlin, DE</td>
+              <td>
+                <span class="src sf"></span><span class="src hs"></span><span class="src ns"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0117</td>
+              <td>Acme Corporation</td>
+              <td>billing@acme.com</td>
+              <td class="muted">— disputed —</td>
+              <td>
+                <span class="src sf"></span><span class="src hs"></span><span class="src ns"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0309</td>
+              <td>Acme Industries Ltd</td>
+              <td>ap@acme-uk.com</td>
+              <td>London, UK</td>
+              <td>
+                <span class="src sf"></span><span class="src hs"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0512</td>
+              <td>Bluebird Logistics</td>
+              <td>ops@bluebird.io</td>
+              <td>Rotterdam, NL</td>
+              <td>
+                <span class="src hs"></span><span class="src ns"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0688</td>
+              <td>Castor &amp; Pollux Co.</td>
+              <td class="muted">— bounced —</td>
+              <td>Boston, MA</td>
+              <td>
+                <span class="src sf"></span><span class="src hs"></span><span class="src ns"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0721</td>
+              <td>Delta Bravo Studios</td>
+              <td>finance@delta-bravo.tv</td>
+              <td>Stockholm, SE</td>
+              <td>
+                <span class="src sf"></span><span class="src ns"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0809</td>
+              <td>Elementarium AB</td>
+              <td>hello@elementarium.se</td>
+              <td>Malmö, SE</td>
+              <td>
+                <span class="src hs"></span><span class="src ns"></span>
+              </td>
+            </tr>
+            <tr>
+              <td class="id">cus_0913</td>
+              <td>Forge &amp; Anvil Mfg.</td>
+              <td>ar@forgeanvil.us</td>
+              <td>Pittsburgh, PA</td>
+              <td>
+                <span class="src sf"></span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ terminal ============ -->
+<section class="term" id="reconcile">
+  <div class="wrap">
+    <div class="section-label"><span class="num">03</span><span>Reconcile from the CLI</span><span class="rule"></span></div>
+    <h2>It's just SQL. Run it like dbt.</h2>
+    <p class="lede">The whole pipeline is a graph of SQL queries Zugzug pushes down to your warehouse. Run it from your laptop, in CI, on a cron, or as a dbt operation. Exit code is meaningful, logs are readable.</p>
+
+    <div class="terminal">
+      <div class="bar">
+        <span class="dots"><i></i><i></i><i></i></span>
+        <span>~/work/acme · main</span>
+        <span style="margin-left:auto">zsh</span>
+      </div>
+<pre><span class="prompt">$</span> zugzug reconcile --entity customer
+
+<span class="dim">[0.04s]</span> Loaded <span class="hi">zugzug.yaml</span> — 1 entity, 4 fields, 3 match rules
+<span class="dim">[0.18s]</span> Connected → <span class="hi">snowflake</span> · acme.us-east-1 · warehouse=<span class="hi">XS</span>
+<span class="dim">[0.42s]</span> Reading sources from warehouse:
+        <span class="src-sf">●</span> raw.salesforce.account     <span class="ok">ok</span>  <span class="dim">2,109 rows · fresh 4m</span>
+        <span class="src-hs">●</span> raw.hubspot.companies      <span class="ok">ok</span>  <span class="dim">1,847 rows · fresh 11m</span>
+        <span class="src-ns">●</span> raw.netsuite.customer      <span class="ok">ok</span>  <span class="dim">1,422 rows · fresh 1h</span>
+
+<span class="dim">[1.62s]</span> Pushing down match SQL → snowflake
+        <span class="ok">✓</span> 1,182 strong matches  <span class="dim">(DUNS, VAT)</span>
+        <span class="warn">~</span>    87 fuzzy matches   <span class="dim">(name + HQ ≥ 0.85)</span>
+        <span class="hi">·</span>    14 ambiguous       <span class="dim">→ steward queue</span>
+
+<span class="dim">[2.94s]</span> Applying survivorship in-warehouse…
+        <span class="ok">✓</span> legal_name        1,284 / 1,284 resolved
+        <span class="ok">✓</span> primary_email     1,271 / 1,284 resolved
+        <span class="warn">~</span> headquarters      1,247 / 1,284  <span class="warn">37 deferred to steward</span>
+        <span class="ok">✓</span> annual_revenue    1,284 / 1,284 resolved
+
+<span class="dim">[3.71s]</span> <span class="hi">CREATE OR REPLACE TABLE</span> analytics.golden.customer …
+        <span class="ok">✓</span> +112 new   <span class="ok">~36 updated</span>   <span class="dim">·8 archived</span>
+        <span class="ok">✓</span> Granted → <span class="hi">dbt_role</span>, <span class="hi">looker_role</span>
+        <span class="ok">✓</span> 0.41 credits used · zero rows left the warehouse
+
+<span class="dim">[3.78s]</span> <span class="ok">✔ Reconciled.</span> 1,284 golden records · 51 queue items · 0 errors
+
+<span class="prompt">$</span> <span class="dim">_</span></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ============ optional UI ============ -->
+<section class="optional" id="ui">
+  <div class="wrap">
+    <div class="section-label"><span class="num">04</span><span>The steward UI is optional</span><span class="rule"></span></div>
+    <div class="row">
+      <div>
+        <h2>For the 1% rules can't decide.</h2>
+        <p class="lede">
+          When two sources disagree and no rule covers it, Zugzug parks the
+          conflict in a queue. A non-technical steward — sales ops, finance,
+          a data-savvy PM — clears them one at a time.
+        </p>
+        <p class="lede" style="margin-top:18px">
+          The queue is just a thin React app reading queue items from your
+          warehouse and writing the steward's decisions back to it. Host it on
+          a subdomain, embed it in your internal tools portal, or skip it
+          entirely if rules already cover everything.
+        </p>
+        <p class="small">Not bundled. Install with <code style="color:var(--accent)">zugzug ui</code>.</p>
+      </div>
+
+      <div class="preview">
+        <span class="stamp">queue · 9 to go</span>
+        <h3>Which address is right for Acme Corp.?</h3>
+        <div class="two">
+          <div class="opt">
+            <div class="v">Berlin, Germany</div>
+            <div class="sub">Friedrichstr. 200, 10117</div>
+            <div class="src">From HubSpot</div>
+          </div>
+          <div class="opt">
+            <div class="v">San Mateo, CA</div>
+            <div class="sub">1 Acme Plaza, 94402</div>
+            <div class="src">From NetSuite · 94d old</div>
+          </div>
+        </div>
+        <div class="skip">Skip this one</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ architecture ============ -->
+<section class="arch" id="arch">
+  <div class="wrap">
+    <div class="section-label"><span class="num">05</span><span>Architecture</span><span class="rule"></span></div>
+    <h2>Three layers. The data never leaves.</h2>
+    <p class="lede">Zugzug is a thin compiler + scheduler. Match logic, survivorship, and the golden table all live in your warehouse. The Zugzug process only handles metadata, the queue, and the optional UI.</p>
+
+    <div class="arch-diagram">
+
+      <div class="layer connectors">
+        <div class="name"><b>Your warehouse</b>The raw tables your ELT already loaded</div>
+        <div class="boxes">
+          <div class="box"><span class="marker" style="background:var(--wh-snow)"></span>Snowflake</div>
+          <div class="box"><span class="marker" style="background:var(--wh-bq)"></span>BigQuery</div>
+          <div class="box"><span class="marker" style="background:var(--wh-dbx)"></span>Databricks</div>
+          <div class="box"><span class="marker" style="background:var(--wh-md)"></span>MotherDuck</div>
+          <div class="box"><span class="marker" style="background:var(--wh-pg)"></span>Postgres</div>
+          <div class="box"><span class="marker" style="background:var(--wh-rs)"></span>Redshift</div>
+          <div class="box"><span class="marker" style="background:var(--ink-3)"></span>Trino / Athena</div>
+          <div class="box"><span class="marker" style="background:var(--ink-3)"></span>ClickHouse</div>
+        </div>
+      </div>
+
+      <div class="divider">↓ Zugzug pushes SQL down ↓</div>
+
+      <div class="layer core">
+        <div class="name"><b>Zugzug core</b>Single Go binary · stateless</div>
+        <div class="boxes">
+          <div class="box"><span class="marker"></span>YAML → SQL compiler</div>
+          <div class="box"><span class="marker"></span>Match planner</div>
+          <div class="box"><span class="marker"></span>Survivorship engine</div>
+          <div class="box"><span class="marker"></span>Queue generator</div>
+        </div>
+      </div>
+
+      <div class="divider">↓ golden table written back ↓</div>
+
+      <div class="layer surface">
+        <div class="name"><b>Surfaces</b>How you actually use it</div>
+        <div class="boxes">
+          <div class="box"><span class="marker"></span>analytics.golden.*</div>
+          <div class="box"><span class="marker"></span>dbt source</div>
+          <div class="box"><span class="marker"></span>Reverse-ETL feed</div>
+          <div class="box"><span class="marker"></span>Steward UI (opt)</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ manifesto ============ -->
+<section class="manifesto">
+  <div class="wrap">
+    <div class="section-label"><span class="num">06</span><span>Three things we won't budge on</span><span class="rule"></span></div>
+    <h2>The <i>boring middle</i> is the whole point.</h2>
+
+    <div class="credos">
+
+      <div class="credo">
+        <div class="n">01</div>
+        <h3>Your warehouse, not ours.</h3>
+        <p>Zugzug doesn't move your data, doesn't host it, doesn't see it. Compute and storage stay where they already are. The Zugzug process only holds metadata and the steward queue.</p>
+      </div>
+
+      <div class="credo">
+        <div class="n">02</div>
+        <h3>YAML is the source of truth.</h3>
+        <p>No clicking through a UI to define your data model. Every entity, rule, and source mapping lives in version-controlled config. The UI is a view, never the canon.</p>
+      </div>
+
+      <div class="credo">
+        <div class="n">03</div>
+        <h3>The output is a table.</h3>
+        <p>You shouldn't have to learn a new API to use your master data. <code style="font-family:var(--font-mono);color:var(--accent)">SELECT * FROM analytics.golden.customer</code> in your warehouse is the API. Everything else is a bonus.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============ get started ============ -->
+<section class="start" id="start">
+  <div class="wrap">
+    <div class="section-label"><span class="num">07</span><span>Get started</span><span class="rule"></span></div>
+    <h2>Pick your poison.</h2>
+
+    <div class="ways">
+
+      <div class="way">
+        <h3>· Local · 60 seconds</h3>
+        <div class="cmd"><span class="dim">$</span> brew install zugzug<br><span class="dim">$</span> zugzug connect <span class="dim">duckdb ./demo.duckdb</span><br><span class="dim">$</span> zugzug init <span class="dim">--entity customer --sample</span><br><span class="dim">$</span> zugzug reconcile</div>
+        <p>Try it against the bundled sample data in DuckDB. Zero credentials, zero cloud cost.</p>
+      </div>
+
+      <div class="way">
+        <h3>· Your warehouse</h3>
+        <div class="cmd"><span class="dim">$</span> zugzug connect snowflake \<br>&nbsp;&nbsp;<span class="dim">--account</span> acme.us-east-1<br><span class="dim">$</span> zugzug introspect <span class="dim">raw.salesforce.*</span><br><span class="dim">$</span> zugzug reconcile <span class="dim">--dry-run</span></div>
+        <p>Read-only first. <code style="color:var(--accent);font-family:var(--font-mono)">--dry-run</code> shows you the SQL it would run and the table it would create — nothing executes until you say so.</p>
+      </div>
+
+      <div class="way">
+        <h3>· In production</h3>
+        <div class="cmd"><span class="dim">$</span> docker run zugzug/zugzug \<br>&nbsp;&nbsp;reconcile <span class="dim">--every 15m</span><br><span class="dim">#</span> or wire into your dbt run:<br><span class="dim">$</span> dbt run-operation zugzug</div>
+        <p>One container on a tiny VM, or invoked from your existing dbt schedule. No new orchestrator to learn.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div>Zugzug · Apache-2.0</div>
+  <div>
+    <a href="#">github</a>
+    <a href="#">docs</a>
+    <a href="#">discord</a>
+    <a href="#">@zugzug_io</a>
+  </div>
+</footer>
+
+</body>
+</html>

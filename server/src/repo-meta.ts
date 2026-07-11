@@ -8,7 +8,6 @@ import {
   type AuditEntry,
   type Preferences,
   type GridLayoutConfig,
-  rel,
   pgAll,
   pgGet,
   pgRun,
@@ -58,11 +57,11 @@ export async function listAudit(limit = 30, tenantId: string = "default"): Promi
     uid: string;
     action: string;
     detail: string;
-    secs: number;
+    at: string;
     metadata: Record<string, unknown> | null;
   }>(
     `SELECT id, user_id AS uid, action, detail, metadata,
-            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs
+            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
      FROM ${pg("audit_log")} ${where}
      ORDER BY created_at DESC
      LIMIT ${cappedLimit}`,
@@ -83,7 +82,7 @@ export async function listAudit(limit = 30, tenantId: string = "default"): Promi
     user: byId.get(r.uid) ?? unknownUser,
     action: r.action,
     detail: r.detail,
-    at: rel(Number(r.secs)),
+    at: r.at,
     metadata: r.metadata,
   }));
 }

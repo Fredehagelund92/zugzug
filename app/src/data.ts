@@ -73,6 +73,9 @@ export interface MappingDimension {
   description?: string | null;
   /** Curated palette token for the monogram. null = fall back to --accent. */
   color?: PaletteName | null;
+  /** Workspace member accountable for this reference table. */
+  ownerUserId?: string | null;
+  ownerName?: string | null;
   rows: number; // rows already in the map table
   canonical: CanonicalValue[];
   counts: {

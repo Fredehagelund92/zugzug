@@ -4,29 +4,8 @@ import { apiFetch } from "../../api";
 import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
-
-export interface User {
-  id: string;
-  name: string;
-  initials: string;
-}
-
-interface AuditEntry {
-  id: string;
-  at: string;
-  user: User;
-  action: string;
-  detail: string;
-  metadata?: Record<string, unknown> | null;
-}
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  if (diff < 60_000) return "just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
-}
+import { AuditTimeline } from "../../components/AuditTimeline";
+import type { AuditEntry } from "../../store";
 
 export function Audit() {
   const [rows, setRows] = useState<AuditEntry[]>([]);
@@ -37,11 +16,12 @@ export function Audit() {
   const tenantParam = params.get("tenant") ?? "";
   const typeParam = params.get("type") ?? "";
   const onlyElevated = params.get("elevated") === "1";
+  const query = params.get("q") ?? "";
 
-  const [tenantFilter, setTenantFilter] = useState(tenantParam);
-  useEffect(() => setTenantFilter(tenantParam), [tenantParam]);
+  const [tenantInput, setTenantInput] = useState(tenantParam);
+  useEffect(() => setTenantInput(tenantParam), [tenantParam]);
 
-  const setParamReplace = useCallback(
+  const setParam = useCallback(
     (key: string, value: string | null) => {
       const next = new URLSearchParams(params);
       if (value && value.length > 0) next.set(key, value);
@@ -51,25 +31,10 @@ export function Audit() {
     [params, setParams],
   );
 
-  const eventTypes = useMemo(() => Array.from(new Set(rows.map((r) => r.action))).sort(), [rows]);
-
-  const filteredRows = useMemo(() => {
-    return rows.filter((r) => {
-      if (onlyElevated) {
-        const elevated =
-          (r.metadata as { actor_super_admin?: boolean } | null | undefined)?.actor_super_admin ===
-          true;
-        if (!elevated) return false;
-      }
-      if (typeParam && r.action !== typeParam) return false;
-      return true;
-    });
-  }, [rows, onlyElevated, typeParam]);
-
   const load = useCallback(async (tenantId?: string) => {
     setLoading(true);
     try {
-      const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}&limit=100` : "?limit=100";
+      const qs = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}&limit=200` : "?limit=200";
       const r = await apiFetch(`/audit${qs}`);
       if (r.ok) setRows((await r.json()) as AuditEntry[]);
     } finally {
@@ -81,93 +46,114 @@ export function Audit() {
     void load(tenantParam.trim() || undefined);
   }, [load, tenantParam]);
 
-  const handleFilter = (e: React.FormEvent) => {
+  const eventTypes = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.action))).sort(),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (onlyElevated) {
+        const meta = r.metadata as { actor_super_admin?: boolean } | null | undefined;
+        if (meta?.actor_super_admin !== true) return false;
+      }
+      if (typeParam && r.action !== typeParam) return false;
+      if (q) {
+        const hay = `${r.action} ${r.detail ?? ""} ${r.user.name}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, onlyElevated, typeParam, query]);
+
+  const handleTenantSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setParamReplace("tenant", tenantFilter.trim() || null);
+    setParam("tenant", tenantInput.trim() || null);
   };
+
+  const activeFilterCount =
+    (tenantParam ? 1 : 0) + (typeParam ? 1 : 0) + (onlyElevated ? 1 : 0) + (query ? 1 : 0);
 
   return (
     <div className="space-y-6">
       <PageHeader
         kicker="System"
-        title="System audit"
-        lede="Cross-workspace activity log. Newest first."
-        count={loading ? undefined : filteredRows.length}
+        title="Activity log"
+        lede="What's happened across every workspace, newest first."
+        count={loading ? undefined : filtered.length}
         action={
-          <form onSubmit={handleFilter} className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              value={query}
+              onChange={(e) => setParam("q", e.target.value || null)}
+              placeholder="Search…"
+              className="w-[200px] border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+            />
             <button
               type="button"
               data-active={onlyElevated}
-              onClick={() => setParamReplace("elevated", onlyElevated ? null : "1")}
+              onClick={() => setParam("elevated", onlyElevated ? null : "1")}
               className={
-                "px-3 py-1.5 text-sm border transition-colors " +
+                "border px-3 py-1.5 text-sm transition-colors " +
                 (onlyElevated
-                  ? "bg-accent-soft border-accent text-accent"
-                  : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-line bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink")
               }
+              title="Only show actions taken under super-admin privilege"
             >
-              Super-admin actions
+              Super-admin only
             </button>
-            <input
-              className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink font-mono placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
-              value={tenantFilter}
-              onChange={(e) => setTenantFilter(e.target.value)}
-              placeholder="Filter by tenant ID…"
-            />
-            <button
-              type="submit"
-              className="px-3 py-1.5 text-sm bg-surface-2 border border-line text-ink-2 hover:text-ink hover:bg-hover transition-colors"
-            >
-              Filter
-            </button>
-            {tenantParam && (
-              <button
-                type="button"
-                onClick={() => setParamReplace("tenant", null)}
-                className="px-3 py-1.5 text-sm text-ink-3 hover:text-ink transition-colors"
-              >
-                Clear
-              </button>
-            )}
-          </form>
+          </div>
         }
       />
 
-      {eventTypes.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
+      <form onSubmit={handleTenantSubmit} className="flex items-center gap-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
+          Workspace
+        </span>
+        <input
+          className="w-[260px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+          value={tenantInput}
+          onChange={(e) => setTenantInput(e.target.value)}
+          placeholder="All workspaces — filter by tenant ID…"
+        />
+        <button
+          type="submit"
+          className="border border-line bg-surface-2 px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+        >
+          Apply
+        </button>
+        {activeFilterCount > 0 && (
           <button
             type="button"
-            data-active={!typeParam}
-            onClick={() => setParamReplace("type", null)}
-            className={
-              "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border transition-colors " +
-              (!typeParam
-                ? "bg-accent-soft border-accent text-accent"
-                : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
-            }
+            onClick={() => {
+              setTenantInput("");
+              const next = new URLSearchParams();
+              setParams(next, { replace: true });
+            }}
+            className="px-3 py-1.5 text-sm text-ink-3 transition-colors hover:text-ink"
           >
-            <span>All events</span>
-            <span className="font-mono text-[10px] tabular-nums opacity-80">{rows.length}</span>
+            Clear all ({activeFilterCount})
           </button>
+        )}
+      </form>
+
+      {eventTypes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Chip label="All events" count={rows.length} active={!typeParam} onClick={() => setParam("type", null)} />
           {eventTypes.map((t) => {
-            const active = typeParam === t;
             const count = rows.filter((r) => r.action === t).length;
+            const active = typeParam === t;
             return (
-              <button
+              <Chip
                 key={t}
-                type="button"
-                data-active={active}
-                onClick={() => setParamReplace("type", active ? null : t)}
-                className={
-                  "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border transition-colors " +
-                  (active
-                    ? "bg-accent-soft border-accent text-accent"
-                    : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")
-                }
-              >
-                <code className="font-mono text-[10.5px]">{t}</code>
-                <span className="font-mono text-[10px] tabular-nums opacity-80">{count}</span>
-              </button>
+                label={t}
+                mono
+                count={count}
+                active={active}
+                onClick={() => setParam("type", active ? null : t)}
+              />
             );
           })}
         </div>
@@ -175,50 +161,69 @@ export function Audit() {
 
       <div className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
-          <SkeletonList rows={6} columns={[140, 100, 160, "minmax(0,1fr)"]} />
-        ) : filteredRows.length === 0 ? (
+          <SkeletonList rows={6} columns={[28, "minmax(0,1fr)", 80]} />
+        ) : filtered.length === 0 ? (
           <EmptyState
-            title="No activity yet"
-            body="System activity will appear here as workspaces are created and changed."
+            title="No matching activity"
+            body={
+              rows.length === 0
+                ? "Once workspaces start generating events, they'll appear here."
+                : "Adjust the filters above to find what you're looking for."
+            }
           />
         ) : (
-          <div className="border border-line divide-y divide-line bg-surface">
-            <div className="grid grid-cols-[140px_100px_160px_1fr] gap-4 items-center px-5 py-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                When
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                User
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Action
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Detail
-              </span>
-            </div>
-            {filteredRows.map((row, i) => (
-              <div
-                key={row.id ?? i}
-                className="zz-rise grid grid-cols-[140px_100px_160px_1fr] gap-4 items-baseline px-5 py-3 hover:bg-hover transition-colors"
-                style={{ animationDelay: `${100 + i * 20}ms` }}
-              >
-                <span className="font-mono text-xs text-ink-3 tabular-nums">
-                  {relativeTime(row.at)}
+          <AuditTimeline
+            rows={filtered}
+            renderActorBadge={(row) => {
+              const meta = row.metadata as { actor_super_admin?: boolean } | null | undefined;
+              if (meta?.actor_super_admin !== true) return null;
+              return (
+                <span
+                  className="ml-1 inline-flex items-center border px-1.5 py-px font-mono text-[9px] uppercase tracking-widest"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--tint-violet) 50%, transparent)",
+                    color: "var(--tint-violet)",
+                    background: "color-mix(in srgb, var(--tint-violet) 12%, transparent)",
+                  }}
+                >
+                  Super-admin
                 </span>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-accent-soft flex items-center justify-center text-[10px] font-bold text-accent">
-                    {row.user.initials}
-                  </div>
-                  <span className="font-mono text-xs text-ink-3 truncate">{row.user.name}</span>
-                </div>
-                <code className="font-mono text-xs text-accent truncate">{row.action}</code>
-                <span className="text-sm text-ink-2 truncate">{row.detail}</span>
-              </div>
-            ))}
-          </div>
+              );
+            }}
+          />
         )}
       </div>
     </div>
+  );
+}
+
+function Chip({
+  label,
+  count,
+  active,
+  onClick,
+  mono,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  mono?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      data-active={active}
+      onClick={onClick}
+      className={
+        "inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs transition-colors " +
+        (active
+          ? "border-accent bg-accent-soft text-accent"
+          : "border-line bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink")
+      }
+    >
+      <span className={mono ? "font-mono text-[10.5px]" : ""}>{label}</span>
+      <span className="font-mono text-[10px] tabular-nums opacity-80">{count}</span>
+    </button>
   );
 }

@@ -11,7 +11,10 @@
 
 The one initiative actively being worked on. One thing at a time.
 
-*(Nothing committed yet — picking up after v0.2 shipped.)*
+- **Reference tables (v0.3)** — dimensions as governed maintained lists, per [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md) and [ADR-0002](./docs/adr/0002-publish-gates-materialization.md). Design reference: `docs/mdm-reference-table.html`. Scope, in shipping order:
+  1. Land the activity/audit timeline + grid cursor perf work (in flight).
+  2. Dimension `owner` metadata (description and color already exist).
+  3. Versioned publish: surface the existing per-dim version counter as "Published vN", derived unpublished-changes panel, "changed only" filter, unify user-facing vocabulary on **publish**. Editing stays instant; publish gates what dbt consumes.
 
 ---
 
@@ -105,8 +108,8 @@ Decisions taking items off the table. Listed so they don't re-litigate in issues
 
 | Item | Why | What would change our mind |
 |---|---|---|
-| Generic MDM positioning (Tamr / Stibo / Reltio space) | Different market; competitive landscape | Never — explicit anti-goal. |
-| Airtable-like surface (rich types, attachments, app builder) | Out of focus | Never — explicit anti-goal. |
+| Generic MDM positioning (Tamr / Stibo / Reltio space) | Different market; competitive landscape. Entity resolution / golden records explicitly rejected in [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md); reference tables are in scope, probabilistic matching is not. | Never — explicit anti-goal. |
+| Airtable-like surface (rich types, attachments, app builder) | Out of focus. Reference tables ([ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md)) are governed lists, not an app platform. | Never — explicit anti-goal. |
 | ADBC as the warehouse abstraction | No production Node binding with Snowflake + BigQuery + Databricks driver coverage in 2026. | A production-grade Node ADBC binding with the full driver set. |
 | OpenRefine Reconciliation API | Different distribution channel; would split focus. | A 10× distribution opportunity tied specifically to OpenRefine. |
 | Apache-2.0 + CLA + BSL relicense | One-way door taken at v0.1 with MIT + DCO. Relicense would require every contributor to re-sign. | Effectively closed. |

@@ -511,6 +511,7 @@ export async function patchDimension(
     orderingMode?: "derived" | "manual";
     description?: string | null;
     color?: string | null;
+    ownerUserId?: string | null;
   },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}`, {
@@ -738,6 +739,20 @@ export async function generateSuggestion(
     };
     cached?: boolean;
   }>;
+}
+
+/** Per-dimension publish state (ADR-0002): last published version + what's
+ *  waiting — staged drafts and canonical rows touched since that publish. */
+export interface PublishState {
+  version: number;
+  publishedAt: string | null;
+  publishedByName: string | null;
+  pendingDrafts: number;
+  changedKeys: string[];
+}
+
+export async function fetchPublishState(dimId: string): Promise<PublishState> {
+  return api<PublishState>(`/dimensions/${encodeURIComponent(dimId)}/publish-state`);
 }
 
 /** Approve & commit the dimension's mapped drafts (server folds them into the

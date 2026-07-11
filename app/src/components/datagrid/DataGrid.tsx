@@ -69,13 +69,25 @@ function RangeOutline({
         height: brRect.bottom - tlRect.top,
       });
     };
+    // rAF-coalesce: scroll fires per-pixel, but we only need one measure per
+    // frame. Without this, scrolling a long list ran getBoundingClientRect +
+    // setState on every wheel tick and choked the main thread.
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
+      });
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(container);
-    container.addEventListener("scroll", update);
+    container.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       ro.disconnect();
-      container.removeEventListener("scroll", update);
+      if (raf) cancelAnimationFrame(raf);
+      container.removeEventListener("scroll", onScroll);
     };
   }, [topLeftSelector, bottomRightSelector, containerRef]);
   if (!rect) return null;
@@ -123,13 +135,22 @@ function FillHandle({
         left: tRect.right - cRect.left + container.scrollLeft - 8,
       });
     };
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
+      });
+    };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(container);
-    container.addEventListener("scroll", update);
+    container.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       ro.disconnect();
-      container.removeEventListener("scroll", update);
+      if (raf) cancelAnimationFrame(raf);
+      container.removeEventListener("scroll", onScroll);
     };
   }, [targetSelector, containerRef]);
   if (!pos) return null;

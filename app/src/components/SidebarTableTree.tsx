@@ -105,7 +105,7 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
         {dirty && (
           <span
             className="h-1.5 w-1.5 shrink-0 rounded-pill bg-accent"
-            title="uncommitted drafts"
+            title="unpublished drafts"
           />
         )}
       </button>

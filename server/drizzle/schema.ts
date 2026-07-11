@@ -43,6 +43,7 @@ export const dimension = app.table(
     name_col:    varchar("name_col"),
     description: varchar("description"),
     color:       varchar("color"),
+    owner_user_id: varchar("owner_user_id"),
     ordering_mode:      varchar("ordering_mode").notNull().default("derived"),
     last_rebalanced_at: timestamp("last_rebalanced_at"),
     tenant_id:   varchar("tenant_id").notNull().references(() => tenant.id),

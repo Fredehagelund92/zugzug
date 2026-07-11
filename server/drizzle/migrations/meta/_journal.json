@@ -225,6 +225,27 @@
       "when": 1781800001000,
       "tag": "0031_warehouse_db_added_by_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781800002000,
+      "tag": "0032_dim_scan_values",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1781800003000,
+      "tag": "0033_fix_dim_scan_value_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1781800004000,
+      "tag": "0034_dimension_owner",
+      "breakpoints": true
     }
   ]
 }

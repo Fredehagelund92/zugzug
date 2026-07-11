@@ -209,6 +209,80 @@ export async function discardDraft(
   await appendAuditAs(userId, "discard_draft", `${dimId}: ${raw}`, { tenantId });
 }
 
+export interface PublishState {
+  /** Latest published version; 0 = never published. */
+  version: number;
+  publishedAt: string | null;
+  publishedByName: string | null;
+  /** Staged mapping drafts awaiting publish. */
+  pendingDrafts: number;
+  /** Canonical keys edited, added, or retired since the last publish (ADR-0002:
+   *  derived from canonical_version, not a staging queue). Keys created by
+   *  draft folding don't appear here — they go out in the same publish. */
+  changedKeys: string[];
+}
+
+/** Live canonical keys touched since `since` (or ever, when never published). */
+async function changedKeysSince(
+  dimId: string,
+  tenantId: string,
+  since: Date | null,
+): Promise<string[]> {
+  const rows = since
+    ? await pgAll<{ key: string }>(
+        `SELECT key FROM ${pg("canonical_version")}
+         WHERE dim_id = $1 AND tenant_id = $2
+           AND (updated_at > $3 OR retired_at > $3)
+         ORDER BY key`,
+        [dimId, tenantId, since],
+      )
+    : await pgAll<{ key: string }>(
+        `SELECT key FROM ${pg("canonical_version")}
+         WHERE dim_id = $1 AND tenant_id = $2
+         ORDER BY key`,
+        [dimId, tenantId],
+      );
+  return rows.map((r) => r.key);
+}
+
+export async function getPublishState(dimId: string, tenantId: string): Promise<PublishState> {
+  const last = await pgGet<{ v: number; at: Date | null }>(
+    `SELECT count(*)::int AS v, max(occurred_at) AS at
+     FROM ${pg("outbound_event")}
+     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+    [tenantId, dimId],
+  );
+  const version = Number(last?.v ?? 0);
+  const publishedAt = last?.at ?? null;
+  let publishedByName: string | null = null;
+  if (version > 0) {
+    // Legacy rows (pre double-encoding fix) hold payload as a jsonb string —
+    // unwrap with #>> '{}' before descending in that case.
+    const latest = await pgGet<{ by: string | null }>(
+      `SELECT CASE WHEN jsonb_typeof(payload) = 'string'
+                   THEN (payload #>> '{}')::jsonb->'committed_by'->>'name'
+                   ELSE payload->'committed_by'->>'name' END AS by
+       FROM ${pg("outbound_event")}
+       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'
+       ORDER BY occurred_at DESC LIMIT 1`,
+      [tenantId, dimId],
+    );
+    publishedByName = latest?.by ?? null;
+  }
+  const pending = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${pg("draft")}
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [dimId, tenantId],
+  );
+  return {
+    version,
+    publishedAt: publishedAt ? publishedAt.toISOString() : null,
+    publishedByName,
+    pendingDrafts: Number(pending?.n ?? 0),
+    changedKeys: await changedKeysSince(dimId, tenantId, publishedAt),
+  };
+}
+
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
 export async function commit(
@@ -244,7 +318,19 @@ export async function commit(
     [dimId, tenantId],
   );
   const committed = Number(approved?.n ?? 0);
-  if (!committed) return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
+
+  // ADR-0002: canonical edits are instant in the working copy; publish stamps
+  // them into a version too. A commit with zero drafts still proceeds when
+  // canonical rows changed since the last publish — the draft-driven SQL
+  // below all no-ops safely.
+  const lastPublish = await pgGet<{ at: Date | null }>(
+    `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
+     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+    [tenantId, dimId],
+  );
+  const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null);
+  if (!committed && canonicalChanged.length === 0)
+    return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
   const rowsRecovered = await rowsForUnmappedDrafts(dimId, tenantId, meta.mapTable);
 
@@ -351,6 +437,10 @@ export async function commit(
       `SELECT name FROM ${pg("users")} WHERE id = $1`,
       [userId],
     );
+    // Stamp with the DB clock: publish-state comparisons ("changed since last
+    // publish") run against canonical_version.updated_at, which is DB now().
+    // A host/DB clock skew would otherwise resurrect just-published changes.
+    const dbNow = await tx.get<{ now: Date }>(`SELECT now() AS now`);
     const remappedRaws = new Set(remappedDrafts.map((r) => r.raw.toLowerCase()));
     const addedKeys = approvedDrafts
       .filter((d) => !remappedRaws.has(d.raw.toLowerCase()))
@@ -364,7 +454,7 @@ export async function commit(
       tenantId,
       type: "dimension.committed",
       dimId,
-      occurredAt: new Date(),
+      occurredAt: dbNow?.now ?? new Date(),
       payload: {
         dim_slug: dimId,
         dim_label: meta.label,
@@ -378,7 +468,7 @@ export async function commit(
           merged: [],
           retired: [],
         },
-        summary: { added: addedKeys.length, remapped: remappedKeys.length, updated: 0, merged: 0, retired: 0 },
+        summary: { added: addedKeys.length, remapped: remappedKeys.length, updated: canonicalChanged.length, merged: 0, retired: 0 },
         ...((addedKeys.length > 200 || remappedKeys.length > 200) ? { changes_truncated: true } : {}),
       },
       idemKey: `dimension.committed:${dimId}:${v}`,
@@ -395,12 +485,21 @@ export async function commit(
     });
   }
 
-  await appendAuditAs(
-    userId,
-    "Committed",
-    `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
-    { tenantId },
-  );
+  if (committed > 0) {
+    await appendAuditAs(
+      userId,
+      "Committed",
+      `${committed} value${committed === 1 ? "" : "s"} → ${meta.mapTable} · ${rowsRecovered.toLocaleString()} rows recovered`,
+      { tenantId },
+    );
+  } else {
+    await appendAuditAs(
+      userId,
+      "Published",
+      `${canonicalChanged.length} record change${canonicalChanged.length === 1 ? "" : "s"} → ${meta.dimTable}`,
+      { tenantId },
+    );
+  }
 
   // After Postgres commit: if the warehouse adapter is writable, attempt the
   // warehouse MERGE. Failures log + surface but don't roll back Postgres.
