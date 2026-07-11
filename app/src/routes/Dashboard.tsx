@@ -254,7 +254,7 @@ export function Dashboard() {
     {
       label: "Rows at risk",
       value: fmtK(rowsAtRisk),
-      delta: rowsAtRisk > 0 ? "unmapped warehouse rows" : undefined,
+      delta: rowsAtRisk > 0 ? "warehouse rows whose source value has no record yet" : "all warehouse rows are mapped",
       dir: rowsAtRisk > 0 ? "warn" : undefined,
     },
   ];
@@ -269,7 +269,7 @@ export function Dashboard() {
           backdrop={<MarkBackdrop />}
           kicker="Tables"
           title="Your workspace is empty"
-          lede="Create a master table to start reconciling messy source values to canonical ones. Each table maps a single dimension (countries, regions, post types, …) from your warehouse."
+          lede="Create a table for each list you curate — Country, Channel, Partner. Zug Zug maps messy source values ('US', 'USA', 'United States') to one approved record each, so your dashboards all count the same thing."
           meta={
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Link to={nav.tables}>

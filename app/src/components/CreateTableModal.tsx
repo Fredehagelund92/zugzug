@@ -270,8 +270,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 the name.
               </p>
               <p className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                Add fields from the table view once it&apos;s created — the schema doesn&apos;t have
-                to be decided here.
+                You can add extra columns (region, currency, owner…) from the table view later —
+                nothing is locked in here.
               </p>
             </div>
           )}
@@ -292,16 +292,20 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               return (
                 <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
                   <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                    Seed records from a warehouse column. Each distinct value becomes one record,
-                    with a slug ID.
+                    Seed records from a warehouse column. Example: a country column with 'USA',
+                    'Canada' and 'United States' becomes records usa, canada and united_states —
+                    you can merge and rename them afterwards.
                   </p>
                   {sourceOpts.length === 0 ? (
                     <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                      No warehouse columns available.{" "}
+                      No warehouse columns available yet. An admin connects a database under
+                      Settings → Warehouse; then you pick columns on the{" "}
                       <a href={nav.sources} className="text-accent underline">
-                        Configure a source
+                        Sources
                       </a>{" "}
-                      first.
+                      page.
+                      <br />
+                      Until then, start with a blank table — you can wire a source later.
                     </div>
                   ) : (
                     <>
@@ -330,16 +334,19 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 provides the human name shown alongside it.
               </p>
               <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
-                ⚠ The ID column is permanent. Pick the column that uniquely and stably identifies
-                each record — it cannot be changed after creation.
+                ⚠ The ID column is permanent — it becomes the join key in your warehouse mapping
+                tables. Pick a column that never changes (a database ID, not a name).
               </div>
               {sourceOpts.length === 0 ? (
                 <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                  No warehouse columns available.{" "}
+                  No warehouse columns available yet. An admin connects a database under
+                  Settings → Warehouse; then you pick columns on the{" "}
                   <a href={nav.sources} className="text-accent underline">
-                    Configure a source
+                    Sources
                   </a>{" "}
-                  first.
+                  page.
+                  <br />
+                  Until then, start with a blank table — you can wire a source later.
                 </div>
               ) : (
                 <>
