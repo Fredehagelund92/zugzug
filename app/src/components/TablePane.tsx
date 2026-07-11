@@ -38,6 +38,9 @@ import {
   useCurrentUser,
   ConflictError,
   refreshDimAndNotify,
+  commit,
+  fetchPublishState,
+  type PublishState,
   type GridLayoutConfig,
 } from "../store";
 import { apiFetch } from "../api";
@@ -250,6 +253,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [members, setMembers] = useState<{ user_id: string; name: string | null }[] | null>(null);
+  const [pubState, setPubState] = useState<PublishState | null>(null);
+  const [changedOnly, setChangedOnly] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
@@ -414,15 +420,46 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     return ordered;
   }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
 
-  const rowsForGrid = useMemo(
-    () =>
-      list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
-    [list],
-  );
+  const changedKeySet = useMemo(() => new Set(pubState?.changedKeys ?? []), [pubState]);
+  const rowsForGrid = useMemo(() => {
+    const src = changedOnly ? list.filter((c) => changedKeySet.has(c.key)) : list;
+    return src.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) }));
+  }, [list, changedOnly, changedKeySet]);
 
   const flash = (m: string) => {
     setNotice(m);
     setTimeout(() => setNotice(null), 3000);
+  };
+
+  useEffect(() => {
+    let alive = true;
+    fetchPublishState(activeId)
+      .then((s) => {
+        if (alive) setPubState(s);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // `dim` identity changes on every store refresh — exactly when the
+    // pending-work counts may have moved.
+  }, [activeId, dim]);
+
+  useEffect(() => setChangedOnly(false), [activeId]);
+
+  const unpublished = pubState ? pubState.pendingDrafts + pubState.changedKeys.length : 0;
+
+  const doPublish = async () => {
+    if (publishing || unpublished === 0) return;
+    setPublishing(true);
+    try {
+      await commit(activeId);
+      const s = await fetchPublishState(activeId);
+      setPubState(s);
+      flash(`Published v${s.version}`);
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const add = async () => {
@@ -705,6 +742,31 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               owner <span className="text-ink">{dim.ownerName}</span>
             </span>
           )}
+          {pubState && pubState.version > 0 && (
+            <span
+              title={
+                pubState.publishedAt
+                  ? `Last published ${new Date(pubState.publishedAt).toLocaleString()}${pubState.publishedByName ? ` by ${pubState.publishedByName}` : ""}`
+                  : undefined
+              }
+            >
+              published <span className="text-ink">v{pubState.version}</span>
+            </span>
+          )}
+          {pubState && pubState.changedKeys.length > 0 && (
+            <button
+              className={cx(
+                "rounded-pill border px-2 py-0.5 font-mono text-[10px] transition-colors",
+                changedOnly
+                  ? "border-accent bg-accent-wash text-accent"
+                  : "border-line-2 text-ink-2 hover:border-accent",
+              )}
+              onClick={() => setChangedOnly((v) => !v)}
+              title="Show only rows changed since the last publish"
+            >
+              changed only · {pubState.changedKeys.length}
+            </button>
+          )}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
@@ -756,6 +818,16 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               title="Assign an owner for this table"
             >
               ⍟ Owner
+            </Button>
+          )}
+          {canEdit && pubState && unpublished > 0 && (
+            <Button
+              size="sm"
+              disabled={publishing}
+              onClick={() => void doPublish()}
+              title={`${pubState.pendingDrafts} staged mapping${pubState.pendingDrafts === 1 ? "" : "s"} + ${pubState.changedKeys.length} record change${pubState.changedKeys.length === 1 ? "" : "s"}`}
+            >
+              ↑ Publish v{pubState.version + 1}
             </Button>
           )}
           {canEdit && (

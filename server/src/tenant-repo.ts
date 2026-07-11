@@ -388,6 +388,10 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDrafts.commit(dimId, userId, this.tenantId));
   }
 
+  getPublishState(dimId: string): Promise<repoDrafts.PublishState> {
+    return this.withClearCtx(() => repoDrafts.getPublishState(dimId, this.tenantId));
+  }
+
   // --- scan ------------------------------------------------------------------
   listSources(opts: { q?: string; schema?: string; status?: string }): Promise<SourceInfo[]> {
     return this.withClearCtx(() => repoScan.listSources({ ...opts, tenantId: this.tenantId }));

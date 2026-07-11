@@ -41,7 +41,11 @@ export async function dispatchOutbound(tx: TxHelpers, input: DispatchInput): Pro
       input.type,
       input.dimId ?? null,
       input.occurredAt,
-      JSON.stringify(input.payload),
+      // Pass the object — postgres.js serializes it once. Pre-stringifying
+      // here double-encoded payload as a jsonb *string*, which broke
+      // payload->… queries (delivery worked only because the dispatcher
+      // tolerates both shapes). Legacy rows remain strings; readers unwrap.
+      input.payload,
       input.idemKey,
     ],
   );

@@ -975,6 +975,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           await reqRepo.scanOneDim(id);
           return json({ ok: true });
         }
+        // GET /api/dimensions/:id/publish-state — version, last publish, pending work
+        if (seg[3] === "publish-state" && seg.length === 4 && id && method === "GET") {
+          return json(await reqRepo.getPublishState(id));
+        }
         // PATCH /api/dimensions/:id — update orderingMode / description / color / ownerUserId
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");

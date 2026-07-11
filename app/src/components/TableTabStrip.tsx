@@ -218,9 +218,9 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
       </span>
       {dirty && (
         <span
-          aria-label="uncommitted drafts"
+          aria-label="unpublished drafts"
           className="h-1.5 w-1.5 rounded-pill bg-accent"
-          title="uncommitted drafts"
+          title="unpublished drafts"
         />
       )}
       <button

@@ -741,6 +741,20 @@ export async function generateSuggestion(
   }>;
 }
 
+/** Per-dimension publish state (ADR-0002): last published version + what's
+ *  waiting — staged drafts and canonical rows touched since that publish. */
+export interface PublishState {
+  version: number;
+  publishedAt: string | null;
+  publishedByName: string | null;
+  pendingDrafts: number;
+  changedKeys: string[];
+}
+
+export async function fetchPublishState(dimId: string): Promise<PublishState> {
+  return api<PublishState>(`/dimensions/${encodeURIComponent(dimId)}/publish-state`);
+}
+
 /** Approve & commit the dimension's mapped drafts (server folds them into the
  *  canonical tables in one batch). Returns the count + warehouse rows recovered. */
 export async function commit(dimId: string): Promise<{ committed: number; rowsRecovered: number }> {
