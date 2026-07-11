@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Zugzug — duplicates inbox</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b14;
+    --surface: #0f1526;
+    --surface-2: #182240;
+    --ink: #eaeef7;
+    --ink-2: #9ba7bf;
+    --ink-3: #5b6884;
+    --line: rgba(255,255,255,.10);
+    --line-2: rgba(255,255,255,.17);
+    --accent: #d6336c;
+    --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+    --amber: #f0a323;
+    --amber-soft: color-mix(in srgb, var(--amber) 12%, transparent);
+    --mint: #30a46c;
+    --mint-soft: color-mix(in srgb, var(--mint) 14%, transparent);
+    --coral: #e8523a;
+    --font-display: "Bricolage Grotesque", sans-serif;
+    --font-body: "Hanken Grotesk", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.55 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  ::selection { background: var(--accent-soft); color: var(--ink); }
+
+  /* ───────── topbar ───────── */
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: -0.022em;
+  }
+  .where {
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+  }
+  .where b { color: var(--ink-2); font-weight: 600; }
+  .progress {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .pdots {
+    display: flex;
+    gap: 4px;
+  }
+  .pdots i {
+    width: 8px; height: 8px;
+    background: var(--line);
+    display: inline-block;
+    border-radius: 50%;
+  }
+  .pdots i.done { background: var(--mint); }
+  .pdots i.now {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .pcount {
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+  }
+  .pcount b { color: var(--ink); font-weight: 600; }
+  .escape {
+    font: 500 12px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    padding: 7px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    background: var(--surface);
+  }
+  .escape:hover { color: var(--ink); border-color: var(--line-2); }
+
+  /* ───────── stage ───────── */
+  main {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 56px 36px 120px;
+  }
+
+  .kicker {
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--accent);
+    text-align: center;
+    margin-bottom: 22px;
+  }
+
+  h1.q {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(34px, 4.4vw, 52px);
+    letter-spacing: -0.03em;
+    line-height: 1.06;
+    margin: 0 0 56px;
+    text-align: center;
+  }
+
+  /* ───────── two records header ───────── */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr 140px 1fr;
+    gap: 20px;
+    align-items: stretch;
+    margin-bottom: 14px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 22px 24px 18px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .card .name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 6px;
+  }
+  .card .id {
+    font: 500 11.5px/1 var(--font-mono);
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 22px;
+  }
+  .card .meta {
+    margin-top: auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px 22px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+  }
+  .card .meta div b {
+    display: block;
+    color: var(--ink-2);
+    font-weight: 600;
+    font-size: 13.5px;
+    margin-top: 2px;
+  }
+  .card .source-tag {
+    position: absolute;
+    top: -1px; right: -1px;
+    font: 600 10px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    padding: 6px 8px;
+    background: var(--surface-2);
+    border-left: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-3);
+  }
+  .source-tag .sw {
+    width: 6px; height: 6px;
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+  .sw.salesforce { background: #00a1e0; }
+  .sw.hubspot    { background: #ff7a59; }
+
+  .card[data-survives="true"] .name::after {
+    content: "this one survives";
+    display: block;
+    margin-top: 10px;
+    font: 500 10.5px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--mint);
+  }
+  .card[data-survives="true"] {
+    border-color: color-mix(in srgb, var(--mint) 40%, var(--line));
+    box-shadow: inset 3px 0 0 var(--mint);
+  }
+
+  /* ───────── confidence column ───────── */
+  .conf {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+  }
+  .conf .pct {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 46px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: var(--mint);
+  }
+  .conf .pct sub {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--ink-3);
+    vertical-align: middle;
+    margin-left: 2px;
+  }
+  .conf .lbl {
+    font: 500 9.5px/1.3 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+  }
+  .conf .swap {
+    margin-top: 14px;
+    font: 500 10px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+    border: 1px dashed var(--line);
+    padding: 7px 9px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .conf .swap:hover { color: var(--ink); border-color: var(--line-2); }
+
+  /* ───────── why-strip ───────── */
+  .why {
+    margin-top: 28px;
+    padding: 16px 22px;
+    background: var(--mint-soft);
+    border-left: 2px solid var(--mint);
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 18px;
+    align-items: center;
+  }
+  .why .head {
+    font: 500 10.5px/1.3 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--mint);
+  }
+  .why .signals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .why .sig {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .why .sig b { color: var(--ink); font-weight: 600; }
+  .why .sig .yes {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px; height: 14px;
+    background: var(--mint);
+    color: #0a1810;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 50%;
+  }
+
+  /* ───────── disagreements ───────── */
+  .sec-label {
+    margin-top: 36px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.28em;
+    color: var(--amber);
+  }
+  .sec-label .rule {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+  }
+  .sec-label .count {
+    color: var(--ink-3);
+  }
+
+  .diffs {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .diff {
+    display: grid;
+    grid-template-columns: 1fr 140px 1fr;
+    background: var(--surface);
+  }
+  .diff > .label {
+    grid-column: 1 / -1;
+    padding: 10px 22px 4px;
+    font: 600 10.5px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+    background: var(--surface);
+  }
+  .diff > .label small {
+    color: var(--ink-3);
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    margin-left: 12px;
+    font-size: 11.5px;
+    font-family: var(--font-body);
+  }
+  .diff > .v {
+    padding: 4px 22px 18px;
+    font: 600 17px/1.35 var(--font-body);
+    color: var(--ink);
+    word-break: break-word;
+  }
+  .diff > .v .sub {
+    display: block;
+    margin-top: 6px;
+    font: 500 11.5px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+    font-weight: 500;
+  }
+  .diff > .v.mono { font-family: var(--font-mono); font-size: 15px; }
+  .diff > .v.muted { color: var(--ink-3); font-style: italic; font-weight: 500; }
+  .diff > .vs {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 10px;
+    background: var(--bg);
+  }
+  .diff > .vs .pill {
+    font: 600 10px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    padding: 5px 8px;
+    background: var(--amber-soft);
+    color: var(--amber);
+    border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  }
+  .diff > .vs .pill.warn {
+    background: color-mix(in srgb, var(--coral) 12%, transparent);
+    color: var(--coral);
+    border-color: color-mix(in srgb, var(--coral) 40%, transparent);
+  }
+
+  .show-all {
+    margin-top: 18px;
+    text-align: center;
+  }
+  .show-all a {
+    font: 500 12px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--ink-3);
+    padding-bottom: 2px;
+    cursor: pointer;
+  }
+  .show-all a:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ───────── decision bar ───────── */
+  .decide {
+    margin-top: 52px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 18px 22px;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color .15s, background .15s, transform .15s;
+  }
+  .btn:hover {
+    transform: translateY(-2px);
+    border-color: var(--line-2);
+  }
+  .btn .lead {
+    font: 600 15px/1.2 var(--font-body);
+  }
+  .btn .lead .k {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 5px;
+    font: 600 11px/1 var(--font-mono);
+    background: var(--surface-2);
+    color: var(--ink-3);
+    border: 1px solid var(--line);
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .btn .sub {
+    font: 500 12px/1.35 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-3);
+  }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn.primary .lead .k { background: rgba(0,0,0,.25); color: #fff; border-color: transparent; }
+  .btn.primary .sub { color: rgba(255,255,255,.78); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
+
+  /* ───────── footer hint ───────── */
+  .hint {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    font: 500 11px/1 var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-3);
+  }
+  .hint .next {
+    margin-left: auto;
+    color: var(--ink-2);
+  }
+  .hint .next b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .hint .shortcuts {
+    display: flex; gap: 14px;
+  }
+  .hint .sc {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .hint .sc kbd {
+    font-family: var(--font-mono);
+    color: var(--ink-2);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 3px 6px;
+    font-size: 10.5px;
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <span class="brand">zugzug</span>
+  <span class="where"><b>Customers</b> · Duplicates inbox</span>
+  <div class="progress">
+    <span class="pcount"><b>3</b> of <b>12</b></span>
+    <span class="pdots">
+      <i class="done"></i><i class="done"></i>
+      <i class="now"></i>
+      <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </span>
+  </div>
+  <button class="escape">Exit inbox</button>
+</header>
+
+<main>
+
+  <div class="kicker">Match 3 of 12 · auto-rules couldn't decide</div>
+  <h1 class="q">Are these the same company?</h1>
+
+  <!-- ============ the two records ============ -->
+  <section class="pair">
+
+    <article class="card" data-survives="true">
+      <span class="source-tag"><span class="sw salesforce"></span>Salesforce</span>
+      <div class="name">Acme Corporation</div>
+      <div class="id">cus_0042 · created 2023-08-14</div>
+      <div class="meta">
+        <div>DUNS<b>084-029-301</b></div>
+        <div>VAT<b>DE 314 159 265</b></div>
+        <div>HQ<b>Berlin, DE</b></div>
+        <div>Country<b>Germany</b></div>
+      </div>
+    </article>
+
+    <div class="conf">
+      <div class="lbl">Match<br>confidence</div>
+      <div class="pct">94<sub>%</sub></div>
+      <button class="swap">⇄ Flip survivor</button>
+    </div>
+
+    <article class="card">
+      <span class="source-tag"><span class="sw hubspot"></span>HubSpot</span>
+      <div class="name">Acme Corp.</div>
+      <div class="id">cus_0117 · created 2024-02-09</div>
+      <div class="meta">
+        <div>DUNS<b>084-029-301</b></div>
+        <div>VAT<b>DE 314 159 265</b></div>
+        <div>HQ<b>Berlin, DE</b></div>
+        <div>Country<b>Germany</b></div>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- ============ why we think so ============ -->
+  <section class="why">
+    <div class="head">Why we<br>think so</div>
+    <div class="signals">
+      <span class="sig"><span class="yes">✓</span> <b>DUNS</b> identical</span>
+      <span class="sig"><span class="yes">✓</span> <b>VAT ID</b> identical</span>
+      <span class="sig"><span class="yes">✓</span> Same <b>country</b></span>
+      <span class="sig"><span class="yes">✓</span> Same <b>HQ city</b></span>
+      <span class="sig"><span class="yes">✓</span> Name <b>0.91 similar</b></span>
+      <span class="sig"><span class="yes">✓</span> 11 of 14 fields agree</span>
+    </div>
+  </section>
+
+  <!-- ============ disagreements ============ -->
+  <div class="sec-label">
+    <span>But they disagree on</span>
+    <span class="count">3 fields</span>
+    <span class="rule"></span>
+  </div>
+
+  <section class="diffs">
+
+    <div class="diff">
+      <div class="label">Legal name <small>used on invoices &amp; contracts</small></div>
+      <div class="v">
+        Acme Corporation
+        <span class="sub">Salesforce · updated 2d ago</span>
+      </div>
+      <div class="vs"><span class="pill">spelling</span></div>
+      <div class="v">
+        Acme Corp.
+        <span class="sub">HubSpot · updated 14d ago</span>
+      </div>
+    </div>
+
+    <div class="diff">
+      <div class="label">Primary email <small>where billing notices go</small></div>
+      <div class="v mono">
+        billing@acme.com
+        <span class="sub">Salesforce · verified ok</span>
+      </div>
+      <div class="vs"><span class="pill warn">conflict</span></div>
+      <div class="v mono">
+        ap@acme.com
+        <span class="sub">HubSpot · never verified</span>
+      </div>
+    </div>
+
+    <div class="diff">
+      <div class="label">Annual revenue <small>finance fields auto-defer to NetSuite</small></div>
+      <div class="v">
+        € 184,300,000
+        <span class="sub">NetSuite · Q2 close</span>
+      </div>
+      <div class="vs"><span class="pill warn">unit?</span></div>
+      <div class="v">
+        $ 200,000,000
+        <span class="sub">HubSpot · self-reported</span>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="show-all"><a>Show all 14 fields →</a></div>
+
+  <!-- ============ decision ============ -->
+  <section class="decide">
+
+    <button class="btn primary">
+      <span class="lead"><span class="k">M</span>Yes — merge them</span>
+      <span class="sub">Survivor → Acme Corporation · 3 conflicts go to you</span>
+    </button>
+
+    <button class="btn">
+      <span class="lead"><span class="k">D</span>Different</span>
+      <span class="sub">Mark not a duplicate · won't ask again</span>
+    </button>
+
+    <button class="btn">
+      <span class="lead"><span class="k">P</span>Parent / child</span>
+      <span class="sub">Same group, different entities</span>
+    </button>
+
+    <button class="btn">
+      <span class="lead"><span class="k">S</span>Skip</span>
+      <span class="sub">I'll come back to this one</span>
+    </button>
+
+  </section>
+
+  <!-- ============ hint ============ -->
+  <footer class="hint">
+    <div class="shortcuts">
+      <span class="sc"><kbd>M</kbd> merge</span>
+      <span class="sc"><kbd>D</kbd> different</span>
+      <span class="sc"><kbd>P</kbd> parent</span>
+      <span class="sc"><kbd>S</kbd> skip</span>
+      <span class="sc"><kbd>?</kbd> help</span>
+    </div>
+    <div class="next">
+      Next up · <b>Acme Industries Ltd ↔ Acme UK Limited</b> · 61% confidence
+    </div>
+  </footer>
+
+</main>
+
+</body>
+</html>
