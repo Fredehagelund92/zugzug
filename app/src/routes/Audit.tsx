@@ -80,7 +80,7 @@ export function Audit() {
         {audit.length === 0 ? (
           <EmptyState
             title="Nothing's happened yet"
-            body="Drafts, commits, member changes, and other workspace actions will show up here as they occur."
+            body="Drafts, publishes, member changes, and other workspace actions will show up here as they occur."
           />
         ) : filtered.length === 0 ? (
           <EmptyState

@@ -381,7 +381,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   };
   const tablesGroup: NavItem[] = [
     { to: navLinks.tables, label: "Tables", Icon: IconTables, count: dims.length },
-    { to: navLinks.triage, label: "Workbench", Icon: IconMapping, count: totalNew },
+    { to: navLinks.triage, label: "Review", Icon: IconMapping, count: totalNew },
     { to: navLinks.audit, label: "Activity", Icon: IconAudit },
   ];
   const workspaceGroup: NavItem[] = [
@@ -416,7 +416,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
       action: () => navigate(navLinks.triage),
-      keywords: "inbox queue match reconcile mapping triage",
+      keywords: "review unmapped source values mapping",
       priority: true,
     });
     out.push({
@@ -435,7 +435,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       secondary: `${dims.length}`,
       icon: <IconTables className="h-4 w-4" />,
       action: () => navigate(navLinks.tables),
-      keywords: "master records",
+      keywords: "tables records",
       priority: true,
     });
     out.push({

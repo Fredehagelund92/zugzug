@@ -124,7 +124,8 @@ createRoot(root).render(
                               path="scans"
                               element={<Navigate to="../warehouse#scans" replace />}
                             />
-                            <Route path="matching" element={<Matching />} />
+                            <Route path="mapping" element={<Matching />} />
+                            <Route path="matching" element={<Navigate to="../mapping" replace />} />
                             <Route path="warehouse" element={<Warehouse />} />
                             <Route path="audit" element={<Navigate to="../../audit" replace />} />
                             <Route path="danger" element={<Danger />} />

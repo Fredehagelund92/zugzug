@@ -267,7 +267,7 @@ export function Dashboard() {
         <EmptyStateIllustration />
         <PageHeader
           backdrop={<MarkBackdrop />}
-          kicker="Master data"
+          kicker="Tables"
           title="Your workspace is empty"
           lede="Create a master table to start reconciling messy source values to canonical ones. Each table maps a single dimension (countries, regions, post types, …) from your warehouse."
           meta={
@@ -289,7 +289,7 @@ export function Dashboard() {
     <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-3 md:space-y-8 md:p-8">
       <PageHeader
         backdrop={<MarkBackdrop />}
-        kicker="Master data"
+        kicker="Tables"
         title="Home"
         meta={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-ink-2">

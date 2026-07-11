@@ -47,7 +47,7 @@ export function Login() {
         <div>
           <h1 className="font-display text-2xl font-bold">Sign in</h1>
           <p className="mt-1 text-[13px]" style={{ color: "var(--ink-2)" }}>
-            Master data reconciliation.
+            Reference table reconciliation.
           </p>
         </div>
 

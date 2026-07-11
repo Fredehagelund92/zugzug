@@ -15,7 +15,7 @@ interface Item {
 const ITEMS: Item[] = [
   { label: "General", to: "general", action: "settings.general.view", Icon: IconSettings },
   { label: "Members", to: "members", action: "settings.members.view", Icon: IconUsers },
-  { label: "Matching", to: "matching", action: "settings.matching.view", Icon: IconWand },
+  { label: "Mapping", to: "mapping", action: "settings.matching.view", Icon: IconWand },
   { label: "Warehouse", to: "warehouse", action: "settings.warehouse.view", Icon: IconDatabase },
   { label: "Danger", to: "danger", action: "settings.danger.leave", Icon: IconOctagonAlert },
 ];

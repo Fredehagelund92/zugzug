@@ -22,7 +22,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "Workbench",
+    title: "Review",
     rows: [
       ["⌘1 … ⌘9", "switch tab by position"],
       ["⌥1 / ⌥2 / ⌥3", "switch mode (Records / Match / Sources)"],

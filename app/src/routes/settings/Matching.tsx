@@ -13,8 +13,8 @@ export function Matching() {
 
   return (
     <SettingsSection
-      title="Matching defaults"
-      hint="How aggressively Zug Zug matches new values when a scan finds them."
+      title="Mapping defaults"
+      hint="How aggressively Zug Zug maps new source values when a scan finds them."
     >
       <ReadOnly enabled={!canEdit}>
         <FormField label="Confidence bands">
