@@ -103,6 +103,19 @@ export function useGridCursor<Row>({
     [columns],
   );
 
+  // O(1) lookups for cursor moves — findIndex() on every arrow keystroke
+  // turned into the dominant cost at 1k+ rows.
+  const rowIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < rows.length; i++) m.set(rowKey(rows[i] as Row), i);
+    return m;
+  }, [rows, rowKey]);
+  const colIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    for (let i = 0; i < navCols.length; i++) m.set(navCols[i]!.field, i);
+    return m;
+  }, [navCols]);
+
   const move = useCallback(
     (dx: number, dy: number) => {
       setCursor((cur) => {
@@ -111,8 +124,8 @@ export function useGridCursor<Row>({
           const c0 = navCols[0];
           return r0 && c0 ? { rowKey: rowKey(r0), field: c0.field, editing: false } : null;
         }
-        const ri = rows.findIndex((r) => rowKey(r) === cur.rowKey);
-        const ci = navCols.findIndex((c) => c.field === cur.field);
+        const ri = rowIndex.get(cur.rowKey) ?? -1;
+        const ci = colIndex.get(cur.field) ?? -1;
         const nr = Math.max(0, Math.min(rows.length - 1, ri + dy));
         const nc = Math.max(0, Math.min(navCols.length - 1, ci + dx));
         const row = rows[nr];
@@ -120,7 +133,7 @@ export function useGridCursor<Row>({
         return row && col ? { rowKey: rowKey(row), field: col.field, editing: false } : cur;
       });
     },
-    [rows, navCols, rowKey],
+    [rows, navCols, rowKey, rowIndex, colIndex],
   );
 
   // Horizontal move that wraps at the row edges (Sheets/Excel convention).
@@ -131,8 +144,8 @@ export function useGridCursor<Row>({
     (delta: -1 | 1) => {
       setCursor((cur) => {
         if (!cur) return cur;
-        const ri = rows.findIndex((r) => rowKey(r) === cur.rowKey);
-        const ci = navCols.findIndex((c) => c.field === cur.field);
+        const ri = rowIndex.get(cur.rowKey) ?? -1;
+        const ci = colIndex.get(cur.field) ?? -1;
         if (ri < 0 || ci < 0) return cur;
         let nr = ri;
         let nc = ci + delta;
@@ -152,7 +165,7 @@ export function useGridCursor<Row>({
           : cur;
       });
     },
-    [rows, navCols, rowKey],
+    [rows, navCols, rowKey, rowIndex, colIndex],
   );
 
   const startEdit = useCallback(
@@ -217,7 +230,7 @@ export function useGridCursor<Row>({
       lastIndexRef.current = -1;
       return;
     }
-    const present = rows.findIndex((r) => rowKey(r) === cursor.rowKey);
+    const present = rowIndex.get(cursor.rowKey) ?? -1;
     if (present >= 0) {
       lastIndexRef.current = present;
       return;
@@ -235,7 +248,7 @@ export function useGridCursor<Row>({
     }
     setCursor({ rowKey: rowKey(targetRow), field: cursor.field, editing: false });
     lastIndexRef.current = targetIdx;
-  }, [rows, cursor, rowKey]);
+  }, [rows, cursor, rowKey, rowIndex]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -286,8 +299,8 @@ export function useGridCursor<Row>({
           e.key === "ArrowRight")
       ) {
         e.preventDefault();
-        const ri = rows.findIndex((r) => rowKey(r) === cursor.rowKey);
-        const ci = navCols.findIndex((c) => c.field === cursor.field);
+        const ri = rowIndex.get(cursor.rowKey) ?? -1;
+        const ci = colIndex.get(cursor.field) ?? -1;
         if (ri < 0 || ci < 0) return;
         const dir =
           e.key === "ArrowUp"
@@ -397,6 +410,8 @@ export function useGridCursor<Row>({
       rows,
       navCols,
       rowKey,
+      rowIndex,
+      colIndex,
       getValue,
       typeToEdit,
     ],
