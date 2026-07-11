@@ -109,7 +109,7 @@ export function WorkspaceSwitcher() {
         createPortal(
           <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
+            <div role="presentation" className="absolute inset-0 bg-black/30" onClick={() => setOpen(false)} />
 
             {/* Panel */}
             <div

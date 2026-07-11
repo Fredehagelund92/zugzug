@@ -39,6 +39,7 @@ export function OptionBuilder({ options, onChange, defaultColor = null }: Option
             type="button"
             onClick={() => remove(o.label)}
             title="click to remove"
+            aria-label={`Remove option ${o.label}`}
             className="transition-opacity hover:opacity-70"
           >
             <Chip label={o.label} color={o.color} />
@@ -63,22 +64,28 @@ export function OptionBuilder({ options, onChange, defaultColor = null }: Option
         className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1 font-mono text-[11.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
       />
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1">
+        <div role="radiogroup" aria-label="Option color" className="flex items-center gap-1">
           {PALETTE_NAMES.map((c) => (
             <button
               key={c}
               type="button"
+              role="radio"
+              aria-checked={color === c}
+              aria-label={`Color ${c}`}
               onClick={() => setColor(c)}
               title={c}
-              className={`h-3.5 w-3.5 shrink-0 rounded-sm ${color === c ? "ring-1 ring-ink" : ""}`}
+              className={`h-6 w-6 shrink-0 rounded-sm ${color === c ? "ring-1 ring-ink" : ""}`}
               style={{ background: PALETTE[c].bg }}
             />
           ))}
           <button
             type="button"
+            role="radio"
+            aria-checked={color === null}
+            aria-label="No color"
             onClick={() => setColor(null)}
             title="no color"
-            className={`h-3.5 w-3.5 shrink-0 rounded-sm border border-line-2 ${color === null ? "ring-1 ring-ink" : ""}`}
+            className={`h-6 w-6 shrink-0 rounded-sm border border-line-2 ${color === null ? "ring-1 ring-ink" : ""}`}
           />
         </div>
         <button

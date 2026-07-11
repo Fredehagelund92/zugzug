@@ -84,7 +84,7 @@ export function ShortcutsOverlay({ open, onClose }: { open: boolean; onClose: ()
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-6" onClick={onClose}>
+    <div role="presentation" className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-6" onClick={onClose}>
       <div
         className="w-[560px] max-w-full rounded-lg border border-line-2 bg-surface-elevated p-5 shadow-pop"
         onClick={(e) => e.stopPropagation()}

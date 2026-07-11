@@ -189,6 +189,7 @@ export function CatalogExplorer({
 
   return (
     <div
+      role="presentation"
       className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-2 backdrop-blur-sm sm:p-8"
       onClick={onClose}
     >
