@@ -3,6 +3,7 @@ import { usePageTitle } from "../hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { authFetch } from "../api";
 import { Mark } from "../components/Mark";
+import { useAuthConfig } from "../store";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_email: "That doesn't look like an email address.",
@@ -16,6 +17,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export function Signup() {
   usePageTitle("Sign up");
+  const authConfig = useAuthConfig();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -118,6 +120,11 @@ export function Signup() {
               Have an account? Sign in →
             </Link>
           </p>
+          {authConfig?.allowedDomain && (
+            <p className="text-center text-[11px]" style={{ color: "var(--ink-3)" }}>
+              Only @{authConfig.allowedDomain} accounts can sign up here.
+            </p>
+          )}
         </form>
       </div>
     </div>
