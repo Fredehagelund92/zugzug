@@ -511,6 +511,7 @@ export async function patchDimension(
     orderingMode?: "derived" | "manual";
     description?: string | null;
     color?: string | null;
+    ownerUserId?: string | null;
   },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}`, {

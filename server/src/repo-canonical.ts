@@ -270,14 +270,19 @@ export async function getDimension(
       nameCol: string | null;
       description: string | null;
       color: string | null;
+      ownerUserId: string | null;
+      ownerName: string | null;
       orderingMode: string;
     }
   >(
-    `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable",
-            key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind",
-            name_table AS "nameTable", name_id_col AS "nameIdCol", name_col AS "nameCol",
-            description, color, COALESCE(ordering_mode, 'derived') AS "orderingMode"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    `SELECT dim.id, dim.label AS dimension, dim.dim_table AS "dimTable", dim.map_table AS "mapTable",
+            dim.key_col AS "keyCol", COALESCE(dim.key_kind, 'slug') AS "keyKind",
+            dim.name_table AS "nameTable", dim.name_id_col AS "nameIdCol", dim.name_col AS "nameCol",
+            dim.description, dim.color, dim.owner_user_id AS "ownerUserId", u.name AS "ownerName",
+            COALESCE(dim.ordering_mode, 'derived') AS "orderingMode"
+     FROM ${pg("dimension")} dim
+     LEFT JOIN ${pg("users")} u ON u.id = dim.owner_user_id
+     WHERE dim.id = $1 AND dim.tenant_id = $2`,
     [id, tenantId],
   );
   if (!meta) return null;
@@ -425,6 +430,8 @@ export async function getDimension(
     nameCol: _nameCol,
     description,
     color,
+    ownerUserId,
+    ownerName,
     orderingMode,
     ...metaOut
   } = meta;
@@ -437,6 +444,8 @@ export async function getDimension(
     orderingMode,
     description: description ?? null,
     color: safeColor,
+    ownerUserId: ownerUserId ?? null,
+    ownerName: ownerName ?? null,
     rows: Number(rowsRow?.n ?? 0),
     nextPosition: nextPos,
     canonical,
@@ -1513,6 +1522,7 @@ export interface UpdateDimensionMetaInput {
   orderingMode?: "derived" | "manual";
   description?: string | null;
   color?: string | null;
+  ownerUserId?: string | null;
 }
 
 export async function updateDimensionMeta(
@@ -1552,6 +1562,15 @@ export async function updateDimensionMeta(
   ) {
     throw new AppError("VALIDATION_FAILED", `unknown orderingMode: ${patch.orderingMode}`, 422);
   }
+  if (patch.ownerUserId !== undefined && patch.ownerUserId !== null) {
+    const member = await pgGet(
+      `SELECT 1 FROM ${pg("tenant_member")} WHERE tenant_id = $1 AND user_id = $2`,
+      [tenantId, patch.ownerUserId],
+    );
+    if (!member) {
+      throw new AppError("VALIDATION_FAILED", "owner must be a workspace member", 422);
+    }
+  }
 
   const modeChanges =
     patch.orderingMode !== undefined && patch.orderingMode !== current.orderingMode;
@@ -1566,6 +1585,10 @@ export async function updateDimensionMeta(
   if (patch.color !== undefined) {
     sets.push(`color = $${vals.length + 1}`);
     vals.push(patch.color ?? null);
+  }
+  if (patch.ownerUserId !== undefined) {
+    sets.push(`owner_user_id = $${vals.length + 1}`);
+    vals.push(patch.ownerUserId ?? null);
   }
   if (modeChanges) {
     sets.push(`ordering_mode = $${vals.length + 1}`);

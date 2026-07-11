@@ -1,0 +1,4 @@
+[test]
+# Force the test database before any test file's imports evaluate — see
+# test/preload-env.ts for why the in-file process.env assignments are not enough.
+preload = ["./test/preload-env.ts"]

@@ -40,6 +40,8 @@ import {
   refreshDimAndNotify,
   type GridLayoutConfig,
 } from "../store";
+import { apiFetch } from "../api";
+import { cx } from "../lib/cx";
 import { usePresence } from "../lib/use-presence";
 import { useLinkedCandidates } from "../lib/use-linked-candidates";
 import { useOpenTabs } from "../lib/open-tabs";
@@ -246,6 +248,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   } | null>(null);
   const [orderingOpen, setOrderingOpen] = useState(false);
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
+  const [ownerOpen, setOwnerOpen] = useState(false);
+  const [members, setMembers] = useState<{ user_id: string; name: string | null }[] | null>(null);
   const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
@@ -637,6 +641,22 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     window.setTimeout(() => headerEl.classList.remove("zz-row-flash"), 1700);
   };
 
+  const openOwnerPanel = async () => {
+    setOwnerOpen((v) => !v);
+    if (members === null) {
+      try {
+        const r = await apiFetch("/team/members");
+        if (r.ok) {
+          setMembers((await r.json()) as { user_id: string; name: string | null }[]);
+        } else {
+          setMembers([]);
+        }
+      } catch {
+        setMembers([]);
+      }
+    }
+  };
+
   const performBulkRemove = async () => {
     const targets = sel
       .map((k) => list.find((x) => x.key === k))
@@ -680,6 +700,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             {fields.length} field{fields.length === 1 ? "" : "s"}
           </span>
           <span className="tabular-nums">{totalVariants.toLocaleString()} raw</span>
+          {dim.ownerName && (
+            <span>
+              owner <span className="text-ink">{dim.ownerName}</span>
+            </span>
+          )}
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
@@ -721,6 +746,16 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               title="Table ordering settings"
             >
               ⇅ Ordering
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void openOwnerPanel()}
+              title="Assign an owner for this table"
+            >
+              ⍟ Owner
             </Button>
           )}
           {canEdit && (
@@ -843,6 +878,53 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {ownerOpen && (
+        <div className="border-b border-line bg-surface-2 px-4 py-3 text-[13px]">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-3">
+            Owner
+          </div>
+          {members === null ? (
+            <div className="text-[12px] text-ink-3">Loading members…</div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                className={cx(
+                  "rounded-pill border px-2.5 py-1 text-[12px] transition-colors",
+                  !dim.ownerUserId
+                    ? "border-accent text-accent"
+                    : "border-line-2 text-ink-2 hover:border-accent",
+                )}
+                onClick={async () => {
+                  if (dim.ownerUserId) await patchDimension(activeId, { ownerUserId: null });
+                  setOwnerOpen(false);
+                }}
+              >
+                No owner
+              </button>
+              {members.map((m) => (
+                <button
+                  key={m.user_id}
+                  className={cx(
+                    "rounded-pill border px-2.5 py-1 text-[12px] transition-colors",
+                    dim.ownerUserId === m.user_id
+                      ? "border-accent text-accent"
+                      : "border-line-2 text-ink-2 hover:border-accent",
+                  )}
+                  onClick={async () => {
+                    if (dim.ownerUserId !== m.user_id) {
+                      await patchDimension(activeId, { ownerUserId: m.user_id });
+                    }
+                    setOwnerOpen(false);
+                  }}
+                >
+                  {m.name ?? m.user_id}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

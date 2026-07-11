@@ -223,6 +223,8 @@ export interface CatalogTable {
 export interface MappingDimension extends DimensionMeta {
   description: string | null;
   color: PaletteName | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
   nextPosition: string | null;
   canonical: CanonicalValue[];
   counts: {

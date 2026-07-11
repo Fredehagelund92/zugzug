@@ -975,7 +975,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           await reqRepo.scanOneDim(id);
           return json({ ok: true });
         }
-        // PATCH /api/dimensions/:id — update orderingMode / description / color
+        // PATCH /api/dimensions/:id — update orderingMode / description / color / ownerUserId
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
