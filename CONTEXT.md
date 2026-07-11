@@ -4,50 +4,56 @@ Curation layer between a data warehouse and dbt: teams turn messy raw values int
 
 ## Language
 
-**Dimension**:
-A curated entity type (country, channel, partner) with a canonical set of records. Materialized as a `dim_<x>` table.
-_Avoid_: entity, table, list
+Plain words first: a non-technical teammate — including non-native English
+speakers — must understand every label without a glossary.
 
-**Canonical record**:
-A single approved row in a dimension — a `key` + `label` pair plus attributes. The thing raw values map *to*.
-_Avoid_: golden record, master record
+**Table**:
+A curated list (country, channel, partner) with an approved set of records.
+Materialized as a `dim_<x>` table for dbt. ("Dimension" survives only in the
+dbt-facing `dim_`/`map_` names and in code identifiers.)
+_Avoid_: dimension (user-facing), entity, master table
 
-**Raw value**:
-A distinct string scanned from a registered warehouse column, awaiting mapping.
-_Avoid_: source value, dirty value
+**Record**:
+A single approved row in a table — a `key` + `label` pair plus attributes.
+The thing source values map *to*. Qualify as "approved record" only where
+ambiguity forces it.
+_Avoid_: canonical record, golden record, master record
+
+**Source value**:
+A distinct string scanned from a registered warehouse column, awaiting
+mapping. It comes from a source; hence the name.
+_Avoid_: raw value, dirty value
 
 **Mapping**:
-The assignment of a raw value to a canonical record. Materialized in `map_<x>` tables.
-_Avoid_: match, reconciliation, merge
-
-**Reference table**:
-A dimension curated as a maintained list in its own right (e.g. Country), with an owner and published versions — rather than emerging only from mapping raw values.
-_Avoid_: lookup table, master list
+The assignment of a source value to a record. Materialized in `map_<x>`
+tables.
+_Avoid_: match, matching, reconciliation, merge
 
 **Draft**:
-A staged mapping assignment awaiting publish. Lives in app state, invisible to dbt. Canonical-record edits are not drafted — they apply instantly to the working copy.
+A staged mapping awaiting publish. Lives in app state, invisible to dbt.
+Record edits are not drafted — they apply instantly to the working copy.
 
 **Working copy**:
-The current, editable state of a dimension (canonical records + mappings + staged drafts) as seen in the grid. Not yet what dbt consumes.
+The current, editable state of a table (records + mappings + staged drafts)
+as seen in the grid. Not yet what dbt consumes.
 
 **Publish**:
-The single act that folds staged drafts and canonical edits into a new numbered dimension version (v17 → v18) and materializes it for dbt.
+The single act that folds staged drafts and record edits into a new numbered
+table version (v17 → v18) and materializes it for dbt.
 _Avoid_: commit (internal implementation term), merge, sync
 
-**Unpublished changes**:
-Everything touched in the working copy since the last publish — derived, not a staging queue.
-_Avoid_: pending drafts (drafts are only the mapping subset)
-
-**Triage**:
-The cross-dimension inbox of unmapped raw values, ordered by frequency.
-_Avoid_: inbox, queue
+**Review**:
+The cross-table inbox of unmapped source values, ordered by frequency.
+_Avoid_: triage, workbench, inbox, queue
 
 **Workspace**:
-A switchable tenant (like a Linear team) holding its own dimensions, sources, and members.
+A switchable tenant (like a Linear team) holding its own tables, sources,
+and members.
 _Avoid_: tenant (implementation term), organization
 
 **Source**:
-A registered warehouse column that Zugzug scans for distinct raw values.
+A registered warehouse column that Zugzug scans for distinct source values.
 
 **Warehouse adapter**:
-The interface through which Zugzug reads (and optionally writes) a specific warehouse technology.
+The interface through which Zugzug reads (and optionally writes) a specific
+warehouse technology.

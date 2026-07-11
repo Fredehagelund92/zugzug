@@ -51,3 +51,10 @@ For multi-step tasks, state a brief plan:
 3. [Step] → verify: [check]
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+5. Vocabulary
+All user-facing strings follow the Language section in CONTEXT.md. Plain
+words only: "table", "record", "source value", "mapping", "Review",
+"publish", "workspace". Never surface: canonical, raw, triage, master,
+golden, commit, sync, tenant, matching. When writing UI copy, prefer a
+concrete example over an abstract term.
