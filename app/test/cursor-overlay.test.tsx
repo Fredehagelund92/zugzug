@@ -8,7 +8,7 @@ function makePeer(over: Partial<PeerState> = {}): PeerState {
     userId: "u_mia",
     displayName: "Mia Berg",
     color: "coral",
-    cell: { row: 3, col: 2 },
+    cell: { rowKey: "r3", field: "col2" },
     selection: null,
     away: false,
     ...over,
@@ -19,7 +19,7 @@ describe("CursorOverlay", () => {
   test("renders one cursor per peer with a known cell", () => {
     const peers = [
       makePeer({ userId: "u_a", displayName: "Alice" }),
-      makePeer({ userId: "u_b", displayName: "Bob", cell: { row: 5, col: 7 } }),
+      makePeer({ userId: "u_b", displayName: "Bob", cell: { rowKey: "r5", field: "col7" } }),
     ];
     render(
       <CursorOverlay
@@ -47,10 +47,10 @@ describe("CursorOverlay", () => {
   });
 
   test("positions cursor at the cell's rect", () => {
-    const peer = makePeer({ cell: { row: 1, col: 1 } });
+    const peer = makePeer({ cell: { rowKey: "r1", field: "col1" } });
     const cellRect = vi.fn(() => ({ top: 50, left: 80, width: 100, height: 30 }));
     render(<CursorOverlay peers={[peer]} cellRect={cellRect} />);
-    expect(cellRect).toHaveBeenCalledWith(1, 1);
+    expect(cellRect).toHaveBeenCalledWith("r1", "col1");
     const cell = screen.getByText(/mia berg/i).parentElement;
     expect(cell?.style.top).toBe("50px");
     expect(cell?.style.left).toBe("80px");

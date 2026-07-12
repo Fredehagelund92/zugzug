@@ -490,12 +490,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // ── Publish self cursor position to presence when cursor moves ────────────
   useEffect(() => {
     if (!presence || !cursor.cursor) return;
-    const rowIdx = rowIndexMap.get(cursor.cursor.rowKey);
-    const colIdx = colIndexMap.get(cursor.cursor.field);
-    if (rowIdx != null && colIdx != null) {
-      presence.setCell(rowIdx, colIdx);
-    }
-  }, [presence, cursor.cursor, rowIndexMap, colIndexMap]);
+    presence.setCell(cursor.cursor.rowKey, cursor.cursor.field);
+  }, [presence, cursor.cursor]);
 
   // Keep range anchor in sync when cursor moves without shift (range collapses)
   // We handle this explicitly in the key handler below, not via useEffect, to
@@ -1503,14 +1499,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         {presence && (
           <CursorOverlay
             peers={presence.peers}
-            cellRect={(row, col) => {
+            cellRect={(rowKey, field) => {
               const container = cursor.ref.current;
               if (!container) return null;
-              const rowEl = container.querySelector<HTMLElement>(
-                `[data-row="${sortedRows[row] ? rowKey(sortedRows[row]!) : ""}"]`,
+              const cellEl = container.querySelector<HTMLElement>(
+                `[data-cell="${attrEsc(`${rowKey}::${field}`)}"]`,
               );
-              if (!rowEl) return null;
-              const cellEl = rowEl.querySelectorAll<HTMLElement>("[data-cell]")[col] ?? null;
               if (!cellEl) return null;
               const grid = container.getBoundingClientRect();
               const cell = cellEl.getBoundingClientRect();
