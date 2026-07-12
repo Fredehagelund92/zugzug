@@ -602,7 +602,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setBusy(true);
     const result = await deriveCanonical(activeId, s.table, s.column);
     setBusy(false);
-    flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)}`);
+    flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)} · staged drafts untouched`);
   };
 
   const deriveExternal = async (idColOpt: string, nameColOpt: string) => {
@@ -612,7 +612,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setBusy(true);
     const result = await deriveCanonical(activeId, s.table, s.column, nameCol);
     setBusy(false);
-    flash(`Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)}`);
+    flash(`Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · staged drafts untouched`);
   };
 
   const navigate = useNavigate();
