@@ -18,11 +18,36 @@ process.env.GOOGLE_CLIENT_ID ??= "test-stub";
 process.env.GOOGLE_CLIENT_SECRET ??= "test-stub";
 process.env.ZUGZUG_CURSOR_KEY ??= "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
 
-// resetDb() (DROP SCHEMA + replay all migrations) takes 7–13 s on this
-// machine. Migration 0036 added dimension_version (table + RLS policy),
-// pushing cumulative replay past the 5 s bun default. Raise the global
-// timeout so beforeEach hooks that call resetDb() do not time out.
-// bunfig.toml [test].timeout is not respected in bun 1.3.x — this is the
-// only way to set it that works for both `bun test` and `bun run test`.
+// resetDb() (DROP SCHEMA + replay all migrations) takes 2–6 s per call.
+// Migration 0036 added dimension_version (table + RLS policy), pushing replay
+// past the 5 s bun default, so beforeEach hooks that call resetDb() flap.
+//
+// Raising the limit is harder than it looks in bun 1.3.x:
+// - bunfig.toml [test].timeout is not respected;
+// - setDefaultTimeout() called here applies ONLY to the first test file bun
+//   executes — the default silently reverts to 5000 ms for every subsequent
+//   file (verified empirically: two identical files, first passes a 5.5 s
+//   hook, second times out at 5000 ms);
+// - jest.setTimeout() and hook-based re-application behave the same way.
+// The only mechanism that sticks per file is a module-scope
+// setDefaultTimeout() call inside the test file itself, so inject one into
+// every *.test.ts at load time via a preload plugin. The header is prepended
+// without a trailing newline so original line numbers are preserved in stack
+// traces (the original first line is always a comment or env assignment).
 import { setDefaultTimeout } from "bun:test";
-setDefaultTimeout(30_000);
+import { plugin } from "bun";
+
+setDefaultTimeout(30_000); // covers the first file even if the plugin is bypassed
+
+plugin({
+  name: "per-file-test-timeout",
+  setup(build) {
+    build.onLoad({ filter: /\.test\.ts$/ }, async (args) => {
+      const src = await Bun.file(args.path).text();
+      return {
+        contents: `import { setDefaultTimeout as __sdt } from "bun:test"; __sdt(30_000); ` + src,
+        loader: "ts",
+      };
+    });
+  },
+});

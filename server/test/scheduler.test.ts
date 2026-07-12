@@ -97,9 +97,9 @@ test("scheduler — stop(timeoutMs) returns within timeout even if job hangs", a
   const scheduler = createScheduler({
     tickIntervalMs: 50,
     listTenants: FAKE_LIST_TENANTS,
-    jobs: [makeJob("hang", async (_ctx) => {
+    jobs: [makeJob("hang", async () => {
       // Ignore signal — simulate misbehaving job that doesn't honor abort
-      await new Promise((r) => setTimeout(r, 5000));
+      await new Promise((r) => setTimeout(r, 600));
       return {};
     })],
   });
@@ -108,6 +108,11 @@ test("scheduler — stop(timeoutMs) returns within timeout even if job hangs", a
   const t0 = Date.now();
   await scheduler.stop(100);
   const elapsed = Date.now() - t0;
+  // Drain the still-hanging tick before the test ends. Without this the
+  // in-flight tick (and its open pgTxScoped transaction) leaks past this test
+  // file: it collides with resetDb()'s DROP SCHEMA CASCADE in later files and
+  // poisons bun's hook timeouts, cascading into suite-wide failures.
+  await scheduler.stop();
   expect(elapsed).toBeLessThan(200);
 });
 

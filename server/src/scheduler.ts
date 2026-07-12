@@ -48,6 +48,7 @@ async function recordScanRun(
   jobName: string,
   tenantId: string,
   fn: () => Promise<JobResult>,
+  stopped: () => boolean,
 ): Promise<void> {
   const runId = `run_${crypto.randomUUID().replace(/-/g, "")}`;
   const startedAt = new Date();
@@ -68,6 +69,10 @@ async function recordScanRun(
 
   try {
     const result = await fn();
+    // Skip DB writes if the scheduler was stopped while the job was running —
+    // prevents open transactions from racing with resetDb() in tests, and
+    // avoids unnecessary DB writes after a graceful shutdown.
+    if (stopped()) return;
     const durationMs = Date.now() - startedAt.getTime();
     await pgRun(
       `UPDATE ${pg("scan_run")} SET ended_at = $1, status = 'ok',
@@ -75,6 +80,7 @@ async function recordScanRun(
       [new Date(), result.rowsScanned ?? null, durationMs, runId],
     ).catch((e) => console.error(`scheduler: scan_run UPDATE failed for ${runId}:`, e));
   } catch (jobErr) {
+    if (stopped()) return;
     const durationMs = Date.now() - startedAt.getTime();
     const errorMessage = jobErr instanceof Error ? jobErr.message : String(jobErr);
     await pgRun(
@@ -116,6 +122,9 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
   let drainPromise: Promise<void> | null = null;
   let abortController = new AbortController();
   let lastTickActual: number | null = null;
+  // Set by stop() after the drain window so a zombie in-flight tick skips
+  // further tenants and DB writes when it eventually resumes.
+  let stopped = false;
 
   async function _tick(): Promise<void> {
     const tickStart = Date.now();
@@ -154,12 +163,13 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
       // SKIP LOCKED across all tenants in a single query).
       for (const job of jobs) {
         if (job.scope !== "global") continue;
+        if (stopped) break;
         const ctx: JobContext = {
           signal: abortController.signal,
           tenantId: "*",
           repo: {} as TenantRepo,
         };
-        await recordScanRun(job.name, "*", () => job.run(ctx));
+        await recordScanRun(job.name, "*", () => job.run(ctx), () => stopped);
       }
 
       let tenants: Array<{ id: string }>;
@@ -171,6 +181,7 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
       }
 
       for (const t of tenants) {
+        if (stopped) break;
         if (shouldRun !== undefined) {
           let due: boolean;
           try {
@@ -192,7 +203,7 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
             };
             for (const job of jobs) {
               if (job.scope === "global") continue;
-              await recordScanRun(`${t.id}:${job.name}`, t.id, () => job.run(ctx));
+              await recordScanRun(`${t.id}:${job.name}`, t.id, () => job.run(ctx), () => stopped);
             }
           });
         } catch (e) {
@@ -213,6 +224,7 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
 
   function start(): void {
     if (intervalHandle !== null) return; // idempotent
+    stopped = false; // clear any previous stop() so ticks resume DB writes
     fireTick(); // fire immediately, then on interval
     intervalHandle = setInterval(fireTick, tickIntervalMs);
   }
@@ -229,7 +241,13 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
       await Promise.race([drainPromise, timeout]);
     }
 
-    // Reset abort controller for potential re-use
+    // Hard-stop: if the drain timed out, an in-flight tick may still be running.
+    // Setting `stopped` here (after the drain window) makes that zombie tick skip
+    // any further tenants and DB writes when it eventually resumes, so it cannot
+    // collide with whatever runs after stop() returns. Jobs that finished within
+    // the drain window were recorded normally. stopped stays true until start().
+    stopped = true;
+    // Reset abort controller for potential re-use.
     abortController = new AbortController();
   }
 
