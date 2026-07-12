@@ -11,17 +11,18 @@ Audit items 1.7, 1.8, 1.9 from `docs/grid-next-level-plan.md`. Approved 2026-07-
 ### Server
 
 - New route: `DELETE /api/t/<slug>/dimensions/:id`, gated exactly like table create/edit (`gateOrJson(tenantCtx, "curate")`).
-- One Postgres transaction deletes, in order: `dimension_source`, `dimension_field`, `draft`, `source_stat`, `user_grid_layout`, `ai_hint_cache`, `canonical_version`, then the `dimension` row. (No FK cascades exist — explicit sweeps, schema audit in the fact-finding report.)
-- **Kept on purpose:** `audit` and `outbound_event` rows (history outlives the table). A final audit entry records the deletion (actor, table name, record count).
-- Warehouse `DROP TABLE IF EXISTS <schema>.dim_<id>` and `map_<id>` run best-effort **after** the transaction commits. Unreachable/detached warehouse does not fail the delete; the response reports `{ ok: true, warehouseDropped: boolean }`.
-- 404 for unknown id; the tenant scoping comes from the route context like every other dimension route.
+- **Correction from fact-finding:** `dim_<id>`/`map_<id>` are Postgres tables (created via `pgRun` in `addDimension`, repo-canonical.ts:563-583), not external warehouse DDL — so deletion is entirely a Postgres affair; no best-effort branch or `warehouseDropped` flag is needed.
+- The delete sweeps, in order: `dimension_source`, `dimension_field`, `draft`, `source_stat`, `user_grid_layout`, `ai_hint_cache`, `canonical_version` metadata rows, then `DROP TABLE IF EXISTS` on `dim_<id>` and `map_<id>`, then the `dimension` row. (No FK cascades exist — explicit sweeps, per the schema audit.)
+- **Kept on purpose:** `audit` and `outbound_event` rows (history outlives the table). A final audit entry records the deletion via `appendAuditAs` (actor, table name, record count).
+- 404 for unknown id; tenant scoping comes from the route context like every other dimension route.
 
 ### Client
 
 - Entry point: right-click on a table tab (TabItem gains `onContextMenu`), opening the existing datagrid `ContextMenu` component with two items: **Close tab** and **Delete table…**. No new toolbar button (toolbar crowding is a known craft issue).
 - **Delete table…** opens the existing `ConfirmDialog` with its `confirmPhrase` prop (same pattern as RemoveDatabaseConfirm): the user must type the table's display name. Copy (plain vocabulary):
   > Permanently delete **<Name>**? Its <N> records and their mappings are deleted. Anything reading `dim_<id>` from the warehouse will break. This cannot be undone.
-- On confirm: store `deleteDimension(dimId)` → `DELETE` API → remove from the local dims cache, close the tab, success toast ("Deleted <Name>." — plus " Warehouse tables could not be dropped." when `warehouseDropped` is false).
+- On confirm: store `deleteDimension(dimId)` → `DELETE` API → remove from the local dims cache **and refresh the drafts/sources slices** (Review, Dashboard, and Sources must not show rows for a deleted table), close the tab, success toast ("Deleted <Name>.").
+- **Amended after implementation review:** the delete runs atomically inside the request transaction (`pgTxScoped`) — sweeps, `DROP TABLE`s, dimension row, and audit commit or roll back together. There is no `warehouseDropped` partial-success state. Known trade-off: the DROPs take ACCESS EXCLUSIVE inside a held transaction, so a delete can wait behind a long concurrent read of the same table.
 - Permission: menu item hidden unless the user can edit (same `useCanEdit` gate as create).
 
 ## 2. Presence cursors publish record keys (not positions)
