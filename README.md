@@ -29,7 +29,7 @@ warehouse (read-only)
 
 You connect Zugzug to your warehouse with a read-only credential. The adapter scans `DISTINCT` values from the columns you register as dimensions — it never modifies the warehouse unless you explicitly configure a writable adapter.
 
-The UI shows unmapped values alongside their frequency counts. Team members map each source value to a record (a `key` + `label` pair). Mappings sit in Postgres as drafts until an editor publishes them. The audit log records who approved what and when.
+The UI shows unmapped values alongside their frequency counts. Team members map each source value to a record (a `key` + `label` pair). Mappings sit in Postgres as drafts until an editor publishes them. The audit log records who published what and when.
 
 Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres record store), results live in Postgres and are downloadable as Parquet on demand. If you configure a writable warehouse adapter, each publish writes directly into your warehouse — for example, into a MotherDuck database your dbt project already reads.
 

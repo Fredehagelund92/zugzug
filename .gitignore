@@ -23,3 +23,4 @@ dist/
 
 # local worktrees (subagent-driven execution)
 .worktrees/
+.claude/worktrees/

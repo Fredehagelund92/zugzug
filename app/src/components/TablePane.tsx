@@ -1498,6 +1498,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   value={null}
                   placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
                   onPick={(survivorLabel) => {
+                    if (sel.length < 2) return;
                     const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
                     if (!survivorKey) return;
                     const loserKeys = sel.filter((k) => k !== survivorKey);
