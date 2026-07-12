@@ -96,7 +96,7 @@ export function Workspaces() {
       <PageHeader
         kicker="System"
         title="Workspaces"
-        lede="Isolated reconciliation environments. Each workspace is scoped to a warehouse connection and owns its own canonical tables and audit trail."
+        lede="Isolated mapping environments. Each workspace is scoped to a warehouse connection and owns its own reference tables and audit trail."
         count={loading ? undefined : tenants.length}
         action={
           <Button
@@ -120,7 +120,7 @@ export function Workspaces() {
         ) : tenants.length === 0 ? (
           <EmptyState
             title="No workspaces yet"
-            body="Workspaces isolate reconciliation environments. Each scopes to a warehouse connection and owns its own canonical tables."
+            body="Workspaces isolate mapping environments. Each scopes to a warehouse connection and owns its own reference tables."
             action={
               <Button size="sm" onClick={() => setShowForm(true)}>
                 Create your first workspace

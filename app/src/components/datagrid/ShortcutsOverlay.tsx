@@ -50,7 +50,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "Review inbox",
+    title: "Review",
     rows: [
       ["↑↓ / J K", "move cursor"],
       ["A", "accept suggestion"],

@@ -568,7 +568,7 @@ export function AddFieldPopover({
                 onChange={(e) => setLinkedTargetDimId(e.target.value)}
                 className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
               >
-                <option value="">— pick a dimension —</option>
+                <option value="">— pick a table —</option>
                 {(allDims ?? [])
                   .filter((d) => d.id !== currentDimId)
                   .map((d) => (

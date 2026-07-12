@@ -18,7 +18,7 @@ const EVENTS: { value: WebhookEvent; label: string; hint: string }[] = [
   {
     value: "dimension.committed",
     label: "dimension.committed",
-    hint: "When canonical records change.",
+    hint: "When records change.",
   },
   {
     value: "dimension.created",
@@ -27,7 +27,7 @@ const EVENTS: { value: WebhookEvent; label: string; hint: string }[] = [
   },
   {
     value: "canonical.deleted",
-    label: "canonical.deleted",
+    label: "record.deleted",
     hint: "When a single record is retired.",
   },
   {

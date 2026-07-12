@@ -144,7 +144,7 @@ function ConnectionsSection() {
       title="Connections"
       hint={
         engineer
-          ? `Reads source values from your warehouse (${adapterLabel}); master records live where the adapter's writability allows; team state lives in Postgres.`
+          ? `Reads source values from your warehouse (${adapterLabel}); records live where the adapter's writability allows; team state lives in Postgres.`
           : "Where Zug Zug reads from and where your work is kept."
       }
     >
@@ -172,7 +172,7 @@ function ConnectionsSection() {
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-ink-2">
             <span>
               {wsInfo?.writable
-                ? "scanned for source values & writes canonical via MERGE"
+                ? "scanned for source values & writes records via MERGE"
                 : "scanned for source values — never written to"}
             </span>
           </div>

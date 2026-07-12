@@ -67,7 +67,7 @@ export function Webhooks() {
       <div className="space-y-4">
         <EmptyState
           title="No webhooks yet"
-          body="Subscribe an endpoint to receive a signed POST when canonical records change."
+          body="Subscribe an endpoint to receive a signed POST when records change."
           action={
             canEdit ? (
               <Button onClick={() => setShowCreate(true)}>Create your first webhook</Button>

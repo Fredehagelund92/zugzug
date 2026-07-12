@@ -88,7 +88,7 @@ export function PullApi() {
     <div className="space-y-6">
       <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
         <h2 className="font-display text-[15px] font-semibold text-ink">
-          Your canonical records, available as a JSON API
+          Your records, available as a JSON API
         </h2>
         <p className="text-[13px] text-ink-2">
           Use this to sync into dbt, Fivetran, or any ETL pipeline. Authenticate with a service
@@ -147,7 +147,7 @@ export function PullApi() {
                 <th className="py-1.5 font-medium">Slug</th>
                 <th className="font-medium">Label</th>
                 <th className="font-medium text-right pr-4">Records</th>
-                <th className="font-medium">Last commit</th>
+                <th className="font-medium">Last publish</th>
                 <th className="font-medium text-right">Copy curl</th>
               </tr>
             </thead>
@@ -215,7 +215,7 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
     { sig: `GET /v1/dimensions/${firstSlug}/schema`, desc: "Get a dimension's field schema." },
     {
       sig: `GET /v1/dimensions/${firstSlug}/canonical`,
-      desc: "Paginated canonical records. Supports ?since= and ?cursor=.",
+      desc: "Paginated records. Supports ?since= and ?cursor=.",
     },
     {
       sig: `GET /v1/dimensions/${firstSlug}/tombstones`,
