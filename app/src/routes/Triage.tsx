@@ -335,16 +335,22 @@ function TriageInner() {
   const openPublishPreview = async () => {
     const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
     if (dimIds.length === 0) return;
-    const states = await Promise.all(dimIds.map((id) => fetchPublishState(id)));
-    setPreview(
-      dimIds.map((id, i) => ({
-        dimId: id,
-        dimName: dims.find((d) => d.id === id)?.dimension ?? id,
-        nextVersion: states[i].version + 1,
-        drafts: stagedAllDrafts.filter((d) => d.dimId === id),
-        changedKeys: states[i].changedKeys,
-      })),
-    );
+    try {
+      const states = await Promise.all(dimIds.map((id) => fetchPublishState(id)));
+      setPreview(
+        dimIds.map((id, i) => ({
+          dimId: id,
+          dimName: dims.find((d) => d.id === id)?.dimension ?? id,
+          nextVersion: states[i].version + 1,
+          drafts: stagedAllDrafts.filter((d) => d.dimId === id),
+          changedKeys: states[i].changedKeys,
+        })),
+      );
+    } catch (err) {
+      setCommitError(
+        err instanceof Error ? err.message : "Could not load the publish preview — try again.",
+      );
+    }
   };
 
   const triggerRescan = useCallback(async (dimId: string) => {
