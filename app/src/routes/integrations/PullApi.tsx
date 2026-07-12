@@ -136,7 +136,7 @@ export function PullApi() {
           <p className="text-[13px] text-ink-2">
             No dimensions yet. Create one in{" "}
             <Link to="../../tables" className="text-accent underline-offset-2 hover:underline">
-              Master tables
+              Tables
             </Link>{" "}
             and they'll appear here.
           </p>

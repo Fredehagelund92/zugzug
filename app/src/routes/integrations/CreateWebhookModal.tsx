@@ -27,7 +27,7 @@ const EVENTS: { value: WebhookEvent; label: string; hint: string }[] = [
   },
   {
     value: "canonical.deleted",
-    label: "record.deleted",
+    label: "canonical.deleted",
     hint: "When a single record is retired.",
   },
   {
