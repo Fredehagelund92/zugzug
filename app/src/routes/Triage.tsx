@@ -888,7 +888,7 @@ function CrossDimFooter(p: FooterProps) {
       )}
       {p.commitError && (
         <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
-          <span>Publish failed — {p.commitError}</span>
+          <span>{p.commitError}</span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>
               Dismiss

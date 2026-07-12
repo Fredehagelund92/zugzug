@@ -22,7 +22,7 @@ export function NoTablesYet({
         No tables yet
       </div>
       <h1 className="mt-2 font-display text-[clamp(22px,3vw,32px)] font-extrabold leading-tight tracking-[-0.03em] text-ink">
-        Nothing to {from === "mapping" ? "match" : from === "triage" ? "triage" : "manage"} yet.
+        Nothing to {from === "mapping" ? "map" : from === "triage" ? "review" : "manage"} yet.
       </h1>
       <p className="mt-3 text-ink-2">
         Create a table from scratch, or import one from a warehouse column.

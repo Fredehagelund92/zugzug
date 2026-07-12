@@ -30,4 +30,10 @@ describe("summarizeOutcomes", () => {
       "✓ 1 change published · 1 row recovered",
     );
   });
+  it("multiple failures use 'their'", () => {
+    const s = summarizeOutcomes([ok("country", 3), bad("channel", "timeout"), bad("region", "timeout")]);
+    expect(s.ok).toBe(false);
+    expect(s.failed).toHaveLength(2);
+    expect(s.message).toContain("their drafts are still staged.");
+  });
 });

@@ -32,6 +32,6 @@ export function summarizeOutcomes(outcomes: CommitOutcome[]): {
     committed,
     rowsRecovered,
     failed,
-    message: `Published ${plural(committed, "change")}, but ${names} — its drafts are still staged.`,
+    message: `Published ${plural(committed, "change")}, but ${names} — ${failed.length === 1 ? "its" : "their"} drafts are still staged.`,
   };
 }
