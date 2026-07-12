@@ -380,13 +380,14 @@ export class TenantRepo {
   commit(
     dimId: string,
     userId: string,
+    draftKeys?: string[],
   ): Promise<{
     committed: number;
     rowsRecovered: number;
     warehouseSynced: "n/a" | "synced" | "failed";
   }> {
     this.assertRole("commit");
-    return this.withClearCtx(() => repoDrafts.commit(dimId, userId, this.tenantId));
+    return this.withClearCtx(() => repoDrafts.commit(dimId, userId, this.tenantId, draftKeys));
   }
 
   getPublishState(dimId: string): Promise<repoDrafts.PublishState> {

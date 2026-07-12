@@ -1306,7 +1306,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "commit");
           if (denied) return denied;
-          return json(await reqRepo.commit(id, me));
+          const body = req.headers.get("content-length")
+            ? await req.json().catch(() => null)
+            : null;
+          const draftKeys = Array.isArray(body?.draftKeys) ? (body.draftKeys as string[]) : undefined;
+          return json(await reqRepo.commit(id, me, draftKeys));
         }
         // POST /api/dimensions/:id/positions/rebalance
         if (

@@ -316,10 +316,39 @@ export async function commit(
   const DIMT = cq(meta.dimTable);
   const MAPT = cq(meta.mapTable);
 
+  // When draftKeys is provided, validate that all requested keys exist as
+  // mapped drafts for this (dim, tenant) before touching anything.
+  const scoped = draftKeys !== undefined;
+  if (scoped && draftKeys!.length > 0) {
+    const found = await pgAll<{ raw: string }>(
+      `SELECT raw FROM ${DRAFT}
+       WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL
+         AND raw = ANY($3)`,
+      [dimId, tenantId, draftKeys],
+    );
+    const foundSet = new Set(found.map((r) => r.raw));
+    const missing = draftKeys!.filter((k) => !foundSet.has(k));
+    if (missing.length > 0) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `unknown or unstaged draft keys: ${missing.join(", ")}`,
+        400,
+      );
+    }
+  }
+
+  // Scope clause: appended to every draft-filtered statement when draftKeys is provided.
+  // scoped=true + empty array → AND raw = ANY('{}') → matches nothing → zero-work fold.
+  const scopeClause = scoped ? ` AND raw = ANY($3)` : "";
+  const scopeClauseD = scoped ? ` AND d.raw = ANY($3)` : "";
+  const baseParams = (extra: unknown[] = []) =>
+    scoped ? [dimId, tenantId, draftKeys, ...extra] : [dimId, tenantId, ...extra];
+  const baseParamsD = baseParams; // alias for aliased-draft statements
+
   const approved = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${DRAFT}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId, tenantId],
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+    baseParams(),
   );
   const committed = Number(approved?.n ?? 0);
 
@@ -327,6 +356,9 @@ export async function commit(
   // them into a version too. A commit with zero drafts still proceeds when
   // canonical rows changed since the last publish — the draft-driven SQL
   // below all no-ops safely.
+  // NOTE: scoped empty-array (draftKeys=[]) is valid — it means "fold no drafts,
+  // publish record-state only". The early return must not short-circuit in that
+  // case when canonicalChanged.length > 0. Unscoped (undefined) keeps existing behaviour.
   const lastPublish = await pgGet<{ at: Date | null }>(
     `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
      WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
@@ -345,8 +377,8 @@ export async function commit(
     const ownDrafts = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM ${DRAFT}
        WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'
-         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'`,
-      [dimId, tenantId, userId],
+         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${scoped ? ` AND raw = ANY($4)` : ""}`,
+      scoped ? [dimId, tenantId, userId, draftKeys] : [dimId, tenantId, userId],
     );
     const own = Number(ownDrafts?.n ?? 0);
     if (own > 0) {
@@ -364,16 +396,16 @@ export async function commit(
   // the draft rows are deleted inside the transaction.
   const committedRows = await pgAll<{ target_key: string }>(
     `SELECT DISTINCT target_key FROM ${DRAFT}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId, tenantId],
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+    baseParams(),
   );
 
   // Snapshot approved drafts BEFORE the tx so we can pass them to the
   // warehouse adapter after the Postgres commit succeeds.
   const approvedDrafts = await pgAll<{ raw: string; key: string; label: string | null }>(
     `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId, tenantId],
+     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+    baseParams(),
   );
 
   // Identify remaps (raw already mapped but to a different target_key) so we
@@ -383,8 +415,8 @@ export async function commit(
      FROM ${DRAFT} d
      JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
      WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
-       AND d.target_key IS NOT NULL AND m.${key} <> d.target_key`,
-    [dimId, tenantId],
+       AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}`,
+    baseParamsD(),
   );
 
   // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
@@ -400,8 +432,8 @@ export async function commit(
          WHERE lower(m.raw) = lower(d.raw)
            AND d.dim_id = $1 AND d.tenant_id = $2
            AND d.status = 'mapped' AND d.target_key IS NOT NULL
-           AND m.${key} <> d.target_key`,
-        [dimId, tenantId],
+           AND m.${key} <> d.target_key${scopeClauseD}`,
+        baseParamsD(),
       );
     }
     if (meta.orderingMode === "manual") {
@@ -417,7 +449,7 @@ export async function commit(
            FROM ${DRAFT} d
            WHERE d.dim_id = $1 AND d.tenant_id = $2
              AND d.status = 'mapped' AND d.target_key IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)
+             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}
            GROUP BY target_key, target_label
          )
          INSERT INTO ${DIMT} (${key}, label, position)
@@ -425,28 +457,36 @@ export async function commit(
            o.k, o.lbl,
            (SELECT m FROM max_pos) + 1024 * row_number() OVER (ORDER BY o.first_seen, o.k)
          FROM ordered o`,
-        [dimId, tenantId],
+        baseParamsD(),
       );
     } else {
       await tx.run(
         `INSERT INTO ${DIMT} (${key}, label)
          SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
          WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)`,
-        [dimId, tenantId],
+           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}`,
+        baseParamsD(),
       );
     }
     await tx.run(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT d.raw, d.target_key FROM ${DRAFT} d
        WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))`,
-      [dimId, tenantId],
+         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}`,
+      baseParamsD(),
     );
-    await tx.run(
-      `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
-      [dimId, tenantId],
-    );
+    // DELETE: scoped → only delete the requested draft raws; unscoped → delete all mapped.
+    if (scoped) {
+      await tx.run(
+        `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND raw = ANY($3)`,
+        [dimId, tenantId, draftKeys],
+      );
+    } else {
+      await tx.run(
+        `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
+        [dimId, tenantId],
+      );
+    }
 
     // Outbound event for downstream subscribers (PR3). Uses a count-based
     // per-(tenant, dim, type) monotonic counter — simpler than extracting

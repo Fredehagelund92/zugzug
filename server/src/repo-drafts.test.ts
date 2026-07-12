@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
-import { saveDraft, commit } from "./repo-drafts.ts";
+import { saveDraft, commit, listDrafts } from "./repo-drafts.ts";
 import { getPreferences, setPreferences } from "./repo-meta.ts";
 
 const T = "test_commit_out";
@@ -110,5 +110,44 @@ describe("commit() fires dimension.committed event", () => {
       [T, dimId],
     );
     expect(after!.n).toBe(before!.n);
+  });
+});
+
+describe("commit() draft-scoped folding", () => {
+  const run = Date.now();
+
+  it("commit with draftKeys folds only those drafts", async () => {
+    const prefs = await getPreferences(T);
+    await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
+    const dimId = await addDimension(`ScopedFold_${run}`, [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
+    await saveDraft(dimId, "u.s.", "mapped", "United States", "united_states", U, T);
+    const res = await commit(dimId, U, T, ["usa"]);
+    expect(res.committed).toBe(1);
+    const remaining = await listDrafts(dimId, T);
+    expect(remaining.map((d) => d.raw)).toEqual(["u.s."]);
+  });
+
+  it("commit with an unknown draft key folds nothing and throws", async () => {
+    const prefs = await getPreferences(T);
+    await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
+    const dimId = await addDimension(`UnknownKey_${run}`, [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
+    await expect(commit(dimId, U, T, ["usa", "ghost"])).rejects.toThrow(/ghost/);
+    expect((await listDrafts(dimId, T)).length).toBe(1);
+  });
+
+  it("four-eyes gate checks only the folded set", async () => {
+    await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: true }, T);
+    const dimId = await addDimension(`FourEyesScoped_${run}`, [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "A", undefined, U, T);
+    await addCanonicalOne(dimId, "B", undefined, U, T);
+    await saveDraft(dimId, "aaa", "mapped", "A", "a", U, T);   // U's draft
+    await saveDraft(dimId, "bbb", "mapped", "B", "b", U2, T);  // U2's draft
+    await expect(commit(dimId, U, T, ["bbb"])).resolves.toMatchObject({ committed: 1 }); // U publishes U2's — fine
+    await expect(commit(dimId, U, T, ["aaa"])).rejects.toThrow(/another editor must publish/i); // U can't publish own
+    await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
   });
 });
