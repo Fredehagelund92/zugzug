@@ -253,6 +253,13 @@
       "when": 1781800005000,
       "tag": "0035_require_second_publisher",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781800006000,
+      "tag": "0036_publish_lifecycle",
+      "breakpoints": true
     }
   ]
 }

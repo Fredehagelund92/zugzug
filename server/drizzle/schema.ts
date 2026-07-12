@@ -143,8 +143,10 @@ export const draft = app.table(
     created_at:   timestamp("created_at").notNull(),
     source:       varchar("source").notNull().default("user"),
     confidence:   varchar("confidence"),
-    reasoning:    varchar("reasoning"),
-    tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
+    reasoning:       varchar("reasoning"),
+    tenant_id:       varchar("tenant_id").notNull().references(() => tenant.id),
+    rejected_reason: text("rejected_reason"),
+    rejected_by:     text("rejected_by"),
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw, t.user_id] }),
@@ -660,5 +662,27 @@ export const authCredentialQuota = app.table(
   },
   (t) => [
     index("auth_credential_quota_window_idx").on(t.window_started_at),
+  ],
+);
+
+/* ---------- Publish lifecycle ---------- */
+
+export const dimensionVersion = app.table(
+  "dimension_version",
+  {
+    id:               text("id").primaryKey(),
+    tenant_id:        text("tenant_id").notNull(),
+    dim_id:           text("dim_id").notNull(),
+    version:          integer("version").notNull(),
+    kind:             text("kind").notNull().default("publish"),
+                                                    // 'publish' | 'rollback'
+    restores_version: integer("restores_version"),
+    snapshot:         jsonb("snapshot").notNull(),
+    published_by:     text("published_by").notNull(),
+    created_at:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("dimension_version_unique").on(t.tenant_id, t.dim_id, t.version),
+    check("dimension_version_kind_chk", sql`${t.kind} IN ('publish','rollback')`),
   ],
 );
