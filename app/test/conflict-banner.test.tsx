@@ -31,7 +31,7 @@ describe("ConflictBanner", () => {
         onKeepEditing={() => undefined}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /refresh row/i }));
+    await userEvent.click(screen.getByRole("button", { name: /use theirs/i }));
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
@@ -44,7 +44,7 @@ describe("ConflictBanner", () => {
         onKeepEditing={onKeepEditing}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /keep editing/i }));
+    await userEvent.click(screen.getByRole("button", { name: /keep my version/i }));
     expect(onKeepEditing).toHaveBeenCalledOnce();
   });
 

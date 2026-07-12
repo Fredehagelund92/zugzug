@@ -52,7 +52,7 @@ import { useLinkedCandidates } from "../lib/use-linked-candidates";
 import { useOpenTabs } from "../lib/open-tabs";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { ManageLinkedFieldsPopover } from "./linked/ManageLinkedFieldsPopover";
-import { ConflictBanner } from "./ConflictBanner";
+import { ConflictBanner, FieldDiff } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
@@ -272,14 +272,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   } | null>(null);
 
   const [conflicts, setConflicts] = useState<
-    Map<string, { current: ConflictError["current"]; conflictedKeys?: string[] }>
+    Map<string, { current: ConflictError["current"]; conflictedKeys?: string[]; diff?: FieldDiff[] }>
   >(new Map());
 
-  const surfaceConflict = useCallback((rowKey: string, err: unknown) => {
+  const surfaceConflict = useCallback((rowKey: string, err: unknown, diff?: FieldDiff[]) => {
     if (err instanceof ConflictError) {
       setConflicts((prev) => {
         const next = new Map(prev);
-        next.set(rowKey, { current: err.current, conflictedKeys: err.conflictedKeys });
+        next.set(rowKey, { current: err.current, conflictedKeys: err.conflictedKeys, diff });
         return next;
       });
       return true;
@@ -1054,6 +1054,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 key={rowKey}
                 conflict={c.current}
                 conflictedKeys={c.conflictedKeys}
+                diff={c.diff}
                 onRefresh={async () => {
                   await refreshDimAndNotify(activeId);
                   dismissConflict(rowKey);
@@ -1108,7 +1109,12 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                       await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
                       dismissConflict(rowKey);
                     } catch (e) {
-                      if (!surfaceConflict(rowKey, e)) throw e;
+                      const serverRow = getCanonical(activeId, rowKey);
+                      const labelDiff: FieldDiff[] = [];
+                      if (serverRow && serverRow.label !== value) {
+                        labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
+                      }
+                      if (!surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)) throw e;
                       return;
                     }
                     if (prev) {

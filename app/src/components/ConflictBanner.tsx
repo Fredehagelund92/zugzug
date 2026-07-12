@@ -1,6 +1,12 @@
 import { Button } from "./Button";
 import { cx } from "../lib/cx";
 
+export interface FieldDiff {
+  field: string;
+  theirs: string;
+  yours: string;
+}
+
 export interface ConflictBannerProps {
   conflict: {
     updatedBy: { id: string; name: string; initials: string };
@@ -9,6 +15,8 @@ export interface ConflictBannerProps {
   /** Set when the action that conflicted touched multiple keys (e.g. merge).
    *  Banner copy names the first key + "(and N others)". */
   conflictedKeys?: string[];
+  /** Field-level diff showing theirs vs yours, rendered below the message. */
+  diff?: FieldDiff[];
   onRefresh: () => void;
   onKeepEditing: () => void;
 }
@@ -25,6 +33,7 @@ function ago(iso: string): string {
 export function ConflictBanner({
   conflict,
   conflictedKeys,
+  diff,
   onRefresh,
   onKeepEditing,
 }: ConflictBannerProps) {
@@ -47,12 +56,21 @@ export function ConflictBanner({
       </span>
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onKeepEditing}>
-          Keep editing
+          Keep my version
         </Button>
         <Button variant="secondary" size="sm" onClick={onRefresh}>
-          Refresh row
+          Use theirs
         </Button>
       </div>
+      {diff && diff.length > 0 && (
+        <ul className="w-full space-y-0.5 font-mono text-[11px] text-warn/90">
+          {diff.map((d) => (
+            <li key={d.field}>
+              <span className="text-warn/70">{d.field}:</span> theirs &quot;{d.theirs}&quot; · yours &quot;{d.yours}&quot;
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
