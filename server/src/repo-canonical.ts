@@ -1709,6 +1709,46 @@ export async function updateDimensionMeta(
 }
 
 // ---------------------------------------------------------------------------
+// Dimension deletion
+// ---------------------------------------------------------------------------
+
+/** Permanently removes a table: metadata rows, the dim_/map_ Postgres tables,
+ *  and the dimension row. Audit and outbound_event rows are kept — history
+ *  outlives the table — and a final audit entry records the deletion. */
+export async function deleteDimension(id: string, userId: string): Promise<boolean> {
+  const dim = await pgGet<{ id: string; label: string; dim_table: string; map_table: string }>(
+    `SELECT id, label, dim_table, map_table FROM ${pg("dimension")} WHERE id = $1`,
+    [id],
+  );
+  if (!dim) return false;
+  const count = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${cq(dim.dim_table)}`,
+  ).catch(() => null);
+  const sweeps = [
+    "dimension_source",
+    "dimension_field",
+    "draft",
+    "source_stat",
+    "user_grid_layout",
+    "ai_hint_cache",
+    "canonical_version",
+  ];
+  for (const t of sweeps) {
+    await pgRun(`DELETE FROM ${pg(t)} WHERE dim_id = $1`, [id]);
+  }
+  await pgRun(`DROP TABLE IF EXISTS ${cq(dim.dim_table)}`);
+  await pgRun(`DROP TABLE IF EXISTS ${cq(dim.map_table)}`);
+  await pgRun(`DELETE FROM ${pg("dimension")} WHERE id = $1`, [id]);
+  await appendAuditAs(
+    userId,
+    "Deleted table",
+    `${dim.label} — ${count?.n ?? 0} records; dropped dim_${id} + map_${id}`,
+    { tableId: id },
+  );
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Position helpers
 // ---------------------------------------------------------------------------
 

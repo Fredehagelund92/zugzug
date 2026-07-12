@@ -997,6 +997,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const dim = await reqRepo.updateDimensionMeta(id, patch, me);
           return json({ ok: true, dim });
         }
+        // DELETE /api/dimensions/:id — permanently remove a table
+        if (seg.length === 3 && id && method === "DELETE") {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const ok = await reqRepo.deleteDimension(id, me);
+          return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
+        }
         if (seg[3] === "drafts") {
           // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
           if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
