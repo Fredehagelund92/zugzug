@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { applyColumnMap, type ColumnTarget, type MappedImportRow } from "../lib/csv";
+import { applyColumnMap, fieldMismatch, type ColumnTarget, type MappedImportRow } from "../lib/csv";
 import type { CsvMapping } from "../lib/csv";
 import type { FieldDef } from "../data";
 
@@ -15,19 +15,10 @@ function defaultMap(headers: string[], mapping: CsvMapping): ColumnTarget[] {
   });
 }
 
-/** Check whether a value is incompatible with a field's type.
- *  Returns true when the value would be coerced to null on import. */
-function isIncompatible(value: string, type: string): boolean {
-  if (!value || value.trim() === "") return false;
-  if (type === "number") return isNaN(Number(value.trim()));
-  if (type === "date") return isNaN(Date.parse(value.trim()));
-  return false;
-}
-
 interface CoercionWarning {
   header: string;
   count: number;
-  type: string;
+  severity: "empty" | "blocking";
 }
 
 function computeWarnings(
@@ -42,14 +33,18 @@ function computeWarnings(
     if (target.kind !== "field") return;
     const field = fieldById.get(target.fieldId);
     if (!field) return;
-    if (field.type !== "number" && field.type !== "date") return;
-    let count = 0;
+    let emptyCount = 0;
+    let blockingCount = 0;
     for (const row of allRows) {
       const v = row[i] ?? "";
-      if (isIncompatible(v, field.type)) count++;
+      const m = fieldMismatch(field.type, v);
+      if (m === "empty") emptyCount++;
+      else if (m === "blocking") blockingCount++;
     }
-    if (count > 0) {
-      warnings.push({ header: headers[i] ?? "", count, type: field.type });
+    if (blockingCount > 0) {
+      warnings.push({ header: headers[i] ?? "", count: blockingCount, severity: "blocking" });
+    } else if (emptyCount > 0) {
+      warnings.push({ header: headers[i] ?? "", count: emptyCount, severity: "empty" });
     }
   });
   return warnings;
@@ -87,11 +82,12 @@ export function ImportPreviewDialog({
 
   const hasKey = colMap.some((t) => t.kind === "key");
   const hasLabel = colMap.some((t) => t.kind === "label");
-  const canImport = hasKey || hasLabel;
+  const warnings = computeWarnings(headers, rows, colMap, fields);
+  const hasBlockingWarnings = warnings.some((w) => w.severity === "blocking");
+  const canImport = (hasKey || hasLabel) && !hasBlockingWarnings;
 
   const previewRows = rows.slice(0, 3);
   const mapped = applyColumnMap(headers, previewRows, colMap);
-  const warnings = computeWarnings(headers, rows, colMap, fields);
 
   const totalRecords = rows.length;
 
@@ -176,12 +172,22 @@ export function ImportPreviewDialog({
           {/* Coercion warnings */}
           {warnings.length > 0 && (
             <div className="space-y-0.5">
-              {warnings.map((w) => (
-                <p key={w.header} className="text-[12px] text-amber-500">
-                  {w.count} value{w.count === 1 ? "" : "s"} in &apos;{w.header}&apos; aren&apos;t{" "}
-                  {w.type === "number" ? "numbers" : "dates"} and will import empty.
-                </p>
-              ))}
+              {warnings.map((w) =>
+                w.severity === "blocking" ? (
+                  <p
+                    key={w.header}
+                    className="rounded-sm border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger"
+                  >
+                    {w.count} value{w.count === 1 ? "" : "s"} in &apos;{w.header}&apos; aren&apos;t
+                    valid dates — fix the CSV or map the column to Ignore. Importing would fail.
+                  </p>
+                ) : (
+                  <p key={w.header} className="text-[12px] text-amber-500">
+                    {w.count} value{w.count === 1 ? "" : "s"} in &apos;{w.header}&apos; will import
+                    empty.
+                  </p>
+                ),
+              )}
             </div>
           )}
 

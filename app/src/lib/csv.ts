@@ -122,6 +122,26 @@ export function mapCsvHeaders(
   return mapping;
 }
 
+/** Check whether a value is incompatible with a field's type.
+ *  Returns "empty" when the server would coerce the value to null,
+ *  "blocking" when the server would throw (aborting the entire import),
+ *  or null when the value is acceptable or the type is unknown. */
+export function fieldMismatch(type: string, value: string): "empty" | "blocking" | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  if (type === "number") {
+    return !Number.isFinite(Number(trimmed)) ? "empty" : null;
+  }
+  if (type === "date") {
+    return isNaN(new Date(trimmed).getTime()) ? "blocking" : null;
+  }
+  if (type === "boolean") {
+    const lower = trimmed.toLowerCase();
+    return lower === "true" || lower === "false" || lower === "1" || lower === "0" ? null : "empty";
+  }
+  return null;
+}
+
 export interface ParsedImport {
   rows: Array<{ key?: string; label?: string; fields?: Record<string, string | null> }>;
   mapping: CsvMapping;
