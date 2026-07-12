@@ -989,6 +989,18 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "versions" && seg.length === 4 && id && method === "GET") {
           return json(await reqRepo.listVersions(id));
         }
+        // POST /api/dimensions/:id/rollback — restore a snapshotted version (admin only)
+        if (seg[3] === "rollback" && seg.length === 4 && id && method === "POST") {
+          const gate = requireAdmin(tenantCtx);
+          if (!gate.ok) return json({ error: "forbidden" }, 403);
+          const body = (await req.json()) as { toVersion?: unknown };
+          const toVersion = Number(body?.toVersion);
+          if (!Number.isInteger(toVersion) || toVersion < 1) {
+            throw new AppError("VALIDATION_FAILED", "toVersion must be a positive integer", 400);
+          }
+          const { rollbackToVersion } = await import("./repo-rollback.ts");
+          return json(await rollbackToVersion(id, tenantCtx.tenantId, toVersion, me));
+        }
         // PATCH /api/dimensions/:id — update orderingMode / description / color / ownerUserId
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");
