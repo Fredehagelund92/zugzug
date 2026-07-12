@@ -7,6 +7,7 @@ import * as repoScan from "./repo-scan.ts";
 import * as repoDimScan from "./repo-dim-scan.ts";
 import * as repoAiHint from "./repo-ai-hint.ts";
 import * as repoActivity from "./repo-activity.ts";
+import * as repoVersions from "./repo-versions.ts";
 import type {
   Preferences,
   CanonicalValue,
@@ -390,6 +391,10 @@ export class TenantRepo {
 
   getPublishState(dimId: string): Promise<repoDrafts.PublishState> {
     return this.withClearCtx(() => repoDrafts.getPublishState(dimId, this.tenantId));
+  }
+
+  listVersions(dimId: string): Promise<repoVersions.VersionInfo[]> {
+    return this.withClearCtx(() => repoVersions.listVersions(dimId, this.tenantId));
   }
 
   // --- scan ------------------------------------------------------------------

@@ -18,6 +18,7 @@ import {
   pg,
 } from "./repo-shared.ts";
 import { appendAuditAs, getPreferences } from "./repo-meta.ts";
+import { writeVersionSnapshot } from "./repo-versions.ts";
 import { AppError } from "./errors.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { getAdapter } from "./warehouse/registry.ts";
@@ -290,6 +291,8 @@ export async function commit(
   dimId: string,
   userId: string,
   tenantId: string,
+  draftKeys?: string[],
+  opts?: { kind?: "publish" | "rollback"; restoresVersion?: number },
 ): Promise<{
   committed: number;
   rowsRecovered: number;
@@ -456,6 +459,17 @@ export async function commit(
       [tenantId, dimId],
     );
     const v = versionRow?.v ?? 1;
+    await writeVersionSnapshot(tx, {
+      tenantId,
+      dimId,
+      version: v,
+      kind: opts?.kind ?? "publish",
+      restoresVersion: opts?.restoresVersion ?? null,
+      publishedBy: userId,
+      dimTable: meta.dimTable,
+      mapTable: meta.mapTable,
+      keyCol: meta.keyCol,
+    });
     const committedBy = await tx.get<{ name: string }>(
       `SELECT name FROM ${pg("users")} WHERE id = $1`,
       [userId],
@@ -493,6 +507,8 @@ export async function commit(
         },
         summary: { added: addedKeys.length, remapped: remappedKeys.length, updated: canonicalChanged.length, merged: 0, retired: 0 },
         ...((addedKeys.length > 200 || remappedKeys.length > 200) ? { changes_truncated: true } : {}),
+        kind: opts?.kind ?? "publish",
+        ...(opts?.restoresVersion != null ? { restores_version: opts.restoresVersion } : {}),
       },
       idemKey: `dimension.committed:${dimId}:${v}`,
     });
