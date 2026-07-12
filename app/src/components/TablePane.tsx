@@ -70,6 +70,8 @@ import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
 import { ImportPreviewDialog } from "./ImportPreviewDialog";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
 
+const quickFilterLabel = (r: CanonicalValue) => r.label;
+
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
   switch (f.type) {
@@ -1112,7 +1114,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           columns={columns}
           showRowNumbers
           quickFilter={quickFilter}
-          quickFilterAccessor={(r) => r.label}
+          quickFilterAccessor={quickFilterLabel}
           selection={{ selected: sel, onChange: setSel }}
           onCommit={
             canEdit
