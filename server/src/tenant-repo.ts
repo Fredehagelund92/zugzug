@@ -134,6 +134,11 @@ export class TenantRepo {
     );
   }
 
+  deleteDimension(dimId: string, userId: string): Promise<boolean> {
+    this.assertRole("curate");
+    return this.withClearCtx(() => repoCanonical.deleteDimension(dimId, userId, this.tenantId));
+  }
+
   updateDimensionMeta(
     dimId: string,
     patch: repoCanonical.UpdateDimensionMetaInput,

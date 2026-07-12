@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { cx } from "../../lib/cx";
 import { useGridCursor } from "./useGridCursor";
@@ -157,6 +165,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     activity,
     presence,
   } = props;
+  const gridId = useId();
   // Memoized so a stable `columns` identity from the host actually preserves
   // GridRow memoization downstream — a fresh array here cascades into
   // orderedVisible/gridStyle and defeats React.memo on every row.
@@ -490,12 +499,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // ── Publish self cursor position to presence when cursor moves ────────────
   useEffect(() => {
     if (!presence || !cursor.cursor) return;
-    const rowIdx = rowIndexMap.get(cursor.cursor.rowKey);
-    const colIdx = colIndexMap.get(cursor.cursor.field);
-    if (rowIdx != null && colIdx != null) {
-      presence.setCell(rowIdx, colIdx);
-    }
-  }, [presence, cursor.cursor, rowIndexMap, colIndexMap]);
+    presence.setCell(cursor.cursor.rowKey, cursor.cursor.field);
+  }, [presence, cursor.cursor]);
 
   // Keep range anchor in sync when cursor moves without shift (range collapses)
   // We handle this explicitly in the key handler below, not via useEffect, to
@@ -1118,16 +1123,24 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return;
       }
 
-      // Escape: collapse range to anchor
+      // Escape: collapse multi-cell range to anchor; for a single-cell range
+      // (anchor === focus, i.e. a plain click), fall through so cursor.onKeyDown
+      // can clear the cursor entirely (Escape-then-Tab grid exit).
       if (e.key === "Escape" && range) {
-        e.preventDefault();
-        cursor.setCursor({
-          rowKey: range.anchor.rowKey,
-          field: range.anchor.field,
-          editing: false,
-        });
+        const isMultiCell =
+          range.anchor.rowKey !== range.focus.rowKey || range.anchor.field !== range.focus.field;
+        if (isMultiCell) {
+          e.preventDefault();
+          cursor.setCursor({
+            rowKey: range.anchor.rowKey,
+            field: range.anchor.field,
+            editing: false,
+          });
+          setRange(null);
+          return;
+        }
+        // Single-cell range: clear it silently and let cursor.onKeyDown clear cursor
         setRange(null);
-        return;
       }
 
       // Non-shift arrow / all other keys: collapse range and let cursor handle
@@ -1387,6 +1400,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         role="grid"
         aria-rowcount={sortedRows.length + 1}
         aria-colcount={orderedVisible.length}
+        aria-activedescendant={
+          cursor.cursor
+            ? `${gridId}${encodeURIComponent(cursor.cursor.rowKey)}::${cursor.cursor.field}`
+            : undefined
+        }
         onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
         className={cx(
@@ -1456,6 +1474,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           rows={sortedRows}
           rowKey={rowKey}
           columns={orderedVisible}
+          gridId={gridId}
           gridStyle={gridStyle}
           cellPadY={cellPadY}
           showRowNumbers={showRowNumbers}
@@ -1503,14 +1522,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         {presence && (
           <CursorOverlay
             peers={presence.peers}
-            cellRect={(row, col) => {
+            cellRect={(rowKey, field) => {
               const container = cursor.ref.current;
               if (!container) return null;
-              const rowEl = container.querySelector<HTMLElement>(
-                `[data-row="${sortedRows[row] ? rowKey(sortedRows[row]!) : ""}"]`,
+              const cellEl = container.querySelector<HTMLElement>(
+                `[data-cell="${attrEsc(`${rowKey}::${field}`)}"]`,
               );
-              if (!rowEl) return null;
-              const cellEl = rowEl.querySelectorAll<HTMLElement>("[data-cell]")[col] ?? null;
               if (!cellEl) return null;
               const grid = container.getBoundingClientRect();
               const cell = cellEl.getBoundingClientRect();

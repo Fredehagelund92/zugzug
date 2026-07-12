@@ -182,10 +182,10 @@ export interface DataGridProps<Row> {
    *  When present, each row gets a left-edge pip + hover-revealed badge. */
   activity?: Map<string, RowActivityEntry>;
   /** When present, renders a CursorOverlay with peer cell highlights and
-   *  invokes `presence.setCell(row, col)` on cell focus to publish self. */
+   *  invokes `presence.setCell(rowKey, field)` on cell focus to publish self. */
   presence?: {
     peers: PeerState[];
-    setCell: (row: number, col: number) => void;
+    setCell: (rowKey: string, field: string) => void;
   };
   /** Host hook for workbench single-key actions (A/S/R/N…). Called for keydowns
    *  the grid itself did not handle (never while editing). `startEdit` opens

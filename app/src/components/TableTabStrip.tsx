@@ -3,9 +3,12 @@ import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { PALETTE, type PaletteName } from "../lib/palette";
 import { IconPlus, IconX, IconSearch } from "./Icons";
-import { useDimensions, useDrafts } from "../store";
+import { useDimensions, useDrafts, useCanEdit, deleteDimension } from "../store";
 import { useOpenTabs, type OpenTab } from "../lib/open-tabs";
 import type { MappingDimension } from "../data";
+import { ContextMenu } from "./datagrid/ContextMenu";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { toast } from "./Toast";
 
 const DROPDOWN_W = 280;
 
@@ -184,15 +187,20 @@ interface TabItemProps {
   dirty: boolean;
   onFocus: () => void;
   onClose: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
+function TabItem({ tab, dim, active, dirty, onFocus, onClose, onContextMenu }: TabItemProps) {
   return (
     <div
       role="tab"
       aria-selected={active}
       data-tab-id={tab.id}
       onClick={onFocus}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu(e);
+      }}
       onAuxClick={(e) => {
         if (e.button === 1) {
           e.preventDefault();
@@ -246,9 +254,31 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose }: TabItemProps) {
 export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () => void }) {
   const dims = useDimensions();
   const drafts = useDrafts();
+  const canEdit = useCanEdit();
   const { tabs, activeId, focusTab, closeTab, openTab } = useOpenTabs();
   const [addOpen, setAddOpen] = useState(false);
   const addBtnRef = useRef<HTMLButtonElement>(null);
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; tab: OpenTab } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MappingDimension | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  // Dismiss the tab context menu on outside mousedown or Escape
+  useEffect(() => {
+    if (!tabMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTabMenu(null);
+    };
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[role="menu"]')) return;
+      setTabMenu(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [tabMenu]);
 
   const dirtyDimIds = useMemo(() => {
     const s = new Set<string>();
@@ -277,6 +307,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
               dirty={dirtyDimIds.has(tab.dimId)}
               onFocus={() => focusTab(tab.id)}
               onClose={() => closeTab(tab.id)}
+              onContextMenu={(e) => setTabMenu({ x: e.clientX, y: e.clientY, tab })}
             />
           );
         })}
@@ -303,6 +334,65 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
           />
         )}
       </div>
+
+      {tabMenu && (
+        <ContextMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          onClose={() => setTabMenu(null)}
+          items={[
+            { label: "Close tab", onClick: () => closeTab(tabMenu.tab.id) },
+            ...(canEdit
+              ? [
+                  {
+                    label: "Delete table…",
+                    onClick: () => {
+                      const dim = dims.find((d) => d.id === tabMenu.tab.dimId);
+                      if (dim) setDeleteTarget(dim);
+                    },
+                  },
+                ]
+              : []),
+          ]}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          open
+          danger
+          loading={deleting}
+          title={`Delete ${deleteTarget.dimension}?`}
+          confirmLabel="Delete table"
+          confirmPhrase={deleteTarget.dimension}
+          body={
+            <>
+              Permanently delete <strong>{deleteTarget.dimension}</strong>? Its{" "}
+              {deleteTarget.rows.toLocaleString()} records and their mappings are deleted, and
+              anything reading <code>dim_{deleteTarget.id}</code> from the warehouse will break.
+              This cannot be undone.
+            </>
+          }
+          onConfirm={async () => {
+            setDeleting(true);
+            try {
+              await deleteDimension(deleteTarget.id);
+              const open = tabs.find((t) => t.dimId === deleteTarget.id);
+              if (open) closeTab(open.id);
+              toast(`Deleted ${deleteTarget.dimension}.`);
+              setDeleteTarget(null);
+            } catch (err) {
+              toast(
+                `Couldn't delete ${deleteTarget.dimension} — ${err instanceof Error ? err.message : "please try again"}`,
+                "error",
+              );
+            } finally {
+              setDeleting(false);
+            }
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

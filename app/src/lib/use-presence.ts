@@ -14,9 +14,20 @@ export interface PeerState {
   userId: string;
   displayName: string;
   color: PaletteName;
-  cell: { row: number; col: number } | null;
+  cell: { rowKey: string; field: string } | null;
   selection: { row: number; col: number; rowEnd: number; colEnd: number } | null;
   away: boolean;
+}
+
+/** Awareness payloads cross client versions during a deploy: accept only the
+ *  keyed cursor shape; older {row, col} index payloads render no cursor. */
+export function sanitizePeerCell(raw: unknown): PeerState["cell"] {
+  if (typeof raw !== "object" || raw === null) return null;
+  const c = raw as Record<string, unknown>;
+  if (typeof c.rowKey === "string" && typeof c.field === "string") {
+    return { rowKey: c.rowKey, field: c.field };
+  }
+  return null;
 }
 
 const AWAY_AFTER_MS = 120_000; // 2 min: peer disappears from cursors
@@ -25,12 +36,12 @@ const CURSOR_THROTTLE_MS = 33; // ~30 Hz
 
 /** Subscribes to live presence in a given table.
  *  - `peers`: array of remote PeerState (self excluded).
- *  - `setCell(row, col)`: publish self cursor position (throttled to ~30 Hz).
+ *  - `setCell(rowKey, field)`: publish self cursor position (throttled to ~30 Hz).
  *  - `away`: true if no local input for AWAY_AFTER_MS. */
 export function usePresence(
   tableId: string | null,
   me: { userId: string; displayName: string },
-): { peers: PeerState[]; setCell: (row: number, col: number) => void; away: boolean } {
+): { peers: PeerState[]; setCell: (rowKey: string, field: string) => void; away: boolean } {
   const [peers, setPeers] = useState<PeerState[]>([]);
   const [away, setAway] = useState(false);
   const awarenessRef = useRef<Awareness | null>(null);
@@ -74,7 +85,7 @@ export function usePresence(
           userId: s.userId,
           displayName: s.displayName,
           color: s.color,
-          cell: isAway ? null : (s.cell ?? null),
+          cell: isAway ? null : sanitizePeerCell(s.cell),
           selection: isAway ? null : (s.selection ?? null),
           away: isAway,
         });
@@ -116,14 +127,14 @@ export function usePresence(
     };
   }, [tableId, me.userId, me.displayName]);
 
-  const setCell = (row: number, col: number) => {
+  const setCell = (rowKey: string, field: string) => {
     const now = performance.now();
     if (now - lastSendRef.current < CURSOR_THROTTLE_MS) return;
     lastSendRef.current = now;
     const cur = awarenessRef.current;
     if (!cur) return;
     const s = (cur.getLocalState() ?? {}) as Record<string, unknown>;
-    cur.setLocalState({ ...s, cell: { row, col }, lastActiveAt: Date.now() });
+    cur.setLocalState({ ...s, cell: { rowKey, field }, lastActiveAt: Date.now() });
   };
 
   return { peers, setCell, away };

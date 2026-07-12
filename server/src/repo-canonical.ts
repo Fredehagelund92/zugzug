@@ -1709,6 +1709,65 @@ export async function updateDimensionMeta(
 }
 
 // ---------------------------------------------------------------------------
+// Dimension deletion
+// ---------------------------------------------------------------------------
+
+/** Permanently removes a table: metadata rows, the dim_/map_ Postgres tables,
+ *  and the dimension row. Audit and outbound_event rows are kept — history
+ *  outlives the table — and a final audit entry records the deletion. */
+export async function deleteDimension(
+  id: string,
+  userId: string,
+  tenantId: string,
+): Promise<boolean> {
+  const dim = await pgGet<{ id: string; label: string; dim_table: string; map_table: string }>(
+    `SELECT id, label, dim_table, map_table FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [id, tenantId],
+  );
+  if (!dim) return false;
+  // Use to_regclass to check table existence before counting — avoids
+  // poisoning the transaction with a missing-table error (error code 42P01
+  // inside a transaction leaves it in an aborted state for all later queries).
+  const exists = await pgGet<{ r: string | null }>(`SELECT to_regclass($1) AS r`, [dim.dim_table]);
+  const count = exists?.r
+    ? await pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(dim.dim_table)}`)
+    : { n: 0 };
+  const tenantSweeps = [
+    "dimension_source",
+    "dimension_field",
+    "draft",
+    "source_stat",
+    "ai_hint_cache",
+    "canonical_version",
+  ];
+  for (const t of tenantSweeps) {
+    await pgRun(`DELETE FROM ${pg(t)} WHERE dim_id = $1 AND tenant_id = $2`, [id, tenantId]);
+  }
+  // user_grid_layout has no tenant_id column — scope to the calling tenant's members
+  await pgRun(
+    `DELETE FROM ${pg("user_grid_layout")} WHERE dim_id = $1
+       AND user_id IN (SELECT user_id FROM ${pg("tenant_member")} WHERE tenant_id = $2)`,
+    [id, tenantId],
+  );
+  await pgRun(`DROP TABLE IF EXISTS ${cq(dim.dim_table)}`);
+  await pgRun(`DROP TABLE IF EXISTS ${cq(dim.map_table)}`);
+  await pgRun(`DELETE FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+  const dimTableShort = dim.dim_table.includes(".")
+    ? dim.dim_table.split(".").pop()!
+    : dim.dim_table;
+  const mapTableShort = dim.map_table.includes(".")
+    ? dim.map_table.split(".").pop()!
+    : dim.map_table;
+  await appendAuditAs(
+    userId,
+    "Deleted table",
+    `${dim.label} — ${count?.n ?? 0} records; dropped ${dimTableShort} + ${mapTableShort}`,
+    { tableId: id, tenantId },
+  );
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Position helpers
 // ---------------------------------------------------------------------------
 
