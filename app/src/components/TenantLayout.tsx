@@ -31,6 +31,10 @@ export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
     void initStore();
   }, [tenantSlug]);
 
+  useEffect(() => {
+    if (tenantSlug) sessionStorage.setItem("zz:lastTenant", tenantSlug);
+  }, [tenantSlug]);
+
   const ctx: TenantContextValue = useMemo(
     () => ({
       id: m?.slug ?? tenantSlug ?? "",
