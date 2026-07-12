@@ -1463,7 +1463,22 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           estimatedRowHeight={estimatedRowHeight}
           scrollContainerRef={cursor.ref}
           virtualizerRef={virtualizerRef}
-          empty={empty}
+          empty={
+            rows.length > 0 && filterSet && filterSet.conditions.length > 0 ? (
+              <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">
+                <div>No records match the current filters.</div>
+                <button
+                  type="button"
+                  onClick={() => setFilterSet(null)}
+                  className="mt-2 text-accent underline-offset-2 hover:underline"
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              empty
+            )
+          }
           cursorRowKey={cursor.cursor?.rowKey ?? null}
           cursorField={cursor.cursor?.field ?? null}
           cursorEditing={!!cursor.cursor?.editing}
