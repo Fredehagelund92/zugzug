@@ -118,6 +118,7 @@ export interface Preferences {
   publishThreshold: number;
   suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
+  requireSecondPublisher: boolean;
 }
 
 export interface WorkspaceInfo {
@@ -167,7 +168,7 @@ function resetStore(): void {
   sources = [];
   draftsFlat = {};
   audit = [];
-  preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null };
+  preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null, requireSecondPublisher: false };
   _authConfigCache = null;
   _authConfigPromise = null;
   _workspaceInfoCache = null;
@@ -250,7 +251,7 @@ let dims: MappingDimension[] = [];
 let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
-let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null };
+let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null, requireSecondPublisher: false };
 let storeLoading = true;
 
 const listeners = new Set<() => void>();
@@ -395,7 +396,8 @@ async function refreshSources(): Promise<void> {
   sources = await api<SourceInfo[]>("/sources");
 }
 async function refreshPreferences(): Promise<void> {
-  preferences = await api<Preferences>("/preferences");
+  const raw = await api<Preferences>("/preferences");
+  preferences = { ...raw, requireSecondPublisher: raw.requireSecondPublisher ?? false };
 }
 
 /** Preload everything once. Awaited in main.tsx so the first render has data.

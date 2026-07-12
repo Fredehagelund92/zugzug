@@ -310,12 +310,15 @@ function TriageInner() {
             error: null,
           });
         } catch (err) {
+          const msg = err instanceof Error ? err.message : "unknown error";
           outcomes.push({
             dimId: id,
             dimName: name,
             committed: 0,
             rowsRecovered: 0,
-            error: err instanceof Error ? err.message : "unknown error",
+            error: msg.includes("SECOND_PUBLISHER_REQUIRED")
+              ? "These drafts need a second publisher — another editor has to press Publish (workspace setting: Four eyes on publish)."
+              : msg,
           });
         }
       }

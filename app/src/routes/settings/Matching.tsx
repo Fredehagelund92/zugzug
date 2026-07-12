@@ -5,10 +5,12 @@ import { SettingsSection } from "../../components/settings/SettingsSection";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { FormField } from "../../components/FormField";
+import { Checkbox } from "../../components/Checkbox";
 
 export function Matching() {
   const tenant = useTenant();
   const canEdit = can(tenant, "settings.matching.edit");
+  const canEditGov = can(tenant, "settings.general.edit");
   const prefs = usePreferences();
 
   return (
@@ -31,6 +33,22 @@ export function Matching() {
           />
         </FormField>
       </ReadOnly>
+      <FormField
+        label="Four eyes on publish"
+        hint="When on, a draft's author can't publish it — a second editor must. Applies to mapping drafts only; record edits are not drafted."
+      >
+        <Checkbox
+          state={prefs.requireSecondPublisher ? "on" : "off"}
+          disabled={!canEditGov}
+          onClick={() =>
+            void setPreferences({
+              ...prefs,
+              requireSecondPublisher: !prefs.requireSecondPublisher,
+            }).then(() => invalidate.tenant(tenant.slug))
+          }
+          aria-label="Require a second publisher"
+        />
+      </FormField>
     </SettingsSection>
   );
 }

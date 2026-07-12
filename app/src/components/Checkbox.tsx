@@ -5,10 +5,12 @@ import { IconCheck } from "./Icons";
 export function Checkbox({
   state,
   onClick,
+  disabled,
   "aria-label": ariaLabel,
 }: {
   state: "on" | "off" | "mixed";
   onClick: () => void;
+  disabled?: boolean;
   "aria-label"?: string;
 }) {
   return (
@@ -17,9 +19,10 @@ export function Checkbox({
       role="checkbox"
       aria-checked={state === "mixed" ? "mixed" : state === "on"}
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={onClick}
       className={cx(
-        "grid h-4 w-4 shrink-0 place-items-center rounded-sm border transition-colors",
+        "grid h-4 w-4 shrink-0 place-items-center rounded-sm border transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
         state === "off"
           ? "border-line-2 hover:border-accent"
           : "border-accent bg-accent text-accent-ink",
