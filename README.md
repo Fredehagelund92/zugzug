@@ -31,7 +31,7 @@ You connect Zugzug to your warehouse with a read-only credential. The adapter sc
 
 The UI shows unmapped values alongside their frequency counts. Team members map each source value to a record (a `key` + `label` pair). Mappings sit in Postgres as drafts until an editor publishes them. The audit log records who approved what and when.
 
-Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres record store), results live in Postgres and are downloadable as Parquet on demand. If you configure a writable warehouse adapter, publishes write directly into your warehouse — for example, into a MotherDuck database your dbt project already reads.
+Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres record store), results live in Postgres and are downloadable as Parquet on demand. If you configure a writable warehouse adapter, each publish writes directly into your warehouse — for example, into a MotherDuck database your dbt project already reads.
 
 The warehouse adapter is a TypeScript interface (`WarehouseAdapter`). DuckDB/MotherDuck and Snowflake are shipped. Additional adapters (Postgres-as-warehouse, BigQuery, Databricks) are community-roadmapped — see the issue template below.
 
