@@ -31,6 +31,8 @@ export function NoWorkspaceLanding() {
     void navigator.clipboard.writeText(email).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      window.prompt("Copy your email:", email);
     });
   };
 
