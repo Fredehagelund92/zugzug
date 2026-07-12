@@ -60,6 +60,48 @@ describe("useSyncStatus", () => {
     expect(result.current).toBe("failed");
   });
 
+  test("a concurrent success does not mask a failure — pill stays at failed", async () => {
+    let releaseSuccess!: () => void;
+    const gateSuccess = new Promise<void>((r) => (releaseSuccess = r));
+    // W1 → fails immediately (500), W2 → held until after W1 rejects
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockImplementationOnce(async (_url: string, _opts?: RequestInit) => {
+          // W1: fail immediately
+          return new Response("boom", { status: 500 });
+        })
+        .mockImplementationOnce(async (_url: string, _opts?: RequestInit) => {
+          // W2: block until released
+          await gateSuccess;
+          return new Response(null, { status: 204 });
+        })
+        // GET calls for the initial load
+        .mockImplementation(async () =>
+          new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
+        ),
+    );
+    const { useSyncStatus, discardDraft } = await import("../src/store");
+    const { result } = renderHook(() => useSyncStatus());
+
+    let w1!: Promise<void>;
+    let w2!: Promise<void>;
+    act(() => {
+      w1 = discardDraft("country", "usa").catch(() => undefined);
+      w2 = discardDraft("country", "gbr").catch(() => undefined);
+    });
+
+    // Wait for W1 to reject
+    await act(async () => { await w1; });
+
+    // Now release W2 so writeSettled runs last
+    releaseSuccess();
+    await act(async () => { await w2; });
+
+    // Pill must stay on failed — success must not mask the failure
+    expect(result.current).toBe("failed");
+  });
+
   test("saved decays back to idle after ~1.5s", async () => {
     vi.stubGlobal(
       "fetch",

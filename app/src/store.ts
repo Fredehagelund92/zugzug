@@ -280,6 +280,7 @@ function writeStarted(): void {
 function writeSettled(): void {
   pendingWrites--;
   if (pendingWrites > 0) return;
+  if (syncStatus === "failed") return;
   syncStatus = "saved";
   emitSync();
   savedDecayTimer = setTimeout(() => {
