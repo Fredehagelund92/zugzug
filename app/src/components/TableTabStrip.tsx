@@ -261,6 +261,24 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; tab: OpenTab } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MappingDimension | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Dismiss the tab context menu on outside mousedown or Escape
+  useEffect(() => {
+    if (!tabMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTabMenu(null);
+    };
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[role="menu"]')) return;
+      setTabMenu(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown);
+    };
+  }, [tabMenu]);
 
   const dirtyDimIds = useMemo(() => {
     const s = new Set<string>();

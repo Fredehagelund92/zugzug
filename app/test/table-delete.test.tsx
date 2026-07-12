@@ -93,3 +93,39 @@ describe("delete table from the tab strip", () => {
     expect(screen.queryByRole("menuitem", { name: /delete table/i })).toBeNull();
   });
 });
+
+describe("tab context menu dismissal", () => {
+  test("Escape closes the tab context menu", async () => {
+    await renderStrip();
+    const tab = await screen.findByRole("tab", { name: /brand/i });
+
+    act(() => {
+      fireEvent.contextMenu(tab);
+    });
+    // Menu is open
+    await screen.findByRole("menuitem", { name: /close tab/i });
+
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
+    // Menu is gone
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  test("mousedown on document.body closes the tab context menu", async () => {
+    await renderStrip();
+    const tab = await screen.findByRole("tab", { name: /brand/i });
+
+    act(() => {
+      fireEvent.contextMenu(tab);
+    });
+    // Menu is open
+    await screen.findByRole("menuitem", { name: /close tab/i });
+
+    act(() => {
+      fireEvent.mouseDown(document.body);
+    });
+    // Menu is gone
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+});

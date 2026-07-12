@@ -1401,7 +1401,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         aria-rowcount={sortedRows.length + 1}
         aria-colcount={orderedVisible.length}
         aria-activedescendant={
-          cursor.cursor ? `${gridId}${cursor.cursor.rowKey}::${cursor.cursor.field}` : undefined
+          cursor.cursor
+            ? `${gridId}${encodeURIComponent(cursor.cursor.rowKey)}::${cursor.cursor.field}`
+            : undefined
         }
         onKeyDown={handleKeyDown}
         onContextMenu={onContextMenu}
