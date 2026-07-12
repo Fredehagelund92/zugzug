@@ -9,6 +9,7 @@ import type {
 import type { ConditionalRule } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
+import { toast } from "./components/Toast";
 
 /** Thrown by client mutation helpers on HTTP 409 from the server.
  *  Callers (TablePane) inspect `current` to render the inline conflict banner. */
@@ -262,7 +263,7 @@ const emit = () => listeners.forEach((l) => l());
 
 /* ---- sync status (own listener channel — NOT the global emit() bus, which
    would re-render every store subscriber on every write start/settle) ---- */
-export type SyncStatus = "idle" | "saving" | "saved";
+export type SyncStatus = "idle" | "saving" | "saved" | "failed";
 let pendingWrites = 0;
 let syncStatus: SyncStatus = "idle";
 let savedDecayTimer: ReturnType<typeof setTimeout> | null = null;
@@ -280,12 +281,23 @@ function writeStarted(): void {
 function writeSettled(): void {
   pendingWrites--;
   if (pendingWrites > 0) return;
+  if (syncStatus === "failed") return;
   syncStatus = "saved";
   emitSync();
   savedDecayTimer = setTimeout(() => {
     syncStatus = "idle";
     emitSync();
   }, 1500);
+}
+function writeFailed(): void {
+  pendingWrites--;
+  syncStatus = "failed";
+  emitSync();
+  if (savedDecayTimer) clearTimeout(savedDecayTimer);
+  savedDecayTimer = setTimeout(() => {
+    syncStatus = "idle";
+    emitSync();
+  }, 4000);
 }
 
 const subscribeSync = (l: () => void) => {
@@ -306,9 +318,12 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const isWrite = !!opts?.method && opts.method !== "GET";
   if (isWrite) writeStarted();
   try {
-    return await apiInner<T>(path, opts);
-  } finally {
+    const result = await apiInner<T>(path, opts);
     if (isWrite) writeSettled();
+    return result;
+  } catch (e) {
+    if (isWrite) writeFailed();
+    throw e;
   }
 }
 
@@ -1076,6 +1091,9 @@ export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
       void api(`/grid-layout/${encodeURIComponent(dimId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(() => {
+        toast("Couldn't save the table layout — recent column changes may not stick.", "error");
       });
     }, 400),
   );
