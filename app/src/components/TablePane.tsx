@@ -226,7 +226,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
 
   const [sel, setSel] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ msg: string; tone: "info" | "danger" } | null>(null);
   const [renameFlash, setRenameFlash] = useState<{
     prev: string;
     next: string;
@@ -443,8 +443,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     return src.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) }));
   }, [list, changedOnly, changedKeySet]);
 
-  const flash = (m: string) => {
-    setNotice(m);
+  const flash = (m: string, tone: "info" | "danger" = "info") => {
+    setNotice({ msg: m, tone });
     setTimeout(() => setNotice(null), 3000);
   };
 
@@ -480,6 +480,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED"
           ? "These drafts need a second publisher — another editor has to press Publish (workspace setting: Four eyes on publish)."
           : `Publish failed — ${msg}`,
+        "danger",
       );
     } finally {
       setPublishing(false);
@@ -1034,8 +1035,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       )}
 
       {notice && (
-        <div className="border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
-          {notice}
+        <div
+          className={
+            notice.tone === "danger"
+              ? "border-b border-danger/40 bg-danger-soft px-4 py-2 font-mono text-[12px] text-danger"
+              : "border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent"
+          }
+        >
+          {notice.msg}
         </div>
       )}
       {renameFlash && (
