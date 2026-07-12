@@ -1491,19 +1491,15 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   value={null}
                   placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
                   onPick={(survivorLabel) => {
-                    if (sel.length >= 5) {
-                      const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
-                      if (!survivorKey) return;
-                      const loserKeys = sel.filter((k) => k !== survivorKey);
-                      const loserRows = dim.canonical.filter((c) => loserKeys.includes(c.key));
-                      const allUndefined = loserRows.every((c) => c.variants === undefined);
-                      const loserVariantSum = allUndefined
-                        ? null
-                        : loserRows.reduce((n, c) => n + (c.variants ?? 0), 0);
-                      setMergeConfirm({ survivorLabel, loserCount: sel.length - 1, loserVariantSum });
-                    } else {
-                      void merge(survivorLabel);
-                    }
+                    const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
+                    if (!survivorKey) return;
+                    const loserKeys = sel.filter((k) => k !== survivorKey);
+                    const loserRows = dim.canonical.filter((c) => loserKeys.includes(c.key));
+                    const allUndefined = loserRows.every((c) => c.variants === undefined);
+                    const loserVariantSum = allUndefined
+                      ? null
+                      : loserRows.reduce((n, c) => n + (c.variants ?? 0), 0);
+                    setMergeConfirm({ survivorLabel, loserCount: sel.length - 1, loserVariantSum });
                   }}
                 />
               </span>
