@@ -22,8 +22,13 @@ export function MasterTables() {
   const create = useCreateTableModal();
   const canEdit = useCanEdit();
 
-  // Mount-only URL → state fold. Honors legacy ?dimId=<id> from old palette
-  // links + bookmarks. New contract is ?open=a,b,c&active=<dimId>.
+  // URL → state fold, run once — but only after the store has delivered the
+  // table list. initStore() is fire-and-forget (TenantLayout), so on a cold
+  // profile this route mounts with dims=[] and a mount-only fold would drop
+  // every deep-linked tab; the URL writer below stays gated until the fold
+  // lands, so ?open/?active survive the wait. Honors legacy ?dimId=<id>.
+  // A workspace with no tables never folds — there is nothing to open, and
+  // NoTablesYet renders regardless.
   const didInitFromUrl = useRef(false);
   // Whether the URL fold opened any tab. The blank-page fallback below runs in
   // the same commit with a stale (pre-fold) `tabs` capture, so without this
@@ -31,6 +36,7 @@ export function MasterTables() {
   const urlOpenedTab = useRef(false);
   useEffect(() => {
     if (didInitFromUrl.current) return;
+    if (dims.length === 0) return;
     didInitFromUrl.current = true;
     const legacyDim = searchParams.get("dimId");
     const openParam = searchParams.get("open");
@@ -52,8 +58,7 @@ export function MasterTables() {
       openTab(activeParam);
       urlOpenedTab.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dims, searchParams, openTab]);
 
   // Fallback so the page is never blank when the user has tables but no
   // session-restored tabs (first visit on a clean profile).
