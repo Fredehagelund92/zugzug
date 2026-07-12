@@ -9,6 +9,7 @@ import type {
 import type { ConditionalRule } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
+import { toast } from "./components/Toast";
 
 /** Thrown by client mutation helpers on HTTP 409 from the server.
  *  Callers (TablePane) inspect `current` to render the inline conflict banner. */
@@ -1090,6 +1091,9 @@ export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
       void api(`/grid-layout/${encodeURIComponent(dimId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(() => {
+        toast("Couldn't save the table layout — recent column changes may not stick.", "error");
       });
     }, 400),
   );
