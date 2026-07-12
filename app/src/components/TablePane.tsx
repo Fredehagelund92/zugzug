@@ -236,7 +236,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [addOpen, setAddOpen] = useState(false);
   const addFieldRef = useRef<HTMLButtonElement | null>(null);
 
-  const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState<{ count: number } | null>(null);
+  const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState<{
+    count: number;
+    variantSum: number | null;
+  } | null>(null);
   const [singleDeleteConfirm, setSingleDeleteConfirm] = useState<{
     key: string;
     label: string;
@@ -252,6 +255,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [mergeConfirm, setMergeConfirm] = useState<{
     survivorLabel: string;
     loserCount: number;
+    loserVariantSum: number | null;
   } | null>(null);
   const [orderingOpen, setOrderingOpen] = useState(false);
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
@@ -1456,7 +1460,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
                   onPick={(survivorLabel) => {
                     if (sel.length >= 5) {
-                      setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
+                      const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
+                      const loserKeys = sel.filter((k) => k !== survivorKey);
+                      const loserRows = dim.canonical.filter((c) => loserKeys.includes(c.key));
+                      const allUndefined = loserRows.every((c) => c.variants === undefined);
+                      const loserVariantSum = allUndefined
+                        ? null
+                        : loserRows.reduce((n, c) => n + (c.variants ?? 0), 0);
+                      setMergeConfirm({ survivorLabel, loserCount: sel.length - 1, loserVariantSum });
                     } else {
                       void merge(survivorLabel);
                     }
@@ -1468,7 +1479,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               size="sm"
               variant="secondary"
               icon={<IconX className="h-3.5 w-3.5" />}
-              onClick={() => setBulkRemoveConfirm({ count: sel.length })}
+              onClick={() => {
+                const selRows = dim.canonical.filter((c) => sel.includes(c.key));
+                const allUndefined = selRows.every((c) => c.variants === undefined);
+                const variantSum = allUndefined
+                  ? null
+                  : selRows.reduce((n, c) => n + (c.variants ?? 0), 0);
+                setBulkRemoveConfirm({ count: sel.length, variantSum });
+              }}
               disabled={busy}
             >
               Remove
@@ -1514,7 +1532,15 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           bulkRemoveConfirm && (
             <>
               {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be
-              retired. Mapped raw values will lose their target. Use Undo if you change your mind.
+              retired.{" "}
+              {bulkRemoveConfirm.variantSum !== null && (
+                <>
+                  {bulkRemoveConfirm.variantSum} source value
+                  {bulkRemoveConfirm.variantSum === 1 ? "" : "s"} will lose their record and
+                  reappear in Review.{" "}
+                </>
+              )}
+              Use Undo if you change your mind.
             </>
           )
         }
@@ -1589,7 +1615,21 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
                 {mergeConfirm.survivorLabel}
               </code>
-              . Their raw values will be re-pointed. Use Undo if you change your mind.
+              .{" "}
+              {mergeConfirm.loserVariantSum !== null ? (
+                <>
+                  {mergeConfirm.loserVariantSum} source value
+                  {mergeConfirm.loserVariantSum === 1 ? "" : "s"} currently mapped to them will
+                  re-point to{" "}
+                  <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                    {mergeConfirm.survivorLabel}
+                  </code>{" "}
+                  on next publish.{" "}
+                </>
+              ) : (
+                <>Their source values will be re-pointed. </>
+              )}
+              Use Undo if you change your mind.
             </>
           )
         }
