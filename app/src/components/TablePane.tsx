@@ -53,7 +53,7 @@ import { useLinkedCandidates } from "../lib/use-linked-candidates";
 import { useOpenTabs } from "../lib/open-tabs";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { ManageLinkedFieldsPopover } from "./linked/ManageLinkedFieldsPopover";
-import { ConflictBanner, FieldDiff } from "./ConflictBanner";
+import { ConflictBanner, type FieldDiff } from "./ConflictBanner";
 import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
@@ -550,7 +550,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setBusy(false);
     setSel([]);
     for (const k of [survivor, ...losers]) dismissConflict(k);
-    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed.`);
+    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed · applies on next publish`);
   };
 
   const retire = async (key: string, label: string) => {

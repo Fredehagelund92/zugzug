@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useId, type ReactNode } from "react";
 
 export function FormField({
   label,
@@ -15,13 +15,19 @@ export function FormField({
   children: ReactNode;
 }) {
   const hintId = useId();
+  const child =
+    htmlFor && hint && Children.count(children) === 1 && isValidElement(children)
+      ? cloneElement(children as React.ReactElement<{ "aria-describedby"?: string }>, {
+          "aria-describedby": hintId,
+        })
+      : children;
   const body = (
     <>
       <span className="flex items-baseline justify-between gap-2">
         <span className="font-mono text-[11px] uppercase tracking-wider text-ink-2">{label}</span>
         {status}
       </span>
-      {children}
+      {child}
       {hint && (
         <span id={htmlFor ? hintId : undefined} className="text-[12px] text-ink-2">
           {hint}

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Button } from "./Button";
 import { IconArrowRight, IconPlus } from "./Icons";
 import { useNavLinks } from "../lib/use-tenant-navigate";
@@ -16,6 +16,7 @@ export function NoTablesYet({
   onCreateRequested?: () => void;
 }) {
   const nav = useNavLinks();
+  const navigate = useNavigate();
   return (
     <div className="zz-rise mx-auto max-w-xl rounded-lg border border-line bg-surface p-10 text-center">
       <div className="font-mono text-[10px] font-medium uppercase tracking-[0.22em] text-ink-3">
@@ -37,14 +38,13 @@ export function NoTablesYet({
             Create blank table
           </Button>
         )}
-        <Link to={nav.sources}>
-          <Button
-            variant={onCreateRequested ? "secondary" : undefined}
-            icon={<IconArrowRight className="h-4 w-4" />}
-          >
-            Wire a source
-          </Button>
-        </Link>
+        <Button
+          variant={onCreateRequested ? "secondary" : undefined}
+          icon={<IconArrowRight className="h-4 w-4" />}
+          onClick={() => navigate(nav.sources)}
+        >
+          Wire a source
+        </Button>
       </div>
       {!onCreateRequested && (
         <p className="mt-2 text-[12px] text-ink-3">

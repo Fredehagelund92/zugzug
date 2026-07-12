@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
-import { Link, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { EmptyState as SetupCard } from "../components/EmptyState";
@@ -101,6 +101,7 @@ export function Sources() {
   const dims = useDimensions();
   const canEdit = useCanEdit();
   const nav = useNavLinks();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQ = searchParams.get("q") ?? "";
   const initialStatus = ((): Status => {
@@ -522,11 +523,14 @@ export function Sources() {
                   <em className="font-display not-italic text-ink">{agg.worst.dimension}</em>.
                 </p>
               </div>
-              <Link to={nav.table(agg.worst.dimId, "match")} className="shrink-0">
-                <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
-                  Match values
-                </Button>
-              </Link>
+              <Button
+                size="sm"
+                icon={<IconArrowRight className="h-3.5 w-3.5" />}
+                onClick={() => navigate(nav.table(agg.worst!.dimId, "match"))}
+                className="shrink-0"
+              >
+                Match values
+              </Button>
             </div>
           </div>
         ) : agg.columns > 0 ? (
@@ -770,6 +774,7 @@ function EmptyState({
   onBrowse: () => void;
   settingsBase: string;
 }) {
+  const navigate = useNavigate();
   if (wired === 0) {
     return (
       <SetupCard
@@ -778,9 +783,9 @@ function EmptyState({
         action={
           <div className="flex items-center gap-2">
             <Button onClick={onBrowse}>Browse catalog</Button>
-            <Link to={`${settingsBase}/warehouse`}>
-              <Button variant="secondary">Warehouse settings</Button>
-            </Link>
+            <Button variant="secondary" onClick={() => navigate(`${settingsBase}/warehouse`)}>
+              Warehouse settings
+            </Button>
           </div>
         }
       />
