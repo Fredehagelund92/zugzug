@@ -1,0 +1,33 @@
+import { describe, it, expect } from "vitest";
+import { summarizeOutcomes, type CommitOutcome } from "./commit-outcomes";
+
+const ok = (dim: string, n: number): CommitOutcome => ({
+  dimId: dim, dimName: dim, committed: n, rowsRecovered: n * 10, error: null,
+});
+const bad = (dim: string, err: string): CommitOutcome => ({
+  dimId: dim, dimName: dim, committed: 0, rowsRecovered: 0, error: err,
+});
+
+describe("summarizeOutcomes", () => {
+  it("all success", () => {
+    const s = summarizeOutcomes([ok("country", 3), ok("channel", 2)]);
+    expect(s.ok).toBe(true);
+    expect(s.committed).toBe(5);
+    expect(s.failed).toHaveLength(0);
+    expect(s.message).toBe("✓ 5 changes published · 50 rows recovered");
+  });
+  it("partial failure names the failed tables", () => {
+    const s = summarizeOutcomes([ok("country", 3), bad("channel", "timeout")]);
+    expect(s.ok).toBe(false);
+    expect(s.committed).toBe(3);
+    expect(s.failed).toHaveLength(1);
+    expect(s.message).toBe(
+      "Published 3 changes, but channel failed (timeout) — its drafts are still staged.",
+    );
+  });
+  it("singulars", () => {
+    expect(summarizeOutcomes([{ ...ok("a", 1), rowsRecovered: 1 }]).message).toBe(
+      "✓ 1 change published · 1 row recovered",
+    );
+  });
+});

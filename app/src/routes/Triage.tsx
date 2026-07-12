@@ -28,6 +28,7 @@ import { useAiHint, type AiHint } from "../lib/use-ai-hint";
 import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
 import { ComboSelect } from "../components/ComboSelect";
 import { useDimValuesPage, type ScanValueRow } from "../lib/use-dim-values-page";
+import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 import { apiFetch } from "../api";
 
 /* Triage — per-dim sectioned inbox. Each ranked dim gets a section header; only
@@ -293,26 +294,35 @@ function TriageInner() {
     const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
     if (dimIds.length === 0) return;
     setCommitting(true);
-    const n0 = stagedAllDrafts.length;
-    toast(`${n0} change${n0 === 1 ? "" : "s"} published`);
     try {
-      let total = 0,
-        totalRows = 0;
+      const outcomes: CommitOutcome[] = [];
       for (const id of dimIds) {
-        const res = await commit(id);
-        total += res.committed;
-        totalRows += res.rowsRecovered;
+        const name = dims.find((d) => d.id === id)?.dimension ?? id;
+        try {
+          const res = await commit(id);
+          outcomes.push({
+            dimId: id,
+            dimName: name,
+            committed: res.committed,
+            rowsRecovered: res.rowsRecovered,
+            error: null,
+          });
+        } catch (err) {
+          outcomes.push({
+            dimId: id,
+            dimName: name,
+            committed: 0,
+            rowsRecovered: 0,
+            error: err instanceof Error ? err.message : "unknown error",
+          });
+        }
       }
-      if (total === 0) return;
-      toast(
-        `✓ ${total} change${total === 1 ? "" : "s"} published · ${totalRows.toLocaleString()} rows recovered`,
-      );
-    } catch (err) {
-      setCommitError(
-        err instanceof Error
-          ? err.message
-          : "Publish failed across dimensions — check your connection and try again.",
-      );
+      const summary = summarizeOutcomes(outcomes);
+      if (summary.ok) {
+        if (summary.committed > 0) toast(summary.message);
+      } else {
+        setCommitError(summary.message);
+      }
     } finally {
       setCommitting(false);
     }
