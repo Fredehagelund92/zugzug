@@ -3,6 +3,7 @@ import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
+import { EmptyState as SetupCard } from "../components/EmptyState";
 import { CatalogExplorer } from "../components/CatalogExplorer";
 import { PageHeader } from "../components/PageHeader";
 import { LedgerRow } from "../components/sources/LedgerRow";
@@ -621,6 +622,7 @@ export function Sources() {
                 filteredByStatus={status !== "all" || !!q.trim()}
                 status={status}
                 onBrowse={() => setCatalog(true)}
+                settingsBase={nav.settings}
               />
             )}
 
@@ -760,26 +762,28 @@ function EmptyState({
   filteredByStatus,
   status,
   onBrowse,
+  settingsBase,
 }: {
   wired: number;
   filteredByStatus: boolean;
   status: Status;
   onBrowse: () => void;
+  settingsBase: string;
 }) {
   if (wired === 0) {
     return (
-      <div className="py-16 text-center">
-        <div className="font-display text-[20px] italic text-ink-2">No sources wired yet.</div>
-        <p className="mx-auto mt-2 max-w-[48ch] text-[13px] text-ink-3">
-          A source is a warehouse column Zug Zug watches for new values. Browse your warehouse to
-          wire the first one.
-        </p>
-        <div className="mt-5 flex justify-center">
-          <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />} onClick={onBrowse}>
-            Browse warehouse
-          </Button>
-        </div>
-      </div>
+      <SetupCard
+        title="No sources yet"
+        body="A source is a warehouse column Zug Zug scans for values. To add one: an admin connects a database under Settings → Warehouse, then you pick columns from the catalog here."
+        action={
+          <div className="flex items-center gap-2">
+            <Button onClick={onBrowse}>Browse catalog</Button>
+            <Link to={`${settingsBase}/warehouse`}>
+              <Button variant="secondary">Warehouse settings</Button>
+            </Link>
+          </div>
+        }
+      />
     );
   }
   if (filteredByStatus && status === "clean") {
