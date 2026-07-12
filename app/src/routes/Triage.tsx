@@ -20,6 +20,7 @@ import {
   useWorkspaceInfo,
   useCanEdit,
   useStoreLoading,
+  fetchPublishState,
 } from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
@@ -29,6 +30,7 @@ import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
 import { ComboSelect } from "../components/ComboSelect";
 import { useDimValuesPage, type ScanValueRow } from "../lib/use-dim-values-page";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
+import { PublishPreviewDialog, type PublishGroup } from "../components/PublishPreviewDialog";
 import { apiFetch } from "../api";
 
 /* Triage — per-dim sectioned inbox. Each ranked dim gets a section header; only
@@ -328,6 +330,23 @@ function TriageInner() {
     }
   };
 
+  const [preview, setPreview] = useState<PublishGroup[] | null>(null);
+
+  const openPublishPreview = async () => {
+    const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
+    if (dimIds.length === 0) return;
+    const states = await Promise.all(dimIds.map((id) => fetchPublishState(id)));
+    setPreview(
+      dimIds.map((id, i) => ({
+        dimId: id,
+        dimName: dims.find((d) => d.id === id)?.dimension ?? id,
+        nextVersion: states[i].version + 1,
+        drafts: stagedAllDrafts.filter((d) => d.dimId === id),
+        changedKeys: states[i].changedKeys,
+      })),
+    );
+  };
+
   const triggerRescan = useCallback(async (dimId: string) => {
     const r = await apiFetch(`/dimensions/${encodeURIComponent(dimId)}/scan`, { method: "POST" });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -341,6 +360,7 @@ function TriageInner() {
   );
 
   return (
+    <>
     <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-4 md:px-5 md:pb-5">
       <div className="mb-3 shrink-0">
         <PageHeader
@@ -411,7 +431,7 @@ function TriageInner() {
                 onAccept={(raw) => acceptCross(rd.d.id, raw)}
                 onSkip={(raw) => skipCross(rd.d.id, raw)}
                 onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
-                onCommitAll={approveAndCommitAll}
+                onCommitAll={() => void openPublishPreview()}
                 aiHint={i === activeDimIdx ? aiHint : { hint: null, loading: false, error: false }}
                 rescanning={rescanning && i === activeDimIdx}
                 onRescan={async () => {
@@ -438,7 +458,7 @@ function TriageInner() {
           dimById={dimById}
           stagedDrafts={stagedAllDrafts}
           discard={discardCross}
-          commitAll={approveAndCommitAll}
+          commitAll={() => void openPublishPreview()}
           committing={committing}
           commitError={commitError}
           setCommitError={setCommitError}
@@ -450,6 +470,32 @@ function TriageInner() {
         />
       </div>
     </div>
+    {preview && (
+      <PublishPreviewDialog
+        open
+        groups={preview}
+        publishing={committing}
+        onDiscardDraft={(d) => {
+          void discardDraft(d.dimId, d.raw);
+          setPreview((p) => {
+            const next =
+              p
+                ?.map((g) =>
+                  g.dimId === d.dimId
+                    ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
+                    : g,
+                )
+                .filter((g) => g.drafts.length > 0 || g.changedKeys.length > 0) ?? null;
+            return next && next.length > 0 ? next : null;
+          });
+        }}
+        onConfirm={() => {
+          void approveAndCommitAll().then(() => setPreview(null));
+        }}
+        onCancel={() => setPreview(null)}
+      />
+    )}
+    </>
   );
 }
 
