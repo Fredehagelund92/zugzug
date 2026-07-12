@@ -641,7 +641,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   };
 
   return (
-    <div>
+    <div className="flex flex-1 flex-col min-h-0">
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-2">
           {engineer && (
