@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { useAudit } from "../store";
 import { EmptyState } from "../components/EmptyState";
@@ -8,7 +9,9 @@ import { AuditTimeline } from "../components/AuditTimeline";
 export function Audit() {
   usePageTitle("Activity");
   const audit = useAudit();
-  const [query, setQuery] = useState("");
+  const [params, setParams] = useSearchParams();
+  const query = params.get("q") ?? "";
+  const setQuery = (v: string) => setParams(v ? { q: v } : {}, { replace: true });
   const [actor, setActor] = useState<string>("");
 
   const actors = useMemo(() => {
@@ -39,7 +42,7 @@ export function Audit() {
   return (
     <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
       <PageHeader
-        kicker="Workspace"
+        kicker="This workspace"
         title="Activity"
         lede="Everything that's happened in this workspace, newest first."
         count={audit.length === 0 ? undefined : audit.length}

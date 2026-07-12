@@ -127,7 +127,6 @@ createRoot(root).render(
                             <Route path="mapping" element={<Matching />} />
                             <Route path="matching" element={<Navigate to="../mapping" replace />} />
                             <Route path="warehouse" element={<Warehouse />} />
-                            <Route path="audit" element={<Navigate to="../../audit" replace />} />
                             <Route path="danger" element={<Danger />} />
                           </Route>
                           <Route path="integrations" element={<IntegrationsLayout />}>

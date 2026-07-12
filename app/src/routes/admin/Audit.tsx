@@ -78,7 +78,7 @@ export function Audit() {
   return (
     <div className="space-y-6">
       <PageHeader
-        kicker="System"
+        kicker="All workspaces"
         title="Activity log"
         lede="What's happened across every workspace, newest first."
         count={loading ? undefined : filtered.length}

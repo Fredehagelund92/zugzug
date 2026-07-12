@@ -1299,6 +1299,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           activity={activity}
           presence={presence}
           initialSort={layout.sort ?? undefined}
+          onViewHistory={(rowKey) => {
+            const row = list.find((c) => c.key === rowKey);
+            if (!row) return;
+            navigate(`${navLinks.audit}?q=${encodeURIComponent(row.label)}`);
+          }}
           onSortChange={(sort) => {
             setLayout((cur) => {
               const next = { ...cur, sort: sort ?? null };

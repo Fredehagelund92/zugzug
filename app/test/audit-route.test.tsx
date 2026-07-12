@@ -9,15 +9,15 @@ vi.mock("../src/store", () => ({
 }));
 
 describe("Audit (primary nav)", () => {
-  test("renders the PageHeader with kicker 'Workspace'", async () => {
+  test("renders the PageHeader with kicker 'This workspace'", async () => {
     const { Audit } = await import("../src/routes/Audit");
     render(
       <MemoryRouter>
         <Audit />
       </MemoryRouter>,
     );
-    expect(screen.getByText("Workspace")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1, name: "Audit" })).toBeInTheDocument();
+    expect(screen.getByText("This workspace")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Activity" })).toBeInTheDocument();
   });
 
   test("renders the audit row", async () => {

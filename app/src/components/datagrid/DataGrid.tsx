@@ -791,6 +791,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onClick: () => props.onDeleteRow?.(rk),
           disabled: !props.onDeleteRow,
         },
+        ...(props.onViewHistory
+          ? [
+              { separator: true, label: "", onClick: () => {} } as MenuItem,
+              {
+                label: "View history",
+                onClick: () => props.onViewHistory!(rk),
+              } as MenuItem,
+            ]
+          : []),
       ];
     }
     if (surface.kind === "header") {
