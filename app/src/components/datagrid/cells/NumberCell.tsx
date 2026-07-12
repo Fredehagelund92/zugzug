@@ -142,12 +142,17 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
       return;
     }
     if (isDuration) {
-      commit(hmsToSeconds(t)); // null if invalid → stored as null
+      const secs = hmsToSeconds(t);
+      if (secs == null) {
+        cancel();
+        return;
+      }
+      commit(secs);
       return;
     }
     const n = Number(t);
     if (!Number.isFinite(n)) {
-      commit(null);
+      cancel();
       return;
     }
     // Percent editor works in display space (0–100); store normalized (0–1)
