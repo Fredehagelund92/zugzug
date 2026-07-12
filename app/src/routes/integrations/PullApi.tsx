@@ -138,7 +138,7 @@ export function PullApi() {
             <Link to="../../tables" className="text-accent underline-offset-2 hover:underline">
               Tables
             </Link>{" "}
-            and they'll appear here.
+            and they’ll appear here.
           </p>
         ) : (
           <table className="w-full text-[13px]">

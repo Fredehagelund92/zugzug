@@ -33,6 +33,7 @@ function Editor<Row>({ value, commit }: EditCtx<Row>) {
   // a one-frame flicker where the Editor briefly renders nothing.
   useLayoutEffect(() => {
     commit(!isChecked(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional run-once on mount; adding commit/value would cause an infinite commit loop
   }, []);
   return null;
 }

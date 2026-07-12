@@ -10,7 +10,7 @@ import { EmailCell } from "./cells/EmailCell";
 import { RatingCell } from "./cells/RatingCell";
 import { LinkedCell } from "./cells/LinkedCell";
 import { SelectCell } from "./cells/SelectCell";
-import type { CellType, ColumnDef, RuleStyle } from "./types";
+import type { CellCtx, CellType, ColumnDef, EditCtx, RuleStyle } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import type { OptionDef } from "../../data";
 import type { RowActivityEntry } from "../../lib/use-row-activity";
@@ -19,7 +19,8 @@ import type { RowEvaluation } from "./useConditionalFormatting";
 
 type InlineEditor = "select" | "linked" | "date";
 
-const CELLS: Record<Exclude<CellType, InlineEditor>, { Renderer: any; Editor: any }> = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry stores generic cell components; Row type param is erased at dispatch
+const CELLS: Record<Exclude<CellType, InlineEditor>, { Renderer: (ctx: any) => React.ReactNode; Editor: (ctx: any) => React.ReactNode }> = {
   text: TextCell,
   number: NumberCell,
   boolean: BooleanCell,
@@ -28,7 +29,7 @@ const CELLS: Record<Exclude<CellType, InlineEditor>, { Renderer: any; Editor: an
   rating: RatingCell,
 };
 
-function CellRenderer({ type, ctx }: { type: CellType; ctx: any }) {
+function CellRenderer<Row>({ type, ctx }: { type: CellType; ctx: CellCtx<Row> }) {
   if (type === "select") return <SelectCell.Renderer {...ctx} />;
   if (type === "linked") return <LinkedCell.Renderer {...ctx} />;
   if (type === "date") return <DateCell.Renderer {...ctx} />;
@@ -36,7 +37,7 @@ function CellRenderer({ type, ctx }: { type: CellType; ctx: any }) {
   return <C.Renderer {...ctx} />;
 }
 
-function CellEditor({ type, ctx }: { type: CellType; ctx: any }) {
+function CellEditor<Row>({ type, ctx }: { type: CellType; ctx: EditCtx<Row> }) {
   // select / linked / date editors render their own portal popovers and need
   // anchorRef — they're handled inline in the body below.
   if (type === "select" || type === "linked" || type === "date") return null;

@@ -32,7 +32,7 @@ export function DatabaseTable(props: Props): JSX.Element {
       </div>
       {props.databases.length === 0 ? (
         <div className="p-4 text-[12.5px] text-ink-2">
-          No databases registered yet — click "+ Add database" to pick one discovered in MotherDuck.
+          No databases registered yet — click “+ Add database” to pick one discovered in MotherDuck.
         </div>
       ) : (
         <table className="w-full">

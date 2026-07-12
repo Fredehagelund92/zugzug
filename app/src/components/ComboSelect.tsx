@@ -130,6 +130,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onClose omitted intentionally; callers may pass inline functions that change each render, adding it would re-register listeners every cycle
   }, [open]);
 
   const norm = q.trim();

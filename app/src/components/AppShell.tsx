@@ -362,7 +362,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [focusTab, drawerOpen]);
+  }, [focusTab, drawerOpen, navLinks.tables]);
 
   const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
   const settingsBase = navLinks.settings;

@@ -518,6 +518,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     onCursorChange(
       cursor.cursor ? { rowKey: cursor.cursor.rowKey, field: cursor.cursor.field } : null,
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the specific fields consumed; cursor.cursor object ref excluded to avoid firing on object identity changes when rowKey/field haven't changed
   }, [cursor.cursor?.rowKey, cursor.cursor?.field, onCursorChange]);
 
   // ── Publish self cursor position to presence when cursor moves ────────────
@@ -984,6 +985,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   };
 
   // ── Grid-level keyboard handler (layered on top of cursor.onKeyDown) ────────
+  const { onCellKeyDown } = props;
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       const cur = cursor.cursor;
@@ -1158,8 +1160,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       // Host hook for workbench single-key actions: fires iff (not editing)
       // AND no grid handler above consumed the event AND the cursor bindings
       // didn't preventDefault.
-      if (!e.defaultPrevented && props.onCellKeyDown) {
-        props.onCellKeyDown(e, {
+      if (!e.defaultPrevented && onCellKeyDown) {
+        onCellKeyDown(e, {
           cursor: cur ? { rowKey: cur.rowKey, field: cur.field } : null,
           startEdit: (seed?: string) => cursor.startEdit(seed),
         });
@@ -1180,7 +1182,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       commitValue,
       computeRangeBounds,
       selection,
-      props.onCellKeyDown,
+      onCellKeyDown,
     ],
   );
 

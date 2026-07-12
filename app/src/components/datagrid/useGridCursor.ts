@@ -216,6 +216,7 @@ export function useGridCursor<Row>({
     if (!fullyVisible) {
       el.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- cursor object ref excluded; only rowKey/field trigger scroll; adding cursor would scroll on every editing-state change too
   }, [cursor?.rowKey, cursor?.field]);
 
   // When the host's rows change (filter toggle, async save), the cursor may
