@@ -86,8 +86,9 @@ export function Triage() {
   const dims = useDimensions();
   const loading = useStoreLoading();
   const create = useCreateTableModal();
+  const canEdit = useCanEdit();
   if (loading) return <TriageLoader />;
-  if (dims.length === 0) return <NoTablesYet from="triage" onCreateRequested={create.open} />;
+  if (dims.length === 0) return <NoTablesYet from="triage" onCreateRequested={canEdit ? create.open : undefined} />;
   return (
     <UndoStackProvider scopeKey="triage">
       <TriageInner />

@@ -28,8 +28,12 @@ export function NoTablesYet({
         Create a table from scratch, or import one from a warehouse column.
       </p>
       <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-        {onCreateRequested && (
+        {onCreateRequested ? (
           <Button icon={<IconPlus className="h-4 w-4" />} onClick={onCreateRequested}>
+            Create blank table
+          </Button>
+        ) : (
+          <Button disabled icon={<IconPlus className="h-4 w-4" />} title="Viewers can't create tables">
             Create blank table
           </Button>
         )}
@@ -42,6 +46,12 @@ export function NoTablesYet({
           </Button>
         </Link>
       </div>
+      {!onCreateRequested && (
+        <p className="mt-2 text-[12px] text-ink-3">
+          You have view-only access. Ask a workspace admin to make you an editor
+          (Settings → Members) to create tables.
+        </p>
+      )}
     </div>
   );
 }
