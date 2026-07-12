@@ -43,7 +43,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["↑ ↓", "move cursor"],
       ["A", "accept suggestion"],
-      ["↵ / M", "pick master record"],
+      ["↵ / M", "pick record"],
       ["S", "skip"],
       ["R", "reset draft"],
       ["⌘↵", "publish staged drafts"],
@@ -54,7 +54,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["↑↓ / J K", "move cursor"],
       ["A", "accept suggestion"],
-      ["↵ / M", "pick master record"],
+      ["↵ / M", "pick record"],
       ["S", "skip"],
       ["N", "jump to next new"],
       ["Esc", "clear cursor"],

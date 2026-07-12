@@ -395,7 +395,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               </div>
               <input
                 type="search"
-                placeholder="Search raw values…"
+                placeholder="Search source values…"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"

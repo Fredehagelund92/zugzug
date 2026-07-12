@@ -549,7 +549,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setBusy(false);
     setSel([]);
     for (const k of [survivor, ...losers]) dismissConflict(k);
-    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — raw values re-pointed.`);
+    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed.`);
   };
 
   const retire = async (key: string, label: string) => {
@@ -560,7 +560,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       const r = await retireCanonical(activeId, key, version);
       if (!r.ok) {
         flash(
-          `Can't remove "${label}" — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
+          `Can't remove "${label}" — ${r.variants} source value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
         );
         return;
       }
@@ -1042,7 +1042,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
           <span>
             Renamed “{renameFlash.prev}” → “{renameFlash.next}”.{" "}
-            {renameFlash.variants.toLocaleString()} raw value{renameFlash.variants === 1 ? "" : "s"}{" "}
+            {renameFlash.variants.toLocaleString()} source value{renameFlash.variants === 1 ? "" : "s"}{" "}
             re-pointed.
           </span>
           <div className="flex items-center gap-2">

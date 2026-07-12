@@ -415,7 +415,7 @@ function TriageInner() {
           </div>
           <input
             type="search"
-            placeholder="Search raw values…"
+            placeholder="Search source values…"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"
@@ -888,7 +888,7 @@ function CrossDimFooter(p: FooterProps) {
       )}
       {p.commitError && (
         <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
-          <span>Commit failed — {p.commitError}</span>
+          <span>Publish failed — {p.commitError}</span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>
               Dismiss
