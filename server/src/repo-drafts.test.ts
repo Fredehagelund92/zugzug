@@ -150,4 +150,88 @@ describe("commit() draft-scoped folding", () => {
     await expect(commit(dimId, U, T, ["aaa"])).rejects.toThrow(/another editor must publish/i); // U can't publish own
     await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
   });
+
+  it("empty draftKeys folds nothing but publishes when canonical changed", async () => {
+    const prefs = await getPreferences(T);
+    await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
+    const dimId = await addDimension(`EmptyArrayScope_${run}`, [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "Alpha", undefined, U, T);
+
+    // Stage a draft and commit it (v1)
+    await saveDraft(dimId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
+    await commit(dimId, U, T);
+
+    // Make a canonical change since last publish
+    await addCanonicalOne(dimId, "Beta", undefined, U, T);
+
+    // Stage another draft
+    await saveDraft(dimId, "beta variant", "mapped", "Beta", "beta", U, T);
+
+    // Count versions before
+    const versionsBefore = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
+       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+      [T, dimId],
+    );
+
+    // Commit with empty array — folds no drafts but publishes (canonical changed)
+    const res = await commit(dimId, U, T, []);
+    expect(res.committed).toBe(0);
+
+    // New draft must still be staged
+    const remaining = await listDrafts(dimId, T);
+    expect(remaining.map((d) => d.raw)).toContain("beta variant");
+
+    // A new version must have been created
+    const versionsAfter = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
+       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+      [T, dimId],
+    );
+    expect(versionsAfter!.n).toBe(versionsBefore!.n + 1);
+  });
+});
+
+describe("commit() manual ordering mode", () => {
+  const run = Date.now();
+
+  it("scoped commit inserts dim row with position for the folded draft only", async () => {
+    const prefs = await getPreferences(T);
+    await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
+    const dimId = await addDimension(`ManualOrdering_${run}`, [], { keyKind: "slug" }, U, T);
+
+    // Switch to manual ordering mode via SQL UPDATE
+    await pgRun(
+      `UPDATE "zugzug_app"."dimension" SET ordering_mode = 'manual' WHERE id = $1 AND tenant_id = $2`,
+      [dimId, T],
+    );
+
+    // Stage two drafts with new target keys (not yet in the dim table)
+    await saveDraft(dimId, "foo raw", "mapped", "Foo", "foo", U, T);
+    await saveDraft(dimId, "bar raw", "mapped", "Bar", "bar", U, T);
+
+    // Commit scoped to only "foo raw"
+    const res = await commit(dimId, U, T, ["foo raw"]);
+    expect(res.committed).toBe(1);
+
+    // Look up the dim table name and key column from the dimension registry
+    const dimMeta = await pgGet<{ dimTable: string; keyCol: string }>(
+      `SELECT dim_table AS "dimTable", key_col AS "keyCol"
+       FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
+      [dimId, T],
+    );
+
+    // "foo" should be in the dim table with a non-null position
+    const fooRow = await pgGet<{ position: number | null }>(
+      `SELECT position FROM ${dimMeta!.dimTable} WHERE ${dimMeta!.keyCol} = $1`,
+      ["foo"],
+    );
+    expect(fooRow).not.toBeNull();
+    expect(fooRow!.position).not.toBeNull();
+    expect(Number(fooRow!.position)).toBeGreaterThan(0);
+
+    // "bar raw" draft must still be staged
+    const remaining = await listDrafts(dimId, T);
+    expect(remaining.map((d) => d.raw)).toContain("bar raw");
+  });
 });
