@@ -525,6 +525,32 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     [cursor.ref],
   );
 
+  // Header elevation: flag the scroll container once content has scrolled
+  // under the sticky header so CSS can add a shadow
+  // (.zz-grid-scroll[data-scrolled] .zz-grid-header). rAF-coalesced like the
+  // other scroll listeners in this file.
+  useEffect(() => {
+    const el = cursor.ref.current;
+    if (!el) return;
+    let raf = 0;
+    const update = () => {
+      el.toggleAttribute("data-scrolled", el.scrollTop > 0);
+    };
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        update();
+      });
+    };
+    update();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [cursor.ref]);
+
   // ── Copy (Cmd+C) ───────────────────────────────────────────────────────────
   const handleCopy = useCallback(async () => {
     if (!range) {
