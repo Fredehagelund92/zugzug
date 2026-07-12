@@ -10,6 +10,17 @@ import type { ConditionalRule } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
 
+/** Thrown by client mutation helpers on HTTP 403 with a machine-readable code. */
+export class ApiCodeError extends Error {
+  constructor(
+    msg: string,
+    public code: string,
+  ) {
+    super(msg);
+    this.name = "ApiCodeError";
+  }
+}
+
 /** Thrown by client mutation helpers on HTTP 409 from the server.
  *  Callers (TablePane) inspect `current` to render the inline conflict banner. */
 export class ConflictError extends Error {
@@ -329,6 +340,12 @@ async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
       };
       if (body.details?.current) {
         throw new ConflictError(body.details.current, body.details.conflictedKeys);
+      }
+    }
+    if (res.status === 403) {
+      const body = await res.json().catch(() => null) as { code?: string } | null;
+      if (body?.code) {
+        throw new ApiCodeError(`${opts?.method ?? "GET"} ${path} → 403 ${body.code}`, body.code);
       }
     }
     throw new Error(

@@ -39,6 +39,7 @@ import {
   useCanEdit,
   useCurrentUser,
   ConflictError,
+  ApiCodeError,
   refreshDimAndNotify,
   commit,
   fetchPublishState,
@@ -476,7 +477,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     } catch (err) {
       const msg = err instanceof Error ? err.message : "unknown error";
       flash(
-        msg.includes("SECOND_PUBLISHER_REQUIRED")
+        err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED"
           ? "These drafts need a second publisher — another editor has to press Publish (workspace setting: Four eyes on publish)."
           : `Publish failed — ${msg}`,
       );

@@ -21,6 +21,7 @@ import {
   useCanEdit,
   useStoreLoading,
   fetchPublishState,
+  ApiCodeError,
 } from "../store";
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
@@ -310,13 +311,15 @@ function TriageInner() {
             error: null,
           });
         } catch (err) {
+          const isSecondPublisher =
+            err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED";
           const msg = err instanceof Error ? err.message : "unknown error";
           outcomes.push({
             dimId: id,
             dimName: name,
             committed: 0,
             rowsRecovered: 0,
-            error: msg.includes("SECOND_PUBLISHER_REQUIRED")
+            error: isSecondPublisher
               ? "These drafts need a second publisher — another editor has to press Publish (workspace setting: Four eyes on publish)."
               : msg,
           });
