@@ -1725,9 +1725,13 @@ export async function deleteDimension(
     [id, tenantId],
   );
   if (!dim) return false;
-  const count = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${cq(dim.dim_table)}`,
-  ).catch(() => null);
+  // Use to_regclass to check table existence before counting — avoids
+  // poisoning the transaction with a missing-table error (error code 42P01
+  // inside a transaction leaves it in an aborted state for all later queries).
+  const exists = await pgGet<{ r: string | null }>(`SELECT to_regclass($1) AS r`, [dim.dim_table]);
+  const count = exists?.r
+    ? await pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(dim.dim_table)}`)
+    : { n: 0 };
   const tenantSweeps = [
     "dimension_source",
     "dimension_field",
@@ -1748,10 +1752,16 @@ export async function deleteDimension(
   await pgRun(`DROP TABLE IF EXISTS ${cq(dim.dim_table)}`);
   await pgRun(`DROP TABLE IF EXISTS ${cq(dim.map_table)}`);
   await pgRun(`DELETE FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+  const dimTableShort = dim.dim_table.includes(".")
+    ? dim.dim_table.split(".").pop()!
+    : dim.dim_table;
+  const mapTableShort = dim.map_table.includes(".")
+    ? dim.map_table.split(".").pop()!
+    : dim.map_table;
   await appendAuditAs(
     userId,
     "Deleted table",
-    `${dim.label} — ${count?.n ?? 0} records; dropped dim_${id} + map_${id}`,
+    `${dim.label} — ${count?.n ?? 0} records; dropped ${dimTableShort} + ${mapTableShort}`,
     { tableId: id, tenantId },
   );
   return true;

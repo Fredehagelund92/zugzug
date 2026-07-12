@@ -124,4 +124,50 @@ describe("deleteDimension", () => {
     expect(audit).not.toBeNull();
     expect(audit!.tenant_id).toBe(T);
   });
+
+  it("succeeds with 0 records in the audit when the physical dim table is dropped beforehand", async () => {
+    // Set up a fresh tenant/user/dimension for this isolated test
+    const DIM3 = "deltest3";
+    const T3 = "test_del_dim3";
+    const U3 = "u_test_del3";
+
+    await pgRun(
+      `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+       VALUES ($1, $1, 'DelTest3', now()) ON CONFLICT DO NOTHING`,
+      [T3],
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, email, initials, is_super_admin)
+       VALUES ($1, 'Del Tester 3', 'd3@example.test', 'D3', false)
+       ON CONFLICT DO NOTHING`,
+      [U3],
+    );
+    await addDimension("Deltest3", [], { keyKind: "slug" }, U3, T3);
+
+    // Drop the physical dim table before calling deleteDimension
+    await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_deltest3"`);
+
+    // deleteDimension must still succeed (no error from the missing table)
+    const result = await deleteDimension(DIM3, U3, T3);
+    expect(result).toBe(true);
+
+    // Dimension row must be gone
+    expect(await pgGet(`SELECT id FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM3])).toBeNull();
+
+    // Audit detail must report 0 records
+    const audit = await pgGet<{ detail: string }>(
+      `SELECT detail FROM "zugzug_app"."audit_log"
+       WHERE action = 'Deleted table' AND tenant_id = $1
+       ORDER BY created_at DESC LIMIT 1`,
+      [T3],
+    );
+    expect(audit).not.toBeNull();
+    expect(audit!.detail).toContain("0 records");
+
+    // Cleanup
+    await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_deltest3"`).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM3]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U3]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T3]).catch(() => {});
+  });
 });
