@@ -1664,7 +1664,21 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       <ConfirmDialog
         open={orderingConfirm === "derived"}
         title="Switch to derived ordering?"
-        body={`This will null the positions on all ${list.length} rows. Switching back to manual later will assign new positions — your current manual order cannot be recovered.`}
+        body={
+          <>
+            <div>
+              This will null the positions on all {list.length} rows. Switching back to manual
+              later will assign new positions — your current manual order cannot be recovered.
+            </div>
+            <button
+              type="button"
+              onClick={() => exportToCSV(dim)}
+              className="mt-2 text-[12px] text-accent hover:underline"
+            >
+              Export the current order to CSV first
+            </button>
+          </>
+        }
         confirmLabel="Switch to derived"
         danger
         onConfirm={async () => {
