@@ -58,6 +58,7 @@ import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { toast } from "./Toast";
+import { useAddQueue } from "../hooks/use-add-queue";
 import { prepareImport, type ParsedImport } from "../lib/csv";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
 
@@ -222,6 +223,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const renameFlashTimer = useRef<number | null>(null);
   const addInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
+
   const [idOpt, setIdOpt] = useState<string | null>(null);
   const [nameOpt, setNameOpt] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -421,23 +423,33 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setTimeout(() => setNotice(null), 3000);
   };
 
-  const add = async () => {
+  const addQueue = useAddQueue(
+    async (label) => {
+      await addCanonical(activeId, label);
+      undo.push({
+        label: `add "${label}"`,
+        surface: "Records",
+        apply: () => addCanonical(activeId, label),
+        inverse: () => {
+          const addedKey = slug(label);
+          const v = getCanonical(activeId, addedKey)?.version ?? 1;
+          return retireCanonical(activeId, addedKey, v).then(() => undefined);
+        },
+      });
+    },
+    (label, err) => {
+      toast(
+        `Couldn't add "${label}" — ${err instanceof Error ? err.message : "please try again"}`,
+        "error",
+      );
+    },
+  );
+
+  const add = () => {
     const label = draft.trim();
-    if (!label || busy) return;
-    setBusy(true);
-    await addCanonical(activeId, label);
-    undo.push({
-      label: `add "${label}"`,
-      surface: "Records",
-      apply: () => addCanonical(activeId, label),
-      inverse: () => {
-        const addedKey = slug(label);
-        const v = getCanonical(activeId, addedKey)?.version ?? 1;
-        return retireCanonical(activeId, addedKey, v).then(() => undefined);
-      },
-    });
-    setBusy(false);
+    if (!label) return;
     setDraft("");
+    addQueue.enqueue(label);
   };
 
   const merge = async (survivorLabel: string) => {
@@ -1243,8 +1255,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               size="sm"
               icon={<IconPlus className="h-3.5 w-3.5" />}
               onClick={add}
-              disabled={!draft.trim() || busy}
-              loading={busy}
+              disabled={!draft.trim()}
+              loading={addQueue.pending > 0}
               className="ml-auto"
             >
               Add record
