@@ -1,6 +1,39 @@
 /* Quote-aware CSV parsing + header mapping for master-table import. */
 
 import type { FieldDef } from "../data";
+import { slug } from "../store";
+
+export type ColumnTarget =
+  | { kind: "key" }
+  | { kind: "label" }
+  | { kind: "field"; fieldId: string }
+  | { kind: "ignore" };
+
+export interface MappedImportRow {
+  key: string;
+  label: string;
+  fields: Record<string, string>;
+}
+
+export function applyColumnMap(
+  _headers: string[],
+  rows: string[][],
+  map: ColumnTarget[],
+): MappedImportRow[] {
+  return rows.map((r) => {
+    let key = "";
+    let label = "";
+    const fields: Record<string, string> = {};
+    map.forEach((t, i) => {
+      const v = r[i] ?? "";
+      if (t.kind === "key") key = v;
+      else if (t.kind === "label") label = v;
+      else if (t.kind === "field") fields[t.fieldId] = v;
+    });
+    if (!key && label) key = slug(label);
+    return { key, label, fields };
+  });
+}
 
 /** RFC-4180-ish parser: handles quoted cells, escaped quotes, CR/LF/CRLF.
  *  Returns rows of cells; skips fully-empty trailing lines. */

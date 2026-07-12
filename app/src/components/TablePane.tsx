@@ -66,7 +66,8 @@ import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PublishPreviewDialog } from "./PublishPreviewDialog";
 import { toast } from "./Toast";
-import { prepareImport, type ParsedImport } from "../lib/csv";
+import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
+import { ImportPreviewDialog } from "./ImportPreviewDialog";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
@@ -306,15 +307,18 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [dismissedSortBanner, setDismissedSortBanner] = useState<Set<string>>(new Set());
 
   const importFileRef = useRef<HTMLInputElement>(null);
-  const [pendingImport, setPendingImport] = useState<ParsedImport | null>(null);
+  const [pendingImport, setPendingImport] = useState<(ParsedImport & { headers: string[]; rawRows: string[][] }) | null>(null);
+  const [importing, setImporting] = useState(false);
   const onImportFile = async (file: File | null, input: HTMLInputElement) => {
     input.value = ""; // allow re-picking the same file
     if (!file) return;
     const text = await file.text();
     try {
-      setPendingImport(
-        prepareImport(text, { keyCol: dim.keyCol, dimension: dim.dimension, fields }),
-      );
+      const grid = parseCsv(text);
+      const headers = grid[0] ?? [];
+      const rawRows = grid.slice(1);
+      const parsed = prepareImport(text, { keyCol: dim.keyCol, dimension: dim.dimension, fields });
+      setPendingImport({ ...parsed, headers, rawRows });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Couldn't parse that CSV.", "error");
     }
@@ -1502,31 +1506,31 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         )}
       </div>
 
-      <ConfirmDialog
+      <ImportPreviewDialog
         open={pendingImport !== null}
-        title={`Import into ${dim.dimension}?`}
-        body={
-          pendingImport && (
-            <ul className="flex flex-col gap-1 font-mono text-[12px]">
-              {pendingImport.summary.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-              <li className="mt-1 text-ink-3">
-                New keys are created; existing keys get field updates. Labels are never renamed.
-              </li>
-            </ul>
-          )
-        }
-        confirmLabel="Import"
-        onConfirm={async () => {
-          if (!pendingImport) return;
-          const toImport = pendingImport.rows;
+        headers={pendingImport?.headers ?? []}
+        rows={pendingImport?.rawRows ?? []}
+        mapping={pendingImport?.mapping ?? { labelIdx: -1, keyIdx: -1, fieldIdx: {}, ignored: [] }}
+        fields={fields}
+        importing={importing}
+        tableName={dim.dimension}
+        onConfirm={async (mapped) => {
           setPendingImport(null);
+          setImporting(true);
           try {
+            const toImport = mapped.map((r) => ({
+              key: r.key || undefined,
+              label: r.label || undefined,
+              fields: Object.keys(r.fields).length > 0
+                ? Object.fromEntries(Object.entries(r.fields).map(([k, v]) => [k, v === "" ? null : v]))
+                : undefined,
+            }));
             const r = await importRows(activeId, toImport);
             toast(`Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`);
           } catch (err) {
             toast(err instanceof Error ? err.message : "Couldn't import.", "error");
+          } finally {
+            setImporting(false);
           }
         }}
         onCancel={() => setPendingImport(null)}
