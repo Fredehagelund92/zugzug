@@ -47,14 +47,14 @@ test("tenant A preferences are independent from tenant B preferences", async () 
   const a = new TenantRepo("tpref_a", "admin");
   const b = new TenantRepo("tpref_b", "admin");
 
-  await a.setPreferences({ publishThreshold: 80, suggestThreshold: 60, scanSchedule: "15m" });
+  await a.setPreferences({ publishThreshold: 80, suggestThreshold: 60, scanSchedule: "hourly" });
   await b.setPreferences({ publishThreshold: 99, suggestThreshold: 90, scanSchedule: "daily" });
 
   const gotA = await a.getPreferences();
   const gotB = await b.getPreferences();
 
   expect(gotA.publishThreshold).toBe(80);
-  expect(gotA.scanSchedule).toBe("15m");
+  expect(gotA.scanSchedule).toBe("hourly");
   expect(gotB.publishThreshold).toBe(99);
   expect(gotB.scanSchedule).toBe("daily");
 });

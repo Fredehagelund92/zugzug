@@ -10,6 +10,9 @@ import { pgRun } from "../src/pg.ts";
 import { provisionTenant } from "../src/tenant.ts";
 import { TenantRepo } from "../src/tenant-repo.ts";
 import { scanSourcesJob, autoStageJob, autoCommitJob } from "../src/scheduler-jobs.ts";
+// env.attachWarehouse is read at module-load time from .env (which may set ATTACH_WAREHOUSE=true).
+// Override it here so no-op tests reflect the test's intended env.
+import { env } from "../src/env.ts";
 
 const T_ID = "tsjobs";
 async function cleanup(): Promise<void> {
@@ -35,15 +38,27 @@ test("scanSourcesJob.run() returns rowsScanned: 0 on empty DB", async () => {
 });
 
 test("autoStageJob.run() is a no-op when ATTACH_WAREHOUSE is false", async () => {
-  // env.attachWarehouse is false in this test env (ATTACH_WAREHOUSE=false above)
-  const result = await autoStageJob.run(ctx);
-  expect(result).toEqual({});
+  // env.attachWarehouse may be true from server/.env; force it false for this test.
+  const saved = env.attachWarehouse;
+  (env as { attachWarehouse: boolean }).attachWarehouse = false;
+  try {
+    const result = await autoStageJob.run(ctx);
+    expect(result).toEqual({});
+  } finally {
+    (env as { attachWarehouse: boolean }).attachWarehouse = saved;
+  }
 });
 
 test("autoCommitJob.run() is a no-op when ATTACH_WAREHOUSE is false", async () => {
-  // env.attachWarehouse is false in this test env (ATTACH_WAREHOUSE=false above)
-  const result = await autoCommitJob.run(ctx);
-  expect(result).toEqual({});
+  // env.attachWarehouse may be true from server/.env; force it false for this test.
+  const saved = env.attachWarehouse;
+  (env as { attachWarehouse: boolean }).attachWarehouse = false;
+  try {
+    const result = await autoCommitJob.run(ctx);
+    expect(result).toEqual({});
+  } finally {
+    (env as { attachWarehouse: boolean }).attachWarehouse = saved;
+  }
 });
 
 test("the three jobs run independently when invoked individually", async () => {

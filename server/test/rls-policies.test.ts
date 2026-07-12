@@ -14,12 +14,12 @@ test("SELECT on dimension WITH SET LOCAL works (inside pgTxScoped)", async () =>
   });
 });
 
-test("11 scoped tables have RLS enabled", async () => {
+test("14 scoped tables have RLS enabled", async () => {
   const rows = await pgAll<{ tablename: string }>(
     `SELECT tablename FROM pg_tables WHERE schemaname = 'zugzug_app' AND rowsecurity = true ORDER BY tablename`,
     [],
   );
-  expect(rows.length).toBe(12);
+  expect(rows.length).toBe(14);
 });
 
 test("Each scoped table has a tenant_iso policy", async () => {
@@ -27,7 +27,7 @@ test("Each scoped table has a tenant_iso policy", async () => {
     `SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'zugzug_app' ORDER BY tablename`,
     [],
   );
-  expect(rows.length).toBe(12);
+  expect(rows.length).toBe(14);
   for (const r of rows) {
     expect(
       r.policyname === "tenant_iso" || r.policyname.endsWith("_tenant_isolation"),

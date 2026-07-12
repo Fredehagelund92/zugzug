@@ -62,7 +62,7 @@ test("GET /api/t/:slug/preferences returns the tenant's preferences", async () =
   await new TenantRepo("troute_a", "admin").setPreferences({
     publishThreshold: 77,
     suggestThreshold: 55,
-    scanSchedule: "15m",
+    scanSchedule: "hourly",
   });
 
   const { handle } = await import("../src/server.ts");
@@ -73,7 +73,7 @@ test("GET /api/t/:slug/preferences returns the tenant's preferences", async () =
   expect(res.status).toBe(200);
   const body = (await res.json()) as { publishThreshold: number; scanSchedule: string };
   expect(body.publishThreshold).toBe(77);
-  expect(body.scanSchedule).toBe("15m");
+  expect(body.scanSchedule).toBe("hourly");
 });
 
 test("GET /api/t/:slug/preferences for a workspace the user does not belong to → 403", async () => {

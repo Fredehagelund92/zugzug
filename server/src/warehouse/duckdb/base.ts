@@ -47,16 +47,13 @@ export abstract class DuckDbBase {
 
   qualifyRef(table: Ref): string {
     const catalog = table.catalog ?? this.creds.database;
-    if (!catalog) {
-      throw new Error(
-        `qualifyRef: missing catalog for ${table.schema}.${table.table} — caller must pass Ref.catalog (resolved from warehouse_database).`,
-      );
-    }
-    return [
-      this.quoteIdentifier(catalog),
-      this.quoteIdentifier(table.schema),
-      this.quoteIdentifier(table.table),
-    ].join(".");
+    // When no catalog is available (e.g. in-memory DuckDB without a database prop),
+    // produce a 2-part schema.table ref — valid for local/in-memory connections.
+    const parts: string[] = [];
+    if (catalog) parts.push(this.quoteIdentifier(catalog));
+    parts.push(this.quoteIdentifier(table.schema));
+    parts.push(this.quoteIdentifier(table.table));
+    return parts.join(".");
   }
 
   castToString(expr: string): string {
