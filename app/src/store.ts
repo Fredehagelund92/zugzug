@@ -515,6 +515,15 @@ export async function addDimension(
   return id;
 }
 
+/** Permanently removes a table and everything it owns. The server keeps
+ *  history (activity log); the local cache drops the dim immediately. */
+export async function deleteDimension(dimId: string): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}`, { method: "DELETE" });
+  dims = dims.filter((d) => d.id !== dimId);
+  await refreshAudit();
+  emit();
+}
+
 export async function patchDimension(
   dimId: string,
   patch: {
