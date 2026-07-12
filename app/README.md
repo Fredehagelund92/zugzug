@@ -1,10 +1,10 @@
 # Zug Zug — app
 
-The Zug Zug frontend: a master-data layer over a DuckDB warehouse. Built **from**
+The Zug Zug frontend: a reference-table layer over a DuckDB warehouse. Built **from**
 the brand guide — the look is imported, never re-interpreted.
 
 > **Now wired to a real backend** (`../server/`): `src/store.ts` fetches `/api`
-> (Vite proxies it to the Bun server on :8787; canonical/drafts/audit in Postgres,
+> (Vite proxies it to the Bun server on :8787; records/drafts/audit in Postgres,
 > warehouse scan in MotherDuck). Start the API first — `cd ../server && bun run start`
 > — see `../server/.env.example` and `ARCHITECTURE.md`. The store still exposes the
 > same hooks, so components are unchanged.
@@ -46,7 +46,7 @@ src/
   globals.css        tailwind + tokens.css import + @theme alias + base
   tokens.css         brand source of truth (verbatim; do not edit)
   theme.ts           useTheme(): light/dark toggle + setAccent (fidelity proof)
-  data.ts            typed mock fixtures (master/source tables, mappings)
+  data.ts            typed mock fixtures (reference/source tables, mappings)
   lib/cx.ts          className joiner
   components/        Button, Mark (ZZ logomark) — Tailwind, token-backed
   routes/Showcase    the design-system surface (tokens, type, buttons, live theming)

@@ -4,9 +4,9 @@
 
 **Status: v0.1 — early release.** Expect rough edges and breaking changes between minor versions until v1.0.
 
-Your warehouse accumulates raw strings that nobody agrees on: "BCG", "B.C.G.", "Boston Consulting Group". dbt has no primitive to reconcile them. Existing MDM tools (Tamr, Stibo, Reltio) are enterprise-priced and closed-source. Zugzug is the gap between "messy values land in the warehouse" and "dbt models join clean dimensions." A team curates raw values to canonical IDs via a browser UI; results land in `dim_<x>` / `map_<x>` tables dbt can join directly.
+Your warehouse accumulates raw strings that nobody agrees on: "BCG", "B.C.G.", "Boston Consulting Group". dbt has no primitive to reconcile them. Existing MDM tools (Tamr, Stibo, Reltio) are enterprise-priced and closed-source. Zugzug is the gap between "messy values land in the warehouse" and "dbt models join clean dimensions." A team maps source values to approved records in a browser UI; results land in `dim_<x>` / `map_<x>` tables dbt can join directly.
 
-The same grid maintains the dimensions themselves as governed reference tables — the canonical Country or Currency list your dashboards and finance close depend on — edited in place like a spreadsheet, with roles, audit history, and CSV import/export. Not entity resolution, not an app builder: curated lists and the mappings into them, materialized where dbt can join them.
+The same grid maintains the dimensions themselves as governed reference tables — the one Country or Currency list your dashboards and finance close depend on — edited in place like a spreadsheet, with roles, audit history, and CSV import/export. Not entity resolution, not an app builder: curated lists and the mappings into them, materialized where dbt can join them.
 
 ```
 warehouse (read-only)
@@ -29,9 +29,9 @@ warehouse (read-only)
 
 You connect Zugzug to your warehouse with a read-only credential. The adapter scans `DISTINCT` values from the columns you register as dimensions — it never modifies the warehouse unless you explicitly configure a writable adapter.
 
-The UI shows unmapped values alongside their frequency counts. Team members assign each raw value to a canonical record (a `key` + `label` pair). Assignments sit in Postgres as drafts until an approver commits them. The audit log records who approved what and when.
+The UI shows unmapped values alongside their frequency counts. Team members map each source value to a record (a `key` + `label` pair). Mappings sit in Postgres as drafts until an editor publishes them. The audit log records who approved what and when.
 
-Committing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres canonical store), results live in Postgres and are downloadable as Parquet on demand. If you configure a writable warehouse adapter, commits write directly into your warehouse — for example, into a MotherDuck database your dbt project already reads.
+Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres record store), results live in Postgres and are downloadable as Parquet on demand. If you configure a writable warehouse adapter, publishes write directly into your warehouse — for example, into a MotherDuck database your dbt project already reads.
 
 The warehouse adapter is a TypeScript interface (`WarehouseAdapter`). DuckDB/MotherDuck and Snowflake are shipped. Additional adapters (Postgres-as-warehouse, BigQuery, Databricks) are community-roadmapped — see the issue template below.
 
@@ -79,7 +79,7 @@ cd ../app && bun run dev
 
 Open `http://localhost:5173`. The first user to sign up becomes the admin.
 
-For non-default setups (Snowflake, OIDC, writable canonical store), see `server/.env.example` — every option is documented there.
+For non-default setups (Snowflake, OIDC, writable warehouse store), see `server/.env.example` — every option is documented there.
 
 ## Adapters
 

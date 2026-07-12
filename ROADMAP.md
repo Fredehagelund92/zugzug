@@ -23,7 +23,7 @@ The one initiative actively being worked on. One thing at a time.
 Planned for the next release. Subject to scope refinement.
 
 - **[#53] row_touched invalidation** — commit-time hint over the presence WebSocket that collapses activity-badge staleness from 5 s poll to ~50 ms push. Deferred from E1; small standalone task.
-- **[#17] Triage: bulk Skip action** — the floating bulk bar ships Merge; Skip and Map-to are the remaining actions from the original triage bulk spec.
+- **[#17] Review: bulk Skip action** — the floating bulk bar ships Merge; Skip and Map-to are the remaining actions from the original Review bulk spec.
 - **Snowflake auth: password and SSO modes** — v0.1 shipped with key-pair auth (SNOWFLAKE_JWT) only. Tracking inbound demand to prioritize.
 
 ---
@@ -93,7 +93,7 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 - **Role-based permissions (epic #36)** — admin/editor/viewer roles, `canAdminister` gating.
 - **CSV import/export** — `POST /dimensions/:id/import`, per-dim Export button, `ImportCSVModal`.
 - **E1 — Activity & Presence** — row-activity badges (audit log + API + DataGrid pip), live cursors (yjs WebSocket awareness), presence strip.
-- **E2 — Optimistic concurrency** — version-column conflict detection on canonical row edits.
+- **E2 — Optimistic concurrency** — version-column conflict detection on record edits.
 - **Grid-feel sprint** — optimistic mutations, undo persistence, floating bulk-action bar, vocabulary unification, unified toast stack.
 - **Multi-tenant workspaces** — Deploy 1 + Deploy 2 migrations, TenantRepo, withTenantTx, auth middleware, sign-in invite flow, provisionTenant/teardownTenant, super-admin routes, scheduler per-tenant scoping, `/app/:slug/*` routes, workspace switcher, apiFetch, RLS.
 - **Settings IA redesign** — Account, Danger zone, Admin console, Team roster.
