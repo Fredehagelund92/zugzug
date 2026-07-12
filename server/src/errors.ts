@@ -12,7 +12,8 @@ export type ErrorCode =
   | "SELF_DEMOTE"
   | "LAST_SUPER_ADMIN"
   | "READ_ONLY_TOKEN"
-  | "INTERNAL";
+  | "INTERNAL"
+  | "SECOND_PUBLISHER_REQUIRED";
 
 export class AppError extends Error {
   constructor(

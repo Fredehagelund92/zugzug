@@ -9,9 +9,11 @@ import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
 import { saveDraft, commit } from "./repo-drafts.ts";
+import { getPreferences, setPreferences } from "./repo-meta.ts";
 
 const T = "test_commit_out";
 const U = "u_test_commit";
+const U2 = "u_test_commit_bob";
 
 beforeAll(async () => {
   await pgRun(
@@ -25,6 +27,12 @@ beforeAll(async () => {
      ON CONFLICT DO NOTHING`,
     [U],
   );
+  await pgRun(
+    `INSERT INTO "zugzug_app"."users" (id, name, email, initials, is_super_admin)
+     VALUES ($1, 'Bob Publisher', 'bob@example.test', 'BP', false)
+     ON CONFLICT DO NOTHING`,
+    [U2],
+  );
 });
 
 afterAll(async () => {
@@ -35,8 +43,32 @@ afterAll(async () => {
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U2]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
+});
+
+describe("commit() second-publisher gate", () => {
+  it("rejects self-publish when requireSecondPublisher is on", async () => {
+    const prefs = await getPreferences(T);
+    await setPreferences({ ...prefs, requireSecondPublisher: true }, T);
+
+    const dimId = await addDimension("GateDim", [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    // Alice (U) authors the draft
+    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
+
+    // Alice cannot publish her own draft
+    await expect(commit(dimId, U, T)).rejects.toThrow(/another editor must publish/i);
+
+    // Bob (U2) can publish Alice's draft
+    const res = await commit(dimId, U2, T);
+    expect(res.committed).toBe(1);
+
+    // Reset the preference so other tests are unaffected
+    await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
+  });
 });
 
 describe("commit() fires dimension.committed event", () => {

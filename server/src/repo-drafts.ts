@@ -17,7 +17,8 @@ import {
   pgTx,
   pg,
 } from "./repo-shared.ts";
-import { appendAuditAs } from "./repo-meta.ts";
+import { appendAuditAs, getPreferences } from "./repo-meta.ts";
+import { AppError } from "./errors.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { isWritable } from "./warehouse/adapter.ts";
@@ -331,6 +332,28 @@ export async function commit(
   const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null);
   if (!committed && canonicalChanged.length === 0)
     return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
+
+  // Four-eyes governance gate: when requireSecondPublisher is enabled, the
+  // committer must not have authored any of the mapped drafts being published.
+  // Drafts authored by u_system (auto-staged by repo-scan.ts autoStageExactMatches)
+  // are excluded — system drafts never block any human publisher.
+  const prefs = await getPreferences(tenantId);
+  if (prefs.requireSecondPublisher) {
+    const ownDrafts = await pgGet<{ n: number }>(
+      `SELECT count(*)::int AS n FROM ${DRAFT}
+       WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'
+         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'`,
+      [dimId, tenantId, userId],
+    );
+    const own = Number(ownDrafts?.n ?? 0);
+    if (own > 0) {
+      throw new AppError(
+        "SECOND_PUBLISHER_REQUIRED",
+        `${own} of these drafts are yours — another editor must publish them`,
+        403,
+      );
+    }
+  }
 
   const rowsRecovered = await rowsForUnmappedDrafts(dimId, tenantId, meta.mapTable);
 

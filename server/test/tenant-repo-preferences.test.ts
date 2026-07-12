@@ -28,6 +28,7 @@ test("setPreferences + getPreferences round-trip per tenant", async () => {
     publishThreshold: 90,
     suggestThreshold: 70,
     scanSchedule: "hourly",
+    requireSecondPublisher: false,
   });
 
   const got = await repo.getPreferences();
@@ -35,6 +36,7 @@ test("setPreferences + getPreferences round-trip per tenant", async () => {
     publishThreshold: 90,
     suggestThreshold: 70,
     scanSchedule: "hourly",
+    requireSecondPublisher: false,
   });
 });
 
@@ -66,6 +68,7 @@ test("setPreferences as viewer → 403 FORBIDDEN", async () => {
       publishThreshold: 1,
       suggestThreshold: 1,
       scanSchedule: null,
+      requireSecondPublisher: false,
     });
   } catch (e) {
     if (e instanceof AppError) thrown = e;
@@ -76,7 +79,7 @@ test("setPreferences as viewer → 403 FORBIDDEN", async () => {
 test("super-admin bypasses the role check even with role='viewer'", async () => {
   await provisionTenant({ id: "tpref_a", label: "A" });
   const sa = new TenantRepo("tpref_a", "viewer", true);
-  await sa.setPreferences({ publishThreshold: 50, suggestThreshold: 50, scanSchedule: null });
+  await sa.setPreferences({ publishThreshold: 50, suggestThreshold: 50, scanSchedule: null, requireSecondPublisher: false });
   expect((await sa.getPreferences()).publishThreshold).toBe(50);
 });
 

@@ -224,7 +224,8 @@ export const preferences = app.table(
     ai_provider:       varchar("ai_provider").notNull().default("none"),
     ai_api_key:        varchar("ai_api_key"),
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
-    last_outbound_sweep_at: timestamp("last_outbound_sweep_at"),
+    last_outbound_sweep_at:      timestamp("last_outbound_sweep_at"),
+    require_second_publisher:    boolean("require_second_publisher").notNull().default(false),
   },
   (t) => [
     uniqueIndex("preferences_tenant_unique").on(t.tenant_id),

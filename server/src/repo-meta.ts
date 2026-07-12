@@ -93,8 +93,9 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
     publish_threshold: number;
     suggest_threshold: number;
     scan_schedule: string | null;
+    require_second_publisher: boolean;
   }>(
-    `SELECT publish_threshold, suggest_threshold, scan_schedule
+    `SELECT publish_threshold, suggest_threshold, scan_schedule, require_second_publisher
      FROM ${pg("preferences")}
      WHERE tenant_id = $1
      ORDER BY id LIMIT 1`,
@@ -108,6 +109,7 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
     scanSchedule: validSchedule.includes(sched as (typeof validSchedule)[number])
       ? (sched as Preferences["scanSchedule"])
       : null,
+    requireSecondPublisher: row?.require_second_publisher ?? false,
   };
 }
 
@@ -117,14 +119,15 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
 
   await pgRun(
     `INSERT INTO ${pg("preferences")}
-       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
-     VALUES ($1, $2, $3, current_timestamp, $4)
+       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id, require_second_publisher)
+     VALUES ($1, $2, $3, current_timestamp, $4, $5)
      ON CONFLICT (tenant_id) DO UPDATE
-       SET publish_threshold = EXCLUDED.publish_threshold,
-           suggest_threshold = EXCLUDED.suggest_threshold,
-           scan_schedule     = EXCLUDED.scan_schedule,
-           updated_at        = EXCLUDED.updated_at`,
-    [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId],
+       SET publish_threshold        = EXCLUDED.publish_threshold,
+           suggest_threshold        = EXCLUDED.suggest_threshold,
+           scan_schedule            = EXCLUDED.scan_schedule,
+           updated_at               = EXCLUDED.updated_at,
+           require_second_publisher = EXCLUDED.require_second_publisher`,
+    [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId, p.requireSecondPublisher ?? false],
   );
 }
 
