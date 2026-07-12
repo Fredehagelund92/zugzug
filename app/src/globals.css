@@ -360,6 +360,10 @@
 .zz-grid-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
+/* Sticky-header elevation once rows have scrolled underneath. */
+.zz-grid-scroll[data-scrolled] .zz-grid-header {
+  box-shadow: var(--shadow-sm);
+}
 
 /* Row reorder: ghost the source row + give a hint that the grab handle is the
  * row-number gutter. Reorderable surfaces opt in via .zz-row-reorderable. */

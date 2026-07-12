@@ -196,7 +196,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
       <div
         role="row"
         aria-rowindex={1}
-        className="grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
+        className="zz-grid-header grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
         style={gridStyle}
       >
         {showRowNumbers && (
