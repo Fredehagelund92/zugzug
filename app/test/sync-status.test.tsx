@@ -17,7 +17,10 @@ describe("useSyncStatus", () => {
       vi.fn(async (_url: string, opts?: RequestInit) => {
         if (opts?.method && opts.method !== "GET") await gate;
         if (!opts?.method || opts.method === "GET")
-          return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+          return new Response("[]", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
         return new Response(null, { status: 204 });
       }),
     );
@@ -36,12 +39,36 @@ describe("useSyncStatus", () => {
     await waitFor(() => expect(result.current).toBe("saved"));
   });
 
+  test("failed when a write rejects; the pill state does not report saved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, opts?: RequestInit) => {
+        if (opts?.method && opts.method !== "GET") return new Response("boom", { status: 500 });
+        return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+    const { useSyncStatus, discardDraft } = await import("../src/store");
+    const { result } = renderHook(() => useSyncStatus());
+
+    let done!: Promise<void>;
+    act(() => {
+      done = discardDraft("country", "usa").catch(() => undefined);
+    });
+    await act(async () => {
+      await done;
+    });
+    expect(result.current).toBe("failed");
+  });
+
   test("saved decays back to idle after ~1.5s", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_url: string, opts?: RequestInit) => {
         if (!opts?.method || opts.method === "GET")
-          return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+          return new Response("[]", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
         return new Response(null, { status: 204 });
       }),
     );
