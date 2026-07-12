@@ -60,4 +60,29 @@ describe("ConflictBanner", () => {
     expect(screen.getByText(/norway/i)).toBeInTheDocument();
     expect(screen.getByText(/and 1 other/i)).toBeInTheDocument();
   });
+
+  test("renders theirs-vs-yours lines when a diff is provided", () => {
+    const diff = [{ field: "label", theirs: "ACME Inc", yours: "ACME Inc." }];
+    render(
+      <ConflictBanner
+        conflict={conflict}
+        diff={diff}
+        onRefresh={() => undefined}
+        onKeepEditing={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/label:/)).toBeInTheDocument();
+    expect(screen.getByText(/theirs "ACME Inc"/)).toBeInTheDocument();
+    expect(screen.getByText(/yours "ACME Inc\."/)).toBeInTheDocument();
+
+    // Assert list does not render when diff is omitted
+    const { container: containerWithoutDiff } = render(
+      <ConflictBanner
+        conflict={conflict}
+        onRefresh={() => undefined}
+        onKeepEditing={() => undefined}
+      />,
+    );
+    expect(containerWithoutDiff.querySelector("ul")).not.toBeInTheDocument();
+  });
 });
