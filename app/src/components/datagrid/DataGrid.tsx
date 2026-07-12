@@ -262,8 +262,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     return rows.filter(match);
   }, [rows, filterSet, getValue]);
 
+  const searchedRows = useMemo(() => {
+    const q = props.quickFilter?.trim().toLowerCase();
+    if (!q) return filteredRows;
+    const accessor = props.quickFilterAccessor;
+    return filteredRows.filter((r) => {
+      const text = accessor ? accessor(r) : String((r as Record<string, unknown>)["label"] ?? "");
+      return text.toLowerCase().includes(q);
+    });
+  }, [filteredRows, props.quickFilter, props.quickFilterAccessor]);
+
   const sortedRows = useMemo(() => {
-    if (!sort) return filteredRows;
+    if (!sort) return searchedRows;
     const sign = sort.dir === "asc" ? 1 : -1;
     const cmp = (a: Row, b: Row) => {
       const av = getValue(a, sort.field);
@@ -274,8 +284,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign;
       return String(av ?? "").localeCompare(String(bv ?? "")) * sign;
     };
-    return [...filteredRows].sort(cmp);
-  }, [filteredRows, sort, getValue]);
+    return [...searchedRows].sort(cmp);
+  }, [searchedRows, sort, getValue]);
 
   // ── Task 20: per-column widths ──────────────────────────────────────────────
   const [widths, setWidths] = useState<Record<string, number>>(() =>

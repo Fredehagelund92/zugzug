@@ -267,6 +267,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [publishing, setPublishing] = useState(false);
   const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
   const [publishPreview, setPublishPreview] = useState(false);
+  const [quickFilter, setQuickFilter] = useState("");
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
     anchorRect: DOMRect;
@@ -784,6 +785,15 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
           <PresenceStrip peers={presence.peers} />
+          <label className="relative">
+            <span className="sr-only">Search records</span>
+            <input
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Search records…"
+              className="w-[180px] rounded-sm border border-line-2 bg-surface px-2 py-1 font-mono text-[11.5px] text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+            />
+          </label>
           <Button
             variant="ghost"
             size="sm"
@@ -1101,6 +1111,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           rowKey={(c) => c.key}
           columns={columns}
           showRowNumbers
+          quickFilter={quickFilter}
+          quickFilterAccessor={(r) => r.label}
           selection={{ selected: sel, onChange: setSel }}
           onCommit={
             canEdit

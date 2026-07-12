@@ -223,4 +223,8 @@ export interface DataGridProps<Row> {
   onSortChange?: (sort: { column: string; direction: "asc" | "desc" } | null) => void;
   /** Seed the sort state on mount. */
   initialSort?: { column: string; direction: "asc" | "desc" } | null;
+  /** Free-text filter — case-insensitive contains. Requires quickFilterAccessor. */
+  quickFilter?: string;
+  /** Extracts the searchable string from a row for quickFilter. */
+  quickFilterAccessor?: (row: Row) => string;
 }
