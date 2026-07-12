@@ -271,6 +271,12 @@ export function useGridCursor<Row>({
         return;
       }
 
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setCursor(null);
+        return;
+      }
+
       const isCmd = e.metaKey || e.ctrlKey;
       if (
         isCmd &&

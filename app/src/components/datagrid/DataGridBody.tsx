@@ -16,6 +16,7 @@ interface DataGridBodyProps<Row> {
   rows: Row[];
   rowKey: (row: Row) => string;
   columns: ColumnDef<Row>[];
+  gridId: string;
   gridStyle: React.CSSProperties;
   cellPadY: string;
   showRowNumbers: boolean;
@@ -69,6 +70,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
     rows,
     rowKey,
     columns,
+    gridId,
     gridStyle,
     cellPadY,
     showRowNumbers,
@@ -144,6 +146,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
               rowKey={rk}
               rowIndex={vRow.index}
               columns={columns}
+              gridId={gridId}
               focusedField={focusedOnThisRow ? cursorField : null}
               editingField={focusedOnThisRow && cursorEditing ? cursorField : null}
               cursorInitial={focusedOnThisRow ? cursorInitial : undefined}

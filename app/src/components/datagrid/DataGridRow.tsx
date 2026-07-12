@@ -53,6 +53,7 @@ interface GridCellProps<Row> {
   column: ColumnDef<Row>;
   rowKey: string;
   colIndex: number;
+  gridId: string;
   value: unknown;
   focused: boolean;
   editing: boolean;
@@ -81,6 +82,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
     column: c,
     rowKey: rk,
     colIndex: idx,
+    gridId,
     value,
     focused,
     editing,
@@ -122,6 +124,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
       role="gridcell"
       aria-colindex={idx + 1}
       aria-selected={focused ? true : undefined}
+      id={`${gridId}${data}`}
       data-cell={data}
       data-field={c.field}
       onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
@@ -227,6 +230,7 @@ function gridCellAreEqual<Row>(prev: GridCellProps<Row>, next: GridCellProps<Row
     prev.column === next.column &&
     prev.rowKey === next.rowKey &&
     prev.colIndex === next.colIndex &&
+    prev.gridId === next.gridId &&
     prev.value === next.value &&
     prev.focused === next.focused &&
     prev.editing === next.editing &&
@@ -259,6 +263,7 @@ export interface GridRowProps<Row> {
   rowKey: string;
   rowIndex: number;
   columns: ColumnDef<Row>[];
+  gridId: string;
   /** Which field on this row has the cursor (null = cursor is elsewhere). */
   focusedField: string | null;
   /** Which field on this row is actively being edited (null = none). */
@@ -305,6 +310,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     rowKey: rk,
     rowIndex,
     columns,
+    gridId,
     focusedField,
     editingField,
     cursorInitial,
@@ -384,6 +390,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
             column={c}
             rowKey={rk}
             colIndex={idx}
+            gridId={gridId}
             value={value}
             focused={focused}
             editing={editing}
