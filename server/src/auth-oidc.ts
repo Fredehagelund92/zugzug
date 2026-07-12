@@ -10,7 +10,7 @@
 
 import * as defaultClient from "openid-client";
 import { env, pg } from "./env.ts";
-import { pgRun, pgGet, pgAll } from "./pg.ts";
+import { pgRun, pgGet, pgTx } from "./pg.ts";
 import { issueSession } from "./auth.ts";
 import { acceptInvitesFor } from "./tenant.ts";
 import { log } from "./log.ts";
@@ -192,58 +192,69 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
     return loginErrorRedirect("domain", clearState, clearNonce);
   }
 
-  // Gate check (with bootstrap: first OIDC user becomes admin).
-  // Subsequent users must have a tenant_member or tenant_invite row.
-  const [{ n: userCount }] = await pgAll<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${pg("users")}`,
-  );
-  if (userCount > 0) {
-    const allowed = await pgGet<{ ok: boolean }>(
-      `SELECT EXISTS(
-         SELECT 1 FROM ${pg("tenant_member")} tm
-           JOIN ${pg("users")} u ON u.id = tm.user_id
-          WHERE u.email = $1
-         UNION ALL
-         SELECT 1 FROM ${pg("tenant_invite")} WHERE lower(email) = lower($1)
-       ) AS ok`,
-      [email],
-    );
-    if (!allowed?.ok) {
-      return loginErrorRedirect("not_allowed", clearState, clearNonce);
-    }
-  }
-
-  // NOTE: userCount===0 is race-vulnerable under concurrent first-logins — both
-  // could see count=0 and both become admin. Acceptable for v0.2; no lock added.
-  const role = userCount === 0 ? "admin" : "editor";
-
   const initials =
     claims.given_name && claims.family_name
       ? `${claims.given_name[0]}${claims.family_name[0]}`.toUpperCase()
       : initialsOf(name);
 
   const userId = `u_${sub}`;
-  // ON CONFLICT deliberately does NOT update role — an admin who re-logs in via
-  // OIDC must stay admin; only the first-insert path sets the role.
-  await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider)
-     VALUES ($1, $2, $3, $4, $5, 'oidc')
-     ON CONFLICT (id) DO UPDATE SET
-       name = EXCLUDED.name,
-       email = EXCLUDED.email,
-       initials = EXCLUDED.initials,
-       auth_provider = 'oidc'`,
-    [userId, name, email, sub, initials],
-  );
 
-  // Seed default-tenant membership on first sign-in (first user = admin, rest = editor).
-  // ON CONFLICT DO NOTHING preserves existing role on re-login.
-  await pgRun(
-    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
-     VALUES ('default', $1, $2, now())
-     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
-    [userId, role],
-  );
+  // Serialize the first-admin decision: same advisory lock key as auth-password.ts
+  // so password and OIDC first-signups cannot race against each other.
+  const oidcResult = await pgTx(async (tx) => {
+    await tx.run(`SELECT pg_advisory_xact_lock(hashtext('zz:first-admin'))`);
+
+    const countRow = await tx.get<{ n: number }>(
+      `SELECT count(*)::int AS n FROM ${pg("users")}`,
+    );
+    const userCount = countRow?.n ?? 0;
+
+    // Gate check (with bootstrap: first OIDC user becomes admin).
+    // Subsequent users must have a tenant_member or tenant_invite row.
+    if (userCount > 0) {
+      const allowed = await tx.get<{ ok: boolean }>(
+        `SELECT EXISTS(
+           SELECT 1 FROM ${pg("tenant_member")} tm
+             JOIN ${pg("users")} u ON u.id = tm.user_id
+            WHERE u.email = $1
+           UNION ALL
+           SELECT 1 FROM ${pg("tenant_invite")} WHERE lower(email) = lower($1)
+         ) AS ok`,
+        [email],
+      );
+      if (!allowed?.ok) return { denied: true } as const;
+    }
+
+    const role = userCount === 0 ? "admin" : "editor";
+
+    // ON CONFLICT deliberately does NOT update role — an admin who re-logs in via
+    // OIDC must stay admin; only the first-insert path sets the role.
+    await tx.run(
+      `INSERT INTO ${pg("users")} (id, name, email, google_sub, initials, auth_provider)
+       VALUES ($1, $2, $3, $4, $5, 'oidc')
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         email = EXCLUDED.email,
+         initials = EXCLUDED.initials,
+         auth_provider = 'oidc'`,
+      [userId, name, email, sub, initials],
+    );
+
+    // Seed default-tenant membership on first sign-in (first user = admin, rest = editor).
+    // ON CONFLICT DO NOTHING preserves existing role on re-login.
+    await tx.run(
+      `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+       VALUES ('default', $1, $2, now())
+       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+      [userId, role],
+    );
+
+    return { denied: false } as const;
+  });
+
+  if (oidcResult.denied) {
+    return loginErrorRedirect("not_allowed", clearState, clearNonce);
+  }
 
   try {
     await acceptInvitesFor(userId, email);

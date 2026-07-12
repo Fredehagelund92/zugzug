@@ -76,6 +76,20 @@ describe("first-admin role assignment", () => {
   });
 });
 
+// ── cross-path advisory lock invariant ───────────────────────────────────────
+// A source-text assertion is a smell in general; here it is the honest cheap
+// guard for a cross-file invariant that no integration test can reach without
+// an OIDC issuer.
+describe("cross-path advisory lock key", () => {
+  it("password and OIDC first-admin paths share one advisory lock key", async () => {
+    const pw = await Bun.file("src/auth-password.ts").text();
+    const oidc = await Bun.file("src/auth-oidc.ts").text();
+    const key = "hashtext('zz:first-admin')";
+    expect(pw).toContain(key);
+    expect(oidc).toContain(key);
+  });
+});
+
 // ── requireAdmin ──────────────────────────────────────────────────────────────
 
 describe("requireAdmin", () => {
