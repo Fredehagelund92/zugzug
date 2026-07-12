@@ -3,7 +3,7 @@
    Uses Bun.password.hash/verify (argon2id default). */
 
 import { env, pg } from "./env.ts";
-import { pgRun, pgAll, pgGet } from "./pg.ts";
+import { pgRun, pgGet, pgTx } from "./pg.ts";
 import { issueSession } from "./auth.ts";
 import { acceptInvitesFor } from "./tenant.ts";
 import { log } from "./log.ts";
@@ -68,48 +68,59 @@ export async function handleSignup(req: Request): Promise<Response> {
     return jsonError(400, "domain_not_allowed", { allowedDomain: env.allowedDomain });
   }
 
-  // First user becomes admin and is seeded into the default tenant.
-  // Subsequent users must already have a tenant_member or tenant_invite row.
-  const [{ n: userCount }] = await pgAll<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${pg("users")}`,
-  );
-  if (userCount > 0) {
-    const allowed = await pgGet<{ ok: boolean }>(
-      `SELECT EXISTS(
-         SELECT 1 FROM ${pg("tenant_member")} tm
-           JOIN ${pg("users")} u ON u.id = tm.user_id
-          WHERE u.email = $1
-         UNION ALL
-         SELECT 1 FROM ${pg("tenant_invite")} WHERE lower(email) = lower($1)
-       ) AS ok`,
-      [email],
-    );
-    if (!allowed?.ok) return jsonError(403, "not_allowed");
-  }
-
-  // Check email isn't already used (by either auth provider)
+  // Check email isn't already used (by either auth provider) — fast pre-check
+  // outside the lock so we can return 409 without acquiring the advisory lock.
   const existing = await pgGet(`SELECT id FROM ${pg("users")} WHERE email = $1`, [email]);
   if (existing) return jsonError(409, "email_taken");
 
-  // NOTE: userCount===0 is race-vulnerable under concurrent first-signups — both
-  // could see count=0 and both become admin. Acceptable for v0.2; no lock added.
-  const role = userCount === 0 ? "admin" : "editor";
-
   const hash = await Bun.password.hash(password); // argon2id default
   const userId = `u_${crypto.randomUUID().replace(/-/g, "")}`;
-  await pgRun(
-    `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider)
-     VALUES ($1, $2, $3, $4, $5, 'password')`,
-    [userId, name, email, initialsOf(name), hash],
-  );
 
-  // Seed default-tenant membership (first user = admin, rest = editor).
-  await pgRun(
-    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
-     VALUES ('default', $1, $2, now())
-     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
-    [userId, role],
-  );
+  // Serialize the first-admin decision: advisory lock prevents two concurrent
+  // first-signups from both seeing count=0 and both becoming admin.
+  const signupResult = await pgTx(async (tx) => {
+    await tx.run(`SELECT pg_advisory_xact_lock(hashtext('zz:first-admin'))`);
+    const countRow = await tx.get<{ n: number }>(
+      `SELECT count(*)::int AS n FROM ${pg("users")}`,
+    );
+    const userCount = countRow?.n ?? 0;
+
+    // First user becomes admin and is seeded into the default tenant.
+    // Subsequent users must already have a tenant_member or tenant_invite row.
+    if (userCount > 0) {
+      const allowed = await tx.get<{ ok: boolean }>(
+        `SELECT EXISTS(
+           SELECT 1 FROM ${pg("tenant_member")} tm
+             JOIN ${pg("users")} u ON u.id = tm.user_id
+            WHERE u.email = $1
+           UNION ALL
+           SELECT 1 FROM ${pg("tenant_invite")} WHERE lower(email) = lower($1)
+         ) AS ok`,
+        [email],
+      );
+      if (!allowed?.ok) return { denied: true } as const;
+    }
+
+    const role = userCount === 0 ? "admin" : "editor";
+
+    await tx.run(
+      `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider)
+       VALUES ($1, $2, $3, $4, $5, 'password')`,
+      [userId, name, email, initialsOf(name), hash],
+    );
+
+    // Seed default-tenant membership (first user = admin, rest = editor).
+    await tx.run(
+      `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+       VALUES ('default', $1, $2, now())
+       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+      [userId, role],
+    );
+
+    return { denied: false } as const;
+  });
+
+  if (signupResult.denied) return jsonError(403, "not_allowed");
 
   try {
     await acceptInvitesFor(userId, email);
