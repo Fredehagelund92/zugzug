@@ -1461,6 +1461,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                   onPick={(survivorLabel) => {
                     if (sel.length >= 5) {
                       const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
+                      if (!survivorKey) return;
                       const loserKeys = sel.filter((k) => k !== survivorKey);
                       const loserRows = dim.canonical.filter((c) => loserKeys.includes(c.key));
                       const allUndefined = loserRows.every((c) => c.variants === undefined);
