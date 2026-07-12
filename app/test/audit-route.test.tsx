@@ -4,8 +4,15 @@ import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../src/store", () => ({
   useAudit: () => [
-    { at: new Date().toISOString(), action: "draft.created", detail: "channel/web" },
+    {
+      id: "a1",
+      at: new Date().toISOString(),
+      user: { id: "u1", name: "Alice", initials: "AL" },
+      action: "draft.created",
+      detail: "channel/web",
+    },
   ],
+  useStoreLoading: () => false,
 }));
 
 describe("Audit (primary nav)", () => {

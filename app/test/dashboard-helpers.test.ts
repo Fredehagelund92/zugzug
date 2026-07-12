@@ -22,10 +22,7 @@ const cleanDim: MappingDimension = {
   keyCol: "post_type",
   rows: 100,
   canonical: [],
-  values: [
-    { value: "A", status: "mapped", current: "A", suggestion: null, confidence: 0, sources: [] },
-    { value: "B", status: "mapped", current: "B", suggestion: null, confidence: 0, sources: [] },
-  ],
+  counts: { newCount: 0, mappedCount: 2, totalDistinct: 2, unmappedRowsTotal: 0, mappedRowsTotal: 100, scannedAt: null },
 };
 
 const dirtyDim: MappingDimension = {
@@ -36,12 +33,7 @@ const dirtyDim: MappingDimension = {
   keyCol: "country_code",
   rows: 500,
   canonical: [],
-  values: [
-    { value: "US", status: "mapped", current: "US", suggestion: null, confidence: 0, sources: [] },
-    { value: "GB", status: "mapped", current: "GB", suggestion: null, confidence: 0, sources: [] },
-    { value: "XX", status: "new", current: null, suggestion: null, confidence: 0, sources: [] },
-    { value: "YY", status: "new", current: null, suggestion: null, confidence: 0, sources: [] },
-  ],
+  counts: { newCount: 2, mappedCount: 2, totalDistinct: 4, unmappedRowsTotal: 500, mappedRowsTotal: 500, scannedAt: null },
 };
 
 const emptyDim: MappingDimension = {
@@ -52,7 +44,7 @@ const emptyDim: MappingDimension = {
   keyCol: "id",
   rows: 0,
   canonical: [],
-  values: [],
+  counts: { newCount: 0, mappedCount: 0, totalDistinct: 0, unmappedRowsTotal: 0, mappedRowsTotal: 0, scannedAt: null },
 };
 
 const auditLog: AuditEntry[] = [
@@ -74,8 +66,8 @@ describe("coveragePct", () => {
     expect(coveragePct(dirtyDim)).toBe(50);
   });
   test("rounds down", () => {
-    const d = { ...dirtyDim, values: [...dirtyDim.values, { value: "ZZ", status: "new" as const, current: null, suggestion: null, confidence: 0, sources: [] }] };
     // 2 mapped / 5 total = 40%
+    const d = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 3, totalDistinct: 5 } };
     expect(coveragePct(d)).toBe(40);
   });
 });
@@ -90,14 +82,14 @@ describe("urgencyScore", () => {
     expect(urgencyScore(dirtyDim)).toBeGreaterThan(urgencyScore(cleanDim));
   });
   test("more new values = higher score", () => {
-    const oneNew: MappingDimension = { ...dirtyDim, values: [dirtyDim.values[0], dirtyDim.values[2]] };
+    const oneNew: MappingDimension = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
     expect(urgencyScore(dirtyDim)).toBeGreaterThan(urgencyScore(oneNew));
   });
   test("staged clean dim scores above clean unstaged dim", () => {
     expect(urgencyScore(cleanDim, true)).toBeGreaterThan(urgencyScore(cleanDim, false));
   });
   test("any dim with one new value outranks a staged-only dim", () => {
-    const oneNew: MappingDimension = { ...dirtyDim, values: [dirtyDim.values[0], dirtyDim.values[2]] };
+    const oneNew: MappingDimension = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
     expect(urgencyScore(oneNew, false)).toBeGreaterThan(urgencyScore(cleanDim, true));
   });
 });

@@ -14,7 +14,7 @@ function harness(role: "viewer" | "editor" | "admin", path = "/app/acme/settings
         <Route path="/app/acme/settings" element={<SettingsLayout />}>
           <Route path="general" element={<div>General</div>} />
           <Route path="members" element={<div>Members</div>} />
-          <Route path="matching" element={<div>Matching</div>} />
+          <Route path="mapping" element={<div>Mapping</div>} />
           <Route path="warehouse" element={<div>Warehouse</div>} />
           <Route path="tokens" element={<Navigate to="../../integrations/service-accounts" replace />} />
           <Route path="scans" element={<Navigate to="../warehouse#scans" replace />} />
@@ -61,7 +61,7 @@ describe("SettingsSidebar", () => {
     harness("admin");
     const links = getNavLinks();
     const texts = links.map((l) => l.text);
-    expect(texts).toEqual(["General", "Members", "Matching", "Warehouse", "Danger"]);
+    expect(texts).toEqual(["General", "Members", "Mapping", "Warehouse", "Danger"]);
   });
 
   test("active route gets aria-current", () => {

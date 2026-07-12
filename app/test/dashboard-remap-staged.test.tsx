@@ -15,11 +15,7 @@ const dimA: MappingDimension = {
   keyCol: "country_code",
   rows: 300,
   canonical: [],
-  values: [
-    { value: "us", status: "mapped", current: "United States", suggestion: null, confidence: 0, sources: [] },
-    { value: "gb", status: "mapped", current: "United Kingdom", suggestion: null, confidence: 0, sources: [] },
-    { value: "zz", status: "new", current: null, suggestion: null, confidence: 0, sources: [] },
-  ],
+  counts: { newCount: 1, mappedCount: 2, totalDistinct: 3, unmappedRowsTotal: 100, mappedRowsTotal: 200, scannedAt: null },
 };
 
 const dimB: MappingDimension = {
@@ -30,11 +26,7 @@ const dimB: MappingDimension = {
   keyCol: "region_code",
   rows: 200,
   canonical: [],
-  values: [
-    { value: "emea", status: "mapped", current: "EMEA", suggestion: null, confidence: 0, sources: [] },
-    { value: "amer", status: "mapped", current: "Americas", suggestion: null, confidence: 0, sources: [] },
-    { value: "apac", status: "mapped", current: "APAC", suggestion: null, confidence: 0, sources: [] },
-  ],
+  counts: { newCount: 0, mappedCount: 3, totalDistinct: 3, unmappedRowsTotal: 0, mappedRowsTotal: 200, scannedAt: null },
 };
 
 const dimC: MappingDimension = {
@@ -45,11 +37,7 @@ const dimC: MappingDimension = {
   keyCol: "channel_id",
   rows: 150,
   canonical: [],
-  values: [
-    { value: "fb", status: "mapped", current: "facebook", suggestion: null, confidence: 0, sources: [] },
-    { value: "ig", status: "mapped", current: "instagram", suggestion: null, confidence: 0, sources: [] },
-    { value: "tw", status: "mapped", current: "twitter", suggestion: null, confidence: 0, sources: [] },
-  ],
+  counts: { newCount: 0, mappedCount: 3, totalDistinct: 3, unmappedRowsTotal: 0, mappedRowsTotal: 150, scannedAt: null },
 };
 
 const remapDraft: Draft = {
@@ -77,6 +65,7 @@ vi.mock("../src/store", () => ({
   useAudit: () => [],
   useDrafts: () => draftsFixture,
   useWorkspaceInfo: () => ({ adapter: "motherduck", warehouseDb: "md:demo", writable: true }),
+  useStoreLoading: () => false,
   useConnectionHealth: () => ({
     warehouse: { status: "ok", lastCheckedAt: new Date().toISOString() },
     postgres: { status: "ok", lastCheckedAt: new Date().toISOString() },

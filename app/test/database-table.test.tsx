@@ -8,6 +8,7 @@ const ROWS: DatabaseRow[] = [
     databaseName: "analytics",
     label: "Sales DWH",
     sourceCount: 3,
+    schemaCount: 3,
     addedAt: "2026-03-14T00:00:00Z",
     lastProbeAt: null,
     lastProbeError: null,
@@ -17,6 +18,7 @@ const ROWS: DatabaseRow[] = [
     databaseName: "hr",
     label: null,
     sourceCount: 0,
+    schemaCount: null,
     addedAt: "2026-03-14T00:00:00Z",
     lastProbeAt: null,
     lastProbeError: "Catalog not found",
@@ -24,13 +26,13 @@ const ROWS: DatabaseRow[] = [
 ];
 
 describe("DatabaseTable", () => {
-  test("renders one row per database with sourceCount", () => {
+  test("renders one row per database with schemaCount", () => {
     const { container } = render(
       <DatabaseTable databases={ROWS} canAdd={true} onAdd={vi.fn()} onRemove={vi.fn()} />,
     );
     expect(container.textContent).toContain("analytics");
     expect(container.textContent).toContain("Sales DWH");
-    expect(container.textContent).toContain("3 sources");
+    expect(container.textContent).toContain("3 schemas");
   });
 
   test("'unreachable' pill on rows with lastProbeError", () => {
@@ -54,7 +56,7 @@ describe("DatabaseTable", () => {
     const { container } = render(
       <DatabaseTable databases={[]} canAdd={true} onAdd={vi.fn()} onRemove={vi.fn()} />,
     );
-    expect(container.textContent).toContain("Most warehouses ship with one main catalog");
+    expect(container.textContent).toContain("No databases registered yet");
   });
 
   test("hides + Add when canAdd=false", () => {

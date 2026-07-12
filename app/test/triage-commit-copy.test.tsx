@@ -14,16 +14,6 @@ const stubTenant = {
 const stubDim = {
   id: "country",
   dimension: "Country",
-  values: [
-    {
-      value: "USA",
-      status: "new",
-      current: null,
-      suggestion: null,
-      confidence: 0,
-      sources: [{ table: "raw.users", column: "country", rows: 100 }],
-    },
-  ],
   canonical: [],
   fields: [],
   rows: 0,
@@ -33,6 +23,7 @@ const stubDim = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   keyKind: "slug",
+  counts: { newCount: 1, mappedCount: 0, totalDistinct: 1, unmappedRowsTotal: 100, mappedRowsTotal: 0, scannedAt: null },
 };
 
 const stubDraft = {
@@ -71,6 +62,8 @@ function setupMocks(writable: boolean) {
         defaultEngineerMode: true,
         allowedDomain: null,
       }),
+      useStoreLoading: () => false,
+      useCanEdit: () => true,
       useDimensions: () => [stubDim],
       useDrafts: () => ({ "country::USA": stubDraft }),
       saveDraft: vi.fn(),

@@ -19,6 +19,6 @@ describe("Login page copy", () => {
   test("uses generic lead copy", async () => {
     const { Login } = await import("../src/routes/Login");
     render(<MemoryRouter><Login /></MemoryRouter>);
-    expect(screen.getByText(/master data reconciliation/i)).toBeInTheDocument();
+    expect(screen.getByText(/reference table mapping/i)).toBeInTheDocument();
   });
 });

@@ -56,6 +56,19 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   });
 }
 
+// jsdom lacks IntersectionObserver (used by Triage's infinite-scroll sentinel).
+// Stub it so components that call new IntersectionObserver() don't throw.
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  class TestIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  Object.defineProperty(globalThis, "IntersectionObserver", {
+    value: TestIntersectionObserver, configurable: true, writable: true,
+  });
+}
+
 // vitest 4 + jsdom 29 on Node 26 does not expose Web Storage on globalThis
 // (jsdom only attaches it to the Window instance, and vitest's populateGlobal
 // allow-list omits the storage accessors). Install a minimal in-memory shim so
