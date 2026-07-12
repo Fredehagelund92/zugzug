@@ -1026,6 +1026,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
             return noContent();
           }
+          // POST /api/dimensions/:id/drafts/reject
+          if (seg.length === 5 && seg[4] === "reject" && method === "POST") {
+            const denied = gateOrJson(tenantCtx, "curate");
+            if (denied) return denied;
+            const b = (await req.json()) as { raws: string[]; reason: string };
+            if (!Array.isArray(b.raws)) return err("raws must be an array", 400);
+            if (typeof b.reason !== "string") return err("reason is required", 400);
+            const result = await reqRepo.rejectDrafts(id, b.raws, b.reason, me);
+            return json(result);
+          }
         }
         // POST /api/dimensions/:id/sources — wire a warehouse column to a dim.
         //   Qualified: { source: { databaseId, schemaName, tableName, columnName } }

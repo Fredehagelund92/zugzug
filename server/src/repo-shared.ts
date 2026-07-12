@@ -240,7 +240,7 @@ export interface MappingDimension extends DimensionMeta {
 export interface Draft {
   dimId: string;
   raw: string;
-  status: "mapped" | "skipped";
+  status: "mapped" | "skipped" | "rejected";
   targetLabel: string | null;
   targetKey: string | null;
   user: User;
@@ -248,6 +248,8 @@ export interface Draft {
   source: "user" | "ai";
   confidence: "high" | "medium" | "low" | null;
   reasoning: string | null;
+  rejectedReason: string | null;
+  rejectedBy: string | null;
 }
 export interface User {
   id: string;

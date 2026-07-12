@@ -29,7 +29,7 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
   const rows = await pgAll<{
     dimId: string;
     raw: string;
-    status: "mapped" | "skipped";
+    status: "mapped" | "skipped" | "rejected";
     targetLabel: string | null;
     targetKey: string | null;
     uid: string;
@@ -37,12 +37,15 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
+    rejectedReason: string | null;
+    rejectedBy: string | null;
   }>(
     `SELECT dim_id AS "dimId", raw, status,
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
-            source, confidence, reasoning
+            source, confidence, reasoning,
+            rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
      FROM ${pg("draft")} WHERE dim_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
     [dimId, tenantId],
   );
@@ -67,6 +70,8 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
     source: r.source,
     confidence: r.confidence,
     reasoning: r.reasoning,
+    rejectedReason: r.rejectedReason,
+    rejectedBy: r.rejectedBy,
   }));
 }
 
@@ -84,7 +89,8 @@ export async function saveDraft(
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7)
      ON CONFLICT (tenant_id, dim_id, raw, user_id) DO UPDATE
        SET status = EXCLUDED.status, target_label = EXCLUDED.target_label,
-           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at`,
+           target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at,
+           rejected_reason = NULL, rejected_by = NULL`,
     [dimId, raw, status, targetLabel, targetKey, userId, tenantId],
   );
 }
@@ -195,6 +201,8 @@ export async function createDraft(
     source: row.source,
     confidence: row.confidence,
     reasoning: row.reasoning,
+    rejectedReason: null,
+    rejectedBy: null,
   };
 }
 
@@ -209,6 +217,31 @@ export async function discardDraft(
     [dimId, raw, userId, tenantId],
   );
   await appendAuditAs(userId, "discard_draft", `${dimId}: ${raw}`, { tenantId });
+}
+
+export async function rejectDrafts(
+  dimId: string,
+  tenantId: string,
+  raws: string[],
+  reason: string,
+  reviewerId: string,
+): Promise<{ rejected: number }> {
+  const trimmed = reason.trim();
+  if (!trimmed) throw new AppError("VALIDATION_FAILED", "a rejection reason is required", 400);
+  if (raws.length === 0) return { rejected: 0 };
+  const res = await pgAll<{ raw: string }>(
+    `UPDATE ${pg("draft")}
+        SET status = 'rejected', rejected_reason = $4, rejected_by = $5
+      WHERE dim_id = $1 AND tenant_id = $2 AND raw = ANY($3) AND status = 'mapped'
+      RETURNING raw`,
+    [dimId, tenantId, raws, trimmed, reviewerId],
+  );
+  const n = res.length;
+  await appendAuditAs(reviewerId, "Rejected drafts", `${n} in ${dimId}: ${trimmed}`, {
+    tenantId,
+    tableId: dimId,
+  });
+  return { rejected: n };
 }
 
 export interface PublishState {

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
-import { saveDraft, commit, listDrafts } from "./repo-drafts.ts";
+import { saveDraft, commit, listDrafts, rejectDrafts } from "./repo-drafts.ts";
 import { getPreferences, setPreferences } from "./repo-meta.ts";
 
 const T = "test_commit_out";
@@ -233,5 +233,25 @@ describe("commit() manual ordering mode", () => {
     // "bar raw" draft must still be staged
     const remaining = await listDrafts(dimId, T);
     expect(remaining.map((d) => d.raw)).toContain("bar raw");
+  });
+});
+
+describe("rejectDrafts()", () => {
+  it("reject sets status, reason, reviewer; re-staging clears them", async () => {
+    const dimId = await addDimension("RejectDim", [], { keyKind: "slug" }, U, T);
+    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
+    const r = await rejectDrafts(dimId, T, ["usa"], "wrong target — USA is a country not a partner", U2);
+    expect(r.rejected).toBe(1);
+    const [d] = await listDrafts(dimId, T);
+    expect(d.status).toBe("rejected");
+    expect(d.rejectedReason).toMatch(/wrong target/);
+    await saveDraft(dimId, "usa", "mapped", "United States of America", "united_states", U, T); // re-stage
+    const [d2] = await listDrafts(dimId, T);
+    expect(d2.status).toBe("mapped");
+    expect(d2.rejectedReason).toBeNull();
+  });
+  it("reject with empty reason 400s", async () => {
+    const dimId = await addDimension("RejectEmptyReason", [], { keyKind: "slug" }, U, T);
+    await expect(rejectDrafts(dimId, T, ["usa"], "  ", U2)).rejects.toThrow(/reason/i);
   });
 });

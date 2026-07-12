@@ -377,6 +377,18 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDrafts.discardDraft(dimId, raw, userId, this.tenantId));
   }
 
+  rejectDrafts(
+    dimId: string,
+    raws: string[],
+    reason: string,
+    reviewerId: string,
+  ): Promise<{ rejected: number }> {
+    this.assertRole("curate");
+    return this.withClearCtx(() =>
+      repoDrafts.rejectDrafts(dimId, this.tenantId, raws, reason, reviewerId),
+    );
+  }
+
   commit(
     dimId: string,
     userId: string,
