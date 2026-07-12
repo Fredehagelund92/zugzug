@@ -10,6 +10,8 @@ import {
   slug,
   useSources,
   useDimensions,
+  useDrafts,
+  discardDraft,
   addCanonical,
   renameCanonical,
   getCanonical,
@@ -62,6 +64,7 @@ import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { PublishPreviewDialog } from "./PublishPreviewDialog";
 import { toast } from "./Toast";
 import { prepareImport, type ParsedImport } from "../lib/csv";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
@@ -204,6 +207,7 @@ function exportToCSV(dim: MappingDimension): void {
 function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
   const sources = useSources();
   const allDims = useDimensions();
+  const drafts = useDrafts();
   const { engineer } = useEngineerMode();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
@@ -257,6 +261,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [changedOnly, setChangedOnly] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
+  const [publishPreview, setPublishPreview] = useState(false);
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
     anchorRect: DOMRect;
@@ -824,7 +829,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             <Button
               size="sm"
               disabled={publishing}
-              onClick={() => void doPublish()}
+              onClick={() => setPublishPreview(true)}
               title={`${pubState.pendingDrafts} staged mapping${pubState.pendingDrafts === 1 ? "" : "s"} + ${pubState.changedKeys.length} record change${pubState.changedKeys.length === 1 ? "" : "s"}`}
             >
               ↑ Publish v{pubState.version + 1}
@@ -1632,6 +1637,31 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           setRebalanceConfirm(false);
         }}
         onCancel={() => setRebalanceConfirm(false)}
+      />
+
+      <PublishPreviewDialog
+        open={publishPreview}
+        publishing={publishing}
+        groups={
+          pubState
+            ? [
+                {
+                  dimId: activeId,
+                  dimName: dim.dimension,
+                  nextVersion: pubState.version + 1,
+                  drafts: Object.values(drafts).filter(
+                    (d) => d.dimId === activeId && d.status === "mapped",
+                  ),
+                  changedKeys: pubState.changedKeys,
+                },
+              ]
+            : []
+        }
+        onDiscardDraft={(d) => void discardDraft(d.dimId, d.raw)}
+        onConfirm={() => {
+          void doPublish().then(() => setPublishPreview(false));
+        }}
+        onCancel={() => setPublishPreview(false)}
       />
     </div>
   );
