@@ -47,13 +47,22 @@ export abstract class DuckDbBase {
 
   qualifyRef(table: Ref): string {
     const catalog = table.catalog ?? this.creds.database;
-    // When no catalog is available (e.g. in-memory DuckDB without a database prop),
-    // produce a 2-part schema.table ref — valid for local/in-memory connections.
-    const parts: string[] = [];
-    if (catalog) parts.push(this.quoteIdentifier(catalog));
-    parts.push(this.quoteIdentifier(table.schema));
-    parts.push(this.quoteIdentifier(table.table));
-    return parts.join(".");
+    if (!catalog) {
+      if (this.creds.token) {
+        // MotherDuck connections always have a resolvable catalog — a missing one is
+        // a caller bug; fail loudly rather than query whichever database is current.
+        throw new Error(
+          `qualifyRef: missing catalog for ${table.schema}.${table.table} — caller must pass Ref.catalog (resolved from warehouse_database).`,
+        );
+      }
+      // Local file / in-memory DuckDB has no catalog — 2-part refs are correct.
+      return [this.quoteIdentifier(table.schema), this.quoteIdentifier(table.table)].join(".");
+    }
+    return [
+      this.quoteIdentifier(catalog),
+      this.quoteIdentifier(table.schema),
+      this.quoteIdentifier(table.table),
+    ].join(".");
   }
 
   castToString(expr: string): string {

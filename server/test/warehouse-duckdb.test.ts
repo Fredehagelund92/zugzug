@@ -33,6 +33,15 @@ test("qualifyRef builds schema.table when no database", () => {
   expect(a.qualifyRef({ schema: "main", table: "t" })).toBe('"main"."t"');
 });
 
+test("qualifyRef throws for MotherDuck creds with no catalog", () => {
+  const a = new DuckDbReadOnlyAdapter({
+    type: "duckdb",
+    token: "md-token",
+    attached: true,
+  });
+  expect(() => a.qualifyRef({ schema: "raw", table: "partners" })).toThrow(/missing catalog/);
+});
+
 test("castToString wraps in CAST(... AS VARCHAR)", () => {
   const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
   expect(a.castToString('"col"')).toBe('CAST("col" AS VARCHAR)');
