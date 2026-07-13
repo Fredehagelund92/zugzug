@@ -56,20 +56,29 @@ describe("copy feedback", () => {
   });
 
   test("⌘C flashes the copied cell", async () => {
-    const { container } = renderGrid();
-    const grid = container.querySelector('[role="grid"]') as HTMLElement;
+    // Stub rAF to call the callback synchronously so we can assert the class
+    // without waiting for a real animation frame.
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
 
-    const cell = container.querySelector('[data-cell="1::name"]') as HTMLElement;
-    act(() => {
-      fireEvent.pointerDown(cell, { button: 0, bubbles: true, cancelable: true });
-      fireEvent.pointerUp(cell, { button: 0, bubbles: true });
-    });
+    try {
+      const { container } = renderGrid();
+      const grid = container.querySelector('[role="grid"]') as HTMLElement;
 
-    await act(async () => {
-      fireEvent.keyDown(grid, { key: "c", metaKey: true, bubbles: true });
-    });
+      const cell = container.querySelector('[data-cell="1::name"]') as HTMLElement;
+      act(() => {
+        fireEvent.pointerDown(cell, { button: 0, bubbles: true, cancelable: true });
+        fireEvent.pointerUp(cell, { button: 0, bubbles: true });
+      });
 
-    // Flash is applied via rAF; verify it was called (clipboard write resolved)
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Acme");
+      await act(async () => {
+        fireEvent.keyDown(grid, { key: "c", metaKey: true, bubbles: true });
+      });
+
+      // flashCellCopy applies zz-copy-flash via rAF (now synchronous).
+      expect(cell).toHaveClass("zz-copy-flash");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

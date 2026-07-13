@@ -24,7 +24,7 @@ import type { DataGridProps, FilterSet } from "./types";
 import { CursorOverlay } from "./CursorOverlay";
 import { DataGridBody } from "./DataGridBody";
 import { DataGridHeader } from "./DataGridHeader";
-import { attrEsc, flashCell } from "./util";
+import { attrEsc, flashCell, flashCellCopy } from "./util";
 import { toast } from "../Toast";
 import {
   IconCopy,
@@ -601,7 +601,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const text = val == null ? "" : String(val);
       await navigator.clipboard.writeText(text);
       toast("Copied", "success");
-      flashCell(rk, field);
+      flashCellCopy(rk, field);
       return;
     }
     const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
@@ -626,7 +626,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       for (let ci = minCol; ci <= maxCol; ci++) {
         const col = orderedVisible[ci];
         if (!col) continue;
-        flashCell(rowKey(row), col.field);
+        flashCellCopy(rowKey(row), col.field);
       }
     }
   }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds, getValue]);

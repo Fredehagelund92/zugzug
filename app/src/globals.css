@@ -203,6 +203,20 @@
   }
 }
 
+/* copy-flash: very brief accent wash on a cell after ⌘C (high-frequency action).
+   Intentionally much shorter than zz-row-flash so it doesn't feel intrusive. */
+.zz-copy-flash {
+  animation: zz-copy-flash 200ms var(--ease) both;
+}
+@keyframes zz-copy-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 /* row-flash: brief accent wash on a row the user was just navigated to
    (Cmd-K palette → "focus a record"). Decays so the row settles back into
    its normal hover/selected styling. */
