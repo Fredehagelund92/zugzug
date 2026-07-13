@@ -75,6 +75,16 @@ export async function pgRun(query: string, params: unknown[] = []): Promise<void
 }
 
 export function pgTxRaw<T>(fn: (tx: TxHelpers) => Promise<T>): Promise<T> {
+  const ctx = pgContext.getStore();
+  if (ctx?.tx) {
+    // Already inside a transaction (e.g. the request's pgTxScoped). Reuse it —
+    // opening a second pooled connection here deadlocks against locks the
+    // ambient tx already holds (see changeColumnType: its validation SELECT
+    // takes ACCESS SHARE on dim_<id>, then the DDL's ALTER TABLE needs ACCESS
+    // EXCLUSIVE — a cross-connection lock wait Postgres can't break). Nested tx
+    // flattens into the outer one, which is the atomicity the callers want anyway.
+    return fn(ctx.tx);
+  }
   assertNotInsideTenantRepo("pgTxRaw");
   return pool.begin(async (txSql) => {
     const helpers: TxHelpers = {
