@@ -1,27 +1,25 @@
 import { test, expect, describe, vi, afterEach } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 import { DataGrid, UndoStackProvider } from "../src/components/datagrid";
-import { CommandPalette, type Command } from "../src/components/CommandPalette";
 import type { ColumnDef } from "../src/components/datagrid/types";
 
 /**
- * Task 13: No React setState-in-render warnings on column resize/reorder;
- * no duplicate key warnings from the command palette.
+ * Task 13: No React setState-in-render warnings on column resize/reorder.
  *
- * (1) Resize / reorder warnings:
- *   The fix targets DataGridHeader.tsx — the onUp handler for resize and the
- *   setDrag updater for reorder both previously called setOrder/onLayoutChange
- *   inside another setState updater, which React flags as a render-phase side
- *   effect. In jsdom tests the StrictMode double-render that surfaces this
- *   warning is absent (StrictMode is only in src/main.tsx), so the exact
- *   "Cannot update X while rendering Y" warning may not reproduce here.
- *   We test what IS observable: no console.error during resize/reorder, and
- *   that onLayoutChange receives the correct payload.
+ * The fix targets DataGridHeader.tsx — the onUp handler for resize and the
+ * setDrag updater for reorder both previously called setOrder/onLayoutChange
+ * inside another setState updater, which React flags as a render-phase side
+ * effect. In jsdom tests the StrictMode double-render that surfaces this
+ * warning is absent (StrictMode is only in src/main.tsx), so the exact
+ * "Cannot update X while rendering Y" warning may not reproduce here.
+ * We test what IS observable: no console.error during resize/reorder, and
+ * that onLayoutChange receives the correct payload.
  *
- * (2) Palette duplicate key:
- *   If the commands array contains two entries with the same id, React emits
- *   a "Encountered two children with the same key" warning. We verify that
- *   the palette renders with unique command ids and no such warning fires.
+ * Note (palette duplicate key): the spec's Bug 2 ("duplicate Review key") was
+ * in ShortcutsOverlay.tsx and is already resolved upstream — group titles are
+ * unique. The speculative dedup guard in AppShell.tsx commands useMemo was
+ * removed as YAGNI; command ids (nav:*, dim:${id}, rec:${id}:${key}) cannot
+ * collide by construction.
  */
 
 // ── Shared grid setup ────────────────────────────────────────────────────────
@@ -169,101 +167,3 @@ describe("column reorder", () => {
   });
 });
 
-// ── 3. Palette: no duplicate-key warning ─────────────────────────────────────
-
-describe("command palette unique keys", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  test("command ids are unique — no duplicate React key warning", () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    // Simulate the AppShell command list that includes nav entries + dim entries.
-    // The critical scenario: two commands could end up with the same id if the
-    // commands array is not properly deduplicated.
-    const commands: Command[] = [
-      { id: "nav:dashboard", group: "Navigate", label: "Home", action: () => {}, priority: true },
-      {
-        id: "nav:triage",
-        group: "Navigate",
-        label: "Review",
-        action: () => {},
-        priority: true,
-      },
-      { id: "nav:sources", group: "Navigate", label: "Sources", action: () => {}, priority: true },
-      { id: "nav:tables", group: "Navigate", label: "Tables", action: () => {}, priority: true },
-      { id: "nav:audit", group: "Navigate", label: "Audit", action: () => {}, priority: true },
-      { id: "nav:settings", group: "Navigate", label: "Settings", action: () => {}, priority: true },
-      {
-        id: "nav:integrations",
-        group: "Navigate",
-        label: "Integrations",
-        action: () => {},
-        priority: true,
-      },
-      // Simulate dim entries
-      { id: "dim:dim1", group: "Tables", label: "Customers", action: () => {} },
-      { id: "dim:dim2", group: "Tables", label: "Countries", action: () => {} },
-      // Simulate canonical record entries
-      { id: "rec:dim1:us", group: "Records", label: "United States", action: () => {} },
-      { id: "rec:dim1:uk", group: "Records", label: "United Kingdom", action: () => {} },
-    ];
-
-    // Assert all ids are unique before rendering
-    const ids = commands.map((c) => c.id);
-    const uniqueIds = new Set(ids);
-    expect(uniqueIds.size).toBe(ids.length);
-
-    // Render the palette open (so it renders the command list)
-    render(
-      <CommandPalette
-        open={true}
-        onClose={() => {}}
-        commands={commands}
-        recents={["nav:triage"]}
-      />,
-    );
-
-    // No duplicate-key warning should have fired
-    const errorMessages = errorSpy.mock.calls.flat().join(" ");
-    expect(errorMessages).not.toMatch(/same key/i);
-    expect(errorMessages).not.toMatch(/duplicate.*key/i);
-    expect(errorMessages).not.toMatch(/Encountered two children with the same key/);
-  });
-
-  test("palette with 'Review' search renders without duplicate-key warning", () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    const commands: Command[] = [
-      {
-        id: "nav:triage",
-        group: "Navigate",
-        label: "Review",
-        action: () => {},
-        priority: true,
-        keywords: "inbox queue match reconcile mapping triage",
-      },
-      // A dim named "Review" — different id, same label
-      { id: "dim:review-dim", group: "Tables", label: "Review", action: () => {} },
-      // A canonical record with label "Review" — different id
-      { id: "rec:dim1:review", group: "Records", label: "Review", action: () => {} },
-    ];
-
-    const { container } = render(
-      <CommandPalette open={true} onClose={() => {}} commands={commands} />,
-    );
-
-    // Type "review" to trigger filtering
-    const input = container.querySelector("input");
-    expect(input).not.toBeNull();
-    act(() => {
-      fireEvent.change(input!, { target: { value: "review" } });
-    });
-
-    // Three results, all with different IDs — no duplicate key warning
-    const errorMessages = errorSpy.mock.calls.flat().join(" ");
-    expect(errorMessages).not.toMatch(/same key/i);
-    expect(errorMessages).not.toMatch(/Encountered two children with the same key/);
-  });
-});

@@ -493,15 +493,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
         });
       }
     }
-    // Deduplicate by id — guards against data-driven duplicates (e.g. two
-    // canonical records with the same key across dims) that would cause React
-    // to warn "Encountered two children with the same key" in the palette list.
-    const seen = new Set<string>();
-    return out.filter((c) => {
-      if (seen.has(c.id)) return false;
-      seen.add(c.id);
-      return true;
-    });
+    return out;
   }, [dims, totalNew, navigate, openTab, navLinks]);
 
   // Shared sidebar content — rendered both in the desktop aside and the mobile drawer.
