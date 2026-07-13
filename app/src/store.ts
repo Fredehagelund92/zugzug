@@ -396,11 +396,9 @@ async function refreshDrafts(dimId?: string): Promise<void> {
     draftsFlat = next;
     return;
   }
-  const lists = await Promise.all(
-    dims.map((d) => api<Draft[]>(`/dimensions/${encodeURIComponent(d.id)}/drafts`)),
-  );
+  const list = await api<Draft[]>("/drafts");
   const flat: Record<string, Draft> = {};
-  for (const list of lists) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
+  for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {
