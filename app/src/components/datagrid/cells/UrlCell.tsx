@@ -25,7 +25,7 @@ function Renderer<Row>({ value }: CellCtx<Row>) {
       className="flex min-w-0 items-center gap-1 font-mono text-[12px] text-accent hover:underline"
     >
       <span className="shrink-0 text-[10px] text-ink-3">↗</span>
-      <span className="truncate">{raw}</span>
+      <span className="truncate" title={raw}>{raw}</span>
     </a>
   );
 }
