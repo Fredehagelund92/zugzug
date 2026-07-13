@@ -669,7 +669,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <span>
                 key <span className="text-ink">{dim.keyCol}</span>
               </span>
-                  <span className="text-line-2">·</span>
+              <span className="text-line-2">·</span>
             </>
           )}
           <span className="tabular-nums">

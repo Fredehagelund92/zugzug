@@ -130,8 +130,10 @@ describe("vocabulary gate", () => {
       "} raw</span>"
     );
 
-    // Flash message after merge used "raw values re-pointed"
+    // Flash message after merge used "raw values re-pointed" — guard both plural and
+    // singular forms so a "1 raw value" regression in a template string is caught too.
     expect(source, 'Flash message still contains "raw values"').not.toContain("raw values");
+    expect(source, 'Copy still contains the singular "raw value"').not.toContain("raw value");
 
     // ComboSelect placeholder used "pick survivor…"
     expect(source, 'ComboSelect placeholder still says "pick survivor…"').not.toContain(
