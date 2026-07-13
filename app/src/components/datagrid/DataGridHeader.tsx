@@ -371,23 +371,21 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
 
               {/* Task 19: ⋯ menu button — pinned to the right cluster. When the
                 info badge is present it owns ml-auto; otherwise the button does. */}
-              {!c.pinnedLeft && (
-                <button
-                  type="button"
-                  aria-label="Column menu"
-                  className={cx(
-                    "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40",
-                    !c.description && "ml-auto",
-                  )}
-                  onClick={(e) => {
-                    menuAnchorRef.current = e.currentTarget;
-                    setMenuAnchorRect(null);
-                    setMenuFor((s) => (s === c.field ? null : c.field));
-                  }}
-                >
-                  ⋯
-                </button>
-              )}
+              <button
+                type="button"
+                aria-label="Column menu"
+                className={cx(
+                  "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40",
+                  !c.description && "ml-auto",
+                )}
+                onClick={(e) => {
+                  menuAnchorRef.current = e.currentTarget;
+                  setMenuAnchorRect(null);
+                  setMenuFor((s) => (s === c.field ? null : c.field));
+                }}
+              >
+                ⋯
+              </button>
 
               {/* Task 19: ColumnHeaderMenu */}
               {menuFor === c.field && (
