@@ -56,6 +56,7 @@ interface DataGridBodyProps<Row> {
     | undefined;
   onRowNumPointerDown: (e: React.PointerEvent, rk: string) => void;
   onColumnHover: (field: string | null) => void;
+  firstPinnedField: string | null;
 
   // Conditional formatting evaluator
   condFmt: CondFmt<Row>;
@@ -96,6 +97,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
     onAddColumnOption,
     onRowNumPointerDown,
     onColumnHover,
+    firstPinnedField,
     condFmt,
     activity,
     renderRowDetail,
@@ -169,6 +171,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
               evaluation={evaluation}
               activityEntry={activity?.get(rk)}
               onColumnHover={onColumnHover}
+              firstPinnedField={firstPinnedField}
             />
             {detail !== null && (
               <div role="row" className="border-b border-line bg-surface-2/50">

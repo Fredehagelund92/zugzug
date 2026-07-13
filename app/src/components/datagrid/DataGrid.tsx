@@ -296,6 +296,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     return out;
   }, [visible, order]);
 
+  // Computed once per column change — O(cols) instead of O(cols²) per cell.
+  const firstPinnedField = useMemo(
+    () => orderedVisible.find((c) => c.pinnedLeft)?.field ?? null,
+    [orderedVisible],
+  );
+
   // template: optional checkbox + each visible column's width (uses orderedVisible)
   const gridStyle = useMemo(() => {
     const tracks = orderedVisible.map((c) => {
@@ -511,9 +517,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // based (no React state) so the per-hover path doesn't trigger renders —
   // important because GridRow is memoized and a top-level state change would
   // invalidate every row.
+  // isScrollingRef: set true while a scroll is in flight so applyColumnHover
+  // is skipped — cells slide under a stationary pointer on scroll and the
+  // querySelectorAll sweeps are wasted work.
+  const isScrollingRef = useRef(false);
   const hoverFieldRef = useRef<string | null>(null);
   const applyColumnHover = useCallback(
     (field: string | null) => {
+      if (isScrollingRef.current) return;
       const root = cursor.ref.current;
       if (!root) return;
       if (hoverFieldRef.current === field) return;
@@ -535,14 +546,21 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // under the sticky header so CSS can add a shadow
   // (.zz-grid-scroll[data-scrolled] .zz-grid-header). rAF-coalesced like the
   // other scroll listeners in this file.
+  // Also sets isScrollingRef while scrolling so applyColumnHover is skipped.
   useEffect(() => {
     const el = cursor.ref.current;
     if (!el) return;
     let raf = 0;
+    let scrollEndTimer = 0;
     const update = () => {
       el.toggleAttribute("data-scrolled", el.scrollTop > 0);
     };
     const onScroll = () => {
+      isScrollingRef.current = true;
+      clearTimeout(scrollEndTimer);
+      scrollEndTimer = window.setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 150);
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
@@ -553,6 +571,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      clearTimeout(scrollEndTimer);
       el.removeEventListener("scroll", onScroll);
     };
   }, [cursor.ref]);
@@ -1515,6 +1534,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onAddColumnOption={props.onAddColumnOption}
           onRowNumPointerDown={onRowNumPointerDown}
           onColumnHover={applyColumnHover}
+          firstPinnedField={firstPinnedField}
           condFmt={condFmt}
           activity={activity}
           renderRowDetail={props.renderRowDetail}

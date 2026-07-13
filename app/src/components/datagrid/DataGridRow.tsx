@@ -299,6 +299,9 @@ export interface GridRowProps<Row> {
    *  tint the column. DOM-mutation based on the DataGrid side — see
    *  applyColumnHover. */
   onColumnHover: (field: string | null) => void;
+  /** The field of the leftmost pinned-left column, or null if none. Computed
+   *  once per render in DataGrid so cells don't recompute O(cols²) per row. */
+  firstPinnedField: string | null;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -333,13 +336,14 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     evaluation,
     activityEntry,
     onColumnHover,
+    firstPinnedField,
   } = props;
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 2}
       className={cx(
-        "relative group grid items-stretch border-b border-line transition-colors",
+        "relative group grid items-stretch border-b border-line",
         selected ? "bg-surface-2" : "hover:bg-hover",
       )}
       style={gridStyle}
@@ -381,7 +385,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         const inRangeCell = cellInRange(rk, c.field);
         const value = getValue(row, c.field);
         const isLastCol = idx === columns.length - 1;
-        const isFirstPinned = !!(c.pinnedLeft && !columns.slice(0, idx).some((x) => x.pinnedLeft));
+        const isFirstPinned = c.pinnedLeft === true && c.field === firstPinnedField;
         const ruleStyle: RuleStyle | undefined = evaluation.cellStyles.get(c.field);
         return (
           <GridCell
