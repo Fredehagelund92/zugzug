@@ -214,7 +214,18 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     props.onSortChange?.(sort ? { column: sort.field, direction: sort.dir } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
-  const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
+  const [filterSet, setFilterSet] = useState<FilterSet | null>(() => props.initialFilterSet ?? null);
+  const updateFilterSet = useCallback(
+    (next: FilterSet | null | ((cur: FilterSet | null) => FilterSet | null)) => {
+      setFilterSet((cur) => {
+        const resolved = typeof next === "function" ? next(cur) : next;
+        props.onFilterSetChange?.(resolved);
+        return resolved;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [props.onFilterSetChange],
+  );
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [rulesEditor, setRulesEditor] = useState<string | null>(null);
   const [descEditor, setDescEditor] = useState<string | null>(null);
@@ -788,7 +799,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           label: `Filter to "${valStr.slice(0, 24)}"`,
           icon: <IconFilter />,
           onClick: () => {
-            setFilterSet((cur) => ({
+            updateFilterSet((cur) => ({
               conjunction: cur?.conjunction ?? "and",
               conditions: [
                 ...(cur?.conditions ?? []),
@@ -806,7 +817,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           label: `Filter to NOT "${valStr.slice(0, 24)}"`,
           icon: <IconFilter />,
           onClick: () => {
-            setFilterSet((cur) => ({
+            updateFilterSet((cur) => ({
               conjunction: cur?.conjunction ?? "and",
               conditions: [
                 ...(cur?.conditions ?? []),
@@ -1453,7 +1464,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   return (
     <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
       {filterSet && filterSet.conditions.length > 0 && (
-        <FilterBar filterSet={filterSet} columns={orderedVisible} onChange={setFilterSet} />
+        <FilterBar filterSet={filterSet} columns={orderedVisible} onChange={updateFilterSet} />
       )}
       <div
         ref={cursor.ref}
@@ -1550,7 +1561,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 <div>No records match the current filters.</div>
                 <button
                   type="button"
-                  onClick={() => setFilterSet(null)}
+                  onClick={() => updateFilterSet(null)}
                   className="mt-2 text-accent underline-offset-2 hover:underline"
                 >
                   Clear filters

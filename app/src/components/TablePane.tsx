@@ -1173,6 +1173,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }
           activity={activity}
           presence={presence}
+          initialFilterSet={layout.filterSet ?? null}
+          onFilterSetChange={(fs) => {
+            setLayout((cur) => {
+              const next = { ...cur, filterSet: fs };
+              setGridLayout(activeId, { filterSet: fs });
+              return next;
+            });
+          }}
           initialSort={layout.sort ?? undefined}
           onSortChange={(sort) => {
             setLayout((cur) => {

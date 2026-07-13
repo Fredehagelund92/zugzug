@@ -218,4 +218,8 @@ export interface DataGridProps<Row> {
   onSortChange?: (sort: { column: string; direction: "asc" | "desc" } | null) => void;
   /** Seed the sort state on mount. */
   initialSort?: { column: string; direction: "asc" | "desc" } | null;
+  /** Seed the filter state on mount. */
+  initialFilterSet?: FilterSet | null;
+  /** Notified when the user changes filters (add/remove/clear). Not fired on mount. */
+  onFilterSetChange?: (fs: FilterSet | null) => void;
 }
