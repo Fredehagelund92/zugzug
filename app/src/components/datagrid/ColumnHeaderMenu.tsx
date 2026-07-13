@@ -83,6 +83,13 @@ export function ColumnHeaderMenu<Row>({
   );
   const [ratingMaxCustom, setRatingMaxCustom] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode === "rename") {
+      renameInputRef.current?.select();
+    }
+  }, [mode]);
 
   // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
   // in a portal on document.body so the menu escapes the grid's stacking
@@ -246,6 +253,7 @@ export function ColumnHeaderMenu<Row>({
       {mode === "rename" && (
         <div className="p-1">
           <input
+            ref={renameInputRef}
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
