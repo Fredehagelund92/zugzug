@@ -299,20 +299,18 @@ function TriageInner() {
     () => Object.values(allDrafts).filter((d) => d.status === "mapped"),
     [allDrafts],
   );
-  const approveAndCommitAll = async () => {
+  const approveAndCommitAll = async (groups: PublishGroup[]) => {
     setCommitError(null);
-    const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
-    if (dimIds.length === 0) return;
+    if (groups.length === 0) return;
     setCommitting(true);
     try {
       const outcomes: CommitOutcome[] = [];
-      for (const id of dimIds) {
-        const name = dims.find((d) => d.id === id)?.dimension ?? id;
+      for (const g of groups) {
         try {
-          const res = await commit(id);
+          const res = await commit(g.dimId, g.drafts.map((d) => d.raw));
           outcomes.push({
-            dimId: id,
-            dimName: name,
+            dimId: g.dimId,
+            dimName: g.dimName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
             error: null,
@@ -322,8 +320,8 @@ function TriageInner() {
             err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED";
           const msg = err instanceof Error ? err.message : "unknown error";
           outcomes.push({
-            dimId: id,
-            dimName: name,
+            dimId: g.dimId,
+            dimName: g.dimName,
             committed: 0,
             rowsRecovered: 0,
             error: isSecondPublisher
@@ -509,7 +507,8 @@ function TriageInner() {
           });
         }}
         onConfirm={() => {
-          void approveAndCommitAll().then(() => setPreview(null));
+          const groups = preview ?? [];
+          void approveAndCommitAll(groups).then(() => setPreview(null));
         }}
         onCancel={() => setPreview(null)}
       />

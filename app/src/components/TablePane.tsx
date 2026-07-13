@@ -65,7 +65,7 @@ import { MatchModeBody } from "./modes/MatchModeBody";
 import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { PublishPreviewDialog } from "./PublishPreviewDialog";
+import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
 import { toast } from "./Toast";
 import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
 import { ImportPreviewDialog } from "./ImportPreviewDialog";
@@ -270,6 +270,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [publishing, setPublishing] = useState(false);
   const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
   const [publishPreview, setPublishPreview] = useState(false);
+  const [publishGroups, setPublishGroups] = useState<PublishGroup[]>([]);
   const [quickFilter, setQuickFilter] = useState("");
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
@@ -466,11 +467,11 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
 
   const unpublished = pubState ? pubState.pendingDrafts + pubState.changedKeys.length : 0;
 
-  const doPublish = async () => {
+  const doPublish = async (draftKeys?: string[]) => {
     if (publishing || unpublished === 0) return;
     setPublishing(true);
     try {
-      await commit(activeId);
+      await commit(activeId, draftKeys);
       const s = await fetchPublishState(activeId);
       setPubState(s);
       flash(`Published v${s.version}`);
@@ -858,7 +859,24 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             <Button
               size="sm"
               disabled={publishing}
-              onClick={() => setPublishPreview(true)}
+              onClick={() => {
+                setPublishGroups(
+                  pubState
+                    ? [
+                        {
+                          dimId: activeId,
+                          dimName: dim.dimension,
+                          nextVersion: pubState.version + 1,
+                          drafts: Object.values(drafts).filter(
+                            (d) => d.dimId === activeId && d.status === "mapped",
+                          ),
+                          changedKeys: pubState.changedKeys,
+                        },
+                      ]
+                    : [],
+                );
+                setPublishPreview(true);
+              }}
               title={`${pubState.pendingDrafts} staged mapping${pubState.pendingDrafts === 1 ? "" : "s"} + ${pubState.changedKeys.length} record change${pubState.changedKeys.length === 1 ? "" : "s"}`}
             >
               ↑ Publish v{pubState.version + 1}
@@ -1733,24 +1751,22 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       <PublishPreviewDialog
         open={publishPreview}
         publishing={publishing}
-        groups={
-          pubState
-            ? [
-                {
-                  dimId: activeId,
-                  dimName: dim.dimension,
-                  nextVersion: pubState.version + 1,
-                  drafts: Object.values(drafts).filter(
-                    (d) => d.dimId === activeId && d.status === "mapped",
-                  ),
-                  changedKeys: pubState.changedKeys,
-                },
-              ]
-            : []
-        }
-        onDiscardDraft={(d) => void discardDraft(d.dimId, d.raw)}
+        groups={publishGroups}
+        onDiscardDraft={(d) => {
+          void discardDraft(d.dimId, d.raw);
+          setPublishGroups((gs) =>
+            gs
+              .map((g) =>
+                g.dimId === d.dimId
+                  ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
+                  : g,
+              )
+              .filter((g) => g.drafts.length > 0 || g.changedKeys.length > 0),
+          );
+        }}
         onConfirm={() => {
-          void doPublish().then(() => setPublishPreview(false));
+          const draftKeys = publishGroups.flatMap((g) => g.drafts.map((d) => d.raw));
+          void doPublish(draftKeys).then(() => setPublishPreview(false));
         }}
         onCancel={() => setPublishPreview(false)}
       />
