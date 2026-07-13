@@ -110,7 +110,8 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
                   </div>
                   {isAdmin && !isNewest && (
                     <button
-                      className="shrink-0 rounded-sm border border-line-2 px-2 py-0.5 text-[11.5px] text-ink-2 hover:border-accent hover:text-accent"
+                      className="shrink-0 rounded-sm border border-line-2 px-2 py-0.5 text-[11.5px] text-ink-2 hover:border-accent hover:text-accent disabled:opacity-40"
+                      disabled={rolling}
                       onClick={() => setRollbackTarget(v)}
                     >
                       Roll back to v{v.version}
@@ -131,7 +132,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
         <ConfirmDialog
           open={true}
           title={`Roll back to v${rollbackTarget.version}?`}
-          body={`Publishes a new version v${latestVersion != null ? latestVersion + 1 : "?"} with v${rollbackTarget.version}'s content — ${rollbackTarget.counts.records} records, ${rollbackTarget.counts.mappings} mappings. Your staged drafts are kept. Other systems receive a normal publish event marked as a rollback.`}
+          body={`Publishes a new version v${latestVersion != null ? latestVersion + 1 : "?"} with v${rollbackTarget.version}'s content — ${rollbackTarget.counts.records} records, ${rollbackTarget.counts.mappings} mappings. Your staged drafts are kept. Downstream systems receive a normal publish event marked as a rollback.`}
           confirmLabel={`Roll back to v${rollbackTarget.version}`}
           confirmPhrase={`v${rollbackTarget.version}`}
           danger
