@@ -1,5 +1,11 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+
+// This file uses vi.resetModules() + vi.doMock() + await import() on a heavy
+// component (Triage.tsx, ~1100 lines) per test. Under the full parallel suite
+// each cycle can approach 12 s; scope the extended timeout here rather than
+// globally so other files use the 5 s default.
+vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter } from "react-router-dom";
 import React from "react";
 
@@ -148,7 +154,8 @@ describe("Triage — rejected draft presentation", () => {
       </MemoryRouter>,
     );
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /re-stage/i })).toBeInTheDocument();
+      const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
+      expect(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i })).toBeInTheDocument();
     });
   });
 
@@ -163,8 +170,12 @@ describe("Triage — rejected draft presentation", () => {
         <Triage />
       </MemoryRouter>,
     );
-    await waitFor(() => screen.getByRole("button", { name: /re-stage/i }));
-    fireEvent.click(screen.getByRole("button", { name: /re-stage/i }));
+    await waitFor(() => {
+      const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
+      within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i });
+    });
+    const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
+    fireEvent.click(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }));
     // saveDraft should be called to re-stage the draft (clearing rejection on server)
     await waitFor(() => {
       expect(saveDraftMock).toHaveBeenCalledWith(

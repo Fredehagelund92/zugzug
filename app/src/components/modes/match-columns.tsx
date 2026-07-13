@@ -11,7 +11,8 @@ const confText = (c: number) => (c >= 90 ? "text-ok" : c >= 70 ? "text-warn" : "
 
 export interface MatchRowState {
   target: string | null;
-  status: "mapped" | "new" | "skipped";
+  status: "mapped" | "new" | "skipped" | "rejected";
+  rejectedReason?: string | null;
 }
 
 /** ComboSelect as a DataGrid edit cell: opens on mount, commits the pick,
@@ -154,14 +155,22 @@ export function matchColumns(opts: {
       editable: false,
       width: 96,
       render: (r) => {
-        const s = state[r.value]?.status ?? "new";
-        return s === "mapped" ? (
-          <Chip label="Mapped" bucket="chip-1" dot />
-        ) : s === "skipped" ? (
-          <Chip label="Skipped" bucket="chip-5" />
-        ) : (
-          <Chip label="New" bucket="chip-2" dot />
-        );
+        const row = state[r.value];
+        const s = row?.status ?? "new";
+        if (s === "mapped") return <Chip label="Mapped" bucket="chip-1" dot />;
+        if (s === "skipped") return <Chip label="Skipped" bucket="chip-5" />;
+        if (s === "rejected") {
+          const reason = row?.rejectedReason ?? null;
+          return (
+            <span
+              className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
+              title={reason ?? undefined}
+            >
+              rejected{reason ? `: ${reason.slice(0, 60)}${reason.length > 60 ? "…" : ""}` : ""}
+            </span>
+          );
+        }
+        return <Chip label="New" bucket="chip-2" dot />;
       },
     },
   ];

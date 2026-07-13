@@ -1,5 +1,9 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+
+// Heavy vi.resetModules() + vi.doMock() + await import() cycle per test;
+// scope the extended timeout here rather than globally.
+vi.setConfig({ testTimeout: 15000 });
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { clearToasts } from "../src/components/Toast";

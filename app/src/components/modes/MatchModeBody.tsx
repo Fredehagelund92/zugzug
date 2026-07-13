@@ -32,8 +32,8 @@ import { useAiHint } from "../../lib/use-ai-hint";
    the bulk-row "automap" affordance is dropped because it required eager
    per-row suggestions that aren't in the paged payload. */
 
-type RStatus = "mapped" | "new" | "skipped";
-type ValueState = Record<string, { target: string | null; status: RStatus }>;
+type RStatus = "mapped" | "new" | "skipped" | "rejected";
+type ValueState = Record<string, { target: string | null; status: RStatus; rejectedReason?: string | null }>;
 type Filter = "new" | "all" | "mapped";
 
 // Escape a string for use inside a double-quoted CSS attribute selector.
@@ -155,9 +155,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           return [
             v.raw,
             d
-              // Rejected drafts are not yet renderable as a distinct status (Task 8);
-              // map to "new" so they appear as needing attention in the match grid.
-              ? { target: d.targetLabel, status: d.status === "rejected" ? ("new" as const) : d.status }
+              ? { target: d.targetLabel, status: d.status, rejectedReason: d.rejectedReason }
               : { target: v.mappedLabel, status: v.isMapped ? "mapped" : "new" },
           ];
         }),
@@ -580,7 +578,21 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 </div>
                 {(() => {
                   const d = allDrafts[dkey(dim.id, r.value)];
-                  return d ? (
+                  if (!d) return null;
+                  if (d.status === "rejected") {
+                    const reason = d.rejectedReason ?? null;
+                    return (
+                      <div className="mt-2">
+                        <span
+                          className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
+                          title={reason ?? undefined}
+                        >
+                          rejected{reason ? `: ${reason.slice(0, 60)}${reason.length > 60 ? "…" : ""}` : ""}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
                     <div className="mt-2 flex items-center gap-1.5 font-mono text-[10.5px] text-ink-3">
                       <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">
                         {d.user.initials}
@@ -589,7 +601,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
                       {engineer ? " · uncommitted draft" : " · awaiting publish"}
                     </div>
-                  ) : null;
+                  );
                 })()}
                 {state[r.value]?.status === "new" && canEdit && (
                   <div className="mt-2">

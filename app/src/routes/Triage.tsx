@@ -217,6 +217,7 @@ function TriageInner() {
     return saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label));
   };
   const acceptCross = (dimId: string, raw: string) => {
+    if (allDrafts[dkey(dimId, raw)]?.status === "rejected") return;
     // No per-row suggestion in the scan-values payload — accept relies on the
     // AI hint for the focused cursor row.
     const suggestion = aiHint.hint?.suggestion;
@@ -231,6 +232,7 @@ function TriageInner() {
     advanceCrossNext(dimId, raw);
   };
   const skipCross = (dimId: string, raw: string) => {
+    if (allDrafts[dkey(dimId, raw)]?.status === "rejected") return;
     const prev = allDrafts[dkey(dimId, raw)];
     undo.push({
       label: `skip "${raw}"`,
@@ -248,6 +250,7 @@ function TriageInner() {
     advanceCrossNext(dimId, raw);
   };
   const pickCross = (dimId: string, raw: string, label: string) => {
+    if (allDrafts[dkey(dimId, raw)]?.status === "rejected") return;
     stageMapCross(dimId, raw, label).catch((err) =>
       reportDraftError(`map "${raw}" → ${label}`, err),
     );
