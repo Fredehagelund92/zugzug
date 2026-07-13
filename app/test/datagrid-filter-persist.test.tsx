@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
-import { render, act, fireEvent, screen } from "@testing-library/react";
+import { render, act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef, FilterSet } from "../src/components/datagrid/types";
@@ -160,5 +160,52 @@ describe("initialFilterSet + onFilterSetChange", () => {
     // Last call should be with null
     const lastCall = onFilterSetChange.mock.calls.at(-1)![0];
     expect(lastCall).toBeNull();
+  });
+
+  test("(d) column-header ⋯ → Filter… path fires onFilterSetChange", async () => {
+    // Regression: DataGrid previously passed raw setFilterSet to DataGridHeader
+    // so the column-header quick-filter bypassed updateFilterSet and never
+    // called onFilterSetChange. This test drives the full UI path to verify the fix.
+    const onFilterSetChange = vi.fn();
+
+    render(
+      <UndoStackProvider>
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.id}
+          onFilterSetChange={onFilterSetChange}
+        />
+      </UndoStackProvider>,
+    );
+
+    // Open the column-header ⋯ menu for the Region column
+    const menuButton = await screen.findByRole("button", { name: /column menu/i });
+    act(() => {
+      fireEvent.click(menuButton);
+    });
+
+    // Click the "Filter…" menu item
+    const filterMenuItem = await screen.findByRole("button", { name: /filter…/i });
+    act(() => {
+      fireEvent.click(filterMenuItem);
+    });
+
+    // Type a filter value and press Enter to apply
+    const filterInput = await screen.findByPlaceholderText(/contains…/i);
+    act(() => {
+      fireEvent.change(filterInput, { target: { value: "EU" } });
+      fireEvent.keyDown(filterInput, { key: "Enter" });
+    });
+
+    // onFilterSetChange must fire — previously it was never called from this path
+    await waitFor(() => {
+      expect(onFilterSetChange).toHaveBeenCalledOnce();
+    });
+    const called = onFilterSetChange.mock.calls[0]![0] as FilterSet;
+    expect(called.conditions).toHaveLength(1);
+    expect(called.conditions[0]!.field).toBe("region");
+    expect(called.conditions[0]!.operator).toBe("contains");
+    expect(called.conditions[0]!.value).toBe("EU");
   });
 });

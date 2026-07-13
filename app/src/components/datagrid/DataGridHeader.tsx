@@ -87,7 +87,7 @@ interface DataGridHeaderProps<Row> {
 
   // Filter
   filterSet: FilterSet | null;
-  setFilterSet: React.Dispatch<React.SetStateAction<FilterSet | null>>;
+  setFilterSet: (next: FilterSet | null | ((cur: FilterSet | null) => FilterSet | null)) => void;
 
   // Widths
   setWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>;

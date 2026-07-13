@@ -1514,7 +1514,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           sort={sort}
           setSort={setSort}
           filterSet={filterSet}
-          setFilterSet={setFilterSet}
+          setFilterSet={updateFilterSet}
           setWidths={setWidths}
           widthsRef={widthsRef}
           setOrder={setOrder}
