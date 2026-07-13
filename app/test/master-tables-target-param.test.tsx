@@ -165,3 +165,55 @@ describe("?target= URL param lifecycle", () => {
     expect(search).not.toContain("mode="); // records is the default, omitted
   });
 });
+
+describe("Already-open-tab handoff (fold-gate regression)", () => {
+  /**
+   * Regression: when a tab is ALREADY open in records mode, writing ?mode=match
+   * to the URL does NOT switch the pane — foldUrlMode is gated by foldedDimsRef
+   * and only runs once per dim per session. The fix calls onModeChange("match")
+   * directly (the same mechanism the ModeStrip uses), which bypasses the fold gate.
+   *
+   * This test reproduces the exact seam: open a tab in records mode, verify the
+   * fold gate has fired, then simulate the onMapValuesToRecord handoff the same
+   * way the fixed handler does it — call onModeChange("match") + write ?target=
+   * to the URL. Assert the URL switches to mode=match&target=r1.
+   *
+   * The fold-gate is confirmed because the tab was opened WITHOUT ?mode=match
+   * initially, so foldedDimsRef already has "brand" in it — a subsequent URL
+   * write of ?mode=match would be silently ignored by the fold. The onModeChange
+   * call is the only path that works.
+   */
+  test("handoff on already-open records tab switches to match mode and preserves ?target=", async () => {
+    // Open tab in records mode (no ?mode= param → fold defaults to records)
+    const initialSearch = "?open=brand&active=brand";
+    stubWindowSearch(initialSearch);
+    await renderRoute(`/app/default/tables${initialSearch}`);
+    act(() => setDims(DIMS));
+
+    // Pane is open and active in records mode
+    expect(await screen.findByTestId("pane-brand")).toHaveAttribute("data-active", "true");
+    // Confirm the fold has run — mode is records (no mode param in URL)
+    let search = screen.getByTestId("loc").textContent ?? "";
+    expect(search).not.toContain("mode=");
+    expect(search).not.toContain("target=");
+
+    // Simulate the fixed onMapValuesToRecord handler:
+    // 1. navigate() writes ?mode=match&target=r1 to the URL. In the real browser
+    //    this updates window.location.search; the URL writer reads it as its base.
+    //    Stub it to reflect what navigate() would produce (without ?mode= since
+    //    the fold never re-runs, the stub just needs ?target=r1 present for the
+    //    URL writer to carry it forward when it rewrites on the perTabMode change).
+    stubWindowSearch("?open=brand&active=brand&target=r1");
+    // 2. Call onModeChange("match") — the real fix; bypasses fold gate.
+    //    This triggers perTabMode to update, which re-runs the URL writer effect.
+    //    The writer reads window.location.search (now has ?target=r1), adds
+    //    mode=match (because perTabMode["brand"]==="match"), and calls setSearchParams.
+    expect(paneCallbacks.onModeChange).not.toBeNull();
+    act(() => paneCallbacks.onModeChange!("match"));
+
+    // The URL writer in MasterTables picks up the new perTabMode and writes it
+    search = screen.getByTestId("loc").textContent ?? "";
+    expect(search).toContain("mode=match");
+    expect(search).toContain("target=r1");
+  });
+});

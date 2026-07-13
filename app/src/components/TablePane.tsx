@@ -168,7 +168,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
         </div>
       )}
       <div className="flex flex-1 flex-col min-h-0">
-        {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} />}
+        {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />}
         {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
         {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}
       </div>
@@ -198,7 +198,15 @@ function exportToCSV(dim: MappingDimension): void {
 /** RecordsBody — the original TablePane body, lifted verbatim so TablePaneInner
  *  can switch between this and other mode bodies (Match, Sources) under one
  *  shared UndoStackProvider. The body owns its own grid layout state, popovers, etc. */
-function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
+function RecordsBody({
+  dim,
+  isActive,
+  onModeChange,
+}: {
+  dim: MappingDimension;
+  isActive: boolean;
+  onModeChange?: (m: Mode) => void;
+}) {
   const sources = useSources();
   const allDims = useDimensions();
   const { engineer } = useEngineerMode();
@@ -1202,6 +1210,10 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             next.set("mode", "match");
             next.set("target", recordKey);
             navigate(`?${next.toString()}`);
+            // Switch perTabMode directly — writing ?mode= to the URL is NOT
+            // sufficient for already-open tabs because foldUrlMode is gated by
+            // foldedDimsRef and only runs once per dim per session.
+            onModeChange?.("match");
           }}
         />
 
