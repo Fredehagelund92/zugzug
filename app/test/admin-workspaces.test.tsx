@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+
+vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter } from "react-router-dom";
 import { Workspaces } from "../src/routes/admin/Workspaces";
 

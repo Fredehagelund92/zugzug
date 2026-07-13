@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+
+vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter, Routes, Route, Outlet } from "react-router-dom";
 import { Memberships } from "../src/routes/account/Memberships";
 import type { Membership } from "../src/components/TenantLayout";

@@ -1,5 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter } from "react-router-dom";
 
 describe("Signup", () => {

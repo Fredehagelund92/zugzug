@@ -1,5 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+
+// Heavy vi.resetModules() + vi.doMock() + await import() cycle per test;
+// scope the extended timeout here rather than globally.
+vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter } from "react-router-dom";
 
 describe("Login — mode-aware", () => {
