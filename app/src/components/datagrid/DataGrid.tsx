@@ -600,6 +600,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const val = getValue(row, field);
       const text = val == null ? "" : String(val);
       await navigator.clipboard.writeText(text);
+      toast("Copied", "success");
+      flashCell(rk, field);
       return;
     }
     const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
@@ -617,6 +619,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       lines.push(cells.join("\t"));
     }
     await navigator.clipboard.writeText(lines.join("\n"));
+    toast("Copied", "success");
+    for (let ri = minRow; ri <= maxRow; ri++) {
+      const row = sortedRows[ri];
+      if (!row) continue;
+      for (let ci = minCol; ci <= maxCol; ci++) {
+        const col = orderedVisible[ci];
+        if (!col) continue;
+        flashCell(rowKey(row), col.field);
+      }
+    }
   }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds, getValue]);
 
   // Coerce a raw clipboard string into the column's expected type. Returns
