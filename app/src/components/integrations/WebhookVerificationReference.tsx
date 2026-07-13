@@ -83,7 +83,7 @@ Content-Type: application/json
 Zugzug-Signature: t=1718457600,kid=current,v1=sha256=4f8a1e…
 Zugzug-Delivery: 0f8e3a7c-2d6b-4c1f-9a4e-7b8c1d2e3f40
 
-{"event":"canonical.updated","dimension":"country", … }`;
+{"event":"dimension.committed","dimension":"country","kind":"publish"}`;
 
 export function WebhookVerificationReference() {
   const [active, setActive] = useState<string>("node");
@@ -162,7 +162,26 @@ export function WebhookVerificationReference() {
         </section>
 
         <section className="space-y-2">
-          <SectionLabel n="03" title="Delivery semantics" />
+          <SectionLabel n="03" title="Event payload (dimension.committed)" />
+          <div className="rounded-sm border border-line bg-surface p-3">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11.5px]">
+              <dt className="font-mono uppercase tracking-wider text-ink-3">event</dt>
+              <dd className="text-ink-2"><code>dimension.committed</code></dd>
+              <dt className="font-mono uppercase tracking-wider text-ink-3">dimension</dt>
+              <dd className="text-ink-2">Dimension ID</dd>
+              <dt className="font-mono uppercase tracking-wider text-ink-3">kind</dt>
+              <dd className="text-ink-2"><code>publish</code> or <code>rollback</code></dd>
+              <dt className="font-mono uppercase tracking-wider text-ink-3">restores_version</dt>
+              <dd className="text-ink-2">Version number on rollbacks; omitted on publishes</dd>
+            </dl>
+          </div>
+          <p className="text-[12px] text-ink-2 max-w-prose">
+            Rollbacks arrive as a normal publish with <code>kind: &quot;rollback&quot;</code> and the version they restore — downstream systems that ignore these fields stay correct.
+          </p>
+        </section>
+
+        <section className="space-y-2">
+          <SectionLabel n="04" title="Delivery semantics" />
           <div className="grid gap-2 sm:grid-cols-3">
             <SpecCard
               label="Timestamp window"
