@@ -61,7 +61,7 @@ export function ContextMenu({
             )}
           >
             {item.icon && (
-              <span className="h-3.5 w-3.5 shrink-0 text-ink-3">{item.icon}</span>
+              <span className="h-3.5 w-3.5 shrink-0 text-ink-3 [&>svg]:h-full [&>svg]:w-full">{item.icon}</span>
             )}
             <span className="flex-1">{item.label}</span>
             {item.shortcut && (
