@@ -105,6 +105,7 @@ export function AwaitingReview() {
     return groups.sort((a, b) => b.totalDrafts - a.totalDrafts);
   }, [othersMappedDrafts, dims]);
 
+  if (!myId) return null;
   if (tableGroups.length === 0) return null;
 
   const totalCount = othersMappedDrafts.length;
@@ -203,23 +204,57 @@ export function AwaitingReview() {
   const handleRejectSelected = async () => {
     if (selectedDrafts.length === 0 || !rejectReason.trim()) return;
     setRejectLoading(true);
-    try {
-      const byDim = new Map<string, string[]>();
-      for (const d of selectedDrafts) {
-        const arr = byDim.get(d.dimId) ?? [];
-        arr.push(d.raw);
-        byDim.set(d.dimId, arr);
-      }
-      for (const [dimId, raws] of byDim) {
+    const byDim = new Map<string, { dimName: string; raws: string[] }>();
+    for (const d of selectedDrafts) {
+      const entry = byDim.get(d.dimId) ?? {
+        dimName: tableGroups.find((tg) => tg.dimId === d.dimId)?.dimName ?? d.dimId,
+        raws: [],
+      };
+      entry.raws.push(d.raw);
+      byDim.set(d.dimId, entry);
+    }
+    const outcomes: Array<{ dimName: string; rejected: boolean; error: string | null }> = [];
+    for (const [dimId, { dimName, raws }] of byDim) {
+      try {
         await rejectDrafts(dimId, raws, rejectReason.trim());
+        outcomes.push({ dimName, rejected: true, error: null });
+      } catch (err) {
+        outcomes.push({ dimName, rejected: false, error: err instanceof Error ? err.message : "unknown error" });
       }
+    }
+    setRejectLoading(false);
+    const failed = outcomes.filter((o) => !o.rejected);
+    const succeededCount = outcomes.filter((o) => o.rejected).length;
+    if (failed.length === 0) {
+      // Full success — clear all state
+      setRejecting(false);
       setSelected(new Set());
       setRejectReason("");
-      setRejecting(false);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Reject failed — try again.", "error");
-    } finally {
-      setRejectLoading(false);
+      const total = selectedDrafts.length;
+      toast(`${total} draft${total === 1 ? "" : "s"} rejected`);
+    } else {
+      // Partial failure: keep failed tables' rows selected, keep reason input open
+      const failedDimIds = new Set(
+        [...byDim.entries()]
+          .filter(([, { dimName }]) => failed.some((f) => f.dimName === dimName))
+          .map(([dimId]) => dimId),
+      );
+      setSelected((prev) => {
+        const next = new Set<string>();
+        for (const k of prev) {
+          const dimId = k.split("::")[0];
+          if (failedDimIds.has(dimId)) next.add(k);
+        }
+        return next;
+      });
+      // Keep rejecting open so reason input remains visible
+      const names = failed.map((f) => `${f.dimName} failed (${f.error})`).join("; ");
+      toast(
+        succeededCount > 0
+          ? `Rejected ${succeededCount} table${succeededCount === 1 ? "" : "s"}, but ${names}`
+          : `Reject failed — ${names}`,
+        "error",
+      );
     }
   };
 

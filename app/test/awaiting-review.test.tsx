@@ -1,7 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
+import { clearToasts } from "../src/components/Toast";
 
 // Shared stub data
 const ME = { id: "u_me", name: "Ada Berg", initials: "AB", email: "ada@example.com", isSuperAdmin: false };
@@ -98,6 +99,10 @@ describe("AwaitingReview", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    clearToasts();
   });
 
   test("lists only others' staged drafts, grouped by table and author", async () => {
@@ -201,5 +206,58 @@ describe("AwaitingReview", () => {
     // No publish/reject buttons
     expect(screen.queryByRole("button", { name: /publish selected/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reject selected/i })).not.toBeInTheDocument();
+  });
+
+  test("reject with one table failing shows partial-failure message and keeps reason input open", async () => {
+    const user = userEvent.setup();
+    vi.doMock("../src/store", async (orig) => {
+      const real = await orig<typeof import("../src/store")>();
+      return {
+        ...real,
+        useDrafts: () => ({
+          "country::USA": stubDraftOther,
+          "city::NYC": stubDraftOtherDim,
+        }),
+        useDimensions: () => [stubDim, stubCityDim],
+        useCanEdit: () => true,
+        useCurrentUser: () => ME,
+        rejectDrafts: vi.fn(async (dimId: string) => {
+          if (dimId === "city") throw new Error("city table locked");
+        }),
+        commit: vi.fn(async () => ({ committed: 1, rowsRecovered: 0 })),
+        fetchPublishState: vi.fn(async () => ({ version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedKeys: [] })),
+      };
+    });
+
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    const { ToastStack } = await import("../src/components/Toast");
+    render(
+      <>
+        <AwaitingReview />
+        <ToastStack />
+      </>,
+    );
+
+    // Select both rows via individual row checkboxes
+    await user.click(screen.getByRole("checkbox", { name: /select usa/i }));
+    await user.click(screen.getByRole("checkbox", { name: /select nyc/i }));
+
+    // Open reject UI
+    await user.click(screen.getByRole("button", { name: /reject selected/i }));
+
+    // Enter reason
+    const reasonInput = screen.getByPlaceholderText(/reason \(required\)/i);
+    await user.type(reasonInput, "test reason");
+
+    // Submit
+    await user.click(screen.getAllByRole("button", { name: /reject selected/i })[0]);
+
+    // Partial-failure message appears
+    await waitFor(() => {
+      expect(screen.getByText(/city table locked/i)).toBeInTheDocument();
+    });
+
+    // Reason input is still present (reject UI stays open)
+    expect(screen.getByPlaceholderText(/reason \(required\)/i)).toBeInTheDocument();
   });
 });
