@@ -1197,6 +1197,12 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               });
             }
           }}
+          onMapValuesToRecord={(recordKey) => {
+            const next = new URLSearchParams(window.location.search);
+            next.set("mode", "match");
+            next.set("target", recordKey);
+            navigate(`?${next.toString()}`);
+          }}
         />
 
         {addOpen && canEdit && (

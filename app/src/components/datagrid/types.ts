@@ -222,4 +222,6 @@ export interface DataGridProps<Row> {
   initialFilterSet?: FilterSet | null;
   /** Notified when the user changes filters (add/remove/clear). Not fired on mount. */
   onFilterSetChange?: (fs: FilterSet | null) => void;
+  /** Row-num context menu: hand off to Match mode with this record pre-selected. */
+  onMapValuesToRecord?: (recordKey: string) => void;
 }

@@ -39,6 +39,7 @@ import {
   IconType,
   IconWand,
   IconPlus,
+  IconArrowRight,
 } from "../Icons";
 
 // ── Range selection types ───────────────────────────────────────────────────
@@ -1043,6 +1044,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             ]
           : []),
         { label: "Delete", icon: <IconTrash />, onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+        ...(props.onMapValuesToRecord
+          ? [
+              {
+                label: "Map values to this record",
+                icon: <IconArrowRight />,
+                onClick: () => props.onMapValuesToRecord!(rk),
+              } as MenuItem,
+            ]
+          : []),
       ];
     }
     return [];
