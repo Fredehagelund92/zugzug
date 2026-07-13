@@ -283,8 +283,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 : !info
                   ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
                   : !info.scanned
-                    ? "Scan pending — count will appear after first sync."
-                    : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one canonical record. Already-mapped values are skipped.`;
+                    ? "Scan pending — count will appear after the first scan."
+                    : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one record. Already-mapped values are skipped.`;
               return (
                 <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
                   <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
@@ -392,7 +392,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                     if (!info.scanned)
                       return (
                         <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                          Scan pending — ID count will appear after first sync.
+                          Scan pending — ID count will appear after the first scan.
                         </div>
                       );
                     return (

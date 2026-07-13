@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from "vitest";
+import { describe, test, expect } from "vitest";
 import { render, act, fireEvent } from "@testing-library/react";
 import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
@@ -83,9 +83,6 @@ describe("column rename select-all", () => {
     });
 
     // The rename input should now be present with value "Name" (the column label)
-    const renameInput = document.querySelector<HTMLInputElement>(
-      'input[value="Name"], input.\\[border-accent\\]',
-    );
     // Find it by looking in document since ColumnHeaderMenu uses createPortal
     const allInputs = Array.from(document.querySelectorAll<HTMLInputElement>("input"));
     const input = allInputs.find((el) => el.value === "Name");

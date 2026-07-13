@@ -10,8 +10,8 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["↑ ↓ ← →", "move cursor"],
       ["any char", "type to edit"],
-      ["Enter", "edit / commit + down"],
-      ["Tab / Shift+Tab", "commit + edit →/←"],
+      ["Enter", "edit / confirm + move down"],
+      ["Tab / Shift+Tab", "confirm + edit →/←"],
       ["Esc", "cancel edit"],
       ["⌫ / Del", "clear cell or range"],
       ["⇧+arrows", "extend range"],
@@ -42,7 +42,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["↑ ↓", "move cursor"],
       ["A", "accept suggestion"],
-      ["↵ / M", "pick master record"],
+      ["↵ / M", "choose the record to keep"],
       ["S", "skip"],
       ["R", "reset draft"],
       ["⌘↵", "publish staged drafts"],
@@ -53,7 +53,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     rows: [
       ["↑↓ / J K", "move cursor"],
       ["A", "accept suggestion"],
-      ["↵ / M", "pick master record"],
+      ["↵ / M", "choose the record to keep"],
       ["S", "skip"],
       ["N", "jump to next new"],
       ["Esc", "clear cursor"],

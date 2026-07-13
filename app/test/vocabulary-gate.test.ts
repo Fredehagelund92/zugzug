@@ -28,6 +28,8 @@ const REPO_ROOT = join(__dirname, "../../");
 const FILES = [
   "app/src/components/TablePane.tsx",
   "app/src/routes/settings/Warehouse.tsx",
+  "app/src/components/datagrid/ShortcutsOverlay.tsx",
+  "app/src/components/CreateTableModal.tsx",
 ];
 
 const BANNED = ["canonical", "raw", "triage", "master", "golden", "commit", "sync", "tenant", "matching"];
@@ -155,5 +157,47 @@ describe("vocabulary gate", () => {
 
     // "new values that need a master record"
     expect(source, 'Warehouse copy still contains "master record"').not.toContain("master record");
+  });
+
+  // Layer 2 targeted assertions for ShortcutsOverlay.tsx and CreateTableModal.tsx.
+  // These files contain code identifiers with banned substrings (e.g. `use-tenant-navigate`
+  // import, `onCommit` prop, `canonicalTable` type names in store) — the import-line skip
+  // in Layer 1 handles `tenant`; `commit` in onCommit prop names never appears in a
+  // quoted string with spaces so won't be caught. These Layer-2 checks assert the exact
+  // old user-facing strings are gone.
+  test("specific banned strings from this wave are not present in ShortcutsOverlay.tsx", () => {
+    const absPath = join(REPO_ROOT, "app/src/components/datagrid/ShortcutsOverlay.tsx");
+    const source = readFileSync(absPath, "utf8");
+
+    // "pick master record" shortcut label → should now say "choose the record to keep"
+    expect(source, 'ShortcutsOverlay still contains "pick master record"').not.toContain(
+      "pick master record"
+    );
+
+    // "edit / commit + down" and "commit + edit →/←" shortcut labels → reworded to "confirm"
+    expect(source, 'ShortcutsOverlay shortcut still says "commit + down"').not.toContain(
+      "commit + down"
+    );
+    expect(source, 'ShortcutsOverlay shortcut still says "commit + edit"').not.toContain(
+      "commit + edit"
+    );
+  });
+
+  test("specific banned strings from this wave are not present in CreateTableModal.tsx", () => {
+    const absPath = join(REPO_ROOT, "app/src/components/CreateTableModal.tsx");
+    const source = readFileSync(absPath, "utf8");
+
+    // "each becomes one canonical record" → should now say "each becomes one record"
+    expect(source, 'CreateTableModal still contains "canonical record"').not.toContain(
+      "canonical record"
+    );
+
+    // "after first sync" → should now say "after the first scan"
+    // Note: "sync" appears in `use-tenant-navigate` import (skipped by Layer 1 import filter)
+    // and may appear in function/variable identifiers — this assertion targets only the
+    // user-facing helper string.
+    expect(source, 'CreateTableModal helper text still says "after first sync"').not.toContain(
+      "after first sync"
+    );
   });
 });
