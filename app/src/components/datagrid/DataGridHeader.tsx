@@ -145,6 +145,13 @@ interface DataGridHeaderProps<Row> {
     opts?: { coerceInvalidToNull?: boolean },
   ) => Promise<{ ok: boolean; invalidCount?: number }>;
   onDeleteColumn?: (field: string) => void;
+  // Linked-column (fk / lookup) actions surfaced in ColumnHeaderMenu.
+  onShowLinkedFields?: (fkField: string) => void;
+  onOpenTargetDimension?: (fkField: string) => void;
+  onChangeDisplayedField?: (lookupField: string) => void;
+  onManageLinkedFields?: (lookupField: string) => void;
+  onJumpToSourceColumn?: (fkField: string) => void;
+  onRemoveLookup?: (lookupField: string) => void;
 }
 
 export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.ReactElement {
@@ -188,6 +195,12 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
     onSaveColumnDescription,
     onChangeColumnType,
     onDeleteColumn,
+    onShowLinkedFields,
+    onOpenTargetDimension,
+    onChangeDisplayedField,
+    onManageLinkedFields,
+    onJumpToSourceColumn,
+    onRemoveLookup,
   } = props;
 
   // Hidden-fields popover is local to the header — no other surface reads it.
@@ -476,6 +489,24 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                     onLayoutChange?.({ hidden });
                   }}
                   onDelete={() => onDeleteColumn?.(c.field)}
+                  onShowLinkedFields={
+                    onShowLinkedFields ? () => onShowLinkedFields(c.field) : undefined
+                  }
+                  onOpenTargetDimension={
+                    onOpenTargetDimension ? () => onOpenTargetDimension(c.field) : undefined
+                  }
+                  onChangeDisplayedField={
+                    onChangeDisplayedField ? () => onChangeDisplayedField(c.field) : undefined
+                  }
+                  onManageLinkedFields={
+                    onManageLinkedFields ? () => onManageLinkedFields(c.field) : undefined
+                  }
+                  onJumpToSourceColumn={
+                    onJumpToSourceColumn
+                      ? () => onJumpToSourceColumn(c.sourceField ?? c.field)
+                      : undefined
+                  }
+                  onRemoveLookup={onRemoveLookup ? () => onRemoveLookup(c.field) : undefined}
                 />
               )}
 

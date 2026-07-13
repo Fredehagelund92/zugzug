@@ -28,7 +28,7 @@ describe("right-click context menu", () => {
     expect(menu?.textContent).toContain("Filter to");
   });
 
-  test("right-click on a column header opens column items", () => {
+  test("right-click on a column header opens the ColumnHeaderMenu (same as the ⋯ button)", () => {
     const { container } = render(
       <UndoStackProvider>
         <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} />
@@ -38,10 +38,13 @@ describe("right-click context menu", () => {
     act(() => {
       fireEvent.contextMenu(headerLabel, { clientX: 50, clientY: 50, bubbles: true });
     });
-    const menu = document.querySelector('[role="menu"]');
+    // Right-click no longer opens the shared ContextMenu for headers — it opens
+    // the same ColumnHeaderMenu the ⋯ button opens.
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    const menu = document.querySelector("div.zz-pop-in");
     expect(menu).not.toBeNull();
-    expect(menu?.textContent).toContain("Rename");
-    expect(menu?.textContent).toContain("Sort ascending");
+    expect(menu?.textContent).toContain("Rename column");
+    expect(menu?.textContent).toContain("Sort A→Z");
   });
 
   test("row-number context menu has no Duplicate item", () => {

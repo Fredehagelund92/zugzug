@@ -56,7 +56,7 @@ describe("menu presentation consistency", () => {
     }
   });
 
-  test("column header context menu shows Title Case labels", () => {
+  test("column header menu (opened via right-click) shows Title Case labels", () => {
     const { container } = render(
       <UndoStackProvider>
         <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} />
@@ -66,10 +66,11 @@ describe("menu presentation consistency", () => {
     act(() => {
       fireEvent.contextMenu(headerSpan, { clientX: 50, clientY: 50, bubbles: true });
     });
-    const menu = document.querySelector('[role="menu"]')!;
+    // Right-click opens the ColumnHeaderMenu portal, not the shared ContextMenu.
+    const menu = document.querySelector("div.zz-pop-in")!;
     expect(menu).not.toBeNull();
-    expect(menu.textContent).toContain("Rename");
-    expect(menu.textContent).toContain("Sort ascending");
+    expect(menu.textContent).toContain("Rename column");
+    expect(menu.textContent).toContain("Sort A→Z");
     expect(menu.textContent).toContain("Hide column");
   });
 });

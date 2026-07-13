@@ -32,12 +32,6 @@ import {
   IconX,
   IconFilter,
   IconTrash,
-  IconEyeOff,
-  IconSortAsc,
-  IconSortDesc,
-  IconEdit,
-  IconType,
-  IconWand,
   IconPlus,
   IconArrowRight,
 } from "../Icons";
@@ -785,6 +779,19 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // ── Context menu ────────────────────────────────────────────────────────────
   const { menu: contextMenu, onContextMenu, close: closeMenu } = useContextMenu();
 
+  // Right-clicking a header opens the same ColumnHeaderMenu the ⋯ button opens
+  // (one consistent menu), anchored at the cursor. Cells and row numbers keep
+  // the ContextMenu. We intercept the header surface here rather than rendering
+  // the ContextMenu for it below.
+  useEffect(() => {
+    if (contextMenu?.surface.kind !== "header") return;
+    const { field } = contextMenu.surface;
+    menuAnchorRef.current = null;
+    setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
+    setMenuFor(field);
+    closeMenu();
+  }, [contextMenu, closeMenu]);
+
   const buildMenuItems = (surface: ContextSurface): MenuItem[] => {
     if (surface.kind === "cell") {
       const { rowKey: rk, field } = surface;
@@ -872,129 +879,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           disabled: !props.onDeleteRow,
         },
       ];
-    }
-    if (surface.kind === "header") {
-      const c = orderedVisible.find((col) => col.field === surface.field);
-      const kind = c?.columnKind ?? "normal";
-
-      const sortAsc: MenuItem = {
-        label: "Sort ascending",
-        icon: <IconSortAsc />,
-        onClick: () => setSort({ field: surface.field, dir: "asc" }),
-      };
-      const sortDesc: MenuItem = {
-        label: "Sort descending",
-        icon: <IconSortDesc />,
-        onClick: () => setSort({ field: surface.field, dir: "desc" }),
-      };
-      const conditional: MenuItem = {
-        label: "Conditional formatting…",
-        icon: <IconWand />,
-        onClick: () => {
-          if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-          setRulesEditor(surface.field);
-        },
-        disabled: !props.onSaveColumnRules,
-      };
-      const hide: MenuItem = {
-        label: "Hide column",
-        icon: <IconEyeOff />,
-        onClick: () => {
-          const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
-          props.onLayoutChange?.({ hidden });
-        },
-      };
-      const sep: MenuItem = { separator: true, label: "", onClick: () => {} };
-
-      if (kind === "lookup") {
-        return [
-          sortAsc,
-          sortDesc,
-          conditional,
-          sep,
-          {
-            label: "Change displayed field…",
-            onClick: () => props.onChangeDisplayedField?.(surface.field),
-            disabled: !props.onChangeDisplayedField,
-          },
-          {
-            label: "Manage linked fields…",
-            onClick: () => props.onManageLinkedFields?.(surface.field),
-            disabled: !props.onManageLinkedFields,
-          },
-          {
-            label: "Jump to source column →",
-            onClick: () => props.onJumpToSourceColumn?.(c?.sourceField ?? surface.field),
-            disabled: !props.onJumpToSourceColumn,
-          },
-          sep,
-          hide,
-          {
-            label: "Remove this lookup",
-            onClick: () => props.onRemoveLookup?.(surface.field),
-            disabled: !props.onRemoveLookup,
-          },
-        ];
-      }
-
-      // Normal + FK share the standard column header items.
-      const base: MenuItem[] = [
-        sortAsc,
-        sortDesc,
-        {
-          label: "Rename",
-          icon: <IconEdit />,
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setMenuFor(surface.field);
-          },
-        },
-        {
-          label: "Change type",
-          icon: <IconType />,
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setMenuFor(surface.field);
-          },
-          disabled: !props.onChangeColumnType,
-        },
-        sep,
-        conditional,
-        {
-          label: "Edit description",
-          icon: <IconEdit />,
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setDescEditor(surface.field);
-          },
-          disabled: !props.onSaveColumnDescription,
-        },
-      ];
-
-      if (kind === "fk") {
-        base.push(
-          sep,
-          {
-            label: "Show linked fields…",
-            onClick: () => props.onShowLinkedFields?.(surface.field),
-            disabled: !props.onShowLinkedFields,
-          },
-          {
-            label: "Open target dimension →",
-            onClick: () => props.onOpenTargetDimension?.(surface.field),
-            disabled: !props.onOpenTargetDimension,
-          },
-        );
-      }
-
-      base.push(sep, hide, {
-        label: "Delete column",
-        icon: <IconTrash />,
-        onClick: () => props.onDeleteColumn?.(surface.field),
-        disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
-      });
-
-      return base;
     }
     if (surface.kind === "row-num") {
       const rk = surface.rowKey;
@@ -1551,6 +1435,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onSaveColumnDescription={props.onSaveColumnDescription}
           onChangeColumnType={props.onChangeColumnType}
           onDeleteColumn={props.onDeleteColumn}
+          onShowLinkedFields={props.onShowLinkedFields}
+          onOpenTargetDimension={props.onOpenTargetDimension}
+          onChangeDisplayedField={props.onChangeDisplayedField}
+          onManageLinkedFields={props.onManageLinkedFields}
+          onJumpToSourceColumn={props.onJumpToSourceColumn}
+          onRemoveLookup={props.onRemoveLookup}
         />
         {/* body */}
         <DataGridBody
@@ -1626,7 +1516,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         )}
       </div>
       <StatusBar agg={statusAgg} />
-      {contextMenu && (
+      {/* Header right-clicks are intercepted (see effect above) to open the
+          ColumnHeaderMenu instead — never render the shared ContextMenu for them. */}
+      {contextMenu && contextMenu.surface.kind !== "header" && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
