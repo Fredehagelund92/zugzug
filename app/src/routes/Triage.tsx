@@ -209,7 +209,7 @@ function TriageInner() {
       surface: "Review",
       apply: () => saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label)),
       inverse: () =>
-        prev
+        prev && prev.status !== "rejected"
           ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
           : discardDraft(dimId, raw),
     });
@@ -236,7 +236,7 @@ function TriageInner() {
       surface: "Review",
       apply: () => saveDraft(dimId, raw, "skipped", null, null),
       inverse: () =>
-        prev
+        prev && prev.status !== "rejected"
           ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
           : discardDraft(dimId, raw),
     });
@@ -260,7 +260,11 @@ function TriageInner() {
       label: `discard "${raw}"`,
       surface: "Review",
       apply: () => discardDraft(dimId, raw),
-      inverse: () => saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey),
+      // Rejected drafts cannot be re-saved via saveDraft; discard is the safe fallback.
+      inverse: () =>
+        prev.status !== "rejected"
+          ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(dimId, raw),
     });
     discardDraft(dimId, raw).catch((err) => reportDraftError(`discard "${raw}"`, err));
   };
@@ -275,7 +279,10 @@ function TriageInner() {
         const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
         const r = rows[j];
         const draft = allDrafts[dkey(activeDim.id, r.raw)];
-        const status: RStatus = draft ? draft.status : r.isMapped ? "mapped" : "new";
+        // Rejected drafts are treated as "skipped" for cursor navigation: they
+        // are not "new" items needing mapping (Task 8 will render them distinctly).
+        const rawStatus = draft ? draft.status : r.isMapped ? "mapped" : "new";
+        const status: RStatus = rawStatus === "rejected" ? "skipped" : rawStatus;
         if (status === "new") {
           setCursor({ dimId: activeDim.id, raw: r.raw });
           return;
@@ -669,7 +676,8 @@ function DimSectionBody(p: DimSectionBodyProps) {
     const draft = p.drafts[dkey(p.dim.id, r.raw)];
     if (draft)
       return {
-        status: draft.status,
+        // Rejected drafts render as "skipped" until Task 8 adds the rejected UI.
+        status: draft.status === "rejected" ? "skipped" : draft.status,
         target: draft.targetLabel,
       };
     return {

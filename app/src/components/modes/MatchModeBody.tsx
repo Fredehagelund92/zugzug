@@ -155,7 +155,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           return [
             v.raw,
             d
-              ? { target: d.targetLabel, status: d.status }
+              // Rejected drafts are not yet renderable as a distinct status (Task 8);
+              // map to "new" so they appear as needing attention in the match grid.
+              ? { target: d.targetLabel, status: d.status === "rejected" ? ("new" as const) : d.status }
               : { target: v.mappedLabel, status: v.isMapped ? "mapped" : "new" },
           ];
         }),
@@ -180,7 +182,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
       surface: "Match",
       apply: () => saveDraft(dim.id, v, "mapped", label, keyFor(label)),
       inverse: () =>
-        prev
+        prev && prev.status !== "rejected"
           ? saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey)
           : discardDraft(dim.id, v),
     });
@@ -211,7 +213,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
       surface: "Match",
       apply: () => saveDraft(dim.id, v, "skipped", null, null),
       inverse: () =>
-        prev
+        prev && prev.status !== "rejected"
           ? saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey)
           : discardDraft(dim.id, v),
     });
@@ -228,7 +230,11 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
       label: `reset "${v}"`,
       surface: "Match",
       apply: () => discardDraft(dim.id, v),
-      inverse: () => saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey),
+      // Rejected drafts cannot be re-saved via saveDraft; discard is the safe fallback.
+      inverse: () =>
+        prev.status !== "rejected"
+          ? saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(dim.id, v),
     });
     return discardDraft(dim.id, v);
   };
@@ -252,7 +258,11 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
       label: `discard "${raw}"`,
       surface: "Match",
       apply: () => discardDraft(dim.id, raw),
-      inverse: () => saveDraft(dim.id, raw, prev.status, prev.targetLabel, prev.targetKey),
+      // Rejected drafts cannot be re-saved via saveDraft; discard is the safe fallback.
+      inverse: () =>
+        prev.status !== "rejected"
+          ? saveDraft(dim.id, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(dim.id, raw),
     });
     void discardDraft(dim.id, raw);
   };

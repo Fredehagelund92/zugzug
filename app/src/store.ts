@@ -79,7 +79,7 @@ function isCurrentUser(x: unknown): x is CurrentUser {
 export interface Draft {
   dimId: string;
   raw: string;
-  status: "mapped" | "skipped";
+  status: "mapped" | "skipped" | "rejected";
   targetLabel: string | null;
   targetKey: string | null;
   user: User;
@@ -87,6 +87,8 @@ export interface Draft {
   source: "user" | "ai";
   confidence: "high" | "medium" | "low" | null;
   reasoning: string | null;
+  rejectedReason: string | null;
+  rejectedBy: string | null;
 }
 export interface AuditEntry {
   id: string;
@@ -653,6 +655,8 @@ export async function saveDraft(
       source: prev?.source ?? "user",
       confidence: prev?.confidence ?? null,
       reasoning: prev?.reasoning ?? null,
+      rejectedReason: null,
+      rejectedBy: null,
     },
   };
   emit();
@@ -775,11 +779,18 @@ export async function fetchPublishState(dimId: string): Promise<PublishState> {
 }
 
 /** Approve & commit the dimension's mapped drafts (server folds them into the
- *  canonical tables in one batch). Returns the count + warehouse rows recovered. */
-export async function commit(dimId: string): Promise<{ committed: number; rowsRecovered: number }> {
+ *  canonical tables in one batch). When `draftKeys` is provided, only those
+ *  raws are folded (scoped commit). Returns the count + warehouse rows recovered. */
+export async function commit(
+  dimId: string,
+  draftKeys?: string[],
+): Promise<{ committed: number; rowsRecovered: number }> {
   const res = await api<{ committed: number; rowsRecovered: number }>(
     `/dimensions/${encodeURIComponent(dimId)}/commit`,
-    { method: "POST" },
+    {
+      method: "POST",
+      ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
+    },
   );
   await refreshDim(dimId);
   await refreshDrafts(dimId);
@@ -787,6 +798,50 @@ export async function commit(dimId: string): Promise<{ committed: number; rowsRe
   await refreshAudit();
   emit();
   return res;
+}
+
+/** One entry in a dimension's version history. */
+export interface VersionInfo {
+  version: number;
+  kind: "publish" | "rollback";
+  restoresVersion: number | null;
+  publishedBy: string;
+  publishedByName: string;
+  at: string;
+  counts: { records: number; mappings: number };
+  hasSnapshot: boolean;
+}
+
+/** Fetch the full version history for a dimension. */
+export async function fetchVersions(dimId: string): Promise<VersionInfo[]> {
+  return api<VersionInfo[]>(`/dimensions/${encodeURIComponent(dimId)}/versions`);
+}
+
+/** Roll a dimension back to a prior snapshot version. Refreshes dim, drafts,
+ *  and audit — mirrors the commit() refresh/emit pattern. */
+export async function rollbackDim(dimId: string, toVersion: number): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/rollback`, {
+    method: "POST",
+    body: JSON.stringify({ toVersion }),
+  });
+  await refreshDim(dimId);
+  await refreshDrafts(dimId);
+  await refreshAudit();
+  emit();
+}
+
+/** Reject a set of raw draft values with a reason. Refreshes drafts and emits. */
+export async function rejectDrafts(
+  dimId: string,
+  raws: string[],
+  reason: string,
+): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/reject`, {
+    method: "POST",
+    body: JSON.stringify({ raws, reason }),
+  });
+  await refreshDrafts(dimId);
+  emit();
 }
 
 export async function appendAudit(action: string, detail: string): Promise<void> {
