@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../api";
 
 export type AuditOp = "rename" | "create" | "archive" | "field-write" | "merge" | "commit";
 
@@ -38,9 +39,11 @@ export function useRowActivity(
     fetchActivityRef.current = async () => {
       if (!tableId || cancelledRef.current) return;
       const since = new Date(Date.now() - TWENTY_FOUR_HOURS_MS).toISOString();
-      const url = `/api/tables/${encodeURIComponent(tableId)}/row-activity?since=${encodeURIComponent(since)}`;
+      // Tenant-aware: apiFetch rewrites to /api/t/<slug>/tables/... so the route
+      // resolves the workspace (a raw /api/tables/... 403s in multi-tenant mode).
+      const path = `/tables/${encodeURIComponent(tableId)}/row-activity?since=${encodeURIComponent(since)}`;
       try {
-        const res = await fetch(url, { credentials: "include" });
+        const res = await apiFetch(path);
         if (cancelledRef.current || !res.ok) return;
         const data = (await res.json()) as { entries: RowActivityEntry[]; serverTime: string };
         if (cancelledRef.current) return;
