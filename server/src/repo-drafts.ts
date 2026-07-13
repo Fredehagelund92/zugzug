@@ -325,11 +325,11 @@ export async function commit(
   userId: string,
   tenantId: string,
   draftKeys?: string[],
-  opts?: { kind?: "publish" | "rollback"; restoresVersion?: number },
+  opts?: { kind?: "publish" | "rollback"; restoresVersion?: number; skipWarehouseSync?: boolean },
 ): Promise<{
   committed: number;
   rowsRecovered: number;
-  warehouseSynced: "n/a" | "synced" | "failed";
+  warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
 }> {
   const meta = await pgGet<{
     dimTable: string;
@@ -615,9 +615,11 @@ export async function commit(
 
   // After Postgres commit: if the warehouse adapter is writable, attempt the
   // warehouse MERGE. Failures log + surface but don't roll back Postgres.
-  let warehouseSynced: "n/a" | "synced" | "failed" = "n/a";
+  // skipWarehouseSync=true (set by rollback) skips this block so rollback's
+  // own warehouse block is the single source of truth.
+  let warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed" = "n/a";
   const adapter = await getAdapter();
-  if (isWritable(adapter)) {
+  if (!opts?.skipWarehouseSync && isWritable(adapter)) {
     const dimSpec = {
       dimId,
       dimTable: meta.dimTable,

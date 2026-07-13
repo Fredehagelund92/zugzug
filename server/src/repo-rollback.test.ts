@@ -88,6 +88,8 @@ describe("rollbackToVersion", () => {
     const res = await rollbackToVersion(dimId, T, v1, ADMIN);
 
     expect(res.restoredVersion).toBe(v1);
+    // ATTACH_WAREHOUSE=false → no writable adapter → warehouse block is skipped
+    expect(res.warehouseSynced).toBe("n/a");
 
     // New version is kind=rollback
     const versions = await listVersions(dimId, T);

@@ -396,7 +396,7 @@ export class TenantRepo {
   ): Promise<{
     committed: number;
     rowsRecovered: number;
-    warehouseSynced: "n/a" | "synced" | "failed";
+    warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
   }> {
     this.assertRole("commit");
     return this.withClearCtx(() => repoDrafts.commit(dimId, userId, this.tenantId, draftKeys));

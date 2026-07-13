@@ -27,7 +27,7 @@ export async function rollbackToVersion(
 ): Promise<{
   committed: number;
   rowsRecovered: number;
-  warehouseSynced: "n/a" | "synced" | "failed";
+  warehouseSynced: "n/a" | "synced-additive" | "failed";
   restoredVersion: number;
 }> {
   const snap = await getSnapshot(dimId, tenantId, toVersion);
@@ -110,14 +110,19 @@ export async function rollbackToVersion(
 
   // 5. Call commit with empty draftKeys — the canonical_version touch above
   //    ensures changedKeysSince returns changes, bypassing the early-return.
+  //    skipWarehouseSync=true prevents commit()'s warehouse block from firing
+  //    (it would report "synced" on empty drafts — a false signal); rollback
+  //    owns the warehouse step below.
   const res = await commit(dimId, userId, tenantId, [], {
     kind: "rollback",
     restoresVersion: toVersion,
+    skipWarehouseSync: true,
   });
 
-  // 6. Warehouse sync: commitCanonical is INSERT-only, so we must pass ALL
-  //    snapshot records to replace stale rows.  We do this directly here
-  //    rather than relying on commit()'s warehouse block (which gets empty drafts).
+  // 6. Warehouse sync: commitCanonical is INSERT-only (cannot delete stale rows),
+  //    so this sync is additive — rows from the reverted version may remain.
+  //    We pass ALL snapshot records so the adapter MERGEs the full restored state.
+  let warehouseSynced: "n/a" | "synced-additive" | "failed" = "n/a";
   const adapter = await getAdapter();
   if (isWritable(adapter)) {
     const dimSpec = {
@@ -142,9 +147,13 @@ export async function rollbackToVersion(
     try {
       await adapter.ensureCanonicalTables(dimSpec);
       await adapter.commitCanonical(dimSpec, approvedDrafts);
-      await appendAuditAs(userId, "Warehouse synced (rollback)", `→ ${meta.mapTable}`, {
-        tenantId,
-      });
+      await appendAuditAs(
+        userId,
+        "Warehouse rollback sync",
+        `additive — rows added by the reverted version may remain; manual resync recommended`,
+        { tenantId },
+      );
+      warehouseSynced = "synced-additive";
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await appendAuditAs(
@@ -153,8 +162,9 @@ export async function rollbackToVersion(
         `→ ${meta.mapTable}: ${msg}`,
         { tenantId },
       );
+      warehouseSynced = "failed";
     }
   }
 
-  return { ...res, restoredVersion: toVersion };
+  return { committed: res.committed, rowsRecovered: res.rowsRecovered, warehouseSynced, restoredVersion: toVersion };
 }
