@@ -280,6 +280,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [widths, setWidths] = useState<Record<string, number>>(() =>
     Object.fromEntries(visible.filter((c) => c.width).map((c) => [c.field, c.width!])),
   );
+  // ref mirror of `widths` so DataGridHeader's event handlers can read the
+  // committed widths without calling onLayoutChange inside a setState updater
+  // (which would be a setState-in-render side effect).
+  const widthsRef = useRef(widths);
+  useEffect(() => {
+    widthsRef.current = widths;
+  }, [widths]);
 
   const colWidth = (field: string) =>
     widths[field] ?? visible.find((c) => c.field === field)?.width;
@@ -1498,6 +1505,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           filterSet={filterSet}
           setFilterSet={setFilterSet}
           setWidths={setWidths}
+          widthsRef={widthsRef}
           setOrder={setOrder}
           drag={drag}
           setDrag={setDrag}
