@@ -217,6 +217,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   });
   const undo = useUndoStack();
 
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
+
   const [sel, setSel] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -417,11 +420,25 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     return ordered;
   }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
 
-  const rowsForGrid = useMemo(
-    () =>
-      list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
-    [list],
+  const visibleFields = useMemo(
+    () => columns.filter((c) => !c.hidden).map((c) => c.field),
+    [columns],
   );
+
+  const rowsForGrid = useMemo(() => {
+    const all = list.map((c): CanonicalValue & Record<string, unknown> => ({
+      ...c,
+      ...(c.fields ?? {}),
+    }));
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((row) =>
+      visibleFields.some((f) => {
+        const v = (row as Record<string, unknown>)[f];
+        return v != null && String(v).toLowerCase().includes(q);
+      }),
+    );
+  }, [list, search, visibleFields]);
 
   const flash = (m: string) => {
     setNotice(m);
@@ -680,6 +697,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           </span>
           <span className="tabular-nums">{totalVariants.toLocaleString()} source values</span>
         </div>
+
+        <input
+          ref={searchRef}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search records…"
+          className="w-full max-w-xs rounded-sm border border-line-2 bg-bg px-3 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+        />
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
           <PresenceStrip peers={presence.peers} />
