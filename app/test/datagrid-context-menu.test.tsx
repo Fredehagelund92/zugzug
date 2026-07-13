@@ -44,6 +44,17 @@ describe("right-click context menu", () => {
     expect(menu?.textContent).toContain("Sort ascending");
   });
 
+  test("row-number context menu has no Duplicate item", () => {
+    const { container } = render(
+      <UndoStackProvider>
+        <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} showRowNumbers />
+      </UndoStackProvider>,
+    );
+    const rownum = container.querySelector('[data-row-num="1"]') as HTMLElement;
+    act(() => { fireEvent.contextMenu(rownum, { clientX: 30, clientY: 30, bubbles: true }); });
+    expect(document.querySelector('[role="menu"]')?.textContent).not.toContain("Duplicate");
+  });
+
   test("Escape closes the menu", () => {
     const { container } = render(
       <UndoStackProvider>

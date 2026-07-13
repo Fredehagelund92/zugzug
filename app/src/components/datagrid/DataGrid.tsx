@@ -172,8 +172,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const visible = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
   const selectionCol = !!selection;
   const showRowNumbers = !!props.showRowNumbers;
-  const compact = props.density === "compact";
-  const cellPadY = compact ? "py-[3px]" : "py-[7px]";
+  const cellPadY = "py-[7px]";
   const undo = useUndoStack();
 
   // Typed cell-value accessor: uses the prop if provided, otherwise falls back
@@ -462,7 +461,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // The actual `useVirtualizer` call lives in DataGridBody; it writes its
   // instance into this ref so the cursor scroll-into-view effect below can
   // imperatively call scrollToIndex without re-creating the virtualiser here.
-  const estimatedRowHeight = compact ? 26 : 38;
+  const estimatedRowHeight = 38;
   const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
   // Pointer-driven cursor moves must NOT auto-scroll: the clicked cell is
@@ -984,11 +983,6 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               } as MenuItem,
             ]
           : []),
-        {
-          label: "Duplicate",
-          onClick: () => props.onDuplicateRow?.(rk),
-          disabled: !props.onDuplicateRow,
-        },
         { label: "Delete", onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
       ];
     }
