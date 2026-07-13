@@ -32,6 +32,7 @@ import { ComboSelect } from "../components/ComboSelect";
 import { useDimValuesPage, type ScanValueRow } from "../lib/use-dim-values-page";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 import { PublishPreviewDialog, type PublishGroup } from "../components/PublishPreviewDialog";
+import { AwaitingReview } from "../components/AwaitingReview";
 import { apiFetch } from "../api";
 
 /* Triage — per-dim sectioned inbox. Each ranked dim gets a section header; only
@@ -431,6 +432,9 @@ function TriageInner() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          <div className="px-3 pt-3">
+            <AwaitingReview />
+          </div>
           {rankedDims.length === 0 ? (
             <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
           ) : (
