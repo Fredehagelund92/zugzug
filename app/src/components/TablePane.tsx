@@ -675,7 +675,24 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   };
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
+    <div
+      className="flex flex-1 flex-col min-h-0"
+      onKeyDown={(e) => {
+        const t = e.target as HTMLElement;
+        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+        if (e.key === "/") {
+          e.preventDefault();
+          searchRef.current?.focus();
+          searchRef.current?.select();
+          return;
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+          e.preventDefault();
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        }
+      }}
+    >
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-2">
           {engineer && (
