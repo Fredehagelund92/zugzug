@@ -412,9 +412,9 @@ async function refreshPreferences(): Promise<void> {
 }
 
 /** Preload everything once. Awaited in main.tsx so the first render has data.
- *  Independent slices run in parallel; refreshDrafts is sequential because it
- *  iterates the dims it just fetched. Cold boot drops from 6 sequential RTTs
- *  to 3 (users → 4-in-parallel → drafts). */
+ *  Independent slices run in parallel; refreshDrafts runs after them (it fetches
+ *  every dim's drafts in one batch request, independent of the dim list). Cold
+ *  boot drops from 6 sequential RTTs to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
   const [u, meRaw] = await Promise.all([
     api<{ currentUser: User; collaborators: User[] }>("/users"),

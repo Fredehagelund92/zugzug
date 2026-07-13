@@ -17,17 +17,11 @@ const rowKey = "rt_row_1";
 const U1 = "u_rt_actor";
 
 async function cleanup(): Promise<void> {
-  // Drop dynamic dim_/map_ tables using the dimension registry to locate them.
-  const row = await pgRun(
-    `SELECT dim_table, map_table FROM "zugzug_app"."dimension" WHERE id = $1 LIMIT 1`,
-    [dimId],
-  ).catch(() => null);
-  // Attempt drops regardless (IF EXISTS handles missing tables).
+  // Drop dynamic dim_/map_ tables (IF EXISTS handles missing tables).
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${dimId}"`);
   await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${dimId}"`);
   await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${dimId}"`);
   await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${dimId}"`);
-  void row; // used above for context only
   await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1`, [dimId]);
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T1]);
   await pgRun(`DELETE FROM "zugzug_app"."dimension_field" WHERE dim_id = $1`, [dimId]);

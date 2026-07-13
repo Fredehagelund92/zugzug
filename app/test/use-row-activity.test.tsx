@@ -74,7 +74,7 @@ describe("useRowActivity", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test("cleans up timer on unmount", async () => {
+  test("cleans up safety-net interval on unmount", async () => {
     const { unmount } = renderHook(() => useRowActivity("d_country"));
     await flushMicrotasks();
     expect(fetchMock).toHaveBeenCalledTimes(1);

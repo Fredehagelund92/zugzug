@@ -31,6 +31,8 @@ export function useRowActivity(
 
   // Single fetch implementation, re-created per tableId and held in a ref so
   // both the mount/safety-net effect and the debounced-push effect share it.
+  // NB: this effect must be declared before those two so the ref holds the
+  // current closure by the time they run (React runs effects in definition order).
   const fetchActivityRef = useRef<() => Promise<void>>(async () => {});
   useEffect(() => {
     fetchActivityRef.current = async () => {
