@@ -18,7 +18,6 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ["⌘A", "select all visible"],
       ["⌘C / ⌘V", "copy / paste (fills range)"],
       ["⌘⌫", "remove selected row(s)"],
-      ["/", "focus filter"],
     ],
   },
   {
