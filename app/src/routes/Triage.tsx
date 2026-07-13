@@ -42,7 +42,7 @@ import { apiFetch } from "../api";
    POST /api/dimensions/:id/scan, then refetches. */
 
 type Filter = "new" | "all" | "mapped";
-type RStatus = "mapped" | "new" | "skipped";
+type RStatus = "mapped" | "new" | "skipped" | "rejected";
 
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 function flashRow(selector: string): void {
@@ -254,6 +254,15 @@ function TriageInner() {
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
+  // Re-stage a rejected draft: call saveDraft which clears rejected_reason/rejected_by
+  // on the server (the ON CONFLICT branch resets those columns to NULL).
+  const restageCross = (dimId: string, raw: string) => {
+    const prev = allDrafts[dkey(dimId, raw)];
+    if (!prev || prev.status !== "rejected") return;
+    void Promise.resolve(
+      saveDraft(dimId, raw, prev.targetLabel ? "mapped" : "skipped", prev.targetLabel, prev.targetKey)
+    ).catch((err) => reportDraftError(`re-stage "${raw}"`, err));
+  };
   const discardCross = (dimId: string, raw: string) => {
     const prev = allDrafts[dkey(dimId, raw)];
     if (!prev) return;
@@ -280,9 +289,9 @@ function TriageInner() {
         const j = ((idx < 0 ? -1 : idx) + i + rows.length) % rows.length;
         const r = rows[j];
         const draft = allDrafts[dkey(activeDim.id, r.raw)];
-        // Rejected drafts are treated as "skipped" for cursor navigation: they
-        // are not "new" items needing mapping (Task 8 will render them distinctly).
         const rawStatus = draft ? draft.status : r.isMapped ? "mapped" : "new";
+        // Rejected drafts are skipped for cursor advance — the row is visible and
+        // actionable (Re-stage / Discard), but not a "new" item to navigate through.
         const status: RStatus = rawStatus === "rejected" ? "skipped" : rawStatus;
         if (status === "new") {
           setCursor({ dimId: activeDim.id, raw: r.raw });
@@ -452,6 +461,7 @@ function TriageInner() {
                 onAccept={(raw) => acceptCross(rd.d.id, raw)}
                 onSkip={(raw) => skipCross(rd.d.id, raw)}
                 onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
+                onRestage={(raw) => restageCross(rd.d.id, raw)}
                 onCommitAll={() => void openPublishPreview()}
                 aiHint={i === activeDimIdx ? aiHint : { hint: null, loading: false, error: false }}
                 rescanning={rescanning && i === activeDimIdx}
@@ -577,6 +587,7 @@ interface DimSectionProps {
   onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
+  onRestage: (raw: string) => void;
   onCommitAll: () => void;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   rescanning: boolean;
@@ -646,6 +657,7 @@ function DimSection(p: DimSectionProps) {
             onAccept={p.onAccept}
             onSkip={p.onSkip}
             onPick={p.onPick}
+            onRestage={p.onRestage}
             onCommitAll={p.onCommitAll}
             aiHint={p.aiHint}
             sentinelRef={sentinelRef}
@@ -666,6 +678,7 @@ interface DimSectionBodyProps {
   onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
+  onRestage: (raw: string) => void;
   onCommitAll: () => void;
   aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
@@ -675,17 +688,18 @@ function DimSectionBody(p: DimSectionBodyProps) {
   const options = useMemo(() => p.dim.canonical.map((c) => c.label), [p.dim.canonical]);
   const [editingRaw, setEditingRaw] = useState<string | null>(null);
 
-  const rowStatus = (r: ScanValueRow): { status: RStatus; target: string | null } => {
+  const rowStatus = (r: ScanValueRow): { status: RStatus; target: string | null; rejectedReason: string | null } => {
     const draft = p.drafts[dkey(p.dim.id, r.raw)];
     if (draft)
       return {
-        // Rejected drafts render as "skipped" until Task 8 adds the rejected UI.
-        status: draft.status === "rejected" ? "skipped" : draft.status,
+        status: draft.status,
         target: draft.targetLabel,
+        rejectedReason: draft.rejectedReason,
       };
     return {
       status: r.isMapped ? "mapped" : "new",
       target: r.mappedLabel,
+      rejectedReason: null,
     };
   };
 
@@ -700,13 +714,16 @@ function DimSectionBody(p: DimSectionBodyProps) {
     const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
     if (!plain) return;
     const k = e.key.toLowerCase();
-    if (p.canEdit && k === "a") {
+    // A/S/M keyboard actions are blocked on rejected rows — the only valid
+    // actions are Re-stage (button) and Discard (button). See task-9-brief.md.
+    const isRejected = p.drafts[dkey(p.dim.id, raw)]?.status === "rejected";
+    if (p.canEdit && k === "a" && !isRejected) {
       e.preventDefault();
       p.onAccept(raw);
-    } else if (p.canEdit && k === "s") {
+    } else if (p.canEdit && k === "s" && !isRejected) {
       e.preventDefault();
       p.onSkip(raw);
-    } else if (p.canEdit && (k === "m" || k === "enter")) {
+    } else if (p.canEdit && (k === "m" || k === "enter") && !isRejected) {
       e.preventDefault();
       setEditingRaw(raw);
     } else if (k === "n") {
@@ -752,7 +769,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
     <div className="border-t border-line">
       <ul className="divide-y divide-line">
         {p.page.items.map((r) => {
-          const { status, target } = rowStatus(r);
+          const { status, target, rejectedReason } = rowStatus(r);
           const isCursor =
             p.cursor && p.cursor.dimId === p.dim.id && p.cursor.raw === r.raw;
           return (
@@ -797,17 +814,33 @@ function DimSectionBody(p: DimSectionBodyProps) {
                     <span className="font-mono text-[12px] text-ink-3">—</span>
                   )}
                 </span>
-                <span className="w-20">
+                <span className={status === "rejected" ? "w-auto max-w-[180px]" : "w-20"}>
                   {status === "mapped" ? (
                     <Chip label="Mapped" bucket="chip-1" dot />
                   ) : status === "skipped" ? (
                     <Chip label="Skipped" bucket="chip-5" />
+                  ) : status === "rejected" ? (
+                    <span
+                      className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
+                      title={rejectedReason ?? undefined}
+                    >
+                      rejected{rejectedReason ? `: ${rejectedReason.slice(0, 60)}${rejectedReason.length > 60 ? "…" : ""}` : ""}
+                    </span>
                   ) : (
                     <Chip label="New" bucket="chip-2" dot />
                   )}
                 </span>
+                {status === "rejected" && p.canEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); p.onRestage(r.raw); }}
+                  >
+                    Re-stage
+                  </Button>
+                )}
               </div>
-              {isCursor && !target && (
+              {isCursor && !target && status !== "rejected" && (
                 <div className="flex flex-col gap-2 pl-1 pt-1">
                   <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
                   {status === "new" && p.canEdit && (
