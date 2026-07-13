@@ -204,11 +204,15 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
-  const activity = useRowActivity(activeId);
+  // Presence pushes a `row_touched` hint when a peer writes a row; bump this
+  // nonce to trigger useRowActivity's debounced refetch (replaces the 5s poll).
+  const [activityNonce, setActivityNonce] = useState(0);
+  const activity = useRowActivity(activeId, { refetchNonce: activityNonce });
   const currentUser = useCurrentUser();
   const presence = usePresence(currentUser ? activeId : null, {
     userId: currentUser?.id ?? "",
     displayName: currentUser?.name ?? "",
+    onRowTouched: () => setActivityNonce((n) => n + 1),
   });
   const undo = useUndoStack();
 
