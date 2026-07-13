@@ -501,7 +501,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setBusy(false);
     setSel([]);
     for (const k of [survivor, ...losers]) dismissConflict(k);
-    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — raw values re-pointed.`);
+    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed.`);
   };
 
   const retire = async (key: string, label: string) => {
@@ -512,7 +512,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       const r = await retireCanonical(activeId, key, version);
       if (!r.ok) {
         flash(
-          `Can't remove "${label}" — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
+          `Can't remove "${label}" — ${r.variants} source value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
         );
         return;
       }
@@ -669,12 +669,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <span>
                 key <span className="text-ink">{dim.keyCol}</span>
               </span>
-              {dim.orderingMode === "manual" && dim.nextPosition && (
-                <span className="font-mono text-[11px] text-ink-3">
-                  next position: {dim.nextPosition}
-                </span>
-              )}
-              <span className="text-line-2">·</span>
+                  <span className="text-line-2">·</span>
             </>
           )}
           <span className="tabular-nums">
@@ -683,7 +678,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           <span className="tabular-nums">
             {fields.length} field{fields.length === 1 ? "" : "s"}
           </span>
-          <span className="tabular-nums">{totalVariants.toLocaleString()} raw</span>
+          <span className="tabular-nums">{totalVariants.toLocaleString()} source values</span>
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
@@ -1281,7 +1276,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 <ComboSelect
                   options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
                   value={null}
-                  placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
+                  placeholder={sel.length < 2 ? "select 2+" : "Keep which record?"}
                   onPick={(survivorLabel) => {
                     if (sel.length >= 5) {
                       setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
@@ -1342,7 +1337,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           bulkRemoveConfirm && (
             <>
               {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be
-              retired. Mapped raw values will lose their target. Use Undo if you change your mind.
+              retired. Mapped source values will lose their target. Use Undo if you change your mind.
             </>
           )
         }
@@ -1417,7 +1412,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
                 {mergeConfirm.survivorLabel}
               </code>
-              . Their raw values will be re-pointed. Use Undo if you change your mind.
+              . Their source values will be re-pointed. Use Undo if you change your mind.
             </>
           )
         }
