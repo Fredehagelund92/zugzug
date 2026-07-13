@@ -1607,32 +1607,6 @@ if (import.meta.main) {
         return ok ? undefined : new Response("upgrade failed", { status: 500 });
       }
 
-      // Legacy /ws/presence/:tableId — default-tenant fallback (one-release deprecation).
-      if (url.pathname.startsWith("/ws/presence/")) {
-        const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
-        if (!tableId) return new Response("missing tableId", { status: 400 });
-        let session: SessionUser | null;
-        try {
-          session = await getSessionUser(req);
-          if (!session) {
-            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-            session = await getApiTokenUser(req);
-          }
-        } catch {
-          return new Response("auth error", { status: 503 });
-        }
-        if (!session) return new Response("unauthorized", { status: 401 });
-        const ok = srv.upgrade(req, {
-          data: {
-            tableId,
-            tenantId: "default",
-            userId: session.id,
-            displayName: session.name,
-          } satisfies PresenceWsData,
-        });
-        return ok ? undefined : new Response("upgrade failed", { status: 500 });
-      }
-
       const reqId = crypto.randomUUID();
       const start = performance.now();
       let userId: string | undefined;
