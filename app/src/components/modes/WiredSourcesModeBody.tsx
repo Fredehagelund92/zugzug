@@ -96,7 +96,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
   const firstSchema = wired[0].table.split(".")[0];
 
   return (
-    <div className="zz-rise flex flex-1 flex-col min-h-0">
+    <div className="zz-fade-in flex flex-1 flex-col min-h-0">
       {/* Per-dim color stripe on the left edge — the workbench signature for
           "which table am I looking at". The container itself is transparent so
           the canvas grid bleeds through below the last row; the hero header

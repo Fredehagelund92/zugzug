@@ -869,7 +869,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         />
       )}
 
-      <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
+      <div className="zz-fade-in flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
         <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
           <span className="font-mono text-[11.5px] text-ink-3">
             {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}

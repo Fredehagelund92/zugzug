@@ -162,6 +162,14 @@
   animation: zz-rise 0.62s var(--ease) both;
 }
 
+/* fade-in only: opacity 0→1, no translate. Use on full-height flex containers
+   (RecordsBody, WiredSourcesModeBody) where a translateY entrance causes a
+   visible ~16px downward settle on cold open (craft-j1-02/03). */
+.zz-fade-in {
+  opacity: 0;
+  animation: zz-fade 0.62s var(--ease) both;
+}
+
 /* slide-over drawer (value mapper) */
 .zz-overlay {
   animation: zz-fade 0.2s ease both;
@@ -322,7 +330,8 @@
     animation: none;
     opacity: 0;
   }
-  .zz-rise {
+  .zz-rise,
+  .zz-fade-in {
     animation: none;
     opacity: 1;
   }
