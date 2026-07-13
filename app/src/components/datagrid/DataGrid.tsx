@@ -161,6 +161,29 @@ function FillHandle({
   );
 }
 
+/** Clipboard access that never throws: the API is absent in insecure contexts
+ *  (and headless browsers), so failures surface a toast instead of an uncaught
+ *  rejection. Returns success/false for writes, the text/null for reads. */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    toast("Couldn't access the clipboard", "error");
+    return false;
+  }
+}
+async function readClipboard(): Promise<string | null> {
+  try {
+    if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
+    return await navigator.clipboard.readText();
+  } catch {
+    toast("Couldn't read the clipboard", "error");
+    return null;
+  }
+}
+
 export function DataGrid<Row>(props: DataGridProps<Row>) {
   const {
     rows,
@@ -612,7 +635,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (!row) return;
       const val = getValue(row, field);
       const text = val == null ? "" : String(val);
-      await navigator.clipboard.writeText(text);
+      if (!(await writeClipboard(text))) return;
       toast("Copied", "success");
       flashCellCopy(rk, field);
       return;
@@ -631,7 +654,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       }
       lines.push(cells.join("\t"));
     }
-    await navigator.clipboard.writeText(lines.join("\n"));
+    if (!(await writeClipboard(lines.join("\n")))) return;
     toast("Copied", "success");
     for (let ri = minRow; ri <= maxRow; ri++) {
       const row = sortedRows[ri];
@@ -685,7 +708,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   //   2. Tabular clipboard → paste the source TSV grid starting at the anchor.
   const handlePaste = useCallback(async () => {
     if (!cursor.cursor) return;
-    const text = await navigator.clipboard.readText();
+    const text = await readClipboard();
     if (!text) return;
     // Trim trailing newline so single-value paste from a copy of one cell
     // doesn't look like two rows.
