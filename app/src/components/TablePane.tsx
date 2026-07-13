@@ -1185,7 +1185,7 @@ function RecordsBody({
           onFilterSetChange={(fs) => {
             setLayout((cur) => {
               const next = { ...cur, filterSet: fs };
-              setGridLayout(activeId, { filterSet: fs });
+              setGridLayout(activeId, next);
               return next;
             });
           }}

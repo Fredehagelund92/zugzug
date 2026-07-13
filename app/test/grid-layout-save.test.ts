@@ -28,6 +28,41 @@ describe("setGridLayout persistence", () => {
     expect(patch!.init!.keepalive).toBe(true);
   });
 
+  test("filter-only call preserves previously-set widths/hidden in the PATCH body", async () => {
+    vi.useFakeTimers();
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "PATCH") bodies.push(init.body as string);
+        return new Response(null, { status: 204 });
+      }),
+    );
+    const { setGridLayout } = await import("../src/store");
+    // Simulate a prior layout save that flushes (widths + hidden)
+    setGridLayout("dim1", { widths: { label: 240 }, hidden: ["rank"] });
+    await vi.advanceTimersByTimeAsync(500); // flush the first debounce
+
+    // Now a filter-only change comes in — the pendingLayouts map is empty after the flush
+    // The caller must pass the FULL config (not just {filterSet}) so the PATCH body
+    // contains all keys and the server does not wipe widths/hidden.
+    setGridLayout("dim1", {
+      widths: { label: 240 },
+      hidden: ["rank"],
+      filterSet: {
+        conjunction: "and",
+        conditions: [{ id: "c1", field: "region", operator: "equals", value: "EU" }],
+      },
+    });
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(bodies).toHaveLength(2);
+    const second = JSON.parse(bodies[1]!);
+    expect(second).toHaveProperty("widths");
+    expect(second).toHaveProperty("hidden");
+    expect(second).toHaveProperty("filterSet");
+  });
+
   test("a failed layout save raises an error toast", async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
