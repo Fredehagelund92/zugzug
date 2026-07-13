@@ -5,6 +5,7 @@ import { Badge } from "./Badge";
 import { Checkbox } from "./Checkbox";
 import { ComboSelect } from "./ComboSelect";
 import { AddFieldPopover } from "./AddFieldPopover";
+import { RenameConfirmation } from "./RenameConfirmation";
 import { IconPlus, IconX } from "./Icons";
 import {
   slug,
@@ -128,7 +129,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
 
   return (
     <div
-      className="flex flex-1 flex-col min-h-0"
+      className="relative flex flex-1 flex-col min-h-0"
       onKeyDown={(e) => {
         // Skip when editing in a grid cell (focus is inside an input)
         const t = e.target as HTMLElement;
@@ -855,29 +856,17 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         </div>
       )}
       {renameFlash && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
-          <span>
-            Renamed “{renameFlash.prev}” → “{renameFlash.next}”.{" "}
-            {renameFlash.variants.toLocaleString()} raw value{renameFlash.variants === 1 ? "" : "s"}{" "}
-            re-pointed.
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!undo.canUndo}
-              onClick={() => {
-                void undo.undo();
-                setRenameFlash(null);
-              }}
-            >
-              Undo
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setRenameFlash(null)}>
-              Dismiss
-            </Button>
-          </div>
-        </div>
+        <RenameConfirmation
+          prev={renameFlash.prev}
+          next={renameFlash.next}
+          variants={renameFlash.variants}
+          canUndo={undo.canUndo}
+          onUndo={() => {
+            void undo.undo();
+            setRenameFlash(null);
+          }}
+          onDismiss={() => setRenameFlash(null)}
+        />
       )}
 
       <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
