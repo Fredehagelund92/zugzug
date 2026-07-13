@@ -109,8 +109,17 @@ describe("Tables deep links", () => {
     expect(search).toContain("active=brand");
   });
 
-  test("legacy ?dimId=brand opens brand after cold load", async () => {
+  test("legacy ?dimId= is ignored — does NOT open the tab", async () => {
     await renderRoute("/app/default/tables?dimId=brand");
+    act(() => setDims(DIMS));
+    // The legacy fold is removed: pane-brand should NOT be mounted.
+    // Fallback opens dims[0] ("a") because no ?open= was supplied.
+    expect(await screen.findByTestId("pane-a")).toHaveAttribute("data-active", "true");
+    expect(screen.queryByTestId("pane-brand")).toBeNull();
+  });
+
+  test("?open=brand still opens that tab", async () => {
+    await renderRoute("/app/default/tables?open=brand&active=brand");
     act(() => setDims(DIMS));
     expect(await screen.findByTestId("pane-brand")).toHaveAttribute("data-active", "true");
   });

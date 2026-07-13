@@ -10,7 +10,7 @@ import { availableModes, type Mode } from "../lib/available-modes";
 import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
 
 /* Tables — the master-record workbench, now multi-tab. The route owns the URL
-   contract (?open=a,b,c&active=<id> + legacy ?dimId=) and the tab strip. Each
+   contract (?open=a,b,c&active=<id>) and the tab strip. Each
    open tab mounts its own <TablePane> with an isolated UndoStackProvider; only
    the active pane is visible (CSS hide) so per-pane React state survives
    tab switches without a coordination layer. */
@@ -26,7 +26,7 @@ export function MasterTables() {
   // table list. initStore() is fire-and-forget (TenantLayout), so on a cold
   // profile this route mounts with dims=[] and a mount-only fold would drop
   // every deep-linked tab; the URL writer below stays gated until the fold
-  // lands, so ?open/?active survive the wait. Honors legacy ?dimId=<id>.
+  // lands, so ?open/?active survive the wait.
   // A workspace with no tables never folds — there is nothing to open, and
   // NoTablesYet renders regardless.
   const didInitFromUrl = useRef(false);
@@ -38,14 +38,8 @@ export function MasterTables() {
     if (didInitFromUrl.current) return;
     if (dims.length === 0) return;
     didInitFromUrl.current = true;
-    const legacyDim = searchParams.get("dimId");
     const openParam = searchParams.get("open");
     const activeParam = searchParams.get("active");
-    if (legacyDim && dims.some((d) => d.id === legacyDim)) {
-      openTab(legacyDim);
-      urlOpenedTab.current = true;
-      return;
-    }
     if (openParam) {
       for (const did of openParam.split(",").filter(Boolean)) {
         if (dims.some((d) => d.id === did)) {
@@ -109,7 +103,6 @@ export function MasterTables() {
     // stale capture from an earlier commit would silently drop params written
     // by a more recent run of this same effect.
     const next = new URLSearchParams(window.location.search);
-    next.delete("dimId");
     if (tabs.length > 0) {
       next.set("open", tabs.map((t) => t.dimId).join(","));
     } else {
