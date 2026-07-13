@@ -120,6 +120,7 @@ export function MasterTables() {
         if (mode !== "records") next.set("mode", mode);
         else next.delete("mode");
         if (mode !== "match") next.delete("value");
+        if (mode !== "match") next.delete("target");
       }
     } else {
       next.delete("active");
