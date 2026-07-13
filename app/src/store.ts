@@ -6,7 +6,7 @@ import type {
   PaletteName,
   NumberFormat,
 } from "./data";
-import type { ConditionalRule } from "./components/datagrid/types";
+import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
 import { toast } from "./components/Toast";
@@ -1057,6 +1057,7 @@ export interface GridLayoutConfig {
   order?: string[];
   hidden?: string[];
   sort?: { column: string; direction: "asc" | "desc" } | null;
+  filterSet?: FilterSet | null;
 }
 
 // Layout cache so re-activating a tab renders with correct column widths
