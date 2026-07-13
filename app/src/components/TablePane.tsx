@@ -66,6 +66,7 @@ import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
+import { VersionHistory } from "./VersionHistory";
 import { toast } from "./Toast";
 import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
 import { ImportPreviewDialog } from "./ImportPreviewDialog";
@@ -264,6 +265,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   const [orderingOpen, setOrderingOpen] = useState(false);
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
   const [ownerOpen, setOwnerOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [members, setMembers] = useState<{ user_id: string; name: string | null }[] | null>(null);
   const [pubState, setPubState] = useState<PublishState | null>(null);
   const [changedOnly, setChangedOnly] = useState(false);
@@ -855,6 +857,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               ⍟ Owner
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setHistoryOpen((v) => !v)}
+            title="View version history"
+          >
+            ⌛ History
+          </Button>
           {canEdit && pubState && unpublished > 0 && (
             <Button
               size="sm"
@@ -1050,6 +1060,15 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
             </div>
           )}
         </div>
+      )}
+
+      {historyOpen && (
+        <VersionHistory
+          dimId={activeId}
+          onClose={() => setHistoryOpen(false)}
+          onRollbackSuccess={() => setHistoryOpen(false)}
+          flash={flash}
+        />
       )}
 
       {notice && (

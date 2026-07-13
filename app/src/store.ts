@@ -826,6 +826,7 @@ export async function rollbackDim(dimId: string, toVersion: number): Promise<voi
   });
   await refreshDim(dimId);
   await refreshDrafts(dimId);
+  await refreshSources();
   await refreshAudit();
   emit();
 }

@@ -21,6 +21,7 @@ const MATRIX: Record<Action, Record<"viewer" | "editor" | "admin", boolean>> = {
   "settings.danger.leave":  { viewer: true,  editor: true,  admin: true },
   "settings.danger.delete": { viewer: false, editor: false, admin: true },
   "admin.view":             { viewer: false, editor: false, admin: false },
+  "table.rollback":         { viewer: false, editor: false, admin: true },
 };
 
 describe("can()", () => {

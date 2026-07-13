@@ -20,7 +20,8 @@ export type Action =
   | "integrations.webhooks.edit"
   | "integrations.service_accounts.view"
   | "integrations.service_accounts.edit"
-  | "admin.view";
+  | "admin.view"
+  | "table.rollback";
 
 export function can(t: TenantContextValue, action: Action): boolean {
   // Super-admin gets every workspace + account affordance. The /admin shell
@@ -64,5 +65,8 @@ export function can(t: TenantContextValue, action: Action): boolean {
 
     case "admin.view":
       return t.isSuperAdmin;
+
+    case "table.rollback":
+      return t.role === "admin";
   }
 }
