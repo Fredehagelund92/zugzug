@@ -26,6 +26,20 @@ import { DataGridBody } from "./DataGridBody";
 import { DataGridHeader } from "./DataGridHeader";
 import { attrEsc, flashCell } from "./util";
 import { toast } from "../Toast";
+import {
+  IconCopy,
+  IconPaste,
+  IconX,
+  IconFilter,
+  IconTrash,
+  IconEyeOff,
+  IconSortAsc,
+  IconSortDesc,
+  IconEdit,
+  IconType,
+  IconWand,
+  IconPlus,
+} from "../Icons";
 
 // ── Range selection types ───────────────────────────────────────────────────
 interface RangeCorner {
@@ -747,12 +761,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const value = row ? getValue(row, field) : null;
       const valStr = value == null ? "" : String(value);
       return [
-        { label: "Copy", onClick: () => void handleCopy() },
-        { label: "Paste", onClick: () => void handlePaste() },
-        { label: "Clear", onClick: () => void commitValue(rk, field, null) },
+        { label: "Copy", icon: <IconCopy />, shortcut: "⌘C", onClick: () => void handleCopy() },
+        { label: "Paste", icon: <IconPaste />, shortcut: "⌘V", onClick: () => void handlePaste() },
+        { label: "Clear", icon: <IconX />, onClick: () => void commitValue(rk, field, null) },
         { separator: true, label: "", onClick: () => {} },
         {
           label: `Filter to "${valStr.slice(0, 24)}"`,
+          icon: <IconFilter />,
           onClick: () => {
             setFilterSet((cur) => ({
               conjunction: cur?.conjunction ?? "and",
@@ -770,6 +785,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         },
         {
           label: `Filter to NOT "${valStr.slice(0, 24)}"`,
+          icon: <IconFilter />,
           onClick: () => {
             setFilterSet((cur) => ({
               conjunction: cur?.conjunction ?? "and",
@@ -788,11 +804,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         { separator: true, label: "", onClick: () => {} },
         {
           label: "Insert row above",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "above"),
           disabled: !props.onInsertRow,
         },
         {
           label: "Insert row below",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "below"),
           disabled: !props.onInsertRow,
         },
@@ -818,6 +836,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           : []),
         {
           label: "Delete row",
+          icon: <IconTrash />,
           onClick: () => props.onDeleteRow?.(rk),
           disabled: !props.onDeleteRow,
         },
@@ -829,14 +848,17 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
       const sortAsc: MenuItem = {
         label: "Sort ascending",
+        icon: <IconSortAsc />,
         onClick: () => setSort({ field: surface.field, dir: "asc" }),
       };
       const sortDesc: MenuItem = {
         label: "Sort descending",
+        icon: <IconSortDesc />,
         onClick: () => setSort({ field: surface.field, dir: "desc" }),
       };
       const conditional: MenuItem = {
         label: "Conditional formatting…",
+        icon: <IconWand />,
         onClick: () => {
           if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
           setRulesEditor(surface.field);
@@ -845,6 +867,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       };
       const hide: MenuItem = {
         label: "Hide column",
+        icon: <IconEyeOff />,
         onClick: () => {
           const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
           props.onLayoutChange?.({ hidden });
@@ -889,6 +912,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         sortDesc,
         {
           label: "Rename",
+          icon: <IconEdit />,
           onClick: () => {
             if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setMenuFor(surface.field);
@@ -896,6 +920,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         },
         {
           label: "Change type",
+          icon: <IconType />,
           onClick: () => {
             if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setMenuFor(surface.field);
@@ -906,6 +931,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         conditional,
         {
           label: "Edit description",
+          icon: <IconEdit />,
           onClick: () => {
             if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
             setDescEditor(surface.field);
@@ -932,6 +958,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
 
       base.push(sep, hide, {
         label: "Delete column",
+        icon: <IconTrash />,
         onClick: () => props.onDeleteColumn?.(surface.field),
         disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
       });
@@ -955,11 +982,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         },
         {
           label: "Insert above",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "above"),
           disabled: !props.onInsertRow,
         },
         {
           label: "Insert below",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "below"),
           disabled: !props.onInsertRow,
         },
@@ -983,7 +1012,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               } as MenuItem,
             ]
           : []),
-        { label: "Delete", onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+        { label: "Delete", icon: <IconTrash />, onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
       ];
     }
     return [];

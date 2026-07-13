@@ -153,13 +153,13 @@ export function ColumnHeaderMenu<Row>({
       {mode === "menu" && (
         <>
           <button type="button" className={item} onClick={() => setMode("rename")}>
-            <IconEdit className={iconCls} /> rename column
+            <IconEdit className={iconCls} /> Rename column
           </button>
           <button type="button" className={item} onClick={() => setMode("type")}>
-            <IconType className={iconCls} /> change type
+            <IconType className={iconCls} /> Change type
           </button>
           <button type="button" className={item} onClick={() => setMode("filter")}>
-            <IconFilter className={iconCls} /> filter…
+            <IconFilter className={iconCls} /> Filter…
             {filterValue && (
               <span className="ml-auto rounded-pill bg-accent-wash px-1.5 font-mono text-[9px] text-accent">
                 on
@@ -175,7 +175,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              <IconRules className={iconCls} /> conditional formatting…
+              <IconRules className={iconCls} /> Conditional formatting…
             </button>
           )}
           {onEditDescription && (
@@ -187,7 +187,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              <IconEdit className={iconCls} /> edit description…
+              <IconEdit className={iconCls} /> Edit description…
             </button>
           )}
           <div className="my-1 h-px bg-line" />
@@ -199,7 +199,7 @@ export function ColumnHeaderMenu<Row>({
               onClose();
             }}
           >
-            <IconSortAsc className={iconCls} /> sort A→Z
+            <IconSortAsc className={iconCls} /> Sort A→Z
           </button>
           <button
             type="button"
@@ -209,7 +209,7 @@ export function ColumnHeaderMenu<Row>({
               onClose();
             }}
           >
-            <IconSortDesc className={iconCls} /> sort Z→A
+            <IconSortDesc className={iconCls} /> Sort Z→A
           </button>
           {sortDir != null && (
             <button
@@ -220,7 +220,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              <IconX className={iconCls} /> clear sort
+              <IconX className={iconCls} /> Clear sort
             </button>
           )}
           <div className="my-1 h-px bg-line" />
@@ -232,14 +232,14 @@ export function ColumnHeaderMenu<Row>({
               onClose();
             }}
           >
-            <IconEyeOff className={iconCls} /> hide column
+            <IconEyeOff className={iconCls} /> Hide column
           </button>
           <button
             type="button"
             className={cx(item, "text-danger")}
             onClick={() => setMode("confirm-delete")}
           >
-            <IconTrash className="h-3.5 w-3.5 shrink-0" /> delete column
+            <IconTrash className="h-3.5 w-3.5 shrink-0" /> Delete column
           </button>
         </>
       )}
@@ -271,10 +271,10 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              save
+              Save
             </button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>
-              cancel
+              Cancel
             </button>
           </div>
         </div>
@@ -310,7 +310,7 @@ export function ColumnHeaderMenu<Row>({
           </div>
           <div className="my-1 h-px bg-line" />
           <button type="button" className={item} onClick={() => setMode("menu")}>
-            <IconChevronLeft className={iconCls} /> back
+            <IconChevronLeft className={iconCls} /> Back
           </button>
         </div>
       )}
@@ -598,7 +598,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              apply
+              Apply
             </button>
             {filterValue && (
               <button
@@ -610,7 +610,7 @@ export function ColumnHeaderMenu<Row>({
                   onClose();
                 }}
               >
-                clear
+                Clear
               </button>
             )}
             <button
@@ -638,10 +638,10 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              delete
+              Delete
             </button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>
-              cancel
+              Cancel
             </button>
           </div>
         </div>

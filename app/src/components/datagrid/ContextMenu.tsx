@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
 
@@ -7,6 +7,8 @@ export interface MenuItem {
   onClick: () => void;
   disabled?: boolean;
   separator?: boolean;
+  icon?: React.ReactNode;
+  shortcut?: string;
 }
 
 export function ContextMenu({
@@ -54,11 +56,17 @@ export function ContextMenu({
               onClose();
             }}
             className={cx(
-              "block w-full px-3 py-1.5 text-left text-ink",
+              "flex w-full items-center gap-2 px-3 py-1.5 text-left text-ink",
               item.disabled ? "cursor-not-allowed opacity-40" : "hover:bg-hover",
             )}
           >
-            {item.label}
+            {item.icon && (
+              <span className="h-3.5 w-3.5 shrink-0 text-ink-3">{item.icon}</span>
+            )}
+            <span className="flex-1">{item.label}</span>
+            {item.shortcut && (
+              <span className="ml-2 shrink-0 font-mono text-[10px] text-ink-3">{item.shortcut}</span>
+            )}
           </button>
         ),
       )}
