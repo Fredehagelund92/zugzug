@@ -591,6 +591,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
+    // GET /api/t/:slug/drafts — all drafts for the workspace in one query (boot path).
+    if (tenantSlugFromPath !== null && seg[1] === "drafts" && seg.length === 2 && method === "GET") {
+      return json(await reqRepo.listAllDrafts());
+    }
+
     // PATCH /api/t/:slug — rename workspace label and/or set color (admin only)
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
       const gate = requireAdmin(tenantCtx);

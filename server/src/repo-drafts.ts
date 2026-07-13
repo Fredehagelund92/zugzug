@@ -71,6 +71,51 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
   }));
 }
 
+export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
+  const rows = await pgAll<{
+    dimId: string;
+    raw: string;
+    status: "mapped" | "skipped";
+    targetLabel: string | null;
+    targetKey: string | null;
+    uid: string;
+    secs: number;
+    source: "user" | "ai";
+    confidence: "high" | "medium" | "low" | null;
+    reasoning: string | null;
+  }>(
+    `SELECT dim_id AS "dimId", raw, status,
+            target_label AS "targetLabel", target_key AS "targetKey",
+            user_id AS uid,
+            EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            source, confidence, reasoning
+     FROM ${pg("draft")} WHERE tenant_id = $1 ORDER BY dim_id, created_at DESC`,
+    [tenantId],
+  );
+  if (rows.length === 0) return [];
+
+  const uids = Array.from(new Set(rows.map((r) => r.uid)));
+  const users = await pgAll<User>(
+    `SELECT id, name, initials FROM ${pg("users")} WHERE id = ANY($1::text[])`,
+    [uids],
+  );
+  const byId = new Map(users.map((u) => [u.id, u]));
+  const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
+
+  return rows.map((r) => ({
+    dimId: r.dimId,
+    raw: r.raw,
+    status: r.status,
+    targetLabel: r.targetLabel,
+    targetKey: r.targetKey,
+    user: byId.get(r.uid) ?? unknownUser,
+    at: rel(Number(r.secs)),
+    source: r.source,
+    confidence: r.confidence,
+    reasoning: r.reasoning,
+  }));
+}
+
 export async function saveDraft(
   dimId: string,
   raw: string,
