@@ -1104,7 +1104,23 @@ function RecordsBody({
           }}
           empty={
             <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">
-              no records yet — import from a source above, or add one below
+              {list.length > 0 ? (
+                <>
+                  No records match
+                  {search.trim() ? ` “${search.trim()}”` : " the current filter"}.
+                  {search.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      className="ml-2 text-accent hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </>
+              ) : (
+                "no records yet — import from a source above, or add one below"
+              )}
             </div>
           }
           onAddFieldClick={canEdit ? () => setAddOpen((v) => !v) : undefined}
