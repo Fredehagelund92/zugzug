@@ -20,6 +20,7 @@ import {
   useWorkspaceInfo,
   useCanEdit,
   useStoreLoading,
+  useCurrentUser,
   fetchPublishState,
   ApiCodeError,
 } from "../store";
@@ -690,6 +691,7 @@ interface DimSectionBodyProps {
 function DimSectionBody(p: DimSectionBodyProps) {
   const options = useMemo(() => p.dim.canonical.map((c) => c.label), [p.dim.canonical]);
   const [editingRaw, setEditingRaw] = useState<string | null>(null);
+  const me = useCurrentUser();
 
   const rowStatus = (r: ScanValueRow): { status: RStatus; target: string | null; rejectedReason: string | null } => {
     const draft = p.drafts[dkey(p.dim.id, r.raw)];
@@ -833,7 +835,8 @@ function DimSectionBody(p: DimSectionBodyProps) {
                     <Chip label="New" bucket="chip-2" dot />
                   )}
                 </span>
-                {status === "rejected" && p.canEdit && (
+                {status === "rejected" && p.canEdit &&
+                  p.drafts[dkey(p.dim.id, r.raw)]?.user.id === me?.id && (
                   <Button
                     variant="ghost"
                     size="sm"

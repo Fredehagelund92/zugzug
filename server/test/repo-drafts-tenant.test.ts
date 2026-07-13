@@ -42,3 +42,32 @@ test("listDrafts is tenant-scoped", async () => {
   expect((await drafts.listDrafts(DIM, TA)).map((d) => d.raw)).toContain("FRA");
   expect(await drafts.listDrafts(DIM, TB)).toEqual([]);
 });
+
+test("createDraft ON CONFLICT resets rejected_reason and rejected_by", async () => {
+  await provisionTenant({ id: TA, label: "A" });
+  await canonical.addDimension(DIM, [], { keyKind: "slug", silent: true }, "u_test", TA);
+
+  // Seed a rejected draft directly so we have rejected_reason/rejected_by set
+  await pgRun(
+    `INSERT INTO "zugzug_app"."draft"
+       (dim_id, raw, status, target_label, target_key, user_id, created_at, tenant_id,
+        source, confidence, reasoning, rejected_reason, rejected_by)
+     VALUES ($1, $2, 'rejected', 'Germany', 'de', 'u_test', current_timestamp, $3,
+             'user', null, null, 'wrong mapping', 'u_reviewer')`,
+    [DIM, "DEU", TA],
+  );
+
+  // createDraft should clear the rejection fields on conflict
+  await drafts.createDraft(
+    { dim_id: DIM, raw: "DEU", target_label: "Germany", target_key: "de", status: "mapped" },
+    "u_test",
+    TA,
+  );
+
+  const rows = await drafts.listDrafts(DIM, TA);
+  const deu = rows.find((d) => d.raw === "DEU");
+  expect(deu).toBeDefined();
+  expect(deu!.status).toBe("mapped");
+  expect(deu!.rejectedReason).toBeNull();
+  expect(deu!.rejectedBy).toBeNull();
+});

@@ -174,6 +174,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   };
 
   const stageMap = (v: string, label: string) => {
+    if (state[v]?.status === "rejected") return;
     const prev = allDrafts[dkey(dim.id, v)];
     undo.push({
       label: `match "${v}" → ${label}`,
@@ -205,6 +206,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   // Skip without the row flash — bulkApply uses this so a skipped selection
   // doesn't fire N flash animations.
   const skipPersist = (v: string) => {
+    if (state[v]?.status === "rejected") return;
     const prev = allDrafts[dkey(dim.id, v)];
     undo.push({
       label: `skip "${v}"`,

@@ -139,13 +139,15 @@ export async function createDraft(
         source, confidence, reasoning)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7, $8, $9, $10)
      ON CONFLICT (tenant_id, dim_id, raw, user_id) DO UPDATE SET
-       status       = EXCLUDED.status,
-       target_label = EXCLUDED.target_label,
-       target_key   = EXCLUDED.target_key,
-       created_at   = EXCLUDED.created_at,
-       source       = EXCLUDED.source,
-       confidence   = EXCLUDED.confidence,
-       reasoning    = EXCLUDED.reasoning`,
+       status          = EXCLUDED.status,
+       target_label    = EXCLUDED.target_label,
+       target_key      = EXCLUDED.target_key,
+       created_at      = EXCLUDED.created_at,
+       source          = EXCLUDED.source,
+       confidence      = EXCLUDED.confidence,
+       reasoning       = EXCLUDED.reasoning,
+       rejected_reason = NULL,
+       rejected_by     = NULL`,
     [
       dim_id,
       raw,
