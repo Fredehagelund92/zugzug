@@ -4,6 +4,7 @@ import { Button } from "./Button";
 import { IconX } from "./Icons";
 import { PALETTE, PALETTE_NAMES, defaultTintFor } from "../lib/palette";
 import { createTable, useSources, type CreateTableMode, type CreateTableInput } from "../store";
+import { toast } from "./Toast";
 import { ComboSelect } from "./ComboSelect";
 import type { PaletteName } from "../data";
 import { useNavLinks } from "../lib/use-tenant-navigate";
@@ -32,8 +33,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     idColumn: string;
     nameColumn: string;
   } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   const sources = useSources();
@@ -53,7 +52,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     setColor(defaultTintFor(String(Date.now())));
     setSource(null);
     setExternal(null);
-    setError(null);
     setConfirmingDiscard(false);
   }, [open, defaultMode]);
 
@@ -79,29 +77,37 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     else onClose();
   }, [confirmingDiscard, name, source, external, onClose]);
 
-  const submit = useCallback(async (): Promise<void> => {
-    if (submitting || !canSubmit) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const payload: CreateTableInput = {
-        name: name.trim(),
-        description: description.trim() || null,
-        color,
-        mode,
-        ...(mode === "source" && source ? { source } : {}),
-        ...(mode === "external_id" && external ? { external } : {}),
-      };
-      const id = await createTable(payload);
-      onCreated(id);
-      onClose();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [submitting, canSubmit, name, description, color, mode, source, external, onCreated, onClose]);
+  const submit = useCallback((): void => {
+    if (!canSubmit) return;
+
+    const payload: CreateTableInput = {
+      name: name.trim(),
+      description: description.trim() || null,
+      color,
+      mode,
+      ...(mode === "source" && source ? { source } : {}),
+      ...(mode === "external_id" && external ? { external } : {}),
+    };
+
+    // Close immediately — background provisioning continues after this.
+    onClose();
+
+    const run = (p: CreateTableInput): void => {
+      void createTable(p).then(
+        (id) => {
+          onCreated(id);
+        },
+        (e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          toast(`Failed to create "${p.name}": ${msg}`, "error", {
+            label: "Retry",
+            onClick: () => run(p),
+          });
+        },
+      );
+    };
+    run(payload);
+  }, [canSubmit, name, description, color, mode, source, external, onCreated, onClose]);
 
   // Esc to close (or cancel the discard prompt if it's already showing)
   useEffect(() => {
@@ -111,7 +117,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
         if (confirmingDiscard) setConfirmingDiscard(false);
         else requestClose();
       }
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit) void submit();
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit) submit();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -245,17 +251,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           </div>
         </div>
 
-        {/* error banner — sits between the mode segment and the swap region so
-            it lands close to the input that caused the error, not next to the
-            footer where the user just pressed Create */}
-        {error && (
-          <div
-            role="alert"
-            className="mx-6 mt-2 rounded-sm border border-danger/40 bg-danger-soft px-3 py-2 font-mono text-[12px] text-danger"
-          >
-            {error}
-          </div>
-        )}
+        {/* errors surface as toasts after the modal closes (optimistic submit) */}
 
         {/* swappable region */}
         <div className="px-6 pb-4 pt-2">
@@ -435,8 +431,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 <Button variant="ghost" size="sm" onClick={requestClose}>
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => void submit()} disabled={!canSubmit || submitting}>
-                  {submitting ? "Creating…" : "Create table"}
+                <Button size="sm" onClick={submit} disabled={!canSubmit}>
+                  Create table
                 </Button>
               </div>
             </>

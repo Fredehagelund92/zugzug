@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { Button } from "./Button";
 import { OptionBuilder } from "./OptionBuilder";
+import { toast } from "./Toast";
 import type { NumberFormat, OptionDef } from "../data";
 import type { ColumnConfig } from "./datagrid/types";
 
@@ -54,7 +55,6 @@ export function AddFieldPopover({
   const [options, setOptions] = useState<OptionDef[]>([]);
   const [createAnother, setCreateAnother] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [numFmt, setNumFmt] = useState<
     "integer" | "decimal" | "percent" | "currency" | "compact" | "duration"
   >("integer");
@@ -145,7 +145,6 @@ export function AddFieldPopover({
     type,
     options,
     createAnother,
-    busy,
     numFmt,
     numPrecision,
     currSymbol,
@@ -209,66 +208,77 @@ export function AddFieldPopover({
     nameInputRef.current?.focus();
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const trimmed = label.trim();
-    if (!trimmed || busy) return;
+    if (!trimmed) return;
     if (type === "linked" && !linkedTargetDimId) {
       setError("Select a dimension to link to.");
       return;
     }
     setError(null);
-    setBusy(true);
-    try {
-      let config: ColumnConfig;
-      if (type === "number") {
-        let numberFormat: NumberFormat | undefined;
-        if (numFmt === "integer") {
-          numberFormat = { format: "integer" };
-        } else if (numFmt === "decimal") {
-          numberFormat = { format: "decimal", precision: numPrecision as 1 | 2 | 3 | 4 };
-        } else if (numFmt === "percent") {
-          numberFormat = { format: "percent", precision: numPrecision as 0 | 1 | 2 };
-        } else if (numFmt === "compact") {
-          numberFormat = { format: "compact", precision: numPrecision as 0 | 1 | 2 };
-        } else if (numFmt === "duration") {
-          numberFormat = { format: "duration", display: durationDisplay };
-        } else {
-          numberFormat = {
-            format: "currency",
-            symbol: currSymbol || "$",
-            position: currPosition,
-            precision: numPrecision as 0 | 1 | 2,
-          };
-        }
-        config = { type: "number", numberFormat };
-      } else if (type === "select") {
-        config = { type: "select", options };
-      } else if (type === "rating") {
-        config = { type: "rating", ratingMax };
-      } else if (type === "linked") {
-        config = {
-          type: "linked",
-          targetDimId: linkedTargetDimId,
-          displayFields: ["label"],
-          candidates: [],
+
+    let config: ColumnConfig;
+    if (type === "number") {
+      let numberFormat: NumberFormat | undefined;
+      if (numFmt === "integer") {
+        numberFormat = { format: "integer" };
+      } else if (numFmt === "decimal") {
+        numberFormat = { format: "decimal", precision: numPrecision as 1 | 2 | 3 | 4 };
+      } else if (numFmt === "percent") {
+        numberFormat = { format: "percent", precision: numPrecision as 0 | 1 | 2 };
+      } else if (numFmt === "compact") {
+        numberFormat = { format: "compact", precision: numPrecision as 0 | 1 | 2 };
+      } else if (numFmt === "duration") {
+        numberFormat = { format: "duration", display: durationDisplay };
+      } else {
+        numberFormat = {
+          format: "currency",
+          symbol: currSymbol || "$",
+          position: currPosition,
+          precision: numPrecision as 0 | 1 | 2,
         };
-      } else {
-        config = { type } as ColumnConfig;
       }
-      await onSubmit({ label: trimmed, config });
-      if (createAnother) {
-        resetForm();
-      } else {
-        onClose();
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
+      config = { type: "number", numberFormat };
+    } else if (type === "select") {
+      config = { type: "select", options };
+    } else if (type === "rating") {
+      config = { type: "rating", ratingMax };
+    } else if (type === "linked") {
+      config = {
+        type: "linked",
+        targetDimId: linkedTargetDimId,
+        displayFields: ["label"],
+        candidates: [],
+      };
+    } else {
+      config = { type } as ColumnConfig;
     }
+
+    const input: AddFieldInput = { label: trimmed, config };
+
+    // Close/reset immediately — provision in the background.
+    if (createAnother) {
+      resetForm();
+    } else {
+      onClose();
+    }
+
+    const run = (i: AddFieldInput): void => {
+      void onSubmit(i).then(
+        () => { /* success — nothing extra to do */ },
+        (err) => {
+          const msg = err instanceof Error ? err.message : "Something went wrong.";
+          toast(`Failed to add field "${i.label}": ${msg}`, "error", {
+            label: "Retry",
+            onClick: () => run(i),
+          });
+        },
+      );
+    };
+    run(input);
   };
 
-  const canSubmit = label.trim().length > 0 && !busy;
+  const canSubmit = label.trim().length > 0;
 
   return createPortal(
     <div
@@ -293,7 +303,7 @@ export function AddFieldPopover({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && type !== "select") void handleSubmit();
+            if (e.key === "Enter" && type !== "select") handleSubmit();
           }}
           placeholder="Field name…"
           className="w-full rounded-sm border border-line-2 bg-bg px-3 py-2 font-display text-[16px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
@@ -603,13 +613,13 @@ export function AddFieldPopover({
             </span>
           </label>
           <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={busy}>
+            <Button variant="ghost" size="sm" type="button" onClick={onClose}>
               Cancel
             </Button>
             <Button
               size="sm"
               type="button"
-              onClick={() => void handleSubmit()}
+              onClick={handleSubmit}
               disabled={!canSubmit}
             >
               Create field
