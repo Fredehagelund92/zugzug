@@ -4,6 +4,7 @@ import { usePageTitle } from "../hooks/usePageTitle";
 import { useAudit } from "../store";
 import { EmptyState } from "../components/EmptyState";
 import { PageHeader } from "../components/PageHeader";
+import { PageContainer } from "../components/PageContainer";
 import { AuditTimeline } from "../components/AuditTimeline";
 
 export function Audit() {
@@ -40,7 +41,7 @@ export function Audit() {
   }, [audit, query, actor]);
 
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
+    <PageContainer>
       <PageHeader
         kicker="This workspace"
         title="Activity"
@@ -96,7 +97,7 @@ export function Audit() {
           <AuditTimeline rows={filtered} />
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
