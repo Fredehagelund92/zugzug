@@ -82,7 +82,11 @@ export function usePresence(
     // Extract tenant slug from pathname (same pattern as apiFetch)
     const m = /^\/app\/([^/]+)\//.exec(location.pathname + "/");
     const slug = m?.[1] ?? "default";
-    const wsUrl = `${wsProto}://${location.host}/ws/t/${slug}/presence/${encodeURIComponent(tableId)}`;
+    // y-websocket appends the room name (tableId) to this base URL, giving
+    // /ws/t/<slug>/presence/<tableId>. Do NOT include tableId here too, or the
+    // room becomes "<tableId>/<tableId>" and the server's row_touched broadcast
+    // (emitted to room "<tableId>") never reaches this client.
+    const wsUrl = `${wsProto}://${location.host}/ws/t/${slug}/presence`;
     const provider = new WebsocketProvider(wsUrl, tableId, doc, { connect: true });
     const awareness = provider.awareness as Awareness;
     awarenessRef.current = awareness;
