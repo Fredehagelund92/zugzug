@@ -8,7 +8,7 @@ beforeEach(() => {
   // apiFetch reads window.location.pathname; stub a tenant URL.
   Object.defineProperty(window, "location", {
     writable: true,
-    value: { pathname: "/app/acme/integrations/webhooks" },
+    value: { pathname: "/app/acme/settings/webhooks" },
   });
   globalThis.fetch = FETCH as unknown as typeof fetch;
 });

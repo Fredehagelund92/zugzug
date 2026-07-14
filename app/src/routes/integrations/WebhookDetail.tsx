@@ -235,7 +235,7 @@ export function WebhookDetail() {
         onConfirm={async () => {
           try {
             await deleteWebhook(id);
-            navigate("/integrations/webhooks");
+            navigate("/settings/webhooks");
           } catch (e) {
             toastError(e, "load_failed");
             setConfirmDelete(false);
