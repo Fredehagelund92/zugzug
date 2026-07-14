@@ -1,9 +1,10 @@
 import { Outlet } from "react-router-dom";
+import { PageContainer } from "../PageContainer";
 
 export function SettingsLayout() {
   return (
-    <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
+    <PageContainer>
       <Outlet />
-    </div>
+    </PageContainer>
   );
 }

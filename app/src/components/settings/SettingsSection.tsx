@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Card } from "../Card";
+import { Panel } from "../Panel";
 
 export function SettingsSection({
   title,
@@ -11,7 +11,7 @@ export function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <Card className="p-0 overflow-hidden">
+    <Panel padding="none">
       <div className="relative border-b border-line px-5 py-4 md:px-6 md:py-5">
         <div className="absolute left-0 inset-y-0 w-[2px] bg-accent" />
         <div className="max-w-2xl">
@@ -22,6 +22,6 @@ export function SettingsSection({
       <div className="px-5 py-5 md:px-6 md:py-6">
         <div className="max-w-2xl space-y-6">{children}</div>
       </div>
-    </Card>
+    </Panel>
   );
 }
