@@ -28,7 +28,7 @@ import { Workspaces } from "./routes/admin/Workspaces";
 import { Users as AdminUsers } from "./routes/admin/Users";
 import { Audit as AdminAudit } from "./routes/admin/Audit";
 import { Warehouses as AdminWarehouses } from "./routes/admin/Warehouses";
-import { IntegrationsLayout } from "./routes/integrations/IntegrationsLayout";
+import { WebhookDetailRedirect } from "./routes/integrations/WebhookDetailRedirect";
 import { PullApi } from "./routes/integrations/PullApi";
 import { Webhooks } from "./routes/integrations/Webhooks";
 import { WebhookDetail } from "./routes/integrations/WebhookDetail";
@@ -118,7 +118,7 @@ createRoot(root).render(
                             <Route path="members" element={<Members />} />
                             <Route
                               path="tokens"
-                              element={<Navigate to="../../integrations/service-accounts" replace />}
+                              element={<Navigate to="../service-accounts" replace />}
                             />
                             <Route
                               path="scans"
@@ -128,13 +128,17 @@ createRoot(root).render(
                             <Route path="matching" element={<Navigate to="../mapping" replace />} />
                             <Route path="warehouse" element={<Warehouse />} />
                             <Route path="danger" element={<Danger />} />
-                          </Route>
-                          <Route path="integrations" element={<IntegrationsLayout />}>
-                            <Route index element={<Navigate to="pull-api" replace />} />
                             <Route path="pull-api" element={<PullApi />} />
                             <Route path="webhooks" element={<Webhooks />} />
                             <Route path="webhooks/:id" element={<WebhookDetail />} />
                             <Route path="service-accounts" element={<ServiceAccounts />} />
+                          </Route>
+                          <Route path="integrations">
+                            <Route index element={<Navigate to="../settings/pull-api" replace />} />
+                            <Route path="pull-api" element={<Navigate to="../../settings/pull-api" replace />} />
+                            <Route path="webhooks" element={<Navigate to="../../settings/webhooks" replace />} />
+                            <Route path="webhooks/:id" element={<WebhookDetailRedirect />} />
+                            <Route path="service-accounts" element={<Navigate to="../../settings/service-accounts" replace />} />
                           </Route>
                           <Route path="account" element={<Account />}>
                             <Route index element={<Navigate to="profile" replace />} />
