@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
@@ -20,7 +21,7 @@ interface Tenant {
 }
 
 const inputCls =
-  "w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
+  "w-full bg-surface-2 border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
 
 export function Workspaces() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -128,7 +129,7 @@ export function Workspaces() {
             }
           />
         ) : (
-          <div className="border border-line divide-y divide-line bg-surface">
+          <Panel padding="none" className="divide-y divide-line">
             {/* Column headers */}
             <div className="grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-2.5">
               <span />
@@ -175,7 +176,7 @@ export function Workspaces() {
                       if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                       else if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="w-full bg-surface border border-accent px-2 py-1 text-sm text-ink focus:outline-none"
+                    className="w-full bg-surface-2 border border-accent px-2 py-1 text-sm text-ink focus:outline-none"
                   />
                 ) : (
                   <button
@@ -207,13 +208,13 @@ export function Workspaces() {
                 </span>
               </div>
             ))}
-          </div>
+          </Panel>
         )}
       </div>
 
       {/* Create form — slides in when showForm is true */}
       {showForm && (
-        <div className="zz-rise border border-line-2 bg-surface-2 p-6">
+        <Panel className="zz-rise">
           <div className="flex items-center gap-2.5 mb-5">
             <div className="w-0.5 h-4 bg-accent flex-shrink-0" />
             <span className="font-mono text-[10px] uppercase tracking-widest text-ink-2">
@@ -293,7 +294,7 @@ export function Workspaces() {
               Create workspace
             </Button>
           </div>
-        </div>
+        </Panel>
       )}
     </div>
   );

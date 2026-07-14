@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { authFetch } from "../../api";
 import { useMemberships } from "../../store";
 import { PageHeader } from "../../components/PageHeader";
+import { Panel } from "../../components/Panel";
 import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { Badge } from "../../components/Badge";
@@ -31,9 +32,7 @@ export function Warehouses() {
   // if they have none (super-admin not yet provisioned anywhere), drop them
   // at the workspace switcher and let it resolve.
   const settingsHref =
-    memberships.length > 0
-      ? `/app/${memberships[0]!.slug}/settings/warehouse`
-      : "/app";
+    memberships.length > 0 ? `/app/${memberships[0]!.slug}/settings/warehouse` : "/app";
 
   useEffect(() => {
     void (async () => {
@@ -63,7 +62,7 @@ export function Warehouses() {
         />
       ) : (
         <div className="space-y-4">
-          <div className="rounded-sm border border-line bg-surface-2 p-4">
+          <Panel padding="sm">
             <div className="flex items-center gap-2">
               <span className="font-display text-[14px] font-semibold text-ink">Adapter</span>
               <Badge>{data.adapter}</Badge>
@@ -78,9 +77,9 @@ export function Warehouses() {
                 ? "Adapter loaded successfully at boot."
                 : `Boot validation failed: ${data.bootValidation.reason ?? "unknown reason"}`}
             </div>
-          </div>
+          </Panel>
 
-          <div className="rounded-sm border border-line bg-surface">
+          <Panel padding="none">
             <div className="border-b border-line px-4 py-2 text-[12px] font-medium text-ink-2">
               Databases
             </div>
@@ -104,14 +103,11 @@ export function Warehouses() {
                 ))}
               </ul>
             )}
-          </div>
+          </Panel>
 
           <p className="text-[12.5px] text-ink-3">
             Need to add or remove a database?{" "}
-            <Link
-              to={settingsHref}
-              className="text-accent underline-offset-2 hover:underline"
-            >
+            <Link to={settingsHref} className="text-accent underline-offset-2 hover:underline">
               Open Settings → Warehouse →
             </Link>
           </p>

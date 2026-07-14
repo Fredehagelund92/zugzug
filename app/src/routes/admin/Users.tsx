@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
@@ -163,7 +164,7 @@ export function Users() {
         ))}
       </div>
 
-      <div className="zz-rise border border-line" style={{ animationDelay: "80ms" }}>
+      <Panel padding="none" className="zz-rise" style={{ animationDelay: "80ms" }}>
         {loading ? (
           <SkeletonList rows={5} columns={[24, "minmax(0,1fr)", 160, 80, 100, 120]} />
         ) : filteredUsers.length === 0 ? (
@@ -172,7 +173,7 @@ export function Users() {
             body="Try a different search term, filter, or invite teammates from a workspace."
           />
         ) : (
-          <div className="border border-line divide-y divide-line bg-surface">
+          <div className="divide-y divide-line">
             <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5">
               <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
                 User
@@ -236,7 +237,7 @@ export function Users() {
             ))}
           </div>
         )}
-      </div>
+      </Panel>
 
       <ConfirmDialog
         open={!!pending}
