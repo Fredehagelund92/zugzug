@@ -48,4 +48,17 @@ describe("Panel", () => {
     const { getByRole } = render(<Panel role="region" aria-label="Deliveries" />);
     expect(getByRole("region").getAttribute("aria-label")).toBe("Deliveries");
   });
+
+  it("renders a div by default", () => {
+    const { container } = render(<Panel>x</Panel>);
+    expect(container.firstElementChild!.tagName).toBe("DIV");
+  });
+
+  it("renders a custom element via `as` (preserves semantics)", () => {
+    const { container } = render(<Panel as="section">x</Panel>);
+    const el = container.firstElementChild!;
+    expect(el.tagName).toBe("SECTION");
+    // still a white bordered surface
+    expect(el.className).toContain("bg-surface");
+  });
 });

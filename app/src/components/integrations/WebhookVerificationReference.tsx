@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { BundledLanguage } from "shiki";
 import { SigningRecipeBlock } from "./SigningRecipeBlock";
+import { Panel } from "../Panel";
 import { cx } from "../../lib/cx";
 
 interface Recipe {
@@ -90,7 +91,7 @@ export function WebhookVerificationReference() {
   const recipe = RECIPES.find((r) => r.id === active) ?? RECIPES[0];
 
   return (
-    <section className="rounded-sm border border-line bg-surface-2">
+    <Panel as="section" padding="none">
       <header className="flex items-baseline gap-3 px-4 py-3 border-b border-line">
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
           Reference
@@ -109,7 +110,7 @@ export function WebhookVerificationReference() {
 
         <section className="space-y-2">
           <SectionLabel n="01" title="Example request" />
-          <div className="rounded-sm border border-line bg-surface overflow-hidden">
+          <div className="rounded-sm border border-line bg-surface-2 overflow-hidden">
             <pre className="p-3 overflow-x-auto text-[12px] leading-relaxed font-mono text-ink whitespace-pre">
               {EXAMPLE_HEADERS}
             </pre>
@@ -163,20 +164,25 @@ export function WebhookVerificationReference() {
 
         <section className="space-y-2">
           <SectionLabel n="03" title="Event payload (dimension.committed)" />
-          <div className="rounded-sm border border-line bg-surface p-3">
+          <div className="rounded-sm border border-line bg-surface-2 p-3">
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11.5px]">
               <dt className="font-mono uppercase tracking-wider text-ink-3">event</dt>
-              <dd className="text-ink-2"><code>dimension.committed</code></dd>
+              <dd className="text-ink-2">
+                <code>dimension.committed</code>
+              </dd>
               <dt className="font-mono uppercase tracking-wider text-ink-3">dimension</dt>
               <dd className="text-ink-2">Dimension ID</dd>
               <dt className="font-mono uppercase tracking-wider text-ink-3">kind</dt>
-              <dd className="text-ink-2"><code>publish</code> or <code>rollback</code></dd>
+              <dd className="text-ink-2">
+                <code>publish</code> or <code>rollback</code>
+              </dd>
               <dt className="font-mono uppercase tracking-wider text-ink-3">restores_version</dt>
               <dd className="text-ink-2">Version number on rollbacks; omitted on publishes</dd>
             </dl>
           </div>
           <p className="text-[12px] text-ink-2 max-w-prose">
-            Rollbacks arrive as a normal publish with <code>kind: &quot;rollback&quot;</code> and the version they restore — downstream systems that ignore these fields stay correct.
+            Rollbacks arrive as a normal publish with <code>kind: &quot;rollback&quot;</code> and
+            the version they restore — downstream systems that ignore these fields stay correct.
           </p>
         </section>
 
@@ -197,7 +203,7 @@ export function WebhookVerificationReference() {
           </div>
         </section>
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -212,7 +218,7 @@ function SectionLabel({ n, title }: { n: string; title: string }) {
 
 function SpecCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <div className="rounded-sm border border-line bg-surface p-3 space-y-1">
+    <div className="rounded-sm border border-line bg-surface-2 p-3 space-y-1">
       <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{label}</div>
       <div className="font-display text-[14px] font-semibold text-ink">{value}</div>
       <div className="text-[11.5px] text-ink-2 font-mono">{note}</div>

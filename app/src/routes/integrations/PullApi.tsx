@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import { SkeletonList } from "../../components/Skeleton";
 import {
   listDimensions,
@@ -51,7 +52,7 @@ function MiniCopy({ text, label }: { text: string; label: string }) {
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
-      className="px-1.5 py-0.5 rounded-sm text-[11px] text-ink-2 hover:bg-surface hover:text-ink transition-colors"
+      className="px-1.5 py-0.5 rounded-sm text-[11px] text-ink-2 hover:bg-hover hover:text-ink transition-colors"
     >
       {copied ? "Copied" : label}
     </button>
@@ -86,7 +87,7 @@ export function PullApi() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+      <Panel as="section" padding="sm" className="space-y-2">
         <h2 className="font-display text-[15px] font-semibold text-ink">
           Your records, available as a JSON API
         </h2>
@@ -95,7 +96,7 @@ export function PullApi() {
           account from this workspace.
         </p>
         <div className="flex items-center gap-2 mt-2">
-          <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface text-[12px] font-mono">
+          <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface-2 text-[12px] font-mono">
             {baseUrl}
           </code>
           <CopyButton text={baseUrl} />
@@ -105,9 +106,9 @@ export function PullApi() {
             Event store: <code>outbound_event</code> table.
           </div>
         </DeveloperDetails>
-      </section>
+      </Panel>
 
-      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+      <Panel as="section" padding="sm" className="space-y-2">
         <h3 className="font-display text-[14px] font-semibold text-ink">Authentication</h3>
         <p className="text-[13px] text-ink-2">
           Every request needs a bearer token from the{" "}
@@ -116,15 +117,15 @@ export function PullApi() {
           </Link>{" "}
           page.
         </p>
-        <pre className="px-3 py-2 rounded-sm bg-surface text-[12px] font-mono overflow-x-auto">
+        <pre className="px-3 py-2 rounded-sm bg-surface-2 text-[12px] font-mono overflow-x-auto">
           {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
      ${baseUrl}/dimensions`}
         </pre>
-      </section>
+      </Panel>
 
       <EndpointCards baseUrl={baseUrl} firstSlug={firstSlug} />
 
-      <section className="rounded-sm border border-line bg-surface-2 p-4">
+      <Panel as="section" padding="sm">
         <h3 className="font-display text-[14px] font-semibold text-ink mb-3">
           Dimensions in this workspace
         </h3>
@@ -158,7 +159,7 @@ export function PullApi() {
                 return (
                   <tr
                     key={d.slug}
-                    className="border-t border-line hover:bg-surface/60 transition-colors"
+                    className="border-t border-line hover:bg-hover transition-colors"
                   >
                     <td className="py-2 font-mono">{d.slug}</td>
                     <td>{d.label}</td>
@@ -184,9 +185,9 @@ export function PullApi() {
             </tbody>
           </table>
         )}
-      </section>
+      </Panel>
 
-      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+      <Panel as="section" padding="sm" className="space-y-2">
         <h3 className="font-display text-[14px] font-semibold text-ink">
           Pagination + incremental sync
         </h3>
@@ -196,15 +197,15 @@ export function PullApi() {
           <code>?cursor=&lt;value&gt;</code>. Cursors invalidated by server-key rotation return{" "}
           <code>400 cursor_invalid</code>; consumers should resync from <code>?since=</code>.
         </p>
-      </section>
+      </Panel>
 
-      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+      <Panel as="section" padding="sm" className="space-y-2">
         <h3 className="font-display text-[14px] font-semibold text-ink">Rate limits</h3>
         <p className="text-[13px] text-ink-2">
           600 req/min per credential by default (configurable via <code>ZUGZUG_PULL_API_RPM</code>).
           Exceeding returns <code>429</code> with <code>Retry-After</code> seconds.
         </p>
-      </section>
+      </Panel>
     </div>
   );
 }
@@ -226,16 +227,16 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
     <section className="space-y-3">
       <h3 className="font-display text-[14px] font-semibold text-ink">Endpoints</h3>
       {ENDPOINTS.map((e) => (
-        <div key={e.sig} className="rounded-sm border border-line bg-surface-2 p-4">
+        <Panel key={e.sig} padding="sm">
           <code className="text-[12px] font-mono">{e.sig}</code>
           <p className="mt-1 text-[12.5px] text-ink-2">{e.desc}</p>
           <details className="mt-2">
             <summary className="text-[12px] text-ink-3 cursor-pointer">Sample response</summary>
-            <pre className="mt-2 p-2 rounded-sm bg-surface text-[11.5px] font-mono overflow-x-auto">
+            <pre className="mt-2 p-2 rounded-sm bg-surface-2 text-[11.5px] font-mono overflow-x-auto">
               {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${e.sig.replace("GET ", "")}`}
             </pre>
           </details>
-        </div>
+        </Panel>
       ))}
     </section>
   );

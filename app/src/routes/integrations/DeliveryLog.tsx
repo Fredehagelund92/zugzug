@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { useTenant } from "../../lib/tenant-context";
 import { can } from "../../lib/permissions";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import { Badge } from "../../components/Badge";
 import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../components/Toast";
@@ -53,7 +54,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
   const colCount = canSeePayload ? 7 : 6;
 
   return (
-    <section className="space-y-2">
+    <Panel as="section" padding="sm" className="space-y-2">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-[14px] font-semibold text-ink">Delivery log</h3>
         <Button size="sm" variant="ghost" onClick={() => void refresh()}>
@@ -168,7 +169,7 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
         </tbody>
       </table>
       {rows.length === 0 && <p className="text-[12px] text-ink-3">No deliveries yet.</p>}
-    </section>
+    </Panel>
   );
 }
 

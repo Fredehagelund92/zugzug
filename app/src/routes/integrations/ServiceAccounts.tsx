@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTenant } from "../../lib/tenant-context";
 import { can } from "../../lib/permissions";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SkeletonList } from "../../components/Skeleton";
@@ -94,13 +95,13 @@ export function ServiceAccounts() {
       </div>
 
       {showForm && (
-        <div className="rounded-sm border border-line bg-surface-2 p-4 space-y-3">
+        <Panel padding="sm" className="space-y-3">
           <FormField label="Name">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="dbt prod"
-              className="w-full rounded-sm border border-line bg-surface px-2 py-1.5 text-[13px]"
+              className="w-full rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px]"
             />
           </FormField>
           <FormField label="Expires">
@@ -138,7 +139,7 @@ export function ServiceAccounts() {
               Create
             </Button>
           </div>
-        </div>
+        </Panel>
       )}
 
       {items.length === 0 && !showForm ? (

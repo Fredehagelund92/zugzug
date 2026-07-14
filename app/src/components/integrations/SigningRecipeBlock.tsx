@@ -28,7 +28,7 @@ export function SigningRecipeBlock({ code, lang, filename }: Props) {
   }, [code, lang]);
 
   return (
-    <div className="relative rounded-sm border border-line bg-surface overflow-hidden">
+    <div className="relative rounded-sm border border-line bg-surface-2 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-line">
         <span className="font-mono text-[11px] uppercase tracking-wider text-ink-3">
           {filename}

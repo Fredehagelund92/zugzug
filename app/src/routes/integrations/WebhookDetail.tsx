@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { can } from "../../lib/permissions";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import { Badge } from "../../components/Badge";
 import { SkeletonList } from "../../components/Skeleton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -96,7 +97,7 @@ export function WebhookDetail() {
         </div>
       )}
 
-      <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-3">
+      <Panel as="section" padding="sm" className="space-y-3">
         <h3 className="font-display text-[14px] font-semibold text-ink">Overview</h3>
         <Row label="URL">
           <code className="font-mono text-[12px]">{w.url}</code>
@@ -186,10 +187,10 @@ export function WebhookDetail() {
           </Link>{" "}
           on the Webhooks page.
         </p>
-      </section>
+      </Panel>
 
       {canEdit && (
-        <section className="rounded-sm border border-line bg-surface-2 p-4 space-y-2">
+        <Panel as="section" padding="sm" className="space-y-2">
           <h3 className="font-display text-[14px] font-semibold text-ink">Send a test event</h3>
           <p className="text-[13px] text-ink-2">
             POSTs a synthetic <code>webhook.test</code> payload to the endpoint. Marked with a TEST
@@ -207,7 +208,7 @@ export function WebhookDetail() {
           >
             Send test event
           </Button>
-        </section>
+        </Panel>
       )}
 
       <DeliveryLog webhookId={id} />
