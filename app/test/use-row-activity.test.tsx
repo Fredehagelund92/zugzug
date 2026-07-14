@@ -60,21 +60,21 @@ describe("useRowActivity", () => {
     );
   });
 
-  test("re-polls every 5 seconds", async () => {
+  test("does not poll every 5 seconds (push-driven now)", async () => {
     renderHook(() => useRowActivity("d_country"));
-    // Flush initial poll
+    // Flush initial fetch
     await flushMicrotasks();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    // Advance 5s to fire the next poll timer
+    // Advance 5s — no poll loop, so no extra fetch (see use-row-activity-push
+    // for the debounced push refetch and the 60s safety net).
     await act(async () => {
       vi.advanceTimersByTime(5_000);
     });
-    // Flush the second poll's promises
     await flushMicrotasks();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test("cleans up timer on unmount", async () => {
+  test("cleans up safety-net interval on unmount", async () => {
     const { unmount } = renderHook(() => useRowActivity("d_country"));
     await flushMicrotasks();
     expect(fetchMock).toHaveBeenCalledTimes(1);

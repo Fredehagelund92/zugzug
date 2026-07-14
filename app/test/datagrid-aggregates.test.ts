@@ -30,4 +30,18 @@ describe("computeAggregates", () => {
     expect(agg.sum).toBe(60);
     expect(agg.avg).toBeCloseTo(20);
   });
+  test("sums numeric-typed fields even when values are numeric strings", () => {
+    const stringRows = [{ id: "1", n: "100" }, { id: "2", n: "100" }, { id: "3", n: "100" }];
+    const stringCols = [{ field: "n", label: "N", config: { type: "number" } }];
+    const agg = computeAggregates(stringRows as any, stringCols as any, (r, f) => (r as any)[f], { minRow: 0, maxRow: 2, minCol: 0, maxCol: 0 });
+    expect(agg.sum).toBe(300);
+    expect(agg.avg).toBe(100);
+  });
+  test("non-numeric string in a numeric field is excluded — no NaN poisoning", () => {
+    const mixedRows = [{ id: "1", n: "100" }, { id: "2", n: "abc" }, { id: "3", n: "200" }];
+    const mixedCols = [{ field: "n", label: "N", config: { type: "number" } }];
+    const agg = computeAggregates(mixedRows as any, mixedCols as any, (r, f) => (r as any)[f], { minRow: 0, maxRow: 2, minCol: 0, maxCol: 0 });
+    expect(agg.sum).toBe(300);
+    expect(agg.avg).toBe(150);
+  });
 });

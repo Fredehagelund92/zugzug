@@ -5,6 +5,7 @@ import { Badge } from "./Badge";
 import { Checkbox } from "./Checkbox";
 import { ComboSelect } from "./ComboSelect";
 import { AddFieldPopover } from "./AddFieldPopover";
+import { RenameConfirmation } from "./RenameConfirmation";
 import { IconPlus, IconX } from "./Icons";
 import {
   slug,
@@ -128,7 +129,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
 
   return (
     <div
-      className="flex flex-1 flex-col min-h-0"
+      className="relative flex flex-1 flex-col min-h-0"
       onKeyDown={(e) => {
         // Skip when editing in a grid cell (focus is inside an input)
         const t = e.target as HTMLElement;
@@ -167,7 +168,9 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
         </div>
       )}
       <div className="flex flex-1 flex-col min-h-0">
-        {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} />}
+        {activeMode === "records" && (
+          <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />
+        )}
         {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
         {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}
       </div>
@@ -197,20 +200,35 @@ function exportToCSV(dim: MappingDimension): void {
 /** RecordsBody — the original TablePane body, lifted verbatim so TablePaneInner
  *  can switch between this and other mode bodies (Match, Sources) under one
  *  shared UndoStackProvider. The body owns its own grid layout state, popovers, etc. */
-function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
+function RecordsBody({
+  dim,
+  isActive,
+  onModeChange,
+}: {
+  dim: MappingDimension;
+  isActive: boolean;
+  onModeChange?: (m: Mode) => void;
+}) {
   const sources = useSources();
   const allDims = useDimensions();
   const { engineer } = useEngineerMode();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
-  const activity = useRowActivity(activeId);
+  // Presence pushes a `row_touched` hint when a peer writes a row; bump this
+  // nonce to trigger useRowActivity's debounced refetch (replaces the 5s poll).
+  const [activityNonce, setActivityNonce] = useState(0);
+  const activity = useRowActivity(activeId, { refetchNonce: activityNonce });
   const currentUser = useCurrentUser();
   const presence = usePresence(currentUser ? activeId : null, {
     userId: currentUser?.id ?? "",
     displayName: currentUser?.name ?? "",
+    onRowTouched: () => setActivityNonce((n) => n + 1),
   });
   const undo = useUndoStack();
+
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const [sel, setSel] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
@@ -412,11 +430,25 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     return ordered;
   }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
 
-  const rowsForGrid = useMemo(
-    () =>
-      list.map((c): CanonicalValue & Record<string, unknown> => ({ ...c, ...(c.fields ?? {}) })),
-    [list],
+  const visibleFields = useMemo(
+    () => columns.filter((c) => !c.hidden).map((c) => c.field),
+    [columns],
   );
+
+  const rowsForGrid = useMemo(() => {
+    const all = list.map((c): CanonicalValue & Record<string, unknown> => ({
+      ...c,
+      ...(c.fields ?? {}),
+    }));
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((row) =>
+      visibleFields.some((f) => {
+        const v = (row as Record<string, unknown>)[f];
+        return v != null && String(v).toLowerCase().includes(q);
+      }),
+    );
+  }, [list, search, visibleFields]);
 
   const flash = (m: string) => {
     setNotice(m);
@@ -496,7 +528,9 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
     setBusy(false);
     setSel([]);
     for (const k of [survivor, ...losers]) dismissConflict(k);
-    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — raw values re-pointed.`);
+    flash(
+      `Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed.`,
+    );
   };
 
   const retire = async (key: string, label: string) => {
@@ -507,7 +541,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
       const r = await retireCanonical(activeId, key, version);
       if (!r.ok) {
         flash(
-          `Can't remove "${label}" — ${r.variants} raw value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
+          `Can't remove "${label}" — ${r.variants} source value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
         );
         return;
       }
@@ -653,7 +687,24 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
   };
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
+    <div
+      className="flex flex-1 flex-col min-h-0"
+      onKeyDown={(e) => {
+        const t = e.target as HTMLElement;
+        if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+        if (e.key === "/") {
+          e.preventDefault();
+          searchRef.current?.focus();
+          searchRef.current?.select();
+          return;
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+          e.preventDefault();
+          searchRef.current?.focus();
+          searchRef.current?.select();
+        }
+      }}
+    >
       <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
         <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-2">
           {engineer && (
@@ -664,11 +715,6 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <span>
                 key <span className="text-ink">{dim.keyCol}</span>
               </span>
-              {dim.orderingMode === "manual" && dim.nextPosition && (
-                <span className="font-mono text-[11px] text-ink-3">
-                  next position: {dim.nextPosition}
-                </span>
-              )}
               <span className="text-line-2">·</span>
             </>
           )}
@@ -678,8 +724,16 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           <span className="tabular-nums">
             {fields.length} field{fields.length === 1 ? "" : "s"}
           </span>
-          <span className="tabular-nums">{totalVariants.toLocaleString()} raw</span>
+          <span className="tabular-nums">{totalVariants.toLocaleString()} source values</span>
         </div>
+
+        <input
+          ref={searchRef}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search records…"
+          className="w-full max-w-xs rounded-sm border border-line-2 bg-bg px-3 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
+        />
 
         <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
           <PresenceStrip peers={presence.peers} />
@@ -851,32 +905,20 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
         </div>
       )}
       {renameFlash && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-accent-wash px-4 py-2 font-mono text-[12px] text-accent">
-          <span>
-            Renamed “{renameFlash.prev}” → “{renameFlash.next}”.{" "}
-            {renameFlash.variants.toLocaleString()} raw value{renameFlash.variants === 1 ? "" : "s"}{" "}
-            re-pointed.
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!undo.canUndo}
-              onClick={() => {
-                void undo.undo();
-                setRenameFlash(null);
-              }}
-            >
-              Undo
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setRenameFlash(null)}>
-              Dismiss
-            </Button>
-          </div>
-        </div>
+        <RenameConfirmation
+          prev={renameFlash.prev}
+          next={renameFlash.next}
+          variants={renameFlash.variants}
+          canUndo={undo.canUndo}
+          onUndo={() => {
+            void undo.undo();
+            setRenameFlash(null);
+          }}
+          onDismiss={() => setRenameFlash(null)}
+        />
       )}
 
-      <div className="zz-rise flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
+      <div className="zz-fade-in flex flex-1 flex-col min-h-0" style={{ animationDelay: "60ms" }}>
         <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-5 py-2.5">
           <span className="font-mono text-[11.5px] text-ink-3">
             {list.length >= 5 ? "Tip — select two or more records to merge them into one." : ""}
@@ -1066,7 +1108,23 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }}
           empty={
             <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">
-              no records yet — import from a source above, or add one below
+              {list.length > 0 ? (
+                <>
+                  No records match
+                  {search.trim() ? ` “${search.trim()}”` : " the current filter"}.
+                  {search.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      className="ml-2 text-accent hover:underline"
+                    >
+                      Clear search
+                    </button>
+                  )}
+                </>
+              ) : (
+                "no records yet — import from a source above, or add one below"
+              )}
             </div>
           }
           onAddFieldClick={canEdit ? () => setAddOpen((v) => !v) : undefined}
@@ -1143,6 +1201,14 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           }
           activity={activity}
           presence={presence}
+          initialFilterSet={layout.filterSet ?? null}
+          onFilterSetChange={(fs) => {
+            setLayout((cur) => {
+              const next = { ...cur, filterSet: fs };
+              setGridLayout(activeId, next);
+              return next;
+            });
+          }}
           initialSort={layout.sort ?? undefined}
           onSortChange={(sort) => {
             setLayout((cur) => {
@@ -1158,6 +1224,16 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 return next;
               });
             }
+          }}
+          onMapValuesToRecord={(recordKey) => {
+            const next = new URLSearchParams(window.location.search);
+            next.set("mode", "match");
+            next.set("target", recordKey);
+            navigate(`?${next.toString()}`);
+            // Switch perTabMode directly — writing ?mode= to the URL is NOT
+            // sufficient for already-open tabs because foldUrlMode is gated by
+            // foldedDimsRef and only runs once per dim per session.
+            onModeChange?.("match");
           }}
         />
 
@@ -1288,7 +1364,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
                 <ComboSelect
                   options={list.filter((c) => sel.includes(c.key)).map((c) => c.label)}
                   value={null}
-                  placeholder={sel.length < 2 ? "select 2+" : "pick survivor…"}
+                  placeholder={sel.length < 2 ? "select 2+" : "Keep which record?"}
                   onPick={(survivorLabel) => {
                     if (sel.length >= 5) {
                       setMergeConfirm({ survivorLabel, loserCount: sel.length - 1 });
@@ -1349,7 +1425,8 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
           bulkRemoveConfirm && (
             <>
               {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be
-              retired. Mapped raw values will lose their target. Use Undo if you change your mind.
+              retired. Mapped source values will lose their target. Use Undo if you change your
+              mind.
             </>
           )
         }
@@ -1424,7 +1501,7 @@ function RecordsBody({ dim, isActive }: { dim: MappingDimension; isActive: boole
               <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
                 {mergeConfirm.survivorLabel}
               </code>
-              . Their raw values will be re-pointed. Use Undo if you change your mind.
+              . Their source values will be re-pointed. Use Undo if you change your mind.
             </>
           )
         }

@@ -591,6 +591,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
     }
 
+    // GET /api/t/:slug/drafts — all drafts for the workspace in one query (boot path).
+    if (
+      tenantSlugFromPath !== null &&
+      seg[1] === "drafts" &&
+      seg.length === 2 &&
+      method === "GET"
+    ) {
+      return json(await reqRepo.listAllDrafts());
+    }
+
     // PATCH /api/t/:slug — rename workspace label and/or set color (admin only)
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
       const gate = requireAdmin(tenantCtx);
@@ -1595,32 +1605,6 @@ if (import.meta.main) {
           data: {
             tableId,
             tenantId: tenant.id,
-            userId: session.id,
-            displayName: session.name,
-          } satisfies PresenceWsData,
-        });
-        return ok ? undefined : new Response("upgrade failed", { status: 500 });
-      }
-
-      // Legacy /ws/presence/:tableId — default-tenant fallback (one-release deprecation).
-      if (url.pathname.startsWith("/ws/presence/")) {
-        const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
-        if (!tableId) return new Response("missing tableId", { status: 400 });
-        let session: SessionUser | null;
-        try {
-          session = await getSessionUser(req);
-          if (!session) {
-            const { getApiTokenUser } = await import("./auth-api-tokens.ts");
-            session = await getApiTokenUser(req);
-          }
-        } catch {
-          return new Response("auth error", { status: 503 });
-        }
-        if (!session) return new Response("unauthorized", { status: 401 });
-        const ok = srv.upgrade(req, {
-          data: {
-            tableId,
-            tenantId: "default",
             userId: session.id,
             displayName: session.name,
           } satisfies PresenceWsData,

@@ -87,10 +87,13 @@ interface DataGridHeaderProps<Row> {
 
   // Filter
   filterSet: FilterSet | null;
-  setFilterSet: React.Dispatch<React.SetStateAction<FilterSet | null>>;
+  setFilterSet: (next: FilterSet | null | ((cur: FilterSet | null) => FilterSet | null)) => void;
 
   // Widths
   setWidths: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  /** Ref mirror of the widths state — lets event handlers read the latest
+   *  committed widths without accessing state inside an updater function. */
+  widthsRef: React.MutableRefObject<Record<string, number>>;
 
   // Order / drag
   setOrder: React.Dispatch<React.SetStateAction<string[] | null>>;
@@ -142,6 +145,13 @@ interface DataGridHeaderProps<Row> {
     opts?: { coerceInvalidToNull?: boolean },
   ) => Promise<{ ok: boolean; invalidCount?: number }>;
   onDeleteColumn?: (field: string) => void;
+  // Linked-column (fk / lookup) actions surfaced in ColumnHeaderMenu.
+  onShowLinkedFields?: (fkField: string) => void;
+  onOpenTargetDimension?: (fkField: string) => void;
+  onChangeDisplayedField?: (lookupField: string) => void;
+  onManageLinkedFields?: (lookupField: string) => void;
+  onJumpToSourceColumn?: (fkField: string) => void;
+  onRemoveLookup?: (lookupField: string) => void;
 }
 
 export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.ReactElement {
@@ -160,6 +170,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
     filterSet,
     setFilterSet,
     setWidths,
+    widthsRef,
     setOrder,
     drag,
     setDrag,
@@ -184,6 +195,12 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
     onSaveColumnDescription,
     onChangeColumnType,
     onDeleteColumn,
+    onShowLinkedFields,
+    onOpenTargetDimension,
+    onChangeDisplayedField,
+    onManageLinkedFields,
+    onJumpToSourceColumn,
+    onRemoveLookup,
   } = props;
 
   // Hidden-fields popover is local to the header — no other surface reads it.
@@ -318,17 +335,20 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                       }
                       return;
                     }
-                    setDrag((d) => {
-                      if (!d || d.overIndex == null) return null;
+                    // Read drag state synchronously then clear it — avoids calling
+                    // setOrder/onLayoutChange inside a setDrag updater (setState-in-render).
+                    const d = dragRef.current;
+                    setDrag(null);
+                    if (d && d.overIndex != null) {
                       const from = columns.findIndex((x) => x.field === d.field);
-                      if (from < 0 || from === d.overIndex) return null;
-                      const next = [...columns.map((x) => x.field)];
-                      next.splice(from, 1);
-                      next.splice(d.overIndex, 0, d.field);
-                      setOrder(next);
-                      onLayoutChange?.({ order: next });
-                      return null;
-                    });
+                      if (from >= 0 && from !== d.overIndex) {
+                        const next = [...columns.map((x) => x.field)];
+                        next.splice(from, 1);
+                        next.splice(d.overIndex, 0, d.field);
+                        setOrder(next);
+                        onLayoutChange?.({ order: next });
+                      }
+                    }
                   };
                   window.addEventListener("pointermove", onMove);
                   window.addEventListener("pointerup", onUp);
@@ -371,23 +391,21 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
 
               {/* Task 19: ⋯ menu button — pinned to the right cluster. When the
                 info badge is present it owns ml-auto; otherwise the button does. */}
-              {!c.pinnedLeft && (
-                <button
-                  type="button"
-                  aria-label="Column menu"
-                  className={cx(
-                    "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40",
-                    !c.description && "ml-auto",
-                  )}
-                  onClick={(e) => {
-                    menuAnchorRef.current = e.currentTarget;
-                    setMenuAnchorRect(null);
-                    setMenuFor((s) => (s === c.field ? null : c.field));
-                  }}
-                >
-                  ⋯
-                </button>
-              )}
+              <button
+                type="button"
+                aria-label="Column menu"
+                className={cx(
+                  "opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100 max-md:opacity-40",
+                  !c.description && "ml-auto",
+                )}
+                onClick={(e) => {
+                  menuAnchorRef.current = e.currentTarget;
+                  setMenuAnchorRect(null);
+                  setMenuFor((s) => (s === c.field ? null : c.field));
+                }}
+              >
+                ⋯
+              </button>
 
               {/* Task 19: ColumnHeaderMenu */}
               {menuFor === c.field && (
@@ -471,6 +489,24 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                     onLayoutChange?.({ hidden });
                   }}
                   onDelete={() => onDeleteColumn?.(c.field)}
+                  onShowLinkedFields={
+                    onShowLinkedFields ? () => onShowLinkedFields(c.field) : undefined
+                  }
+                  onOpenTargetDimension={
+                    onOpenTargetDimension ? () => onOpenTargetDimension(c.field) : undefined
+                  }
+                  onChangeDisplayedField={
+                    onChangeDisplayedField ? () => onChangeDisplayedField(c.field) : undefined
+                  }
+                  onManageLinkedFields={
+                    onManageLinkedFields ? () => onManageLinkedFields(c.field) : undefined
+                  }
+                  onJumpToSourceColumn={
+                    onJumpToSourceColumn
+                      ? () => onJumpToSourceColumn(c.sourceField ?? c.field)
+                      : undefined
+                  }
+                  onRemoveLookup={onRemoveLookup ? () => onRemoveLookup(c.field) : undefined}
                 />
               )}
 
@@ -487,18 +523,25 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                     const startX = e.clientX;
                     const headerEl = e.currentTarget.parentElement as HTMLElement;
                     const startW = headerEl.getBoundingClientRect().width;
+                    // Track the latest width for this column in a closure variable.
+                    // onUp uses it (plus the widthsRef for other columns) to call
+                    // onLayoutChange outside any setState updater — avoiding the
+                    // "setState-in-render" anti-pattern where onLayoutChange (which
+                    // may setState in a parent) fires during React's reconciliation.
+                    let latestWidth: number = startW;
                     const onMove = (ev: PointerEvent) => {
                       const next = Math.max(60, Math.min(600, startW + (ev.clientX - startX)));
+                      latestWidth = next;
                       setWidths((w) => ({ ...w, [c.field]: next }));
                     };
                     const onUp = () => {
                       window.removeEventListener("pointermove", onMove);
                       window.removeEventListener("pointerup", onUp);
-                      // commit the final width via the host
-                      setWidths((w) => {
-                        onLayoutChange?.({ widths: w });
-                        return w;
-                      });
+                      // Notify the host outside any setState updater. Build the widths
+                      // map from the ref (always current) plus the closure-tracked
+                      // final width for the dragged column.
+                      const finalWidths = { ...widthsRef.current, [c.field]: latestWidth };
+                      onLayoutChange?.({ widths: finalWidths });
                     };
                     window.addEventListener("pointermove", onMove);
                     window.addEventListener("pointerup", onUp);
@@ -555,11 +598,13 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                       if (w > max) max = w;
                     }
                     const next = Math.min(600, Math.max(60, max));
-                    setWidths((w) => {
-                      const updated = { ...w, [c.field]: next };
-                      onLayoutChange?.({ widths: updated });
-                      return updated;
-                    });
+                    // Compute the full updated widths map from the ref (which always
+                    // holds the latest committed state) before calling setWidths, so
+                    // onLayoutChange can fire outside any setState updater and avoid
+                    // the setState-in-render anti-pattern.
+                    const updatedWidths = { ...widthsRef.current, [c.field]: next };
+                    setWidths(updatedWidths);
+                    onLayoutChange?.({ widths: updatedWidths });
                   }}
                 >
                   <span

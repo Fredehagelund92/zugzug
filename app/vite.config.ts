@@ -32,6 +32,10 @@ export default defineConfig({
     // so file edits never reach Vite's watcher. Polling makes HMR work in WSL.
     watch: { usePolling: true, interval: 120 },
     // The Bun backend (server/) serves /api on :8787. Proxy avoids CORS in dev.
-    proxy: { "/api": { target: "http://localhost:8787", changeOrigin: true } },
+    // /ws needs ws:true so the presence WebSocket reaches the backend in dev.
+    proxy: {
+      "/api": { target: "http://localhost:8787", changeOrigin: true },
+      "/ws": { target: "ws://localhost:8787", ws: true },
+    },
   },
 });

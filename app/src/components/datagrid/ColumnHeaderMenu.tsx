@@ -11,6 +11,7 @@ import {
   IconTrash,
   IconChevronLeft,
   IconFilter,
+  IconArrowRight,
 } from "../Icons";
 import type { CellType, ColumnConfig, ColumnDef, NumberFormat } from "./types";
 
@@ -35,6 +36,14 @@ interface Props<Row> {
   onFilter: (value: string | null) => void;
   onOpenRules?: () => void;
   onEditDescription?: () => void;
+  // Linked-column (fk / lookup) actions. Present the kind-appropriate subset
+  // depending on `column.columnKind`.
+  onShowLinkedFields?: () => void;
+  onOpenTargetDimension?: () => void;
+  onChangeDisplayedField?: () => void;
+  onManageLinkedFields?: () => void;
+  onJumpToSourceColumn?: () => void;
+  onRemoveLookup?: () => void;
 }
 
 const TYPES: CellType[] = ["text", "number", "boolean", "date", "select", "url", "email", "rating"];
@@ -56,6 +65,12 @@ export function ColumnHeaderMenu<Row>({
   onFilter,
   onOpenRules,
   onEditDescription,
+  onShowLinkedFields,
+  onOpenTargetDimension,
+  onChangeDisplayedField,
+  onManageLinkedFields,
+  onJumpToSourceColumn,
+  onRemoveLookup,
 }: Props<Row>) {
   const [mode, setMode] = useState<
     "menu" | "rename" | "type" | "number-format" | "rating-max" | "filter" | "confirm-delete"
@@ -83,6 +98,13 @@ export function ColumnHeaderMenu<Row>({
   );
   const [ratingMaxCustom, setRatingMaxCustom] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode === "rename") {
+      renameInputRef.current?.select();
+    }
+  }, [mode]);
 
   // Position relative to the anchor (the ⋯ button) using fixed coords. Rendered
   // in a portal on document.body so the menu escapes the grid's stacking
@@ -143,6 +165,8 @@ export function ColumnHeaderMenu<Row>({
   const item =
     "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left font-mono text-[11.5px] text-ink hover:bg-hover";
   const iconCls = "h-3.5 w-3.5 shrink-0 text-ink-3";
+  const isLookup = column.columnKind === "lookup";
+  const isFk = column.columnKind === "fk";
 
   return createPortal(
     <div
@@ -150,16 +174,124 @@ export function ColumnHeaderMenu<Row>({
       style={{ position: "fixed", top: 0, left: 0, width: MENU_WIDTH }}
       className="zz-pop-in z-40 rounded-sm border border-line-2 bg-surface-elevated p-1 shadow-pop"
     >
-      {mode === "menu" && (
+      {mode === "menu" && isLookup && (
+        <>
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onSort("asc");
+              onClose();
+            }}
+          >
+            <IconSortAsc className={iconCls} /> Sort A→Z
+          </button>
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onSort("desc");
+              onClose();
+            }}
+          >
+            <IconSortDesc className={iconCls} /> Sort Z→A
+          </button>
+          {sortDir != null && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onSort(null);
+                onClose();
+              }}
+            >
+              <IconX className={iconCls} /> Clear sort
+            </button>
+          )}
+          {onOpenRules && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onOpenRules();
+                onClose();
+              }}
+            >
+              <IconRules className={iconCls} /> Conditional formatting…
+            </button>
+          )}
+          <div className="my-1 h-px bg-line" />
+          {onChangeDisplayedField && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onChangeDisplayedField();
+                onClose();
+              }}
+            >
+              <IconType className={iconCls} /> Change displayed field…
+            </button>
+          )}
+          {onManageLinkedFields && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onManageLinkedFields();
+                onClose();
+              }}
+            >
+              <IconEdit className={iconCls} /> Manage linked fields…
+            </button>
+          )}
+          {onJumpToSourceColumn && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onJumpToSourceColumn();
+                onClose();
+              }}
+            >
+              <IconArrowRight className={iconCls} /> Jump to source column →
+            </button>
+          )}
+          <div className="my-1 h-px bg-line" />
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              onHide();
+              onClose();
+            }}
+          >
+            <IconEyeOff className={iconCls} /> Hide column
+          </button>
+          {onRemoveLookup && (
+            <button
+              type="button"
+              className={cx(item, "text-danger")}
+              onClick={() => {
+                onRemoveLookup();
+                onClose();
+              }}
+            >
+              <IconTrash className="h-3.5 w-3.5 shrink-0" /> Remove this lookup
+            </button>
+          )}
+        </>
+      )}
+      {mode === "menu" && !isLookup && (
         <>
           <button type="button" className={item} onClick={() => setMode("rename")}>
-            <IconEdit className={iconCls} /> rename column
+            <IconEdit className={iconCls} /> Rename column
           </button>
           <button type="button" className={item} onClick={() => setMode("type")}>
-            <IconType className={iconCls} /> change type
+            <IconType className={iconCls} /> Change type
           </button>
           <button type="button" className={item} onClick={() => setMode("filter")}>
-            <IconFilter className={iconCls} /> filter…
+            <IconFilter className={iconCls} /> Filter…
             {filterValue && (
               <span className="ml-auto rounded-pill bg-accent-wash px-1.5 font-mono text-[9px] text-accent">
                 on
@@ -175,7 +307,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              <IconRules className={iconCls} /> conditional formatting…
+              <IconRules className={iconCls} /> Conditional formatting…
             </button>
           )}
           {onEditDescription && (
@@ -187,7 +319,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              <IconEdit className={iconCls} /> edit description…
+              <IconEdit className={iconCls} /> Edit description…
             </button>
           )}
           <div className="my-1 h-px bg-line" />
@@ -199,7 +331,7 @@ export function ColumnHeaderMenu<Row>({
               onClose();
             }}
           >
-            <IconSortAsc className={iconCls} /> sort A→Z
+            <IconSortAsc className={iconCls} /> Sort A→Z
           </button>
           <button
             type="button"
@@ -209,7 +341,7 @@ export function ColumnHeaderMenu<Row>({
               onClose();
             }}
           >
-            <IconSortDesc className={iconCls} /> sort Z→A
+            <IconSortDesc className={iconCls} /> Sort Z→A
           </button>
           {sortDir != null && (
             <button
@@ -220,8 +352,37 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              <IconX className={iconCls} /> clear sort
+              <IconX className={iconCls} /> Clear sort
             </button>
+          )}
+          {isFk && (onShowLinkedFields || onOpenTargetDimension) && (
+            <>
+              <div className="my-1 h-px bg-line" />
+              {onShowLinkedFields && (
+                <button
+                  type="button"
+                  className={item}
+                  onClick={() => {
+                    onShowLinkedFields();
+                    onClose();
+                  }}
+                >
+                  <IconEdit className={iconCls} /> Show linked fields…
+                </button>
+              )}
+              {onOpenTargetDimension && (
+                <button
+                  type="button"
+                  className={item}
+                  onClick={() => {
+                    onOpenTargetDimension();
+                    onClose();
+                  }}
+                >
+                  <IconArrowRight className={iconCls} /> Open target dimension →
+                </button>
+              )}
+            </>
           )}
           <div className="my-1 h-px bg-line" />
           <button
@@ -232,20 +393,21 @@ export function ColumnHeaderMenu<Row>({
               onClose();
             }}
           >
-            <IconEyeOff className={iconCls} /> hide column
+            <IconEyeOff className={iconCls} /> Hide column
           </button>
           <button
             type="button"
             className={cx(item, "text-danger")}
             onClick={() => setMode("confirm-delete")}
           >
-            <IconTrash className="h-3.5 w-3.5 shrink-0" /> delete column
+            <IconTrash className="h-3.5 w-3.5 shrink-0" /> Delete column
           </button>
         </>
       )}
       {mode === "rename" && (
         <div className="p-1">
           <input
+            ref={renameInputRef}
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -271,10 +433,10 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              save
+              Save
             </button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>
-              cancel
+              Cancel
             </button>
           </div>
         </div>
@@ -310,7 +472,7 @@ export function ColumnHeaderMenu<Row>({
           </div>
           <div className="my-1 h-px bg-line" />
           <button type="button" className={item} onClick={() => setMode("menu")}>
-            <IconChevronLeft className={iconCls} /> back
+            <IconChevronLeft className={iconCls} /> Back
           </button>
         </div>
       )}
@@ -598,7 +760,7 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              apply
+              Apply
             </button>
             {filterValue && (
               <button
@@ -610,7 +772,7 @@ export function ColumnHeaderMenu<Row>({
                   onClose();
                 }}
               >
-                clear
+                Clear
               </button>
             )}
             <button
@@ -638,10 +800,10 @@ export function ColumnHeaderMenu<Row>({
                 onClose();
               }}
             >
-              delete
+              Delete
             </button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>
-              cancel
+              Cancel
             </button>
           </div>
         </div>

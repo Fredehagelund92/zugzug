@@ -24,8 +24,17 @@ import type { DataGridProps, FilterSet } from "./types";
 import { CursorOverlay } from "./CursorOverlay";
 import { DataGridBody } from "./DataGridBody";
 import { DataGridHeader } from "./DataGridHeader";
-import { attrEsc, flashCell } from "./util";
+import { attrEsc, flashCell, flashCellCopy } from "./util";
 import { toast } from "../Toast";
+import {
+  IconCopy,
+  IconPaste,
+  IconX,
+  IconFilter,
+  IconTrash,
+  IconPlus,
+  IconArrowRight,
+} from "../Icons";
 
 // ── Range selection types ───────────────────────────────────────────────────
 interface RangeCorner {
@@ -152,6 +161,29 @@ function FillHandle({
   );
 }
 
+/** Clipboard access that never throws: the API is absent in insecure contexts
+ *  (and headless browsers), so failures surface a toast instead of an uncaught
+ *  rejection. Returns success/false for writes, the text/null for reads. */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error("clipboard unavailable");
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    toast("Couldn't access the clipboard", "error");
+    return false;
+  }
+}
+async function readClipboard(): Promise<string | null> {
+  try {
+    if (!navigator.clipboard?.readText) throw new Error("clipboard unavailable");
+    return await navigator.clipboard.readText();
+  } catch {
+    toast("Couldn't read the clipboard", "error");
+    return null;
+  }
+}
+
 export function DataGrid<Row>(props: DataGridProps<Row>) {
   const {
     rows,
@@ -172,8 +204,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const visible = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
   const selectionCol = !!selection;
   const showRowNumbers = !!props.showRowNumbers;
-  const compact = props.density === "compact";
-  const cellPadY = compact ? "py-[3px]" : "py-[7px]";
+  const cellPadY = "py-[7px]";
   const undo = useUndoStack();
 
   // Typed cell-value accessor: uses the prop if provided, otherwise falls back
@@ -201,7 +232,20 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     props.onSortChange?.(sort ? { column: sort.field, direction: sort.dir } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
-  const [filterSet, setFilterSet] = useState<FilterSet | null>(null);
+  const [filterSet, setFilterSet] = useState<FilterSet | null>(
+    () => props.initialFilterSet ?? null,
+  );
+  const updateFilterSet = useCallback(
+    (next: FilterSet | null | ((cur: FilterSet | null) => FilterSet | null)) => {
+      setFilterSet((cur) => {
+        const resolved = typeof next === "function" ? next(cur) : next;
+        props.onFilterSetChange?.(resolved);
+        return resolved;
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [props.onFilterSetChange],
+  );
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [rulesEditor, setRulesEditor] = useState<string | null>(null);
   const [descEditor, setDescEditor] = useState<string | null>(null);
@@ -267,6 +311,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const [widths, setWidths] = useState<Record<string, number>>(() =>
     Object.fromEntries(visible.filter((c) => c.width).map((c) => [c.field, c.width!])),
   );
+  // ref mirror of `widths` so DataGridHeader's event handlers can read the
+  // committed widths without calling onLayoutChange inside a setState updater
+  // (which would be a setState-in-render side effect).
+  const widthsRef = useRef(widths);
+  useEffect(() => {
+    widthsRef.current = widths;
+  }, [widths]);
 
   const colWidth = (field: string) =>
     widths[field] ?? visible.find((c) => c.field === field)?.width;
@@ -295,6 +346,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     for (const c of visible) if (!order.includes(c.field)) out.push(c);
     return out;
   }, [visible, order]);
+
+  // Computed once per column change — O(cols) instead of O(cols²) per cell.
+  const firstPinnedField = useMemo(
+    () => orderedVisible.find((c) => c.pinnedLeft)?.field ?? null,
+    [orderedVisible],
+  );
 
   // template: optional checkbox + each visible column's width (uses orderedVisible)
   const gridStyle = useMemo(() => {
@@ -456,7 +513,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // The actual `useVirtualizer` call lives in DataGridBody; it writes its
   // instance into this ref so the cursor scroll-into-view effect below can
   // imperatively call scrollToIndex without re-creating the virtualiser here.
-  const estimatedRowHeight = compact ? 26 : 38;
+  const estimatedRowHeight = 38;
   const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element> | null>(null);
 
   // Pointer-driven cursor moves must NOT auto-scroll: the clicked cell is
@@ -511,9 +568,14 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // based (no React state) so the per-hover path doesn't trigger renders —
   // important because GridRow is memoized and a top-level state change would
   // invalidate every row.
+  // isScrollingRef: set true while a scroll is in flight so applyColumnHover
+  // is skipped — cells slide under a stationary pointer on scroll and the
+  // querySelectorAll sweeps are wasted work.
+  const isScrollingRef = useRef(false);
   const hoverFieldRef = useRef<string | null>(null);
   const applyColumnHover = useCallback(
     (field: string | null) => {
+      if (isScrollingRef.current) return;
       const root = cursor.ref.current;
       if (!root) return;
       if (hoverFieldRef.current === field) return;
@@ -535,14 +597,21 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // under the sticky header so CSS can add a shadow
   // (.zz-grid-scroll[data-scrolled] .zz-grid-header). rAF-coalesced like the
   // other scroll listeners in this file.
+  // Also sets isScrollingRef while scrolling so applyColumnHover is skipped.
   useEffect(() => {
     const el = cursor.ref.current;
     if (!el) return;
     let raf = 0;
+    let scrollEndTimer = 0;
     const update = () => {
       el.toggleAttribute("data-scrolled", el.scrollTop > 0);
     };
     const onScroll = () => {
+      isScrollingRef.current = true;
+      clearTimeout(scrollEndTimer);
+      scrollEndTimer = window.setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 150);
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
@@ -553,6 +622,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      clearTimeout(scrollEndTimer);
       el.removeEventListener("scroll", onScroll);
     };
   }, [cursor.ref]);
@@ -567,7 +637,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       if (!row) return;
       const val = getValue(row, field);
       const text = val == null ? "" : String(val);
-      await navigator.clipboard.writeText(text);
+      if (!(await writeClipboard(text))) return;
+      toast("Copied", "success");
+      flashCellCopy(rk, field);
       return;
     }
     const { minRow, maxRow, minCol, maxCol } = computeRangeBounds(range);
@@ -584,7 +656,17 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       }
       lines.push(cells.join("\t"));
     }
-    await navigator.clipboard.writeText(lines.join("\n"));
+    if (!(await writeClipboard(lines.join("\n")))) return;
+    toast("Copied", "success");
+    for (let ri = minRow; ri <= maxRow; ri++) {
+      const row = sortedRows[ri];
+      if (!row) continue;
+      for (let ci = minCol; ci <= maxCol; ci++) {
+        const col = orderedVisible[ci];
+        if (!col) continue;
+        flashCellCopy(rowKey(row), col.field);
+      }
+    }
   }, [range, cursor.cursor, sortedRows, rowKey, orderedVisible, computeRangeBounds, getValue]);
 
   // Coerce a raw clipboard string into the column's expected type. Returns
@@ -628,7 +710,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   //   2. Tabular clipboard → paste the source TSV grid starting at the anchor.
   const handlePaste = useCallback(async () => {
     if (!cursor.cursor) return;
-    const text = await navigator.clipboard.readText();
+    const text = await readClipboard();
     if (!text) return;
     // Trim trailing newline so single-value paste from a copy of one cell
     // doesn't look like two rows.
@@ -722,6 +804,19 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // ── Context menu ────────────────────────────────────────────────────────────
   const { menu: contextMenu, onContextMenu, close: closeMenu } = useContextMenu();
 
+  // Right-clicking a header opens the same ColumnHeaderMenu the ⋯ button opens
+  // (one consistent menu), anchored at the cursor. Cells and row numbers keep
+  // the ContextMenu. We intercept the header surface here rather than rendering
+  // the ContextMenu for it below.
+  useEffect(() => {
+    if (contextMenu?.surface.kind !== "header") return;
+    const { field } = contextMenu.surface;
+    menuAnchorRef.current = null;
+    setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
+    setMenuFor(field);
+    closeMenu();
+  }, [contextMenu, closeMenu]);
+
   const buildMenuItems = (surface: ContextSurface): MenuItem[] => {
     if (surface.kind === "cell") {
       const { rowKey: rk, field } = surface;
@@ -729,14 +824,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
       const value = row ? getValue(row, field) : null;
       const valStr = value == null ? "" : String(value);
       return [
-        { label: "Copy", onClick: () => void handleCopy() },
-        { label: "Paste", onClick: () => void handlePaste() },
-        { label: "Clear", onClick: () => void commitValue(rk, field, null) },
+        { label: "Copy", icon: <IconCopy />, shortcut: "⌘C", onClick: () => void handleCopy() },
+        { label: "Paste", icon: <IconPaste />, shortcut: "⌘V", onClick: () => void handlePaste() },
+        { label: "Clear", icon: <IconX />, onClick: () => void commitValue(rk, field, null) },
         { separator: true, label: "", onClick: () => {} },
         {
           label: `Filter to "${valStr.slice(0, 24)}"`,
+          icon: <IconFilter />,
           onClick: () => {
-            setFilterSet((cur) => ({
+            updateFilterSet((cur) => ({
               conjunction: cur?.conjunction ?? "and",
               conditions: [
                 ...(cur?.conditions ?? []),
@@ -752,8 +848,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         },
         {
           label: `Filter to NOT "${valStr.slice(0, 24)}"`,
+          icon: <IconFilter />,
           onClick: () => {
-            setFilterSet((cur) => ({
+            updateFilterSet((cur) => ({
               conjunction: cur?.conjunction ?? "and",
               conditions: [
                 ...(cur?.conditions ?? []),
@@ -770,11 +867,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         { separator: true, label: "", onClick: () => {} },
         {
           label: "Insert row above",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "above"),
           disabled: !props.onInsertRow,
         },
         {
           label: "Insert row below",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "below"),
           disabled: !props.onInsertRow,
         },
@@ -800,125 +899,11 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           : []),
         {
           label: "Delete row",
+          icon: <IconTrash />,
           onClick: () => props.onDeleteRow?.(rk),
           disabled: !props.onDeleteRow,
         },
       ];
-    }
-    if (surface.kind === "header") {
-      const c = orderedVisible.find((col) => col.field === surface.field);
-      const kind = c?.columnKind ?? "normal";
-
-      const sortAsc: MenuItem = {
-        label: "Sort ascending",
-        onClick: () => setSort({ field: surface.field, dir: "asc" }),
-      };
-      const sortDesc: MenuItem = {
-        label: "Sort descending",
-        onClick: () => setSort({ field: surface.field, dir: "desc" }),
-      };
-      const conditional: MenuItem = {
-        label: "Conditional formatting…",
-        onClick: () => {
-          if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-          setRulesEditor(surface.field);
-        },
-        disabled: !props.onSaveColumnRules,
-      };
-      const hide: MenuItem = {
-        label: "Hide column",
-        onClick: () => {
-          const hidden = [...columns.filter((v) => v.hidden).map((v) => v.field), surface.field];
-          props.onLayoutChange?.({ hidden });
-        },
-      };
-      const sep: MenuItem = { separator: true, label: "", onClick: () => {} };
-
-      if (kind === "lookup") {
-        return [
-          sortAsc,
-          sortDesc,
-          conditional,
-          sep,
-          {
-            label: "Change displayed field…",
-            onClick: () => props.onChangeDisplayedField?.(surface.field),
-            disabled: !props.onChangeDisplayedField,
-          },
-          {
-            label: "Manage linked fields…",
-            onClick: () => props.onManageLinkedFields?.(surface.field),
-            disabled: !props.onManageLinkedFields,
-          },
-          {
-            label: "Jump to source column →",
-            onClick: () => props.onJumpToSourceColumn?.(c?.sourceField ?? surface.field),
-            disabled: !props.onJumpToSourceColumn,
-          },
-          sep,
-          hide,
-          {
-            label: "Remove this lookup",
-            onClick: () => props.onRemoveLookup?.(surface.field),
-            disabled: !props.onRemoveLookup,
-          },
-        ];
-      }
-
-      // Normal + FK share the standard column header items.
-      const base: MenuItem[] = [
-        sortAsc,
-        sortDesc,
-        {
-          label: "Rename",
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setMenuFor(surface.field);
-          },
-        },
-        {
-          label: "Change type",
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setMenuFor(surface.field);
-          },
-          disabled: !props.onChangeColumnType,
-        },
-        sep,
-        conditional,
-        {
-          label: "Edit description",
-          onClick: () => {
-            if (contextMenu) setMenuAnchorRect(new DOMRect(contextMenu.x, contextMenu.y, 0, 0));
-            setDescEditor(surface.field);
-          },
-          disabled: !props.onSaveColumnDescription,
-        },
-      ];
-
-      if (kind === "fk") {
-        base.push(
-          sep,
-          {
-            label: "Show linked fields…",
-            onClick: () => props.onShowLinkedFields?.(surface.field),
-            disabled: !props.onShowLinkedFields,
-          },
-          {
-            label: "Open target dimension →",
-            onClick: () => props.onOpenTargetDimension?.(surface.field),
-            disabled: !props.onOpenTargetDimension,
-          },
-        );
-      }
-
-      base.push(sep, hide, {
-        label: "Delete column",
-        onClick: () => props.onDeleteColumn?.(surface.field),
-        disabled: !props.onDeleteColumn || !!c?.pinnedLeft,
-      });
-
-      return base;
     }
     if (surface.kind === "row-num") {
       const rk = surface.rowKey;
@@ -937,11 +922,13 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         },
         {
           label: "Insert above",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "above"),
           disabled: !props.onInsertRow,
         },
         {
           label: "Insert below",
+          icon: <IconPlus />,
           onClick: () => props.onInsertRow?.(rk, "below"),
           disabled: !props.onInsertRow,
         },
@@ -966,11 +953,20 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
             ]
           : []),
         {
-          label: "Duplicate",
-          onClick: () => props.onDuplicateRow?.(rk),
-          disabled: !props.onDuplicateRow,
+          label: "Delete",
+          icon: <IconTrash />,
+          onClick: () => props.onDeleteRow?.(rk),
+          disabled: !props.onDeleteRow,
         },
-        { label: "Delete", onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+        ...(props.onMapValuesToRecord
+          ? [
+              {
+                label: "Map values to this record",
+                icon: <IconArrowRight />,
+                onClick: () => props.onMapValuesToRecord!(rk),
+              } as MenuItem,
+            ]
+          : []),
       ];
     }
     return [];
@@ -1392,7 +1388,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   return (
     <div className="relative flex flex-1 flex-col min-h-0 overflow-hidden rounded-lg border border-line bg-surface focus-within:ring-1 focus-within:ring-accent/40">
       {filterSet && filterSet.conditions.length > 0 && (
-        <FilterBar filterSet={filterSet} columns={orderedVisible} onChange={setFilterSet} />
+        <FilterBar filterSet={filterSet} columns={orderedVisible} onChange={updateFilterSet} />
       )}
       <div
         ref={cursor.ref}
@@ -1442,8 +1438,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           sort={sort}
           setSort={setSort}
           filterSet={filterSet}
-          setFilterSet={setFilterSet}
+          setFilterSet={updateFilterSet}
           setWidths={setWidths}
+          widthsRef={widthsRef}
           setOrder={setOrder}
           drag={drag}
           setDrag={setDrag}
@@ -1468,6 +1465,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onSaveColumnDescription={props.onSaveColumnDescription}
           onChangeColumnType={props.onChangeColumnType}
           onDeleteColumn={props.onDeleteColumn}
+          onShowLinkedFields={props.onShowLinkedFields}
+          onOpenTargetDimension={props.onOpenTargetDimension}
+          onChangeDisplayedField={props.onChangeDisplayedField}
+          onManageLinkedFields={props.onManageLinkedFields}
+          onJumpToSourceColumn={props.onJumpToSourceColumn}
+          onRemoveLookup={props.onRemoveLookup}
         />
         {/* body */}
         <DataGridBody
@@ -1488,7 +1491,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
                 <div>No records match the current filters.</div>
                 <button
                   type="button"
-                  onClick={() => setFilterSet(null)}
+                  onClick={() => updateFilterSet(null)}
                   className="mt-2 text-accent underline-offset-2 hover:underline"
                 >
                   Clear filters
@@ -1515,6 +1518,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onAddColumnOption={props.onAddColumnOption}
           onRowNumPointerDown={onRowNumPointerDown}
           onColumnHover={applyColumnHover}
+          firstPinnedField={firstPinnedField}
           condFmt={condFmt}
           activity={activity}
           renderRowDetail={props.renderRowDetail}
@@ -1542,7 +1546,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         )}
       </div>
       <StatusBar agg={statusAgg} />
-      {contextMenu && (
+      {/* Header right-clicks are intercepted (see effect above) to open the
+          ColumnHeaderMenu instead — never render the shared ContextMenu for them. */}
+      {contextMenu && contextMenu.surface.kind !== "header" && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}

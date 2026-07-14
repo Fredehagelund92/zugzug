@@ -6,7 +6,7 @@ import type {
   PaletteName,
   NumberFormat,
 } from "./data";
-import type { ConditionalRule } from "./components/datagrid/types";
+import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
 import { toast } from "./components/Toast";
@@ -396,11 +396,9 @@ async function refreshDrafts(dimId?: string): Promise<void> {
     draftsFlat = next;
     return;
   }
-  const lists = await Promise.all(
-    dims.map((d) => api<Draft[]>(`/dimensions/${encodeURIComponent(d.id)}/drafts`)),
-  );
+  const list = await api<Draft[]>("/drafts");
   const flat: Record<string, Draft> = {};
-  for (const list of lists) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
+  for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {
@@ -414,9 +412,9 @@ async function refreshPreferences(): Promise<void> {
 }
 
 /** Preload everything once. Awaited in main.tsx so the first render has data.
- *  Independent slices run in parallel; refreshDrafts is sequential because it
- *  iterates the dims it just fetched. Cold boot drops from 6 sequential RTTs
- *  to 3 (users → 4-in-parallel → drafts). */
+ *  Independent slices run in parallel; refreshDrafts runs after them (it fetches
+ *  every dim's drafts in one batch request, independent of the dim list). Cold
+ *  boot drops from 6 sequential RTTs to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
   const [u, meRaw] = await Promise.all([
     api<{ currentUser: User; collaborators: User[] }>("/users"),
@@ -1059,6 +1057,7 @@ export interface GridLayoutConfig {
   order?: string[];
   hidden?: string[];
   sort?: { column: string; direction: "asc" | "desc" } | null;
+  filterSet?: FilterSet | null;
 }
 
 // Layout cache so re-activating a tab renders with correct column widths

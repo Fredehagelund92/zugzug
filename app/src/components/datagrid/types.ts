@@ -165,15 +165,12 @@ export interface DataGridProps<Row> {
    *  Pass a typed reader when the row type's fields don't match column `field`
    *  names directly (e.g. flattened nested objects). */
   getValue?: (row: Row, field: string) => unknown;
-  /** Row density. "compact" tightens cell padding to ~24px rows; default ~32px. */
-  density?: "default" | "compact";
   /** Prepend a 1-based row number column (read-only, 36px wide). */
   showRowNumbers?: boolean;
   /** Row operations triggered from the right-click context menu. */
   onInsertRow?: (rowKey: string, where: "above" | "below") => void;
   onDeleteRow?: (rowKey: string) => void;
   onReorderRow?: (rowKey: string, before: string | null, after: string | null) => void;
-  onDuplicateRow?: (rowKey: string) => void;
   /** Save per-column conditional formatting rules (persisted in field_config). */
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
   /** Save a plain-text description for a column (persisted in dimension_field.description). */
@@ -221,4 +218,10 @@ export interface DataGridProps<Row> {
   onSortChange?: (sort: { column: string; direction: "asc" | "desc" } | null) => void;
   /** Seed the sort state on mount. */
   initialSort?: { column: string; direction: "asc" | "desc" } | null;
+  /** Seed the filter state on mount. */
+  initialFilterSet?: FilterSet | null;
+  /** Notified when the user changes filters (add/remove/clear). Not fired on mount. */
+  onFilterSetChange?: (fs: FilterSet | null) => void;
+  /** Row-num context menu: hand off to Match mode with this record pre-selected. */
+  onMapValuesToRecord?: (recordKey: string) => void;
 }

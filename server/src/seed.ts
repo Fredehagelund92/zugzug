@@ -3,7 +3,7 @@
    after exploring the demo. Idempotent (safe to re-run). */
 
 import { pgGet } from "./pg.ts";
-import { addDimension, addCanonical, addSource } from "./repo.ts";
+import { addDimension, addCanonicalOne, addSource } from "./repo.ts";
 
 const COUNTRY_SOURCES = [
   { table: "raw.orders", column: "shipping_country" },
@@ -73,7 +73,12 @@ async function seedDimension(
       await addSource(dimKey, s.table, s.column, T);
     }
   }
-  await addCanonical(dimKey, canonical, T);
+  // Use addCanonicalOne per record (not the bulk addCanonical) so each seeded
+  // record gets a canonical_version row — without it, rename/merge/retire 404
+  // ("canonical not found") because bumpVersionOrThrow finds no version row.
+  for (const c of canonical) {
+    await addCanonicalOne(dimKey, c.label, c.key, "u_verify", T);
+  }
 }
 
 export async function seedDemo(): Promise<void> {

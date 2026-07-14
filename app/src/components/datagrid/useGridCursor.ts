@@ -73,8 +73,6 @@ interface Opts<Row> {
   onBulkDelete?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
-  onShortcuts?: () => void; // '?' → open shortcuts overlay
-  onFocusFilter?: () => void; // '/' → focus toolbar filter
   /** Disable type-to-edit (printable char enters edit mode). Off when the host
    *  owns single-key actions via DataGrid's onCellKeyDown. Default true. */
   typeToEdit?: boolean;
@@ -90,8 +88,6 @@ export function useGridCursor<Row>({
   onBulkDelete,
   onUndo,
   onRedo,
-  onShortcuts,
-  onFocusFilter,
   typeToEdit = true,
 }: Opts<Row>) {
   const [cursor, setCursor] = useState<Cursor | null>(null);
@@ -352,16 +348,6 @@ export function useGridCursor<Row>({
         moveH(e.shiftKey ? -1 : 1);
         return;
       }
-      if (e.key === "?") {
-        e.preventDefault();
-        onShortcuts?.();
-        return;
-      }
-      if (e.key === "/") {
-        e.preventDefault();
-        onFocusFilter?.();
-        return;
-      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
         onSelectAll?.();
@@ -392,8 +378,6 @@ export function useGridCursor<Row>({
       onBulkDelete,
       onUndo,
       onRedo,
-      onShortcuts,
-      onFocusFilter,
       rows,
       navCols,
       rowKey,

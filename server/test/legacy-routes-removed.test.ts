@@ -5,6 +5,7 @@ process.env.AUTH_MODE = "password";
 process.env.ALLOWED_DOMAIN = "example.com";
 
 import { test, expect, beforeEach, afterAll } from "bun:test";
+import { readFileSync } from "node:fs";
 import { pgRun } from "../src/pg.ts";
 
 const U_IDS = ["u_legacy_e2e"];
@@ -51,6 +52,26 @@ test("GET /api/team/users returns 404", async () => {
   const { handle } = await import("../src/server.ts");
   const res = await handle(
     new Request("http://localhost/api/team/users", { headers: { cookie } }),
+    () => {},
+  );
+  expect(res.status).toBe(404);
+});
+
+// The legacy /ws/presence/:tableId route lived inside the Bun.serve fetch handler
+// (not inside `handle`), so it cannot be exercised via handle() in unit tests.
+// We use two complementary assertions:
+//   1. Source-level: the legacy block no longer exists in server.ts.
+//   2. Behavioural: handle() returns 404 for the path (regression guard that no
+//      routing code accidentally starts handling it via the API router either).
+test("legacy /ws/presence route block is absent from server.ts source", () => {
+  const src = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  expect(src).not.toContain('"/ws/presence/"');
+});
+
+test("GET /ws/presence/<id> returns 404 via handle (no accidental API routing)", async () => {
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request("http://localhost/ws/presence/tbl_abc123"),
     () => {},
   );
   expect(res.status).toBe(404);

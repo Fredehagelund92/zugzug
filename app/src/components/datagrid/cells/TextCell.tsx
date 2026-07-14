@@ -7,7 +7,9 @@ const inputBase =
 function Renderer<Row>({ value }: CellCtx<Row>) {
   const s = value == null || value === "" ? null : String(value);
   return s ? (
-    <span className="truncate font-mono text-[12px] text-ink">{s}</span>
+    <span className="truncate font-mono text-[12px] text-ink" title={s}>
+      {s}
+    </span>
   ) : (
     <span className="font-mono text-[12px] text-ink-3">—</span>
   );

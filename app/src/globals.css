@@ -162,6 +162,14 @@
   animation: zz-rise 0.62s var(--ease) both;
 }
 
+/* fade-in only: opacity 0→1, no translate. Use on full-height flex containers
+   (RecordsBody, WiredSourcesModeBody) where a translateY entrance causes a
+   visible ~16px downward settle on cold open (craft-j1-02/03). */
+.zz-fade-in {
+  opacity: 0;
+  animation: zz-fade 0.62s var(--ease) both;
+}
+
 /* slide-over drawer (value mapper) */
 .zz-overlay {
   animation: zz-fade 0.2s ease both;
@@ -200,6 +208,20 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* copy-flash: very brief accent wash on a cell after ⌘C (high-frequency action).
+   Intentionally much shorter than zz-row-flash so it doesn't feel intrusive. */
+.zz-copy-flash {
+  animation: zz-copy-flash 200ms var(--ease) both;
+}
+@keyframes zz-copy-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  100% {
+    background-color: transparent;
   }
 }
 
@@ -308,7 +330,8 @@
     animation: none;
     opacity: 0;
   }
-  .zz-rise {
+  .zz-rise,
+  .zz-fade-in {
     animation: none;
     opacity: 1;
   }
