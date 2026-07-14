@@ -178,7 +178,7 @@ function ConnectionsSection() {
           </div>
         ) : (
           <div className="mt-1 text-[12.5px] text-ink-2">
-            Where Zug Zug looks for new values that need a master record.
+            Where Zug Zug looks for new values that need a record.
           </div>
         )}
       </div>

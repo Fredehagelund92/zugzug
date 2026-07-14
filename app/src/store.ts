@@ -6,9 +6,10 @@ import type {
   PaletteName,
   NumberFormat,
 } from "./data";
-import type { ConditionalRule } from "./components/datagrid/types";
+import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
+import { toast } from "./components/Toast";
 
 /** Thrown by client mutation helpers on HTTP 403 with a machine-readable code. */
 export class ApiCodeError extends Error {
@@ -276,7 +277,7 @@ const emit = () => listeners.forEach((l) => l());
 
 /* ---- sync status (own listener channel — NOT the global emit() bus, which
    would re-render every store subscriber on every write start/settle) ---- */
-export type SyncStatus = "idle" | "saving" | "saved";
+export type SyncStatus = "idle" | "saving" | "saved" | "failed";
 let pendingWrites = 0;
 let syncStatus: SyncStatus = "idle";
 let savedDecayTimer: ReturnType<typeof setTimeout> | null = null;
@@ -294,12 +295,23 @@ function writeStarted(): void {
 function writeSettled(): void {
   pendingWrites--;
   if (pendingWrites > 0) return;
+  if (syncStatus === "failed") return;
   syncStatus = "saved";
   emitSync();
   savedDecayTimer = setTimeout(() => {
     syncStatus = "idle";
     emitSync();
   }, 1500);
+}
+function writeFailed(): void {
+  pendingWrites--;
+  syncStatus = "failed";
+  emitSync();
+  if (savedDecayTimer) clearTimeout(savedDecayTimer);
+  savedDecayTimer = setTimeout(() => {
+    syncStatus = "idle";
+    emitSync();
+  }, 4000);
 }
 
 const subscribeSync = (l: () => void) => {
@@ -320,9 +332,12 @@ async function api<T>(path: string, opts?: RequestInit): Promise<T> {
   const isWrite = !!opts?.method && opts.method !== "GET";
   if (isWrite) writeStarted();
   try {
-    return await apiInner<T>(path, opts);
-  } finally {
+    const result = await apiInner<T>(path, opts);
     if (isWrite) writeSettled();
+    return result;
+  } catch (e) {
+    if (isWrite) writeFailed();
+    throw e;
   }
 }
 
@@ -401,11 +416,9 @@ async function refreshDrafts(dimId?: string): Promise<void> {
     draftsFlat = next;
     return;
   }
-  const lists = await Promise.all(
-    dims.map((d) => api<Draft[]>(`/dimensions/${encodeURIComponent(d.id)}/drafts`)),
-  );
+  const list = await api<Draft[]>("/drafts");
   const flat: Record<string, Draft> = {};
-  for (const list of lists) for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
+  for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {
@@ -420,9 +433,9 @@ async function refreshPreferences(): Promise<void> {
 }
 
 /** Preload everything once. Awaited in main.tsx so the first render has data.
- *  Independent slices run in parallel; refreshDrafts is sequential because it
- *  iterates the dims it just fetched. Cold boot drops from 6 sequential RTTs
- *  to 3 (users → 4-in-parallel → drafts). */
+ *  Independent slices run in parallel; refreshDrafts runs after them (it fetches
+ *  every dim's drafts in one batch request, independent of the dim list). Cold
+ *  boot drops from 6 sequential RTTs to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
   const [u, meRaw] = await Promise.all([
     api<{ currentUser: User; collaborators: User[] }>("/users"),
@@ -524,6 +537,19 @@ export async function addDimension(
   await refreshAudit();
   emit();
   return id;
+}
+
+/** Permanently removes a table and everything it owns. The server keeps
+ *  history (activity log); the local cache drops the dim immediately. */
+export async function deleteDimension(dimId: string): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}`, { method: "DELETE" });
+  dims = dims.filter((d) => d.id !== dimId);
+  await Promise.all([refreshAudit(), refreshSources()]);
+  // Prune drafts for the deleted dim without hitting the server for a gone endpoint
+  const next: Record<string, Draft> = {};
+  for (const [k, d] of Object.entries(draftsFlat)) if (d.dimId !== dimId) next[k] = d;
+  draftsFlat = next;
+  emit();
 }
 
 export async function patchDimension(
@@ -1132,6 +1158,7 @@ export interface GridLayoutConfig {
   order?: string[];
   hidden?: string[];
   sort?: { column: string; direction: "asc" | "desc" } | null;
+  filterSet?: FilterSet | null;
 }
 
 // Layout cache so re-activating a tab renders with correct column widths
@@ -1177,6 +1204,9 @@ export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
       void api(`/grid-layout/${encodeURIComponent(dimId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
+        keepalive: true,
+      }).catch(() => {
+        toast("Couldn't save the table layout — recent column changes may not stick.", "error");
       });
     }, 400),
   );

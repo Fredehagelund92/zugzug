@@ -54,6 +54,7 @@ interface GridCellProps<Row> {
   column: ColumnDef<Row>;
   rowKey: string;
   colIndex: number;
+  gridId: string;
   value: unknown;
   focused: boolean;
   editing: boolean;
@@ -82,6 +83,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
     column: c,
     rowKey: rk,
     colIndex: idx,
+    gridId,
     value,
     focused,
     editing,
@@ -123,6 +125,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
       role="gridcell"
       aria-colindex={idx + 1}
       aria-selected={focused ? true : undefined}
+      id={`${gridId}${encodeURIComponent(rk)}::${c.field}`}
       data-cell={data}
       data-field={c.field}
       onPointerDown={(e) => onCellPointerDown(e, rk, c.field)}
@@ -228,6 +231,7 @@ function gridCellAreEqual<Row>(prev: GridCellProps<Row>, next: GridCellProps<Row
     prev.column === next.column &&
     prev.rowKey === next.rowKey &&
     prev.colIndex === next.colIndex &&
+    prev.gridId === next.gridId &&
     prev.value === next.value &&
     prev.focused === next.focused &&
     prev.editing === next.editing &&
@@ -260,6 +264,7 @@ export interface GridRowProps<Row> {
   rowKey: string;
   rowIndex: number;
   columns: ColumnDef<Row>[];
+  gridId: string;
   /** Which field on this row has the cursor (null = cursor is elsewhere). */
   focusedField: string | null;
   /** Which field on this row is actively being edited (null = none). */
@@ -295,6 +300,9 @@ export interface GridRowProps<Row> {
    *  tint the column. DOM-mutation based on the DataGrid side — see
    *  applyColumnHover. */
   onColumnHover: (field: string | null) => void;
+  /** The field of the leftmost pinned-left column, or null if none. Computed
+   *  once per render in DataGrid so cells don't recompute O(cols²) per row. */
+  firstPinnedField: string | null;
 }
 
 function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
@@ -306,6 +314,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     rowKey: rk,
     rowIndex,
     columns,
+    gridId,
     focusedField,
     editingField,
     cursorInitial,
@@ -328,13 +337,14 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
     evaluation,
     activityEntry,
     onColumnHover,
+    firstPinnedField,
   } = props;
   return (
     <div
       role="row"
       aria-rowindex={rowIndex + 2}
       className={cx(
-        "relative group grid items-stretch border-b border-line transition-colors",
+        "relative group grid items-stretch border-b border-line",
         selected ? "bg-surface-2" : "hover:bg-hover",
       )}
       style={gridStyle}
@@ -376,7 +386,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
         const inRangeCell = cellInRange(rk, c.field);
         const value = getValue(row, c.field);
         const isLastCol = idx === columns.length - 1;
-        const isFirstPinned = !!(c.pinnedLeft && !columns.slice(0, idx).some((x) => x.pinnedLeft));
+        const isFirstPinned = c.pinnedLeft === true && c.field === firstPinnedField;
         const ruleStyle: RuleStyle | undefined = evaluation.cellStyles.get(c.field);
         return (
           <GridCell
@@ -385,6 +395,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
             column={c}
             rowKey={rk}
             colIndex={idx}
+            gridId={gridId}
             value={value}
             focused={focused}
             editing={editing}

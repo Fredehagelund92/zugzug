@@ -47,12 +47,13 @@ export function computeAggregates<Row>(
       count++;
       seen.add(String(v));
       const isNumericCol = col.config.type === "number" || col.config.type === "rating";
-      if (isNumericCol && typeof v === "number" && !isNaN(v)) {
+      const num = typeof v === "number" ? v : Number(v);
+      if (isNumericCol && Number.isFinite(num)) {
         anyNumeric = true;
-        sum += v;
+        sum += num;
         sumCount++;
-        if (min == null || (typeof min === "number" && v < min)) min = v;
-        if (max == null || (typeof max === "number" && v > max)) max = v;
+        if (min == null || (typeof min === "number" && num < min)) min = num;
+        if (max == null || (typeof max === "number" && num > max)) max = num;
       } else if (!anyNumeric) {
         const s = String(v);
         if (min == null || (typeof min === "string" && s < min)) min = s;

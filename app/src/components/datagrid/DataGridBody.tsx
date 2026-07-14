@@ -16,6 +16,7 @@ interface DataGridBodyProps<Row> {
   rows: Row[];
   rowKey: (row: Row) => string;
   columns: ColumnDef<Row>[];
+  gridId: string;
   gridStyle: React.CSSProperties;
   cellPadY: string;
   showRowNumbers: boolean;
@@ -55,6 +56,7 @@ interface DataGridBodyProps<Row> {
     | undefined;
   onRowNumPointerDown: (e: React.PointerEvent, rk: string) => void;
   onColumnHover: (field: string | null) => void;
+  firstPinnedField: string | null;
 
   // Conditional formatting evaluator
   condFmt: CondFmt<Row>;
@@ -69,6 +71,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
     rows,
     rowKey,
     columns,
+    gridId,
     gridStyle,
     cellPadY,
     showRowNumbers,
@@ -94,6 +97,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
     onAddColumnOption,
     onRowNumPointerDown,
     onColumnHover,
+    firstPinnedField,
     condFmt,
     activity,
     renderRowDetail,
@@ -144,6 +148,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
               rowKey={rk}
               rowIndex={vRow.index}
               columns={columns}
+              gridId={gridId}
               focusedField={focusedOnThisRow ? cursorField : null}
               editingField={focusedOnThisRow && cursorEditing ? cursorField : null}
               cursorInitial={focusedOnThisRow ? cursorInitial : undefined}
@@ -166,6 +171,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
               evaluation={evaluation}
               activityEntry={activity?.get(rk)}
               onColumnHover={onColumnHover}
+              firstPinnedField={firstPinnedField}
             />
             {detail !== null && (
               <div role="row" className="border-b border-line bg-surface-2/50">

@@ -13,6 +13,7 @@ import {
   pgRun,
   pg,
 } from "./repo-shared.ts";
+import { presence } from "./realtime/presence-room.ts";
 
 /* ---- users & presence (Postgres) ---- */
 export async function listUsers(): Promise<User[]> {
@@ -45,6 +46,19 @@ export async function appendAuditAs(
       ctx.metadata ? JSON.stringify(ctx.metadata) : null,
     ],
   );
+  // Best-effort activity push. Row-scoped writes carry tableId + rowKey; hint the room
+  // so peers refetch instead of polling. A presence failure must never fail the write.
+  if (ctx.tableId && ctx.rowKey) {
+    try {
+      presence.broadcastRowTouched(
+        ctx.tableId,
+        { type: "row_touched", rowKey: ctx.rowKey, userId },
+        ctx.tenantId ?? "default",
+      );
+    } catch {
+      /* transport down — the 60s client safety net covers it */
+    }
+  }
 }
 
 export async function listAudit(limit = 30, tenantId: string = "default"): Promise<AuditEntry[]> {

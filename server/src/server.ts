@@ -552,6 +552,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       return handleChangePassword(req, me);
     }
 
+    // GET /api/t/:slug/drafts — all drafts for the workspace in one query (boot path).
+    if (
+      tenantSlugFromPath !== null &&
+      seg[1] === "drafts" &&
+      seg.length === 2 &&
+      method === "GET"
+    ) {
+      return json(await reqRepo.listAllDrafts());
+    }
+
     // PATCH /api/t/:slug — rename workspace label and/or set color (admin only)
     if (tenantSlugFromPath !== null && seg.length === 1 && method === "PATCH") {
       const gate = requireAdmin(tenantCtx);
@@ -1009,6 +1019,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             (await req.json()) as import("./repo-canonical.ts").UpdateDimensionMetaInput;
           const dim = await reqRepo.updateDimensionMeta(id, patch, me);
           return json({ ok: true, dim });
+        }
+        // DELETE /api/dimensions/:id — permanently remove a table
+        if (seg.length === 3 && id && method === "DELETE") {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          const ok = await reqRepo.deleteDimension(id, me);
+          return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
         }
         if (seg[3] === "drafts") {
           // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
@@ -1614,28 +1631,6 @@ if (import.meta.main) {
           data: {
             tableId,
             tenantId: tenant.id,
-            userId: session.id,
-            displayName: session.name,
-          } satisfies PresenceWsData,
-        });
-        return ok ? undefined : new Response("upgrade failed", { status: 500 });
-      }
-
-      // Legacy /ws/presence/:tableId — default-tenant fallback (one-release deprecation).
-      if (url.pathname.startsWith("/ws/presence/")) {
-        const tableId = decodeURIComponent(url.pathname.slice("/ws/presence/".length));
-        if (!tableId) return new Response("missing tableId", { status: 400 });
-        let session: SessionUser | null;
-        try {
-          session = await getSessionUser(req);
-        } catch {
-          return new Response("auth error", { status: 503 });
-        }
-        if (!session) return new Response("unauthorized", { status: 401 });
-        const ok = srv.upgrade(req, {
-          data: {
-            tableId,
-            tenantId: "default",
             userId: session.id,
             displayName: session.name,
           } satisfies PresenceWsData,

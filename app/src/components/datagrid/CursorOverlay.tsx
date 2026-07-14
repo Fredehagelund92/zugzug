@@ -10,9 +10,9 @@ interface Rect {
 
 export interface CursorOverlayProps {
   peers: PeerState[];
-  /** Translates a peer's (row, col) into a pixel rect inside the grid container.
+  /** Translates a peer's (rowKey, field) into a pixel rect inside the grid container.
    *  Return null if the cell is virtualized out of view or otherwise un-paintable. */
-  cellRect: (row: number, col: number) => Rect | null;
+  cellRect: (rowKey: string, field: string) => Rect | null;
 }
 
 /** Renders peer cursors absolutely positioned over the grid surface. Container
@@ -22,7 +22,7 @@ export function CursorOverlay({ peers, cellRect }: CursorOverlayProps) {
     <div className="pointer-events-none absolute inset-0 z-20">
       {peers.map((p) => {
         if (!p.cell) return null;
-        const r = cellRect(p.cell.row, p.cell.col);
+        const r = cellRect(p.cell.rowKey, p.cell.field);
         if (!r) return null;
         return <PeerCursor key={p.userId} peer={p} rect={r} />;
       })}
@@ -42,7 +42,7 @@ function PeerCursor({ peer, rect }: { peer: PeerState; rect: Rect }) {
       if (el) el.dataset.stale = "true";
     }, 1800);
     return () => window.clearTimeout(t);
-  }, [peer.cell?.row, peer.cell?.col]);
+  }, [peer.cell?.rowKey, peer.cell?.field]);
 
   return (
     <div

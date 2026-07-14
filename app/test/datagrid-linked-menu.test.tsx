@@ -1,5 +1,5 @@
 import { test, expect, describe, vi } from "vitest";
-import { render, act, fireEvent } from "@testing-library/react";
+import { render, act, fireEvent, cleanup } from "@testing-library/react";
 import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../src/components/datagrid/types";
@@ -29,10 +29,12 @@ function normalColumn(): ColumnDef<Row> {
   return { field: "id", label: "ID", config: { type: "text" } };
 }
 
+// Right-clicking a header opens the same ColumnHeaderMenu the ⋯ button opens
+// (a portal rendered as div.zz-pop-in), not the shared ContextMenu.
 function openHeaderMenu(field: string, container: HTMLElement) {
   const h = container.querySelector(`[data-header="${field}"] span`) as HTMLElement;
   act(() => { fireEvent.contextMenu(h, { clientX: 50, clientY: 50, bubbles: true }); });
-  return document.querySelector('[role="menu"]')!;
+  return document.querySelector("div.zz-pop-in")!;
 }
 
 describe("right-click on FK column", () => {
@@ -71,6 +73,30 @@ describe("right-click on lookup column", () => {
     expect(menu.textContent).toContain("Remove this lookup");
     expect(menu.textContent).not.toContain("Rename");
     expect(menu.textContent).not.toContain("Change type");
+  });
+
+  test("right-click and the ⋯ button open the same menu with the same lookup actions", () => {
+    const cols = [normalColumn(), fkColumn(), lookupColumn()];
+    const props = {
+      rows, rowKey: (r: Row) => r.id, onCommit: async () => {},
+      onChangeDisplayedField: vi.fn(), onRemoveLookup: vi.fn(),
+      onJumpToSourceColumn: vi.fn(), onManageLinkedFields: vi.fn(),
+    };
+    // Right-click menu (fresh render).
+    const rc = render(<UndoStackProvider><DataGrid columns={cols} {...props} /></UndoStackProvider>);
+    const rightClickMenu = openHeaderMenu("country__iso_code", rc.container).textContent;
+    cleanup();
+
+    // ⋯ button menu for the same column (fresh render). The lookup column is the
+    // 3rd visible column → 3rd ⋯ button.
+    const dots = render(<UndoStackProvider><DataGrid columns={cols} {...props} /></UndoStackProvider>);
+    const btns = Array.from(dots.container.querySelectorAll('button[aria-label="Column menu"]'));
+    act(() => { fireEvent.click(btns[2]); });
+    const dotsMenu = dots.baseElement.querySelector("div.zz-pop-in")!.textContent;
+
+    expect(dotsMenu).toEqual(rightClickMenu);
+    expect(dotsMenu).toContain("Manage linked fields");
+    expect(dotsMenu).toContain("Remove this lookup");
   });
 });
 

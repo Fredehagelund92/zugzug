@@ -139,6 +139,11 @@ export class TenantRepo {
     );
   }
 
+  deleteDimension(dimId: string, userId: string): Promise<boolean> {
+    this.assertRole("curate");
+    return this.withClearCtx(() => repoCanonical.deleteDimension(dimId, userId, this.tenantId));
+  }
+
   updateDimensionMeta(
     dimId: string,
     patch: repoCanonical.UpdateDimensionMetaInput,
@@ -340,6 +345,10 @@ export class TenantRepo {
   // --- drafts ----------------------------------------------------------------
   listDrafts(dimId: string): Promise<Draft[]> {
     return this.withClearCtx(() => repoDrafts.listDrafts(dimId, this.tenantId));
+  }
+
+  listAllDrafts(): Promise<Draft[]> {
+    return this.withClearCtx(() => repoDrafts.listAllDrafts(this.tenantId));
   }
 
   saveDraft(

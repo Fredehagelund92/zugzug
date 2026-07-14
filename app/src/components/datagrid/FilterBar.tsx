@@ -207,7 +207,7 @@ function FilterConditionEditor<Row>({
           onClick={save}
           className="flex-1 rounded-sm bg-accent px-2 py-1 font-mono text-[11.5px] text-accent-ink transition-opacity hover:opacity-90"
         >
-          apply
+          Apply
         </button>
         <button
           type="button"

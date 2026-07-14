@@ -165,8 +165,6 @@ export interface DataGridProps<Row> {
    *  Pass a typed reader when the row type's fields don't match column `field`
    *  names directly (e.g. flattened nested objects). */
   getValue?: (row: Row, field: string) => unknown;
-  /** Row density. "compact" tightens cell padding to ~24px rows; default ~32px. */
-  density?: "default" | "compact";
   /** Prepend a 1-based row number column (read-only, 36px wide). */
   showRowNumbers?: boolean;
   /** Row operations triggered from the right-click context menu. */
@@ -184,10 +182,10 @@ export interface DataGridProps<Row> {
    *  When present, each row gets a left-edge pip + hover-revealed badge. */
   activity?: Map<string, RowActivityEntry>;
   /** When present, renders a CursorOverlay with peer cell highlights and
-   *  invokes `presence.setCell(row, col)` on cell focus to publish self. */
+   *  invokes `presence.setCell(rowKey, field)` on cell focus to publish self. */
   presence?: {
     peers: PeerState[];
-    setCell: (row: number, col: number) => void;
+    setCell: (rowKey: string, field: string) => void;
   };
   /** Host hook for workbench single-key actions (A/S/R/N…). Called for keydowns
    *  the grid itself did not handle (never while editing). `startEdit` opens
@@ -227,4 +225,10 @@ export interface DataGridProps<Row> {
   quickFilter?: string;
   /** Extracts the searchable string from a row for quickFilter. */
   quickFilterAccessor?: (row: Row) => string;
+  /** Seed the filter state on mount. */
+  initialFilterSet?: FilterSet | null;
+  /** Notified when the user changes filters (add/remove/clear). Not fired on mount. */
+  onFilterSetChange?: (fs: FilterSet | null) => void;
+  /** Row-num context menu: hand off to Match mode with this record pre-selected. */
+  onMapValuesToRecord?: (recordKey: string) => void;
 }

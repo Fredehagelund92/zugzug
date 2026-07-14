@@ -291,6 +291,24 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     [dim.dimension, options, state, external, canEdit, open],
   );
 
+  // ── Default mapping target (?target=) ────────────────────────────────────
+  // A deep link may supply ?target=<recordKey> (e.g. from Task 5's URL writer).
+  // On mount, resolve the key to its canonical record, show an affordance, and
+  // default the filter to "new". Consumed once (active pane only); stale keys
+  // are silently ignored.
+  const initialTargetRef = useRef<string | null>(isActive ? searchParams.get("target") : null);
+  const [defaultTarget, setDefaultTarget] = useState<{ key: string; label: string } | null>(null);
+  useEffect(() => {
+    const key = initialTargetRef.current;
+    if (!key) return;
+    initialTargetRef.current = null;
+    const rec = dim.canonical.find((c) => c.key === key);
+    if (!rec) return; // stale key → ignore, no crash
+    setDefaultTarget({ key: rec.key, label: rec.label });
+    setFilter("new");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dim.id, dim.canonical, setFilter]);
+
   // ── Deep-linking ─────────────────────────────────────────────────────────
   // URL ?value=… points at a specific row. Without an eager values list we
   // can't pre-validate existence; best-effort: when the row appears in the
@@ -478,6 +496,32 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             </>
           )}
         </div>
+
+        {/* default-target affordance — shown when ?target= resolved to a record */}
+        {defaultTarget && (
+          <div className="flex items-center gap-2 border-b border-line bg-accent-wash px-4 py-2 font-mono text-[11.5px]">
+            <span className="text-ink-2">
+              Mapping values to{" "}
+              <span className="font-semibold text-ink">{defaultTarget.label}</span>
+            </span>
+            <Button
+              size="sm"
+              onClick={() => {
+                for (const v of sel) void stageMap(v, defaultTarget.label);
+              }}
+            >
+              Map selected
+            </Button>
+            <button
+              type="button"
+              aria-label="Clear target"
+              onClick={() => setDefaultTarget(null)}
+              className="ml-auto text-ink-3 hover:text-ink"
+            >
+              <IconX className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* rows — DataGrid owns cursor, range selection, copy/paste, header */}
         <DataGrid<MappingValue>

@@ -260,3 +260,15 @@ export const IconIntegrations = (p: SVGProps<SVGSVGElement>) => (
     <path d="M8 12h8M12 8l4 4-4 4" />
   </Base>
 );
+export const IconCopy = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </Base>
+);
+export const IconPaste = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <rect x="8" y="2" width="8" height="4" rx="1" />
+  </Base>
+);

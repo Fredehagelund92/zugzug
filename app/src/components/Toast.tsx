@@ -6,10 +6,16 @@ export const TOAST_DURATION_MS = 2800;
 
 export type ToastVariant = "success" | "error";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastItem {
   id: number;
   message: string;
   variant: ToastVariant;
+  action?: ToastAction;
 }
 
 let toasts: ToastItem[] = [];
@@ -34,10 +40,15 @@ export function clearToasts(): void {
 
 /** Show a notice in the global toast stack (bottom-right). Successes
  *  auto-dismiss; errors persist until the user dismisses them so the
- *  timer never races a decision. */
-export function toast(message: string, variant: ToastVariant = "success"): void {
+ *  timer never races a decision. Pass an optional `action` to surface
+ *  a labelled button alongside the message (e.g. a Retry affordance). */
+export function toast(
+  message: string,
+  variant: ToastVariant = "success",
+  action?: ToastAction,
+): void {
   const id = nextId++;
-  toasts = [...toasts, { id, message, variant }];
+  toasts = [...toasts, { id, message, variant, action }];
   emit();
   if (variant !== "error") setTimeout(() => dismiss(id), TOAST_DURATION_MS);
 }
@@ -65,6 +76,18 @@ export function ToastStack(): React.ReactElement | null {
           )}
         >
           <span className="min-w-0 flex-1 break-words">{t.message}</span>
+          {t.action && (
+            <button
+              type="button"
+              onClick={() => {
+                dismiss(t.id);
+                t.action!.onClick();
+              }}
+              className="shrink-0 font-semibold underline transition-colors hover:opacity-80"
+            >
+              {t.action.label}
+            </button>
+          )}
           <button
             type="button"
             aria-label="Dismiss notification"

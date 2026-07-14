@@ -264,11 +264,16 @@ export interface AuditEntry {
   detail: string;
   metadata: Record<string, unknown> | null;
 }
+export interface FilterSetConfig {
+  conjunction: "and" | "or";
+  conditions: Array<{ id: string; field: string; operator: string; value: string }>;
+}
 export interface GridLayoutConfig {
   widths?: Record<string, number>;
   order?: string[];
   hidden?: string[];
   sort?: { column: string; direction: "asc" | "desc" } | null;
+  filterSet?: FilterSetConfig | null;
 }
 export interface Preferences {
   publishThreshold: number;

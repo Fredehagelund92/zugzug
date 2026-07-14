@@ -11,7 +11,7 @@ import { availableModes, type Mode } from "../lib/available-modes";
 import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
 
 /* Tables — the master-record workbench, now multi-tab. The route owns the URL
-   contract (?open=a,b,c&active=<id> + legacy ?dimId=) and the tab strip. Each
+   contract (?open=a,b,c&active=<id>) and the tab strip. Each
    open tab mounts its own <TablePane> with an isolated UndoStackProvider; only
    the active pane is visible (CSS hide) so per-pane React state survives
    tab switches without a coordination layer. */
@@ -25,8 +25,13 @@ export function MasterTables() {
   const create = useCreateTableModal();
   const canEdit = useCanEdit();
 
-  // Mount-only URL → state fold. Honors legacy ?dimId=<id> from old palette
-  // links + bookmarks. New contract is ?open=a,b,c&active=<dimId>.
+  // URL → state fold, run once — but only after the store has delivered the
+  // table list. initStore() is fire-and-forget (TenantLayout), so on a cold
+  // profile this route mounts with dims=[] and a mount-only fold would drop
+  // every deep-linked tab; the URL writer below stays gated until the fold
+  // lands, so ?open/?active survive the wait.
+  // A workspace with no tables never folds — there is nothing to open, and
+  // NoTablesYet renders regardless.
   const didInitFromUrl = useRef(false);
   // Whether the URL fold opened any tab. The blank-page fallback below runs in
   // the same commit with a stale (pre-fold) `tabs` capture, so without this
@@ -34,15 +39,10 @@ export function MasterTables() {
   const urlOpenedTab = useRef(false);
   useEffect(() => {
     if (didInitFromUrl.current) return;
+    if (dims.length === 0) return;
     didInitFromUrl.current = true;
-    const legacyDim = searchParams.get("dimId");
     const openParam = searchParams.get("open");
     const activeParam = searchParams.get("active");
-    if (legacyDim && dims.some((d) => d.id === legacyDim)) {
-      openTab(legacyDim);
-      urlOpenedTab.current = true;
-      return;
-    }
     if (openParam) {
       for (const did of openParam.split(",").filter(Boolean)) {
         if (dims.some((d) => d.id === did)) {
@@ -55,8 +55,7 @@ export function MasterTables() {
       openTab(activeParam);
       urlOpenedTab.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dims, searchParams, openTab]);
 
   // Fallback so the page is never blank when the user has tables but no
   // session-restored tabs (first visit on a clean profile).
@@ -107,7 +106,6 @@ export function MasterTables() {
     // stale capture from an earlier commit would silently drop params written
     // by a more recent run of this same effect.
     const next = new URLSearchParams(window.location.search);
-    next.delete("dimId");
     if (tabs.length > 0) {
       next.set("open", tabs.map((t) => t.dimId).join(","));
     } else {
@@ -125,6 +123,7 @@ export function MasterTables() {
         if (mode !== "records") next.set("mode", mode);
         else next.delete("mode");
         if (mode !== "match") next.delete("value");
+        if (mode !== "match") next.delete("target");
       }
     } else {
       next.delete("active");
