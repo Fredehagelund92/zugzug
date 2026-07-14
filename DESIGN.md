@@ -145,13 +145,22 @@ Display headings are tight: `letter-spacing: -.03em` on `h1`, `-.02em` on `h2/h3
 
 `--r-sm 4 · --r 8 · --r-lg 12 · --r-pill 999`
 
-Default radius is `8px`. Pills (`999px`) only on tags, switches, and the workspace switcher. Avoid radius > 12 except on hero cards in print layouts.
+**Square-mode is active and permanent** (`app/src/globals.css`): `--r-sm/--r/--r-lg`
+are overridden to `0`, so every non-pill corner renders square by design. The
+values above are the brand's dormant scale — `rounded-*` utilities are
+cosmetically inert today. Author them semantically anyway (`--r-lg` for
+containers) so the source doesn't lie; radius standardization is code hygiene,
+not a user-facing change. Pills (`--r-pill 999`) are exempt from square-mode and
+remain the only rounded shapes — used only on tags, switches, and the workspace
+switcher.
 
 ### Layout widths
 
 `--maxw 1180 · --wide 1320 · --ak-sidebar 264 · --ak-nav 248 · --ak-topbar 60`
 
-App pages use `--maxw`. Marketing/brand pages use `--wide`. The topbar is a hard 60px and never changes.
+App document pages cap at `--wide` (1320) via `PageContainer` (§7). `--maxw`
+(1180) is retired — nothing uses it. Marketing/brand pages also use `--wide`.
+The topbar is a hard 60px and never changes.
 
 ### Z-index layers
 
@@ -185,9 +194,39 @@ Theme transitions use `.5s var(--ease)` on `background` and `color`. Respect `pr
 
 Default = ghost on `--surface-2`, hover on `--ak-hover`. Primary CTA = filled `--accent` with `--accent-ink` text. Destructive = filled `--ak-danger`. No outline buttons (they fight the dark ground).
 
-### Cards
+### Containers
 
-`background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);`. Padding `--ak-space-5` minimum. Don't use shadow on dark theme cards — the lattice ground does the work.
+Two primitives own every framed surface. Don't hand-roll `border + bg-surface`
+divs on document pages — reach for these.
+
+**`Panel`** — the one container. `background: var(--surface); border: 1px solid
+var(--line); border-radius: var(--r-lg);` (square under square-mode),
+`overflow: hidden`, and **no shadow** — the lattice ground does the separation.
+One knob: `padding="none" | "sm" | "md"` (default `md` = `--ak-space-5`, 24px;
+`sm` = 16px; `none` for tables/grids that fill the frame). Replaces the old
+`Card` component.
+
+**`PageContainer`** — the one page frame. Centered, padded (`p-4 md:p-8`),
+`max="wide" (1320, default) | "full"`. Every document page's outermost element.
+Applied once at the layout for homogeneous route subtrees (Settings, Account),
+per-page for the mixed AppShell routes.
+
+**Surface color is structural, not semantic** — depth alone decides the tint:
+
+| Depth | Token | Example |
+|---|---|---|
+| Page canvas | `--bg` | the lattice ground |
+| Panel on the page | `--surface` (white) | any `Panel` |
+| Inset inside a panel | `--surface-2` (gray) | code block, key/value row, input |
+| Overlay above the page | `--surface-elevated` + shadow | menu, popover, modal |
+
+A container is never gray because of what it *means* (help, disabled,
+secondary) — only because of where it *sits*. **Shadow signals "floating above
+the page"** and appears on overlays only, never on an in-page `Panel`.
+
+**Exempt:** the grid pages — Sources, Review, Master tables — are bespoke
+full-width, full-height grid experiences and deliberately do **not** use
+`PageContainer` or route their grid frame through `Panel`. Leave them alone.
 
 ### Tables (the grid)
 
