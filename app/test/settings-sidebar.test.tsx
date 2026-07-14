@@ -16,7 +16,10 @@ function harness(role: "viewer" | "editor" | "admin", path = "/app/acme/settings
           <Route path="members" element={<div>Members</div>} />
           <Route path="mapping" element={<div>Mapping</div>} />
           <Route path="warehouse" element={<div>Warehouse</div>} />
-          <Route path="tokens" element={<Navigate to="../../integrations/service-accounts" replace />} />
+          <Route path="pull-api" element={<div>Pull API</div>} />
+          <Route path="webhooks" element={<div>Webhooks</div>} />
+          <Route path="service-accounts" element={<div>Service accounts</div>} />
+          <Route path="tokens" element={<Navigate to="../service-accounts" replace />} />
           <Route path="scans" element={<Navigate to="../warehouse#scans" replace />} />
           <Route path="audit" element={<div>Audit</div>} />
           <Route path="danger" element={<div>Danger</div>} />
@@ -56,18 +59,55 @@ const getNavLinks = () => {
   });
 };
 
+const getSectionKickers = () => {
+  const nav = screen.getByRole("navigation");
+  return Array.from(nav.querySelectorAll("span.font-mono")).map((s) => s.textContent?.trim() || "");
+};
+
 describe("SettingsSidebar", () => {
-  test("renders the five workspace settings sections", () => {
+  test("renders Workspace, Integrations and Danger sections", () => {
     harness("admin");
-    const links = getNavLinks();
-    const texts = links.map((l) => l.text);
-    expect(texts).toEqual(["General", "Members", "Mapping", "Warehouse", "Danger"]);
+    expect(getSectionKickers()).toEqual(["Workspace", "Integrations", "Danger"]);
+  });
+
+  test("Workspace section lists General, Members, Mapping, Warehouse", () => {
+    harness("admin");
+    const texts = getNavLinks().map((l) => l.text);
+    expect(texts.slice(0, 4)).toEqual(["General", "Members", "Mapping", "Warehouse"]);
+  });
+
+  test("Integrations section lists Pull API, Webhooks, Service accounts", () => {
+    harness("admin");
+    const texts = getNavLinks().map((l) => l.text);
+    expect(texts).toContain("Pull API");
+    expect(texts).toContain("Webhooks");
+    expect(texts).toContain("Service accounts");
+  });
+
+  test("Danger section lists Danger last", () => {
+    harness("admin");
+    const texts = getNavLinks().map((l) => l.text);
+    expect(texts[texts.length - 1]).toBe("Danger");
+  });
+
+  test("renders the account cross-link", () => {
+    harness("admin");
+    const link = screen.getByRole("link", { name: /Your account/ });
+    expect(link.getAttribute("href")).toBe("/app/acme/account/profile");
+  });
+
+  test("a section whose items are all filtered renders no kicker", () => {
+    // Viewers cannot view service accounts, but Pull API + Webhooks remain,
+    // so the Integrations section still shows. All three sections stay for viewers.
+    harness("viewer");
+    expect(getSectionKickers()).toEqual(["Workspace", "Integrations", "Danger"]);
+    const texts = getNavLinks().map((l) => l.text);
+    expect(texts).not.toContain("Service accounts");
   });
 
   test("active route gets aria-current", () => {
     harness("admin", "/app/acme/settings/members");
-    const links = getNavLinks();
-    const membersLink = links.find((l) => l.text === "Members");
+    const membersLink = getNavLinks().find((l) => l.text === "Members");
     expect(membersLink?.ariaCurrent).toBe("page");
   });
 
@@ -75,7 +115,7 @@ describe("SettingsSidebar", () => {
     harness("admin");
     const nav = screen.getByRole("navigation");
     const links = Array.from(nav.querySelectorAll("a"));
-    expect(links.length).toBe(5);
+    expect(links.length).toBe(8);
     for (const link of links) {
       expect(link.querySelector("svg")).not.toBeNull();
     }
