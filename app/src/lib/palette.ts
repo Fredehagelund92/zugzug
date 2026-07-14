@@ -3,16 +3,7 @@
    code consumes. Adding a tint = new entry here + matching --tint-* in tokens.css. */
 
 export type PaletteName =
-  | "rose"
-  | "amber"
-  | "mint"
-  | "teal"
-  | "indigo"
-  | "violet"
-  | "slate"
-  | "coral"
-  | "sky"
-  | "lime";
+  "rose" | "amber" | "mint" | "teal" | "indigo" | "violet" | "slate" | "coral" | "sky" | "lime";
 
 export const PALETTE_NAMES: PaletteName[] = [
   "rose",

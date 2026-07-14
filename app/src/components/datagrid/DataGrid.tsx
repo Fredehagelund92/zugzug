@@ -232,7 +232,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     props.onSortChange?.(sort ? { column: sort.field, direction: sort.dir } : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
-  const [filterSet, setFilterSet] = useState<FilterSet | null>(() => props.initialFilterSet ?? null);
+  const [filterSet, setFilterSet] = useState<FilterSet | null>(
+    () => props.initialFilterSet ?? null,
+  );
   const updateFilterSet = useCallback(
     (next: FilterSet | null | ((cur: FilterSet | null) => FilterSet | null)) => {
       setFilterSet((cur) => {
@@ -950,7 +952,12 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               } as MenuItem,
             ]
           : []),
-        { label: "Delete", icon: <IconTrash />, onClick: () => props.onDeleteRow?.(rk), disabled: !props.onDeleteRow },
+        {
+          label: "Delete",
+          icon: <IconTrash />,
+          onClick: () => props.onDeleteRow?.(rk),
+          disabled: !props.onDeleteRow,
+        },
         ...(props.onMapValuesToRecord
           ? [
               {

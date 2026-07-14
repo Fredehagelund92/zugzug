@@ -98,10 +98,7 @@ async function toError(res: Response): Promise<IntegrationsApiError> {
 
 export type WebhookStatus = "active" | "paused" | "disabled";
 export type WebhookEvent =
-  | "dimension.committed"
-  | "dimension.created"
-  | "dimension.schema.updated"
-  | "canonical.deleted";
+  "dimension.committed" | "dimension.created" | "dimension.schema.updated" | "canonical.deleted";
 
 export interface Webhook {
   id: string;

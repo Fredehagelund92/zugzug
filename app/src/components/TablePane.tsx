@@ -168,7 +168,9 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
         </div>
       )}
       <div className="flex flex-1 flex-col min-h-0">
-        {activeMode === "records" && <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />}
+        {activeMode === "records" && (
+          <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />
+        )}
         {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
         {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}
       </div>
@@ -526,7 +528,9 @@ function RecordsBody({
     setBusy(false);
     setSel([]);
     for (const k of [survivor, ...losers]) dismissConflict(k);
-    flash(`Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed.`);
+    flash(
+      `Merged ${n} record${n === 1 ? "" : "s"} into ${survivorLabel} — source values re-pointed.`,
+    );
   };
 
   const retire = async (key: string, label: string) => {
@@ -1421,7 +1425,8 @@ function RecordsBody({
           bulkRemoveConfirm && (
             <>
               {bulkRemoveConfirm.count} record{bulkRemoveConfirm.count === 1 ? "" : "s"} will be
-              retired. Mapped source values will lose their target. Use Undo if you change your mind.
+              retired. Mapped source values will lose their target. Use Undo if you change your
+              mind.
             </>
           )
         }

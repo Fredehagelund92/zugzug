@@ -265,7 +265,9 @@ export function AddFieldPopover({
 
     const run = (i: AddFieldInput): void => {
       void onSubmit(i).then(
-        () => { /* success — nothing extra to do */ },
+        () => {
+          /* success — nothing extra to do */
+        },
         (err) => {
           const msg = err instanceof Error ? err.message : "Something went wrong.";
           toast(`Failed to add field "${i.label}": ${msg}`, "error", {
@@ -616,12 +618,7 @@ export function AddFieldPopover({
             <Button variant="ghost" size="sm" type="button" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              size="sm"
-              type="button"
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-            >
+            <Button size="sm" type="button" onClick={handleSubmit} disabled={!canSubmit}>
               Create field
             </Button>
           </div>

@@ -56,7 +56,9 @@ export async function appendAuditAs(
         { type: "row_touched", rowKey: ctx.rowKey, userId },
         ctx.tenantId ?? "default",
       );
-    } catch { /* transport down — the 60s client safety net covers it */ }
+    } catch {
+      /* transport down — the 60s client safety net covers it */
+    }
   }
 }
 

@@ -13,7 +13,11 @@ function Renderer<Row>({ value, column }: CellCtx<Row>) {
   const key = String(value);
   const candidates = column.config.type === "linked" ? column.config.candidates : [];
   const match = candidates.find((c) => c.key === key);
-  return <span className="truncate font-mono text-[12px] text-ink" title={match?.label ?? key}>{match?.label ?? key}</span>;
+  return (
+    <span className="truncate font-mono text-[12px] text-ink" title={match?.label ?? key}>
+      {match?.label ?? key}
+    </span>
+  );
 }
 
 interface LinkedEditorProps<Row> extends EditCtx<Row> {

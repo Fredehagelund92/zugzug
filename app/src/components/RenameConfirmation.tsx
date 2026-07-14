@@ -23,16 +23,11 @@ export function RenameConfirmation({
   return (
     <div className="absolute bottom-4 left-4 z-30 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-accent/40 bg-[color-mix(in_srgb,var(--accent)_9%,var(--surface-elevated))] px-4 py-2 font-mono text-[12px] text-accent shadow-lg">
       <span>
-        Renamed &ldquo;{prev}&rdquo; → &ldquo;{next}&rdquo;.{" "}
-        {variants.toLocaleString()} source value{variants === 1 ? "" : "s"} re-pointed.
+        Renamed &ldquo;{prev}&rdquo; → &ldquo;{next}&rdquo;. {variants.toLocaleString()} source
+        value{variants === 1 ? "" : "s"} re-pointed.
       </span>
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={!canUndo}
-          onClick={onUndo}
-        >
+        <Button variant="ghost" size="sm" disabled={!canUndo} onClick={onUndo}>
           Undo
         </Button>
         <Button variant="ghost" size="sm" onClick={onDismiss}>

@@ -592,7 +592,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     // GET /api/t/:slug/drafts — all drafts for the workspace in one query (boot path).
-    if (tenantSlugFromPath !== null && seg[1] === "drafts" && seg.length === 2 && method === "GET") {
+    if (
+      tenantSlugFromPath !== null &&
+      seg[1] === "drafts" &&
+      seg.length === 2 &&
+      method === "GET"
+    ) {
       return json(await reqRepo.listAllDrafts());
     }
 
