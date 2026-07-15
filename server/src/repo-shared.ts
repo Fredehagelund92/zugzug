@@ -12,7 +12,17 @@ import type { Ref } from "./warehouse/adapter.ts";
 
 /** Curated palette token. Mirror of app/src/lib/palette.ts so the server can
  *  validate inbound values without a shared module. */
-export type PaletteName = "rose" | "amber" | "mint" | "teal" | "indigo" | "violet" | "slate";
+export type PaletteName =
+  | "rose"
+  | "amber"
+  | "mint"
+  | "teal"
+  | "indigo"
+  | "violet"
+  | "slate"
+  | "coral"
+  | "sky"
+  | "lime";
 export const PALETTE_NAMES: PaletteName[] = [
   "rose",
   "amber",
@@ -21,6 +31,9 @@ export const PALETTE_NAMES: PaletteName[] = [
   "indigo",
   "violet",
   "slate",
+  "coral",
+  "sky",
+  "lime",
 ];
 
 export interface OptionDef {

@@ -6,13 +6,12 @@
 
 import * as repo from "./repo.ts";
 import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
+import { PALETTE_NAMES } from "./repo-shared.ts";
 import type { QualifiedSource } from "./repo-canonical.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
 import { AppError } from "./errors.ts";
-
-const PALETTE_NAMES: PaletteName[] = ["rose", "amber", "mint", "teal", "indigo", "violet", "slate"];
 
 export type CreateTableMode = "blank" | "source" | "external_id";
 
