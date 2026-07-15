@@ -102,6 +102,10 @@ function humanize(row: AuditEntry): Phrase {
 
 /* ────────────────────────── time helpers ────────────────────────── */
 
+/* Force English regardless of the reader's browser locale — otherwise month
+   and weekday names render in the OS language and mix into the English UI. */
+const LOCALE = "en-US";
+
 function safeDate(s: string): Date | null {
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d;
@@ -115,13 +119,13 @@ function relativeTime(iso: string): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
   if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return d.toLocaleDateString(LOCALE, { month: "short", day: "numeric" });
 }
 
 function absoluteTime(iso: string): string {
   const d = safeDate(iso);
   if (!d) return iso;
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(LOCALE, {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -142,10 +146,10 @@ function dayBucket(iso: string): { key: string; label: string } {
   const key = evt.toISOString().slice(0, 10);
   if (diffDays === 0) return { key, label: "Today" };
   if (diffDays === 1) return { key, label: "Yesterday" };
-  if (diffDays < 7) return { key, label: evt.toLocaleDateString(undefined, { weekday: "long" }) };
+  if (diffDays < 7) return { key, label: evt.toLocaleDateString(LOCALE, { weekday: "long" }) };
   return {
     key,
-    label: evt.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }),
+    label: evt.toLocaleDateString(LOCALE, { month: "long", day: "numeric", year: "numeric" }),
   };
 }
 
@@ -241,7 +245,13 @@ function KindGlyph({ kind }: { kind: EventKind }) {
     <span
       aria-hidden
       className="relative z-10 inline-flex h-7 w-7 items-center justify-center rounded-full"
-      style={{ background: g.soft, color: g.color, boxShadow: "0 0 0 2px var(--surface)" }}
+      style={{
+        // Tint over an opaque surface base so the rail can't bleed through the
+        // otherwise-translucent fill; the 2px ring masks it at the edge.
+        background: `linear-gradient(${g.soft}, ${g.soft}), var(--surface)`,
+        color: g.color,
+        boxShadow: "0 0 0 2px var(--surface)",
+      }}
     >
       <svg width="14" height="14" viewBox="0 0 16 16">
         {g.path}
@@ -294,10 +304,12 @@ export function AuditTimeline({ rows, renderActorBadge, renderTag }: AuditTimeli
             </header>
 
             <ol className="relative">
-              {/* The rail threads the event nodes; trimmed to the first/last node. */}
+              {/* The rail threads the event nodes: anchored glyph-center to
+                  glyph-center (14px node ÷ + 12px row pad = 26px), so it never
+                  pokes past the end icons and collapses on single-event days. */}
               <span
                 aria-hidden
-                className="absolute left-[13px] top-5 bottom-5 w-px"
+                className="absolute left-[13px] top-[26px] bottom-[26px] w-px"
                 style={{ background: "var(--line)" }}
               />
               {g.items.map((row) => (
