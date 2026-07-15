@@ -82,6 +82,11 @@ export class TenantRepo {
     return this.withClearCtx(() => repoMeta.listAudit(limit, scope, filter));
   }
 
+  listAuditActions(): Promise<string[]> {
+    const scope = this.isSuperAdmin && this.tenantId === "*" ? "*" : this.tenantId;
+    return this.withClearCtx(() => repoMeta.listAuditActions(scope));
+  }
+
   appendAudit(
     userId: string,
     action: string,

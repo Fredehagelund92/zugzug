@@ -68,6 +68,10 @@ export interface AuditFilter {
   actor?: string;
   q?: string;
   before?: string;
+  /** Exact action-code match (the admin feed's event-type filter). */
+  action?: string;
+  /** Only actions taken under super-admin privilege (admin feed). */
+  elevatedOnly?: boolean;
 }
 
 export async function listAudit(
@@ -83,6 +87,8 @@ export async function listAudit(
 
   if (tenantId !== "*") clauses.push(`a.tenant_id = ${bind(tenantId)}`);
   if (filter.actor) clauses.push(`a.user_id = ${bind(filter.actor)}`);
+  if (filter.action) clauses.push(`a.action = ${bind(filter.action)}`);
+  if (filter.elevatedOnly) clauses.push(`a.metadata->>'actor_super_admin' = 'true'`);
 
   const q = filter.q?.trim();
   if (q) {
@@ -132,6 +138,19 @@ export async function listAudit(
     at: r.at,
     metadata: r.metadata,
   }));
+}
+
+/** Distinct action codes present in the feed, for the event-type picker.
+ *  Sourced from the data (not visible rows) so the picker is complete.
+ *  tenantId === '*' spans every workspace (super-admin feed). */
+export async function listAuditActions(tenantId: string = "default"): Promise<string[]> {
+  const where = tenantId === "*" ? "" : "WHERE tenant_id = $1";
+  const params = tenantId === "*" ? [] : [tenantId];
+  const rows = await pgAll<{ action: string }>(
+    `SELECT DISTINCT action FROM ${pg("audit_log")} ${where} ORDER BY action`,
+    params,
+  );
+  return rows.map((r) => r.action);
 }
 
 /* --- workspace-global preferences (one row per tenant) --- */

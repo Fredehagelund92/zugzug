@@ -331,13 +331,27 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json({ ok: true, teardown: targetId });
       }
 
-      // GET /api/admin/audit[?tenant_id=…&limit=…]
-      if (seg[2] === "audit" && seg.length === 3 && method === "GET") {
-        const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 30)));
-        const filterTenant = url.searchParams.get("tenant_id");
-        const scope = filterTenant ?? "*";
+      // GET /api/admin/audit/actions[?tenant_id=…] — distinct event types.
+      if (seg[2] === "audit" && seg.length === 4 && seg[3] === "actions" && method === "GET") {
+        const scope = url.searchParams.get("tenant_id") ?? "*";
         const adminRepo = new TenantRepo(scope, "admin", true);
-        return json(await adminRepo.listAudit(limit));
+        return json(await adminRepo.listAuditActions());
+      }
+
+      // GET /api/admin/audit[?tenant_id=…&limit=…&type=…&q=…&elevated=1&before=…]
+      if (seg[2] === "audit" && seg.length === 3 && method === "GET") {
+        const sp = url.searchParams;
+        const limit = Math.min(200, Math.max(1, Number(sp.get("limit") ?? 30)));
+        const scope = sp.get("tenant_id") ?? "*";
+        const adminRepo = new TenantRepo(scope, "admin", true);
+        return json(
+          await adminRepo.listAudit(limit, {
+            action: sp.get("type") ?? undefined,
+            q: sp.get("q") ?? undefined,
+            before: sp.get("before") ?? undefined,
+            elevatedOnly: sp.get("elevated") === "1",
+          }),
+        );
       }
 
       // GET /api/admin/warehouse — deployment-global warehouse summary.
