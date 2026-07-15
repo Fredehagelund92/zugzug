@@ -441,10 +441,10 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     out.push({
       id: "nav:audit",
       group: "Navigate",
-      label: "Audit",
+      label: "Activity",
       icon: <IconAudit className="h-4 w-4" />,
       action: () => navigate(navLinks.audit),
-      keywords: "activity log history changes",
+      keywords: "audit activity log history changes",
       priority: true,
     });
     out.push({
@@ -714,7 +714,12 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
           </div>
         </header>
 
-        <main id="main" tabIndex={-1} className="zz-canvas flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+        <main
+          id="main"
+          tabIndex={-1}
+          className="zz-canvas flex-1 overflow-y-auto"
+          style={{ scrollbarGutter: "stable" }}
+        >
           <Outlet context={{ memberships }} />
         </main>
       </div>

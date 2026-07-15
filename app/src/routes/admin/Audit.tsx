@@ -46,10 +46,7 @@ export function Audit() {
     void load(tenantParam.trim() || undefined);
   }, [load, tenantParam]);
 
-  const eventTypes = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.action))).sort(),
-    [rows],
-  );
+  const eventTypes = useMemo(() => Array.from(new Set(rows.map((r) => r.action))).sort(), [rows]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -79,7 +76,7 @@ export function Audit() {
     <div className="space-y-6">
       <PageHeader
         kicker="All workspaces"
-        title="Activity log"
+        title="Activity"
         lede="What's happened across every workspace, newest first."
         count={loading ? undefined : filtered.length}
         action={
@@ -141,7 +138,12 @@ export function Audit() {
 
       {eventTypes.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <Chip label="All events" count={rows.length} active={!typeParam} onClick={() => setParam("type", null)} />
+          <Chip
+            label="All events"
+            count={rows.length}
+            active={!typeParam}
+            onClick={() => setParam("type", null)}
+          />
           {eventTypes.map((t) => {
             const count = rows.filter((r) => r.action === t).length;
             const active = typeParam === t;

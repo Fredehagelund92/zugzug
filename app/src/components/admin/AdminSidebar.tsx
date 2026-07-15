@@ -12,7 +12,7 @@ interface Item {
 const ITEMS: Item[] = [
   { label: "Workspaces", to: "workspaces", Icon: IconBuilding },
   { label: "Users", to: "users", Icon: IconUsers },
-  { label: "Audit", to: "audit", Icon: IconAudit },
+  { label: "Activity", to: "audit", Icon: IconAudit },
   { label: "Warehouse", to: "warehouse", Icon: IconDatabase },
 ];
 

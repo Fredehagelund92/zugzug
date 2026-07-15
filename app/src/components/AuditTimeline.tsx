@@ -4,6 +4,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import type { AuditEntry } from "../store";
+import { Panel } from "./Panel";
 
 /* ────────────────────────── humanize ────────────────────────── */
 
@@ -141,8 +142,7 @@ function dayBucket(iso: string): { key: string; label: string } {
   const key = evt.toISOString().slice(0, 10);
   if (diffDays === 0) return { key, label: "Today" };
   if (diffDays === 1) return { key, label: "Yesterday" };
-  if (diffDays < 7)
-    return { key, label: evt.toLocaleDateString(undefined, { weekday: "long" }) };
+  if (diffDays < 7) return { key, label: evt.toLocaleDateString(undefined, { weekday: "long" }) };
   return {
     key,
     label: evt.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }),
@@ -156,7 +156,9 @@ function KindGlyph({ kind }: { kind: EventKind }) {
     create: {
       color: "var(--tint-mint)",
       soft: "color-mix(in srgb, var(--tint-mint) 16%, transparent)",
-      path: <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />,
+      path: (
+        <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      ),
     },
     update: {
       color: "var(--accent-2)",
@@ -239,9 +241,11 @@ function KindGlyph({ kind }: { kind: EventKind }) {
     <span
       aria-hidden
       className="relative z-10 inline-flex h-7 w-7 items-center justify-center rounded-full"
-      style={{ background: g.soft, color: g.color, boxShadow: "0 0 0 2px var(--bg)" }}
+      style={{ background: g.soft, color: g.color, boxShadow: "0 0 0 2px var(--surface)" }}
     >
-      <svg width="14" height="14" viewBox="0 0 16 16">{g.path}</svg>
+      <svg width="14" height="14" viewBox="0 0 16 16">
+        {g.path}
+      </svg>
     </span>
   );
 }
@@ -271,41 +275,44 @@ export function AuditTimeline({ rows, renderActorBadge, renderTag }: AuditTimeli
   }, [rows]);
 
   return (
-    <div className="space-y-10">
-      {grouped.map((g) => (
-        <section key={g.key} aria-labelledby={`day-${g.key}`}>
-          <header className="mb-4 flex items-baseline gap-3">
-            <h2
-              id={`day-${g.key}`}
-              className="font-display text-xl font-semibold tracking-tight text-ink"
-            >
-              {g.label}
-            </h2>
-            <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-              {g.items.length} event{g.items.length === 1 ? "" : "s"}
-            </span>
-            <div className="h-px flex-1 bg-line" />
-          </header>
+    <Panel padding="md">
+      <div className="space-y-8">
+        {grouped.map((g) => (
+          <section key={g.key} aria-labelledby={`day-${g.key}`}>
+            {/* Day divider reads like a ledger rule: LABEL ──────── N EVENTS */}
+            <header className="mb-2 flex items-center gap-3">
+              <h2
+                id={`day-${g.key}`}
+                className="font-mono text-[11px] font-medium uppercase tracking-[0.2em] text-ink-2"
+              >
+                {g.label}
+              </h2>
+              <span aria-hidden className="h-px flex-1 bg-line" />
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] tabular-nums text-ink-3">
+                {g.items.length} event{g.items.length === 1 ? "" : "s"}
+              </span>
+            </header>
 
-          <ol className="relative">
-            {/* The rail */}
-            <span
-              aria-hidden
-              className="absolute left-[13px] top-2 bottom-2 w-px"
-              style={{ background: "var(--line)" }}
-            />
-            {g.items.map((row) => (
-              <AuditRow
-                key={row.id}
-                row={row}
-                renderActorBadge={renderActorBadge}
-                renderTag={renderTag}
+            <ol className="relative">
+              {/* The rail threads the event nodes; trimmed to the first/last node. */}
+              <span
+                aria-hidden
+                className="absolute left-[13px] top-5 bottom-5 w-px"
+                style={{ background: "var(--line)" }}
               />
-            ))}
-          </ol>
-        </section>
-      ))}
-    </div>
+              {g.items.map((row) => (
+                <AuditRow
+                  key={row.id}
+                  row={row}
+                  renderActorBadge={renderActorBadge}
+                  renderTag={renderTag}
+                />
+              ))}
+            </ol>
+          </section>
+        ))}
+      </div>
+    </Panel>
   );
 }
 
@@ -324,7 +331,13 @@ function AuditRow({
 
   return (
     <li className="group relative">
-      <div className="flex items-start gap-3 py-3 pl-0 pr-1">
+      {/* Full-bleed hover — the whole row is the affordance for expanding metadata.
+          Bleeds to the Panel edge (-inset-x-6 matches the Panel's p-6). */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 -inset-x-6 bg-surface-2 opacity-0 transition-opacity duration-150 group-hover:opacity-60"
+      />
+      <div className="relative flex items-start gap-3 py-3 pl-0 pr-1">
         <KindGlyph kind={phrase.kind} />
 
         <div className="min-w-0 flex-1">
@@ -336,7 +349,10 @@ function AuditRow({
               {phrase.target && (
                 <>
                   {" — "}
-                  <span className="font-mono text-[12.5px] text-ink" style={{ color: "var(--ink)" }}>
+                  <span
+                    className="font-mono text-[12.5px] text-ink"
+                    style={{ color: "var(--ink)" }}
+                  >
                     {phrase.target}
                   </span>
                 </>
@@ -367,7 +383,7 @@ function AuditRow({
           </div>
 
           {open && hasMeta && (
-            <pre className="zz-rise mt-2 max-h-72 overflow-auto border border-line bg-surface px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-2">
+            <pre className="zz-rise mt-2 max-h-72 overflow-auto border border-line bg-surface-2 px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-2">
               {JSON.stringify(row.metadata, null, 2)}
             </pre>
           )}
