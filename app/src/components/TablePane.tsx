@@ -6,7 +6,7 @@ import { Checkbox } from "./Checkbox";
 import { ComboSelect } from "./ComboSelect";
 import { AddFieldPopover } from "./AddFieldPopover";
 import { RenameConfirmation } from "./RenameConfirmation";
-import { IconPlus, IconX } from "./Icons";
+import { IconPlus, IconX, IconFilter } from "./Icons";
 import {
   slug,
   useSources,
@@ -73,6 +73,9 @@ import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
 import { ImportPreviewDialog } from "./ImportPreviewDialog";
 import { useAddQueue } from "../hooks/use-add-queue";
 import { PresenceStrip } from "./datagrid/PresenceStrip";
+import { ToolbarMenu, MenuItem, MenuSection, MenuSep } from "./ToolbarMenu";
+import { OwnerPicker } from "./OwnerPicker";
+import { PALETTE, defaultTintFor } from "../lib/palette";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
@@ -281,6 +284,7 @@ function RecordsBody({
     loserVariantSum: number | null;
   } | null>(null);
   const [orderingOpen, setOrderingOpen] = useState(false);
+  const [rescanOpen, setRescanOpen] = useState(false);
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -783,9 +787,45 @@ function RecordsBody({
     }
   };
 
+  const palette = PALETTE[dim.color ?? defaultTintFor(dim.id)];
+  const initials = (name: string) =>
+    name
+      .trim()
+      .split(/\s+/)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+  const publishedTitle = pubState
+    ? `Version ${pubState.version}${
+        pubState.publishedAt != null
+          ? ` · published ${new Date(pubState.publishedAt).toLocaleString()}${
+              pubState.publishedByName ? ` by ${pubState.publishedByName}` : ""
+            }`
+          : ""
+      }`
+    : undefined;
+  // Plain-language breakdown of what a publish would include — only the parts
+  // that actually exist (no "0 …"), no system jargon.
+  const publishParts: string[] = [];
+  if (pubState && pubState.pendingDrafts > 0)
+    publishParts.push(`${pubState.pendingDrafts} new mapping${pubState.pendingDrafts === 1 ? "" : "s"}`);
+  if (pubState && pubState.changedKeys.length > 0)
+    publishParts.push(
+      `${pubState.changedKeys.length} edited record${pubState.changedKeys.length === 1 ? "" : "s"}`,
+    );
+  const publishSummary = publishParts.join(" and ");
+  // A single readout gauge: bold count + muted unit, hairline-divided.
+  const gauge = (value: React.ReactNode, unit: string) => (
+    <div className="flex items-baseline gap-1.5 border-r border-line px-3 first:pl-0 last:border-r-0">
+      <span className="text-[13px] font-semibold tabular-nums text-ink">{value}</span>
+      <span className="text-[10px] uppercase tracking-wide text-ink-3">{unit}</span>
+    </div>
+  );
+
   return (
     <div
-      className="flex flex-1 flex-col min-h-0"
+      className="@container flex flex-1 flex-col min-h-0"
       onKeyDown={(e) => {
         const t = e.target as HTMLElement;
         if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
@@ -802,126 +842,193 @@ function RecordsBody({
         }
       }}
     >
-      <div className="flex flex-wrap items-center gap-2 border-b border-line bg-surface px-4 py-2">
-        <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-2">
-          {engineer && (
-            <>
-              <span>
-                table <span className="text-ink">{dim.dimTable}</span>
-              </span>
-              <span>
-                key <span className="text-ink">{dim.keyCol}</span>
-              </span>
-              <span className="text-line-2">·</span>
-            </>
-          )}
-          <span className="tabular-nums">
-            {list.length} record{list.length === 1 ? "" : "s"}
+      <div
+        className="flex items-center gap-3 border-b border-line bg-surface py-2 pl-3 pr-3 @max-3xl:flex-wrap @max-3xl:gap-2"
+        style={{ borderLeft: `3px solid ${palette.bg}` }}
+      >
+        <div className="flex shrink-0 items-center gap-2.5">
+          <span
+            className="h-2 w-2 shrink-0 rounded-pill"
+            style={{ background: palette.bg, boxShadow: `0 0 0 3px ${palette.wash}` }}
+          />
+          <span className="max-w-[22ch] truncate font-display text-[14px] font-semibold tracking-tight text-ink">
+            {dim.dimension}
           </span>
-          <span className="tabular-nums">
-            {fields.length} field{fields.length === 1 ? "" : "s"}
-          </span>
-          <span className="tabular-nums">{totalVariants.toLocaleString()} source values</span>
+          <div className="hidden shrink-0 items-center border-l border-line pl-2.5 font-mono text-ink-2 @5xl:flex">
+            {engineer && (
+              <div className="flex items-center gap-2 border-r border-line px-3 text-[11px] first:pl-0">
+                <span>
+                  table <span className="text-ink">{dim.dimTable}</span>
+                </span>
+                <span>
+                  key <span className="text-ink">{dim.keyCol}</span>
+                </span>
+              </div>
+            )}
+            {gauge(list.length, list.length === 1 ? "record" : "records")}
+            {gauge(fields.length, fields.length === 1 ? "field" : "fields")}
+            {gauge(totalVariants.toLocaleString(), "source values")}
+          </div>
           {dim.ownerName && (
-            <span>
-              owner <span className="text-ink">{dim.ownerName}</span>
+            <span className="hidden shrink-0 items-center gap-1.5 rounded-pill border border-line bg-surface-2 py-0.5 pl-0.5 pr-2.5 text-[12px] text-ink-2 @6xl:inline-flex">
+              <span
+                className="grid h-[18px] w-[18px] place-items-center rounded-pill text-[9px] font-bold text-white"
+                style={{ background: palette.bg }}
+              >
+                {initials(dim.ownerName)}
+              </span>
+              {dim.ownerName}
             </span>
-          )}
-          {pubState && pubState.version > 0 && (
-            <span
-              title={
-                pubState.publishedAt
-                  ? `Last published ${new Date(pubState.publishedAt).toLocaleString()}${pubState.publishedByName ? ` by ${pubState.publishedByName}` : ""}`
-                  : undefined
-              }
-            >
-              published <span className="text-ink">v{pubState.version}</span>
-            </span>
-          )}
-          {pubState && pubState.changedKeys.length > 0 && (
-            <button
-              className={cx(
-                "rounded-pill border px-2 py-0.5 font-mono text-[10px] transition-colors",
-                changedOnly
-                  ? "border-accent bg-accent-wash text-accent"
-                  : "border-line-2 text-ink-2 hover:border-accent",
-              )}
-              onClick={() => setChangedOnly((v) => !v)}
-              title="Show only rows changed since the last publish"
-            >
-              changed only · {pubState.changedKeys.length}
-            </button>
           )}
         </div>
 
-        <input
-          ref={searchRef}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search records…"
-          className="w-full max-w-xs rounded-sm border border-line-2 bg-bg px-3 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
-        />
-
-        <div className="ml-auto flex flex-wrap items-center gap-2 max-md:w-full max-md:ml-0">
-          <PresenceStrip peers={presence.peers} />
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!undo.canUndo}
-            onClick={() => void undo.undo()}
-            title={undo.topLabel ?? undefined}
-            className="max-md:hidden"
+        <div className="flex min-w-[120px] max-w-md flex-1 items-center gap-2 rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 transition-colors focus-within:border-accent @max-3xl:order-last @max-3xl:max-w-none @max-3xl:basis-full">
+          <svg
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="shrink-0 text-ink-3"
+            aria-hidden="true"
           >
-            ↶ Undo
-            {undo.topSurface && (
-              <span className="ml-1.5 font-mono text-[10px] text-ink-3">({undo.topSurface})</span>
-            )}
-            <span className="ml-2 font-mono text-[10px] opacity-60">⌘Z</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!undo.canRedo}
-            onClick={() => void undo.redo()}
-            className="max-md:hidden"
-          >
-            ↷ Redo
-          </Button>
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search records…"
+            className="w-full min-w-0 bg-transparent font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3"
+          />
+        </div>
 
-          {list.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => exportToCSV(dim)}>
-              ↓ Export CSV
-            </Button>
-          )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {presence.peers.length > 0 && <PresenceStrip peers={presence.peers} />}
           {canEdit && (
             <Button
               variant="ghost"
               size="sm"
+              className="px-2"
               onClick={() => setOrderingOpen((v) => !v)}
-              title="Table ordering settings"
+              title="Sort & order rows"
             >
-              ⇅ Ordering
+              <span className="text-[13px] leading-none">⇅</span>
             </Button>
           )}
+          {pubState && pubState.changedKeys.length > 0 && (
+            <button
+              type="button"
+              aria-pressed={changedOnly}
+              onClick={() => setChangedOnly((v) => !v)}
+              title={
+                changedOnly
+                  ? "Showing only changed records — click to show all"
+                  : "Show only records changed since the last version"
+              }
+              className={cx(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-sm border px-2 py-1.5 text-xs font-semibold transition-colors",
+                changedOnly
+                  ? "border-accent bg-accent-wash text-accent"
+                  : "border-line-2 text-ink-2 hover:bg-hover hover:text-ink",
+              )}
+            >
+              <IconFilter className="h-3.5 w-3.5 shrink-0" />
+              <span className="tabular-nums">{pubState.changedKeys.length}</span>
+              <span className="@max-5xl:hidden">changed</span>
+              {changedOnly && <IconX className="h-3 w-3 shrink-0 opacity-70" />}
+            </button>
+          )}
+
+          <span className="mx-0.5 h-6 w-px shrink-0 bg-line @max-3xl:hidden" />
+
+          <div className="inline-flex overflow-hidden rounded-sm border border-line @max-3xl:hidden">
+            <button
+              type="button"
+              disabled={!undo.canUndo}
+              onClick={() => void undo.undo()}
+              title={undo.topLabel ? `Undo — ${undo.topLabel} (⌘Z)` : "Undo (⌘Z)"}
+              className="px-2.5 py-1.5 text-[13px] leading-none text-ink-2 transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+            >
+              ↶
+            </button>
+            <button
+              type="button"
+              disabled={!undo.canRedo}
+              onClick={() => void undo.redo()}
+              title="Redo"
+              className="border-l border-line px-2.5 py-1.5 text-[13px] leading-none text-ink-2 transition-colors hover:bg-hover hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+            >
+              ↷
+            </button>
+          </div>
+
           {canEdit && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void openOwnerPanel()}
-              title="Assign an owner for this table"
-            >
-              ⍟ Owner
-            </Button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={(e) => void onImportFile(e.target.files?.[0] ?? null, e.target)}
+            />
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setHistoryOpen((v) => !v)}
-            title="View version history"
+          <ToolbarMenu
+            title="More actions"
+            className="px-2"
+            leading={<span className="text-[15px] leading-none text-ink-2">⋯</span>}
           >
-            ⌛ History
-          </Button>
-          {canEdit && pubState && unpublished > 0 && (
+            {(canEdit || list.length > 0) && (
+              <>
+                <MenuSection>Import / export</MenuSection>
+                {canEdit && (
+                  <MenuItem
+                    glyph="↑"
+                    title="Import CSV"
+                    desc="Map columns onto records & source values"
+                    onClick={() => importFileRef.current?.click()}
+                  />
+                )}
+                {list.length > 0 && (
+                  <MenuItem
+                    glyph="↓"
+                    title="Export records (CSV)"
+                    desc="Key, label and fields as a spreadsheet"
+                    onClick={() => exportToCSV(dim)}
+                  />
+                )}
+                <MenuSep />
+              </>
+            )}
+            <MenuSection>Table</MenuSection>
+            {canEdit && (
+              <MenuItem
+                glyph="⍟"
+                title="Assign owner"
+                desc={dim.ownerName ? `Currently: ${dim.ownerName}` : "Unassigned"}
+                onClick={() => void openOwnerPanel()}
+              />
+            )}
+            <MenuItem
+              glyph="⌛"
+              title="Version history"
+              desc="Roll back to a previous publish"
+              onClick={() => setHistoryOpen(true)}
+            />
+            {canEdit && sourceOpts.length > 0 && (
+              <MenuItem
+                glyph="⟳"
+                title="Re-scan source"
+                desc="Pull new distinct values from wired columns"
+                onClick={() => setRescanOpen((v) => !v)}
+              />
+            )}
+          </ToolbarMenu>
+
+          {canEdit && pubState && unpublished > 0 ? (
             <Button
               size="sm"
               disabled={publishing}
@@ -943,71 +1050,26 @@ function RecordsBody({
                 );
                 setPublishPreview(true);
               }}
-              title={`${pubState.pendingDrafts} staged mapping${pubState.pendingDrafts === 1 ? "" : "s"} + ${pubState.changedKeys.length} record change${pubState.changedKeys.length === 1 ? "" : "s"}`}
+              title={
+                publishSummary ? `Publish ${publishSummary} since the last version` : undefined
+              }
             >
-              ↑ Publish v{pubState.version + 1}
+              Publish {unpublished} change{unpublished === 1 ? "" : "s"}
             </Button>
-          )}
-          {canEdit && (
-            <>
-              <input
-                ref={importFileRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={(e) => void onImportFile(e.target.files?.[0] ?? null, e.target)}
-              />
-              <Button variant="ghost" size="sm" onClick={() => importFileRef.current?.click()}>
-                ↑ Import CSV
-              </Button>
-            </>
-          )}
-          <a
-            href={`/api/dimensions/${dim.id}/snapshot.parquet`}
-            download={`${dim.id}-map.parquet`}
-            className="text-xs text-ink-3 hover:text-ink-1 hover:underline"
-            title="Download the map table as Parquet"
-          >
-            ↓ Download snapshot
-          </a>
-          {sourceOpts.length > 0 && !external && canEdit && (
-            <div className="w-full md:w-56">
-              <ComboSelect
-                options={sourceOpts}
-                value={null}
-                placeholder="re-scan source…"
-                onPick={derive}
-              />
-            </div>
-          )}
-          {external && sourceOpts.length > 0 && canEdit && (
-            <div className="flex flex-wrap items-center gap-2 max-md:w-full">
-              <div className="w-full md:w-40">
-                <ComboSelect
-                  options={sourceOpts}
-                  value={idOpt}
-                  placeholder="id column…"
-                  onPick={setIdOpt}
-                />
-              </div>
-              <div className="w-full md:w-40">
-                <ComboSelect
-                  options={sourceOpts}
-                  value={nameOpt}
-                  placeholder="name column…"
-                  onPick={setNameOpt}
-                />
-              </div>
-              <Button
-                size="sm"
-                disabled={!idOpt || !nameOpt || busy}
-                onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}
-                className="max-md:w-full"
-              >
-                Re-scan
-              </Button>
-            </div>
-          )}
+          ) : pubState && pubState.version > 0 ? (
+            <span
+              className="inline-flex items-center gap-1.5 whitespace-nowrap px-1.5 text-[11px] text-ink-3"
+              title={publishedTitle}
+            >
+              {unpublished > 0 ? (
+                `${unpublished} unpublished`
+              ) : (
+                <>
+                  <span style={{ color: "var(--ak-ok)" }}>✓</span> Up to date
+                </>
+              )}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -1073,46 +1135,82 @@ function RecordsBody({
 
       {ownerOpen && (
         <div className="border-b border-line bg-surface-2 px-4 py-3 text-[13px]">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-3">
-            Owner
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">
+              Owner
+            </span>
+            <button
+              className="text-ink-3 hover:text-ink"
+              onClick={() => setOwnerOpen(false)}
+              title="Close"
+            >
+              <IconX className="h-3.5 w-3.5" />
+            </button>
           </div>
           {members === null ? (
             <div className="text-[12px] text-ink-3">Loading members…</div>
           ) : (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                className={cx(
-                  "rounded-pill border px-2.5 py-1 text-[12px] transition-colors",
-                  !dim.ownerUserId
-                    ? "border-accent text-accent"
-                    : "border-line-2 text-ink-2 hover:border-accent",
-                )}
-                onClick={async () => {
-                  if (dim.ownerUserId) await patchDimension(activeId, { ownerUserId: null });
-                  setOwnerOpen(false);
-                }}
+            <OwnerPicker
+              members={members}
+              currentId={dim.ownerUserId ?? null}
+              onPick={async (id) => {
+                if (dim.ownerUserId !== id) await patchDimension(activeId, { ownerUserId: id });
+                setOwnerOpen(false);
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {rescanOpen && canEdit && sourceOpts.length > 0 && (
+        <div className="border-b border-line bg-surface-2 px-4 py-3 text-[13px]">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-3">
+              Re-scan source
+            </span>
+            <button
+              className="text-ink-3 hover:text-ink"
+              onClick={() => setRescanOpen(false)}
+              title="Close"
+            >
+              <IconX className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          {!external ? (
+            <div className="max-w-xs">
+              <ComboSelect
+                options={sourceOpts}
+                value={null}
+                placeholder="pick a source column…"
+                onPick={derive}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="w-full md:w-44">
+                <ComboSelect
+                  options={sourceOpts}
+                  value={idOpt}
+                  placeholder="id column…"
+                  onPick={setIdOpt}
+                />
+              </div>
+              <div className="w-full md:w-44">
+                <ComboSelect
+                  options={sourceOpts}
+                  value={nameOpt}
+                  placeholder="name column…"
+                  onPick={setNameOpt}
+                />
+              </div>
+              <Button
+                size="sm"
+                disabled={!idOpt || !nameOpt || busy}
+                onClick={() => idOpt && nameOpt && deriveExternal(idOpt, nameOpt)}
+                className="max-md:w-full"
               >
-                No owner
-              </button>
-              {members.map((m) => (
-                <button
-                  key={m.user_id}
-                  className={cx(
-                    "rounded-pill border px-2.5 py-1 text-[12px] transition-colors",
-                    dim.ownerUserId === m.user_id
-                      ? "border-accent text-accent"
-                      : "border-line-2 text-ink-2 hover:border-accent",
-                  )}
-                  onClick={async () => {
-                    if (dim.ownerUserId !== m.user_id) {
-                      await patchDimension(activeId, { ownerUserId: m.user_id });
-                    }
-                    setOwnerOpen(false);
-                  }}
-                >
-                  {m.name ?? m.user_id}
-                </button>
-              ))}
+                Re-scan
+              </Button>
             </div>
           )}
         </div>

@@ -1079,26 +1079,15 @@ function CrossDimFooter(p: FooterProps) {
           >
             {review ? "Hide" : `Review ${stagedCount}`}
           </Button>
-          <div className="flex flex-col items-end gap-1">
-            <Button
-              size="sm"
-              disabled={stagedCount === 0 || !p.canEdit}
-              loading={p.committing}
-              onClick={() => p.commitAll()}
-            >
-              {p.wsInfo?.writable ? "Publish to warehouse" : "Publish"}
-              <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
-            </Button>
-            {p.wsInfo && !p.wsInfo.writable && p.stagedDrafts[0] && (
-              <a
-                href={`/api/dimensions/${p.stagedDrafts[0].dimId}/snapshot.parquet`}
-                download
-                className="text-xs text-ink-3 hover:underline"
-              >
-                Download snapshot →
-              </a>
-            )}
-          </div>
+          <Button
+            size="sm"
+            disabled={stagedCount === 0 || !p.canEdit}
+            loading={p.committing}
+            onClick={() => p.commitAll()}
+          >
+            {p.wsInfo?.writable ? "Publish to warehouse" : "Publish"}
+            <span className="ml-2 hidden font-mono text-[10px] opacity-60 md:inline">⌘↵</span>
+          </Button>
         </div>
       </div>
     </div>
