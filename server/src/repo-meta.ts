@@ -61,11 +61,48 @@ export async function appendAuditAs(
   }
 }
 
-export async function listAudit(limit = 30, tenantId: string = "default"): Promise<AuditEntry[]> {
-  // tenantId === '*' is the super-admin cross-tenant feed.
-  const where = tenantId === "*" ? "" : "WHERE tenant_id = $1";
-  const params = tenantId === "*" ? [] : [tenantId];
+/** Server-side filters for the activity feed. `before` is a keyset cursor of
+ *  the form "<at>|<id>" (the `at` + `id` of the last row already seen), so the
+ *  feed paginates without OFFSET drift as new events land. */
+export interface AuditFilter {
+  actor?: string;
+  q?: string;
+  before?: string;
+}
+
+export async function listAudit(
+  limit = 30,
+  tenantId: string = "default",
+  filter: AuditFilter = {},
+): Promise<AuditEntry[]> {
+  // Build the WHERE incrementally so filters compose. tenantId === '*' is the
+  // super-admin cross-tenant feed (no tenant clause).
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+  const bind = (v: unknown): string => `$${params.push(v)}`;
+
+  if (tenantId !== "*") clauses.push(`a.tenant_id = ${bind(tenantId)}`);
+  if (filter.actor) clauses.push(`a.user_id = ${bind(filter.actor)}`);
+
+  const q = filter.q?.trim();
+  if (q) {
+    const like = bind(`%${q}%`);
+    clauses.push(`(a.action ILIKE ${like} OR a.detail ILIKE ${like} OR u.name ILIKE ${like})`);
+  }
+
+  // Keyset pagination: strictly older than the cursor tuple, matching the
+  // (created_at DESC, id DESC) sort. Millisecond-precision cursor may rarely
+  // skip a same-ms sibling at a page boundary — acceptable for an activity log.
+  if (filter.before) {
+    const [at, id] = filter.before.split("|");
+    if (at && id) {
+      clauses.push(`(a.created_at, a.id) < (${bind(at)}::timestamptz, ${bind(id)})`);
+    }
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const cappedLimit = Math.max(1, Math.min(200, limit));
+
   const rows = await pgAll<{
     id: string;
     uid: string;
@@ -73,27 +110,23 @@ export async function listAudit(limit = 30, tenantId: string = "default"): Promi
     detail: string;
     at: string;
     metadata: Record<string, unknown> | null;
+    uname: string | null;
+    uinitials: string | null;
   }>(
-    `SELECT id, user_id AS uid, action, detail, metadata,
-            to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at
-     FROM ${pg("audit_log")} ${where}
-     ORDER BY created_at DESC
+    `SELECT a.id, a.user_id AS uid, a.action, a.detail, a.metadata,
+            to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at,
+            u.name AS uname, u.initials AS uinitials
+     FROM ${pg("audit_log")} a
+     LEFT JOIN ${pg("users")} u ON u.id = a.user_id
+     ${where}
+     ORDER BY a.created_at DESC, a.id DESC
      LIMIT ${cappedLimit}`,
     params,
   );
-  if (rows.length === 0) return [];
-
-  const uids = Array.from(new Set(rows.map((r) => r.uid)));
-  const users = await pgAll<User>(
-    `SELECT id, name, initials FROM ${pg("users")} WHERE id = ANY($1::text[])`,
-    [uids],
-  );
-  const byId = new Map(users.map((u) => [u.id, u]));
-  const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
 
   return rows.map((r) => ({
     id: r.id,
-    user: byId.get(r.uid) ?? unknownUser,
+    user: { id: r.uid, name: r.uname ?? "Unknown", initials: r.uinitials ?? "??" },
     action: r.action,
     detail: r.detail,
     at: r.at,
@@ -141,7 +174,13 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
            scan_schedule            = EXCLUDED.scan_schedule,
            updated_at               = EXCLUDED.updated_at,
            require_second_publisher = EXCLUDED.require_second_publisher`,
-    [p.publishThreshold, p.suggestThreshold, p.scanSchedule, tenantId, p.requireSecondPublisher ?? false],
+    [
+      p.publishThreshold,
+      p.suggestThreshold,
+      p.scanSchedule,
+      tenantId,
+      p.requireSecondPublisher ?? false,
+    ],
   );
 }
 

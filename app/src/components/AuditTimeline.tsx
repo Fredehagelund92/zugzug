@@ -19,14 +19,7 @@ interface Phrase {
 }
 
 type EventKind =
-  | "create"
-  | "update"
-  | "delete"
-  | "publish"
-  | "connect"
-  | "security"
-  | "system"
-  | "other";
+  "create" | "update" | "delete" | "publish" | "connect" | "security" | "system" | "other";
 
 const KIND_BY_VERB: Record<string, EventKind> = {
   added: "create",

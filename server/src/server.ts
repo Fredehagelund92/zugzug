@@ -878,8 +878,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
       // GET /api/audit ; POST /api/audit {action, detail}
       if (seg[1] === "audit" && seg.length === 2) {
-        if (method === "GET")
-          return json(await reqRepo.listAudit(Number(url.searchParams.get("limit") ?? 30)));
+        if (method === "GET") {
+          const sp = url.searchParams;
+          return json(
+            await reqRepo.listAudit(Number(sp.get("limit") ?? 30), {
+              actor: sp.get("actor") ?? undefined,
+              q: sp.get("q") ?? undefined,
+              before: sp.get("before") ?? undefined,
+            }),
+          );
+        }
         if (method === "POST") {
           const { action, detail } = (await req.json()) as { action: string; detail: string };
           await reqRepo.appendAudit(me, action, detail);
@@ -975,13 +983,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           }
           const q = url.searchParams.get("q");
           const after = url.searchParams.get("after");
-          const limit = Math.min(
-            500,
-            Math.max(1, Number(url.searchParams.get("limit") ?? 100)),
-          );
-          return json(
-            await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }),
-          );
+          const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
+          return json(await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }));
         }
         // POST /api/dimensions/:id/scan — rescan this dim's wired sources and
         // re-materialize its dim_scan_value rows. Faster than POST /api/sources/scan.
@@ -1078,8 +1081,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (denied) return denied;
           const raw = (await req.json()) as {
             source?:
-              | import("./repo-canonical.ts").QualifiedSource
-              | { table: string; column: string };
+              import("./repo-canonical.ts").QualifiedSource | { table: string; column: string };
             table?: string;
             column?: string;
           };
@@ -1139,9 +1141,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             nameColumn?: string;
             force?: boolean;
           };
-          return json(
-            await reqRepo.deriveCanonical(id, table, column, nameColumn, { force }, me),
-          );
+          return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, { force }, me));
         }
         // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
@@ -1348,7 +1348,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const body = req.headers.get("content-length")
             ? await req.json().catch(() => null)
             : null;
-          const draftKeys = Array.isArray(body?.draftKeys) ? (body.draftKeys as string[]) : undefined;
+          const draftKeys = Array.isArray(body?.draftKeys)
+            ? (body.draftKeys as string[])
+            : undefined;
           return json(await reqRepo.commit(id, me, draftKeys));
         }
         // POST /api/dimensions/:id/positions/rebalance

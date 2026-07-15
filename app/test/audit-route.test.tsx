@@ -2,17 +2,23 @@ import { describe, test, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
-vi.mock("../src/store", () => ({
-  useAudit: () => [
-    {
-      id: "a1",
-      at: new Date().toISOString(),
-      user: { id: "u1", name: "Alice", initials: "AL" },
-      action: "draft.created",
-      detail: "channel/web",
-    },
-  ],
-  useStoreLoading: () => false,
+// The page fetches its own data now: the activity feed from /audit and the
+// people-picker roster from /team/members.
+vi.mock("../src/api", () => ({
+  apiFetch: (path: string) => {
+    const body = path.startsWith("/team/members")
+      ? []
+      : [
+          {
+            id: "a1",
+            at: new Date().toISOString(),
+            user: { id: "u1", name: "Alice", initials: "AL" },
+            action: "draft.created",
+            detail: "channel/web",
+          },
+        ];
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(body) } as Response);
+  },
 }));
 
 describe("Audit (primary nav)", () => {
@@ -34,7 +40,7 @@ describe("Audit (primary nav)", () => {
         <Audit />
       </MemoryRouter>,
     );
-    expect(screen.getByText("draft.created")).toBeInTheDocument();
-    expect(screen.getByText("channel/web")).toBeInTheDocument();
+    expect(await screen.findByText("draft.created")).toBeInTheDocument();
+    expect(await screen.findByText("channel/web")).toBeInTheDocument();
   });
 });

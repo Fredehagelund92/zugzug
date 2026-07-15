@@ -77,9 +77,9 @@ export class TenantRepo {
   }
 
   // --- audit -----------------------------------------------------------------
-  listAudit(limit = 30): Promise<AuditEntry[]> {
+  listAudit(limit = 30, filter: repoMeta.AuditFilter = {}): Promise<AuditEntry[]> {
     const scope = this.isSuperAdmin && this.tenantId === "*" ? "*" : this.tenantId;
-    return this.withClearCtx(() => repoMeta.listAudit(limit, scope));
+    return this.withClearCtx(() => repoMeta.listAudit(limit, scope, filter));
   }
 
   appendAudit(
@@ -490,13 +490,8 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDimScan.getDimScanScalars(this.tenantId));
   }
 
-  getDimScanValuesPage(
-    dimId: string,
-    opts: repoDimScan.PageOpts,
-  ): Promise<repoDimScan.ValuesPage> {
-    return this.withClearCtx(() =>
-      repoDimScan.getDimScanValuesPage(this.tenantId, dimId, opts),
-    );
+  getDimScanValuesPage(dimId: string, opts: repoDimScan.PageOpts): Promise<repoDimScan.ValuesPage> {
+    return this.withClearCtx(() => repoDimScan.getDimScanValuesPage(this.tenantId, dimId, opts));
   }
 
   deriveCanonical(
