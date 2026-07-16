@@ -63,7 +63,7 @@ import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MatchModeBody } from "./modes/MatchModeBody";
-import { WiredSourcesModeBody } from "./modes/WiredSourcesModeBody";
+import { SourcesMonitorBody } from "./modes/SourcesMonitorBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
@@ -186,7 +186,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
           <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />
         )}
         {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
-        {activeMode === "sources" && <WiredSourcesModeBody dim={dim} />}
+        {activeMode === "sources" && <SourcesMonitorBody dim={dim} />}
       </div>
     </div>
   );
