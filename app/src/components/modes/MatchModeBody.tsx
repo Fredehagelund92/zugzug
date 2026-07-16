@@ -768,7 +768,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 disabled={staged.length === 0}
                 onClick={() => setReview((s) => !s)}
               >
-                {review ? "Hide review" : `Review ${staged.length}`}
+                {review ? "Hide preview" : `Preview ${staged.length}`}
               </Button>
               {engineer && (
                 <Button
@@ -793,7 +793,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           {review && staged.length > 0 && (
             <div className="border-t border-line">
               <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                Staged for review · {stagedDrafts.length}
+                Staged to publish · {stagedDrafts.length}
               </div>
               <div className="mt-1 max-h-64 overflow-y-auto px-5 pb-2">
                 {(() => {

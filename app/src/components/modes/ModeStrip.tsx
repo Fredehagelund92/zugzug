@@ -12,8 +12,8 @@ interface ModeStripProps {
 
 const LABEL: Record<Mode, string> = {
   records: "Records",
-  match: "Match values",
-  sources: "Wired sources",
+  match: "Map values",
+  sources: "Sources",
 };
 
 export function ModeStrip({ modes, active, onSelect, badges }: ModeStripProps) {

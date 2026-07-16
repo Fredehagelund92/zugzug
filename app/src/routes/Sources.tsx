@@ -529,7 +529,7 @@ export function Sources() {
                 onClick={() => navigate(nav.table(agg.worst!.dimId, "match"))}
                 className="shrink-0"
               >
-                Match values
+                Map values
               </Button>
             </div>
           </div>

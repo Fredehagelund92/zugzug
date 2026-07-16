@@ -149,7 +149,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
                   className={cx("zz-live h-1.5 w-1.5 rounded-pill")}
                   style={{ background: stripeBg }}
                 />
-                Wired sources · {dim.dimension}
+                Sources · {dim.dimension}
               </div>
               <h2 className="mt-2 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
                 <span className="tabular-nums">{wired.length}</span>{" "}

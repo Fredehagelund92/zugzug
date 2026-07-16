@@ -954,7 +954,7 @@ function CrossDimFooter(p: FooterProps) {
       {review && stagedCount > 0 && (
         <div className="border-b border-line">
           <div className="px-4 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
-            Staged for review · {stagedCount} across {grouped.length} dim
+            Staged to publish · {stagedCount} across {grouped.length} table
             {grouped.length === 1 ? "" : "s"}
           </div>
           <div className="mt-1 max-h-72 overflow-y-auto">
@@ -1077,7 +1077,7 @@ function CrossDimFooter(p: FooterProps) {
             disabled={stagedCount === 0}
             onClick={() => setReview((s) => !s)}
           >
-            {review ? "Hide" : `Review ${stagedCount}`}
+            {review ? "Hide preview" : `Preview ${stagedCount}`}
           </Button>
           <Button
             size="sm"

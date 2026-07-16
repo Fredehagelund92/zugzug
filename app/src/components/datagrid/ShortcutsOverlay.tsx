@@ -24,7 +24,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     title: "Review",
     rows: [
       ["⌘1 … ⌘9", "switch tab by position"],
-      ["⌥1 / ⌥2 / ⌥3", "switch mode (Records / Match / Sources)"],
+      ["⌥1 / ⌥2 / ⌥3", "switch mode (Records / Map / Sources)"],
       ["[ / ]", "previous / next mode"],
     ],
   },
@@ -38,7 +38,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
     ],
   },
   {
-    title: "Match values",
+    title: "Map values",
     rows: [
       ["↑ ↓", "move cursor"],
       ["A", "accept suggestion"],

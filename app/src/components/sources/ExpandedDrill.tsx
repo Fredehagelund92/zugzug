@@ -60,7 +60,7 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
       )}
       <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
         <Link to={nav.table(row.dimId, "match")} className="text-accent hover:underline">
-          Open in Match values →
+          Open in Map values →
         </Link>
         <span>→ {row.dimension}</span>
       </div>
