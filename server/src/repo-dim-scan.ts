@@ -1,5 +1,6 @@
 import { pgTxRaw, pgAll } from "./pg.ts";
 import { cq, qid } from "./repo-shared.ts";
+import { clusterScanRows, type ScanValueCluster } from "./cluster-values.ts";
 
 export interface ScanOccurrence {
   raw: string;
@@ -333,4 +334,32 @@ export async function getDimScanValuesAll(
     }
     after = page.nextCursor;
   }
+}
+
+/** The focused mapper's payload: complete clusters worst-first, plus coverage. */
+export interface DimClusterFeed {
+  clusters: ScanValueCluster[];
+  coverage: { resolvedRows: number; atRiskRows: number; pct: number };
+  truncated: boolean;
+}
+
+/**
+ * Fetch a dimension's values (capped, worst-first), cluster the whole set so
+ * every family is complete, and attach coverage. Coverage comes from the
+ * authoritative whole-dimension scalars (not the possibly-truncated rows), so it
+ * stays correct regardless of the cap.
+ */
+export async function getDimClusters(
+  tenantId: string,
+  dimId: string,
+  opts: ClusterFeedOpts,
+): Promise<DimClusterFeed> {
+  const { rows, truncated } = await getDimScanValuesAll(tenantId, dimId, opts);
+  const clusters = clusterScanRows(rows);
+  const scalars = (await getDimScanScalars(tenantId)).find((s) => s.dimId === dimId);
+  const resolvedRows = scalars?.mappedRowsTotal ?? 0;
+  const atRiskRows = scalars?.unmappedRowsTotal ?? 0;
+  const denom = resolvedRows + atRiskRows;
+  const pct = denom > 0 ? Math.round((resolvedRows / denom) * 100) : 100;
+  return { clusters, coverage: { resolvedRows, atRiskRows, pct }, truncated };
 }
