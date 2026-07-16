@@ -19,3 +19,53 @@ export function normalizeKey(raw: string): string {
     .replace(/[^a-z0-9]+/g, "");
   return folded === "" ? `\u0000${raw}` : folded;
 }
+
+/** A raw value plus its downstream row weight. */
+export interface ClusterInput {
+  raw: string;
+  rows: number;
+}
+
+/** A group of look-alike values sharing one normalized key. */
+export interface ValueCluster {
+  /** Deterministic fold key shared by all members. */
+  key: string;
+  /** Representative raw value: the member with the most rows (ties → raw asc). */
+  rep: string;
+  /** Members, sorted rows desc then raw asc. */
+  members: ClusterInput[];
+  /** Sum of member rows — the cluster's downstream impact. */
+  rows: number;
+}
+
+// Shared deterministic comparators (also used by clusterScanRows).
+function cmpByRowsThenRaw(a: { rows: number; raw: string }, b: { rows: number; raw: string }): number {
+  return b.rows - a.rows || (a.raw < b.raw ? -1 : a.raw > b.raw ? 1 : 0);
+}
+function cmpByRowsThenRep(a: { rows: number; rep: string }, b: { rows: number; rep: string }): number {
+  return b.rows - a.rows || (a.rep < b.rep ? -1 : a.rep > b.rep ? 1 : 0);
+}
+
+/**
+ * Group inputs into deterministic clusters. Values folding to the same
+ * `normalizeKey` merge; everything else stays separate. Output order is stable:
+ * clusters by rows desc then rep asc, members by rows desc then raw asc.
+ */
+export function clusterValues(values: ClusterInput[]): ValueCluster[] {
+  const byKey = new Map<string, ClusterInput[]>();
+  for (const v of values) {
+    const key = normalizeKey(v.raw);
+    const arr = byKey.get(key);
+    if (arr) arr.push(v);
+    else byKey.set(key, [v]);
+  }
+
+  const clusters: ValueCluster[] = [];
+  for (const [key, members] of byKey) {
+    members.sort(cmpByRowsThenRaw);
+    const rows = members.reduce((sum, m) => sum + m.rows, 0);
+    clusters.push({ key, rep: members[0].raw, members, rows });
+  }
+  clusters.sort(cmpByRowsThenRep);
+  return clusters;
+}
