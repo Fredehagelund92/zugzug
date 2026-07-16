@@ -104,4 +104,8 @@ describe("clusterScanRows", () => {
     const out = clusterScanRows([scanRow("rare", 12), scanRow("common", 8800)]);
     expect(out.map((c) => c.rep)).toEqual(["common", "rare"]);
   });
+
+  it("returns an empty array for empty input", () => {
+    expect(clusterScanRows([])).toEqual([]);
+  });
 });
