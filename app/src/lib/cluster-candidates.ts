@@ -12,7 +12,7 @@ export type Candidate =
 export function foldLabel(s: string): string {
   return s
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "") // strip combining diacritics
+    .replace(/[\u0300-\u036F]/g, "") // strip combining diacritics
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 }

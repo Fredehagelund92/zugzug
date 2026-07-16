@@ -24,6 +24,7 @@ describe("buildCandidates", () => {
     expect(out.filter((c) => c.kind === "record" && c.closest)).toHaveLength(1);
     // a create row is always last
     expect(out[out.length - 1]).toEqual({ kind: "create", label: "united states" });
+    expect(out.filter((c) => c.kind === "record")).toHaveLength(3);
   });
 
   it("with no fold-match, returns records (none closest) then a create row for rep", () => {
