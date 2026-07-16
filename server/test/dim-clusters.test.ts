@@ -95,3 +95,20 @@ test("TenantRepo.getDimClusters scopes to its tenant and returns the feed", asyn
   expect(feed.clusters[0].key).toBe("usa");
   expect(feed.coverage.pct).toBe(0); // nothing mapped → 0% of 1500 rows resolved
 });
+
+test("empty dimension reports 100% coverage (nothing at risk) with no clusters", async () => {
+  await seed([]); // dimension exists, zero scan values
+  const feed = await getDimClusters(TENANT, DIM, { filter: "new" });
+  expect(feed.clusters).toHaveLength(0);
+  expect(feed.coverage.resolvedRows).toBe(0);
+  expect(feed.coverage.atRiskRows).toBe(0);
+  expect(feed.coverage.pct).toBe(100);
+  expect(feed.truncated).toBe(false);
+});
+
+test("cap exactly equal to the total does not flag truncation", async () => {
+  await seed(Array.from({ length: 10 }, (_, i) => ({ raw: `v${i}`, rows: 100 - i })));
+  const { rows, truncated } = await getDimScanValuesAll(TENANT, DIM, { filter: "new", cap: 10 });
+  expect(rows).toHaveLength(10);
+  expect(truncated).toBe(false);
+});
