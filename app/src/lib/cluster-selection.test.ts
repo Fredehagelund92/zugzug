@@ -47,7 +47,7 @@ describe("siblingSuggestion", () => {
       member("a", 100, true, "Germany"),
       member("b", 200, true, "United States"),
     ]);
-    // members arrive rows-desc from the server; "b" (200) is first → United States
+    // "b" has the most rows (200), so its record (United States) wins, regardless of order.
     expect(siblingSuggestion(c, RECORDS)).toEqual({ key: "us", label: "United States" });
   });
 
