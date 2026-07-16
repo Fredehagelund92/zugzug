@@ -54,7 +54,16 @@ describe("clusterMapperReducer", () => {
 
   it("undo with an empty stack is a no-op", () => {
     const s = init();
-    expect(clusterMapperReducer(s, { type: "undo" })).toEqual(s);
+    expect(clusterMapperReducer(s, { type: "undo" })).toBe(s);
+  });
+
+  it("init action resets to a fresh state for the given keys", () => {
+    let s = clusterMapperReducer(init(), { type: "map", clusterKey: "usa", recordKey: "us", recordLabel: "United States" });
+    s = clusterMapperReducer(s, { type: "init", clusterKeys: ["a", "b"] });
+    expect(s.order).toEqual(["a", "b"]);
+    expect(s.cursor).toBe(0);
+    expect(s.decisions).toEqual({});
+    expect(s.undo).toEqual([]);
   });
 
   it("jumpTo sets the cursor", () => {
