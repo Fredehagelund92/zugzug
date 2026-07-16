@@ -295,3 +295,42 @@ export async function getDimScanValuesPage(
 
   return { items: out, hasMore, nextCursor };
 }
+
+/** Options for the cluster feed. `cap` bounds how many values are pulled into
+    memory for clustering (default 5000); the omitted long tail is reported via
+    `truncated`. */
+export interface ClusterFeedOpts {
+  filter: "new" | "mapped" | "all";
+  cap?: number;
+}
+
+/**
+ * Fetch a dimension's scan values worst-impact-first by looping the existing
+ * paginated `getDimScanValuesPage` until it is exhausted or `cap` is reached.
+ * Reuses the tested query + cursor + occurrence logic — no new SQL. Returns the
+ * (possibly capped) rows and whether more existed beyond the cap.
+ */
+export async function getDimScanValuesAll(
+  tenantId: string,
+  dimId: string,
+  opts: ClusterFeedOpts,
+): Promise<{ rows: ScanValueRow[]; truncated: boolean }> {
+  const cap = opts.cap ?? 5000;
+  const rows: ScanValueRow[] = [];
+  let after: string | null = null;
+  for (;;) {
+    const page = await getDimScanValuesPage(tenantId, dimId, {
+      filter: opts.filter,
+      limit: 500,
+      after,
+    });
+    rows.push(...page.items);
+    if (rows.length >= cap) {
+      return { rows: rows.slice(0, cap), truncated: page.hasMore || rows.length > cap };
+    }
+    if (!page.hasMore || !page.nextCursor) {
+      return { rows, truncated: false };
+    }
+    after = page.nextCursor;
+  }
+}
