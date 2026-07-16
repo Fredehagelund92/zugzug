@@ -26,8 +26,6 @@ export interface UseClusterMapper {
   refetch: () => void;
 }
 
-/** Joins cluster keys for the re-init guard; NUL cannot appear in a key. */
-const SEP = "\u0000";
 
 export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
   const feed = useDimClusters({ dimId: dim.id, filter: "all" });
@@ -40,14 +38,17 @@ export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
   const [state, dispatch] = useReducer(clusterMapperReducer, [] as string[], initMapperState);
 
   // Re-init the reducer whenever the set of pending cluster keys changes.
+  // Serialize the pending key set unambiguously — cluster keys can contain any
+  // character (the server folds punctuation-only values to a NUL-prefixed key),
+  // so a delimiter join/split is unsafe; JSON round-trips exactly.
   const keysRef = useRef<string>("");
-  const keyStr = pending.map((c) => c.key).join(SEP);
+  const keySig = JSON.stringify(pending.map((c) => c.key));
   useEffect(() => {
-    if (keyStr !== keysRef.current) {
-      keysRef.current = keyStr;
-      dispatch({ type: "init", clusterKeys: keyStr ? keyStr.split(SEP) : [] });
+    if (keySig !== keysRef.current) {
+      keysRef.current = keySig;
+      dispatch({ type: "init", clusterKeys: JSON.parse(keySig) as string[] });
     }
-  }, [keyStr]);
+  }, [keySig]);
 
   const [query, setQuery] = useState("");
   const current = state.cursor < pending.length ? pending[state.cursor] : null;

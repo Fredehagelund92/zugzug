@@ -99,4 +99,30 @@ describe("useClusterMapper", () => {
     expect(result.current.current?.key).toBe("usa"); // back on the cluster
     expect(result.current.staged).toBe(0);
   });
+
+  it("handles cluster keys containing NUL (punctuation-only source values) without mis-splitting", async () => {
+    // The server folds a punctuation-only value to a NUL-prefixed key. A
+    // delimiter join/split would corrupt the reducer's order and never reach done.
+    feedRef.current = makeFeedState({
+      clusters: [
+        { key: "usa", rep: "USA", rows: 100, mappedCount: 0, members: [
+          { raw: "USA", rows: 100, isMapped: false, mappedLabel: null, occurrences: [] },
+        ] },
+        { key: "\u0000junk", rep: "???", rows: 10, mappedCount: 0, members: [
+          { raw: "???", rows: 10, isMapped: false, mappedLabel: null, occurrences: [] },
+        ] },
+      ],
+      coverage: { resolvedRows: 0, atRiskRows: 110, pct: 0 },
+      truncated: false,
+    });
+    const { result } = renderHook(() => useClusterMapper(DIM));
+    await waitFor(() => expect(result.current.position.total).toBe(2));
+
+    act(() => result.current.mapCluster("us", "United States"));
+    await waitFor(() => expect(result.current.current?.key).toBe("\u0000junk"));
+    act(() => result.current.mapCluster("us", "United States"));
+
+    expect(result.current.done).toBe(true);
+    expect(result.current.current).toBeNull();
+  });
 });
