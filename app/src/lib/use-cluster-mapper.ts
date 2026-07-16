@@ -16,6 +16,8 @@ export interface UseClusterMapper {
   truncated: boolean;
   staged: number;
   done: boolean;
+  /** Cursor into the pending queue. `index === total` means done — render `done`,
+   *  not "N of N". */
   position: { index: number; total: number };
   query: string;
   setQuery: (q: string) => void;
