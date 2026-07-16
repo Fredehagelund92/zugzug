@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Candidate, CandidateRecord } from "./cluster-candidates";
+import { slug } from "../store";
 
 export interface CandidatePickerOpts {
   candidates: Candidate[];
@@ -14,9 +15,6 @@ export interface UseCandidatePicker {
   onKeyDown: (e: React.KeyboardEvent) => void;
   commit: (candidate: Candidate) => void;
 }
-
-/** Client twin of the store's slug — resolves a "create new record" label to a key. */
-const slugKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 
 function defaultActive(candidates: Candidate[], suggestion: CandidateRecord | null): number {
   if (suggestion) {
@@ -37,7 +35,7 @@ export function useCandidatePicker(opts: CandidatePickerOpts): UseCandidatePicke
 
   const commit = useCallback(
     (candidate: Candidate) => {
-      if (candidate.kind === "create") onMap(slugKey(candidate.label), candidate.label);
+      if (candidate.kind === "create") onMap(slug(candidate.label), candidate.label);
       else onMap(candidate.key, candidate.label);
     },
     [onMap],
