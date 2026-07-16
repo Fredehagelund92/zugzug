@@ -53,5 +53,6 @@ describe("useDimClusters", () => {
     const { result } = renderHook(() => useDimClusters({ dimId: null, filter: "new" }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.current.coverage.pct).toBe(0);
   });
 });

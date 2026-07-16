@@ -40,7 +40,7 @@ export interface UseDimClusters {
   refetch: () => void;
 }
 
-const EMPTY_COVERAGE: Coverage = { resolvedRows: 0, atRiskRows: 0, pct: 100 };
+const EMPTY_COVERAGE: Coverage = { resolvedRows: 0, atRiskRows: 0, pct: 0 };
 
 /** Load the whole cluster feed for a dimension. Mirrors useDimValuesPage's
  *  race-safe fetch shape, but the feed is a single (non-paginated) payload. */
