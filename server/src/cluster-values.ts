@@ -4,6 +4,8 @@
    or aliasing here — that is an opt-in layer built above this module. Pure: no
    I/O, no DB, no env, no React. */
 
+import type { ScanValueRow } from "./repo-dim-scan.ts";
+
 /**
  * Fold a raw value to its conservative cluster key: NFKD-normalize, strip
  * diacritics, lowercase, then drop every non-alphanumeric character. "U.S.A."
@@ -65,6 +67,56 @@ export function clusterValues(values: ClusterInput[]): ValueCluster[] {
     members.sort(cmpByRowsThenRaw);
     const rows = members.reduce((sum, m) => sum + m.rows, 0);
     clusters.push({ key, rep: members[0].raw, members, rows });
+  }
+  clusters.sort(cmpByRowsThenRep);
+  return clusters;
+}
+
+/** A scan-row member of a cluster — richer than ClusterInput, keeps occurrences. */
+export interface ScanValueMember {
+  raw: string;
+  rows: number;
+  isMapped: boolean;
+  mappedLabel: string | null;
+  occurrences: { table: string; column: string; rows: number }[];
+}
+
+/** A cluster of scan rows, plus how many members are already mapped. */
+export interface ScanValueCluster {
+  key: string;
+  rep: string;
+  members: ScanValueMember[];
+  rows: number;
+  mappedCount: number;
+}
+
+/**
+ * Cluster real `ScanValueRow`s the way `clusterValues` clusters plain inputs,
+ * but preserve each member's occurrences and mapped state and report how many
+ * members are already mapped. Weight is `totalRows`.
+ */
+export function clusterScanRows(rows: ScanValueRow[]): ScanValueCluster[] {
+  const byKey = new Map<string, ScanValueMember[]>();
+  for (const r of rows) {
+    const key = normalizeKey(r.raw);
+    const member: ScanValueMember = {
+      raw: r.raw,
+      rows: r.totalRows,
+      isMapped: r.isMapped,
+      mappedLabel: r.mappedLabel,
+      occurrences: r.occurrences,
+    };
+    const arr = byKey.get(key);
+    if (arr) arr.push(member);
+    else byKey.set(key, [member]);
+  }
+
+  const clusters: ScanValueCluster[] = [];
+  for (const [key, members] of byKey) {
+    members.sort(cmpByRowsThenRaw);
+    const rows2 = members.reduce((sum, m) => sum + m.rows, 0);
+    const mappedCount = members.reduce((n, m) => n + (m.isMapped ? 1 : 0), 0);
+    clusters.push({ key, rep: members[0].raw, members, rows: rows2, mappedCount });
   }
   clusters.sort(cmpByRowsThenRep);
   return clusters;

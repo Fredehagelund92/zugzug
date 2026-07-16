@@ -1,5 +1,21 @@
 import { describe, it, expect } from "bun:test";
-import { normalizeKey, clusterValues } from "./cluster-values.ts";
+import { normalizeKey, clusterValues, clusterScanRows } from "./cluster-values.ts";
+import type { ScanValueRow } from "./repo-dim-scan.ts";
+
+function scanRow(
+  raw: string,
+  totalRows: number,
+  isMapped = false,
+  mappedLabel: string | null = null,
+): ScanValueRow {
+  return {
+    raw,
+    totalRows,
+    isMapped,
+    mappedLabel,
+    occurrences: [{ table: "orders", column: "ship_country", rows: totalRows }],
+  };
+}
 
 describe("normalizeKey", () => {
   it("folds case, punctuation, and spacing to one key", () => {
@@ -64,5 +80,28 @@ describe("clusterValues", () => {
 
   it("returns an empty array for empty input", () => {
     expect(clusterValues([])).toEqual([]);
+  });
+});
+
+describe("clusterScanRows", () => {
+  it("clusters scan rows, summing rows and carrying occurrences + mapped state", () => {
+    const out = clusterScanRows([
+      scanRow("USA", 6200),
+      scanRow("U.S.A.", 3100, true, "United States"),
+      scanRow("US", 2000),
+    ]);
+    expect(out).toHaveLength(2);
+
+    const usa = out.find((c) => c.key === "usa");
+    expect(usa).toBeDefined();
+    expect(usa!.rows).toBe(9300);
+    expect(usa!.rep).toBe("USA");
+    expect(usa!.mappedCount).toBe(1);
+    expect(usa!.members[0].occurrences[0].column).toBe("ship_country");
+  });
+
+  it("orders clusters worst-impact first", () => {
+    const out = clusterScanRows([scanRow("rare", 12), scanRow("common", 8800)]);
+    expect(out.map((c) => c.rep)).toEqual(["common", "rare"]);
   });
 });
