@@ -44,8 +44,13 @@ export function buildCandidates(
     return out;
   }
 
+  // Match on label OR key fold, so abbreviations ("US" → key "us") pre-highlight.
+  // An empty fold (punctuation-only rep) never matches — mirrors the server's
+  // normalizeKey never merging empty folds.
   const repKey = foldLabel(rep);
-  const closest = records.find((r) => foldLabel(r.label) === repKey);
+  const closest = repKey
+    ? records.find((r) => foldLabel(r.label) === repKey || foldLabel(r.key) === repKey)
+    : undefined;
   if (closest) {
     out.push({ kind: "record", key: closest.key, label: closest.label, closest: true });
   }

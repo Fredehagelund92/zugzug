@@ -40,4 +40,17 @@ describe("buildCandidates", () => {
     expect(recs.map((r) => r.key)).toEqual(["us", "gb"]);
     expect(out[out.length - 1]).toEqual({ kind: "create", label: "united" });
   });
+
+  it("fold-matches record keys too, so abbreviations pre-highlight", () => {
+    // "US" folds to "us" — the record's KEY, not its label. Must still pre-highlight.
+    const out = buildCandidates(RECORDS, "", "US", 3);
+    expect(out[0]).toEqual({ kind: "record", key: "us", label: "United States", closest: true });
+  });
+
+  it("a punctuation-only rep never closest-matches a punctuation-only record", () => {
+    // Both fold to "" — an empty fold must not count as a match.
+    const recs = [...RECORDS, { key: "junk", label: "???" }];
+    const out = buildCandidates(recs, "", "!!!", 10);
+    expect(out.some((c) => c.kind === "record" && c.closest)).toBe(false);
+  });
 });
