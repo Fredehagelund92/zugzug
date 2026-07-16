@@ -499,6 +499,13 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDimScan.getDimScanValuesPage(this.tenantId, dimId, opts));
   }
 
+  getDimClusters(
+    dimId: string,
+    opts: repoDimScan.ClusterFeedOpts,
+  ): Promise<repoDimScan.DimClusterFeed> {
+    return this.withClearCtx(() => repoDimScan.getDimClusters(this.tenantId, dimId, opts));
+  }
+
   deriveCanonical(
     dimId: string,
     table: string,

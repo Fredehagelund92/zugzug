@@ -2,6 +2,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "./setup.ts";
 import { pgRun } from "../src/pg.ts";
 import { materializeDimScanValues, getDimScanValuesAll, getDimClusters } from "../src/repo-dim-scan.ts";
+import { TenantRepo } from "../src/tenant-repo.ts";
 
 const TENANT = "t_test_dim_clusters";
 const DIM = "d_clusters";
@@ -81,4 +82,16 @@ test("getDimClusters groups look-alikes and reports coverage from whole-dim scal
   expect(feed.coverage.atRiskRows).toBe(1500);
   expect(feed.coverage.pct).toBe(17); // round(300 / 1800 * 100)
   expect(feed.truncated).toBe(false);
+});
+
+test("TenantRepo.getDimClusters scopes to its tenant and returns the feed", async () => {
+  await seed([
+    { raw: "USA", rows: 1000 },
+    { raw: "U.S.A.", rows: 500 },
+  ]);
+  const repo = new TenantRepo(TENANT, "admin");
+  const feed = await repo.getDimClusters(DIM, { filter: "new" });
+  expect(feed.clusters).toHaveLength(1);
+  expect(feed.clusters[0].key).toBe("usa");
+  expect(feed.coverage.pct).toBe(0); // nothing mapped → 0% of 1500 rows resolved
 });

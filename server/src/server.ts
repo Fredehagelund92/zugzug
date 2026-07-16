@@ -1000,6 +1000,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
           return json(await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }));
         }
+        // GET /api/dimensions/:id/clusters?filter=new|mapped|all
+        if (seg[3] === "clusters" && seg.length === 4 && id && method === "GET") {
+          const filter = url.searchParams.get("filter") ?? "new";
+          if (filter !== "new" && filter !== "mapped" && filter !== "all") {
+            return json({ error: "invalid_filter" }, 400);
+          }
+          return json(await reqRepo.getDimClusters(id, { filter }));
+        }
         // POST /api/dimensions/:id/scan — rescan this dim's wired sources and
         // re-materialize its dim_scan_value rows. Faster than POST /api/sources/scan.
         if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
