@@ -62,7 +62,7 @@ import type { ColumnDef, ColumnConfig } from "./datagrid";
 import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
-import { MatchModeBody } from "./modes/MatchModeBody";
+import { MapValuesBody } from "./modes/MapValuesBody";
 import { SourcesMonitorBody } from "./modes/SourcesMonitorBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -185,7 +185,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
         {activeMode === "records" && (
           <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />
         )}
-        {activeMode === "match" && <MatchModeBody dim={dim} isActive={isActive} />}
+        {activeMode === "match" && <MapValuesBody dim={dim} isActive={isActive} />}
         {activeMode === "sources" && <SourcesMonitorBody dim={dim} />}
       </div>
     </div>
