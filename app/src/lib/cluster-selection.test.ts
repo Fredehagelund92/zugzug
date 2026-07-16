@@ -56,6 +56,12 @@ describe("siblingSuggestion", () => {
     expect(siblingSuggestion(c, RECORDS)).toBeNull();
   });
 
+  it("falls back to a fold match when the mapped label differs only by case/punctuation", () => {
+    // "united states." exact-misses but folds to the record's label.
+    const c = cluster("usa", [member("USA", 100, true, "united states.")]);
+    expect(siblingSuggestion(c, RECORDS)).toEqual({ key: "us", label: "United States" });
+  });
+
   it("returns null when the mapped label matches no known record", () => {
     const c = cluster("usa", [member("USA", 100, true, "Atlantis")]);
     expect(siblingSuggestion(c, RECORDS)).toBeNull();
