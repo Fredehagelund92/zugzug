@@ -26,7 +26,6 @@ export interface UseClusterMapper {
   refetch: () => void;
 }
 
-
 export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
   const feed = useDimClusters({ dimId: dim.id, filter: "all" });
   const pending = useMemo(() => pendingClusters(feed.clusters), [feed.clusters]);
@@ -41,7 +40,7 @@ export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
   // Serialize the pending key set unambiguously — cluster keys can contain any
   // character (the server folds punctuation-only values to a NUL-prefixed key),
   // so a delimiter join/split is unsafe; JSON round-trips exactly.
-  const keysRef = useRef<string>("");
+  const keysRef = useRef<string>(JSON.stringify([]));
   const keySig = JSON.stringify(pending.map((c) => c.key));
   useEffect(() => {
     if (keySig !== keysRef.current) {
