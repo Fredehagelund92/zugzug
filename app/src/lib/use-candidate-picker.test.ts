@@ -17,7 +17,6 @@ function opts(over: Partial<CandidatePickerOpts> = {}): CandidatePickerOpts {
     candidates: CANDS,
     suggestion: null,
     onMap: vi.fn(),
-    onSkip: vi.fn(),
     onUndo: vi.fn(),
     onQueryReset: vi.fn(),
     ...over,

@@ -5,7 +5,6 @@ export interface CandidatePickerOpts {
   candidates: Candidate[];
   suggestion: CandidateRecord | null;
   onMap: (recordKey: string, recordLabel: string) => void;
-  onSkip: () => void;
   onUndo: () => void;
   onQueryReset: () => void;
 }
