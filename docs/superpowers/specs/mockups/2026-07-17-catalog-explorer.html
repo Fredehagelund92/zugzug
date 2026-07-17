@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wire a source — catalog explorer (mockup)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #080b14;
+        --surface: #0f1526;
+        --surface-2: #182240;
+        --surface-3: #243056;
+        --surface-elevated: #2b3863;
+        --ink: #eaeef7;
+        --ink-2: #9ba7bf;
+        --ink-3: #5b6884;
+        --line: rgba(255, 255, 255, 0.09);
+        --line-2: rgba(255, 255, 255, 0.17);
+        --accent: #d6336c;
+        --warn: #c7901c;
+        --danger: #d7434b;
+        --ok: #1f9d6b;
+        --shadow-pop: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+        --shadow-lg: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+        --font-display: "Bricolage Grotesque", sans-serif;
+        --font-body: "Hanken Grotesk", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+        --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      [data-theme="light"] {
+        --bg: #f4f6fc;
+        --surface: #ffffff;
+        --surface-2: #eaeef7;
+        --surface-3: #dfe5f2;
+        --surface-elevated: #ffffff;
+        --ink: #0c1020;
+        --ink-2: #48526a;
+        --ink-3: #8893a8;
+        --line: rgba(12, 16, 32, 0.11);
+        --line-2: rgba(12, 16, 32, 0.2);
+        --shadow-pop: 0 8px 22px -10px rgba(20, 30, 60, 0.18);
+        --shadow-lg: 0 24px 50px -20px rgba(20, 30, 60, 0.22);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation-duration: 0.001ms !important;
+          transition-duration: 0.001ms !important;
+        }
+      }
+      body {
+        margin: 0;
+        font-family: var(--font-body);
+        background: var(--bg);
+        color: var(--ink);
+        font-size: 15px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── faint sources page behind, for context ── */
+      .behind {
+        position: fixed;
+        inset: 0;
+        padding: 40px;
+        max-width: 620px;
+        filter: saturate(0.6);
+        opacity: 0.5;
+        pointer-events: none;
+        user-select: none;
+      }
+      .behind .k {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .behind .t {
+        font-family: var(--font-display);
+        font-size: 30px;
+        font-weight: 700;
+        margin: 4px 0 18px;
+      }
+      .behind .ln {
+        height: 44px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-3);
+      }
+      .scrim {
+        position: fixed;
+        inset: 0;
+        background: color-mix(in srgb, #000 46%, transparent);
+        backdrop-filter: blur(3px);
+        animation: fade 0.3s var(--ease) both;
+      }
+      @keyframes fade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* ── slide-over drawer ── */
+      .drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        height: 100%;
+        width: 620px;
+        max-width: 100vw;
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+        border-left: 1px solid var(--line-2);
+        box-shadow: var(--shadow-lg);
+        animation: slide 0.34s var(--ease-spring) both;
+      }
+      @keyframes slide {
+        from {
+          transform: translateX(24px);
+          opacity: 0;
+        }
+        to {
+          transform: none;
+          opacity: 1;
+        }
+      }
+      .drawer::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 2px;
+        background: linear-gradient(
+          to bottom,
+          transparent,
+          color-mix(in srgb, var(--accent) 65%, transparent),
+          transparent
+        );
+      }
+
+      /* header */
+      .head {
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid var(--line);
+      }
+      .head-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .db-badge {
+        display: inline-grid;
+        place-items: center;
+        height: 16px;
+        width: 16px;
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        color: var(--accent);
+        font-weight: 700;
+        font-size: 9px;
+        letter-spacing: 0;
+      }
+      .title {
+        font-family: var(--font-display);
+        font-size: 25px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 6px 0 0;
+      }
+      .close {
+        display: grid;
+        place-items: center;
+        height: 34px;
+        width: 34px;
+        border: 1px solid var(--line-2);
+        background: transparent;
+        color: var(--ink-3);
+        cursor: pointer;
+        font-size: 15px;
+        transition: all 0.14s var(--ease);
+      }
+      .close:hover {
+        color: var(--ink);
+        border-color: var(--ink-3);
+      }
+
+      /* search hero */
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin-top: 16px;
+        padding: 13px 15px;
+        border: 1px solid var(--line-2);
+        background: var(--bg);
+        transition: border-color 0.15s var(--ease);
+      }
+      .search:focus-within {
+        border-color: var(--accent);
+      }
+      .search .mag {
+        color: var(--ink-3);
+        font-size: 15px;
+      }
+      .search input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 14px;
+      }
+      .search input::placeholder {
+        color: var(--ink-3);
+      }
+      .search kbd {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--ink-3);
+        border: 1px solid var(--line);
+        padding: 2px 6px;
+      }
+
+      /* schema facet chips */
+      .facets {
+        display: flex;
+        gap: 6px;
+        margin-top: 13px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+      }
+      .facets::-webkit-scrollbar {
+        display: none;
+      }
+      .facet {
+        flex-shrink: 0;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--ink-3);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 5px 11px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.14s var(--ease);
+      }
+      .facet:hover {
+        color: var(--ink-2);
+        border-color: var(--line-2);
+      }
+      .facet.active {
+        color: var(--accent);
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      .facet .n {
+        opacity: 0.6;
+        margin-left: 5px;
+      }
+
+      /* results */
+      .results {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+      }
+      .tbl {
+        border-bottom: 1px solid var(--line);
+      }
+      .tbl-head {
+        display: grid;
+        grid-template-columns: 14px 1fr auto;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 13px 24px;
+        text-align: left;
+        transition: background 0.12s var(--ease);
+      }
+      .tbl-head:hover {
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+      .tbl-head .chev {
+        font-size: 9px;
+        color: var(--ink-3);
+        transition: transform 0.2s var(--ease);
+      }
+      .tbl-head.open .chev {
+        transform: rotate(90deg);
+      }
+      .tbl-name {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .tbl-name .sc {
+        color: var(--ink-3);
+      }
+      .tbl-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--ink-3);
+      }
+      .tbl-meta .wired-dot {
+        color: var(--ok);
+      }
+      .cols {
+        display: none;
+        padding: 4px 24px 12px 50px;
+        background: color-mix(in srgb, var(--surface-2) 35%, transparent);
+      }
+      .cols.open {
+        display: block;
+        animation: reveal 0.22s var(--ease) both;
+      }
+      @keyframes reveal {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .colrow {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 12px;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .colrow:last-child {
+        border-bottom: none;
+      }
+      .cn {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-2);
+      }
+      .cn .type {
+        color: var(--ink-3);
+        font-size: 10px;
+        margin-left: 8px;
+      }
+
+      .connect {
+        justify-self: end;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--line-2);
+        background: var(--surface);
+        color: var(--ink-3);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 5px 10px;
+        cursor: pointer;
+        transition: all 0.14s var(--ease);
+      }
+      .connect:hover {
+        border-color: var(--accent);
+        color: var(--ink);
+      }
+      .connect .plus {
+        color: var(--accent);
+      }
+
+      /* inline target picker */
+      .picker {
+        justify-self: end;
+        position: relative;
+      }
+      .picker-menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 5px);
+        z-index: 10;
+        min-width: 190px;
+        background: var(--surface-3);
+        border: 1px solid var(--line-2);
+        box-shadow: var(--shadow-pop);
+        padding: 5px;
+        animation: pop 0.13s var(--ease-spring) both;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .picker-menu .ph {
+        font-family: var(--font-mono);
+        font-size: 9px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        padding: 5px 9px 6px;
+      }
+      .picker-menu button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        color: var(--ink-2);
+        font-family: var(--font-body);
+        font-size: 12.5px;
+        padding: 7px 9px;
+        cursor: pointer;
+      }
+      .picker-menu button:hover {
+        background: color-mix(in srgb, var(--ink) 8%, transparent);
+        color: var(--ink);
+      }
+      .picker-menu .swatch {
+        height: 8px;
+        width: 8px;
+        border-radius: 999px;
+        flex-shrink: 0;
+      }
+
+      /* connected confirmation */
+      .connected {
+        justify-self: end;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ok);
+        animation: confirm 0.34s var(--ease-spring) both;
+      }
+      @keyframes confirm {
+        0% {
+          opacity: 0;
+          transform: translateX(6px);
+        }
+        60% {
+          transform: translateX(-1px);
+        }
+        100% {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .connected .check {
+        display: grid;
+        place-items: center;
+        height: 15px;
+        width: 15px;
+        background: color-mix(in srgb, var(--ok) 18%, transparent);
+        color: var(--ok);
+        font-size: 9px;
+      }
+      .connected .out {
+        color: var(--ink-3);
+      }
+
+      /* footer */
+      .foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 24px;
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+      }
+      .foot .count {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+      }
+      .foot .tally {
+        color: var(--ok);
+        transition: opacity 0.2s var(--ease);
+      }
+      .foot .tally.hidden {
+        opacity: 0;
+      }
+      .foot .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .load {
+        border: 1px solid var(--line-2);
+        background: var(--surface);
+        color: var(--ink-2);
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: all 0.14s var(--ease);
+      }
+      .load:hover {
+        border-color: var(--ink-3);
+        color: var(--ink);
+      }
+      .done {
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #fff;
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 14px;
+        cursor: pointer;
+      }
+
+      .no-match {
+        padding: 48px 24px;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--ink-3);
+      }
+
+      .toggle {
+        position: fixed;
+        top: 14px;
+        left: 16px;
+        z-index: 80;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <button class="toggle" onclick="toggleTheme()">theme: dark</button>
+
+    <!-- faint Sources page behind, for context -->
+    <div class="behind">
+      <div class="k">Warehouse</div>
+      <div class="t">Sources</div>
+      <div class="ln">authco.users.plan_type → Plan</div>
+      <div class="ln">authco.users.country → Region</div>
+      <div class="ln">authco.orgs.tier → Plan</div>
+      <div class="ln">billing.invoices.currency → Currency</div>
+    </div>
+
+    <div class="scrim"></div>
+
+    <!-- drawer -->
+    <aside class="drawer" role="dialog" aria-label="Wire a source">
+      <div class="head">
+        <div class="head-top">
+          <div>
+            <div class="eyebrow">
+              <span class="db-badge">A</span> Catalog · analytics
+            </div>
+            <h1 class="title">Wire a source</h1>
+          </div>
+          <button class="close" aria-label="Close">✕</button>
+        </div>
+
+        <label class="search">
+          <span class="mag">⌕</span>
+          <input id="q" placeholder="Search 340 tables and columns…" autofocus />
+          <kbd>esc</kbd>
+        </label>
+
+        <div class="facets" id="facets">
+          <button class="facet active" data-schema="">all systems <span class="n">340</span></button>
+          <button class="facet" data-schema="authco">authco <span class="n">64</span></button>
+          <button class="facet" data-schema="billing">billing <span class="n">41</span></button>
+          <button class="facet" data-schema="events">events <span class="n">128</span></button>
+          <button class="facet" data-schema="marketing">marketing <span class="n">53</span></button>
+          <button class="facet" data-schema="support">support <span class="n">54</span></button>
+        </div>
+      </div>
+
+      <div class="results" id="results">
+        <!-- authco.users -->
+        <div class="tbl" data-schema="authco" data-name="authco.users id email plan_type country created_at">
+          <button class="tbl-head open" onclick="toggleTbl(this)">
+            <span class="chev">▶</span>
+            <span class="tbl-name"><span class="sc">authco.</span>users</span>
+            <span class="tbl-meta"><span class="wired-dot">● 1 wired</span> · 9 cols</span>
+          </button>
+          <div class="cols open">
+            <div class="colrow">
+              <span class="cn">id <span class="type">uuid</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">email <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">plan_type <span class="type">text</span></span>
+              <span class="connected"><span class="check">✓</span> Plan <span class="out">· 3 matched, 2 to review</span></span>
+            </div>
+            <div class="colrow">
+              <span class="cn">country <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">created_at <span class="type">timestamp</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- authco.orgs -->
+        <div class="tbl" data-schema="authco" data-name="authco.orgs tier region seats plan_id">
+          <button class="tbl-head" onclick="toggleTbl(this)">
+            <span class="chev">▶</span>
+            <span class="tbl-name"><span class="sc">authco.</span>orgs</span>
+            <span class="tbl-meta">7 cols</span>
+          </button>
+          <div class="cols">
+            <div class="colrow">
+              <span class="cn">tier <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">region <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">seats <span class="type">int</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- billing.subscriptions -->
+        <div class="tbl" data-schema="billing" data-name="billing.subscriptions status plan interval currency">
+          <button class="tbl-head" onclick="toggleTbl(this)">
+            <span class="chev">▶</span>
+            <span class="tbl-name"><span class="sc">billing.</span>subscriptions</span>
+            <span class="tbl-meta">12 cols</span>
+          </button>
+          <div class="cols">
+            <div class="colrow">
+              <span class="cn">status <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">currency <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- events.pageviews -->
+        <div class="tbl" data-schema="events" data-name="events.pageviews path referrer device browser">
+          <button class="tbl-head" onclick="toggleTbl(this)">
+            <span class="chev">▶</span>
+            <span class="tbl-name"><span class="sc">events.</span>pageviews</span>
+            <span class="tbl-meta">18 cols</span>
+          </button>
+          <div class="cols">
+            <div class="colrow">
+              <span class="cn">device <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+            <div class="colrow">
+              <span class="cn">browser <span class="type">text</span></span>
+              <button class="connect" onclick="pick(this)"><span class="plus">+</span> connect to table</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="no-match" id="noMatch" style="display: none">
+          No tables match — try a schema chip or a shorter term.
+        </div>
+      </div>
+
+      <div class="foot">
+        <span class="count">
+          Showing <b style="color: var(--ink-2)">4</b> of 340 ·
+          <span class="tally hidden" id="tally">0 wired just now</span>
+        </span>
+        <div class="actions">
+          <button class="load">Load more</button>
+          <button class="done" onclick="void 0">Done</button>
+        </div>
+      </div>
+    </aside>
+
+    <script>
+      const TARGETS = [
+        { name: "Plan", color: "#d6336c" },
+        { name: "Region", color: "#1fa9b8" },
+        { name: "Status", color: "#f0a323" },
+        { name: "Currency", color: "#6ab04c" },
+        { name: "Country", color: "#6e63e0" },
+        { name: "Segment", color: "#e8523a" },
+      ];
+      let wiredCount = 0;
+
+      function toggleTbl(head) {
+        head.classList.toggle("open");
+        head.parentElement.querySelector(".cols").classList.toggle("open");
+      }
+
+      function pick(btn) {
+        closePickers();
+        const wrap = document.createElement("span");
+        wrap.className = "picker";
+        wrap.innerHTML =
+          '<div class="picker-menu"><div class="ph">Connect to which table?</div>' +
+          TARGETS.map(
+            (t) =>
+              `<button onclick="connect(this,'${t.name}')"><span class="swatch" style="background:${t.color}"></span>${t.name}</button>`,
+          ).join("") +
+          "</div>";
+        btn.replaceWith(wrap);
+      }
+
+      function connect(el, name) {
+        const outcomes = ["3 matched, 2 to review", "12 records created", "8 matched, all done", "5 to review"];
+        const out = outcomes[wiredCount % outcomes.length];
+        const picker = el.closest(".picker");
+        const chip = document.createElement("span");
+        chip.className = "connected";
+        chip.innerHTML = `<span class="check">✓</span> ${name} <span class="out">· ${out}</span>`;
+        picker.replaceWith(chip);
+        wiredCount++;
+        const tally = document.getElementById("tally");
+        tally.textContent = `${wiredCount} wired just now`;
+        tally.classList.remove("hidden");
+      }
+
+      function closePickers() {
+        document.querySelectorAll(".picker").forEach((p) => {
+          const btn = document.createElement("button");
+          btn.className = "connect";
+          btn.setAttribute("onclick", "pick(this)");
+          btn.innerHTML = '<span class="plus">+</span> connect to table';
+          p.replaceWith(btn);
+        });
+      }
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".picker") && !e.target.closest(".connect")) closePickers();
+      });
+
+      // schema facets
+      document.getElementById("facets").addEventListener("click", (e) => {
+        const b = e.target.closest(".facet");
+        if (!b) return;
+        document.querySelectorAll(".facet").forEach((f) => f.classList.remove("active"));
+        b.classList.add("active");
+        applyFilter();
+      });
+
+      // live search
+      document.getElementById("q").addEventListener("input", applyFilter);
+
+      function applyFilter() {
+        const q = document.getElementById("q").value.trim().toLowerCase();
+        const schema = document.querySelector(".facet.active").dataset.schema;
+        let shown = 0;
+        document.querySelectorAll(".tbl").forEach((t) => {
+          const matchSchema = !schema || t.dataset.schema === schema;
+          const matchQ = !q || t.dataset.name.toLowerCase().includes(q);
+          const vis = matchSchema && matchQ;
+          t.style.display = vis ? "" : "none";
+          if (vis) shown++;
+        });
+        document.getElementById("noMatch").style.display = shown ? "none" : "block";
+        document.querySelector(".count b").textContent = shown;
+      }
+
+      document.querySelector(".close").addEventListener("click", () => alert("(demo) closes the drawer"));
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closePickers();
+      });
+      function toggleTheme() {
+        const html = document.documentElement;
+        const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        html.setAttribute("data-theme", next);
+        document.querySelector(".toggle").textContent = "theme: " + next;
+      }
+    </script>
+  </body>
+</html>

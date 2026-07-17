@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sources — connection surface (mockup)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #080b14;
+        --surface: #0f1526;
+        --surface-2: #182240;
+        --surface-3: #243056;
+        --surface-elevated: #2b3863;
+        --ink: #eaeef7;
+        --ink-2: #9ba7bf;
+        --ink-3: #5b6884;
+        --line: rgba(255, 255, 255, 0.09);
+        --line-2: rgba(255, 255, 255, 0.17);
+        --accent: #d6336c;
+        --accent-wash: color-mix(in srgb, var(--accent) 9%, transparent);
+        --warn: #c7901c;
+        --danger: #d7434b;
+        --ok: #1f9d6b;
+        --shadow-pop: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+        --font-display: "Bricolage Grotesque", sans-serif;
+        --font-body: "Hanken Grotesk", sans-serif;
+        --font-mono: "JetBrains Mono", monospace;
+        --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      [data-theme="light"] {
+        --bg: #f4f6fc;
+        --surface: #ffffff;
+        --surface-2: #eaeef7;
+        --surface-3: #dfe5f2;
+        --surface-elevated: #ffffff;
+        --ink: #0c1020;
+        --ink-2: #48526a;
+        --ink-3: #8893a8;
+        --line: rgba(12, 16, 32, 0.11);
+        --line-2: rgba(12, 16, 32, 0.2);
+        --shadow-pop: 0 8px 22px -10px rgba(20, 30, 60, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: var(--font-body);
+        background: var(--bg);
+        color: var(--ink);
+        font-size: 15px;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
+        transition:
+          background 0.4s var(--ease),
+          color 0.4s var(--ease);
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+
+      .zz-rise {
+        opacity: 0;
+        animation: zz-rise 0.62s var(--ease) both;
+      }
+      @keyframes zz-rise {
+        from {
+          opacity: 0;
+          transform: translateY(-16px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .zz-live {
+        position: relative;
+      }
+      .zz-live::before {
+        content: "";
+        position: absolute;
+        inset: -4px;
+        border-radius: 999px;
+        background: var(--accent);
+        opacity: 0.35;
+        animation: zz-ring 1.8s ease-out infinite;
+      }
+      @keyframes zz-ring {
+        0% {
+          transform: scale(0.6);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(1.8);
+          opacity: 0;
+        }
+      }
+
+      /* ── header ── */
+      .header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 14px;
+      }
+      .kicker {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        color: var(--ink-3);
+      }
+      .title {
+        font-family: var(--font-display);
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 4px 0 6px;
+      }
+      .lede {
+        font-size: 13.5px;
+        color: var(--ink-2);
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+      }
+      .btn {
+        font-family: var(--font-body);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 7px 13px;
+        border: 1px solid var(--line-2);
+        background: transparent;
+        color: var(--ink-2);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s var(--ease);
+      }
+      .btn:hover {
+        color: var(--ink);
+        border-color: var(--ink-3);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: color-mix(in srgb, var(--accent) 86%, #000);
+        border-color: color-mix(in srgb, var(--accent) 86%, #000);
+        color: #fff;
+      }
+
+      /* ── surface ── */
+      .surface {
+        position: relative;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: var(--shadow-pop);
+        overflow: hidden;
+      }
+      .surface::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 1px;
+        background: linear-gradient(
+          to right,
+          transparent,
+          color-mix(in srgb, var(--accent) 70%, transparent),
+          transparent
+        );
+        pointer-events: none;
+      }
+
+      /* collapsible system subhead */
+      .subhead {
+        display: grid;
+        grid-template-columns: 16px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        text-align: left;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+        color: var(--ink);
+        cursor: pointer;
+        padding: 11px 24px;
+        transition: background 0.12s var(--ease);
+        font-family: var(--font-body);
+      }
+      .subhead:hover {
+        background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+      }
+      .subhead .chev {
+        font-size: 10px;
+        color: var(--ink-3);
+        transition: transform 0.18s var(--ease);
+      }
+      .subhead.collapsed .chev {
+        transform: rotate(-90deg);
+      }
+      .subhead .sys {
+        font-family: var(--font-display);
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: capitalize;
+      }
+      .subhead .count {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--ink-3);
+        margin-left: 8px;
+      }
+      .subhead .pending {
+        font-family: var(--font-display);
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .subhead .clean {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+      }
+
+      .group-body.collapsed {
+        display: none;
+      }
+
+      /* row */
+      .row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(120px, auto) 150px 32px;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 20px 12px 40px;
+        border-bottom: 1px solid var(--line);
+        transition: background 0.12s var(--ease);
+      }
+      .row:hover {
+        background: color-mix(in srgb, var(--ink) 4%, transparent);
+      }
+      .col-name {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        color: var(--ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .col-name .schema {
+        color: var(--ink-3);
+      }
+      .target {
+        font-size: 12.5px;
+        color: var(--ink-2);
+        white-space: nowrap;
+      }
+      .target .arrow {
+        color: var(--ink-3);
+        margin-right: 5px;
+      }
+      .target .name {
+        font-family: var(--font-display);
+        font-weight: 600;
+        color: var(--ink);
+      }
+      .state {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+        white-space: nowrap;
+      }
+      .state.warn {
+        color: var(--danger);
+      }
+      .state.never {
+        color: var(--warn);
+      }
+
+      /* overflow menu */
+      .menu-wrap {
+        position: relative;
+        justify-self: end;
+      }
+      .menu-btn {
+        border: none;
+        background: transparent;
+        color: var(--ink-3);
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        padding: 4px 6px;
+        transition: color 0.12s var(--ease);
+      }
+      .menu-btn:hover {
+        color: var(--ink);
+      }
+      .menu {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        min-width: 172px;
+        background: var(--surface-3);
+        border: 1px solid var(--line-2);
+        box-shadow: var(--shadow-pop);
+        z-index: 20;
+        padding: 4px;
+        display: none;
+      }
+      .menu.open {
+        display: block;
+        animation: pop 0.12s cubic-bezier(0.32, 0.72, 0, 1) both;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .menu button {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        color: var(--ink-2);
+        font-family: var(--font-body);
+        font-size: 12.5px;
+        padding: 7px 10px;
+        cursor: pointer;
+      }
+      .menu button:hover {
+        background: color-mix(in srgb, var(--ink) 8%, transparent);
+        color: var(--ink);
+      }
+      .menu button.danger {
+        color: var(--danger);
+      }
+      .menu button.danger:hover {
+        background: color-mix(in srgb, var(--danger) 12%, transparent);
+      }
+      .menu .sep {
+        height: 1px;
+        background: var(--line);
+        margin: 4px 0;
+      }
+
+      /* review pointer */
+      .review {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 13px 24px;
+        font-size: 12.5px;
+        color: var(--ink-2);
+        border-top: 1px solid var(--line);
+      }
+      .review a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .review a:hover {
+        text-decoration: underline;
+      }
+
+      /* theme toggle */
+      .toggle {
+        position: fixed;
+        top: 16px;
+        right: 20px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+        background: var(--surface-2);
+        border: 1px solid var(--line);
+        padding: 6px 10px;
+        cursor: pointer;
+        z-index: 60;
+      }
+      .caption {
+        margin-top: 20px;
+        font-size: 12px;
+        color: var(--ink-3);
+        font-family: var(--font-mono);
+        line-height: 1.7;
+      }
+
+      /* ═══════════ Add source modal ═══════════ */
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 32px 16px;
+        background: color-mix(in srgb, #000 50%, transparent);
+        backdrop-filter: blur(4px);
+      }
+      .backdrop.open {
+        display: flex;
+      }
+      .modal {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 880px;
+        max-height: 100%;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--surface-elevated);
+        box-shadow: var(--shadow-pop);
+      }
+      .modal-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+        padding: 14px 20px;
+      }
+      .modal-head h2 {
+        font-family: var(--font-display);
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        margin: 2px 0 0;
+      }
+      .db-chip {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+        border: 1px solid var(--line-2);
+        background: var(--surface);
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      .db-chip .badge {
+        display: grid;
+        place-items: center;
+        height: 20px;
+        width: 20px;
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
+        color: var(--accent);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .db-chip .dblabel {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+      }
+      .db-chip .dblabel small {
+        font-family: var(--font-mono);
+        font-size: 9.5px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .db-chip .dblabel span {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--ink);
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 1;
+        min-width: 200px;
+        max-width: 360px;
+        border: 1px solid var(--line-2);
+        background: var(--surface);
+        padding: 7px 11px;
+        color: var(--ink-3);
+      }
+      .search input {
+        border: none;
+        background: transparent;
+        outline: none;
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        width: 100%;
+      }
+      .search input::placeholder {
+        color: var(--ink-3);
+      }
+      .close-x {
+        display: grid;
+        place-items: center;
+        height: 32px;
+        width: 32px;
+        border: 1px solid var(--line-2);
+        color: var(--ink-3);
+        background: transparent;
+        cursor: pointer;
+        font-size: 15px;
+      }
+      .close-x:hover {
+        color: var(--ink);
+        border-color: var(--ink-3);
+      }
+      .modal-body {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        min-height: 0;
+        flex: 1;
+      }
+      .rail {
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface) 40%, transparent);
+        padding: 8px 0;
+        overflow-y: auto;
+      }
+      .rail button {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+        padding: 6px 16px;
+        text-align: left;
+      }
+      .rail button:hover {
+        color: var(--ink-2);
+      }
+      .rail button.active {
+        color: var(--accent);
+      }
+      .rail button .n {
+        opacity: 0.6;
+      }
+      .results {
+        overflow-y: auto;
+        min-height: 0;
+      }
+      .tbl {
+        border-bottom: 1px solid var(--line);
+      }
+      .tbl-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 10px 20px;
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        text-align: left;
+      }
+      .tbl-head:hover {
+        background: color-mix(in srgb, var(--ink) 5%, transparent);
+      }
+      .tbl-head .chev {
+        font-size: 10px;
+        color: var(--ink-3);
+        transition: transform 0.18s var(--ease);
+      }
+      .tbl-head.open .chev {
+        transform: rotate(90deg);
+      }
+      .tbl-head .cols {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--ink-3);
+      }
+      .tbl-cols {
+        display: none;
+        background: color-mix(in srgb, var(--surface-2) 40%, transparent);
+        padding: 8px 20px 10px 40px;
+      }
+      .tbl-cols.open {
+        display: block;
+      }
+      .colrow {
+        display: grid;
+        grid-template-columns: 1fr 200px;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 0;
+      }
+      .colrow .cn {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--ink-2);
+      }
+      .connect-pill {
+        justify-self: end;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--line-2);
+        background: var(--surface);
+        color: var(--ink-3);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        padding: 4px 9px;
+        cursor: pointer;
+      }
+      .connect-pill:hover {
+        border-color: var(--accent);
+        color: var(--ink);
+      }
+      .connected {
+        justify-self: end;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--ok);
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 20px;
+        border-top: 1px solid var(--line);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--ink-3);
+      }
+      .load-more {
+        border: 1px solid var(--line-2);
+        background: var(--surface);
+        color: var(--ink-2);
+        font-family: var(--font-body);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 5px 11px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <button class="toggle" onclick="toggleTheme()">theme: dark</button>
+
+    <div class="wrap">
+      <!-- HEADER -->
+      <div class="header zz-rise">
+        <div>
+          <div class="kicker">Warehouse</div>
+          <div class="title">Sources</div>
+          <div class="lede">5 columns connected across 2 systems</div>
+        </div>
+        <div class="actions">
+          <button class="btn">⚡ Scan all</button>
+          <button class="btn btn-primary" onclick="openModal()">＋ Add source</button>
+        </div>
+      </div>
+
+      <!-- SURFACE -->
+      <div class="surface zz-rise" style="animation-delay: 60ms">
+        <!-- system: authco -->
+        <button class="subhead" onclick="toggleGroup(this)">
+          <span class="chev">▼</span>
+          <span><span class="sys">authco</span><span class="count">3 columns · scanned 2h ago</span></span>
+          <span class="pending">4</span>
+        </button>
+        <div class="group-body">
+          <div class="row">
+            <div class="col-name"><span class="schema">authco.users.</span>plan_type</div>
+            <div class="target"><span class="arrow">→</span><span class="name">Plan</span></div>
+            <div class="state">scanned 2h ago</div>
+            <div class="menu-wrap">
+              <button class="menu-btn" onclick="tog(this)">⋯</button>
+              <div class="menu">
+                <button>Re-scan</button>
+                <button>Open in Map values</button>
+                <div class="sep"></div>
+                <button class="danger">Remove source</button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-name"><span class="schema">authco.users.</span>country</div>
+            <div class="target"><span class="arrow">→</span><span class="name">Region</span></div>
+            <div class="state never">never scanned</div>
+            <div class="menu-wrap">
+              <button class="menu-btn" onclick="tog(this)">⋯</button>
+              <div class="menu">
+                <button>Re-scan</button>
+                <button>Open in Map values</button>
+                <div class="sep"></div>
+                <button class="danger">Remove source</button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-name"><span class="schema">authco.orgs.</span>tier</div>
+            <div class="target"><span class="arrow">→</span><span class="name">Plan</span></div>
+            <div class="state">scanned 2h ago</div>
+            <div class="menu-wrap">
+              <button class="menu-btn" onclick="tog(this)">⋯</button>
+              <div class="menu">
+                <button>Re-scan</button>
+                <button>Open in Map values</button>
+                <div class="sep"></div>
+                <button class="danger">Remove source</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- system: billing -->
+        <button class="subhead" onclick="toggleGroup(this)">
+          <span class="chev">▼</span>
+          <span><span class="sys">billing</span><span class="count">2 columns · scanned 1d ago</span></span>
+          <span class="pending">4</span>
+        </button>
+        <div class="group-body">
+          <div class="row">
+            <div class="col-name"><span class="schema">billing.subscriptions.</span>status</div>
+            <div class="target"><span class="arrow">→</span><span class="name">Status</span></div>
+            <div class="state warn">⚠ column not found</div>
+            <div class="menu-wrap">
+              <button class="menu-btn" onclick="tog(this)">⋯</button>
+              <div class="menu">
+                <button>Re-scan</button>
+                <button>Open in Map values</button>
+                <div class="sep"></div>
+                <button class="danger">Remove source</button>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-name"><span class="schema">billing.invoices.</span>currency</div>
+            <div class="target"><span class="arrow">→</span><span class="name">Currency</span></div>
+            <div class="state">scanned 1d ago</div>
+            <div class="menu-wrap">
+              <button class="menu-btn" onclick="tog(this)">⋯</button>
+              <div class="menu">
+                <button>Re-scan</button>
+                <button>Open in Map values</button>
+                <div class="sep"></div>
+                <button class="danger">Remove source</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- review pointer -->
+        <div class="review">
+          <span class="zz-live" style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent); display: inline-block"></span>
+          <span>8 values await a decision</span>
+          <a href="#">→ Review</a>
+        </div>
+      </div>
+
+      <div class="caption">
+        mockup · click a system header to collapse · "Add source" opens the catalog<br />
+        deleted: standing callout · search/filter/sort toolbar · coverage %/rows-watched · unmapped drills · j/k/n keyboard nav · footer totals<br />
+        added: per-row Remove source · calm "column not found" state · pending-count on collapsed groups
+      </div>
+    </div>
+
+    <!-- ═══════════ ADD SOURCE MODAL ═══════════ -->
+    <div class="backdrop" id="modal" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-head">
+          <div>
+            <div class="kicker">Warehouse catalog</div>
+            <h2>Wire a source</h2>
+          </div>
+          <button class="db-chip">
+            <span class="badge">A</span>
+            <span class="dblabel"><small>Database</small><span>analytics</span></span>
+            <span style="color: var(--ink-3); font-size: 10px">▼</span>
+          </button>
+          <label class="search">
+            <span>⌕</span>
+            <input placeholder="Search tables, columns…" />
+          </label>
+          <button class="close-x" onclick="closeModal()">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- schema rail -->
+          <div class="rail">
+            <button class="active">all systems <span class="n">340</span></button>
+            <button>authco <span class="n">64</span></button>
+            <button>billing <span class="n">41</span></button>
+            <button>events <span class="n">128</span></button>
+            <button>marketing <span class="n">53</span></button>
+            <button>support <span class="n">54</span></button>
+          </div>
+
+          <!-- results -->
+          <div class="results">
+            <div class="tbl">
+              <button class="tbl-head open" onclick="toggleTbl(this)">
+                <span class="chev">▶</span> authco.users <span class="cols">9 cols</span>
+              </button>
+              <div class="tbl-cols open">
+                <div class="colrow">
+                  <span class="cn">id</span>
+                  <button class="connect-pill">connect to table…</button>
+                </div>
+                <div class="colrow">
+                  <span class="cn">email</span>
+                  <button class="connect-pill">connect to table…</button>
+                </div>
+                <div class="colrow">
+                  <span class="cn">plan_type</span>
+                  <span class="connected">→ Connected plan_type to Plan · 3 matched, 2 to review</span>
+                </div>
+                <div class="colrow">
+                  <span class="cn">country</span>
+                  <button class="connect-pill">connect to table…</button>
+                </div>
+                <div class="colrow">
+                  <span class="cn">created_at</span>
+                  <button class="connect-pill">connect to table…</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="tbl">
+              <button class="tbl-head" onclick="toggleTbl(this)">
+                <span class="chev">▶</span> authco.orgs <span class="cols">7 cols</span>
+              </button>
+              <div class="tbl-cols">
+                <div class="colrow">
+                  <span class="cn">tier</span>
+                  <button class="connect-pill">connect to table…</button>
+                </div>
+                <div class="colrow">
+                  <span class="cn">region</span>
+                  <button class="connect-pill">connect to table…</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="tbl">
+              <button class="tbl-head" onclick="toggleTbl(this)">
+                <span class="chev">▶</span> authco.sessions <span class="cols">5 cols</span>
+              </button>
+              <div class="tbl-cols"></div>
+            </div>
+
+            <div class="tbl">
+              <button class="tbl-head" onclick="toggleTbl(this)">
+                <span class="chev">▶</span> billing.subscriptions <span class="cols">12 cols</span>
+              </button>
+              <div class="tbl-cols"></div>
+            </div>
+
+            <div class="modal-foot">
+              <span>4 of 340 tables</span>
+              <button class="load-more">Load more</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function tog(btn) {
+        const menu = btn.nextElementSibling;
+        const isOpen = menu.classList.contains("open");
+        document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
+        if (!isOpen) menu.classList.add("open");
+      }
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".menu-wrap"))
+          document.querySelectorAll(".menu.open").forEach((m) => m.classList.remove("open"));
+      });
+      function toggleGroup(head) {
+        head.classList.toggle("collapsed");
+        head.nextElementSibling.classList.toggle("collapsed");
+      }
+      function toggleTbl(head) {
+        head.classList.toggle("open");
+        head.nextElementSibling.classList.toggle("open");
+      }
+      function openModal() {
+        document.getElementById("modal").classList.add("open");
+      }
+      function closeModal() {
+        document.getElementById("modal").classList.remove("open");
+      }
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closeModal();
+      });
+      function toggleTheme() {
+        const html = document.documentElement;
+        const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        html.setAttribute("data-theme", next);
+        document.querySelector(".toggle").textContent = "theme: " + next;
+      }
+    </script>
+  </body>
+</html>
