@@ -6,8 +6,12 @@ import { AdminSidebar } from "./AdminSidebar";
 
 export function AdminLayout() {
   return (
-    <div className="zz-canvas min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-line bg-surface/80 backdrop-blur-sm">
+    // Fixed-height shell with the scroll confined to the content region (like
+    // AppShell) and scrollbarGutter:"stable" reserving the gutter — otherwise
+    // navigating between admin pages of different heights toggles the window
+    // scrollbar and re-centers the max-width header, shifting the logo sideways.
+    <div className="zz-canvas flex h-screen flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-line bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto max-w-[var(--wide)] px-6 h-14 flex items-center gap-3">
           <Link to="/app" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
             <Mark className="h-5 w-5 text-accent" />
@@ -29,9 +33,11 @@ export function AdminLayout() {
         </div>
       </header>
 
-      <SettingsShell sidebar={<AdminSidebar />}>
-        <Outlet />
-      </SettingsShell>
+      <div className="flex-1 overflow-y-auto" style={{ scrollbarGutter: "stable" }}>
+        <SettingsShell sidebar={<AdminSidebar />}>
+          <Outlet />
+        </SettingsShell>
+      </div>
     </div>
   );
 }
