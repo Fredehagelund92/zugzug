@@ -353,6 +353,31 @@ export function useGridCursor<Row>({
         if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
         return;
       }
+      // Plain Home/End: jump to the first/last column of the current row.
+      if (e.key === "Home") {
+        e.preventDefault();
+        const col = navCols[0];
+        if (col) setCursor({ rowKey: cursor.rowKey, field: col.field, editing: false });
+        return;
+      }
+      if (e.key === "End") {
+        e.preventDefault();
+        const col = navCols[navCols.length - 1];
+        if (col) setCursor({ rowKey: cursor.rowKey, field: col.field, editing: false });
+        return;
+      }
+      // PageUp/PageDown: move the cursor ~one viewport; the scroll-into-view
+      // effect keeps it visible. Page size is measured from the container so it
+      // tracks the actual row height.
+      if (e.key === "PageUp" || e.key === "PageDown") {
+        e.preventDefault();
+        const cont = ref.current;
+        const rowEl = cont?.querySelector<HTMLElement>("[data-row]");
+        const rowH = rowEl?.getBoundingClientRect().height || 37;
+        const page = cont ? Math.max(1, Math.floor(cont.clientHeight / rowH) - 1) : 10;
+        move(0, e.key === "PageDown" ? page : -page);
+        return;
+      }
       if (e.key === "ArrowUp") {
         e.preventDefault();
         move(0, -1);
