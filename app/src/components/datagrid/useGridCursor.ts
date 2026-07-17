@@ -215,6 +215,23 @@ export function useGridCursor<Row>({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cursor object ref excluded; only rowKey/field trigger scroll; adding cursor would scroll on every editing-state change too
   }, [cursor?.rowKey, cursor?.field]);
 
+  // When an edit ends but the cursor stays on a cell (Escape / blur-cancel),
+  // the editor <input> unmounts and the browser drops focus to <body> — arrows,
+  // undo, and type-to-edit all go dead until the user clicks back in. Return
+  // focus to the grid so keyboard flow continues. The commit-and-advance path
+  // (Enter/Tab) re-enters edit in the same tick, so `editing` never lands on
+  // false here; this only fires on a genuine edit-exit. We only reclaim focus
+  // when it was orphaned to <body>, so clicking elsewhere still works.
+  const wasEditingRef = useRef(false);
+  useEffect(() => {
+    const editing = cursor?.editing ?? false;
+    if (wasEditingRef.current && !editing && cursor && ref.current) {
+      const active = document.activeElement;
+      if (!active || active === document.body) ref.current.focus();
+    }
+    wasEditingRef.current = editing;
+  }, [cursor]);
+
   // When the host's rows change (filter toggle, async save), the cursor may
   // point at a row that no longer exists. Instead of dropping focus (which
   // would break the workbench A/A/A triage loop — accept → row leaves → next
@@ -334,6 +351,31 @@ export function useGridCursor<Row>({
         const row = rows[rows.length - 1],
           col = navCols[navCols.length - 1];
         if (row && col) setCursor({ rowKey: rowKey(row), field: col.field, editing: false });
+        return;
+      }
+      // Plain Home/End: jump to the first/last column of the current row.
+      if (e.key === "Home") {
+        e.preventDefault();
+        const col = navCols[0];
+        if (col) setCursor({ rowKey: cursor.rowKey, field: col.field, editing: false });
+        return;
+      }
+      if (e.key === "End") {
+        e.preventDefault();
+        const col = navCols[navCols.length - 1];
+        if (col) setCursor({ rowKey: cursor.rowKey, field: col.field, editing: false });
+        return;
+      }
+      // PageUp/PageDown: move the cursor ~one viewport; the scroll-into-view
+      // effect keeps it visible. Page size is measured from the container so it
+      // tracks the actual row height.
+      if (e.key === "PageUp" || e.key === "PageDown") {
+        e.preventDefault();
+        const cont = ref.current;
+        const rowEl = cont?.querySelector<HTMLElement>("[data-row]");
+        const rowH = rowEl?.getBoundingClientRect().height || 37;
+        const page = cont ? Math.max(1, Math.floor(cont.clientHeight / rowH) - 1) : 10;
+        move(0, e.key === "PageDown" ? page : -page);
         return;
       }
       if (e.key === "ArrowUp") {

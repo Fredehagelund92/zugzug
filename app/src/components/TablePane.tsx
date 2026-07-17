@@ -395,13 +395,15 @@ function RecordsBody({
               {c.label}
             </span>
           ),
-        edit: (c, { commit }) => (
+        // `initial` is set when type-to-edit seeded us with a character — it
+        // replaces the label (Excel/Sheets); otherwise edit the existing label.
+        edit: (c, { initial, commit, cancel }) => (
           <input
             autoFocus
-            defaultValue={c.label}
+            defaultValue={initial ?? c.label}
             onKeyDown={(e) => {
               if (e.key === "Enter") commit((e.target as HTMLInputElement).value.trim());
-              if (e.key === "Escape") commit(c.label);
+              if (e.key === "Escape") cancel();
             }}
             onBlur={(e) => commit(e.target.value.trim())}
             className="w-full bg-transparent px-1 font-display text-[14px] font-semibold text-ink outline-none"
@@ -1324,7 +1326,12 @@ function RecordsBody({
                       if (serverRow && serverRow.label !== value) {
                         labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
                       }
-                      if (!surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)) throw e;
+                      if (!surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)) {
+                        // Not a version conflict (e.g. network / server error). The
+                        // store already reverted the optimistic label; tell the user
+                        // instead of failing silently.
+                        toast("Couldn't rename that record — try again.", "error");
+                      }
                       return;
                     }
                     if (prev) {
@@ -1353,7 +1360,13 @@ function RecordsBody({
                   }
                   const v = value == null ? null : String(value);
                   const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
-                  await setFieldValue(activeId, rowKey, field, v);
+                  try {
+                    await setFieldValue(activeId, rowKey, field, v);
+                  } catch {
+                    // Store reverted the optimistic value; surface the failure.
+                    toast("Couldn't save that change — try again.", "error");
+                    return;
+                  }
                   if (prev !== v)
                     undo.push({
                       label: `edit ${field} on "${rowKey}"`,

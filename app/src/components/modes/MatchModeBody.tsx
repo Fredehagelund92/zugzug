@@ -543,6 +543,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 }
               : undefined
           }
+          typeToEdit={false}
           onCellKeyDown={(e, ctx) => {
             const v = ctx.cursor?.rowKey;
             if (canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
