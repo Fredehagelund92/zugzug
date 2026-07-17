@@ -219,17 +219,19 @@ keeps focus in the editor chain throughout._
   restore focus to `cursor.ref` after the editor unmounts.
 
 **D9 — Failed record renames fail silently.** _Severity: feels-sluggish._
-_Status: ⚠️ **PARTIALLY FIXED.** Client: ✅ a plain-language error toast now
-fires on any non-conflict write rejection (rename + field edit) and the value
-reverts — no more silent no-op (`TablePane.tsx`, verified: failing rename toasts
-& reverts, successful edits stay quiet). Server root cause: ❌ still open, and
-**it is a real bug, not a dev-seed gap** — the bulk seed path `addCanonical`
-(`repo-canonical.ts:535-569`) never calls `seedVersionRow`, so every dimension
-derived from the warehouse gets canonical rows with no `canonical_version` row
-and `bumpVersionOrThrow` 404s on rename. `addCanonicalOne` (line 601) seeds
-correctly, which is why manually-added rows rename fine. Recommended fix (needs
-sign-off — governed data path): seed version rows in `addCanonical`, and
-backfill existing rows (or lazily seed on first rename)._
+_Status: ✅ **FIXED & VERIFIED** (client + server). Client: a plain-language
+error toast fires on any non-conflict write rejection (rename + field edit) and
+the value reverts (`TablePane.tsx`). Server root cause — a real bug, not a
+dev-seed gap: the bulk derive path `deriveCanonical` (`repo-scan.ts`) and bulk
+seed `addCanonical` never created `canonical_version` rows, so every
+warehouse-derived record reported version 1 but 404'd on rename because
+`bumpVersionOrThrow` found no row to bump. Fixed two ways: `deriveCanonical` now
+seeds version rows at creation (idempotent), and `bumpVersionOrThrow` lazily
+seeds+bumps a missing row when the canonical row exists and the client is at the
+implied v1 (backfills legacy rows on first edit; a truly-missing key still
+404s). Verified live: a rename that 404'd now returns 200 and persists across
+reload; nonexistent key still 404s; server version tests 22/22. (The client
+toast remains as defense-in-depth for genuine failures.)_
 - **Observed:** Renaming a record whose name was never edited → `PUT
   …/canonical/:key` returns 404 "not found" → the optimistic value silently
   reverts, **no toast, no indicator**. Field-value edits (`…/canonical/:key/field/:field`)
