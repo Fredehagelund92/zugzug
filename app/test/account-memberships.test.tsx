@@ -40,6 +40,12 @@ describe("Account/Memberships", () => {
 
   it("shows EmptyState when memberships array is empty", () => {
     harness([]);
-    expect(screen.getByText("No memberships yet")).toBeInTheDocument();
+    expect(screen.getByText("No workspaces yet")).toBeInTheDocument();
+  });
+
+  it("shows a RoleBadge for admin/viewer rows, not inline role text", () => {
+    harness(MEMBERSHIPS);
+    expect(screen.getByText("admin")).toBeInTheDocument(); // RoleBadge pill
+    expect(screen.queryByText(/· admin/)).not.toBeInTheDocument(); // no inline "· admin"
   });
 });

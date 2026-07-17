@@ -5,16 +5,11 @@ import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { EmptyState } from "../../components/EmptyState";
+import { RoleBadge } from "../../components/RoleBadge";
 import { toast } from "../../components/Toast";
 import { readServerError } from "../../lib/api-errors";
 import { invalidate } from "../../store";
 import type { Membership } from "../../components/TenantLayout";
-
-const ROLE_LABEL: Record<Membership["role"], string> = {
-  admin: "admin",
-  editor: "editor",
-  viewer: "viewer",
-};
 
 export function Memberships() {
   const { memberships } = useOutletContext<{ memberships: Membership[] }>();
@@ -55,15 +50,16 @@ export function Memberships() {
       hint="Every workspace you belong to. Leave any to remove yourself."
     >
       {memberships.length === 0 ? (
-        <EmptyState title="No memberships yet" body="You haven't joined any workspaces yet." />
+        <EmptyState glyph="🎉" title="No workspaces yet" body="Ask an admin to add you to one." />
       ) : (
         <ul className="divide-y divide-line border border-line">
           {memberships.map((m) => (
             <li key={m.slug} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-medium text-ink truncate">{m.label}</div>
-                <div className="font-mono text-[10.5px] text-ink-3">
-                  /{m.slug} · {ROLE_LABEL[m.role]}
+                <div className="flex items-center gap-2 font-mono text-[10.5px] text-ink-3">
+                  /{m.slug}
+                  <RoleBadge role={m.role} />
                 </div>
                 {rowError?.slug === m.slug && (
                   <div className="mt-1 text-xs text-danger" role="status">
