@@ -350,7 +350,7 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
       style={gridStyle}
       data-row={rk}
     >
-      {activityEntry && <RowActivityBadge entry={activityEntry} />}
+      {activityEntry && <RowActivityBadge entry={activityEntry} editing={editingField !== null} />}
       {evaluation.rowStripe && (
         <span
           aria-hidden

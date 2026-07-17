@@ -10,8 +10,19 @@ import type { RowActivityEntry } from "../../lib/use-row-activity";
  *  The badge is capped at 180px and truncates long display names — keeps the
  *  chip from blowing out into adjacent columns when the row is narrow. Sits at
  *  z-20 with a backdrop blur so the underlying cell text is legibly dimmed
- *  rather than smashed against the chip border. */
-export function RowActivityBadge({ entry }: { entry: RowActivityEntry }) {
+ *  rather than smashed against the chip border.
+ *
+ *  While a cell in the row is being edited (`editing`), the right-edge hover
+ *  chip is suppressed — row hover and edit hover are the same gesture, so the
+ *  chip would otherwise pop up over the field being edited. The left-edge pip
+ *  stays; it never overlaps cell content. */
+export function RowActivityBadge({
+  entry,
+  editing = false,
+}: {
+  entry: RowActivityEntry;
+  editing?: boolean;
+}) {
   const relative = useMemo(() => relativeTime(new Date(entry.at)), [entry.at]);
 
   return (
@@ -22,7 +33,9 @@ export function RowActivityBadge({ entry }: { entry: RowActivityEntry }) {
         className="pointer-events-none absolute left-0 top-0 bottom-0 w-0.5 bg-line-2 group-hover:bg-accent transition-colors z-[2]"
       />
       {/* Hover chip — right-aligned, width-capped, sticky to the visible viewport
-       *  via right-3 (3 = 12px gutter for the scrollbar). */}
+       *  via right-3 (3 = 12px gutter for the scrollbar). Hidden while editing so
+       *  it doesn't cover the field in play. */}
+      {!editing && (
       <div className="pointer-events-none group-hover:pointer-events-auto absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-150 z-20 max-w-[180px]">
         <span
           className="inline-flex items-center gap-1.5 rounded-md border border-line-2 px-2 py-0.5 font-mono text-[10px] font-medium text-ink-2 shadow-[0_2px_8px_-2px_color-mix(in_srgb,var(--ink)_18%,transparent)]"
@@ -36,6 +49,7 @@ export function RowActivityBadge({ entry }: { entry: RowActivityEntry }) {
           <span className="shrink-0 text-ink-3">· {relative}</span>
         </span>
       </div>
+      )}
     </>
   );
 }
