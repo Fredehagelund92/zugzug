@@ -23,15 +23,15 @@ import {
   IconMenu,
   IconX,
 } from "./Icons";
-import { useDimensions, useWorkspaceInfo, currentUser } from "../store";
+import { useDimensions, currentUser } from "../store";
 import { RoleBadge } from "./RoleBadge";
 import { SyncPill } from "./SyncPill";
-import { useEngineerMode } from "../lib/engineer-mode";
 import { useOpenTabs } from "../lib/open-tabs";
 import { ShortcutsOverlay } from "./datagrid";
 import { ToastStack, toast } from "./Toast";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { useTenant } from "../lib/tenant-context";
+import { can } from "../lib/permissions";
 import { scopedKey } from "../lib/tenant-storage";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { type Membership } from "./TenantLayout";
@@ -245,14 +245,8 @@ function UserMenu() {
 
 export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const dims = useDimensions();
-  const wsInfo = useWorkspaceInfo();
-  const { engineer } = useEngineerMode();
-  const engineerLabel = wsInfo
-    ? wsInfo.adapter === "duckdb"
-      ? "motherduck"
-      : wsInfo.adapter
-    : "…";
-  const { slug, role: tenantRole } = useTenant();
+  const tenant = useTenant();
+  const { slug, role: tenantRole } = tenant;
   const paletteKey = scopedKey(PALETTE_RECENTS_KEY, slug);
   const [collapsed, toggle] = useNavCollapsed();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -387,12 +381,24 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const workspaceGroup: NavItem[] = [
     { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
     { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
-    { to: navLinks.integrations, label: "Integrations", Icon: IconIntegrations },
     { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
     { to: navLinks.sources, label: "Sources", Icon: IconSources },
   ];
+  const integrationsGroup: NavItem[] = [
+    { to: navLinks.integrationsPullApi, label: "Pull API", Icon: IconIntegrations },
+    { to: navLinks.integrationsWebhooks, label: "Webhooks", Icon: IconIntegrations },
+    ...(can(tenant, "integrations.service_accounts.view")
+      ? [
+          {
+            to: navLinks.integrationsServiceAccounts,
+            label: "Service accounts",
+            Icon: IconUsers,
+          },
+        ]
+      : []),
+  ];
   // Flat nav — used by the command palette and the collapsed icon rail.
-  const nav: NavItem[] = [homeItem, ...tablesGroup, ...workspaceGroup];
+  const nav: NavItem[] = [homeItem, ...tablesGroup, ...workspaceGroup, ...integrationsGroup];
 
   // Quick-switcher command list — navigation + every dim + every canonical
   // record across dims. Rebuilt only when dims change (canonical churn here
@@ -562,26 +568,19 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
                 />
               ))}
             </SidebarGroup>
+
+            <SidebarGroup label="Integrations">
+              {integrationsGroup.map((item) => (
+                <SidebarLink
+                  key={item.to}
+                  {...item}
+                  onClick={isMobile ? () => setDrawerOpen(false) : undefined}
+                />
+              ))}
+            </SidebarGroup>
           </nav>
         </>
       )}
-
-      <div
-        className={cx(
-          "shrink-0 border-t border-line",
-          collapsed && !isMobile ? "p-3" : "px-5 py-2",
-        )}
-      >
-        <div
-          className={cx(
-            "flex items-center gap-2 font-mono text-[11px] text-ink",
-            collapsed && !isMobile && "justify-center",
-          )}
-        >
-          <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-          {(!collapsed || isMobile) && <span>{engineer ? engineerLabel : "Connected"}</span>}
-        </div>
-      </div>
     </>
   );
 

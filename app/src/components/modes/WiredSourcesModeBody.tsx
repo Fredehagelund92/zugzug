@@ -29,7 +29,12 @@ export function WiredSourcesModeBody({ dim }: Props) {
   const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
   const canEdit = useCanEdit();
   const nav = useNavLinks();
-  const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+  const outcomeText = (result: {
+    mode: "seed" | "connect";
+    derived?: number;
+    matched?: number;
+    unmatched?: number;
+  }): string => {
     if (result.mode === "seed") {
       if ((result.derived ?? 0) > 0) {
         return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;

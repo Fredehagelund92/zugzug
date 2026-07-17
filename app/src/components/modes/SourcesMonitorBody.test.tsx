@@ -7,7 +7,9 @@ const { sourcesRef } = vi.hoisted(() => ({ sourcesRef: { current: [] as SourceIn
 vi.mock("../../store", () => ({
   useSources: () => sourcesRef.current,
   useCanEdit: () => true,
-  deriveCanonical: vi.fn().mockResolvedValue({ derived: 0, mode: "connect", matched: 0, unmatched: 0 }),
+  deriveCanonical: vi
+    .fn()
+    .mockResolvedValue({ derived: 0, mode: "connect", matched: 0, unmatched: 0 }),
 }));
 vi.mock("../../lib/use-tenant-navigate", () => ({
   useNavLinks: () => ({ sources: "/sources", table: () => "/tables" }),
@@ -24,8 +26,15 @@ const NOW = Date.now();
 
 function src(over: Partial<SourceInfo> = {}): SourceInfo {
   return {
-    table: "orders", column: "ship_country", dimension: "Country", dimId: "d1",
-    present: true, rows: 1000, values: 10, unmapped: 0, scanned: true,
+    table: "orders",
+    column: "ship_country",
+    dimension: "Country",
+    dimId: "d1",
+    present: true,
+    rows: 1000,
+    values: 10,
+    unmapped: 0,
+    scanned: true,
     scannedAt: new Date(NOW - 86_400_000).toISOString(),
     ...over,
   };

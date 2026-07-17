@@ -8,11 +8,7 @@ import { pg } from "./env.ts";
 
 export interface DispatchInput {
   tenantId: string;
-  type:
-    | "dimension.committed"
-    | "dimension.created"
-    | "dimension.schema.updated"
-    | "canonical.deleted";
+  type: "table.published" | "table.created" | "table.fields.updated" | "record.deleted";
   dimId?: string | null;
   occurredAt: Date;
   payload: Record<string, unknown>;

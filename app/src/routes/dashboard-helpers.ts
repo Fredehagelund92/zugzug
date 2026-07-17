@@ -90,8 +90,7 @@ export function applySort(
   switch (sort) {
     case "urgency":
       return copy.sort(
-        (a, b) =>
-          urgencyScore(b, stagedDimIds.has(b.id)) - urgencyScore(a, stagedDimIds.has(a.id)),
+        (a, b) => urgencyScore(b, stagedDimIds.has(b.id)) - urgencyScore(a, stagedDimIds.has(a.id)),
       );
     case "coverage":
       return copy.sort((a, b) => coveragePct(a) - coveragePct(b));

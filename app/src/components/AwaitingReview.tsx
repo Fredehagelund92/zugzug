@@ -66,10 +66,7 @@ export function AwaitingReview() {
 
   // Collect only others' "mapped" drafts
   const othersMappedDrafts = useMemo(
-    () =>
-      Object.values(allDrafts).filter(
-        (d) => d.status === "mapped" && d.user.id !== myId,
-      ),
+    () => Object.values(allDrafts).filter((d) => d.status === "mapped" && d.user.id !== myId),
     [allDrafts, myId],
   );
 
@@ -90,11 +87,13 @@ export function AwaitingReview() {
         entry.drafts.push(d);
         byAuthor.set(d.user.id, entry);
       }
-      const authorGroups: AuthorGroup[] = [...byAuthor.entries()].map(([authorId, { name, drafts: ds }]) => ({
-        authorId,
-        authorName: authorId === SYSTEM_USER_ID ? "System (rescan)" : name,
-        drafts: ds,
-      }));
+      const authorGroups: AuthorGroup[] = [...byAuthor.entries()].map(
+        ([authorId, { name, drafts: ds }]) => ({
+          authorId,
+          authorName: authorId === SYSTEM_USER_ID ? "System (rescan)" : name,
+          drafts: ds,
+        }),
+      );
       groups.push({
         dimId,
         dimName: dimMap.get(dimId) ?? dimId,
@@ -161,7 +160,10 @@ export function AwaitingReview() {
         })),
       );
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Could not load publish preview — try again.", "error");
+      toast(
+        err instanceof Error ? err.message : "Could not load publish preview — try again.",
+        "error",
+      );
     }
   };
 
@@ -172,10 +174,20 @@ export function AwaitingReview() {
       const outcomes: CommitOutcome[] = [];
       for (const g of preview) {
         try {
-          const res = await commit(g.dimId, g.drafts.map((d) => d.raw));
-          outcomes.push({ dimId: g.dimId, dimName: g.dimName, committed: res.committed, rowsRecovered: res.rowsRecovered, error: null });
+          const res = await commit(
+            g.dimId,
+            g.drafts.map((d) => d.raw),
+          );
+          outcomes.push({
+            dimId: g.dimId,
+            dimName: g.dimName,
+            committed: res.committed,
+            rowsRecovered: res.rowsRecovered,
+            error: null,
+          });
         } catch (err) {
-          const isSecondPublisher = err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED";
+          const isSecondPublisher =
+            err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED";
           outcomes.push({
             dimId: g.dimId,
             dimName: g.dimName,
@@ -183,7 +195,9 @@ export function AwaitingReview() {
             rowsRecovered: 0,
             error: isSecondPublisher
               ? "These drafts need a second publisher."
-              : (err instanceof Error ? err.message : "unknown error"),
+              : err instanceof Error
+                ? err.message
+                : "unknown error",
           });
         }
       }
@@ -219,7 +233,11 @@ export function AwaitingReview() {
         await rejectDrafts(dimId, raws, rejectReason.trim());
         outcomes.push({ dimName, rejected: true, error: null });
       } catch (err) {
-        outcomes.push({ dimName, rejected: false, error: err instanceof Error ? err.message : "unknown error" });
+        outcomes.push({
+          dimName,
+          rejected: false,
+          error: err instanceof Error ? err.message : "unknown error",
+        });
       }
     }
     setRejectLoading(false);
@@ -324,7 +342,9 @@ export function AwaitingReview() {
         {tableGroups.map((tg) => {
           const collapsed_ = isCollapsed(tg.dimId, tg.totalDrafts);
           const allDraftsInTable = tg.authorGroups.flatMap((ag) => ag.drafts);
-          const visibleDrafts = collapsed_ ? allDraftsInTable.slice(0, COLLAPSE_THRESHOLD) : allDraftsInTable;
+          const visibleDrafts = collapsed_
+            ? allDraftsInTable.slice(0, COLLAPSE_THRESHOLD)
+            : allDraftsInTable;
           const hiddenCount = tg.totalDrafts - COLLAPSE_THRESHOLD;
 
           return (
@@ -340,7 +360,9 @@ export function AwaitingReview() {
                 )}
                 <span className="flex-1 font-mono text-[11px] font-semibold text-ink-2">
                   {tg.dimName}
-                  <span className="ml-2 font-normal text-ink-3">· {tg.totalDrafts} record{tg.totalDrafts === 1 ? "" : "s"}</span>
+                  <span className="ml-2 font-normal text-ink-3">
+                    · {tg.totalDrafts} record{tg.totalDrafts === 1 ? "" : "s"}
+                  </span>
                 </span>
                 {tg.totalDrafts > COLLAPSE_THRESHOLD && (
                   <button
@@ -393,9 +415,7 @@ export function AwaitingReview() {
                               {d.targetLabel ?? <span className="text-ink-3">—</span>}
                             </span>
                             <span className="w-28 font-mono text-[10px] text-ink-3">
-                              {d.source === "ai"
-                                ? `AI · ${d.confidence ?? "?"}`
-                                : ag.authorName}
+                              {d.source === "ai" ? `AI · ${d.confidence ?? "?"}` : ag.authorName}
                             </span>
                             <span className="w-16 shrink-0 text-right font-mono text-[10px] text-ink-3">
                               {relativeTime(d.at)}

@@ -260,6 +260,13 @@
       "when": 1781800006000,
       "tag": "0036_publish_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784280461631,
+      "tag": "0037_rename_event_taxonomy",
+      "breakpoints": true
     }
   ]
 }

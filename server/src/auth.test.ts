@@ -39,11 +39,13 @@ describe("first-admin role assignment", () => {
       `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
        VALUES ('default', 'default', 'Default', now()) ON CONFLICT DO NOTHING`,
     );
-    // Clear any leftover rows from a previous run.
-    await pgRun(
-      `DELETE FROM "zugzug_app"."users" WHERE email IN ($1, $2)`,
-      [A_EMAIL, B_EMAIL],
-    ).catch(() => {});
+    // The first-admin gate keys off the GLOBAL users count (handleSignup:
+    // userCount === 0 -> admin), so this test's precondition is an empty users
+    // table. The suite shares one Postgres DB and bun runs files in a
+    // filesystem order that differs macOS vs Linux (CI), so an earlier file may
+    // leave a user behind — clear the whole table, not just A/B. There are no
+    // FKs into users, and every test file provisions its own users.
+    await pgRun(`DELETE FROM "zugzug_app"."users"`).catch(() => {});
     // Invite user B so the second signup passes the invitation gate.
     await pgRun(
       `INSERT INTO "zugzug_app"."tenant_invite"
@@ -61,11 +63,20 @@ describe("first-admin role assignment", () => {
         [email],
       );
       if (!row) continue;
-      await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [row.id]).catch(() => {});
-      await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = $1`, [row.id]).catch(() => {});
+      await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [row.id]).catch(
+        () => {},
+      );
+      await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = $1`, [row.id]).catch(
+        () => {},
+      );
     }
-    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE email IN ($1, $2)`, [A_EMAIL, B_EMAIL]).catch(() => {});
-    await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE email = $1`, [B_EMAIL]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE email IN ($1, $2)`, [
+      A_EMAIL,
+      B_EMAIL,
+    ]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE email = $1`, [B_EMAIL]).catch(
+      () => {},
+    );
   });
 
   it("only the first signup becomes admin", async () => {

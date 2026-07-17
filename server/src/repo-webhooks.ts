@@ -35,10 +35,10 @@ function normalizeAndValidateUrl(input: string): string {
 /* ---------- Event taxonomy ---------- */
 
 const KNOWN_EVENTS = new Set([
-  "dimension.committed",
-  "dimension.created",
-  "dimension.schema.updated",
-  "canonical.deleted",
+  "table.published",
+  "table.created",
+  "table.fields.updated",
+  "record.deleted",
 ]);
 
 function validateEvents(events: string[]): void {

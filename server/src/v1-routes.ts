@@ -138,21 +138,21 @@ async function dispatch(
   void sa;
   const method = req.method;
 
-  // /v1/dimensions
-  if (v1[0] === "dimensions" && v1.length === 1 && method === "GET") {
+  // /v1/tables
+  if (v1[0] === "tables" && v1.length === 1 && method === "GET") {
     return json(await listDimensionsForApi(ctx.tenantId));
   }
 
-  // /v1/dimensions/:slug/schema
-  if (v1[0] === "dimensions" && v1[2] === "schema" && v1.length === 3 && method === "GET") {
+  // /v1/tables/:slug/fields
+  if (v1[0] === "tables" && v1[2] === "fields" && v1.length === 3 && method === "GET") {
     const dimSlug = decodeURIComponent(v1[1]!);
     const out = await getSchemaForApi(ctx.tenantId, dimSlug);
-    if (!out) return jsonError(404, "dimension_not_found");
+    if (!out) return jsonError(404, "table_not_found");
     return json(out);
   }
 
-  // /v1/dimensions/:slug/canonical
-  if (v1[0] === "dimensions" && v1[2] === "canonical" && v1.length === 3 && method === "GET") {
+  // /v1/tables/:slug/records
+  if (v1[0] === "tables" && v1[2] === "records" && v1.length === 3 && method === "GET") {
     const dimSlug = decodeURIComponent(v1[1]!);
     const since = url.searchParams.get("since") ?? undefined;
     const cursor = url.searchParams.get("cursor") ?? undefined;
@@ -171,8 +171,8 @@ async function dispatch(
     }
   }
 
-  // /v1/dimensions/:slug/canonical/:key
-  if (v1[0] === "dimensions" && v1[2] === "canonical" && v1.length === 4 && method === "GET") {
+  // /v1/tables/:slug/records/:key
+  if (v1[0] === "tables" && v1[2] === "records" && v1.length === 4 && method === "GET") {
     const dimSlug = decodeURIComponent(v1[1]!);
     const key = decodeURIComponent(v1[3]!);
     const out = await getCanonicalRow(ctx.tenantId, dimSlug, key);
@@ -180,8 +180,8 @@ async function dispatch(
     return json(out);
   }
 
-  // /v1/dimensions/:slug/tombstones
-  if (v1[0] === "dimensions" && v1[2] === "tombstones" && v1.length === 3 && method === "GET") {
+  // /v1/tables/:slug/removed
+  if (v1[0] === "tables" && v1[2] === "removed" && v1.length === 3 && method === "GET") {
     const dimSlug = decodeURIComponent(v1[1]!);
     const since = url.searchParams.get("since") ?? undefined;
     const cursor = url.searchParams.get("cursor") ?? undefined;

@@ -34,7 +34,11 @@ export function NoTablesYet({
             Create blank table
           </Button>
         ) : (
-          <Button disabled icon={<IconPlus className="h-4 w-4" />} title="Viewers can't create tables">
+          <Button
+            disabled
+            icon={<IconPlus className="h-4 w-4" />}
+            title="Viewers can't create tables"
+          >
             Create blank table
           </Button>
         )}
@@ -48,8 +52,8 @@ export function NoTablesYet({
       </div>
       {!onCreateRequested && (
         <p className="mt-2 text-[12px] text-ink-3">
-          You have view-only access. Ask a workspace admin to make you an editor
-          (Settings → Members) to create tables.
+          You have view-only access. Ask a workspace admin to make you an editor (Settings →
+          Members) to create tables.
         </p>
       )}
     </div>

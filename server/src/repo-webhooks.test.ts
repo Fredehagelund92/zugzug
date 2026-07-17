@@ -46,7 +46,7 @@ describe("createWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://example.test/wh",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     expect(r.id.startsWith("wh_")).toBe(true);
@@ -64,7 +64,7 @@ describe("createWebhook", () => {
     );
     expect(row!.status).toBe("active");
     expect(row!.secret_prefix).toBe(r.value.slice(0, 12));
-    expect(row!.events).toEqual(["dimension.committed"]);
+    expect(row!.events).toEqual(["table.published"]);
     // ciphertext bytea persisted, non-empty, NOT equal to plaintext bytes
     expect(row!.secret_ciphertext.length).toBeGreaterThan(0);
     expect(row!.secret_ciphertext.toString("utf8")).not.toBe(r.value);
@@ -75,7 +75,7 @@ describe("createWebhook", () => {
       createWebhook({
         tenantId: T,
         url: "http://evil.test/x",
-        events: ["dimension.committed"],
+        events: ["table.published"],
         createdBy: U,
       }),
     ).rejects.toThrow(/https/);
@@ -86,7 +86,7 @@ describe("createWebhook", () => {
       createWebhook({
         tenantId: T,
         url: "not a url",
-        events: ["dimension.committed"],
+        events: ["table.published"],
         createdBy: U,
       }),
     ).rejects.toThrow(/invalid_url/);
@@ -118,7 +118,7 @@ describe("createWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://API.example.test/PATH/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const row = await pgGet<{ url: string }>(
@@ -137,7 +137,7 @@ describe("createWebhook", () => {
     await createWebhook({
       tenantId: T,
       url: "https://audit.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const after = await pgGet<{ n: number }>(
@@ -154,7 +154,7 @@ describe("listWebhooks + getWebhook", () => {
     const created = await createWebhook({
       tenantId: T,
       url: "https://list.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const list = await listWebhooks(T);
@@ -176,7 +176,7 @@ describe("listWebhooks + getWebhook", () => {
     const created = await createWebhook({
       tenantId: tt,
       url: "https://other.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const list = await listWebhooks(T);
@@ -195,14 +195,14 @@ describe("listWebhooks + getWebhook", () => {
     const created = await createWebhook({
       tenantId: T,
       url: "https://get.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const got = await getWebhook(T, created.id);
     expect(got).not.toBeNull();
     expect(got!.id).toBe(created.id);
     expect(got!.status).toBe("active");
-    expect(got!.events).toEqual(["dimension.committed"]);
+    expect(got!.events).toEqual(["table.published"]);
   });
 });
 
@@ -211,7 +211,7 @@ describe("patchWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://patch.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const ok = await patchWebhook(
@@ -219,7 +219,7 @@ describe("patchWebhook", () => {
       r.id,
       {
         url: "https://patched.example.test/x",
-        events: ["dimension.created", "canonical.deleted"],
+        events: ["table.created", "record.deleted"],
         description: "updated",
       },
       U,
@@ -228,7 +228,7 @@ describe("patchWebhook", () => {
 
     const after = await getWebhook(T, r.id);
     expect(after!.url).toContain("patched.example.test");
-    expect(after!.events.sort()).toEqual(["canonical.deleted", "dimension.created"]);
+    expect(after!.events.sort()).toEqual(["record.deleted", "table.created"]);
     expect(after!.description).toBe("updated");
   });
 
@@ -236,7 +236,7 @@ describe("patchWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://noeasy.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     await expect(
@@ -253,7 +253,7 @@ describe("patchWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://patchpause.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     await patchWebhook(T, r.id, { status: "paused" }, U);
@@ -271,7 +271,7 @@ describe("pauseWebhook + reactivateWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://pause.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     expect(await pauseWebhook(T, r.id, U)).toBe(true);
@@ -295,7 +295,7 @@ describe("pauseWebhook + reactivateWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://pause2.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     await pauseWebhook(T, r.id, U);
@@ -307,7 +307,7 @@ describe("pauseWebhook + reactivateWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://reactdis.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     await pgRun(
@@ -331,7 +331,7 @@ describe("rotateSecret", () => {
     const created = await createWebhook({
       tenantId: T,
       url: "https://rot.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     const result = await rotateSecret({ tenantId: T, id: created.id, userId: U });
@@ -368,14 +368,14 @@ describe("deleteWebhook", () => {
     const r = await createWebhook({
       tenantId: T,
       url: "https://del.example.test/",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: U,
     });
     await pgRun(
       `INSERT INTO "zugzug_app"."webhook_delivery"
          (id, tenant_id, webhook_id, event_id, event_type, delivery_url,
           signing_kid, status, payload, signature, created_at)
-         VALUES ($1, $2, $3, 'evt_x', 'dimension.committed',
+         VALUES ($1, $2, $3, 'evt_x', 'table.published',
                  'https://del.example.test/', 'current', 'pending',
                  '{}'::jsonb, '', now())`,
       [`whd_del_${crypto.randomUUID().replace(/-/g, "")}`, T, r.id],

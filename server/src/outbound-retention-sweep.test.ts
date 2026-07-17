@@ -25,7 +25,7 @@ async function seedEvent(tenantId: string, daysAgo: number, suffix: string): Pro
   await pgRun(
     `INSERT INTO "zugzug_app"."outbound_event"
        (id, tenant_id, type, dim_id, occurred_at, payload, idem_key)
-     VALUES ($1, $2, 'dimension.committed', 'd_x',
+     VALUES ($1, $2, 'table.published', 'd_x',
              now() - ($3 || ' days')::interval,
              '{}'::jsonb, $4)`,
     [id, tenantId, String(daysAgo), `idem_${tenantId}_${suffix}`],
@@ -39,7 +39,7 @@ async function seedDelivery(tenantId: string, daysAgo: number, suffix: string): 
     `INSERT INTO "zugzug_app"."webhook_delivery"
        (id, tenant_id, webhook_id, event_id, event_type, delivery_url,
         signing_kid, status, payload, signature, created_at)
-     VALUES ($1, $2, 'wh_x', 'evt_x', 'dimension.committed', 'https://example.test/h',
+     VALUES ($1, $2, 'wh_x', 'evt_x', 'table.published', 'https://example.test/h',
              'current', 'success', '{}'::jsonb, 'sig',
              now() - ($3 || ' days')::interval)`,
     [id, tenantId, String(daysAgo)],
@@ -60,7 +60,7 @@ async function seedWebhookWithExpiredPrev(tenantId: string): Promise<string> {
              E'\\\\x00'::bytea, E'\\\\x00'::bytea, 1, 'whsec_curr',
              E'\\\\x01'::bytea, E'\\\\x01'::bytea, 'whsec_prev',
              now() - interval '1 hour',
-             ARRAY['dimension.committed']::varchar[], 'active', NULL, now(), 'u_system')`,
+             ARRAY['table.published']::varchar[], 'active', NULL, now(), 'u_system')`,
     [id, tenantId],
   );
   return id;

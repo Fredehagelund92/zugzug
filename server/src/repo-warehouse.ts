@@ -60,10 +60,7 @@ export async function listWarehouseDatabases(): Promise<DatabaseRow[]> {
     const adapter = await getAdapter();
     counts = await adapter.schemaCounts();
   } catch (err) {
-    console.warn(
-      "[warehouse] schemaCounts failed:",
-      err instanceof Error ? err.message : err,
-    );
+    console.warn("[warehouse] schemaCounts failed:", err instanceof Error ? err.message : err);
   }
   return rows.map((r) => ({
     ...r,

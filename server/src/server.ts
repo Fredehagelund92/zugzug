@@ -1103,7 +1103,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (denied) return denied;
           const raw = (await req.json()) as {
             source?:
-              import("./repo-canonical.ts").QualifiedSource | { table: string; column: string };
+              | import("./repo-canonical.ts").QualifiedSource
+              | { table: string; column: string };
             table?: string;
             column?: string;
           };
@@ -1368,7 +1369,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(tenantCtx, "commit");
           if (denied) return denied;
           const body = req.headers.get("content-length")
-            ? await req.json().catch(() => null)
+            ? ((await req.json().catch(() => null)) as { draftKeys?: unknown } | null)
             : null;
           const draftKeys = Array.isArray(body?.draftKeys)
             ? (body.draftKeys as string[])

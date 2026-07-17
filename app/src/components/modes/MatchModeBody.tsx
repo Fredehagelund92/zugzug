@@ -33,7 +33,10 @@ import { useAiHint } from "../../lib/use-ai-hint";
    per-row suggestions that aren't in the paged payload. */
 
 type RStatus = "mapped" | "new" | "skipped" | "rejected";
-type ValueState = Record<string, { target: string | null; status: RStatus; rejectedReason?: string | null }>;
+type ValueState = Record<
+  string,
+  { target: string | null; status: RStatus; rejectedReason?: string | null }
+>;
 type Filter = "new" | "all" | "mapped";
 
 // Escape a string for use inside a double-quoted CSS attribute selector.
@@ -618,8 +621,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                     </>
                   ) : (
                     <>
-                      ⚠ <span className="text-danger">Unmapped</span> —{" "}
-                      {totalRows.toLocaleString()} downstream rows are missing this value
+                      ⚠ <span className="text-danger">Unmapped</span> — {totalRows.toLocaleString()}{" "}
+                      downstream rows are missing this value
                     </>
                   )}
                 </div>
@@ -634,7 +637,8 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                           className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
                           title={reason ?? undefined}
                         >
-                          rejected{reason ? `: ${reason.slice(0, 60)}${reason.length > 60 ? "…" : ""}` : ""}
+                          rejected
+                          {reason ? `: ${reason.slice(0, 60)}${reason.length > 60 ? "…" : ""}` : ""}
                         </span>
                       </div>
                     );
@@ -666,7 +670,10 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             ) : valuesPage.error ? (
               <div className="px-4 py-12 text-center font-mono text-[12px] text-danger">
                 Failed to load values: {valuesPage.error}{" "}
-                <button onClick={() => valuesPage.refetch()} className="text-accent hover:underline">
+                <button
+                  onClick={() => valuesPage.refetch()}
+                  className="text-accent hover:underline"
+                >
                   retry
                 </button>
               </div>

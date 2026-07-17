@@ -10,7 +10,14 @@ const CANDS: Candidate[] = [
 ];
 
 function key(k: string, mods: Partial<React.KeyboardEvent> = {}) {
-  return { key: k, preventDefault: vi.fn(), metaKey: false, ctrlKey: false, altKey: false, ...mods } as unknown as React.KeyboardEvent;
+  return {
+    key: k,
+    preventDefault: vi.fn(),
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    ...mods,
+  } as unknown as React.KeyboardEvent;
 }
 function opts(over: Partial<CandidatePickerOpts> = {}): CandidatePickerOpts {
   return {

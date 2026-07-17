@@ -93,17 +93,17 @@ afterAll(async () => {
 });
 
 describe("listDimensionsForApi", () => {
-  it("returns one entry per dim with slug, label, key_kind, canonical_count, last_committed_at", async () => {
+  it("returns one entry per dim with slug, label, key_kind, record_count, last_published_at", async () => {
     const dimId = await makeDim("OutCountry");
     await addCanonical(dimId, [{ key: "DE", label: "Germany" }], T);
 
     const out = await listDimensionsForApi(T);
-    const country = out.dimensions.find((d) => d.slug === dimId);
+    const country = out.tables.find((d) => d.slug === dimId);
     expect(country).toBeDefined();
     expect(country!.label).toBe("OutCountry");
     expect(country!.key_kind).toBe("slug");
-    expect(country!.canonical_count).toBeGreaterThanOrEqual(1);
-    expect(typeof country!.last_committed_at).toBe("string");
+    expect(country!.record_count).toBeGreaterThanOrEqual(1);
+    expect(typeof country!.last_published_at).toBe("string");
   });
 });
 
@@ -240,7 +240,7 @@ describe("listTombstonesPage", () => {
     await retireCanonical(dimId, "RETIRED", U, v.RETIRED, T);
 
     const res = await listTombstonesPage(T, dimId, { limit: 100 });
-    const byKey = Object.fromEntries(res.tombstones.map((t) => [t.key, t]));
+    const byKey = Object.fromEntries(res.removed.map((t) => [t.key, t]));
     expect(byKey.MERGED).toBeDefined();
     expect(byKey.MERGED.retired_into).toBe("SURV");
     expect(byKey.RETIRED).toBeDefined();

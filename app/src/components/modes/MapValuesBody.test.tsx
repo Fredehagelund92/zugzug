@@ -5,7 +5,9 @@ import { render, fireEvent } from "@testing-library/react";
 vi.mock("./ClusterMapperCard", () => ({ ClusterMapperCard: () => <div>FOCUSED CARD</div> }));
 vi.mock("./MatchModeBody", () => ({ MatchModeBody: () => <div>GRID BODY</div> }));
 
-const { draftsRef } = vi.hoisted(() => ({ draftsRef: { current: [] as { dimId: string; status: string }[] } }));
+const { draftsRef } = vi.hoisted(() => ({
+  draftsRef: { current: [] as { dimId: string; status: string }[] },
+}));
 vi.mock("../../store", () => ({
   useDrafts: () => draftsRef.current,
   listDrafts: (dimId: string) => draftsRef.current.filter((d) => d.dimId === dimId),
@@ -52,6 +54,8 @@ describe("MapValuesBody", () => {
 
   it("disables publish when nothing is staged", () => {
     const { getByText } = render(<MapValuesBody dim={DIM} isActive />);
-    expect((getByText(/Publish 0 changes/i).closest("button") as HTMLButtonElement).disabled).toBe(true);
+    expect((getByText(/Publish 0 changes/i).closest("button") as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 });

@@ -57,9 +57,7 @@ describe("commit writes a snapshot", () => {
     const snap = await getSnapshot(dimId, T, versions[0].version);
     // to_jsonb(t) uses the actual column name (e.g. "snapdim_code"), not a generic "key".
     // Check that the value "united_states" appears in any field of any record.
-    expect(
-      snap!.records.some((r) => Object.values(r).includes("united_states")),
-    ).toBe(true);
+    expect(snap!.records.some((r) => Object.values(r).includes("united_states"))).toBe(true);
     expect(snap!.mappings).toContainEqual({ raw: "usa", targetKey: "united_states" });
   });
 

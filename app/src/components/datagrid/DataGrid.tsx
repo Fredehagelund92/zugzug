@@ -585,7 +585,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     onCursorChange(
       cursor.cursor ? { rowKey: cursor.cursor.rowKey, field: cursor.cursor.field } : null,
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the specific fields consumed; cursor.cursor object ref excluded to avoid firing on object identity changes when rowKey/field haven't changed
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deps are the specific fields consumed; cursor.cursor object ref excluded to avoid firing on object identity changes when rowKey/field haven't changed
   }, [cursor.cursor?.rowKey, cursor.cursor?.field, onCursorChange]);
 
   // ── Publish self cursor position to presence when cursor moves ────────────

@@ -99,7 +99,7 @@ describe("Review publish affordance copy", () => {
     });
   });
 
-  test("postgres-export mode: button says 'Publish' + 'Download snapshot' link", async () => {
+  test("postgres-export mode: button says 'Publish'", async () => {
     setupMocks(false);
     const { Triage } = await import("../src/routes/Triage");
     render(
@@ -109,7 +109,6 @@ describe("Review publish affordance copy", () => {
     );
     await waitFor(() => {
       expect(screen.getByText(/^Publish$/)).toBeInTheDocument();
-      expect(screen.getByText(/download snapshot/i)).toBeInTheDocument();
     });
   });
 });

@@ -130,7 +130,12 @@ export function Sources() {
       toast(e instanceof Error ? e.message : "Couldn't scan.", "error");
     }
   });
-  const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+  const outcomeText = (result: {
+    mode: "seed" | "connect";
+    derived?: number;
+    matched?: number;
+    unmatched?: number;
+  }): string => {
     if (result.mode === "seed") {
       if ((result.derived ?? 0) > 0) {
         return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;

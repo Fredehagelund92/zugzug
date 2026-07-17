@@ -36,7 +36,10 @@ describe("buildCandidates", () => {
 
   it("with a query, filters records by label/key (case-insensitive) then a create row for the query", () => {
     const out = buildCandidates(RECORDS, "united", "USA", 10);
-    const recs = out.filter((c) => c.kind === "record") as Extract<typeof out[number], { kind: "record" }>[];
+    const recs = out.filter((c) => c.kind === "record") as Extract<
+      (typeof out)[number],
+      { kind: "record" }
+    >[];
     expect(recs.map((r) => r.key)).toEqual(["us", "gb"]);
     expect(out[out.length - 1]).toEqual({ kind: "create", label: "united" });
   });

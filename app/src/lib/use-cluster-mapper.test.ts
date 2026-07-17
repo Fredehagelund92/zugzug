@@ -24,14 +24,32 @@ function loadedFeed(): DimClusterFeed {
   return {
     clusters: [
       // pending: one unmapped + one mapped sibling (United States)
-      { key: "usa", rep: "USA", rows: 150, mappedCount: 1, members: [
-        { raw: "USA", rows: 100, isMapped: false, mappedLabel: null, occurrences: [] },
-        { raw: "U.S.A.", rows: 50, isMapped: true, mappedLabel: "United States", occurrences: [] },
-      ] },
+      {
+        key: "usa",
+        rep: "USA",
+        rows: 150,
+        mappedCount: 1,
+        members: [
+          { raw: "USA", rows: 100, isMapped: false, mappedLabel: null, occurrences: [] },
+          {
+            raw: "U.S.A.",
+            rows: 50,
+            isMapped: true,
+            mappedLabel: "United States",
+            occurrences: [],
+          },
+        ],
+      },
       // fully mapped → excluded from the queue
-      { key: "ger", rep: "Germany", rows: 30, mappedCount: 1, members: [
-        { raw: "Germany", rows: 30, isMapped: true, mappedLabel: "Germany", occurrences: [] },
-      ] },
+      {
+        key: "ger",
+        rep: "Germany",
+        rows: 30,
+        mappedCount: 1,
+        members: [
+          { raw: "Germany", rows: 30, isMapped: true, mappedLabel: "Germany", occurrences: [] },
+        ],
+      },
     ],
     coverage: { resolvedRows: 80, atRiskRows: 100, pct: 44 },
     truncated: false,
@@ -105,12 +123,20 @@ describe("useClusterMapper", () => {
     // delimiter join/split would corrupt the reducer's order and never reach done.
     feedRef.current = makeFeedState({
       clusters: [
-        { key: "usa", rep: "USA", rows: 100, mappedCount: 0, members: [
-          { raw: "USA", rows: 100, isMapped: false, mappedLabel: null, occurrences: [] },
-        ] },
-        { key: "\u0000junk", rep: "???", rows: 10, mappedCount: 0, members: [
-          { raw: "???", rows: 10, isMapped: false, mappedLabel: null, occurrences: [] },
-        ] },
+        {
+          key: "usa",
+          rep: "USA",
+          rows: 100,
+          mappedCount: 0,
+          members: [{ raw: "USA", rows: 100, isMapped: false, mappedLabel: null, occurrences: [] }],
+        },
+        {
+          key: "\u0000junk",
+          rep: "???",
+          rows: 10,
+          mappedCount: 0,
+          members: [{ raw: "???", rows: 10, isMapped: false, mappedLabel: null, occurrences: [] }],
+        },
       ],
       coverage: { resolvedRows: 0, atRiskRows: 110, pct: 0 },
       truncated: false,

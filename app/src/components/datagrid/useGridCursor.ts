@@ -94,10 +94,7 @@ export function useGridCursor<Row>({
   const ref = useRef<HTMLDivElement>(null);
 
   // visible navigable columns — all non-hidden columns, including read-only ones
-  const navCols = useMemo(
-    () => columns.filter((c) => !c.hidden),
-    [columns],
-  );
+  const navCols = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
 
   // O(1) lookups for cursor moves — findIndex() on every arrow keystroke
   // turned into the dominant cost at 1k+ rows.
@@ -212,7 +209,7 @@ export function useGridCursor<Row>({
     if (!fullyVisible) {
       el.scrollIntoView({ block: "nearest", inline: "nearest" });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- cursor object ref excluded; only rowKey/field trigger scroll; adding cursor would scroll on every editing-state change too
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cursor object ref excluded; only rowKey/field trigger scroll; adding cursor would scroll on every editing-state change too
   }, [cursor?.rowKey, cursor?.field]);
 
   // When an edit ends but the cursor stays on a cell (Escape / blur-cancel),

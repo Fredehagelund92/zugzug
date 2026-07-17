@@ -955,7 +955,7 @@ export async function retireCanonical(
     const firedAt = new Date();
     await dispatchOutbound(tx, {
       tenantId,
-      type: "canonical.deleted",
+      type: "record.deleted",
       dimId,
       occurredAt: firedAt,
       payload: {
@@ -966,7 +966,7 @@ export async function retireCanonical(
       },
       // Includes timestamp so concurrent retire calls of the same key (e.g.
       // re-add then re-retire) produce distinct idem keys.
-      idemKey: `canonical.deleted:${dimId}:${key}:${firedAt.getTime()}`,
+      idemKey: `record.deleted:${dimId}:${key}:${firedAt.getTime()}`,
     });
 
     return { ok: true, variants: 0 };

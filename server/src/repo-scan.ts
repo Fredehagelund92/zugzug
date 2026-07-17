@@ -833,7 +833,12 @@ export async function deriveCanonical(
       column,
       hint: "column may be all NULL/empty, or warehouse not attached",
     });
-    await scanWiredSources(dimId, table, [column, ...(external && nameColumn ? [nameColumn] : [])], tenantId);
+    await scanWiredSources(
+      dimId,
+      table,
+      [column, ...(external && nameColumn ? [nameColumn] : [])],
+      tenantId,
+    );
     return { derived: 0, mode, matched: 0, unmatched: 0 };
   }
 

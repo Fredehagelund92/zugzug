@@ -141,7 +141,10 @@ function DashboardSkeleton() {
       </div>
       <div className="overflow-hidden rounded-sm border border-line">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-4 border-b border-line px-4 py-3 last:border-0">
+          <div
+            key={i}
+            className="flex items-center gap-4 border-b border-line px-4 py-3 last:border-0"
+          >
             <div className="h-2 w-2 shrink-0 rounded-pill bg-surface-3" />
             <div className="h-3 w-28 rounded-sm bg-surface-3" />
             <div className="h-2 w-16 rounded-sm bg-surface-3" />
@@ -187,12 +190,8 @@ export function Dashboard() {
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
   const tablesWithNew = dims.filter((d) => d.counts.newCount > 0).length;
-  const attentionTables = dims.filter(
-    (d) => d.counts.newCount > 0 || stagedDimIds.has(d.id),
-  );
-  const cleanTables = dims.filter(
-    (d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id),
-  );
+  const attentionTables = dims.filter((d) => d.counts.newCount > 0 || stagedDimIds.has(d.id));
+  const cleanTables = dims.filter((d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id));
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("urgency");
@@ -248,15 +247,16 @@ export function Dashboard() {
       value: String(totalNew),
       featured: totalNew > 0,
       delta:
-        totalNew > 0
-          ? `across ${tablesWithNew} table${tablesWithNew === 1 ? "" : "s"}`
-          : undefined,
+        totalNew > 0 ? `across ${tablesWithNew} table${tablesWithNew === 1 ? "" : "s"}` : undefined,
       dir: totalNew > 0 ? "warn" : undefined,
     },
     {
       label: "Rows at risk",
       value: fmtK(rowsAtRisk),
-      delta: rowsAtRisk > 0 ? "warehouse rows whose source value has no record yet" : "all warehouse rows are mapped",
+      delta:
+        rowsAtRisk > 0
+          ? "warehouse rows whose source value has no record yet"
+          : "all warehouse rows are mapped",
       dir: rowsAtRisk > 0 ? "warn" : undefined,
     },
   ];

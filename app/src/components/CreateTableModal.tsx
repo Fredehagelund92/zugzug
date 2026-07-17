@@ -289,8 +289,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
                   <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
                     Seed records from a warehouse column. Example: a country column with ‘USA’,
-                    ‘Canada’ and ‘United States’ becomes records usa, canada and united_states —
-                    you can merge and rename them afterwards.
+                    ‘Canada’ and ‘United States’ becomes records usa, canada and united_states — you
+                    can merge and rename them afterwards.
                   </p>
                   {sourceOpts.length === 0 ? (
                     <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
@@ -335,8 +335,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               </div>
               {sourceOpts.length === 0 ? (
                 <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                  No warehouse columns available yet. An admin connects a database under
-                  Settings → Warehouse; then you pick columns on the{" "}
+                  No warehouse columns available yet. An admin connects a database under Settings →
+                  Warehouse; then you pick columns on the{" "}
                   <a href={nav.sources} className="text-accent underline">
                     Sources
                   </a>{" "}

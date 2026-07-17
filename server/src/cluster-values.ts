@@ -41,10 +41,16 @@ export interface ValueCluster {
 }
 
 // Shared deterministic comparators (also used by clusterScanRows).
-function cmpByRowsThenRaw(a: { rows: number; raw: string }, b: { rows: number; raw: string }): number {
+function cmpByRowsThenRaw(
+  a: { rows: number; raw: string },
+  b: { rows: number; raw: string },
+): number {
   return b.rows - a.rows || (a.raw < b.raw ? -1 : a.raw > b.raw ? 1 : 0);
 }
-function cmpByRowsThenRep(a: { rows: number; rep: string }, b: { rows: number; rep: string }): number {
+function cmpByRowsThenRep(
+  a: { rows: number; rep: string },
+  b: { rows: number; rep: string },
+): number {
   return b.rows - a.rows || (a.rep < b.rep ? -1 : a.rep > b.rep ? 1 : 0);
 }
 

@@ -135,10 +135,19 @@ createRoot(root).render(
                           </Route>
                           <Route path="integrations">
                             <Route index element={<Navigate to="../settings/pull-api" replace />} />
-                            <Route path="pull-api" element={<Navigate to="../../settings/pull-api" replace />} />
-                            <Route path="webhooks" element={<Navigate to="../../settings/webhooks" replace />} />
+                            <Route
+                              path="pull-api"
+                              element={<Navigate to="../../settings/pull-api" replace />}
+                            />
+                            <Route
+                              path="webhooks"
+                              element={<Navigate to="../../settings/webhooks" replace />}
+                            />
                             <Route path="webhooks/:id" element={<WebhookDetailRedirect />} />
-                            <Route path="service-accounts" element={<Navigate to="../../settings/service-accounts" replace />} />
+                            <Route
+                              path="service-accounts"
+                              element={<Navigate to="../../settings/service-accounts" replace />}
+                            />
                           </Route>
                           <Route path="account" element={<Account />}>
                             <Route index element={<Navigate to="profile" replace />} />
