@@ -57,7 +57,8 @@ function clickCellByText(container: HTMLElement, text: string): HTMLElement {
 describe("DataGrid onCellKeyDown", () => {
   test("fires for unhandled keys with the cursor position", async () => {
     const onCellKeyDown = vi.fn();
-    const { container } = renderGrid({ onCellKeyDown });
+    // Workbench hosts own printable keys, so they opt out of type-to-edit.
+    const { container } = renderGrid({ onCellKeyDown, typeToEdit: false });
     const grid = container.querySelector('[role="grid"]') as HTMLElement;
 
     clickCellByText(container, "Alpha");
@@ -122,6 +123,7 @@ describe("DataGrid cursor survives row removal", () => {
           rowKey={(r) => r.id}
           onCommit={async () => {}}
           onCellKeyDown={onCellKeyDown}
+          typeToEdit={false}
         />
       </UndoStackProvider>,
     );
@@ -138,6 +140,7 @@ describe("DataGrid cursor survives row removal", () => {
             rowKey={(r) => r.id}
             onCommit={async () => {}}
             onCellKeyDown={onCellKeyDown}
+            typeToEdit={false}
           />
         </UndoStackProvider>,
       );
