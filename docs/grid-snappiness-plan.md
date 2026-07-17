@@ -156,6 +156,8 @@ end, which is the intended F2-style in-place edit.)_
   renderers; `useGridCursor.ts:361-364`.
 
 **D3 — `Home` / `End` do nothing.** _Severity: breaks-the-flow._
+_Status: ✅ **FIXED & VERIFIED** — `Home`/`End` jump to the first/last navigable
+column of the current row (`useGridCursor.ts`)._
 - **Observed:** From `acme_corp::key`, `Home` and `End` leave the cursor
   unmoved. No handler exists (only `⌘Home`/`⌘End` are handled,
   `useGridCursor.ts:325-337`).
@@ -164,6 +166,8 @@ end, which is the intended F2-style in-place edit.)_
   cell; `Home` returns it to the first.
 
 **D4 — `PageUp`/`PageDown` don't page the cursor.** _Severity: feels-sluggish._
+_Status: ✅ **FIXED & VERIFIED** — the cursor moves ~one viewport (page size
+measured from the container) and stays rendered/in-view. `useGridCursor.ts`._
 - **Observed:** `PageDown` scrolls the container (`scrollTop` 0→323) but the
   cursor detaches (`focusedCellDataCell` becomes null); `PageUp` doesn't restore
   it. No cursor paging.
@@ -172,6 +176,9 @@ end, which is the intended F2-style in-place edit.)_
   rendered/visible. (Depends on D0.)
 
 **D5 — `⌘D` fill-down is not implemented.** _Severity: feels-sluggish._
+_Status: ✅ **FIXED & VERIFIED** — `⌘D` fills the top row of a multi-row
+selection down the range (one undo step), or fills a single cell from the cell
+above. `DataGrid.tsx`._
 - **Observed:** Select a cell + the cell below, press `⌘D`; the lower cell keeps
   its own value (no fill). The prompt lists `⌘D` as expected spreadsheet
   behavior.
@@ -211,8 +218,18 @@ keeps focus in the editor chain throughout._
 - **`file:line`:** `useGridCursor.ts:282-285` (Escape/stopEdit path) — needs to
   restore focus to `cursor.ref` after the editor unmounts.
 
-**D9 — Failed record renames fail silently.** _Severity: feels-sluggish
-(root cause may be data-seeding — verify)._
+**D9 — Failed record renames fail silently.** _Severity: feels-sluggish._
+_Status: ⚠️ **PARTIALLY FIXED.** Client: ✅ a plain-language error toast now
+fires on any non-conflict write rejection (rename + field edit) and the value
+reverts — no more silent no-op (`TablePane.tsx`, verified: failing rename toasts
+& reverts, successful edits stay quiet). Server root cause: ❌ still open, and
+**it is a real bug, not a dev-seed gap** — the bulk seed path `addCanonical`
+(`repo-canonical.ts:535-569`) never calls `seedVersionRow`, so every dimension
+derived from the warehouse gets canonical rows with no `canonical_version` row
+and `bumpVersionOrThrow` 404s on rename. `addCanonicalOne` (line 601) seeds
+correctly, which is why manually-added rows rename fine. Recommended fix (needs
+sign-off — governed data path): seed version rows in `addCanonical`, and
+backfill existing rows (or lazily seed on first rename)._
 - **Observed:** Renaming a record whose name was never edited → `PUT
   …/canonical/:key` returns 404 "not found" → the optimistic value silently
   reverts, **no toast, no indicator**. Field-value edits (`…/canonical/:key/field/:field`)
@@ -281,19 +298,16 @@ item: evidence → change → success criterion → effort.
    Record-name editor now honors the seed (`defaultValue={initial ?? c.label}`).
    Verified — typing on a name cell replaces it.
 
-5. **Surface failed writes; verify the rename 404 (D9).** _Effort: M._
-   Evidence: silent 404 on 5263/5267 renames. First confirm whether missing
-   `canonical_version` rows are a dev-seed gap or a real path (check how rows are
-   created / whether `seedVersionRow` runs for imported rows). Then add a
-   non-blocking error toast on write rejection so no edit fails invisibly.
-   Success: a rejected rename shows an error and no stale value remains.
+5. **Surface failed writes (D9). ✅ CLIENT DONE; ⚠️ server root cause open.**
+   Confirmed the root cause is a real bug (`addCanonical` never seeds
+   `canonical_version` rows — see D9). Client error toast shipped and verified.
+   Server fix (seed version rows in `addCanonical` + backfill) needs sign-off.
 
-6. **Add the missing navigation keys: `Home`/`End`, real `PageUp`/`PageDown`
-   cursor paging (D3, D4).** _Effort: M._ Depends on #1 for paging to be
-   meaningful. Success: `Home`/`End` jump to row edges; `PageDown` advances ~one
-   screen with the cursor visible.
+6. **Add the missing navigation keys `Home`/`End`, `PageUp`/`PageDown` (D3, D4).
+   ✅ DONE.** Verified — `Home`/`End` jump to row edges; `PageDown`/`PageUp` page
+   the cursor with it staying visible.
 
-7. **`⌘D` fill-down (D5).** _Effort: M._ Success: `⌘D` fills the top value down
+7. **`⌘D` fill-down (D5). ✅ DONE.** Success: `⌘D` fills the top value down
    the selection in one undo step.
 
 8. **Scroll the range focus into view after `⌘⇧`-arrow / `⌘End` (D10).**
@@ -310,24 +324,24 @@ item: evidence → change → success criterion → effort.
 | Key | Intended (spreadsheet) | Today | Status |
 |---|---|---|---|
 | `↑ ↓ ← →` | Move cursor one cell | Moves one cell | ✅ works |
-| Printable char | Replace cell, enter edit (1st key kept) | Nothing (disabled on manual tables) | ❌ **D1** |
+| Printable char | Replace cell, enter edit (1st key kept) | Enters edit, seed replaces | ✅ fixed (D1/D2) |
 | `Enter` (not editing) | Enter edit | Enters edit | ✅ works |
 | `Enter` (editing) | Commit + move down | Commit + move + re-open editor | ⚠️ Airtable convention (D7) |
 | `Shift+Enter` (editing) | Commit + move up | Commit + move up + re-open | ⚠️ as above |
 | `Tab` / `Shift+Tab` (editing) | Commit + move right/left | Commit + move + re-open | ⚠️ as above |
 | `Tab` / `Shift+Tab` (not editing) | Move right/left | Moves right/left | ✅ works |
-| `Escape` (editing) | Cancel, stay put, keep keyboard | Cancels **but orphans focus to `<body>`** | ❌ **D8** |
-| `Home` / `End` | First / last column of row | Nothing | ❌ **D3** |
-| `PageUp` / `PageDown` | Move cursor one viewport | Scrolls a bit, cursor detaches | ❌ **D4** |
-| `⌘Home` / `⌘End` | Top-left / bottom-right | `⌘Home` ok; `⌘End` jumps logically but can't display (D0) | ⚠️ blocked by **D0** |
-| `⌘←/→/↑/↓` | Jump to data edge | Logical jump; view can't follow past ~row 33 | ⚠️ blocked by **D0** |
+| `Escape` (editing) | Cancel, stay put, keep keyboard | Cancels, focus returns to grid | ✅ fixed (D8) |
+| `Home` / `End` | First / last column of row | Jumps to first/last column | ✅ fixed (D3) |
+| `PageUp` / `PageDown` | Move cursor one viewport | Pages the cursor, stays visible | ✅ fixed (D4) |
+| `⌘Home` / `⌘End` | Top-left / bottom-right | Jump and scroll into view | ✅ works (D0 fixed) |
+| `⌘←/→/↑/↓` | Jump to data edge | Jumps and scrolls into view | ✅ works (D0 fixed) |
 | `Shift+Arrow` | Extend selection | Extends; aggregation footer shows | ✅ works |
 | `⌘Shift+Arrow` | Extend to data edge | Extends; focus end off-screen | ⚠️ **D10** |
-| `⌘D` | Fill down | Not implemented | ❌ **D5** |
+| `⌘D` | Fill down | Fills range / from above, atomic undo | ✅ fixed (D5) |
 | `⌘C` | Copy range | Copies + "Copied" toast (11.9ms) | ✅ works |
 | `⌘V` | Paste | Optimistic, atomic (42.5ms) | ✅ works |
 | `⌘X` | Cut | Not implemented | ❌ **D6** |
-| `⌘Z` / `⌘⇧Z` | Undo / redo (atomic) | Atomic for paste/fill/delete; dead while focus orphaned | ⚠️ blocked by **D8** |
+| `⌘Z` / `⌘⇧Z` | Undo / redo (atomic) | Atomic; alive after edit-exit | ✅ works (D8 fixed) |
 | `Delete` / `Backspace` | Clear cell/range | Clears range, one undo step | ✅ works |
 | Fill handle (drag) | Fill range | Works, atomic undo | ✅ works |
 | `⌘A` | Select all | Selects all | ✅ works |
