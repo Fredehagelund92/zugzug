@@ -115,7 +115,7 @@ export function Workspaces() {
         {loading ? (
           <SkeletonList
             rows={4}
-            columns={[20, 160, "minmax(0,1fr)", 140, 72, 120]}
+            columns={[28, "minmax(0,1fr)"]}
             data-testid="workspaces-skeleton"
           />
         ) : tenants.length === 0 ? (
@@ -130,81 +130,65 @@ export function Workspaces() {
           />
         ) : (
           <Panel padding="none" className="divide-y divide-line">
-            {/* Column headers */}
-            <div className="grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-2.5">
-              <span />
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Slug
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Label
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Warehouse
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
-                Members
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Last activity
-              </span>
-            </div>
-
             {tenants.map((t) => (
               <div
                 key={t.id}
-                className="grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
+                className="grid grid-cols-[28px_1fr] gap-3 items-start px-5 py-4 hover:bg-hover transition-colors group"
               >
-                {/* workspace color dot */}
-                <div
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: t.color ?? WORKSPACE_COLORS[0] }}
-                />
-
-                {/* slug */}
-                <code className="font-mono text-sm text-accent truncate">{t.slug}</code>
-
-                {/* label — click to edit */}
-                {editingId === t.id ? (
-                  <input
-                    autoFocus
-                    value={draftLabel}
-                    onChange={(e) => setDraftLabel(e.target.value)}
-                    onBlur={() => void commitLabel(t)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                      else if (e.key === "Escape") setEditingId(null);
-                    }}
-                    className="w-full bg-surface-2 border border-accent px-2 py-1 text-sm text-ink focus:outline-none"
+                {/* Color chip — vertically centered with the label line */}
+                <div className="pt-0.5 flex justify-center">
+                  <div
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ background: t.color ?? WORKSPACE_COLORS[0] }}
                   />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDraftLabel(t.label);
-                      setEditingId(t.id);
-                    }}
-                    className="font-body text-sm text-ink text-left hover:text-accent transition-colors truncate"
-                    title="Click to rename"
-                  >
-                    {t.label}
-                  </button>
-                )}
+                </div>
 
-                {/* warehouse badge */}
-                <span className="font-mono text-xs text-ink-3 bg-surface-2 border border-line px-2 py-0.5 truncate inline-block">
-                  {t.warehouse_id}
-                </span>
+                {/* Two-tier content */}
+                <div className="min-w-0 space-y-0.5">
+                  {/* Primary line: label (click to edit) */}
+                  {editingId === t.id ? (
+                    <input
+                      autoFocus
+                      value={draftLabel}
+                      onChange={(e) => setDraftLabel(e.target.value)}
+                      onBlur={() => void commitLabel(t)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        else if (e.key === "Escape") setEditingId(null);
+                      }}
+                      className="w-full bg-surface-2 border border-accent px-2 py-0.5 text-sm text-ink focus:outline-none"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDraftLabel(t.label);
+                        setEditingId(t.id);
+                      }}
+                      className="font-body text-sm font-medium text-ink text-left hover:text-accent transition-colors truncate w-full"
+                      title="Click to rename"
+                    >
+                      {t.label}
+                    </button>
+                  )}
 
-                {/* member count */}
-                <span className="font-mono text-sm text-ink-2 tabular-nums text-right">
-                  {t.member_count ?? 0}
-                </span>
-
-                {/* last activity */}
-                <span className="font-mono text-xs text-ink-3">
-                  {t.last_activity_at ? `${ago(t.last_activity_at)} ago` : "—"}
-                </span>
+                  {/* Secondary line: slug · warehouse · members · last activity */}
+                  <div className="flex items-center gap-2 text-xs text-ink-3 truncate">
+                    <code className="font-mono text-accent/70">{t.slug}</code>
+                    <span className="text-ink-3/40">·</span>
+                    <code className="font-mono truncate">{t.warehouse_id}</code>
+                    <span className="text-ink-3/40">·</span>
+                    <span className="shrink-0">
+                      {t.member_count ?? 0} {(t.member_count ?? 0) === 1 ? "member" : "members"}
+                    </span>
+                    {t.last_activity_at && (
+                      <>
+                        <span className="text-ink-3/40">·</span>
+                        <span className="shrink-0">updated {ago(t.last_activity_at)} ago</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </Panel>
