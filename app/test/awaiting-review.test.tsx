@@ -6,6 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 vi.setConfig({ testTimeout: 15000 });
 import userEvent from "@testing-library/user-event";
 import React from "react";
+import { MemoryRouter } from "react-router-dom";
 import { clearToasts } from "../src/components/Toast";
 
 // Shared stub data
@@ -263,5 +264,90 @@ describe("AwaitingReview", () => {
 
     // Reason input is still present (reject UI stays open)
     expect(screen.getByPlaceholderText(/reason \(required\)/i)).toBeInTheDocument();
+  });
+});
+
+describe("Review empty states", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    clearToasts();
+  });
+
+  test("the settled empty state is one emoji + one directive", async () => {
+    // Dim with zero unmapped values — filter="new" → rankedDims is empty → EmptyState shown
+    const dimWithNoNew = {
+      id: "country",
+      dimension: "Country",
+      canonical: [],
+      fields: [],
+      rows: 0,
+      color: null,
+      description: null,
+      dimTable: "zugzug.dim_country",
+      mapTable: "zugzug.map_country",
+      keyCol: "country_code",
+      keyKind: "slug",
+      counts: { newCount: 0, mappedCount: 5, totalDistinct: 5, unmappedRowsTotal: 0, mappedRowsTotal: 50, scannedAt: null },
+    };
+
+    vi.doMock("../src/lib/use-tenant-navigate", () => ({
+      useTenantNavigate: () => () => {},
+      useNavLinks: () => ({
+        base: "/app/test-ws",
+        dashboard: "/app/test-ws",
+        triage: "/app/test-ws/triage",
+        sources: "/app/test-ws/sources",
+        tables: "/app/test-ws/tables",
+        settings: "/app/test-ws/settings",
+        table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+        tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
+      }),
+    }));
+    vi.doMock("../src/store", async (orig) => {
+      const real = await orig<typeof import("../src/store")>();
+      return {
+        ...real,
+        useWorkspaceInfo: () => ({
+          adapter: "duckdb",
+          writable: false,
+          canonicalMode: "postgres-export",
+          warehouseDb: null,
+          defaultEngineerMode: false,
+          allowedDomain: null,
+        }),
+        useStoreLoading: () => false,
+        useCanEdit: () => true,
+        useDimensions: () => [dimWithNoNew],
+        useDrafts: () => ({}),
+        saveDraft: vi.fn(),
+        discardDraft: vi.fn(),
+        commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0 })),
+        fetchPublishState: vi.fn(async () => ({ version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 0, changedKeys: [] })),
+        dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+      };
+    });
+    vi.doMock("../src/lib/create-table-modal", () => ({
+      useCreateTableModal: () => ({ open: vi.fn() }),
+      CreateTableModalProvider: ({ children }: { children: React.ReactNode }) => children,
+    }));
+
+    const { Triage } = await import("../src/routes/Triage");
+    render(
+      <MemoryRouter>
+        <Triage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("🎉")).toBeInTheDocument();
+    });
+    const directive = screen.getByText(/Nothing left to review\./i);
+    expect(directive).toBeInTheDocument();
+    // The directive must not be wrapped in a <p> (no prose paragraph in the empty state)
+    expect(directive.closest("p")).toBeNull();
   });
 });

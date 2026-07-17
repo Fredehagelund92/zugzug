@@ -34,6 +34,7 @@ import { useDimValuesPage, type ScanValueRow } from "../lib/use-dim-values-page"
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 import { PublishPreviewDialog, type PublishGroup } from "../components/PublishPreviewDialog";
 import { AwaitingReview } from "../components/AwaitingReview";
+import { EmptyState as EmptyStateCard } from "../components/EmptyState";
 import { apiFetch } from "../api";
 
 /* Triage — per-dim sectioned inbox. Each ranked dim gets a section header; only
@@ -549,35 +550,29 @@ function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: 
   const nav = useNavLinks();
   if (filter === "new")
     return (
-      <div className="px-4 py-12 text-center">
-        <div className="font-display text-[18px] font-semibold text-ink">
-          Nothing to review today. 🎯
-        </div>
-        <p className="mx-auto mt-2 max-w-[44ch] text-[12.5px] text-ink-3">
-          Curate records in{" "}
+      <EmptyStateCard
+        glyph="🎉"
+        title="Nothing left to review."
+        secondary={
           <Link to={nav.tables} className="text-accent hover:underline">
-            Tables
+            Curate records in Tables
           </Link>
-          , or{" "}
-          <Link to={nav.sources} className="text-accent hover:underline">
-            connect more sources
-          </Link>
-          .
-        </p>
-      </div>
+        }
+      />
     );
   if (filter === "mapped")
     return (
-      <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-        Nothing has been mapped yet.{" "}
-        <button onClick={onSwitchToNew} className="text-accent hover:underline">
-          View needs review →
-        </button>
-      </div>
+      <EmptyStateCard
+        glyph="🗂️"
+        title="Nothing has been mapped yet."
+        secondary={
+          <button onClick={onSwitchToNew} className="text-accent hover:underline">
+            View needs review →
+          </button>
+        }
+      />
     );
-  return (
-    <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">no tables yet</div>
-  );
+  return <EmptyStateCard glyph="📋" title="No tables yet." />;
 }
 
 // ── DimSection ───────────────────────────────────────────────────────────────
@@ -879,6 +874,32 @@ function DimSectionBody(p: DimSectionBodyProps) {
 }
 
 // ── footer ───────────────────────────────────────────────────────────────────
+function ErrorBanner({
+  message,
+  onDismiss,
+  retry,
+}: {
+  message: string;
+  onDismiss: () => void;
+  retry?: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
+      <span>{message}</span>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onDismiss}>
+          Dismiss
+        </Button>
+        {retry && (
+          <Button size="sm" onClick={retry}>
+            Retry
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface FooterProps {
   dimById: Map<string, MappingDimension>;
   stagedDrafts: Draft[];
@@ -935,28 +956,12 @@ function CrossDimFooter(p: FooterProps) {
 
   return (
     <div className="sticky bottom-0 z-10 border-t border-line bg-surface">
-      {p.draftError && (
-        <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
-          <span>{p.draftError}</span>
-          <Button variant="ghost" size="sm" onClick={() => p.setDraftError(null)}>
-            Dismiss
-          </Button>
-        </div>
-      )}
-      {p.commitError && (
-        <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-4 py-2 text-[12px] text-danger">
-          <span>{p.commitError}</span>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => p.setCommitError(null)}>
-              Dismiss
-            </Button>
-            {p.canEdit && (
-              <Button size="sm" onClick={() => p.commitAll()}>
-                Retry
-              </Button>
-            )}
-          </div>
-        </div>
+      {(p.commitError || p.draftError) && (
+        <ErrorBanner
+          message={(p.commitError ?? p.draftError)!}
+          onDismiss={p.commitError ? () => p.setCommitError(null) : () => p.setDraftError(null)}
+          retry={p.commitError && p.canEdit ? () => p.commitAll() : undefined}
+        />
       )}
       {review && stagedCount > 0 && (
         <div className="border-b border-line">
