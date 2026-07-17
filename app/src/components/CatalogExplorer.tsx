@@ -522,7 +522,14 @@ export function CatalogExplorer({
 
               <div className="flex items-center justify-between px-5 py-3">
                 <span className="font-mono text-[11px] text-ink-3">
-                  {loading ? "searching…" : `${rows.length} of ${total} tables`}
+                  {/* While the first page loads (no rows yet) the centered
+                      "Loading catalog…" is the single indicator; only the
+                      "Load more" append case (rows present) shows it here. */}
+                  {loading
+                    ? rows.length > 0
+                      ? "searching…"
+                      : ""
+                    : `${rows.length} of ${total} tables`}
                   {wiredThisSession > 0 && (
                     <span className="text-ok"> · {wiredThisSession} wired just now</span>
                   )}

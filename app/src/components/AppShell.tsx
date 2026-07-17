@@ -10,7 +10,7 @@ import {
   IconDashboard,
   IconMapping,
   IconTables,
-  IconSources,
+  IconLayers,
   IconSettings,
   IconAudit,
   IconUsers,
@@ -381,7 +381,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const workspaceGroup: NavItem[] = [
     { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
     { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
-    { to: navLinks.sources, label: "Sources", Icon: IconSources },
+    { to: navLinks.sources, label: "Sources", Icon: IconLayers },
     { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
   ];
   const integrationsGroup: NavItem[] = [
@@ -429,7 +429,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       id: "nav:sources",
       group: "Navigate",
       label: "Sources",
-      icon: <IconSources className="h-4 w-4" />,
+      icon: <IconLayers className="h-4 w-4" />,
       action: () => navigate(navLinks.sources),
       keywords: "warehouse catalog",
       priority: true,

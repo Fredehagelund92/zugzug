@@ -41,6 +41,8 @@ describe("CatalogExplorer (drawer)", () => {
     expect(screen.queryByText(/no tables match/i)).toBeNull();
     expect(screen.queryByText(/warehouse not attached/i)).toBeNull();
     expect(screen.getByText(/loading catalog/i)).toBeInTheDocument();
+    // Only one loading indicator — the footer "searching…" must not also show.
+    expect(screen.queryByText(/searching/i)).toBeNull();
     // Once the search settles, real results replace the loading state.
     await waitFor(() => expect(screen.getByText("authco.users")).toBeInTheDocument());
     expect(screen.queryByText(/loading catalog/i)).toBeNull();
