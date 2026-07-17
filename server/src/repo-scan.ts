@@ -681,6 +681,30 @@ export async function searchCatalog(opts: {
 
 /* ---- canonical bootstrap from warehouse ---- */
 
+/** Seed a canonical_version row (version 1) for each derived key so the record
+ *  can be renamed/retired/merged later. Without this, rename/merge/retire 404
+ *  ("canonical not found") because bumpVersionOrThrow finds no version row.
+ *  Idempotent — existing version rows are left untouched. */
+async function seedVersionRows(
+  dimId: string,
+  keys: string[],
+  userId: string,
+  tenantId: string,
+): Promise<void> {
+  const CHUNK = 500;
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const chunk = keys.slice(i, i + CHUNK);
+    const placeholders = chunk.map((_, j) => `($1, $${j + 4}, 1, now(), $2, $3)`).join(", ");
+    await pgRun(
+      `INSERT INTO "zugzug_app"."canonical_version"
+            (dim_id, key, version, updated_at, updated_by, tenant_id)
+       VALUES ${placeholders}
+       ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
+      [dimId, userId, tenantId, ...chunk],
+    );
+  }
+}
+
 /** Bulk upsert (raw, key)-style rows into a Postgres table in chunks. */
 async function bulkInsert(
   prefix: string,
@@ -827,6 +851,7 @@ export async function deriveCanonical(
       ids.map((v) => [v, v] as [string, string]),
       `ON CONFLICT (raw) DO NOTHING`,
     );
+    await seedVersionRows(dimId, ids, userId, tenantId);
     if (nameColumn) {
       await pgRun(
         `UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3
@@ -862,6 +887,7 @@ export async function deriveCanonical(
     mapPairs,
     `ON CONFLICT (raw) DO NOTHING`,
   );
+  await seedVersionRows(dimId, [...dimByKey.keys()], userId, tenantId);
   if (!opts.silent)
     await appendAuditAs(
       userId,

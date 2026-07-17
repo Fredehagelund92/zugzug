@@ -19,6 +19,7 @@ import {
   qid,
   cq,
   dimMeta,
+  type DimMeta,
   parseFieldConfig,
   pgAll,
   pgGet,
@@ -124,6 +125,7 @@ async function bumpVersionOrThrow(
   expectedVersion: number,
   userId: string,
   tenantId: string,
+  meta: DimMeta,
 ): Promise<number> {
   const rows = await tx.all<{ version: number }>(
     `UPDATE "zugzug_app"."canonical_version"
@@ -144,7 +146,35 @@ async function bumpVersionOrThrow(
         AND cv.retired_at IS NULL`,
     [dimId, key, tenantId],
   );
-  if (!cur) throw new AppError("NOT_FOUND", `canonical ${dimId}/${key} not found`, 404);
+  if (!cur) {
+    // No version row exists. Rows created by the bulk derive/seed paths
+    // (deriveCanonical, addCanonical) never got one, so the read path reports
+    // them as version 1. If the canonical row actually exists and the client is
+    // at that implied v1, lazily seed the version row and bump it (to 2) rather
+    // than 404. This backfills legacy rows on their first edit. Any other
+    // expectedVersion for a row with no version row is a genuine mismatch.
+    const exists = await tx.get<{ one: number }>(
+      `SELECT 1 AS one FROM ${cq(meta.dimTable)} WHERE ${qid(meta.keyCol)} = $1`,
+      [key],
+    );
+    if (exists && expectedVersion === 1) {
+      const seeded = await tx.all<{ version: number }>(
+        `INSERT INTO "zugzug_app"."canonical_version"
+              (dim_id, key, version, updated_at, updated_by, tenant_id)
+         VALUES ($1, $2, 2, now(), $3, $4)
+         ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
+            SET version      = "canonical_version".version + 1,
+                updated_at   = now(),
+                updated_by   = EXCLUDED.updated_by,
+                retired_at   = NULL,
+                retired_into = NULL
+         RETURNING version`,
+        [dimId, key, userId, tenantId],
+      );
+      if (seeded.length === 1) return seeded[0]!.version;
+    }
+    throw new AppError("NOT_FOUND", `canonical ${dimId}/${key} not found`, 404);
+  }
 
   const current: ConflictCurrent = {
     version: cur.version,
@@ -760,7 +790,7 @@ export async function renameCanonical(
   ).catch(() => null);
 
   const newVersion = await pgTx(async (tx) => {
-    const v = await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId, tenantId);
+    const v = await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId, tenantId, m);
     await tx.run(`UPDATE ${cq(m.dimTable)} SET label = $1 WHERE ${qid(m.keyCol)} = $2`, [
       label,
       key,
@@ -908,7 +938,7 @@ export async function retireCanonical(
     const variants = Number(v?.n ?? 0);
     if (variants > 0) return { ok: false, variants };
 
-    await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId, tenantId);
+    await bumpVersionOrThrow(tx, dimId, key, expectedVersion, userId, tenantId, m);
 
     // Read the label BEFORE the DELETE so the outbound event carries the
     // human-facing name as it existed at the time of retirement. Each dim
