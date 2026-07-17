@@ -100,6 +100,15 @@ export function Webhooks() {
 
       <WebhookVerificationReference />
 
+      {dupSet.size > 0 && (
+        <div
+          role="alert"
+          className="border border-warn/40 bg-warn-soft px-4 py-2.5 text-[13px] text-warn"
+        >
+          {dupSet.size} webhook{dupSet.size === 1 ? "" : "s"} share a URL — deliveries may be duplicated.
+        </div>
+      )}
+
       <Panel padding="sm">
         <table className="w-full text-[13px]">
           <thead className="text-ink-3 text-left">
@@ -148,8 +157,6 @@ export function Webhooks() {
           </tbody>
         </table>
       </Panel>
-
-      {dupSet.size > 0 && <p className="text-[12px] text-ink-3">{dupSet.size} duplicate URLs</p>}
 
       {showCreate && (
         <CreateWebhookModal
