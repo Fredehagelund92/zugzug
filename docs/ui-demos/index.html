@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zugzug — UI/UX polish demos</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="demo.css" />
+    <style>
+      .wrap { max-width: 920px; margin: 0 auto; padding: var(--sp-8) var(--sp-6); }
+      .brandmark { display: flex; align-items: center; gap: 10px; font-family: var(--font-display);
+        font-weight: 800; font-size: var(--fs-lg); letter-spacing: -0.02em; margin-bottom: var(--sp-6); }
+      .brandmark .glyph { width: 26px; height: 26px; display: grid; place-items: center; background: var(--accent);
+        color: #fff; font-weight: 800; flex: none; }
+      h1 { font-size: clamp(34px, 5vw, 56px); font-weight: 800; letter-spacing: -0.035em; line-height: 0.98; }
+      .lead { color: var(--ink-2); font-size: var(--fs-lg); max-width: 60ch; margin-top: var(--sp-4); }
+      .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-4); margin: var(--sp-7) 0; }
+      .card { background: var(--surface); border: 1px solid var(--line); overflow: hidden; text-decoration: none;
+        color: inherit; display: flex; flex-direction: column; transition: border-color var(--dur-base), transform var(--dur-base); }
+      .card:hover { border-color: var(--line-2); transform: translateY(-2px); }
+      .card .thumb { height: 132px; background: var(--brand-ink); position: relative; overflow: hidden; }
+      .card .thumb::after { content: ""; position: absolute; inset: 0;
+        background-image: radial-gradient(circle at center, rgba(255,255,255,0.08) 1.2px, transparent 1.4px);
+        background-size: 22px 22px; }
+      .card .thumb .n { position: absolute; left: 14px; top: 12px; font-family: var(--font-mono); font-size: 11px;
+        letter-spacing: 0.2em; color: rgba(255,255,255,0.55); z-index: 1; }
+      .card .thumb .t { position: absolute; left: 14px; bottom: 12px; font-family: var(--font-display); font-weight: 800;
+        font-size: var(--fs-xl); color: #f4f6fc; letter-spacing: -0.02em; z-index: 1; }
+      .card .body { padding: var(--sp-4); font-size: var(--fs-sm); color: var(--ink-2); }
+      .card .body b { color: var(--ink); font-weight: 600; }
+
+      section.review { margin-top: var(--sp-8); }
+      section.review h2 { font-size: var(--fs-2xl); font-weight: 800; letter-spacing: -0.02em; margin-bottom: var(--sp-2); }
+      section.review p.note { color: var(--ink-3); font-size: var(--fs-sm); margin-bottom: var(--sp-5); }
+      .find { border-top: 1px solid var(--line); padding: var(--sp-4) 0; display: grid;
+        grid-template-columns: 150px 1fr; gap: var(--sp-4); }
+      .find:last-child { border-bottom: 1px solid var(--line); }
+      .find .pg { font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase;
+        letter-spacing: 0.1em; color: var(--ink-3); padding-top: 2px; }
+      .find ul { margin: 0; padding-left: 18px; font-size: var(--fs-sm); color: var(--ink-2); }
+      .find ul li { margin: 3px 0; }
+      .find ul li b { color: var(--ink); font-weight: 600; }
+      .tag { display: inline-block; font-family: var(--font-mono); font-size: 10px; padding: 1px 6px;
+        border-radius: 999px; margin-left: 4px; }
+      .tag.demo { background: var(--accent-wash); color: var(--accent); }
+      @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } .find { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brandmark"><span class="glyph">Z</span>Zug Zug<span class="accent">.</span></div>
+      <div class="kick" style="margin-bottom:14px">ui / ux polish · light mode</div>
+      <h1>Polish pass<span class="accent">.</span></h1>
+      <p class="lead">
+        A walk through every page, with light-mode mockups for the highest-impact changes. Built from the
+        real tokens — square corners, the junction lattice, the rose accent, teal = published, ochre = staged —
+        so these read exactly like the app would.
+      </p>
+
+      <div class="grid">
+        <a class="card" href="01-login.html">
+          <div class="thumb"><span class="n">01</span><span class="t">Login</span></div>
+          <div class="body"><b>Lead with the brand.</b> Split cover carrying the lattice + the source→record convergence motif. Today it's a bare centered card.</div>
+        </a>
+        <a class="card" href="02-dashboard.html">
+          <div class="thumb"><span class="n">02</span><span class="t">Dashboard</span></div>
+          <div class="body"><b>Calmer overview.</b> Two-tier status instead of a 7-field wall, a featured coverage KPI, tint bars + coverage bars in the health table.</div>
+        </a>
+        <a class="card" href="03-review.html">
+          <div class="thumb"><span class="n">03</span><span class="t">Review</span></div>
+          <div class="body"><b>Faster decisions.</b> Solid filter pills, in-brand match confidence, a clean value queue, and a grouped publish footer.</div>
+        </a>
+      </div>
+
+      <section class="review">
+        <h2>What I'd change</h2>
+        <p class="note">Grouped by page. Items marked <span class="tag demo">demo</span> are mocked up above; the rest are quick written recommendations.</p>
+
+        <div class="find">
+          <div class="pg">Login / Signup</div>
+          <ul>
+            <li><b>Add the signature lattice + brand cover</b> — the app's most identifying visual is absent from its front door. <span class="tag demo">demo</span></li>
+            <li>Lift form hierarchy: heavier labels, 14px fields, a real focus ring.</li>
+            <li>Replace the abstract tagline "Reference table mapping."</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Dashboard</div>
+          <ul>
+            <li><b>De-densify the status line</b> — the 7-field inline row is hard to scan; split into a short summary. <span class="tag demo">demo</span></li>
+            <li>Feature the coverage KPI; unify skeleton radii with live cards.</li>
+            <li>Copy: drop "messy" (§Language) — say "source values".</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Review</div>
+          <ul>
+            <li><b>Stronger active filter pill</b> (solid accent, not a faint wash). <span class="tag demo">demo</span></li>
+            <li><b>Move match confidence onto the workflow palette</b> — teal/ochre/neutral, not out-of-brand blue/red. <span class="tag demo">demo</span></li>
+            <li>Standardize every empty state to one emoji + one directive.</li>
+            <li>Consolidate the two footer error zones into one.</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Sources</div>
+          <ul>
+            <li>Copy: "No sources wired yet" → "No sources connected yet".</li>
+            <li>Give the empty state a clear primary ("Browse catalog") over the secondary settings link.</li>
+            <li>Elevate the "values await a decision → Review" pointer above the fold.</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Settings</div>
+          <ul>
+            <li><b>Route every card through <code class="mono">Panel</code></b> — Danger and Warehouse hand-roll <code class="mono">border + bg</code> cards that drift from the system.</li>
+            <li>Rename the "Matching" section to "Mapping" for users.</li>
+            <li>Add a page title per section — settings pages currently start cold with a bare form.</li>
+            <li>Swap the heavy role-popover shadow for the border + elevated-surface pattern.</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Integrations</div>
+          <ul>
+            <li>Turn the "N duplicate URLs" note into a warn banner above the table.</li>
+            <li>Add a copy affordance next to masked secrets/tokens; drop <code class="mono">kid=</code> jargon.</li>
+            <li>Render "never" / null last-delivery as an "—" placeholder.</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Account</div>
+          <ul>
+            <li>Reuse the existing <code class="mono">RoleBadge</code> in Memberships instead of inline mono text.</li>
+            <li>Couple the autosave status inline with its field label.</li>
+            <li>Give the empty-membership state an action ("Ask an admin to add you").</li>
+          </ul>
+        </div>
+        <div class="find">
+          <div class="pg">Admin</div>
+          <ul>
+            <li>Thin the 6-column Workspaces table (2-tier rows or drop last-activity) for scannability.</li>
+            <li>Fix avatar contrast — accent initials on an accent-soft fill are low-contrast.</li>
+            <li>Add Enter-to-search on the Users / Audit search inputs.</li>
+            <li>Extract one <code class="mono">SuperAdminBadge</code>; the Users and Audit variants differ.</li>
+          </ul>
+        </div>
+      </section>
+
+      <p class="faint" style="margin-top:40px;font-size:var(--fs-xs)">
+        Static mockups · <span class="mono">docs/ui-demos/</span> · open any file directly in a browser.
+      </p>
+    </div>
+  </body>
+</html>

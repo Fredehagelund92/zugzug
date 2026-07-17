@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zugzug — Review (polish demo)</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="demo.css" />
+    <style>
+      .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+      /* shell (shared with dashboard demo) */
+      .side { background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column;
+        gap: var(--sp-2); padding: var(--sp-4); position: sticky; top: 0; height: 100vh; }
+      .ws { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line);
+        border-radius: var(--r-pill); cursor: pointer; }
+      .ws:hover { background: var(--hover); }
+      .ws .avatar { width: 24px; height: 24px; border-radius: var(--r-pill); flex: none; display: grid; place-items: center;
+        color: #fff; font-weight: 700; font-size: 11px; font-family: var(--font-display); background: var(--tint-indigo); }
+      .ws .nm { font-weight: 700; font-size: var(--fs-sm); letter-spacing: -0.01em; flex: 1; }
+      .navlabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+        color: var(--ink-3); padding: var(--sp-4) var(--sp-2) var(--sp-1); }
+      .nav { display: flex; flex-direction: column; gap: 2px; }
+      .nav a { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: var(--r);
+        color: var(--ink-2); font-size: var(--fs-sm); font-weight: 500; }
+      .nav a:hover { background: var(--hover); color: var(--ink); }
+      .nav a.active { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
+      .nav a .n { margin-left: auto; font-family: var(--font-mono); font-size: 10px; background: var(--surface-2);
+        color: var(--ink-2); padding: 1px 7px; border-radius: var(--r-pill); }
+      .nav a.active .n { background: var(--accent); color: #fff; }
+      .side-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--line); }
+      .side-foot .avatar { width: 28px; height: 28px; border-radius: var(--r-pill); background: var(--accent); color: #fff;
+        display: grid; place-items: center; font-weight: 700; font-size: 11px; font-family: var(--font-display); flex: none; }
+      .side-foot .who { font-size: var(--fs-sm); font-weight: 600; line-height: 1.2; }
+      .side-foot .who small { display: block; color: var(--ink-3); font-weight: 400; font-size: 11px; }
+
+      .main { min-width: 0; display: flex; flex-direction: column; }
+      .topbar { height: 60px; border-bottom: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(8px);
+        position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: var(--sp-4); padding: 0 var(--sp-6); }
+      .crumbs { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--ink-3); }
+      .crumbs a { color: var(--ink-2); }
+      .cmd { margin-left: auto; display: flex; align-items: center; gap: 8px; background: var(--surface-2);
+        border: 1px solid var(--line); padding: 7px 10px; color: var(--ink-3); font-size: var(--fs-sm); cursor: pointer; min-width: 200px; }
+      .cmd .k { margin-left: auto; font-family: var(--font-mono); font-size: 10px; background: var(--surface);
+        border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+      .content { padding: var(--sp-6); padding-bottom: 96px; max-width: 1080px; width: 100%; margin: 0 auto; }
+
+      /* header */
+      .phead { margin-bottom: var(--sp-5); }
+      .phead h1 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 800; letter-spacing: -0.03em; }
+      .phead .kick { margin-bottom: 8px; }
+      .phead .sub { color: var(--ink-2); font-size: var(--fs-md); margin-top: 6px; }
+
+      /* toolbar */
+      .toolbar { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); flex-wrap: wrap; }
+      .search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line-2);
+        padding: 8px 12px; min-width: 220px; flex: 1; max-width: 320px; }
+      .search input { border: 0; background: transparent; outline: none; font-family: var(--font-body);
+        font-size: var(--fs-sm); color: var(--ink); width: 100%; }
+      .search .ico { color: var(--ink-3); }
+      .scan { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--ink-3); font-size: var(--fs-xs); }
+      .scan b { color: var(--ink-2); font-family: var(--font-mono); font-weight: 500; }
+
+      /* the queue */
+      .queue { display: flex; flex-direction: column; }
+      .qhead { display: flex; align-items: center; gap: 10px; padding: 10px 4px; margin-top: var(--sp-3); }
+      .qhead .tint { width: 3px; height: 15px; }
+      .qhead b { font-weight: 700; letter-spacing: -0.01em; }
+      .qhead small { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+      .qhead .cnt { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+      .row {
+        display: grid; grid-template-columns: 1fr auto; gap: var(--sp-4); align-items: center;
+        background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--line);
+        padding: 14px 16px; margin-bottom: -1px; transition: background var(--dur-base), border-color var(--dur-base);
+      }
+      .row:hover { background: var(--hover); }
+      .row.cursor { border-left-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent-soft); background: var(--surface); }
+      .row .left { display: flex; align-items: center; gap: var(--sp-4); min-width: 0; }
+      .val { font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 500; color: var(--ink); }
+      .val::before { content: '"'; color: var(--ink-3); } .val::after { content: '"'; color: var(--ink-3); }
+      .freq { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+      .origin { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+      .suggest { display: flex; align-items: center; gap: 10px; }
+      .arrow { color: var(--ink-3); }
+      .rec { display: inline-flex; align-items: center; gap: 8px; background: var(--surface-2);
+        border: 1px solid var(--line); padding: 5px 10px; font-size: var(--fs-sm); font-weight: 600; }
+      .rec .tint { width: 8px; height: 8px; border-radius: 999px; }
+      /* confidence uses workflow semantics, not arbitrary blue/red */
+      .conf { font-family: var(--font-mono); font-size: 10px; padding: 3px 7px; border-radius: 999px; white-space: nowrap; }
+      .conf.high { background: var(--committed-soft); color: var(--committed); }
+      .conf.med  { background: var(--staged-soft); color: var(--staged); }
+      .conf.low  { background: var(--surface-2); color: var(--ink-3); }
+      .acts { display: flex; align-items: center; gap: 6px; }
+
+      /* standardized empty state (single emoji + one-line directive) */
+      .empty { text-align: center; padding: var(--sp-8) var(--sp-6); color: var(--ink-2); }
+      .empty .em { font-size: 34px; display: block; margin-bottom: 12px; }
+      .empty b { color: var(--ink); font-weight: 600; }
+
+      /* sticky publish footer */
+      .pfoot { position: fixed; left: 248px; right: 0; bottom: 0; z-index: 20; background: var(--surface-elevated);
+        border-top: 1px solid var(--line-2); box-shadow: var(--shadow); padding: 12px var(--sp-6);
+        display: flex; align-items: center; gap: var(--sp-4); }
+      .pfoot .summary { display: flex; align-items: center; gap: var(--sp-4); }
+      .pfoot .chip { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-sm); }
+      .pfoot .chip .tint { width: 8px; height: 8px; }
+      .pfoot .chip b { font-family: var(--font-mono); }
+      .pfoot .staged-total { font-weight: 700; font-size: var(--fs-md); }
+      .pfoot .staged-total span { color: var(--staged); }
+      .pfoot .spacer { flex: 1; }
+      .pfoot .undo { color: var(--ink-2); }
+
+      @media (max-width: 720px) { .app { grid-template-columns: 1fr; } .side { display: none; } .pfoot { left: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="side">
+        <div class="ws"><span class="avatar">A</span><span class="nm">Acme Analytics</span>
+          <svg class="ico sm" viewBox="0 0 24 24" style="color:var(--ink-3)"><path d="M8 9l4 4 4-4"/></svg></div>
+        <div class="navlabel">Workspace</div>
+        <nav class="nav">
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Overview</a>
+          <a class="active" href="#"><svg class="ico" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Review<span class="n">23</span></a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>Sources</a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>Tables<span class="n">7</span></a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>History</a>
+        </nav>
+        <div class="navlabel">Configure</div>
+        <nav class="nav"><a href="#"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 8"/></svg>Settings</a></nav>
+        <div class="side-foot"><span class="avatar">FH</span><span class="who">Frederik H<small>Admin</small></span></div>
+      </aside>
+
+      <div class="main">
+        <div class="topbar">
+          <div class="crumbs"><a href="#">Acme Analytics</a><span>/</span><span>Review</span></div>
+          <div class="cmd"><svg class="ico sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Search or jump to…<span class="k">⌘K</span></div>
+        </div>
+
+        <main class="content">
+          <header class="phead">
+            <div class="kick">review</div>
+            <h1>Review</h1>
+            <p class="sub">23 source values across 3 tables, ranked by how often they appear. Accept a match or pick a record — nothing publishes until you say so.</p>
+          </header>
+
+          <div class="toolbar">
+            <div class="pills">
+              <button class="pill active">Needs review<span class="n">23</span></button>
+              <button class="pill">All<span class="n">1.24M</span></button>
+              <button class="pill">Mapped<span class="n">1.24M</span></button>
+            </div>
+            <label class="search">
+              <svg class="ico sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+              <input placeholder="Filter source values…" />
+            </label>
+            <div class="scan">as of <b>2:14 PM</b>
+              <button class="btn btn-sm"><svg class="ico sm" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>Rescan</button>
+            </div>
+          </div>
+
+          <!-- Country group -->
+          <div class="queue">
+            <div class="qhead"><span class="tint" style="background:var(--tint-rose)"></span><b>Country</b><small>dim_country</small><span class="cnt">12 values</span></div>
+
+            <div class="row cursor">
+              <div class="left">
+                <span class="val">U.S.</span>
+                <span class="freq">×4,182</span>
+                <span class="origin">orders.ship_country</span>
+              </div>
+              <div class="suggest">
+                <div class="rec"><span class="tint" style="background:var(--tint-rose)"></span>United States</div>
+                <span class="conf high">94% match</span>
+                <div class="acts">
+                  <button class="btn btn-sm btn-primary">Accept <span class="mono" style="opacity:.7">A</span></button>
+                  <button class="btn btn-sm">Pick…</button>
+                  <button class="btn btn-sm btn-ghost">Skip</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="left">
+                <span class="val">Great Britain</span>
+                <span class="freq">×1,904</span>
+                <span class="origin">orders.ship_country</span>
+              </div>
+              <div class="suggest">
+                <div class="rec"><span class="tint" style="background:var(--tint-rose)"></span>United Kingdom</div>
+                <span class="conf med">71% match</span>
+                <div class="acts">
+                  <button class="btn btn-sm btn-primary">Accept</button>
+                  <button class="btn btn-sm">Pick…</button>
+                  <button class="btn btn-sm btn-ghost">Skip</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="left">
+                <span class="val">Airstrip One</span>
+                <span class="freq">×63</span>
+                <span class="origin">orders.ship_country</span>
+              </div>
+              <div class="suggest">
+                <span class="conf low">no match</span>
+                <div class="acts">
+                  <button class="btn btn-sm">Pick a record…</button>
+                  <button class="btn btn-sm btn-ghost">Skip</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Channel group -->
+          <div class="queue">
+            <div class="qhead"><span class="tint" style="background:var(--tint-amber)"></span><b>Channel</b><small>dim_channel</small><span class="cnt">7 values</span></div>
+            <div class="row">
+              <div class="left">
+                <span class="val">gAds</span>
+                <span class="freq">×2,551</span>
+                <span class="origin">sessions.utm_source</span>
+              </div>
+              <div class="suggest">
+                <div class="rec"><span class="tint" style="background:var(--tint-amber)"></span>Google Ads</div>
+                <span class="conf high">96% match</span>
+                <div class="acts">
+                  <button class="btn btn-sm btn-primary">Accept</button>
+                  <button class="btn btn-sm">Pick…</button>
+                  <button class="btn btn-sm btn-ghost">Skip</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- standardized empty state, shown when a filter clears everything -->
+          <div class="panel panel-pad" style="margin-top:24px;display:none">
+            <div class="empty"><span class="em">🎉</span><b>Nothing left to review.</b><br />Every source value has a mapping. Publish to fold your drafts into the next version.</div>
+          </div>
+        </main>
+
+        <!-- sticky publish footer -->
+        <div class="pfoot">
+          <div class="summary">
+            <span class="staged-total"><span>8</span> drafts staged</span>
+            <span class="chip"><span class="tint" style="background:var(--tint-rose)"></span><b>3</b> Country</span>
+            <span class="chip"><span class="tint" style="background:var(--tint-amber)"></span><b>5</b> Channel</span>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn btn-sm btn-ghost undo"><svg class="ico sm" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg>Undo</button>
+          <button class="btn btn-primary">Publish → v18</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,223 @@
+/* =============================================================================
+   demo.css — shared scaffold for the Zugzug UI/UX polish demos (LIGHT MODE).
+   Built from the real tokens (app/src/tokens.css) + app-kit essentials so the
+   mockups read exactly like the app. Light theme is forced; square-mode is on
+   (all non-pill radii collapse to 0), matching globals.css.
+   These are static demos — no framework, no build. Open the .html files direct.
+   ============================================================================= */
+
+/* ---- real light-theme tokens (from tokens.css [data-theme="light"]) ---- */
+:root {
+  --bg: #f4f6fc;
+  --surface: #ffffff;
+  --surface-2: #eaeef7;
+  --surface-3: #dfe5f2;
+  --surface-elevated: #ffffff;
+  --ink: #0c1020;
+  --ink-2: #48526a;
+  --ink-3: #8893a8;
+  --line: rgba(12, 16, 32, 0.11);
+  --line-2: rgba(12, 16, 32, 0.2);
+  --node-line: rgba(12, 16, 32, 0.06);
+  --shadow-sm: 0 1px 2px rgba(20, 30, 60, 0.08), 0 0 0 1px rgba(20, 30, 60, 0.04);
+  --shadow: 0 8px 22px -10px rgba(20, 30, 60, 0.18);
+  --shadow-lg: 0 24px 50px -20px rgba(20, 30, 60, 0.22);
+
+  --accent: #d6336c;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-2: #f0a323;
+  --accent-2-soft: color-mix(in srgb, var(--accent-2) 16%, transparent);
+
+  --brand-ink: #0c1020;
+  --brand-paper: #f5f7fc;
+  --brand-graphite: #353d52;
+  --brand-mist: #c4ccdc;
+
+  /* per-table tints (light variants) */
+  --tint-rose: #d6336c;
+  --tint-amber: #c68410;
+  --tint-mint: #2a8c5e;
+  --tint-teal: #1b8e9c;
+  --tint-indigo: #5a50c7;
+  --tint-violet: #8a3fba;
+  --tint-slate: #57637c;
+
+  --font-display: "Bricolage Grotesque", sans-serif;
+  --font-body: "Hanken Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* square-mode: brand radii collapse to 0; only pills stay round */
+  --r-sm: 0px;
+  --r: 0px;
+  --r-lg: 0px;
+  --r-pill: 999px;
+
+  --wide: 1320px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+
+  /* app-kit scale + semantics */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 14px; --fs-md: 15px;
+  --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 32px; --fs-3xl: 46px;
+
+  --ok: #1f9d6b;
+  --warn: #c7901c;
+  --danger: #d7434b;
+  --committed: #0e9f8a;   /* published to the store — cooler teal */
+  --staged: #c47c18;      /* in-flight draft — saturated ochre */
+  --committed-soft: color-mix(in srgb, var(--committed) 14%, transparent);
+  --staged-soft: color-mix(in srgb, var(--staged) 16%, transparent);
+  --ok-soft: color-mix(in srgb, var(--ok) 14%, transparent);
+  --warn-soft: color-mix(in srgb, var(--warn) 16%, transparent);
+  --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
+  --hover: color-mix(in srgb, var(--ink) 7%, transparent);
+  --accent-wash: color-mix(in srgb, var(--accent) 9%, transparent);
+  --accent-hover: color-mix(in srgb, var(--accent) 86%, #000);
+  --glass: color-mix(in srgb, var(--bg) 82%, transparent);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ---- the signature junction lattice (from DESIGN.md §8) ---- */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at center, var(--node-line) 1.4px, transparent 1.6px),
+    linear-gradient(var(--node-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--node-line) 1px, transparent 1px);
+  background-size: 74px 74px;
+}
+body > * { position: relative; z-index: 1; }
+
+a { color: var(--accent); text-decoration: none; }
+::selection { background: var(--accent); color: var(--accent-ink); }
+
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-2); border-radius: var(--r-pill); border: 3px solid var(--bg);
+}
+
+/* ---- type helpers ---- */
+.mono { font-family: var(--font-mono); }
+.display { font-family: var(--font-display); }
+.muted { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.accent { color: var(--accent); }
+.kick {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.kick::before { content: "[ "; color: var(--accent); }
+.kick::after  { content: " ]"; color: var(--accent); }
+
+h1, h2, h3 { font-family: var(--font-display); }
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600; line-height: 1;
+  padding: 10px 16px; border-radius: var(--r); border: 1px solid transparent; cursor: pointer;
+  background: var(--surface-2); color: var(--ink); white-space: nowrap;
+  transition: background var(--dur-base) var(--ease), border-color var(--dur-base), transform var(--dur-fast), box-shadow var(--dur-base);
+}
+.btn:hover { background: var(--surface-3); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.btn[disabled] { opacity: 0.5; pointer-events: none; }
+.btn svg { width: 16px; height: 16px; }
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); box-shadow: 0 6px 18px -8px var(--accent); }
+.btn-ghost { background: transparent; color: var(--ink-2); }
+.btn-ghost:hover { background: var(--hover); color: var(--ink); }
+.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-sm { padding: 6px 11px; font-size: var(--fs-xs); }
+.btn-lg { padding: 13px 22px; font-size: var(--fs-md); }
+.btn-icon { padding: 0; width: 34px; height: 34px; }
+
+/* ---- icon sizing (feather-style inline svg) ---- */
+.ico { width: 18px; height: 18px; stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.ico.sm { width: 15px; height: 15px; }
+.ico.lg { width: 22px; height: 22px; }
+
+/* ---- panel (the one card) — border + surface, NO shadow ---- */
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); overflow: hidden;
+}
+.panel-pad { padding: var(--sp-5); }
+
+/* ---- badges / chips ---- */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono);
+  font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line);
+}
+.badge .dot { width: 6px; height: 6px; border-radius: var(--r-pill); background: currentColor; }
+.badge-committed { background: var(--committed-soft); color: var(--committed); border-color: transparent; }
+.badge-staged { background: var(--staged-soft); color: var(--staged); border-color: transparent; }
+.badge-ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.badge-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.badge-danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.badge-accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---- coverage bar ---- */
+.bar { height: 6px; border-radius: var(--r-pill); background: var(--surface-3); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--committed); border-radius: var(--r-pill); }
+
+/* ---- inputs ---- */
+.input {
+  width: 100%; font-family: var(--font-body); font-size: var(--fs-sm); color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r);
+  padding: 10px 12px; transition: border-color var(--dur-base), box-shadow var(--dur-base);
+}
+.input::placeholder { color: var(--ink-3); }
+.input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field-label { font-size: var(--fs-xs); font-weight: 600; letter-spacing: 0.04em;
+  text-transform: uppercase; font-family: var(--font-mono); color: var(--ink-3); }
+
+/* ---- segmented / filter pills ---- */
+.pills { display: inline-flex; gap: 4px; }
+.pill {
+  font-family: var(--font-body); font-size: var(--fs-sm); font-weight: 600;
+  padding: 6px 13px; border-radius: var(--r-pill); cursor: pointer;
+  background: transparent; color: var(--ink-2); border: 1px solid transparent;
+  transition: background var(--dur-base), color var(--dur-base), border-color var(--dur-base);
+}
+.pill:hover { color: var(--ink); background: var(--hover); }
+.pill.active { background: var(--accent); color: var(--accent-ink); }
+.pill .n { font-family: var(--font-mono); font-size: 11px; opacity: 0.8; margin-left: 6px; }
+
+/* utility */
+.row { display: flex; align-items: center; gap: var(--sp-3); }
+.between { justify-content: space-between; }
+.wrap { flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

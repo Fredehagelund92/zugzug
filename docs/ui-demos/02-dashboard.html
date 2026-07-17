@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zugzug — Dashboard (polish demo)</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400..800&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <link rel="stylesheet" href="demo.css" />
+    <style>
+      .app { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
+
+      /* ---- sidebar ---- */
+      .side {
+        background: var(--surface); border-right: 1px solid var(--line);
+        display: flex; flex-direction: column; gap: var(--sp-2);
+        padding: var(--sp-4) var(--sp-4); position: sticky; top: 0; height: 100vh;
+      }
+      .ws {
+        display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+        border: 1px solid var(--line); border-radius: var(--r-pill);
+        cursor: pointer; transition: background var(--dur-base);
+      }
+      .ws:hover { background: var(--hover); }
+      .ws .avatar { width: 24px; height: 24px; border-radius: var(--r-pill); flex: none;
+        display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 11px;
+        font-family: var(--font-display); background: var(--tint-indigo); }
+      .ws .nm { font-weight: 700; font-size: var(--fs-sm); letter-spacing: -0.01em; flex: 1; }
+      .ws .chev { color: var(--ink-3); }
+
+      .navlabel { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em;
+        text-transform: uppercase; color: var(--ink-3); padding: var(--sp-4) var(--sp-2) var(--sp-1); }
+      .nav { display: flex; flex-direction: column; gap: 2px; }
+      .nav a { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: var(--r);
+        color: var(--ink-2); font-size: var(--fs-sm); font-weight: 500; transition: background var(--dur-base), color var(--dur-base); }
+      .nav a:hover { background: var(--hover); color: var(--ink); }
+      .nav a.active { background: var(--accent-wash); color: var(--accent); font-weight: 600; }
+      .nav a .n { margin-left: auto; font-family: var(--font-mono); font-size: 10px;
+        background: var(--surface-2); color: var(--ink-2); padding: 1px 7px; border-radius: var(--r-pill); }
+      .nav a.active .n { background: var(--accent); color: #fff; }
+      .side-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+        border-top: 1px solid var(--line); }
+      .side-foot .avatar { width: 28px; height: 28px; border-radius: var(--r-pill); background: var(--accent);
+        color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 11px; font-family: var(--font-display); flex: none; }
+      .side-foot .who { font-size: var(--fs-sm); font-weight: 600; line-height: 1.2; }
+      .side-foot .who small { display: block; color: var(--ink-3); font-weight: 400; font-size: 11px; }
+
+      /* ---- main ---- */
+      .main { min-width: 0; display: flex; flex-direction: column; }
+      .topbar { height: 60px; border-bottom: 1px solid var(--line); background: var(--glass);
+        backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10;
+        display: flex; align-items: center; gap: var(--sp-4); padding: 0 var(--sp-6); }
+      .crumbs { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--ink-3); }
+      .crumbs a { color: var(--ink-2); }
+      .cmd { margin-left: auto; display: flex; align-items: center; gap: 8px; background: var(--surface-2);
+        border: 1px solid var(--line); padding: 7px 10px; color: var(--ink-3); font-size: var(--fs-sm);
+        cursor: pointer; min-width: 200px; }
+      .cmd .k { margin-left: auto; font-family: var(--font-mono); font-size: 10px; background: var(--surface);
+        border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+      .icobtn { width: 34px; height: 34px; display: grid; place-items: center; color: var(--ink-2);
+        border: 1px solid transparent; cursor: pointer; }
+      .icobtn:hover { background: var(--hover); color: var(--ink); }
+
+      .content { padding: var(--sp-6); max-width: var(--wide); width: 100%; margin: 0 auto; }
+
+      /* ---- page header ---- */
+      .phead { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-4);
+        margin-bottom: var(--sp-6); }
+      .phead h1 { font-size: clamp(28px, 3.4vw, 40px); font-weight: 800; letter-spacing: -0.03em; line-height: 1.02; }
+      .phead .kick { margin-bottom: 8px; }
+      /* two-tier status line, replacing the dense 7-field inline row */
+      .status { display: flex; gap: var(--sp-5); margin-top: 12px; flex-wrap: wrap; }
+      .status .s { font-size: var(--fs-sm); color: var(--ink-2); }
+      .status .s b { font-family: var(--font-display); font-weight: 700; color: var(--ink); font-size: var(--fs-md);
+        margin-right: 5px; }
+
+      /* ---- KPI grid ---- */
+      .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--sp-4); margin-bottom: var(--sp-6); }
+      .kpi { background: var(--surface); border: 1px solid var(--line); padding: var(--sp-5); }
+      .kpi .lab { font-size: var(--fs-sm); color: var(--ink-2); display: flex; align-items: center; gap: 7px; }
+      .kpi .lab .ico { color: var(--ink-3); }
+      .kpi .val { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 800;
+        letter-spacing: -0.02em; margin: 8px 0 2px; }
+      .kpi .delta { font-family: var(--font-mono); font-size: var(--fs-xs); display: inline-flex; align-items: center; gap: 4px; }
+      .kpi .delta.up { color: var(--ok); }
+      .kpi.feature { grid-column: span 1; background:
+        linear-gradient(180deg, color-mix(in srgb, var(--committed) 8%, var(--surface)), var(--surface)); }
+      .kpi.feature .val { color: var(--committed); }
+      .kpi .cov { margin-top: 12px; }
+
+      /* ---- health table ---- */
+      .sec-h { display: flex; align-items: baseline; justify-content: space-between; margin: var(--sp-6) 0 var(--sp-3); }
+      .sec-h h2 { font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.01em; }
+      .sec-h .sort { display: flex; gap: 4px; }
+      table.health { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+      .health th { text-align: left; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+        text-transform: uppercase; color: var(--ink-3); font-weight: 500; padding: 11px var(--sp-4);
+        border-bottom: 1px solid var(--line-2); }
+      .health th.r, .health td.r { text-align: right; }
+      .health td { padding: 13px var(--sp-4); border-bottom: 1px solid var(--line); vertical-align: middle; }
+      .health tbody tr { transition: background var(--dur-base); cursor: pointer; }
+      .health tbody tr:hover { background: var(--hover); }
+      .health tbody tr:last-child td { border-bottom: 0; }
+      .tname { display: flex; align-items: center; gap: 11px; }
+      .tname .tint { width: 3px; align-self: stretch; height: 34px; flex: none; }
+      .tname .txt b { font-weight: 700; display: block; letter-spacing: -0.01em; }
+      .tname .txt small { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+      .num { font-family: var(--font-mono); }
+      .covcell { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+      .covcell .bar { flex: 1; }
+      .covcell .pct { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--ink-2); width: 44px; text-align: right; }
+      .updated { color: var(--ink-3); font-size: var(--fs-xs); }
+      td .badge { font-size: 10px; }
+
+      @media (max-width: 1080px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+      @media (max-width: 720px) { .app { grid-template-columns: 1fr; } .side { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <!-- SIDEBAR -->
+      <aside class="side">
+        <div class="ws">
+          <span class="avatar">A</span>
+          <span class="nm">Acme Analytics</span>
+          <svg class="ico sm chev" viewBox="0 0 24 24"><path d="M8 9l4 4 4-4"/></svg>
+        </div>
+
+        <div class="navlabel">Workspace</div>
+        <nav class="nav">
+          <a class="active" href="#"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Overview</a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Review<span class="n">23</span></a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>Sources</a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>Tables<span class="n">7</span></a>
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="9"/></svg>History</a>
+        </nav>
+
+        <div class="navlabel">Configure</div>
+        <nav class="nav">
+          <a href="#"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 8"/></svg>Settings</a>
+        </nav>
+
+        <div class="side-foot">
+          <span class="avatar">FH</span>
+          <span class="who">Frederik H<small>Admin</small></span>
+        </div>
+      </aside>
+
+      <!-- MAIN -->
+      <div class="main">
+        <div class="topbar">
+          <div class="crumbs"><a href="#">Acme Analytics</a><span>/</span><span>Overview</span></div>
+          <div class="cmd"><svg class="ico sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Search or jump to…<span class="k">⌘K</span></div>
+          <button class="icobtn" title="Toggle theme"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg></button>
+        </div>
+
+        <main class="content">
+          <!-- PAGE HEADER with de-densified two-tier status -->
+          <header class="phead">
+            <div>
+              <div class="kick">workspace overview</div>
+              <h1>Acme Analytics</h1>
+              <div class="status">
+                <span class="s"><b>7</b> tables</span>
+                <span class="s"><b>1.24M</b> records</span>
+                <span class="s"><b class="accent">23</b> in review</span>
+                <span class="s"><b style="color:var(--staged)">8</b> drafts staged</span>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-lg">Review 23 new →</button>
+          </header>
+
+          <!-- KPIs -->
+          <section class="kpis">
+            <div class="kpi">
+              <div class="lab"><svg class="ico sm" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18"/><path d="M3 9h18M9 3v18"/></svg>Tables</div>
+              <div class="val">7</div>
+              <div class="delta up">2 need attention</div>
+            </div>
+            <div class="kpi feature">
+              <div class="lab"><svg class="ico sm" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>Coverage</div>
+              <div class="val">98.7%</div>
+              <div class="cov bar"><i style="width:98.7%"></i></div>
+            </div>
+            <div class="kpi">
+              <div class="lab"><svg class="ico sm" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/></svg>In review</div>
+              <div class="val" style="color:var(--accent)">23</div>
+              <div class="delta">source values awaiting a decision</div>
+            </div>
+            <div class="kpi">
+              <div class="lab"><svg class="ico sm" viewBox="0 0 24 24"><path d="M12 2v20M2 7l10-5 10 5"/></svg>Published today</div>
+              <div class="val" style="color:var(--committed)">v18</div>
+              <div class="delta up">↑ folded 8 drafts · 2h ago</div>
+            </div>
+          </section>
+
+          <!-- HEALTH TABLE -->
+          <div class="sec-h">
+            <h2>Table health</h2>
+            <div class="sort pills">
+              <button class="pill active">Urgency</button>
+              <button class="pill">Coverage</button>
+              <button class="pill">Name</button>
+            </div>
+          </div>
+          <div class="panel">
+            <table class="health">
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th class="r">Records</th>
+                  <th>Coverage</th>
+                  <th>In review</th>
+                  <th>Drafts</th>
+                  <th class="r">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><div class="tname"><span class="tint" style="background:var(--tint-rose)"></span><span class="txt"><b>Country</b><small>dim_country</small></span></div></td>
+                  <td class="r num">195</td>
+                  <td><div class="covcell"><div class="bar"><i style="width:88%;background:var(--warn)"></i></div><span class="pct">88%</span></div></td>
+                  <td><span class="badge badge-warn"><span class="dot"></span>12</span></td>
+                  <td><span class="badge badge-staged">3 staged</span></td>
+                  <td class="r updated">4m ago</td>
+                </tr>
+                <tr>
+                  <td><div class="tname"><span class="tint" style="background:var(--tint-amber)"></span><span class="txt"><b>Channel</b><small>dim_channel</small></span></div></td>
+                  <td class="r num">42</td>
+                  <td><div class="covcell"><div class="bar"><i style="width:95%"></i></div><span class="pct">95%</span></div></td>
+                  <td><span class="badge badge-warn"><span class="dot"></span>7</span></td>
+                  <td><span class="badge badge-staged">5 staged</span></td>
+                  <td class="r updated">1h ago</td>
+                </tr>
+                <tr>
+                  <td><div class="tname"><span class="tint" style="background:var(--tint-teal)"></span><span class="txt"><b>Partner</b><small>dim_partner</small></span></div></td>
+                  <td class="r num">1,208</td>
+                  <td><div class="covcell"><div class="bar"><i style="width:99.4%"></i></div><span class="pct">99%</span></div></td>
+                  <td><span class="faint">—</span></td>
+                  <td><span class="faint">—</span></td>
+                  <td class="r updated">yesterday</td>
+                </tr>
+                <tr>
+                  <td><div class="tname"><span class="tint" style="background:var(--tint-indigo)"></span><span class="txt"><b>Product category</b><small>dim_product_category</small></span></div></td>
+                  <td class="r num">88</td>
+                  <td><div class="covcell"><div class="bar"><i style="width:100%"></i></div><span class="pct">100%</span></div></td>
+                  <td><span class="faint">—</span></td>
+                  <td><span class="faint">—</span></td>
+                  <td class="r updated">3d ago</td>
+                </tr>
+                <tr>
+                  <td><div class="tname"><span class="tint" style="background:var(--tint-violet)"></span><span class="txt"><b>Currency</b><small>dim_currency</small></span></div></td>
+                  <td class="r num">161</td>
+                  <td><div class="covcell"><div class="bar"><i style="width:100%"></i></div><span class="pct">100%</span></div></td>
+                  <td><span class="faint">—</span></td>
+                  <td><span class="faint">—</span></td>
+                  <td class="r updated">1w ago</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>
