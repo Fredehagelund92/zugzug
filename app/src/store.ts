@@ -907,6 +907,16 @@ export async function addSource(dimId: string, table: string, column: string): P
   emit();
 }
 
+/** Unwire a warehouse column from a dimension, then refresh the sources list. */
+export async function removeSource(dimId: string, table: string, column: string): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/sources`, {
+    method: "DELETE",
+    body: JSON.stringify({ table, column }),
+  });
+  await refreshSources();
+  emit();
+}
+
 /** Top-N unmapped raw values from a specific warehouse source column. Drives
  *  the per-row "see what's actually unmapped" reveal on the Sources page. */
 export interface UnmappedSample {
