@@ -50,8 +50,12 @@ BEGIN
   END IF;
 
   -- Preflight C: zugzug.warehouse_db must be set (drizzle/migrate.ts).
-  IF current_setting('zugzug.warehouse_db', true) IS NULL
-     OR current_setting('zugzug.warehouse_db', true) = '' THEN
+  -- Only required when there is data to backfill — a fresh install (no users)
+  -- inserts no connections/databases below, so an empty setting is harmless.
+  -- Same fresh-install guard as preflight A above.
+  IF (current_setting('zugzug.warehouse_db', true) IS NULL
+      OR current_setting('zugzug.warehouse_db', true) = '')
+     AND EXISTS (SELECT 1 FROM zugzug_app.users) THEN
     RAISE EXCEPTION
       '[warehouse_multi_db] preflight C: zugzug.warehouse_db setting empty. '
       'drizzle/migrate.ts must SET zugzug.warehouse_db before runMigrations().';
