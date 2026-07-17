@@ -996,16 +996,16 @@ function CrossDimFooter(p: FooterProps) {
                           <span className="min-w-0 flex-1 truncate text-ink">{d.raw}</span>
                           {d.source === "ai" && (
                             <span className="flex shrink-0 items-center gap-1">
-                              <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold text-blue-700">
+                              <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[9px] font-semibold text-ink-2">
                                 AI
                               </span>
                               {d.confidence && (
                                 <span
                                   className={cx(
                                     "rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                                    d.confidence === "high" && "bg-green-100 text-green-700",
-                                    d.confidence === "medium" && "bg-yellow-100 text-yellow-700",
-                                    d.confidence === "low" && "bg-red-100 text-red-700",
+                                    d.confidence === "high" && "bg-committed-soft text-committed",
+                                    d.confidence === "medium" && "bg-staged-soft text-staged",
+                                    d.confidence === "low" && "bg-surface-2 text-ink-3",
                                   )}
                                   title={d.reasoning ?? undefined}
                                 >
