@@ -215,6 +215,23 @@ export function useGridCursor<Row>({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- cursor object ref excluded; only rowKey/field trigger scroll; adding cursor would scroll on every editing-state change too
   }, [cursor?.rowKey, cursor?.field]);
 
+  // When an edit ends but the cursor stays on a cell (Escape / blur-cancel),
+  // the editor <input> unmounts and the browser drops focus to <body> — arrows,
+  // undo, and type-to-edit all go dead until the user clicks back in. Return
+  // focus to the grid so keyboard flow continues. The commit-and-advance path
+  // (Enter/Tab) re-enters edit in the same tick, so `editing` never lands on
+  // false here; this only fires on a genuine edit-exit. We only reclaim focus
+  // when it was orphaned to <body>, so clicking elsewhere still works.
+  const wasEditingRef = useRef(false);
+  useEffect(() => {
+    const editing = cursor?.editing ?? false;
+    if (wasEditingRef.current && !editing && cursor && ref.current) {
+      const active = document.activeElement;
+      if (!active || active === document.body) ref.current.focus();
+    }
+    wasEditingRef.current = editing;
+  }, [cursor]);
+
   // When the host's rows change (filter toggle, async save), the cursor may
   // point at a row that no longer exists. Instead of dropping focus (which
   // would break the workbench A/A/A triage loop — accept → row leaves → next
