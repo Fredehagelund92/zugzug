@@ -31,6 +31,7 @@ const FILES = [
   "app/src/components/datagrid/ShortcutsOverlay.tsx",
   "app/src/components/CreateTableModal.tsx",
   "app/src/routes/Dashboard.tsx",
+  "app/src/routes/Sources.tsx",
 ];
 
 const BANNED = ["canonical", "raw", "triage", "master", "golden", "commit", "sync", "tenant", "matching"];

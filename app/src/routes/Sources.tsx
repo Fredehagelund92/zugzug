@@ -214,7 +214,7 @@ export function Sources() {
 
   const lede =
     agg.columns === 0
-      ? "No sources wired yet. Connect your first warehouse column to start."
+      ? "No sources connected yet."
       : `${agg.columns.toLocaleString()} column${agg.columns === 1 ? "" : "s"} connected across ${agg.systems} system${agg.systems === 1 ? "" : "s"}`;
 
   if (loading) return <SourcesLoader />;
@@ -284,17 +284,28 @@ export function Sources() {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {groups.length === 0 ? (
             <SetupCard
-              title="No sources yet"
-              body="A source is a warehouse column Zug Zug scans for values. To add one: an admin connects a database under Settings → Warehouse, then you pick columns from the catalog here."
-              action={
-                <div className="flex items-center gap-2">
-                  <Button onClick={() => setCatalog(true)}>Browse catalog</Button>
-                  <BrowseWarehouse settingsBase={nav.settings} />
-                </div>
-              }
+              title="No sources connected yet"
+              glyph={<span className="text-2xl" aria-hidden>🔌</span>}
+              body="Pick a warehouse column from the catalog — Zug Zug will scan it for values."
+              action={<Button onClick={() => setCatalog(true)}>Browse catalog</Button>}
+              secondary={<BrowseWarehouse settingsBase={nav.settings} />}
             />
           ) : (
             <>
+              {/* ─── REVIEW POINTER (above the fold when unmapped values exist) ─── */}
+              {agg.unmapped > 0 && agg.worst && (
+                <div className="flex items-center gap-2 border-b border-line bg-accent/5 px-6 py-3 text-[12.5px] text-ink-2">
+                  <span className="zz-live h-1.5 w-1.5 shrink-0 rounded-pill bg-accent" />
+                  {agg.unmapped.toLocaleString()} values await a decision —{" "}
+                  <Link
+                    to={nav.table(agg.worst.dimId, "match")}
+                    className="font-semibold text-accent hover:underline"
+                  >
+                    Review
+                  </Link>
+                </div>
+              )}
+
               {groups.map((g) => (
                 <SchemaSection
                   key={g.schema}
@@ -308,20 +319,6 @@ export function Sources() {
                   onRemove={(r) => void removeAction.run(r)}
                 />
               ))}
-
-              {/* ─── REVIEW POINTER ─── */}
-              {agg.unmapped > 0 && agg.worst && (
-                <div className="flex items-center gap-2 border-t border-line px-6 py-3 text-[12.5px] text-ink-2">
-                  <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" />
-                  {agg.unmapped.toLocaleString()} values await a decision
-                  <Link
-                    to={nav.table(agg.worst.dimId, "match")}
-                    className="font-semibold text-accent hover:underline"
-                  >
-                    → Review
-                  </Link>
-                </div>
-              )}
             </>
           )}
         </div>

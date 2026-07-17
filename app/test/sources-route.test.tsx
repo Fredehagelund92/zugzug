@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { SourceInfo } from "../src/store";
@@ -8,9 +8,10 @@ const SOURCES: SourceInfo[] = [
   { table: "billing.invoices", column: "currency", dimension: "Currency", dimId: "d2", present: true, rows: 50, values: 5, unmapped: 0, scanned: true, scannedAt: "2026-07-16T10:00:00Z" },
 ];
 const removeSource = vi.fn().mockResolvedValue(undefined);
+const useSources = vi.fn(() => SOURCES);
 
 vi.mock("../src/store", () => ({
-  useSources: () => SOURCES,
+  useSources,
   useDimensions: () => [],
   useCanEdit: () => true,
   useStoreLoading: () => false,
@@ -18,6 +19,10 @@ vi.mock("../src/store", () => ({
   deriveCanonical: vi.fn(),
   removeSource,
 }));
+
+beforeEach(() => {
+  useSources.mockImplementation(() => SOURCES);
+});
 vi.mock("../src/lib/use-tenant-navigate", () => ({
   useNavLinks: () => ({
     table: (id: string) => `/app/default/tables?open=${id}&active=${id}&mode=match`,
@@ -32,6 +37,13 @@ async function renderPage() {
 }
 
 describe("Sources route", () => {
+  it("empty state says 'connected', not 'wired'", async () => {
+    useSources.mockImplementation(() => []);
+    await renderPage();
+    expect(screen.queryByText(/wired/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/No sources connected yet/i).length).toBeGreaterThan(0);
+  });
+
   it("renders the connection lede without monitoring copy", async () => {
     await renderPage();
     expect(screen.getByText(/2 columns connected across 2 systems/i)).toBeInTheDocument();
