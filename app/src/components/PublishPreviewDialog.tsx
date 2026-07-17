@@ -86,8 +86,8 @@ export function PublishPreviewDialog({
               )}
               {g.changedKeys.length > 0 && (
                 <div className="mt-1.5 font-mono text-[11px] text-ink-3">
-                  + {g.changedKeys.length} record edit{g.changedKeys.length === 1 ? "" : "s"} already
-                  in the working copy ({g.changedKeys.slice(0, 8).join(", ")}
+                  + {g.changedKeys.length} record edit{g.changedKeys.length === 1 ? "" : "s"}{" "}
+                  already in the working copy ({g.changedKeys.slice(0, 8).join(", ")}
                   {g.changedKeys.length > 8 ? ", …" : ""})
                 </div>
               )}

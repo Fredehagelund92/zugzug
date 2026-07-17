@@ -83,14 +83,14 @@ describe("authenticateBearer — service account tokens", () => {
 describe("resolveTenantContext — service account context", () => {
   it("synthesises role='viewer' when the SA's tenant matches the URL slug", async () => {
     const { value } = await createServiceAccount({ tenantId: T, name: "Resolver", createdBy: U });
-    const req = new Request(`http://test/api/t/${T}/v1/dimensions`, {
+    const req = new Request(`http://test/api/t/${T}/v1/tables`, {
       headers: { authorization: `Bearer ${value}` },
     });
     const authed = await authenticateBearer(req);
     expect(authed!.serviceAccount).toBeDefined();
 
     const ctx = await resolveTenantContext({
-      pathname: `/api/t/${T}/v1/dimensions`,
+      pathname: `/api/t/${T}/v1/tables`,
       user: authed!.user,
       isSuperAdmin: false,
       serviceAccount: authed!.serviceAccount,
@@ -108,14 +108,14 @@ describe("resolveTenantContext — service account context", () => {
       [tt],
     );
     const { value } = await createServiceAccount({ tenantId: tt, name: "Wrong", createdBy: U });
-    const req = new Request(`http://test/api/t/${T}/v1/dimensions`, {
+    const req = new Request(`http://test/api/t/${T}/v1/tables`, {
       headers: { authorization: `Bearer ${value}` },
     });
     const authed = await authenticateBearer(req);
 
     await expect(
       resolveTenantContext({
-        pathname: `/api/t/${T}/v1/dimensions`,
+        pathname: `/api/t/${T}/v1/tables`,
         user: authed!.user,
         isSuperAdmin: false,
         serviceAccount: authed!.serviceAccount,

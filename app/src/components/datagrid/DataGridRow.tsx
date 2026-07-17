@@ -20,7 +20,10 @@ import type { RowEvaluation } from "./useConditionalFormatting";
 type InlineEditor = "select" | "linked" | "date";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry stores generic cell components; Row type param is erased at dispatch
-const CELLS: Record<Exclude<CellType, InlineEditor>, { Renderer: (ctx: any) => React.ReactNode; Editor: (ctx: any) => React.ReactNode }> = {
+const CELLS: Record<
+  Exclude<CellType, InlineEditor>,
+  { Renderer: (ctx: any) => React.ReactNode; Editor: (ctx: any) => React.ReactNode }
+> = {
   text: TextCell,
   number: NumberCell,
   boolean: BooleanCell,

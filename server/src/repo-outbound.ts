@@ -21,8 +21,8 @@ export interface DimensionForApi {
   slug: string;
   label: string;
   key_kind: string;
-  canonical_count: number;
-  last_committed_at: string | null;
+  record_count: number;
+  last_published_at: string | null;
 }
 
 export interface SchemaForApi {
@@ -57,7 +57,7 @@ export interface TombstoneRecord {
 }
 
 export interface TombstonePageResponse {
-  tombstones: TombstoneRecord[];
+  removed: TombstoneRecord[];
   cursor: { next: string | null };
 }
 
@@ -113,35 +113,35 @@ function buildFieldsJsonExpr(fieldColumns: string[]): string {
 
 export async function listDimensionsForApi(
   tenantId: string,
-): Promise<{ dimensions: DimensionForApi[] }> {
+): Promise<{ tables: DimensionForApi[] }> {
   const rows = await pgAll<{
     id: string;
     label: string;
     key_kind: string | null;
-    canonical_count: number;
-    last_committed_at: string | null;
+    record_count: number;
+    last_published_at: string | null;
   }>(
     `SELECT d.id,
             d.label,
             COALESCE(d.key_kind, 'slug') AS key_kind,
             COALESCE((SELECT count(*) FROM "zugzug_app"."canonical_version" cv
                        WHERE cv.dim_id = d.id AND cv.tenant_id = d.tenant_id
-                         AND cv.retired_at IS NULL), 0)::int AS canonical_count,
+                         AND cv.retired_at IS NULL), 0)::int AS record_count,
             (SELECT max(cv.updated_at)::text FROM "zugzug_app"."canonical_version" cv
               WHERE cv.dim_id = d.id AND cv.tenant_id = d.tenant_id
-                AND cv.retired_at IS NULL) AS last_committed_at
+                AND cv.retired_at IS NULL) AS last_published_at
        FROM ${pg("dimension")} d
       WHERE d.tenant_id = $1
       ORDER BY d.label`,
     [tenantId],
   );
   return {
-    dimensions: rows.map((r) => ({
+    tables: rows.map((r) => ({
       slug: r.id,
       label: r.label,
       key_kind: r.key_kind ?? "slug",
-      canonical_count: r.canonical_count,
-      last_committed_at: r.last_committed_at,
+      record_count: r.record_count,
+      last_published_at: r.last_published_at,
     })),
   };
 }
@@ -349,7 +349,7 @@ export async function listTombstonesPage(
   }
 
   return {
-    tombstones: rows.map((r) => ({
+    removed: rows.map((r) => ({
       key: r.key,
       retired_at: r.retired_at,
       retired_into: r.retired_into,

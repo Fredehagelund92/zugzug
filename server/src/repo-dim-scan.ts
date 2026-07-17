@@ -291,8 +291,7 @@ export async function getDimScanValuesPage(
   }));
 
   const last = items[items.length - 1];
-  const nextCursor =
-    hasMore && last ? encodeCursor(Number(last.total_rows), last.raw_lower) : null;
+  const nextCursor = hasMore && last ? encodeCursor(Number(last.total_rows), last.raw_lower) : null;
 
   return { items: out, hasMore, nextCursor };
 }

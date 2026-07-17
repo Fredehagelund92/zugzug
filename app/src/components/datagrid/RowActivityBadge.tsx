@@ -36,19 +36,19 @@ export function RowActivityBadge({
        *  via right-3 (3 = 12px gutter for the scrollbar). Hidden while editing so
        *  it doesn't cover the field in play. */}
       {!editing && (
-      <div className="pointer-events-none group-hover:pointer-events-auto absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-150 z-20 max-w-[180px]">
-        <span
-          className="inline-flex items-center gap-1.5 rounded-md border border-line-2 px-2 py-0.5 font-mono text-[10px] font-medium text-ink-2 shadow-[0_2px_8px_-2px_color-mix(in_srgb,var(--ink)_18%,transparent)]"
-          style={{
-            background: "color-mix(in srgb, var(--surface-2) 92%, transparent)",
-            backdropFilter: "blur(6px)",
-          }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden />
-          <span className="truncate">{entry.displayName}</span>
-          <span className="shrink-0 text-ink-3">· {relative}</span>
-        </span>
-      </div>
+        <div className="pointer-events-none group-hover:pointer-events-auto absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 translate-x-1 group-hover:translate-x-0 transition-all duration-150 z-20 max-w-[180px]">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-md border border-line-2 px-2 py-0.5 font-mono text-[10px] font-medium text-ink-2 shadow-[0_2px_8px_-2px_color-mix(in_srgb,var(--ink)_18%,transparent)]"
+            style={{
+              background: "color-mix(in srgb, var(--surface-2) 92%, transparent)",
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-accent shrink-0" aria-hidden />
+            <span className="truncate">{entry.displayName}</span>
+            <span className="shrink-0 text-ink-3">· {relative}</span>
+          </span>
+        </div>
       )}
     </>
   );

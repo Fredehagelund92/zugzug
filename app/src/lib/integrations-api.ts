@@ -98,10 +98,10 @@ async function toError(res: Response): Promise<IntegrationsApiError> {
 
 export type WebhookStatus = "active" | "paused" | "disabled";
 export type WebhookEvent =
-  | "dimension.committed"
-  | "dimension.created"
-  | "dimension.schema.updated"
-  | "canonical.deleted";
+  | "table.published"
+  | "table.created"
+  | "table.fields.updated"
+  | "record.deleted";
 
 export interface Webhook {
   id: string;
@@ -158,8 +158,8 @@ export interface DimensionSummary {
   slug: string;
   label: string;
   key_kind: string;
-  canonical_count: number;
-  last_committed_at: string | null;
+  record_count: number;
+  last_published_at: string | null;
 }
 
 /* ---------- webhooks ---------- */
@@ -233,6 +233,6 @@ export const revokeServiceAccount = (id: string) =>
 /* ---------- pull-api shapes for the docs page ---------- */
 
 export async function listDimensions(): Promise<DimensionSummary[]> {
-  const { dimensions } = await get<{ dimensions: DimensionSummary[] }>("/v1/dimensions");
-  return dimensions;
+  const { tables } = await get<{ tables: DimensionSummary[] }>("/v1/tables");
+  return tables;
 }

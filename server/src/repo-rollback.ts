@@ -11,7 +11,7 @@
  *  4. Handle warehouse sync manually (adapter.commitCanonical doesn't delete stale
  *     rows, so we call it with the full snapshot content after the Postgres commit). */
 
-import { qid, cq, pgAll, pgGet, pgRun, pgTx, pg } from "./repo-shared.ts";
+import { qid, cq, pgGet, pgTx, pg } from "./repo-shared.ts";
 import { getSnapshot } from "./repo-versions.ts";
 import { commit } from "./repo-drafts.ts";
 import { AppError } from "./errors.ts";
@@ -45,9 +45,7 @@ export async function rollbackToVersion(
   }
 
   // Build the set of keys present in the snapshot so we can retire ghost keys.
-  const snapKeySet = new Set(
-    snap.records.map((r) => String(r[meta.keyCol] ?? "")),
-  );
+  const snapKeySet = new Set(snap.records.map((r) => String(r[meta.keyCol] ?? "")));
 
   await pgTx(async (tx) => {
     // 1. Wipe current canonical rows (dim_ then map_ to avoid FK issues if any).
@@ -74,10 +72,10 @@ export async function rollbackToVersion(
 
     // 3. Reinsert snapshot mappings.
     for (const m of snap.mappings) {
-      await tx.run(
-        `INSERT INTO ${cq(meta.mapTable)} (raw, ${qid(meta.keyCol)}) VALUES ($1, $2)`,
-        [m.raw, m.targetKey],
-      );
+      await tx.run(`INSERT INTO ${cq(meta.mapTable)} (raw, ${qid(meta.keyCol)}) VALUES ($1, $2)`, [
+        m.raw,
+        m.targetKey,
+      ]);
     }
 
     // 4. canonical_version bookkeeping so changedKeysSince sees the restore:
@@ -166,5 +164,10 @@ export async function rollbackToVersion(
     }
   }
 
-  return { committed: res.committed, rowsRecovered: res.rowsRecovered, warehouseSynced, restoredVersion: toVersion };
+  return {
+    committed: res.committed,
+    rowsRecovered: res.rowsRecovered,
+    warehouseSynced,
+    restoredVersion: toVersion,
+  };
 }

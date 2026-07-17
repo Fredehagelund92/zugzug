@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import type { UseClusterMapper } from "../../lib/use-cluster-mapper";
 
-const { mapperRef } = vi.hoisted(() => ({ mapperRef: { current: null as unknown as UseClusterMapper } }));
+const { mapperRef } = vi.hoisted(() => ({
+  mapperRef: { current: null as unknown as UseClusterMapper },
+}));
 vi.mock("../../lib/use-cluster-mapper", () => ({ useClusterMapper: () => mapperRef.current }));
 
 import { ClusterMapperCard } from "./ClusterMapperCard";
@@ -15,7 +17,10 @@ function baseMapper(over: Partial<UseClusterMapper> = {}): UseClusterMapper {
     loading: false,
     error: null,
     current: {
-      key: "usa", rep: "USA", rows: 12405, mappedCount: 1,
+      key: "usa",
+      rep: "USA",
+      rows: 12405,
+      mappedCount: 1,
       members: [
         { raw: "USA", rows: 12000, isMapped: false, mappedLabel: null, occurrences: [] },
         { raw: "U.S.A.", rows: 405, isMapped: true, mappedLabel: "United States", occurrences: [] },

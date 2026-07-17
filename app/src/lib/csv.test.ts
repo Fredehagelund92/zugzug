@@ -5,7 +5,11 @@ describe("applyColumnMap", () => {
   const headers = ["ID", "Name", "Region"];
   const rows = [["us", "United States", "NA"]];
   it("maps chosen columns to key/label/field", () => {
-    const map: ColumnTarget[] = [{ kind: "key" }, { kind: "label" }, { kind: "field", fieldId: "region" }];
+    const map: ColumnTarget[] = [
+      { kind: "key" },
+      { kind: "label" },
+      { kind: "field", fieldId: "region" },
+    ];
     expect(applyColumnMap(headers, rows, map)).toEqual([
       { key: "us", label: "United States", fields: { region: "NA" } },
     ]);

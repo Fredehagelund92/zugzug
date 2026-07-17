@@ -80,9 +80,7 @@ export async function handleSignup(req: Request): Promise<Response> {
   // first-signups from both seeing count=0 and both becoming admin.
   const signupResult = await pgTx(async (tx) => {
     await tx.run(`SELECT pg_advisory_xact_lock(hashtext('zz:first-admin'))`);
-    const countRow = await tx.get<{ n: number }>(
-      `SELECT count(*)::int AS n FROM ${pg("users")}`,
-    );
+    const countRow = await tx.get<{ n: number }>(`SELECT count(*)::int AS n FROM ${pg("users")}`);
     const userCount = countRow?.n ?? 0;
 
     // First user becomes admin and is seeded into the default tenant.

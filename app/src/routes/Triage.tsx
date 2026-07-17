@@ -94,7 +94,8 @@ export function Triage() {
   const create = useCreateTableModal();
   const canEdit = useCanEdit();
   if (loading) return <TriageLoader />;
-  if (dims.length === 0) return <NoTablesYet from="triage" onCreateRequested={canEdit ? create.open : undefined} />;
+  if (dims.length === 0)
+    return <NoTablesYet from="triage" onCreateRequested={canEdit ? create.open : undefined} />;
   return (
     <UndoStackProvider scopeKey="triage">
       <TriageInner />
@@ -226,9 +227,7 @@ function TriageInner() {
       toast(`No suggestion to accept for "${raw}".`, "error");
       return;
     }
-    stageMapCross(dimId, raw, suggestion).catch((err) =>
-      reportDraftError(`accept "${raw}"`, err),
-    );
+    stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
     flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
     advanceCrossNext(dimId, raw);
   };
@@ -264,7 +263,13 @@ function TriageInner() {
     const prev = allDrafts[dkey(dimId, raw)];
     if (!prev || prev.status !== "rejected") return;
     void Promise.resolve(
-      saveDraft(dimId, raw, prev.targetLabel ? "mapped" : "skipped", prev.targetLabel, prev.targetKey)
+      saveDraft(
+        dimId,
+        raw,
+        prev.targetLabel ? "mapped" : "skipped",
+        prev.targetLabel,
+        prev.targetKey,
+      ),
     ).catch((err) => reportDraftError(`re-stage "${raw}"`, err));
   };
   const discardCross = (dimId: string, raw: string) => {
@@ -321,7 +326,10 @@ function TriageInner() {
       const outcomes: CommitOutcome[] = [];
       for (const g of groups) {
         try {
-          const res = await commit(g.dimId, g.drafts.map((d) => d.raw));
+          const res = await commit(
+            g.dimId,
+            g.drafts.map((d) => d.raw),
+          );
           outcomes.push({
             dimId: g.dimId,
             dimName: g.dimName,
@@ -392,156 +400,152 @@ function TriageInner() {
 
   return (
     <>
-    <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-4 md:px-5 md:pb-5">
-      <div className="mb-3 shrink-0">
-        <PageHeader
-          kicker="WORKFLOW"
-          title={
-            <>
-              Review{" "}
-              <span className="font-mono text-[14px] text-ink-3">
-                · {totalNew} across {rankedDims.length} table
-                {rankedDims.length === 1 ? "" : "s"}
-              </span>
-            </>
-          }
-          lede="Sorted by blast radius. Press ⌘↵ to publish."
-        />
-      </div>
-
-      <div
-        className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface"
-        style={{ animationDelay: "150ms" }}
-      >
-        {/* toolbar */}
-        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {(["new", "all", "mapped"] as Filter[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setFilter(k)}
-                className={cx(
-                  "min-h-[44px] rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors md:min-h-0",
-                  filter === k
-                    ? "bg-accent-wash text-accent"
-                    : "text-ink-3 hover:bg-hover hover:text-ink-2",
-                )}
-              >
-                {k === "new" ? "Needs review" : k === "all" ? "All" : "Mapped"}
-              </button>
-            ))}
-          </div>
-          <input
-            type="search"
-            placeholder="Search source values…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"
+      <div className="flex h-full min-h-0 flex-col px-3 pb-3 pt-4 md:px-5 md:pb-5">
+        <div className="mb-3 shrink-0">
+          <PageHeader
+            kicker="WORKFLOW"
+            title={
+              <>
+                Review{" "}
+                <span className="font-mono text-[14px] text-ink-3">
+                  · {totalNew} across {rankedDims.length} table
+                  {rankedDims.length === 1 ? "" : "s"}
+                </span>
+              </>
+            }
+            lede="Sorted by blast radius. Press ⌘↵ to publish."
           />
-          <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
-            ranked by impact · ↑↓ navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
-          </span>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-          <div className="px-3 pt-3">
-            <AwaitingReview />
+        <div
+          className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface"
+          style={{ animationDelay: "150ms" }}
+        >
+          {/* toolbar */}
+          <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(["new", "all", "mapped"] as Filter[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setFilter(k)}
+                  className={cx(
+                    "min-h-[44px] rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors md:min-h-0",
+                    filter === k
+                      ? "bg-accent-wash text-accent"
+                      : "text-ink-3 hover:bg-hover hover:text-ink-2",
+                  )}
+                >
+                  {k === "new" ? "Needs review" : k === "all" ? "All" : "Mapped"}
+                </button>
+              ))}
+            </div>
+            <input
+              type="search"
+              placeholder="Search source values…"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"
+            />
+            <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
+              ranked by impact · ↑↓ navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
+            </span>
           </div>
-          {rankedDims.length === 0 ? (
-            <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
-          ) : (
-            rankedDims.map((rd, i) => (
-              <DimSection
-                key={rd.d.id}
-                dim={rd.d}
-                isActive={i === activeDimIdx}
-                onActivate={() => setActiveDimIdx(i)}
-                page={i === activeDimIdx ? valuesPage : null}
-                drafts={allDrafts}
-                canEdit={canEdit}
-                cursor={cursor}
-                setCursor={setCursor}
-                onAccept={(raw) => acceptCross(rd.d.id, raw)}
-                onSkip={(raw) => skipCross(rd.d.id, raw)}
-                onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
-                onRestage={(raw) => restageCross(rd.d.id, raw)}
-                onCommitAll={() => void openPublishPreview()}
-                aiHint={i === activeDimIdx ? aiHint : { hint: null, loading: false, error: false }}
-                rescanning={rescanning && i === activeDimIdx}
-                onRescan={async () => {
-                  setRescanning(true);
-                  try {
-                    await triggerRescan(rd.d.id);
-                    valuesPage.refetch();
-                    toast("Rescan complete");
-                  } catch (err) {
-                    toast(
-                      err instanceof Error ? `Rescan failed: ${err.message}` : "Rescan failed",
-                      "error",
-                    );
-                  } finally {
-                    setRescanning(false);
-                  }
-                }}
-              />
-            ))
-          )}
-        </div>
 
-        <CrossDimFooter
-          dimById={dimById}
-          stagedDrafts={stagedAllDrafts}
-          discard={discardCross}
-          commitAll={() => void openPublishPreview()}
-          committing={committing}
-          commitError={commitError}
-          setCommitError={setCommitError}
-          draftError={draftError}
-          setDraftError={setDraftError}
-          undo={undo}
-          wsInfo={wsInfo}
-          canEdit={canEdit}
-        />
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+            <div className="px-3 pt-3">
+              <AwaitingReview />
+            </div>
+            {rankedDims.length === 0 ? (
+              <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
+            ) : (
+              rankedDims.map((rd, i) => (
+                <DimSection
+                  key={rd.d.id}
+                  dim={rd.d}
+                  isActive={i === activeDimIdx}
+                  onActivate={() => setActiveDimIdx(i)}
+                  page={i === activeDimIdx ? valuesPage : null}
+                  drafts={allDrafts}
+                  canEdit={canEdit}
+                  cursor={cursor}
+                  setCursor={setCursor}
+                  onAccept={(raw) => acceptCross(rd.d.id, raw)}
+                  onSkip={(raw) => skipCross(rd.d.id, raw)}
+                  onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
+                  onRestage={(raw) => restageCross(rd.d.id, raw)}
+                  onCommitAll={() => void openPublishPreview()}
+                  aiHint={
+                    i === activeDimIdx ? aiHint : { hint: null, loading: false, error: false }
+                  }
+                  rescanning={rescanning && i === activeDimIdx}
+                  onRescan={async () => {
+                    setRescanning(true);
+                    try {
+                      await triggerRescan(rd.d.id);
+                      valuesPage.refetch();
+                      toast("Rescan complete");
+                    } catch (err) {
+                      toast(
+                        err instanceof Error ? `Rescan failed: ${err.message}` : "Rescan failed",
+                        "error",
+                      );
+                    } finally {
+                      setRescanning(false);
+                    }
+                  }}
+                />
+              ))
+            )}
+          </div>
+
+          <CrossDimFooter
+            dimById={dimById}
+            stagedDrafts={stagedAllDrafts}
+            discard={discardCross}
+            commitAll={() => void openPublishPreview()}
+            committing={committing}
+            commitError={commitError}
+            setCommitError={setCommitError}
+            draftError={draftError}
+            setDraftError={setDraftError}
+            undo={undo}
+            wsInfo={wsInfo}
+            canEdit={canEdit}
+          />
+        </div>
       </div>
-    </div>
-    {preview && (
-      <PublishPreviewDialog
-        open
-        groups={preview}
-        publishing={committing}
-        onDiscardDraft={(d) => {
-          void discardDraft(d.dimId, d.raw);
-          setPreview((p) => {
-            const next =
-              p
-                ?.map((g) =>
-                  g.dimId === d.dimId
-                    ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
-                    : g,
-                )
-                .filter((g) => g.drafts.length > 0 || g.changedKeys.length > 0) ?? null;
-            return next && next.length > 0 ? next : null;
-          });
-        }}
-        onConfirm={() => {
-          const groups = preview ?? [];
-          void approveAndCommitAll(groups).then(() => setPreview(null));
-        }}
-        onCancel={() => setPreview(null)}
-      />
-    )}
+      {preview && (
+        <PublishPreviewDialog
+          open
+          groups={preview}
+          publishing={committing}
+          onDiscardDraft={(d) => {
+            void discardDraft(d.dimId, d.raw);
+            setPreview((p) => {
+              const next =
+                p
+                  ?.map((g) =>
+                    g.dimId === d.dimId
+                      ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
+                      : g,
+                  )
+                  .filter((g) => g.drafts.length > 0 || g.changedKeys.length > 0) ?? null;
+              return next && next.length > 0 ? next : null;
+            });
+          }}
+          onConfirm={() => {
+            const groups = preview ?? [];
+            void approveAndCommitAll(groups).then(() => setPreview(null));
+          }}
+          onCancel={() => setPreview(null)}
+        />
+      )}
     </>
   );
 }
 
-function EmptyState({
-  filter,
-  onSwitchToNew,
-}: {
-  filter: Filter;
-  onSwitchToNew: () => void;
-}) {
+function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: () => void }) {
   const nav = useNavLinks();
   if (filter === "new")
     return (
@@ -572,9 +576,7 @@ function EmptyState({
       </div>
     );
   return (
-    <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">
-      no tables yet
-    </div>
+    <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">no tables yet</div>
   );
 }
 
@@ -693,7 +695,9 @@ function DimSectionBody(p: DimSectionBodyProps) {
   const [editingRaw, setEditingRaw] = useState<string | null>(null);
   const me = useCurrentUser();
 
-  const rowStatus = (r: ScanValueRow): { status: RStatus; target: string | null; rejectedReason: string | null } => {
+  const rowStatus = (
+    r: ScanValueRow,
+  ): { status: RStatus; target: string | null; rejectedReason: string | null } => {
     const draft = p.drafts[dkey(p.dim.id, r.raw)];
     if (draft)
       return {
@@ -775,8 +779,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
       <ul className="divide-y divide-line">
         {p.page.items.map((r) => {
           const { status, target, rejectedReason } = rowStatus(r);
-          const isCursor =
-            p.cursor && p.cursor.dimId === p.dim.id && p.cursor.raw === r.raw;
+          const isCursor = p.cursor && p.cursor.dimId === p.dim.id && p.cursor.raw === r.raw;
           return (
             <li
               key={r.raw}
@@ -796,8 +799,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
                   <span className="block truncate font-mono text-[13px] text-ink">{r.raw}</span>
                   <span className="block font-mono text-[10px] text-ink-3 tabular-nums">
                     {r.totalRows.toLocaleString()} rows
-                    {r.occurrences[0] &&
-                      ` · ${r.occurrences[0].table}.${r.occurrences[0].column}`}
+                    {r.occurrences[0] && ` · ${r.occurrences[0].table}.${r.occurrences[0].column}`}
                     {r.occurrences.length > 1 && ` +${r.occurrences.length - 1}`}
                   </span>
                 </span>
@@ -829,22 +831,29 @@ function DimSectionBody(p: DimSectionBodyProps) {
                       className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
                       title={rejectedReason ?? undefined}
                     >
-                      rejected{rejectedReason ? `: ${rejectedReason.slice(0, 60)}${rejectedReason.length > 60 ? "…" : ""}` : ""}
+                      rejected
+                      {rejectedReason
+                        ? `: ${rejectedReason.slice(0, 60)}${rejectedReason.length > 60 ? "…" : ""}`
+                        : ""}
                     </span>
                   ) : (
                     <Chip label="New" bucket="chip-2" dot />
                   )}
                 </span>
-                {status === "rejected" && p.canEdit &&
+                {status === "rejected" &&
+                  p.canEdit &&
                   p.drafts[dkey(p.dim.id, r.raw)]?.user.id === me?.id && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); p.onRestage(r.raw); }}
-                  >
-                    Re-stage
-                  </Button>
-                )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        p.onRestage(r.raw);
+                      }}
+                    >
+                      Re-stage
+                    </Button>
+                  )}
               </div>
               {isCursor && !target && status !== "rejected" && (
                 <div className="flex flex-col gap-2 pl-1 pt-1">
@@ -863,9 +872,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
         <div className="px-4 py-3 text-center font-mono text-[11px] text-ink-3">loading…</div>
       )}
       {!p.page.hasMore && p.page.items.length > 0 && (
-        <div className="px-4 py-3 text-center font-mono text-[10px] text-ink-3">
-          end of list
-        </div>
+        <div className="px-4 py-3 text-center font-mono text-[10px] text-ink-3">end of list</div>
       )}
     </div>
   );

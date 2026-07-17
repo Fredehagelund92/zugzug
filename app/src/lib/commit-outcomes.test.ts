@@ -2,10 +2,18 @@ import { describe, it, expect } from "vitest";
 import { summarizeOutcomes, type CommitOutcome } from "./commit-outcomes";
 
 const ok = (dim: string, n: number): CommitOutcome => ({
-  dimId: dim, dimName: dim, committed: n, rowsRecovered: n * 10, error: null,
+  dimId: dim,
+  dimName: dim,
+  committed: n,
+  rowsRecovered: n * 10,
+  error: null,
 });
 const bad = (dim: string, err: string): CommitOutcome => ({
-  dimId: dim, dimName: dim, committed: 0, rowsRecovered: 0, error: err,
+  dimId: dim,
+  dimName: dim,
+  committed: 0,
+  rowsRecovered: 0,
+  error: err,
 });
 
 describe("summarizeOutcomes", () => {
@@ -31,7 +39,11 @@ describe("summarizeOutcomes", () => {
     );
   });
   it("multiple failures use 'their'", () => {
-    const s = summarizeOutcomes([ok("country", 3), bad("channel", "timeout"), bad("region", "timeout")]);
+    const s = summarizeOutcomes([
+      ok("country", 3),
+      bad("channel", "timeout"),
+      bad("region", "timeout"),
+    ]);
     expect(s.ok).toBe(false);
     expect(s.failed).toHaveLength(2);
     expect(s.message).toContain("their drafts are still staged.");

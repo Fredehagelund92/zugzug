@@ -8,7 +8,12 @@ const RECORDS: CandidateRecord[] = [
   { key: "de", label: "Germany" },
 ];
 
-function member(raw: string, rows: number, isMapped = false, mappedLabel: string | null = null): ClusterMember {
+function member(
+  raw: string,
+  rows: number,
+  isMapped = false,
+  mappedLabel: string | null = null,
+): ClusterMember {
   return { raw, rows, isMapped, mappedLabel, occurrences: [] };
 }
 function cluster(key: string, members: ClusterMember[]): Cluster {
@@ -23,7 +28,10 @@ function cluster(key: string, members: ClusterMember[]): Cluster {
 
 describe("pendingClusters", () => {
   it("keeps clusters with at least one unmapped member, drops fully-mapped ones", () => {
-    const partly = cluster("usa", [member("USA", 100), member("U.S.A.", 50, true, "United States")]);
+    const partly = cluster("usa", [
+      member("USA", 100),
+      member("U.S.A.", 50, true, "United States"),
+    ]);
     const done = cluster("ger", [member("Germany", 30, true, "Germany")]);
     const out = pendingClusters([partly, done]);
     expect(out.map((c) => c.key)).toEqual(["usa"]);

@@ -52,11 +52,11 @@ async function seedWebhook(tenantId: string, events: string[], status = "active"
 
 describe("dispatchOutbound — writes outbound_event row", () => {
   it("inserts a row in the same tx with the right shape", async () => {
-    const idemKey = `dimension.committed:dim_t1:1`;
+    const idemKey = `table.published:dim_t1:1`;
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
         tenantId: T,
-        type: "dimension.committed",
+        type: "table.published",
         dimId: "dim_t1",
         occurredAt: new Date(),
         payload: { dim_slug: "country", version: 1 },
@@ -74,18 +74,18 @@ describe("dispatchOutbound — writes outbound_event row", () => {
       [T, idemKey],
     );
     expect(row).not.toBeNull();
-    expect(row!.type).toBe("dimension.committed");
+    expect(row!.type).toBe("table.published");
     expect(row!.dim_id).toBe("dim_t1");
     const payload = typeof row!.payload === "string" ? JSON.parse(row!.payload) : row!.payload;
     expect((payload as { dim_slug: string }).dim_slug).toBe("country");
   });
 
   it("idem_key collision aborts the surrounding tx (per design §3.1)", async () => {
-    const idemKey = `dimension.committed:dim_t2:1`;
+    const idemKey = `table.published:dim_t2:1`;
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
         tenantId: T,
-        type: "dimension.committed",
+        type: "table.published",
         dimId: "dim_t2",
         occurredAt: new Date(),
         payload: {},
@@ -98,7 +98,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
       await pgTx(async (tx) => {
         await dispatchOutbound(tx, {
           tenantId: T,
-          type: "dimension.committed",
+          type: "table.published",
           dimId: "dim_t2",
           occurredAt: new Date(),
           payload: {},
@@ -114,24 +114,24 @@ describe("dispatchOutbound — writes outbound_event row", () => {
 
 describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
   it("enqueues one delivery per matching subscribed webhook", async () => {
-    const wh1 = await seedWebhook(T, ["dimension.committed"]);
-    const wh2 = await seedWebhook(T, ["dimension.committed", "canonical.deleted"]);
-    const wh3 = await seedWebhook(T, ["canonical.deleted"]); // does NOT subscribe
+    const wh1 = await seedWebhook(T, ["table.published"]);
+    const wh2 = await seedWebhook(T, ["table.published", "record.deleted"]);
+    const wh3 = await seedWebhook(T, ["record.deleted"]); // does NOT subscribe
 
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
         tenantId: T,
-        type: "dimension.committed",
+        type: "table.published",
         dimId: "dim_t3",
         occurredAt: new Date(),
         payload: { dim_slug: "country" },
-        idemKey: `dimension.committed:dim_t3:5`,
+        idemKey: `table.published:dim_t3:5`,
       });
     });
 
     const rows = await pgAll<{ webhook_id: string; status: string }>(
       `SELECT webhook_id, status FROM "zugzug_app"."webhook_delivery"
-        WHERE tenant_id = $1 AND event_type = 'dimension.committed'`,
+        WHERE tenant_id = $1 AND event_type = 'table.published'`,
       [T],
     );
     const ids = rows.map((r) => r.webhook_id).sort();
@@ -142,17 +142,17 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
   });
 
   it("does NOT enqueue for paused or disabled webhooks", async () => {
-    const wh_paused = await seedWebhook(T, ["dimension.committed"], "paused");
-    const wh_disabled = await seedWebhook(T, ["dimension.committed"], "disabled");
+    const wh_paused = await seedWebhook(T, ["table.published"], "paused");
+    const wh_disabled = await seedWebhook(T, ["table.published"], "disabled");
 
     await pgTx(async (tx) => {
       await dispatchOutbound(tx, {
         tenantId: T,
-        type: "dimension.committed",
+        type: "table.published",
         dimId: "dim_t4",
         occurredAt: new Date(),
         payload: {},
-        idemKey: `dimension.committed:dim_t4:1`,
+        idemKey: `table.published:dim_t4:1`,
       });
     });
 

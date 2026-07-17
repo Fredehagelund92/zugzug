@@ -13,6 +13,7 @@ export type ErrorCode =
   | "LAST_SUPER_ADMIN"
   | "READ_ONLY_TOKEN"
   | "INTERNAL"
+  | "NO_SNAPSHOT"
   | "SECOND_PUBLISHER_REQUIRED";
 
 export class AppError extends Error {

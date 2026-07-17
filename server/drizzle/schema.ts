@@ -525,10 +525,10 @@ export const webhook = app.table(
     check(
       "webhook_events_known_chk",
       sql`${t.events} <@ ARRAY[
-        'dimension.committed',
-        'dimension.created',
-        'dimension.schema.updated',
-        'canonical.deleted'
+        'table.published',
+        'table.created',
+        'table.fields.updated',
+        'record.deleted'
       ]::varchar[]`,
     ),
   ],
@@ -559,10 +559,10 @@ export const outboundEvent = app.table(
     check(
       "outbound_event_type_chk",
       sql`${t.type} IN (
-        'dimension.committed',
-        'dimension.created',
-        'dimension.schema.updated',
-        'canonical.deleted'
+        'table.published',
+        'table.created',
+        'table.fields.updated',
+        'record.deleted'
       )`,
     ),
   ],

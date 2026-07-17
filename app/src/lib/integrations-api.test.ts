@@ -34,7 +34,7 @@ describe("createWebhook", () => {
     );
     const out = await api.createWebhook({
       url: "https://x",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       description: null,
     });
     expect(out).toEqual({ id: "wh_1", value: "whsec_xxx" });
@@ -42,7 +42,7 @@ describe("createWebhook", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({
       url: "https://x",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       description: null,
     });
   });
@@ -52,7 +52,7 @@ describe("createWebhook", () => {
       new Response(JSON.stringify({ error: "https_required" }), { status: 400 }),
     );
     await expect(
-      api.createWebhook({ url: "http://x", events: ["dimension.committed"], description: null }),
+      api.createWebhook({ url: "http://x", events: ["table.published"], description: null }),
     ).rejects.toMatchObject({ code: "https_required", status: 400 });
   });
 });
@@ -98,7 +98,7 @@ describe("listServiceAccounts", () => {
 describe("listDimensions", () => {
   it("unwraps the dimensions envelope", async () => {
     FETCH.mockResolvedValueOnce(
-      new Response(JSON.stringify({ dimensions: [{ id: "d1", slug: "country" }] }), {
+      new Response(JSON.stringify({ tables: [{ id: "d1", slug: "country" }] }), {
         status: 200,
       }),
     );

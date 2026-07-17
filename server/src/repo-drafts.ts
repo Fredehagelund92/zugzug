@@ -336,7 +336,7 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
   const last = await pgGet<{ v: number; at: Date | null }>(
     `SELECT count(*)::int AS v, max(occurred_at) AS at
      FROM ${pg("outbound_event")}
-     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
     [tenantId, dimId],
   );
   const version = Number(last?.v ?? 0);
@@ -350,7 +350,7 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
                    THEN (payload #>> '{}')::jsonb->'committed_by'->>'name'
                    ELSE payload->'committed_by'->>'name' END AS by
        FROM ${pg("outbound_event")}
-       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'
+       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'
        ORDER BY occurred_at DESC LIMIT 1`,
       [tenantId, dimId],
     );
@@ -446,7 +446,7 @@ export async function commit(
   // case when canonicalChanged.length > 0. Unscoped (undefined) keeps existing behaviour.
   const lastPublish = await pgGet<{ at: Date | null }>(
     `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
-     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
     [tenantId, dimId],
   );
   const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null);
@@ -576,11 +576,11 @@ export async function commit(
     // Outbound event for downstream subscribers (PR3). Uses a count-based
     // per-(tenant, dim, type) monotonic counter — simpler than extracting
     // payload->>'version' from a jsonb column and equally correct since we
-    // only insert one dimension.committed event per commit() inside this tx.
+    // only insert one table.published event per commit() inside this tx.
     const versionRow = await tx.get<{ v: number }>(
       `SELECT count(*)::int + 1 AS v
          FROM ${pg("outbound_event")}
-        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
       [tenantId, dimId],
     );
     const v = versionRow?.v ?? 1;
@@ -614,7 +614,7 @@ export async function commit(
     }));
     await dispatchOutbound(tx, {
       tenantId,
-      type: "dimension.committed",
+      type: "table.published",
       dimId,
       occurredAt: dbNow?.now ?? new Date(),
       payload: {
@@ -630,12 +630,18 @@ export async function commit(
           merged: [],
           retired: [],
         },
-        summary: { added: addedKeys.length, remapped: remappedKeys.length, updated: canonicalChanged.length, merged: 0, retired: 0 },
-        ...((addedKeys.length > 200 || remappedKeys.length > 200) ? { changes_truncated: true } : {}),
+        summary: {
+          added: addedKeys.length,
+          remapped: remappedKeys.length,
+          updated: canonicalChanged.length,
+          merged: 0,
+          retired: 0,
+        },
+        ...(addedKeys.length > 200 || remappedKeys.length > 200 ? { changes_truncated: true } : {}),
         kind: opts?.kind ?? "publish",
         ...(opts?.restoresVersion != null ? { restores_version: opts.restoresVersion } : {}),
       },
-      idemKey: `dimension.committed:${dimId}:${v}`,
+      idemKey: `table.published:${dimId}:${v}`,
     });
   });
 

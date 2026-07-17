@@ -26,7 +26,12 @@ interface DatabaseOption {
   schemaCount?: number | null;
 }
 
-const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+const outcomeText = (result: {
+  mode: "seed" | "connect";
+  derived?: number;
+  matched?: number;
+  unmatched?: number;
+}): string => {
   if (result.mode === "seed") {
     if ((result.derived ?? 0) > 0) {
       return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;
@@ -69,7 +74,14 @@ export function CatalogExplorer({
   const [open, setOpen] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseOption[]>([]);
   const [internalDb, setInternalDb] = useState<string | null>(database);
-  type WireState = { dim: string; n: number | null; mode?: "seed" | "connect"; matched?: number; unmatched?: number; error?: string };
+  type WireState = {
+    dim: string;
+    n: number | null;
+    mode?: "seed" | "connect";
+    matched?: number;
+    unmatched?: number;
+    error?: string;
+  };
   const [wired, setWired] = useState<Record<string, WireState>>({}); // "table.col" → result
   const seq = useRef(0);
 
@@ -221,9 +233,7 @@ export function CatalogExplorer({
                   <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
                     Database
                   </span>
-                  <span className="font-mono text-[11.5px] text-ink">
-                    {activeDb.databaseName}
-                  </span>
+                  <span className="font-mono text-[11.5px] text-ink">{activeDb.databaseName}</span>
                 </span>
                 <IconChevron
                   className={cx(
@@ -234,10 +244,7 @@ export function CatalogExplorer({
               </button>
               {switcherOpen && (
                 <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setSwitcherOpen(false)}
-                  />
+                  <div className="fixed inset-0 z-10" onClick={() => setSwitcherOpen(false)} />
                   <div className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop">
                     {databases.map((d) => (
                       <button
@@ -382,9 +389,7 @@ export function CatalogExplorer({
                                 </span>
                               )}
                               {typeof d.sourceCount === "number" && (
-                                <span>
-                                  {d.sourceCount} wired
-                                </span>
+                                <span>{d.sourceCount} wired</span>
                               )}
                             </div>
                           </div>
@@ -400,143 +405,150 @@ export function CatalogExplorer({
             </div>
           </div>
         ) : (
-        <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[180px_1fr]">
-          {/* schema facets — horizontal scroll strip on mobile, side rail on desktop */}
-          <div className="flex overflow-x-auto border-b border-line bg-surface/40 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:border-r md:py-2">
-            <button
-              type="button"
-              onClick={() => setSchema(null)}
-              className={cx(
-                "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:py-1.5",
-                schema === null ? "text-accent" : "text-ink-3 hover:text-ink-2",
-              )}
-            >
-              <span>all systems</span>
-              <span className="opacity-60">{total}</span>
-            </button>
-            {schemas.map((s) => (
+          <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[180px_1fr]">
+            {/* schema facets — horizontal scroll strip on mobile, side rail on desktop */}
+            <div className="flex overflow-x-auto border-b border-line bg-surface/40 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:border-r md:py-2">
               <button
-                key={s.schema}
                 type="button"
-                onClick={() => setSchema(s.schema === schema ? null : s.schema)}
+                onClick={() => setSchema(null)}
                 className={cx(
-                  "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:gap-2 md:py-1.5",
-                  s.schema === schema ? "text-accent" : "text-ink-3 hover:text-ink-2",
+                  "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:py-1.5",
+                  schema === null ? "text-accent" : "text-ink-3 hover:text-ink-2",
                 )}
               >
-                <span className="truncate">{s.schema}</span>
-                <span className="shrink-0 opacity-60">{s.tables}</span>
+                <span>all systems</span>
+                <span className="opacity-60">{total}</span>
               </button>
-            ))}
-          </div>
-
-          {/* results */}
-          <div className="min-h-0 overflow-y-auto">
-            {loadError && (
-              <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-5 py-2.5 font-mono text-[11.5px] text-danger">
-                <span>Catalog search failed — {loadError}</span>
-                <Button variant="ghost" size="sm" onClick={() => load(false)}>
-                  Retry
-                </Button>
-              </div>
-            )}
-            {rows.map((t) => {
-              const isOpen = open === t.table;
-              return (
-                <div key={t.table} className="border-b border-line">
-                  <button
-                    type="button"
-                    onClick={() => setOpen(isOpen ? null : t.table)}
-                    className="flex w-full items-center gap-2 px-5 py-2.5 text-left transition-colors hover:bg-hover"
-                  >
-                    <IconChevron
-                      className={cx(
-                        "h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform",
-                        isOpen && "rotate-180",
-                      )}
-                    />
-                    <span className="truncate font-mono text-[12.5px] text-ink">{t.table}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[10px] text-ink-3">
-                      {t.columns.length} cols
-                    </span>
-                  </button>
-                  {isOpen && (
-                    <div className="space-y-1 bg-surface-2/40 px-5 py-2 pl-10">
-                      {t.columns.map((c) => {
-                        const key = `${t.table}.${c}`;
-                        return (
-                          <div
-                            key={c}
-                            className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-0.5 md:grid md:grid-cols-[1fr_180px] md:gap-3"
-                          >
-                            <span className="truncate font-mono text-[11.5px] text-ink-2">{c}</span>
-                            {wired[key]?.error ? (
-                              <span
-                                className="flex items-center justify-end gap-2 font-mono text-[10.5px] text-danger"
-                                title={wired[key].error}
-                              >
-                                <span className="truncate">connect failed</span>
-                                <button
-                                  type="button"
-                                  onClick={() => wire(t.table, c, wired[key].dim)}
-                                  className="rounded-sm border border-danger/40 px-1.5 py-0.5 text-danger transition-colors hover:bg-danger-soft"
-                                >
-                                  Retry
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => clearWireError(key)}
-                                  aria-label="Dismiss connect error"
-                                  className="text-ink-3 transition-colors hover:text-ink"
-                                >
-                                  <IconX className="h-3 w-3" />
-                                </button>
-                              </span>
-                            ) : wired[key] ? (
-                              <span className="flex items-center justify-end gap-1.5 font-mono text-[10.5px] text-ok">
-                                <IconArrowRight className="h-3 w-3" />
-                                {wired[key].n === null
-                                  ? `connecting ${wired[key].dim}…`
-                                  : `Connected ${c} to ${wired[key].dim} · ${outcomeText({ mode: wired[key].mode as "seed" | "connect", derived: wired[key].n ?? undefined, matched: wired[key].matched, unmatched: wired[key].unmatched })}`}
-                              </span>
-                            ) : (
-                              <ComboSelect
-                                options={dimOptions}
-                                value={null}
-                                placeholder="connect to table…"
-                                onPick={canEdit ? (d) => wire(t.table, c, d) : undefined}
-                                disabled={!canEdit}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+              {schemas.map((s) => (
+                <button
+                  key={s.schema}
+                  type="button"
+                  onClick={() => setSchema(s.schema === schema ? null : s.schema)}
+                  className={cx(
+                    "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:gap-2 md:py-1.5",
+                    s.schema === schema ? "text-accent" : "text-ink-3 hover:text-ink-2",
                   )}
+                >
+                  <span className="truncate">{s.schema}</span>
+                  <span className="shrink-0 opacity-60">{s.tables}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* results */}
+            <div className="min-h-0 overflow-y-auto">
+              {loadError && (
+                <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-5 py-2.5 font-mono text-[11.5px] text-danger">
+                  <span>Catalog search failed — {loadError}</span>
+                  <Button variant="ghost" size="sm" onClick={() => load(false)}>
+                    Retry
+                  </Button>
                 </div>
-              );
-            })}
-
-            {!loading && rows.length === 0 && (
-              <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
-                {q || schema
-                  ? "no tables match"
-                  : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between px-5 py-3">
-              <span className="font-mono text-[11px] text-ink-3">
-                {loading ? "searching…" : `${rows.length} of ${total} tables`}
-              </span>
-              {rows.length < total && (
-                <Button variant="secondary" size="sm" disabled={loading} onClick={() => load(true)}>
-                  Load more
-                </Button>
               )}
+              {rows.map((t) => {
+                const isOpen = open === t.table;
+                return (
+                  <div key={t.table} className="border-b border-line">
+                    <button
+                      type="button"
+                      onClick={() => setOpen(isOpen ? null : t.table)}
+                      className="flex w-full items-center gap-2 px-5 py-2.5 text-left transition-colors hover:bg-hover"
+                    >
+                      <IconChevron
+                        className={cx(
+                          "h-3.5 w-3.5 shrink-0 text-ink-3 transition-transform",
+                          isOpen && "rotate-180",
+                        )}
+                      />
+                      <span className="truncate font-mono text-[12.5px] text-ink">{t.table}</span>
+                      <span className="ml-auto shrink-0 font-mono text-[10px] text-ink-3">
+                        {t.columns.length} cols
+                      </span>
+                    </button>
+                    {isOpen && (
+                      <div className="space-y-1 bg-surface-2/40 px-5 py-2 pl-10">
+                        {t.columns.map((c) => {
+                          const key = `${t.table}.${c}`;
+                          return (
+                            <div
+                              key={c}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-0.5 md:grid md:grid-cols-[1fr_180px] md:gap-3"
+                            >
+                              <span className="truncate font-mono text-[11.5px] text-ink-2">
+                                {c}
+                              </span>
+                              {wired[key]?.error ? (
+                                <span
+                                  className="flex items-center justify-end gap-2 font-mono text-[10.5px] text-danger"
+                                  title={wired[key].error}
+                                >
+                                  <span className="truncate">connect failed</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => wire(t.table, c, wired[key].dim)}
+                                    className="rounded-sm border border-danger/40 px-1.5 py-0.5 text-danger transition-colors hover:bg-danger-soft"
+                                  >
+                                    Retry
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => clearWireError(key)}
+                                    aria-label="Dismiss connect error"
+                                    className="text-ink-3 transition-colors hover:text-ink"
+                                  >
+                                    <IconX className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ) : wired[key] ? (
+                                <span className="flex items-center justify-end gap-1.5 font-mono text-[10.5px] text-ok">
+                                  <IconArrowRight className="h-3 w-3" />
+                                  {wired[key].n === null
+                                    ? `connecting ${wired[key].dim}…`
+                                    : `Connected ${c} to ${wired[key].dim} · ${outcomeText({ mode: wired[key].mode as "seed" | "connect", derived: wired[key].n ?? undefined, matched: wired[key].matched, unmatched: wired[key].unmatched })}`}
+                                </span>
+                              ) : (
+                                <ComboSelect
+                                  options={dimOptions}
+                                  value={null}
+                                  placeholder="connect to table…"
+                                  onPick={canEdit ? (d) => wire(t.table, c, d) : undefined}
+                                  disabled={!canEdit}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {!loading && rows.length === 0 && (
+                <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
+                  {q || schema
+                    ? "no tables match"
+                    : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between px-5 py-3">
+                <span className="font-mono text-[11px] text-ink-3">
+                  {loading ? "searching…" : `${rows.length} of ${total} tables`}
+                </span>
+                {rows.length < total && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={loading}
+                    onClick={() => load(true)}
+                  >
+                    Load more
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
         )}
       </div>
     </div>

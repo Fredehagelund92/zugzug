@@ -25,10 +25,14 @@ function daysAgo(iso: string | null | undefined, nowMs: number): number {
 export function classifySource(s: SourceInfo, nowMs: number = Date.now()): SourceStatusInfo {
   const stale = daysAgo(s.scannedAt, nowMs) > STALE_DAYS;
   let status: SourceStatus;
-  if (!s.scanned && !s.scannedAt) status = "stale"; // never checked
-  else if (!s.present && s.scanned) status = "broken"; // column vanished from the warehouse
-  else if (s.unmapped > 0) status = "new"; // values need a record
-  else if (stale) status = "stale"; // resolved but overdue
+  if (!s.scanned && !s.scannedAt)
+    status = "stale"; // never checked
+  else if (!s.present && s.scanned)
+    status = "broken"; // column vanished from the warehouse
+  else if (s.unmapped > 0)
+    status = "new"; // values need a record
+  else if (stale)
+    status = "stale"; // resolved but overdue
   else status = "healthy";
   return { status, unmapped: s.unmapped, stale };
 }
@@ -60,8 +64,18 @@ export interface SourcesSummary {
 }
 
 /** Dimension-level wiring health: counts per action state + total unmapped values. */
-export function summarizeSources(sources: SourceInfo[], nowMs: number = Date.now()): SourcesSummary {
-  const out: SourcesSummary = { total: sources.length, broken: 0, needsMapping: 0, notChecked: 0, healthy: 0, newValuesTotal: 0 };
+export function summarizeSources(
+  sources: SourceInfo[],
+  nowMs: number = Date.now(),
+): SourcesSummary {
+  const out: SourcesSummary = {
+    total: sources.length,
+    broken: 0,
+    needsMapping: 0,
+    notChecked: 0,
+    healthy: 0,
+    newValuesTotal: 0,
+  };
   for (const s of sources) {
     const { status } = classifySource(s, nowMs);
     if (status === "broken") out.broken++;

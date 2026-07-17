@@ -52,10 +52,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
       load();
       onRollbackSuccess();
     } catch (err) {
-      flash(
-        `Rollback failed — ${err instanceof Error ? err.message : "unknown error"}`,
-        "danger",
-      );
+      flash(`Rollback failed — ${err instanceof Error ? err.message : "unknown error"}`, "danger");
     } finally {
       setRolling(false);
     }

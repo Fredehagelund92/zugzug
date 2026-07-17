@@ -169,7 +169,12 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
           tenantId: "*",
           repo: {} as TenantRepo,
         };
-        await recordScanRun(job.name, "*", () => job.run(ctx), () => stopped);
+        await recordScanRun(
+          job.name,
+          "*",
+          () => job.run(ctx),
+          () => stopped,
+        );
       }
 
       let tenants: Array<{ id: string }>;
@@ -203,7 +208,12 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
             };
             for (const job of jobs) {
               if (job.scope === "global") continue;
-              await recordScanRun(`${t.id}:${job.name}`, t.id, () => job.run(ctx), () => stopped);
+              await recordScanRun(
+                `${t.id}:${job.name}`,
+                t.id,
+                () => job.run(ctx),
+                () => stopped,
+              );
             }
           });
         } catch (e) {

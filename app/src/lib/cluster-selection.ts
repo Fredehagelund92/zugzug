@@ -15,7 +15,10 @@ export function pendingClusters(clusters: Cluster[]): Cluster[] {
  * decision. Matches the record by exact label, then by conservative fold. Returns
  * null if nothing is mapped or the label matches no known record.
  */
-export function siblingSuggestion(cluster: Cluster, records: CandidateRecord[]): CandidateRecord | null {
+export function siblingSuggestion(
+  cluster: Cluster,
+  records: CandidateRecord[],
+): CandidateRecord | null {
   let mapped: Cluster["members"][number] | null = null;
   for (const m of cluster.members) {
     if (m.isMapped && m.mappedLabel && (!mapped || m.rows > mapped.rows)) mapped = m;

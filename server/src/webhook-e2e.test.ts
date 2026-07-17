@@ -66,7 +66,7 @@ beforeAll(async () => {
        (id, tenant_id, url, secret_ciphertext, secret_nonce, secret_key_version,
         secret_prefix, events, status, created_at, created_by)
      VALUES ('wh_e2e_test', $1, $2, $3::bytea, $4::bytea, 1, $5,
-             ARRAY['dimension.committed']::varchar[], 'active', now(), $6)
+             ARRAY['table.published']::varchar[], 'active', now(), $6)
      ON CONFLICT (id) DO UPDATE SET
        url = EXCLUDED.url,
        secret_ciphertext = EXCLUDED.secret_ciphertext,

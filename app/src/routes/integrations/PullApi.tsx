@@ -119,7 +119,7 @@ export function PullApi() {
         </p>
         <pre className="px-3 py-2 rounded-sm bg-surface-2 text-[12px] font-mono overflow-x-auto">
           {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \\
-     ${baseUrl}/dimensions`}
+     ${baseUrl}/tables`}
         </pre>
       </Panel>
 
@@ -127,15 +127,15 @@ export function PullApi() {
 
       <Panel as="section" padding="sm">
         <h3 className="font-display text-[14px] font-semibold text-ink mb-3">
-          Dimensions in this workspace
+          Tables in this workspace
         </h3>
         {loading ? (
           <SkeletonList rows={3} columns={[120, 1, 70, 90, 180]} />
         ) : error ? (
-          <p className="text-[13px] text-danger">Could not load dimensions: {error}</p>
+          <p className="text-[13px] text-danger">Could not load tables: {error}</p>
         ) : dims.length === 0 ? (
           <p className="text-[13px] text-ink-2">
-            No dimensions yet. Create one in{" "}
+            No tables yet. Create one in{" "}
             <Link to="../../tables" className="text-accent underline-offset-2 hover:underline">
               Tables
             </Link>{" "}
@@ -164,19 +164,19 @@ export function PullApi() {
                     <td className="py-2 font-mono">{d.slug}</td>
                     <td>{d.label}</td>
                     <td className="text-right pr-4 tabular-nums">
-                      {d.canonical_count.toLocaleString()}
+                      {d.record_count.toLocaleString()}
                     </td>
                     <td
-                      className={d.last_committed_at ? "text-ink" : "text-ink-3"}
-                      title={d.last_committed_at ?? undefined}
+                      className={d.last_published_at ? "text-ink" : "text-ink-3"}
+                      title={d.last_published_at ?? undefined}
                     >
-                      {relativeDay(d.last_committed_at)}
+                      {relativeDay(d.last_published_at)}
                     </td>
                     <td className="text-right">
                       <div className="inline-flex items-center gap-1">
-                        <MiniCopy text={curlFor("canonical")} label="canonical" />
-                        <MiniCopy text={curlFor("schema")} label="schema" />
-                        <MiniCopy text={curlFor("tombstones")} label="tombstones" />
+                        <MiniCopy text={curlFor("records")} label="records" />
+                        <MiniCopy text={curlFor("fields")} label="fields" />
+                        <MiniCopy text={curlFor("removed")} label="removed" />
                       </div>
                     </td>
                   </tr>
@@ -212,15 +212,15 @@ export function PullApi() {
 
 function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: string }) {
   const ENDPOINTS: { sig: string; desc: string }[] = [
-    { sig: `GET /v1/dimensions`, desc: "List this workspace's dimensions." },
-    { sig: `GET /v1/dimensions/${firstSlug}/schema`, desc: "Get a dimension's field schema." },
+    { sig: `GET /v1/tables`, desc: "List this workspace's tables." },
+    { sig: `GET /v1/tables/${firstSlug}/fields`, desc: "Get a table's fields." },
     {
-      sig: `GET /v1/dimensions/${firstSlug}/canonical`,
+      sig: `GET /v1/tables/${firstSlug}/records`,
       desc: "Paginated records. Supports ?since= and ?cursor=.",
     },
     {
-      sig: `GET /v1/dimensions/${firstSlug}/tombstones`,
-      desc: "Paginated retired/merged keys. Used when a webhook reports changes_truncated.",
+      sig: `GET /v1/tables/${firstSlug}/removed`,
+      desc: "Paginated removed records. Used when a webhook reports changes_truncated.",
     },
   ];
   return (

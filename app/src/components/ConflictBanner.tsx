@@ -66,7 +66,8 @@ export function ConflictBanner({
         <ul className="w-full space-y-0.5 font-mono text-[11px] text-warn/90">
           {diff.map((d) => (
             <li key={d.field}>
-              <span className="text-warn/70">{d.field}:</span> theirs &quot;{d.theirs}&quot; · yours &quot;{d.yours}&quot;
+              <span className="text-warn/70">{d.field}:</span> theirs &quot;{d.theirs}&quot; · yours
+              &quot;{d.yours}&quot;
             </li>
           ))}
         </ul>

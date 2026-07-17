@@ -141,22 +141,20 @@ function adminReq(path: string, init: RequestInit = {}): Request {
   });
 }
 
-describe("GET /api/t/:slug/v1/dimensions", () => {
+describe("GET /api/t/:slug/v1/tables", () => {
   it("returns the workspace's dimensions in API wire shape", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/dimensions`));
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as {
-      dimensions: Array<{ slug: string; label: string; canonical_count: number }>;
+      tables: Array<{ slug: string; label: string; record_count: number }>;
     };
-    expect(body.dimensions.find((d) => d.slug === dimId)?.label).toBe("V1Country");
+    expect(body.tables.find((d) => d.slug === dimId)?.label).toBe("V1Country");
   });
 });
 
-describe("GET /api/t/:slug/v1/dimensions/:slug/canonical", () => {
+describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
   it("returns 200 with paginated records", async () => {
-    const res = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/canonical?limit=1`),
-    );
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records?limit=1`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as {
       records: unknown[];
@@ -169,13 +167,11 @@ describe("GET /api/t/:slug/v1/dimensions/:slug/canonical", () => {
   });
 
   it("cursor round-trip returns the next page without duplicates", async () => {
-    const r1 = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/canonical?limit=1`),
-    );
+    const r1 = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records?limit=1`));
     const b1 = (await r1!.json()) as { records: { key: string }[]; cursor: { next: string } };
     const r2 = await handleV1Route(
       authedReq(
-        `/api/t/${SLUG}/v1/dimensions/${dimId}/canonical?limit=1&cursor=${encodeURIComponent(b1.cursor.next)}`,
+        `/api/t/${SLUG}/v1/tables/${dimId}/records?limit=1&cursor=${encodeURIComponent(b1.cursor.next)}`,
       ),
     );
     const b2 = (await r2!.json()) as {
@@ -188,7 +184,7 @@ describe("GET /api/t/:slug/v1/dimensions/:slug/canonical", () => {
 
   it("returns 400 cursor_invalid for a tampered cursor", async () => {
     const res = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/canonical?cursor=garbage.xx`),
+      authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records?cursor=garbage.xx`),
     );
     expect(res!.status).toBe(400);
     const body = (await res!.json()) as { error: string };
@@ -196,11 +192,9 @@ describe("GET /api/t/:slug/v1/dimensions/:slug/canonical", () => {
   });
 });
 
-describe("GET /api/t/:slug/v1/dimensions/:slug/canonical/:key", () => {
+describe("GET /api/t/:slug/v1/tables/:slug/records/:key", () => {
   it("returns the row", async () => {
-    const res = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/canonical/DE`),
-    );
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records/DE`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { key: string; label: string };
     expect(body.key).toBe("DE");
@@ -208,28 +202,26 @@ describe("GET /api/t/:slug/v1/dimensions/:slug/canonical/:key", () => {
   });
 
   it("returns 404 for an unknown key", async () => {
-    const res = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/canonical/NOPE`),
-    );
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records/NOPE`));
     expect(res!.status).toBe(404);
   });
 });
 
-describe("GET /api/t/:slug/v1/dimensions/:slug/schema", () => {
+describe("GET /api/t/:slug/v1/tables/:slug/fields", () => {
   it("returns dim_slug + fields", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/schema`));
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/fields`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { dim_slug: string; label: string; fields: unknown[] };
     expect(body.dim_slug).toBe(dimId);
   });
 });
 
-describe("GET /api/t/:slug/v1/dimensions/:slug/tombstones", () => {
+describe("GET /api/t/:slug/v1/tables/:slug/removed", () => {
   it("returns 200 with an array (possibly empty)", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/dimensions/${dimId}/tombstones`));
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/removed`));
     expect(res!.status).toBe(200);
-    const body = (await res!.json()) as { tombstones: unknown[] };
-    expect(Array.isArray(body.tombstones)).toBe(true);
+    const body = (await res!.json()) as { removed: unknown[] };
+    expect(Array.isArray(body.removed)).toBe(true);
   });
 });
 
@@ -251,7 +243,7 @@ describe("GET /api/t/:slug/v1/service-accounts (admin only)", () => {
 
 describe("auth rejection — missing bearer", () => {
   it("returns 401", async () => {
-    const res = await handleV1Route(new Request(`http://test/api/t/${SLUG}/v1/dimensions`));
+    const res = await handleV1Route(new Request(`http://test/api/t/${SLUG}/v1/tables`));
     expect(res!.status).toBe(401);
   });
 });
@@ -269,7 +261,7 @@ describe("tenant mismatch — SA from a different workspace", () => {
       name: "other-tenant-sa",
       createdBy: ADMIN,
     });
-    const req = new Request(`http://test/api/t/${SLUG}/v1/dimensions`, {
+    const req = new Request(`http://test/api/t/${SLUG}/v1/tables`, {
       headers: { authorization: `Bearer ${value}` },
     });
     const res = await handleV1Route(req);
@@ -289,7 +281,7 @@ describe("/v1/webhooks routes", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           url: "https://example.test/wh/create",
-          events: ["dimension.committed"],
+          events: ["table.published"],
           description: "v1 test",
         }),
       }),
@@ -307,7 +299,7 @@ describe("/v1/webhooks routes", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           url: "http://evil.test/x",
-          events: ["dimension.committed"],
+          events: ["table.published"],
         }),
       }),
     );
@@ -320,7 +312,7 @@ describe("/v1/webhooks routes", () => {
     const res = await handleV1Route(
       authedReq(`/api/t/${SLUG}/v1/webhooks`, {
         method: "POST",
-        body: JSON.stringify({ url: "https://x.test/", events: ["dimension.committed"] }),
+        body: JSON.stringify({ url: "https://x.test/", events: ["table.published"] }),
       }),
     );
     expect(res!.status).toBe(403);
@@ -337,7 +329,7 @@ describe("/v1/webhooks routes", () => {
     const wh = await createWebhook({
       tenantId: T,
       url: "https://example.test/patch",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: ADMIN,
     });
     const res = await handleV1Route(
@@ -354,7 +346,7 @@ describe("/v1/webhooks routes", () => {
     const wh = await createWebhook({
       tenantId: T,
       url: "https://example.test/testev",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: ADMIN,
     });
     const res = await handleV1Route(
@@ -375,7 +367,7 @@ describe("/v1/webhooks routes", () => {
     const wh = await createWebhook({
       tenantId: T,
       url: "https://example.test/del-list",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: ADMIN,
     });
     // Enqueue one delivery via test endpoint.
@@ -391,7 +383,7 @@ describe("/v1/webhooks routes", () => {
     const wh = await createWebhook({
       tenantId: T,
       url: "https://example.test/replay",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: ADMIN,
     });
     const t = await handleV1Route(
@@ -412,7 +404,7 @@ describe("/v1/webhooks routes", () => {
     const wh = await createWebhook({
       tenantId: T,
       url: "https://example.test/delete",
-      events: ["dimension.committed"],
+      events: ["table.published"],
       createdBy: ADMIN,
     });
     const res = await handleV1Route(
@@ -425,12 +417,12 @@ describe("/v1/webhooks routes", () => {
 describe("slug-redirect alias", () => {
   it("returns 301 with Location for an aliased old slug", async () => {
     await recordSlugAlias("v1routes_old", T);
-    const req = new Request(`http://test/api/t/v1routes_old/v1/dimensions`, {
+    const req = new Request(`http://test/api/t/v1routes_old/v1/tables`, {
       headers: { authorization: `Bearer ${saToken}` },
     });
     const res = await handleV1Route(req);
     expect(res!.status).toBe(301);
-    expect(res!.headers.get("location")).toBe(`/api/t/${SLUG}/v1/dimensions`);
+    expect(res!.headers.get("location")).toBe(`/api/t/${SLUG}/v1/tables`);
     await pgRun(`DELETE FROM "zugzug_app"."tenant_slug_alias" WHERE old_slug = $1`, [
       "v1routes_old",
     ]);

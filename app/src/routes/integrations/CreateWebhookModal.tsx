@@ -16,30 +16,30 @@ interface Props {
 
 const EVENTS: { value: WebhookEvent; label: string; hint: string }[] = [
   {
-    value: "dimension.committed",
-    label: "dimension.committed",
+    value: "table.published",
+    label: "table.published",
     hint: "When records change.",
   },
   {
-    value: "dimension.created",
-    label: "dimension.created",
-    hint: "When a new dimension is set up.",
+    value: "table.created",
+    label: "table.created",
+    hint: "When a new table is set up.",
   },
   {
-    value: "canonical.deleted",
-    label: "canonical.deleted",
-    hint: "When a single record is retired.",
+    value: "record.deleted",
+    label: "record.deleted",
+    hint: "When a single record is removed.",
   },
   {
-    value: "dimension.schema.updated",
-    label: "dimension.schema.updated",
-    hint: "When a dimension's field schema changes.",
+    value: "table.fields.updated",
+    label: "table.fields.updated",
+    hint: "When a table's fields change.",
   },
 ];
 
 export function CreateWebhookModal({ onClose, onCreated }: Props) {
   const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<WebhookEvent[]>(["dimension.committed"]);
+  const [events, setEvents] = useState<WebhookEvent[]>(["table.published"]);
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

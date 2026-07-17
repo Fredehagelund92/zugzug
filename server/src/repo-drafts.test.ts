@@ -138,9 +138,9 @@ test("listAllDrafts returns [] for an empty workspace", async () => {
   expect(await listAllDrafts(T_EMPTY)).toEqual([]);
 });
 
-// ---- commit() fires dimension.committed event ----------------------------
+// ---- commit() fires table.published event ----------------------------
 
-describe("commit() fires dimension.committed event", () => {
+describe("commit() fires table.published event", () => {
   it("writes an outbound_event row with the right shape", async () => {
     const dimId = await addDimension("CommitDim", [], { keyKind: "slug" }, U, T);
     await addCanonicalOne(dimId, "Alpha", undefined, U, T);
@@ -150,12 +150,12 @@ describe("commit() fires dimension.committed event", () => {
 
     const evt = await pgGet<{ type: string; payload: unknown }>(
       `SELECT type, payload FROM "zugzug_app"."outbound_event"
-        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'
+        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'
         ORDER BY occurred_at DESC LIMIT 1`,
       [T, dimId],
     );
     expect(evt).not.toBeNull();
-    expect(evt!.type).toBe("dimension.committed");
+    expect(evt!.type).toBe("table.published");
     const payload =
       typeof evt!.payload === "string"
         ? (JSON.parse(evt!.payload) as Record<string, unknown>)
@@ -213,8 +213,8 @@ describe("commit() draft-scoped folding", () => {
     const dimId = await addDimension(`FourEyesScoped_${run}`, [], { keyKind: "slug" }, U, T);
     await addCanonicalOne(dimId, "A", undefined, U, T);
     await addCanonicalOne(dimId, "B", undefined, U, T);
-    await saveDraft(dimId, "aaa", "mapped", "A", "a", U, T);   // U's draft
-    await saveDraft(dimId, "bbb", "mapped", "B", "b", U2, T);  // U2's draft
+    await saveDraft(dimId, "aaa", "mapped", "A", "a", U, T); // U's draft
+    await saveDraft(dimId, "bbb", "mapped", "B", "b", U2, T); // U2's draft
     await expect(commit(dimId, U, T, ["bbb"])).resolves.toMatchObject({ committed: 1 }); // U publishes U2's — fine
     await expect(commit(dimId, U, T, ["aaa"])).rejects.toThrow(/another editor must publish/i); // U can't publish own
     await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
@@ -239,7 +239,7 @@ describe("commit() draft-scoped folding", () => {
     // Count versions before
     const versionsBefore = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
       [T, dimId],
     );
 
@@ -254,7 +254,7 @@ describe("commit() draft-scoped folding", () => {
     // A new version must have been created
     const versionsAfter = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'dimension.committed'`,
+       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
       [T, dimId],
     );
     expect(versionsAfter!.n).toBe(versionsBefore!.n + 1);
@@ -309,7 +309,13 @@ describe("rejectDrafts()", () => {
   it("reject sets status, reason, reviewer; re-staging clears them", async () => {
     const dimId = await addDimension("RejectDim", [], { keyKind: "slug" }, U, T);
     await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
-    const r = await rejectDrafts(dimId, T, ["usa"], "wrong target — USA is a country not a partner", U2);
+    const r = await rejectDrafts(
+      dimId,
+      T,
+      ["usa"],
+      "wrong target — USA is a country not a partner",
+      U2,
+    );
     expect(r.rejected).toBe(1);
     const [d] = await listDrafts(dimId, T);
     expect(d.status).toBe("rejected");

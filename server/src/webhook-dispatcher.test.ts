@@ -84,7 +84,7 @@ async function seedWebhook(
       Buffer.from(enc.nonce),
       enc.keyVersion,
       plaintext.slice(0, 12),
-      ["dimension.committed"],
+      ["table.published"],
       U,
     ],
   );
@@ -130,7 +130,7 @@ async function seedDelivery(s: DeliverySeed): Promise<string> {
        (id, tenant_id, webhook_id, event_id, event_type, delivery_url,
         signing_kid, is_test, status, attempts, max_attempts,
         next_attempt_at, last_attempt_at, payload, signature, created_at)
-     VALUES ($1, $2, $3, $4, 'dimension.committed', $5,
+     VALUES ($1, $2, $3, $4, 'table.published', $5,
              $6, $7, $8, $9, 5,
              ${next}, ${lastAttempt}, '{"hello":"world"}'::jsonb, '', ${createdAt})`,
     [
@@ -198,7 +198,7 @@ describe("webhookDispatcherJob", () => {
     expect(row.last_response_code).toBe(200);
     expect(received).not.toBeNull();
     const r = received as unknown as { headers: Headers; body: string };
-    expect(r.headers.get("x-zugzug-event")).toBe("dimension.committed");
+    expect(r.headers.get("x-zugzug-event")).toBe("table.published");
     expect(r.body).toBe('{"hello":"world"}');
   });
 

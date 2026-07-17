@@ -60,9 +60,9 @@ async function listCanonical(
 ): Promise<Array<{ key: string; label: string | null }>> {
   const meta = await dimMeta(dimId, tenantId);
   if (!meta) return [];
-  const rows = await pgAll<Record<string, unknown>>(
-    `SELECT * FROM ${cq(meta.dimTable)}`,
-  ).catch(() => [] as Record<string, unknown>[]);
+  const rows = await pgAll<Record<string, unknown>>(`SELECT * FROM ${cq(meta.dimTable)}`).catch(
+    () => [] as Record<string, unknown>[],
+  );
   return rows.map((r) => ({
     key: String(r[meta.keyCol] ?? ""),
     label: r.label != null ? String(r.label) : null,

@@ -301,7 +301,10 @@ function RecordsBody({
   } | null>(null);
 
   const [conflicts, setConflicts] = useState<
-    Map<string, { current: ConflictError["current"]; conflictedKeys?: string[]; diff?: FieldDiff[] }>
+    Map<
+      string,
+      { current: ConflictError["current"]; conflictedKeys?: string[]; diff?: FieldDiff[] }
+    >
   >(new Map());
 
   const surfaceConflict = useCallback((rowKey: string, err: unknown, diff?: FieldDiff[]) => {
@@ -335,7 +338,9 @@ function RecordsBody({
   const [dismissedSortBanner, setDismissedSortBanner] = useState<Set<string>>(new Set());
 
   const importFileRef = useRef<HTMLInputElement>(null);
-  const [pendingImport, setPendingImport] = useState<(ParsedImport & { headers: string[]; rawRows: string[][] }) | null>(null);
+  const [pendingImport, setPendingImport] = useState<
+    (ParsedImport & { headers: string[]; rawRows: string[][] }) | null
+  >(null);
   const [importing, setImporting] = useState(false);
   const onImportFile = async (file: File | null, input: HTMLInputElement) => {
     input.value = ""; // allow re-picking the same file
@@ -638,7 +643,12 @@ function RecordsBody({
     }
   };
 
-  const outcomeText = (result: { mode: "seed" | "connect"; derived?: number; matched?: number; unmatched?: number }): string => {
+  const outcomeText = (result: {
+    mode: "seed" | "connect";
+    derived?: number;
+    matched?: number;
+    unmatched?: number;
+  }): string => {
     if (result.mode === "seed") {
       if ((result.derived ?? 0) > 0) {
         return `${result.derived} record${result.derived === 1 ? "" : "s"} created`;
@@ -675,7 +685,9 @@ function RecordsBody({
     setBusy(true);
     const result = await deriveCanonical(activeId, s.table, s.column, nameCol);
     setBusy(false);
-    flash(`Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · staged drafts untouched`);
+    flash(
+      `Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · staged drafts untouched`,
+    );
   };
 
   const navigate = useNavigate();
@@ -811,7 +823,9 @@ function RecordsBody({
   // that actually exist (no "0 …"), no system jargon.
   const publishParts: string[] = [];
   if (pubState && pubState.pendingDrafts > 0)
-    publishParts.push(`${pubState.pendingDrafts} new mapping${pubState.pendingDrafts === 1 ? "" : "s"}`);
+    publishParts.push(
+      `${pubState.pendingDrafts} new mapping${pubState.pendingDrafts === 1 ? "" : "s"}`,
+    );
   if (pubState && pubState.changedKeys.length > 0)
     publishParts.push(
       `${pubState.changedKeys.length} edited record${pubState.changedKeys.length === 1 ? "" : "s"}`,
@@ -1326,7 +1340,9 @@ function RecordsBody({
                       if (serverRow && serverRow.label !== value) {
                         labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
                       }
-                      if (!surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)) {
+                      if (
+                        !surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)
+                      ) {
                         // Not a version conflict (e.g. network / server error). The
                         // store already reverted the optimistic label; tell the user
                         // instead of failing silently.
@@ -1771,9 +1787,12 @@ function RecordsBody({
             const toImport = mapped.map((r) => ({
               key: r.key || undefined,
               label: r.label || undefined,
-              fields: Object.keys(r.fields).length > 0
-                ? Object.fromEntries(Object.entries(r.fields).map(([k, v]) => [k, v === "" ? null : v]))
-                : undefined,
+              fields:
+                Object.keys(r.fields).length > 0
+                  ? Object.fromEntries(
+                      Object.entries(r.fields).map(([k, v]) => [k, v === "" ? null : v]),
+                    )
+                  : undefined,
             }));
             const r = await importRows(activeId, toImport);
             toast(`Imported — ${r.created} created · ${r.updated} updated · ${r.skipped} skipped`);
@@ -1921,8 +1940,8 @@ function RecordsBody({
         body={
           <>
             <div>
-              This will null the positions on all {list.length} rows. Switching back to manual
-              later will assign new positions — your current manual order cannot be recovered.
+              This will null the positions on all {list.length} rows. Switching back to manual later
+              will assign new positions — your current manual order cannot be recovered.
             </div>
             <button
               type="button"
@@ -1963,9 +1982,7 @@ function RecordsBody({
           setPublishGroups((gs) =>
             gs
               .map((g) =>
-                g.dimId === d.dimId
-                  ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
-                  : g,
+                g.dimId === d.dimId ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) } : g,
               )
               .filter((g) => g.drafts.length > 0 || g.changedKeys.length > 0),
           );

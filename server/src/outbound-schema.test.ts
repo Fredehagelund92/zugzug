@@ -316,20 +316,20 @@ describe("teardownTenant cleans up outbound integration tables", () => {
          (id, tenant_id, url, secret_ciphertext, secret_nonce, secret_prefix,
           events, created_at, created_by)
        VALUES ('wh_test_td', $1, 'https://example.test/', '\\x00'::bytea, '\\x00'::bytea,
-               'whsec_aaaaaa', ARRAY['dimension.committed'], now(), 'u_test')`,
+               'whsec_aaaaaa', ARRAY['table.published'], now(), 'u_test')`,
       [TT],
     );
     await pgRun(
       `INSERT INTO "zugzug_app"."outbound_event"
          (id, tenant_id, type, occurred_at, payload, idem_key)
-       VALUES ('evt_test_td', $1, 'dimension.committed', now(), '{}'::jsonb, 'k_test_td')`,
+       VALUES ('evt_test_td', $1, 'table.published', now(), '{}'::jsonb, 'k_test_td')`,
       [TT],
     );
     await pgRun(
       `INSERT INTO "zugzug_app"."webhook_delivery"
          (id, tenant_id, webhook_id, event_id, event_type, delivery_url,
           signing_kid, status, payload, signature, created_at)
-       VALUES ('whd_test_td', $1, 'wh_test_td', 'evt_test_td', 'dimension.committed',
+       VALUES ('whd_test_td', $1, 'wh_test_td', 'evt_test_td', 'table.published',
                'https://example.test/', 'current', 'pending', '{}'::jsonb,
                't=1,v1=sha256=00', now())`,
       [TT],
@@ -347,7 +347,7 @@ describe("teardownTenant cleans up outbound integration tables", () => {
   });
 });
 
-describe("retireCanonical fires canonical.deleted outbound event inside the tx", () => {
+describe("retireCanonical fires record.deleted outbound event inside the tx", () => {
   const DEL_DIM_NAME = "Outbound SD Delete";
   const DEL_DIM_ID = "outbound_sd_delete";
   const REF_DIM_NAME = "Outbound SD Refuse";
@@ -355,7 +355,7 @@ describe("retireCanonical fires canonical.deleted outbound event inside the tx",
 
   async function cleanup() {
     await pgRun(
-      `DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1 AND type = 'canonical.deleted'`,
+      `DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1 AND type = 'record.deleted'`,
       [T],
     ).catch(() => {});
     for (const id of [DEL_DIM_ID, REF_DIM_ID]) {
@@ -399,13 +399,13 @@ describe("retireCanonical fires canonical.deleted outbound event inside the tx",
       idem_key: string;
     }>(
       `SELECT type, dim_id, payload, idem_key FROM "zugzug_app"."outbound_event"
-        WHERE tenant_id = $1 AND type = 'canonical.deleted' AND dim_id = $2`,
+        WHERE tenant_id = $1 AND type = 'record.deleted' AND dim_id = $2`,
       [T, dimId],
     );
     expect(evt).not.toBeNull();
-    expect(evt!.type).toBe("canonical.deleted");
+    expect(evt!.type).toBe("record.deleted");
     expect(evt!.dim_id).toBe(dimId);
-    expect(evt!.idem_key.startsWith(`canonical.deleted:${dimId}:beta:`)).toBe(true);
+    expect(evt!.idem_key.startsWith(`record.deleted:${dimId}:beta:`)).toBe(true);
 
     const payload =
       typeof evt!.payload === "string"
@@ -456,7 +456,7 @@ describe("retireCanonical fires canonical.deleted outbound event inside the tx",
 
     const count = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-        WHERE tenant_id = $1 AND type = 'canonical.deleted' AND dim_id = $2`,
+        WHERE tenant_id = $1 AND type = 'record.deleted' AND dim_id = $2`,
       [T, dimId],
     );
     expect(count!.n).toBe(0);

@@ -128,7 +128,9 @@ export function ImportPreviewDialog({
     <ConfirmDialog
       open={open}
       title={`Import into ${tableName}?`}
-      confirmLabel={importing ? "Importing…" : `Import ${totalRecords} record${totalRecords === 1 ? "" : "s"}`}
+      confirmLabel={
+        importing ? "Importing…" : `Import ${totalRecords} record${totalRecords === 1 ? "" : "s"}`
+      }
       loading={importing}
       onConfirm={() => {
         if (!canImport) return;
@@ -204,7 +206,9 @@ export function ImportPreviewDialog({
                       <th className="px-2 py-1 text-left font-mono text-ink-3">key</th>
                       <th className="px-2 py-1 text-left font-mono text-ink-3">label</th>
                       {fields
-                        .filter((f) => colMap.some((t) => t.kind === "field" && t.fieldId === f.field))
+                        .filter((f) =>
+                          colMap.some((t) => t.kind === "field" && t.fieldId === f.field),
+                        )
                         .map((f) => (
                           <th key={f.field} className="px-2 py-1 text-left font-mono text-ink-3">
                             {f.label}

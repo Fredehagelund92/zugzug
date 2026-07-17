@@ -28,12 +28,15 @@ export function NoWorkspaceLanding() {
 
   const copyEmail = () => {
     if (!email) return;
-    void navigator.clipboard.writeText(email).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
-      window.prompt("Copy your email:", email);
-    });
+    void navigator.clipboard
+      .writeText(email)
+      .then(() => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => {
+        window.prompt("Copy your email:", email);
+      });
   };
 
   return (

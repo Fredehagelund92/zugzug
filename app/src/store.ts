@@ -182,7 +182,12 @@ function resetStore(): void {
   sources = [];
   draftsFlat = {};
   audit = [];
-  preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null, requireSecondPublisher: false };
+  preferences = {
+    publishThreshold: 95,
+    suggestThreshold: 80,
+    scanSchedule: null,
+    requireSecondPublisher: false,
+  };
   _authConfigCache = null;
   _authConfigPromise = null;
   _workspaceInfoCache = null;
@@ -265,7 +270,12 @@ let dims: MappingDimension[] = [];
 let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
-let preferences: Preferences = { publishThreshold: 95, suggestThreshold: 80, scanSchedule: null, requireSecondPublisher: false };
+let preferences: Preferences = {
+  publishThreshold: 95,
+  suggestThreshold: 80,
+  scanSchedule: null,
+  requireSecondPublisher: false,
+};
 let storeLoading = true;
 
 const listeners = new Set<() => void>();
@@ -360,7 +370,7 @@ async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
       }
     }
     if (res.status === 403) {
-      const body = await res.json().catch(() => null) as { code?: string } | null;
+      const body = (await res.json().catch(() => null)) as { code?: string } | null;
       if (body?.code) {
         throw new ApiCodeError(`${opts?.method ?? "GET"} ${path} → 403 ${body.code}`, body.code);
       }
@@ -503,7 +513,11 @@ export function useCurrentUser(): CurrentUser | null {
 }
 
 export function useStoreLoading(): boolean {
-  return useSyncExternalStore(subscribe, () => storeLoading, () => storeLoading);
+  return useSyncExternalStore(
+    subscribe,
+    () => storeLoading,
+    () => storeLoading,
+  );
 }
 
 /** Convenience: true when the current user may mutate state in the active workspace.
@@ -858,11 +872,7 @@ export async function rollbackDim(dimId: string, toVersion: number): Promise<voi
 }
 
 /** Reject a set of raw draft values with a reason. Refreshes drafts and emits. */
-export async function rejectDrafts(
-  dimId: string,
-  raws: string[],
-  reason: string,
-): Promise<void> {
+export async function rejectDrafts(dimId: string, raws: string[], reason: string): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/reject`, {
     method: "POST",
     body: JSON.stringify({ raws, reason }),
@@ -924,13 +934,15 @@ export async function deriveCanonical(
   nameColumn?: string,
   opts: { force?: boolean } = {},
 ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
-  const res = await api<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/derive`,
-    {
-      method: "POST",
-      body: JSON.stringify({ table, column, nameColumn, force: opts.force }),
-    },
-  );
+  const res = await api<{
+    derived: number;
+    mode: "seed" | "connect";
+    matched: number;
+    unmatched: number;
+  }>(`/dimensions/${encodeURIComponent(dimId)}/derive`, {
+    method: "POST",
+    body: JSON.stringify({ table, column, nameColumn, force: opts.force }),
+  });
   await refreshDim(dimId);
   await refreshSources();
   await refreshAudit();

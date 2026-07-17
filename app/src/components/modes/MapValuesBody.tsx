@@ -29,7 +29,9 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
     if (staged === 0) return;
     try {
       const res = await commit(dim.id);
-      toast(`Published ${res.committed} change${res.committed === 1 ? "" : "s"} to ${dim.dimension}`);
+      toast(
+        `Published ${res.committed} change${res.committed === 1 ? "" : "s"} to ${dim.dimension}`,
+      );
     } catch (e) {
       toast(e instanceof Error ? `Publish failed — ${e.message}` : "Publish failed.", "error");
       throw e;
@@ -38,9 +40,12 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
-      {/* Focused / Grid toggle */}
-      <div className="flex items-center gap-2 border-b border-line bg-surface px-4 py-2">
-        <div className="inline-flex border border-line">
+      {/* mapper-head: kicker + view toggle */}
+      <div className="flex items-center gap-3 border-b border-line bg-surface px-4 pt-3 pb-2.5">
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
+          map values · {dim.dimension}
+        </span>
+        <div className="ml-auto inline-flex border border-line">
           {(["focused", "grid"] as const).map((v) => (
             <button
               key={v}
@@ -55,8 +60,21 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
             </button>
           ))}
         </div>
-        <span className="ml-auto font-mono text-[11px] text-ink-3">Grid is the power view — bulk, paste, SQL</span>
       </div>
+
+      {view === "focused" ? (
+        <p className="border-b border-line bg-surface px-4 py-2 text-[12px] leading-snug text-ink-3">
+          Zugzug groups the look-alikes, so one decision maps a whole family of spellings. The
+          closest record is pre-highlighted — <span className="text-ink-2">Enter</span> maps the
+          group and jumps to the next. <span className="font-mono">↑↓</span> to choose, type to
+          search, <span className="font-mono">Tab</span> takes the suggested record.
+        </p>
+      ) : (
+        <p className="border-b border-line bg-surface px-4 py-2 font-mono text-[11px] text-ink-3">
+          Grid keeps the same staged drafts and publish bar — a spreadsheet with range-select,
+          copy/paste, and (in engineer mode) SQL. This is the power surface.
+        </p>
+      )}
 
       {view === "focused" ? (
         <>

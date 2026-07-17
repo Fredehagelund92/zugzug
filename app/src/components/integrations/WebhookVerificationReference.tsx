@@ -84,7 +84,7 @@ Content-Type: application/json
 Zugzug-Signature: t=1718457600,kid=current,v1=sha256=4f8a1e…
 Zugzug-Delivery: 0f8e3a7c-2d6b-4c1f-9a4e-7b8c1d2e3f40
 
-{"event":"dimension.committed","dimension":"country","kind":"publish"}`;
+{"event":"table.published","table":"country","kind":"publish"}`;
 
 export function WebhookVerificationReference() {
   const [active, setActive] = useState<string>("node");
@@ -163,12 +163,12 @@ export function WebhookVerificationReference() {
         </section>
 
         <section className="space-y-2">
-          <SectionLabel n="03" title="Event payload (dimension.committed)" />
+          <SectionLabel n="03" title="Event payload (table.published)" />
           <div className="rounded-sm border border-line bg-surface-2 p-3">
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11.5px]">
               <dt className="font-mono uppercase tracking-wider text-ink-3">event</dt>
               <dd className="text-ink-2">
-                <code>dimension.committed</code>
+                <code>table.published</code>
               </dd>
               <dt className="font-mono uppercase tracking-wider text-ink-3">dimension</dt>
               <dd className="text-ink-2">Dimension ID</dd>

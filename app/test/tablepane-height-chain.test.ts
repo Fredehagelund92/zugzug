@@ -25,7 +25,9 @@ function rootDivOfComponent(source: string, componentName: string): string {
   const start = source.indexOf(`function ${componentName}(`);
   expect(start, `function ${componentName} not found`).toBeGreaterThan(-1);
   const body = source.slice(start);
-  const ret = body.indexOf("return (");
+  // Match the JSX return — `return (` followed by a newline — not an effect
+  // cleanup `return () => {`, whose `(` is immediately closed by `)`.
+  const ret = body.search(/return \(\s*\n/);
   expect(ret, `no return ( in ${componentName}`).toBeGreaterThan(-1);
   const afterReturn = body.slice(ret);
   const divStart = afterReturn.indexOf("<div");

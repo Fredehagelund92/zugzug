@@ -43,7 +43,7 @@ async function seedDelivery(
        (id, tenant_id, webhook_id, event_id, event_type, delivery_url,
         signing_kid, is_test, status, attempts, max_attempts,
         next_attempt_at, payload, signature, last_response_body, created_at)
-     VALUES ($1, $2, $3, $4, 'dimension.committed', $5,
+     VALUES ($1, $2, $3, $4, 'table.published', $5,
              $6, $7, $8, 0, 5,
              now(), $9::jsonb, $10, $11, now())`,
     [
@@ -79,7 +79,7 @@ beforeAll(async () => {
   const wh = await createWebhook({
     tenantId: T,
     url: "https://example.test/wh",
-    events: ["dimension.committed"],
+    events: ["table.published"],
     createdBy: U,
   });
   webhookId = wh.id;

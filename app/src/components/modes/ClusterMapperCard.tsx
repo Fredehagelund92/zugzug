@@ -74,9 +74,11 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
     >
       {/* header: progress + coverage */}
       <div className="flex items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">mapping</span>
-        <span className="ml-auto font-mono text-[11px] text-ink-3">
-          <span className="text-ink">{m.position.index + 1}</span> of {m.position.total}
+        <span className="font-mono text-[11px] text-ink-3">
+          <span className="text-ink">{m.position.index + 1}</span> of {m.position.total} groups
+        </span>
+        <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.15em] text-ink-3">
+          rows resolved
         </span>
         <div className="h-1 w-28 overflow-hidden rounded-pill bg-surface-2">
           <div className="h-full bg-committed" style={{ width: `${m.coverage.pct}%` }} />
@@ -97,13 +99,18 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
             {c.rep}
           </div>
           <div className="text-right font-mono text-[11px] text-ink-3">
-            <span className="block text-[15px] font-semibold text-ink-2">{c.rows.toLocaleString("en-US")}</span>
+            <span className="block text-[15px] font-semibold text-ink-2">
+              {c.rows.toLocaleString("en-US")}
+            </span>
             rows affected
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
           {shown.map((mem) => (
-            <span key={mem.raw} className="rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-[12px] text-ink">
+            <span
+              key={mem.raw}
+              className="rounded-sm border border-line bg-surface px-2 py-0.5 font-mono text-[12px] text-ink"
+            >
               {mem.raw}
             </span>
           ))}
@@ -133,8 +140,10 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
       {/* candidate list */}
       <div className="mt-3 flex-1 overflow-y-auto" role="listbox" aria-label="Records">
         {m.candidates.map((cand, i) => {
-          const activeCls = i === picker.active ? "border-l-accent bg-surface-2" : "border-l-transparent";
-          const label = cand.kind === "create" ? `Create “${cand.label}” as a new record` : cand.label;
+          const activeCls =
+            i === picker.active ? "border-l-accent bg-surface-2" : "border-l-transparent";
+          const label =
+            cand.kind === "create" ? `Create “${cand.label}” as a new record` : cand.label;
           const isSuggested = cand.kind === "record" && m.suggestion?.key === cand.key;
           return (
             <button
@@ -148,11 +157,18 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
                 activeCls,
               )}
             >
-              <span className={cx("font-display text-[15px] font-semibold", cand.kind === "create" ? "text-accent" : "text-ink")}>
+              <span
+                className={cx(
+                  "font-display text-[15px] font-semibold",
+                  cand.kind === "create" ? "text-accent" : "text-ink",
+                )}
+              >
                 {cand.kind === "create" ? "＋ " : ""}
                 {label}
               </span>
-              {cand.kind === "record" && <span className="font-mono text-[11px] text-ink-3">{cand.key}</span>}
+              {cand.kind === "record" && (
+                <span className="font-mono text-[11px] text-ink-3">{cand.key}</span>
+              )}
               <span className="ml-auto flex items-center gap-2">
                 {isSuggested && (
                   <span className="rounded-pill bg-accent-wash px-2 py-0.5 font-mono text-[9.5px] uppercase text-accent">

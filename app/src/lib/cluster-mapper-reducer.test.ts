@@ -19,8 +19,17 @@ describe("clusterMapperReducer", () => {
   });
 
   it("map records the decision and advances to the next undecided cluster", () => {
-    const s = clusterMapperReducer(init(), { type: "map", clusterKey: "usa", recordKey: "us", recordLabel: "United States" });
-    expect(s.decisions.usa).toEqual({ status: "mapped", recordKey: "us", recordLabel: "United States" });
+    const s = clusterMapperReducer(init(), {
+      type: "map",
+      clusterKey: "usa",
+      recordKey: "us",
+      recordLabel: "United States",
+    });
+    expect(s.decisions.usa).toEqual({
+      status: "mapped",
+      recordKey: "us",
+      recordLabel: "United States",
+    });
     expect(s.cursor).toBe(1); // advanced to "germany"
     expect(s.undo).toEqual(["usa"]);
     expect(stagedCount(s)).toBe(1);
@@ -35,16 +44,31 @@ describe("clusterMapperReducer", () => {
 
   it("advance skips over already-decided clusters", () => {
     let s = init();
-    s = clusterMapperReducer(s, { type: "map", clusterKey: "germany", recordKey: "de", recordLabel: "Germany" });
+    s = clusterMapperReducer(s, {
+      type: "map",
+      clusterKey: "germany",
+      recordKey: "de",
+      recordLabel: "Germany",
+    });
     // cursor started at 0 (usa), germany was decided out of order → advance from 0 stays at 0 (usa undecided)
     expect(s.cursor).toBe(0);
-    s = clusterMapperReducer(s, { type: "map", clusterKey: "usa", recordKey: "us", recordLabel: "United States" });
+    s = clusterMapperReducer(s, {
+      type: "map",
+      clusterKey: "usa",
+      recordKey: "us",
+      recordLabel: "United States",
+    });
     // usa + germany decided → next undecided is "uk" (index 2)
     expect(s.cursor).toBe(2);
   });
 
   it("undo reverts the last decision and moves the cursor back to it", () => {
-    let s = clusterMapperReducer(init(), { type: "map", clusterKey: "usa", recordKey: "us", recordLabel: "United States" });
+    let s = clusterMapperReducer(init(), {
+      type: "map",
+      clusterKey: "usa",
+      recordKey: "us",
+      recordLabel: "United States",
+    });
     s = clusterMapperReducer(s, { type: "undo" });
     expect(s.decisions.usa).toBeUndefined();
     expect(s.cursor).toBe(0);
@@ -58,7 +82,12 @@ describe("clusterMapperReducer", () => {
   });
 
   it("init action resets to a fresh state for the given keys", () => {
-    let s = clusterMapperReducer(init(), { type: "map", clusterKey: "usa", recordKey: "us", recordLabel: "United States" });
+    let s = clusterMapperReducer(init(), {
+      type: "map",
+      clusterKey: "usa",
+      recordKey: "us",
+      recordLabel: "United States",
+    });
     s = clusterMapperReducer(s, { type: "init", clusterKeys: ["a", "b"] });
     expect(s.order).toEqual(["a", "b"]);
     expect(s.cursor).toBe(0);
