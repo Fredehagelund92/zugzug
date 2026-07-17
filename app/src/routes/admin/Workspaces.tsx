@@ -111,7 +111,7 @@ export function Workspaces() {
       />
 
       {/* Workspace list */}
-      <div className="zz-rise" style={{ animationDelay: "80ms" }}>
+      <div className="zz-fade-in">
         {loading ? (
           <SkeletonList
             rows={4}
@@ -150,11 +150,10 @@ export function Workspaces() {
               </span>
             </div>
 
-            {tenants.map((t, i) => (
+            {tenants.map((t) => (
               <div
                 key={t.id}
-                className="zz-rise grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
-                style={{ animationDelay: `${120 + i * 40}ms` }}
+                className="grid grid-cols-[20px_160px_1fr_140px_72px_120px] gap-4 items-center px-5 py-3.5 hover:bg-hover transition-colors group"
               >
                 {/* workspace color dot */}
                 <div

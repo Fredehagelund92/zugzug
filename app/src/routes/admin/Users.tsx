@@ -164,7 +164,7 @@ export function Users() {
         ))}
       </div>
 
-      <Panel padding="none" className="zz-rise" style={{ animationDelay: "80ms" }}>
+      <Panel padding="none" className="zz-fade-in">
         {loading ? (
           <SkeletonList rows={5} columns={[24, "minmax(0,1fr)", 160, 80, 100, 120]} />
         ) : filteredUsers.length === 0 ? (
@@ -189,11 +189,10 @@ export function Users() {
               </span>
               <span />
             </div>
-            {filteredUsers.map((u, i) => (
+            {filteredUsers.map((u) => (
               <div
                 key={u.id}
-                className="zz-rise grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
-                style={{ animationDelay: `${100 + i * 30}ms` }}
+                className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="h-7 w-7 shrink-0 rounded-full bg-accent-soft flex items-center justify-center">

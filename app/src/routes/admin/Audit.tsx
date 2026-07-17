@@ -186,7 +186,7 @@ export function Audit() {
         )}
       </div>
 
-      <div className="zz-rise" style={{ animationDelay: "80ms" }}>
+      <div className="zz-fade-in">
         {loading ? (
           <SkeletonList rows={6} columns={[28, "minmax(0,1fr)", 80]} />
         ) : rows.length === 0 ? (
