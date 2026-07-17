@@ -1,0 +1,99 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { IconWand } from "../Icons";
+import { cx } from "../../lib/cx";
+import { ago } from "./utils";
+import type { SourceInfo } from "../../store";
+
+interface SourceRowProps {
+  row: SourceInfo;
+  mapValuesHref: string;
+  canEdit?: boolean;
+  busy?: boolean;
+  onDerive: () => void;
+  onRemove: () => void;
+}
+
+export function SourceRow({ row, mapValuesHref, canEdit = true, busy, onDerive, onRemove }: SourceRowProps) {
+  const [menu, setMenu] = useState(false);
+
+  // Derive connection state
+  const state =
+    row.scanned && !row.present
+      ? { label: "⚠ column not found", tone: "text-danger" }
+      : !row.scanned && !row.scannedAt
+        ? { label: "never scanned", tone: "text-warn" }
+        : { label: row.scannedAt ? `scanned ${ago(row.scannedAt)} ago` : "scanned", tone: "text-ink-3" };
+
+  // Render schema.table.column as one mono string:
+  //   schema.  — dimmed (text-ink-3)
+  //   table    — normal (text-ink)
+  //   .column  — dimmed (text-ink-3)
+  // row.table is "schema.table" (dot-separated); row.column is the column name.
+  const dotIdx = row.table.indexOf(".");
+  const schemaPrefix = dotIdx !== -1 ? row.table.slice(0, dotIdx + 1) : null;
+  const tableOnly = dotIdx !== -1 ? row.table.slice(dotIdx + 1) : row.table;
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,auto)_150px_32px] items-center gap-4 border-b border-line px-6 py-3 pl-10 transition-colors last:border-b-0 hover:bg-surface-2/40">
+      {/* Column identity: schema.table.column */}
+      <div className="truncate font-mono text-[12.5px]">
+        {schemaPrefix && <span className="text-ink-3">{schemaPrefix}</span>}
+        <span className="text-ink">{tableOnly}</span>
+        <span className="text-ink-3">.{row.column}</span>
+      </div>
+
+      {/* Target dimension */}
+      <div className="whitespace-nowrap text-[12.5px]">
+        <span className="mr-1.5 text-ink-3">→</span>
+        <span className="font-display font-semibold text-ink">{row.dimension}</span>
+      </div>
+
+      {/* Connection state */}
+      <div className={cx("whitespace-nowrap font-mono text-[11px]", state.tone)}>{state.label}</div>
+
+      {/* Actions menu */}
+      <div className="relative justify-self-end">
+        <button
+          type="button"
+          aria-label="More actions"
+          onClick={() => setMenu((v) => !v)}
+          className="px-1.5 py-1 text-ink-3 transition-colors hover:text-ink"
+        >
+          ⋯
+        </button>
+        {menu && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
+            <div className="absolute right-0 top-full z-20 mt-1 min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop">
+              <button
+                type="button"
+                disabled={!canEdit || !!busy}
+                onClick={() => { setMenu(false); onDerive(); }}
+                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
+              >
+                <IconWand className="h-3 w-3" /> Re-scan
+              </button>
+              <Link
+                to={mapValuesHref}
+                onClick={() => setMenu(false)}
+                className="block px-2.5 py-1.5 text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink"
+              >
+                Open in Map values
+              </Link>
+              <div className="my-1 h-px bg-line" />
+              <button
+                type="button"
+                disabled={!canEdit}
+                onClick={() => { setMenu(false); onRemove(); }}
+                className="block w-full px-2.5 py-1.5 text-left text-[12.5px] text-danger hover:bg-danger-soft disabled:opacity-40"
+              >
+                Remove source
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
