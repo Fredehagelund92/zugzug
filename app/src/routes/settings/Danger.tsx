@@ -4,6 +4,7 @@ import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { RoleGate } from "../../components/settings/RoleGate";
+import { DangerZone } from "../../components/settings/DangerZone";
 import { useTenant } from "../../lib/tenant-context";
 import { apiFetch } from "../../api";
 import { toast } from "../../components/Toast";
@@ -45,7 +46,7 @@ export function Danger() {
       >
         {/* Delete workspace — admin only */}
         <RoleGate action="settings.danger.delete">
-          <div className="flex items-center justify-between rounded-md border border-danger/40 p-4">
+          <DangerZone className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-ink">Delete workspace</p>
               <p className="mt-0.5 text-xs text-ink-2">
@@ -68,7 +69,7 @@ export function Danger() {
                 Delete workspace
               </Button>
             )}
-          </div>
+          </DangerZone>
         </RoleGate>
       </SettingsSection>
 

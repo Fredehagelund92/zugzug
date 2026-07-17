@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { DangerZone } from "../src/components/settings/DangerZone";
 
 vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter, Routes, Route } from "react-router-dom";
@@ -35,6 +36,13 @@ function harness(role: "viewer" | "editor" | "admin") {
     </MemoryRouter>,
   );
 }
+
+describe("DangerZone component", () => {
+  test("wraps children in a danger-toned panel", () => {
+    const { container } = render(<DangerZone><span>x</span></DangerZone>);
+    expect((container.firstChild as HTMLElement).className).toMatch(/danger/);
+  });
+});
 
 describe("Danger zone", () => {
   test("does not render Leave workspace (moved to Account/Memberships)", () => {
