@@ -430,10 +430,10 @@ function TriageInner() {
                   type="button"
                   onClick={() => setFilter(k)}
                   className={cx(
-                    "min-h-[44px] rounded-sm px-2.5 py-1 font-mono text-[11px] transition-colors md:min-h-0",
+                    "min-h-[44px] rounded-sm px-2.5 py-1 text-sm font-semibold transition-colors md:min-h-0",
                     filter === k
-                      ? "bg-accent-wash text-accent"
-                      : "text-ink-3 hover:bg-hover hover:text-ink-2",
+                      ? "bg-accent text-accent-ink"
+                      : "text-ink-2 hover:bg-hover hover:text-ink",
                   )}
                 >
                   {k === "new" ? "Needs review" : k === "all" ? "All" : "Mapped"}
