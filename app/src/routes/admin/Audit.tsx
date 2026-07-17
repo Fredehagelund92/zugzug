@@ -192,7 +192,7 @@ export function Audit() {
           <SkeletonList rows={6} columns={[28, "minmax(0,1fr)", 80]} />
         ) : rows.length === 0 ? (
           <EmptyState
-            title="No matching activity"
+            title="No activity found"
             body={
               activeFilterCount > 0
                 ? "Adjust the filters above to find what you're looking for."

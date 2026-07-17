@@ -266,7 +266,7 @@ export function Dashboard() {
       dir: undefined,
     },
     {
-      label: "Published today",
+      label: "Last published",
       value: lastCommit ? lastCommit.at : "—",
       valueColor: "var(--ak-committed)",
       delta:

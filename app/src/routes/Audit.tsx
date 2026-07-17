@@ -154,7 +154,7 @@ export function Audit() {
         ) : rows.length === 0 ? (
           hasFilter ? (
             <EmptyState
-              title="No matching activity"
+              title="No activity found"
               body="Clear the filters or search for something else."
             />
           ) : (

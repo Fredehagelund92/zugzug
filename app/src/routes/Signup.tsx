@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useId, type FormEvent } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { authFetch } from "../api";
@@ -24,6 +24,7 @@ export function Signup() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const passwordHintId = useId();
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -84,17 +85,19 @@ export function Signup() {
           <label className="block text-xs font-semibold text-ink-2">
             Password
             <input
+              id="signup-password"
               type="password"
               required
               minLength={12}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-describedby={passwordHintId}
               className="mt-1.5 block w-full rounded-sm border border-line-2 bg-surface-2 px-3 py-[11px] text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             />
-            <span className="mt-1 block text-[11px] font-normal text-ink-3">
-              At least 12 characters.
-            </span>
           </label>
+          <span id={passwordHintId} className="mt-1 block text-[11px] font-normal text-ink-3">
+            At least 12 characters.
+          </span>
           {formError && (
             <p className="text-xs text-warn">{formError}</p>
           )}

@@ -5,7 +5,6 @@ import type { AuditEntry } from "../src/store";
 import {
   coveragePct,
   urgencyScore,
-  coverageColor,
   lastAuditForDim,
   warehouseSyncStatusByDim,
   applyFilter,
@@ -91,23 +90,6 @@ describe("urgencyScore", () => {
   test("any dim with one new value outranks a staged-only dim", () => {
     const oneNew: MappingDimension = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
     expect(urgencyScore(oneNew, false)).toBeGreaterThan(urgencyScore(cleanDim, true));
-  });
-});
-
-// ── coverageColor ─────────────────────────────────────────────────────────────
-
-describe("coverageColor", () => {
-  test("96+ → ok color", () => {
-    expect(coverageColor(96)).toBe("var(--ak-ok)");
-    expect(coverageColor(100)).toBe("var(--ak-ok)");
-  });
-  test("80–95 → warn color", () => {
-    expect(coverageColor(80)).toBe("var(--ak-warn)");
-    expect(coverageColor(95)).toBe("var(--ak-warn)");
-  });
-  test("below 80 → accent color", () => {
-    expect(coverageColor(79)).toBe("var(--accent)");
-    expect(coverageColor(0)).toBe("var(--accent)");
   });
 });
 

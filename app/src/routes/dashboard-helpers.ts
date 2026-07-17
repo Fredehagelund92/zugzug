@@ -36,13 +36,6 @@ export function urgencyScore(dim: MappingDimension, isStaged: boolean = false): 
   return baseUrgency + stagedBoost;
 }
 
-/** CSS color var to use for coverage bars and percentage text. */
-export function coverageColor(pct: number): string {
-  if (pct >= 96) return "var(--ak-ok)";
-  if (pct >= 80) return "var(--ak-warn)";
-  return "var(--accent)";
-}
-
 /**
  * Returns the most recent audit entry whose detail mentions this dim.
  * AuditEntry has no dimId field, so we do a case-insensitive string match

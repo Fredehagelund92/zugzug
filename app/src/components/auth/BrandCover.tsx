@@ -92,7 +92,7 @@ export function BrandCover() {
           <div className="brand-cover-converge" aria-hidden="true">
             <svg viewBox="0 0 360 150" fill="none">
               {/* source values on the left */}
-              <g fontFamily="JetBrains Mono, monospace" fontSize="10" fill="rgba(234,238,247,0.5)">
+              <g style={{ fontFamily: "var(--font-mono)" }} fontSize="10" fill="rgba(234,238,247,0.5)">
                 <text x="0" y="24">&quot;USA&quot;</text>
                 <text x="0" y="52">&quot;U.S.&quot;</text>
                 <text x="0" y="80">&quot;United States&quot;</text>
@@ -120,8 +120,8 @@ export function BrandCover() {
               {/* the canonical record node */}
               <circle cx="272" cy="75" r="15" fill="var(--accent)" />
               <circle cx="272" cy="75" r="24" stroke="var(--accent)" strokeOpacity="0.35" strokeWidth="1" />
-              <text x="300" y="72" fontFamily="JetBrains Mono, monospace" fontSize="10" fill="#f4f6fc">United</text>
-              <text x="300" y="86" fontFamily="JetBrains Mono, monospace" fontSize="10" fill="#f4f6fc">States</text>
+              <text x="300" y="72" style={{ fontFamily: "var(--font-mono)" }} fontSize="10" fill="#f4f6fc">United</text>
+              <text x="300" y="86" style={{ fontFamily: "var(--font-mono)" }} fontSize="10" fill="#f4f6fc">States</text>
             </svg>
           </div>
         </div>
