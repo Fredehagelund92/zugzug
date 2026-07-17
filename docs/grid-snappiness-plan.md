@@ -118,6 +118,10 @@ are all comfortably inside budget; no spinner, no stall, no dropped frames.
 
 **D1 — Type-to-edit is disabled on manual-ordered tables.**
 _Severity: breaks-the-flow._
+_Status: ✅ **FIXED & VERIFIED** on `fix/grid-scroll-height-collapse`. `typeToEdit`
+is now an explicit prop defaulting to `true`; Match mode opts out with
+`typeToEdit={false}`. Verified: typing on a Brand cell enters edit and the seed
+replaces on the record-name and number columns; the reorder shortcut still works._
 - **Observed:** Focus a cell, press `x`. Nothing happens — keydown reaches the
   grid, `defaultPrevented=false`, no edit mode, cell text unchanged. Confirmed on
   both Brand and table A (both `orderingMode: "manual"`).
@@ -135,6 +139,11 @@ _Severity: breaks-the-flow._
 
 **D2 — No replace path even via Enter; the record-name editor appends.**
 _Severity: breaks-the-flow (compounds D1)._
+_Status: ✅ **FIXED** alongside D1 — the record-name editor now honors the
+type-to-edit seed (`defaultValue={initial ?? c.label}`) so the first keystroke
+replaces, and Escape routes through `cancel()` instead of re-committing the
+label. (Enter-to-edit without a seed still opens with the full value + caret at
+end, which is the intended F2-style in-place edit.)_
 - **Observed:** Enter to edit the record name loads the full value with the
   caret at the end; typing appends (`"Acme Corp"` → type `Z` → `"Acme CorpZ"`).
   With D1 also disabling type-to-edit, there is **no fast way to replace a
@@ -181,6 +190,11 @@ lets type-to-edit replace, which is snappier for a fast down-column retype.
 
 **D8 — Focus is orphaned to `<body>` after Escape (and any edit-exit).**
 _Severity: breaks-the-flow._
+_Status: ✅ **FIXED & VERIFIED** on `fix/grid-scroll-height-collapse`. An effect
+in `useGridCursor.ts` reclaims focus to the grid when an edit exits while the
+cursor stays put (only if focus fell to `<body>`). Verified: click → Enter →
+Escape → ArrowDown moves; undo works after Escape; the fast type-to-edit run
+keeps focus in the editor chain throughout._
 - **Observed:** Click cell → Enter → Escape. `document.activeElement` = `<body>`.
   The cursor ring still shows (React cursor state persists) but `↓` doesn't move,
   `⌘Z` doesn't fire, typing does nothing — until you mouse-click back into the
@@ -255,21 +269,17 @@ item: evidence → change → success criterion → effort.
    absolutely-positioned rows remains optional; the 2-line fix is sufficient and
    is a no-op for any non-flex grid consumer.)
 
-2. **Re-enable type-to-edit on manual tables (D1).** _Effort: S._
-   Evidence: `typeToEdit: !props.onCellKeyDown` disables it whenever
-   `onCellKeyDown` is wired. Change: decouple — make `typeToEdit` an explicit
-   prop defaulting to `true`, independent of `onCellKeyDown` (the host handler
-   already ignores printable keys). Success: type `x` on a cell → edit starts
-   with `x`; `⌘⇧`-arrow reorder still works.
+2. **Re-enable type-to-edit on manual tables (D1). ✅ DONE.** _Effort: S._
+   `typeToEdit` is now an explicit prop defaulting to `true`; Match mode opts out
+   with `typeToEdit={false}`. Verified — typing enters edit, reorder still works.
 
-3. **Return focus to the grid when an edit exits (D8).** _Effort: S._
-   Evidence: `activeElement` = `<body>` after Escape; nav dead. Change: after
-   `stopEdit()` on Escape/blur, call `cursor.ref.current?.focus()` once the
-   editor unmounts. Success: click → Enter → Escape → `↓` moves.
+3. **Return focus to the grid when an edit exits (D8). ✅ DONE.** _Effort: S._
+   Effect in `useGridCursor.ts` reclaims focus to the grid on edit-exit when it
+   fell to `<body>`. Verified — click → Enter → Escape → `↓` moves; undo alive.
 
-4. **Clean replace on the record-name editor (D2).** _Effort: S._
-   Depends on #2. Ensure the name editor selects-all (or seeds) so the first
-   keystroke replaces. Success: typing on a name cell replaces it.
+4. **Clean replace on the record-name editor (D2). ✅ DONE.** _Effort: S._
+   Record-name editor now honors the seed (`defaultValue={initial ?? c.label}`).
+   Verified — typing on a name cell replaces it.
 
 5. **Surface failed writes; verify the rename 404 (D9).** _Effort: M._
    Evidence: silent 404 on 5263/5267 renames. First confirm whether missing
