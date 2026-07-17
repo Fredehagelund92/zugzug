@@ -227,6 +227,7 @@ export function Dashboard() {
     label: string;
     value: string;
     featured?: boolean;
+    coveragePct?: number;
     delta?: string;
     dir?: "up" | "down" | "warn";
   }> = [
@@ -237,27 +238,28 @@ export function Dashboard() {
       dir: attentionTables.length > 0 ? "warn" : undefined,
     },
     {
-      label: "Values mapped",
-      value: fmtK(valuesMapped),
+      label: "Coverage",
+      value: `${coverage.toFixed(1)}%`,
+      featured: true,
+      coveragePct: coverage,
       delta: undefined,
       dir: undefined,
     },
     {
-      label: "New to resolve",
+      label: "In review",
       value: String(totalNew),
-      featured: totalNew > 0,
       delta:
         totalNew > 0 ? `across ${tablesWithNew} table${tablesWithNew === 1 ? "" : "s"}` : undefined,
-      dir: totalNew > 0 ? "warn" : undefined,
+      dir: undefined,
     },
     {
-      label: "Rows at risk",
-      value: fmtK(rowsAtRisk),
+      label: "Drafts staged",
+      value: String(staged.length),
       delta:
-        rowsAtRisk > 0
-          ? "warehouse rows whose source value has no record yet"
-          : "all warehouse rows are mapped",
-      dir: rowsAtRisk > 0 ? "warn" : undefined,
+        staged.length > 0
+          ? `${staged.length} draft${staged.length === 1 ? "" : "s"} awaiting publish`
+          : "nothing staged",
+      dir: undefined,
     },
   ];
 
@@ -294,24 +296,35 @@ export function Dashboard() {
         kicker="Tables"
         title="Home"
         meta={
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[12px] text-ink-2">
-            <span className="flex items-center gap-1.5">
-              <span className="zz-live h-1.5 w-1.5 rounded-pill bg-accent" /> live
+          <div className="mt-3 flex flex-wrap gap-5">
+            <span className="text-sm text-ink-2">
+              <span className="font-display text-base font-bold text-ink">{dims.length}</span>{" "}
+              tables
             </span>
-            <span className="text-line-2">/</span>
-            <span className="tabular-nums">{dims.length} tables</span>
-            <span className="text-line-2">/</span>
-            <span className="tabular-nums">{fmtK(valuesMapped)} values mapped</span>
-            <span className="text-line-2">/</span>
-            <span className="text-accent tabular-nums">{coverage.toFixed(1)}% coverage</span>
-            <span className="text-line-2">/</span>
-            <span className="text-warn tabular-nums">{totalNew} new to resolve</span>
-            {staged.length > 0 && (
-              <>
-                <span className="text-line-2">/</span>
-                <span className="text-staged tabular-nums">{staged.length} staged for review</span>
-              </>
-            )}
+            <span className="text-sm text-ink-2">
+              <span className="font-display text-base font-bold text-ink">
+                {fmtK(valuesMapped)}
+              </span>{" "}
+              records
+            </span>
+            <span className="text-sm text-ink-2">
+              <span
+                className="font-display text-base font-bold tabular-nums"
+                style={{ color: "var(--accent)" }}
+              >
+                {totalNew}
+              </span>{" "}
+              in review
+            </span>
+            <span className="text-sm text-ink-2">
+              <span
+                className="font-display text-base font-bold tabular-nums"
+                style={{ color: "var(--ak-staged)" }}
+              >
+                {staged.length}
+              </span>{" "}
+              drafts staged
+            </span>
           </div>
         }
         action={
@@ -333,6 +346,7 @@ export function Dashboard() {
               label={m.label}
               value={m.value}
               featured={m.featured}
+              coveragePct={m.coveragePct}
               delta={m.delta}
               dir={m.dir}
             />

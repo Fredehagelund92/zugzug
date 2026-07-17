@@ -118,9 +118,13 @@ function renderDashboard() {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("Dashboard — staged remap detection", () => {
-  test("page meta shows '1 staged for review' for the remap-only dim", () => {
+  test("page meta shows '1 drafts staged' for the remap-only dim", () => {
     renderDashboard();
-    expect(screen.getByText(/1\s+staged for review/i)).toBeInTheDocument();
+    // Status chip now renders the count in a nested <span>, so match on the
+    // parent span's full text content using a function matcher.
+    expect(
+      screen.getByText((_, el) => el?.textContent?.replace(/\s+/g, " ").trim() === "1 drafts staged"),
+    ).toBeInTheDocument();
   });
 
   test("'Needs attention' toolbar pill counts dims with unmapped OR staged drafts (2)", () => {
