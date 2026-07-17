@@ -16,7 +16,6 @@ import {
   applyFilter,
   applySort,
   coveragePct,
-  coverageColor,
   lastAuditForDim,
   warehouseSyncStatusByDim,
 } from "./dashboard-helpers";
@@ -27,7 +26,7 @@ const MarkBackdrop = () => (
 );
 
 /* EmptyStateIllustration — tells the Zugzug story in a single picture:
-   three messy raw values (left) reconciled into one canonical value (right).
+   three scattered source values (left) reconciled into one approved record (right).
    Token-driven (ink/line/accent), animated reveal via zz-rise. */
 const EmptyStateIllustration = () => (
   <div className="zz-rise relative mx-auto flex h-44 w-full max-w-md items-center justify-center md:h-56">
@@ -46,7 +45,7 @@ const EmptyStateIllustration = () => (
       {/* Subtle grid background */}
       <rect width="360" height="200" fill="url(#zz-grid)" opacity="0.4" />
 
-      {/* Left column — three messy variants */}
+      {/* Left column — three scattered source variants */}
       <g className="text-line" stroke="currentColor" strokeWidth="1.25">
         <rect x="24" y="36" width="118" height="28" rx="6" fill="var(--bg)" />
         <rect x="24" y="86" width="118" height="28" rx="6" fill="var(--bg)" />
@@ -77,7 +76,7 @@ const EmptyStateIllustration = () => (
         <path d="M 142 150 C 190 150, 200 100, 218 100" />
       </g>
 
-      {/* Right canonical card — solid, accented */}
+      {/* Right approved record card — solid, accented */}
       <g>
         <rect
           x="218"
@@ -288,7 +287,7 @@ export function Dashboard() {
           backdrop={<MarkBackdrop />}
           kicker="Tables"
           title="Your workspace is empty"
-          lede="Create a table for each list you curate — Country, Channel, Partner. Zug Zug maps messy source values ('US', 'USA', 'United States') to one approved record each, so your dashboards all count the same thing."
+          lede="Create a table for each list you curate — Country, Channel, Partner. Turn scattered source values into approved records, so your dashboards all count the same thing."
           meta={
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Link to={nav.tables}>
@@ -439,149 +438,109 @@ export function Dashboard() {
         <table className="w-full min-w-[560px] border-collapse">
           <thead>
             <tr>
-              <th className="w-1 border-b border-line-2 bg-surface p-0" />
               <th className="sticky left-0 z-10 border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
                 Table
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
-                Coverage
               </th>
               <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
                 Records
               </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Coverage
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                In review
+              </th>
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+                Drafts
+              </th>
               <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
-                Rows
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
-                Status
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
-                Last activity
+                Updated
               </th>
             </tr>
           </thead>
           <tbody>
             {visibleDims.map((dim) => {
               const pct = coveragePct(dim);
-              const color = coverageColor(pct);
               const newCount = dim.counts.newCount;
               const dimStaged = stagedByDim[dim.id] ?? [];
-              const isStaged = dimStaged.length > 0;
               const lastAudit = lastAuditByDim[dim.id] ?? null;
               const tint = dimTint(dim);
-              const hasUrgency = newCount > 0 || isStaged;
+              const dimId = dim.dimTable.replace(/^[^.]+\./, "");
 
               return (
                 <tr
                   key={dim.id}
                   onClick={() => navigate(nav.table(dim.id, "match"))}
-                  className={cx(
-                    "cursor-pointer",
-                    isStaged
-                      ? "bg-staged/[0.04] hover:bg-staged/[0.07]"
-                      : "bg-surface hover:bg-hover",
-                  )}
+                  className="cursor-pointer bg-surface hover:bg-hover"
                 >
-                  {/* tint accent bar — only on urgent rows */}
-                  <td className="p-0">
-                    {hasUrgency && (
-                      <div className="h-10 w-[3px] rounded-sm" style={{ background: tint }} />
-                    )}
-                  </td>
-
-                  {/* table name + map table + optional staged flag */}
-                  <td className="sticky left-0 z-10 border-b border-line bg-[inherit] px-4 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-2 w-2 shrink-0 rounded-pill" style={{ background: tint }} />
-                      <div className="min-w-0">
+                  {/* table name + dim_* id with 3px tint bar */}
+                  <td className="sticky left-0 z-10 border-b border-line bg-[inherit] py-0 pr-4">
+                    <div className="flex items-stretch gap-3">
+                      <div className="w-[3px] shrink-0 self-stretch" style={{ background: tint }} />
+                      <div className="min-w-0 py-3">
                         <div className="flex items-center gap-1.5">
                           <span className="font-display text-[13px] font-semibold text-ink">
                             {dim.dimension}
                           </span>
                           {wsInfo?.writable && syncStatus[dim.id] === "failed" && (
                             <span
-                              title="Last warehouse sync failed — manual resync required"
+                              title="Last warehouse scan failed — manual re-scan required"
                               className="inline-flex items-center font-mono text-[9px] text-amber-600"
                             >
-                              🔄 needs resync
+                              🔄 needs re-scan
                             </span>
                           )}
                         </div>
-                        <div className="font-mono text-[9px] text-ink-3">{dim.mapTable}</div>
-                        {isStaged && (
-                          <div className="mt-1 flex items-center gap-1 rounded-sm border border-staged/25 bg-staged-soft px-1.5 py-0.5 font-mono text-[9px] text-staged w-fit">
-                            <span>⏸</span>
-                            <span>
-                              {dimStaged.length} staged
-                              {dimStaged[0]
-                                ? ` · ${dimStaged[0].user.initials} staged "${dimStaged[0].raw}"`
-                                : ""}
-                            </span>
-                          </div>
-                        )}
+                        <div className="font-mono text-[10px] text-ink-3">{dimId}</div>
                       </div>
                     </div>
                   </td>
 
+                  {/* records */}
+                  <td className="border-b border-line px-4 py-3 text-right font-mono text-[11px] tabular-nums text-ink-2">
+                    {dim.canonical.length.toLocaleString()}
+                  </td>
+
                   {/* coverage bar + pct */}
-                  <td className="border-b border-line px-4 py-2.5">
-                    <div className="flex items-center gap-2">
+                  <td className="border-b border-line px-4 py-3">
+                    <div className="flex items-center gap-2.5">
                       <div className="h-[3px] w-[72px] overflow-hidden rounded-pill bg-surface-3">
                         <div
-                          className="h-full rounded-pill"
-                          style={{ width: `${pct}%`, background: color }}
+                          className="h-full rounded-pill bg-committed"
+                          style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span
-                        className="min-w-[28px] font-mono text-[11px] tabular-nums"
-                        style={{ color }}
-                      >
+                      <span className="w-[44px] text-right font-mono text-[11px] tabular-nums text-ink-2">
                         {pct}%
                       </span>
                     </div>
                   </td>
 
-                  {/* records */}
-                  <td className="border-b border-line px-4 py-2.5 text-right font-mono text-[11px] tabular-nums text-ink-2">
-                    {dim.canonical.length.toLocaleString()}
-                  </td>
-
-                  {/* rows */}
-                  <td className="border-b border-line px-4 py-2.5 text-right font-mono text-[11px] tabular-nums text-ink-2">
-                    {fmtK(dim.rows)}
-                  </td>
-
-                  {/* status badge */}
-                  <td className="border-b border-line px-4 py-2.5">
+                  {/* in review */}
+                  <td className="border-b border-line px-4 py-3">
                     {newCount > 0 ? (
-                      <Badge tone={newCount > 5 ? "accent" : "warn"} dot>
-                        {newCount} new
-                      </Badge>
-                    ) : isStaged ? (
-                      <Badge tone="staged" dot>
-                        staged
+                      <Badge tone="warn" dot>
+                        {newCount}
                       </Badge>
                     ) : (
-                      <Badge tone="ok" dot>
-                        clean
-                      </Badge>
+                      <span className="font-mono text-[11px] text-ink-3">—</span>
                     )}
                   </td>
 
-                  {/* last activity */}
-                  <td className="border-b border-line px-4 py-2.5">
-                    {lastAudit ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="grid h-[18px] w-[18px] shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[7px] font-semibold text-ink-2">
-                          {lastAudit.user.initials}
-                        </span>
-                        <span className="font-mono text-[10px] text-ink-3">
-                          {lastAudit.action} · {lastAudit.at}
-                        </span>
-                      </div>
+                  {/* drafts staged */}
+                  <td className="border-b border-line px-4 py-3">
+                    {dimStaged.length > 0 ? (
+                      <Badge tone="staged">
+                        {dimStaged.length} staged
+                      </Badge>
                     ) : (
-                      <span className="font-mono text-[10px] text-ink-3">—</span>
+                      <span className="font-mono text-[11px] text-ink-3">—</span>
                     )}
+                  </td>
+
+                  {/* updated */}
+                  <td className="border-b border-line px-4 py-3 text-right font-mono text-[10px] text-ink-3">
+                    {lastAudit ? lastAudit.at : "—"}
                   </td>
                 </tr>
               );
@@ -590,7 +549,7 @@ export function Dashboard() {
             {/* empty filter state */}
             {visibleDims.length === 0 && (
               <tr>
-                <td colSpan={7} className="border-b border-line px-4 py-12 text-center">
+                <td colSpan={6} className="border-b border-line px-4 py-12 text-center">
                   <div className="font-display text-[20px] text-ink-2">
                     {filter === "attention"
                       ? "Nothing needs attention."

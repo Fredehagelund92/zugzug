@@ -30,6 +30,7 @@ const FILES = [
   "app/src/routes/settings/Warehouse.tsx",
   "app/src/components/datagrid/ShortcutsOverlay.tsx",
   "app/src/components/CreateTableModal.tsx",
+  "app/src/routes/Dashboard.tsx",
 ];
 
 const BANNED = ["canonical", "raw", "triage", "master", "golden", "commit", "sync", "tenant", "matching"];
@@ -181,6 +182,11 @@ describe("vocabulary gate", () => {
     expect(source, 'ShortcutsOverlay shortcut still says "commit + edit"').not.toContain(
       "commit + edit"
     );
+  });
+
+  test("Dashboard intro avoids weak 'messy' copy", () => {
+    const source = readFileSync(join(REPO_ROOT, "app/src/routes/Dashboard.tsx"), "utf8");
+    expect(source, 'Dashboard still says "messy"').not.toContain("messy");
   });
 
   test("specific banned strings from this wave are not present in CreateTableModal.tsx", () => {

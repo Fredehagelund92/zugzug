@@ -141,20 +141,23 @@ describe("Dashboard — staged remap detection", () => {
     expect(within(pill as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  test("Dim C (remap-only) row shows the 'staged' status badge", () => {
+  test("Dim C (remap-only) row shows a 'staged' drafts badge with count", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const channelRow = rows.find((r) => within(r).queryByText("Channel"));
     expect(channelRow).toBeDefined();
-    expect(within(channelRow as HTMLElement).getByText(/^staged$/i)).toBeInTheDocument();
+    // New design: Drafts column shows "<n> staged" badge (not bare "staged")
+    expect(within(channelRow as HTMLElement).getByText(/\d+ staged/i)).toBeInTheDocument();
   });
 
-  test("Dim B (no drafts, all mapped) row shows the 'clean' status badge", () => {
+  test("Dim B (no drafts, all mapped) row shows '—' placeholders for in-review and drafts", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const regionRow = rows.find((r) => within(r).queryByText("Region"));
     expect(regionRow).toBeDefined();
-    expect(within(regionRow as HTMLElement).getByText(/^clean$/i)).toBeInTheDocument();
+    // New design: clean rows show '—' in In review and Drafts columns; no 'clean' badge
+    const dashes = within(regionRow as HTMLElement).getAllByText("—");
+    expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
   test("Urgency sort order: Dim A (unmapped) → Dim C (staged) → Dim B (clean)", () => {
