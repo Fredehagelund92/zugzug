@@ -131,7 +131,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
 
   return (
     <>
-      {topPad > 0 && <div style={{ height: topPad }} />}
+      {topPad > 0 && <div className="shrink-0" style={{ height: topPad }} />}
       {vItems.map((vRow) => {
         const row = rows[vRow.index]!;
         const rk = rowKey(row);
@@ -181,7 +181,7 @@ export function DataGridBody<Row>(props: DataGridBodyProps<Row>): React.ReactEle
           </React.Fragment>
         );
       })}
-      {bottomPad > 0 && <div style={{ height: bottomPad }} />}
+      {bottomPad > 0 && <div className="shrink-0" style={{ height: bottomPad }} />}
     </>
   );
 }
