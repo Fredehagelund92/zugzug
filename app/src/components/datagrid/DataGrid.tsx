@@ -1050,6 +1050,51 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         return;
       }
 
+      // Cmd+D: fill down. With a multi-row range, the top row's value(s) fill
+      // the rest of the range; with just a cursor, the focused cell is filled
+      // from the cell directly above (Excel convention). One undo step.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        const writes: Array<{ rk: string; field: string; value: unknown }> = [];
+        // A plain click leaves a single-cell range (anchor === focus), so gate
+        // the range branch on it actually spanning more than one row.
+        const bounds = range ? computeRangeBounds(range) : null;
+        if (bounds && bounds.maxRow > bounds.minRow) {
+          const { minRow, maxRow, minCol, maxCol } = bounds;
+          const srcRow = sortedRows[minRow];
+          if (srcRow) {
+            for (let ci = minCol; ci <= maxCol; ci++) {
+              const col = orderedVisible[ci];
+              if (!col || col.editable === false) continue;
+              const value = getValue(srcRow, col.field);
+              for (let ri = minRow + 1; ri <= maxRow; ri++) {
+                const row = sortedRows[ri];
+                if (row) writes.push({ rk: rowKey(row), field: col.field, value });
+              }
+            }
+          }
+        } else if (cur) {
+          const ri = rowIndexMap.get(cur.rowKey) ?? -1;
+          const col = orderedVisible.find((c) => c.field === cur.field);
+          const above = ri > 0 ? sortedRows[ri - 1] : undefined;
+          if (col && col.editable !== false && above) {
+            writes.push({ rk: cur.rowKey, field: cur.field, value: getValue(above, cur.field) });
+          }
+        }
+        if (writes.length === 0) return;
+        const label = `fill ${writes.length} cell${writes.length === 1 ? "" : "s"}`;
+        undo.beginTransaction(label);
+        void Promise.all(writes.map((w) => commitValue(w.rk, w.field, w.value)))
+          .catch((err) => {
+            console.error(`DataGrid: ${label} failed`, err);
+          })
+          .finally(() => {
+            undo.endTransaction();
+            for (const w of writes) flashCell(w.rk, w.field);
+          });
+        return;
+      }
+
       // Delete / Backspace (without Cmd): clear focused cell or range to null.
       // Cmd+Backspace falls through to the cursor handler for bulk row delete.
       if ((e.key === "Delete" || e.key === "Backspace") && !e.metaKey && !e.ctrlKey) {
