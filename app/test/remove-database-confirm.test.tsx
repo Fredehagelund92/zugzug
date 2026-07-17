@@ -75,6 +75,28 @@ test("409 surfaces dependency list and unlocks force button via ack", async () =
   expect(force.disabled).toBe(false);
 });
 
+test("409 dependency body uses plain-language copy (tables/records, not dimensions/canonical)", async () => {
+  responses.push(
+    () =>
+      new Response(
+        JSON.stringify({
+          kind: "DATABASE_IN_USE",
+          sourceCount: 2,
+          dimensions: [{ dimId: "region", sources: ["public.orders.region"] }],
+        }),
+        { status: 409 },
+      ),
+  );
+  await act(async () => {
+    render(<RemoveDatabaseConfirm database={sample} onCancel={vi.fn()} onRemoved={vi.fn()} />);
+  });
+  const body = document.body.textContent ?? "";
+  expect(body).toContain("tables");
+  expect(body).toContain("records");
+  expect(body).not.toContain("dimensions");
+  expect(body).not.toContain("Canonical");
+});
+
 test("force delete posts ?force=true and resolves on 204", async () => {
   const onRemoved = vi.fn();
   responses.push(

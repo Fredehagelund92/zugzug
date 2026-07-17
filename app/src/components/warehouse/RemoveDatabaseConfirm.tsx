@@ -4,9 +4,9 @@ import { authFetch } from "../../api";
 import type { DatabaseRow } from "./DatabaseTable";
 
 /* RemoveDatabaseConfirm — first DELETE probes for in-use dependencies (409
-   surfaces dimensions + source counts). The admin checks "I understand" and
+   surfaces tables + source counts). The admin checks "I understand" and
    re-issues the request with ?force=true, which unbinds the sources but
-   preserves canonical values. Successful (204) deletes resolve immediately
+   preserves records. Successful (204) deletes resolve immediately
    without a confirmation step. */
 
 interface Props {
@@ -96,7 +96,7 @@ export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props):
             <>
               <div>
                 This database powers {deps.sourceCount} source
-                {deps.sourceCount === 1 ? "" : "s"} across {deps.dimensions.length} dimension
+                {deps.sourceCount === 1 ? "" : "s"} across {deps.dimensions.length} table
                 {deps.dimensions.length === 1 ? "" : "s"}:
               </div>
               <ul className="ml-4 list-disc">
@@ -115,8 +115,8 @@ export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props):
                 ))}
               </ul>
               <div className="rounded-sm border border-line bg-bg-2 p-2 text-ink-2">
-                Removing the database also removes these sources from the dimensions. Canonical
-                values stay; only the source binding goes away.
+                Removing the database also removes these sources from the tables. Your records
+                stay; only the source binding goes away.
               </div>
               <label className="mt-2 flex items-center gap-2">
                 <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />

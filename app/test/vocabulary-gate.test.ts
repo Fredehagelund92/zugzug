@@ -32,6 +32,8 @@ const FILES = [
   "app/src/components/CreateTableModal.tsx",
   "app/src/routes/Dashboard.tsx",
   "app/src/routes/Sources.tsx",
+  "app/src/components/warehouse/RemoveDatabaseConfirm.tsx",
+  "app/src/routes/settings/Matching.tsx",
 ];
 
 const BANNED = ["canonical", "raw", "triage", "master", "golden", "commit", "sync", "tenant", "matching"];
@@ -206,5 +208,12 @@ describe("vocabulary gate", () => {
     expect(source, 'CreateTableModal helper text still says "after first sync"').not.toContain(
       "after first sync"
     );
+  });
+
+  test("Remove-database dialog avoids banned vocabulary", () => {
+    const source = readFileSync(
+      join(REPO_ROOT, "app/src/components/warehouse/RemoveDatabaseConfirm.tsx"), "utf8");
+    expect(source, 'still says "dimension" in user copy').not.toContain("dimension\n");
+    expect(source, 'still says "Canonical values"').not.toContain("Canonical values");
   });
 });
