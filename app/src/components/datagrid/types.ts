@@ -187,10 +187,17 @@ export interface DataGridProps<Row> {
     peers: PeerState[];
     setCell: (rowKey: string, field: string) => void;
   };
+  /** Type-to-edit: a printable keystroke on a focused cell replaces it and
+   *  enters edit mode (Excel/Sheets default). Defaults to `true`. Set `false`
+   *  only for hosts that own printable keys as single-key actions (e.g. Match's
+   *  A/S/R/M) — see {@link onCellKeyDown}. */
+  typeToEdit?: boolean;
   /** Host hook for workbench single-key actions (A/S/R/N…). Called for keydowns
    *  the grid itself did not handle (never while editing). `startEdit` opens
-   *  the editor on the cursor cell — the M-key affordance. When set, the grid's
-   *  type-to-edit behavior is disabled so printable keys reach the host. */
+   *  the editor on the cursor cell — the M-key affordance. Hosts that consume
+   *  printable keys here should also pass `typeToEdit={false}` so those keys
+   *  aren't swallowed by the editor; hosts that only bind modifier chords (e.g.
+   *  ⌘⇧-arrow reorder) can leave type-to-edit on. */
   onCellKeyDown?: (
     e: React.KeyboardEvent,
     ctx: {

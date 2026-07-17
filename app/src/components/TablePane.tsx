@@ -395,13 +395,15 @@ function RecordsBody({
               {c.label}
             </span>
           ),
-        edit: (c, { commit }) => (
+        // `initial` is set when type-to-edit seeded us with a character — it
+        // replaces the label (Excel/Sheets); otherwise edit the existing label.
+        edit: (c, { initial, commit, cancel }) => (
           <input
             autoFocus
-            defaultValue={c.label}
+            defaultValue={initial ?? c.label}
             onKeyDown={(e) => {
               if (e.key === "Enter") commit((e.target as HTMLInputElement).value.trim());
-              if (e.key === "Escape") commit(c.label);
+              if (e.key === "Escape") cancel();
             }}
             onBlur={(e) => commit(e.target.value.trim())}
             className="w-full bg-transparent px-1 font-display text-[14px] font-semibold text-ink outline-none"

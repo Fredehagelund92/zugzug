@@ -516,9 +516,9 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     rowKey,
     columns: orderedVisible,
     getValue,
-    // Hosts that own single-key actions (workbench A/S/R/N…) get printable
-    // keys via onCellKeyDown instead of type-to-edit.
-    typeToEdit: !props.onCellKeyDown,
+    // Spreadsheet default; hosts that own printable keys (e.g. Match's
+    // A/S/R/M single-key actions) opt out with typeToEdit={false}.
+    typeToEdit: props.typeToEdit ?? true,
     onCommit: () => {
       /* the editor's onBlur handles the actual value commit */
     },
