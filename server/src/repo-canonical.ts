@@ -94,6 +94,21 @@ export async function resolveDefaultDatabase(tenantId: string): Promise<string> 
   return row.id;
 }
 
+/** Remove a single wired source column from a dimension. Idempotent — deleting
+ *  a nonexistent wiring is a no-op. */
+export async function removeSource(
+  dimId: string,
+  source: QualifiedSource,
+  tenantId: string,
+): Promise<void> {
+  await pgRun(
+    `DELETE FROM ${pg("dimension_source")}
+      WHERE tenant_id = $1 AND dim_id = $2 AND database_id = $3
+        AND schema_name = $4 AND table_name = $5 AND column_name = $6`,
+    [tenantId, dimId, source.databaseId, source.schemaName, source.tableName, source.columnName],
+  );
+}
+
 /** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */
 type TxLike = {
   all: <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T[]>;

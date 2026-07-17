@@ -1154,6 +1154,46 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           );
           return new Response(null, { status: 204, headers: corsHeaders });
         }
+        // DELETE /api/dimensions/:id/sources — unwire a column. Same input
+        // shapes as the POST above (bare "schema.table"+column resolves to the
+        // default database; qualified passes databaseId explicitly).
+        if (seg[3] === "sources" && seg.length === 4 && method === "DELETE") {
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          if (denied) return denied;
+          const raw = (await req.json()) as {
+            source?:
+              | import("./repo-canonical.ts").QualifiedSource
+              | { table: string; column: string };
+            table?: string;
+            column?: string;
+          };
+          const input =
+            raw.source ??
+            (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
+          if (!input) return err("source required", 400);
+
+          const { resolveDefaultDatabase, removeSource } = await import("./repo-canonical.ts");
+          let qualified: import("./repo-canonical.ts").QualifiedSource;
+          if ("databaseId" in input) {
+            if (!input.databaseId || !input.schemaName || !input.tableName || !input.columnName) {
+              return err("source requires databaseId + schemaName + tableName + columnName", 400);
+            }
+            qualified = input;
+          } else {
+            const parts = input.table.split(".");
+            if (parts.length !== 2 || !parts[0] || !parts[1]) {
+              return err(`expected "schema.table", got: ${input.table}`, 400);
+            }
+            qualified = {
+              databaseId: await resolveDefaultDatabase(tenantCtx.tenantId),
+              schemaName: parts[0],
+              tableName: parts[1],
+              columnName: input.column,
+            };
+          }
+          await removeSource(id, qualified, tenantCtx.tenantId);
+          return new Response(null, { status: 204, headers: corsHeaders });
+        }
         // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
