@@ -8,12 +8,12 @@ import { searchCatalog, deriveCanonical, useCanEdit, type CatalogTable } from ".
 import { fetchWarehouseDatabases } from "../api";
 import type { MappingDimension } from "../data";
 
-/* CatalogExplorer — browse/search the warehouse catalog (the 1000+ tables) and
-   wire a column to a dimension. Server-side search + schema facets + paginated
-   "load more", so it scales regardless of catalog size; results live in local
-   state (never the global cache). The explorer is scoped to a single registered
-   warehouse database; if a caller passes `database={null}` we render a picker so
-   the user can select one before browsing. */
+/* CatalogExplorer — a right slide-over drawer to browse/search the warehouse
+   catalog (the 1000+ tables) and wire a column to a dimension. Server-side
+   search + paginated "load more", so it scales regardless of catalog size;
+   results live in local state (never the global cache). The explorer is scoped
+   to a single registered warehouse database; if a caller passes `database={null}`
+   we render a picker so the user can select one before browsing. */
 
 const PAGE = 50;
 
@@ -65,10 +65,9 @@ export function CatalogExplorer({
 }) {
   const canEdit = useCanEdit();
   const [q, setQ] = useState("");
-  const [schema, setSchema] = useState<string | null>(null);
   const [rows, setRows] = useState<CatalogTable[]>([]);
   const [total, setTotal] = useState(0);
-  const [schemas, setSchemas] = useState<{ schema: string; tables: number }[]>([]);
+  const [wiredThisSession, setWiredThisSession] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
@@ -118,7 +117,6 @@ export function CatalogExplorer({
     if (!internalDb) {
       setRows([]);
       setTotal(0);
-      setSchemas([]);
       setLoading(false);
       return;
     }
@@ -129,13 +127,11 @@ export function CatalogExplorer({
       const r = await searchCatalog({
         database: internalDb,
         q,
-        schema: schema ?? undefined,
         limit: PAGE,
         offset: append ? rows.length : 0,
       });
       if (ticket !== seq.current) return; // a newer search superseded this one
       setTotal(r.total);
-      setSchemas(r.schemas);
       setRows((prev) => (append ? [...prev, ...r.rows] : r.rows));
     } catch (err) {
       if (ticket !== seq.current) return;
@@ -149,12 +145,12 @@ export function CatalogExplorer({
     }
   };
 
-  // (re)search from the top on database / query / schema change, debounced
+  // (re)search from the top on database / query change, debounced
   useEffect(() => {
     const t = setTimeout(() => load(false), 220);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [internalDb, q, schema]);
+  }, [internalDb, q]);
 
   const wire = async (table: string, column: string, dimLabel: string) => {
     const dim = dims.find((d) => d.dimension === dimLabel);
@@ -164,6 +160,7 @@ export function CatalogExplorer({
     try {
       const { derived, mode, matched, unmatched } = await deriveCanonical(dim.id, table, column);
       setWired((w) => ({ ...w, [key]: { dim: dimLabel, n: derived, mode, matched, unmatched } }));
+      setWiredThisSession((n) => n + 1);
     } catch (err) {
       setWired((w) => ({
         ...w,
@@ -202,11 +199,13 @@ export function CatalogExplorer({
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/50 p-2 backdrop-blur-sm sm:p-8"
+      className="zz-overlay fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-line bg-surface-elevated shadow-pop"
+        role="dialog"
+        aria-label="Wire a source"
+        className="zz-drawer fixed right-0 top-0 flex h-full w-[620px] max-w-full flex-col overflow-hidden border-l border-line-2 bg-surface-elevated shadow-pop"
         onClick={(e) => e.stopPropagation()}
       >
         {/* header + database picker + search */}
@@ -285,7 +284,7 @@ export function CatalogExplorer({
             </div>
           ) : null}
           {internalDb && (
-            <label className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent md:max-w-sm">
+            <label className="flex min-w-0 flex-1 basis-full items-center gap-2 rounded-sm border border-line-2 bg-surface px-3 py-1.5 text-ink-3 focus-within:border-accent">
               <IconSearch className="h-4 w-4 shrink-0" />
               <input
                 autoFocus
@@ -405,38 +404,9 @@ export function CatalogExplorer({
             </div>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[180px_1fr]">
-            {/* schema facets — horizontal scroll strip on mobile, side rail on desktop */}
-            <div className="flex overflow-x-auto border-b border-line bg-surface/40 md:flex-col md:overflow-x-visible md:overflow-y-auto md:border-b-0 md:border-r md:py-2">
-              <button
-                type="button"
-                onClick={() => setSchema(null)}
-                className={cx(
-                  "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:py-1.5",
-                  schema === null ? "text-accent" : "text-ink-3 hover:text-ink-2",
-                )}
-              >
-                <span>all systems</span>
-                <span className="opacity-60">{total}</span>
-              </button>
-              {schemas.map((s) => (
-                <button
-                  key={s.schema}
-                  type="button"
-                  onClick={() => setSchema(s.schema === schema ? null : s.schema)}
-                  className={cx(
-                    "flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-left font-mono text-[11px] transition-colors md:w-full md:justify-between md:gap-2 md:py-1.5",
-                    s.schema === schema ? "text-accent" : "text-ink-3 hover:text-ink-2",
-                  )}
-                >
-                  <span className="truncate">{s.schema}</span>
-                  <span className="shrink-0 opacity-60">{s.tables}</span>
-                </button>
-              ))}
-            </div>
-
+          <div className="flex min-h-0 flex-1 flex-col">
             {/* results */}
-            <div className="min-h-0 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {loadError && (
                 <div className="flex items-center justify-between gap-3 border-b border-danger/40 bg-danger-soft px-5 py-2.5 font-mono text-[11.5px] text-danger">
                   <span>Catalog search failed — {loadError}</span>
@@ -526,7 +496,7 @@ export function CatalogExplorer({
 
               {!loading && rows.length === 0 && (
                 <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
-                  {q || schema
+                  {q
                     ? "no tables match"
                     : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
                 </div>
@@ -535,6 +505,9 @@ export function CatalogExplorer({
               <div className="flex items-center justify-between px-5 py-3">
                 <span className="font-mono text-[11px] text-ink-3">
                   {loading ? "searching…" : `${rows.length} of ${total} tables`}
+                  {wiredThisSession > 0 && (
+                    <span className="text-ok"> · {wiredThisSession} wired just now</span>
+                  )}
                 </span>
                 {rows.length < total && (
                   <Button
