@@ -9,6 +9,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { toast } from "../../components/Toast";
 import { readServerError } from "../../lib/api-errors";
 import { invalidate, subscribeInvalidate } from "../../store";
+import { SuperAdminBadge } from "../../components/admin/SuperAdminBadge";
 
 interface AdminUser {
   id: string;
@@ -195,8 +196,8 @@ export function Users() {
                 className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-7 w-7 shrink-0 rounded-full bg-accent-soft flex items-center justify-center">
-                    <span className="font-mono text-[10px] font-bold text-accent">
+                  <div className="h-7 w-7 shrink-0 rounded-full bg-accent flex items-center justify-center">
+                    <span className="font-mono text-[10px] font-bold text-accent-ink">
                       {u.initials}
                     </span>
                   </div>
@@ -213,12 +214,7 @@ export function Users() {
                 </span>
                 <div>
                   {u.isSuperAdmin ? (
-                    <span
-                      className="inline-flex items-center font-mono text-[10px] uppercase tracking-wider px-2 py-0.5"
-                      style={{ color: "var(--accent-2)", background: "var(--accent-2-soft)" }}
-                    >
-                      admin
-                    </span>
+                    <SuperAdminBadge />
                   ) : (
                     <span className="font-mono text-[10px] text-ink-3">—</span>
                   )}

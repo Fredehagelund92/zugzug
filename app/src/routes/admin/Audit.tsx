@@ -6,6 +6,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
 import { AuditTimeline } from "../../components/AuditTimeline";
 import type { AuditEntry } from "../../store";
+import { SuperAdminBadge } from "../../components/admin/SuperAdminBadge";
 
 const PAGE_SIZE = 30;
 
@@ -205,18 +206,7 @@ export function Audit() {
               renderActorBadge={(row) => {
                 const meta = row.metadata as { actor_super_admin?: boolean } | null | undefined;
                 if (meta?.actor_super_admin !== true) return null;
-                return (
-                  <span
-                    className="ml-1 inline-flex items-center border px-1.5 py-px font-mono text-[9px] uppercase tracking-widest"
-                    style={{
-                      borderColor: "color-mix(in srgb, var(--tint-violet) 50%, transparent)",
-                      color: "var(--tint-violet)",
-                      background: "color-mix(in srgb, var(--tint-violet) 12%, transparent)",
-                    }}
-                  >
-                    Super-admin
-                  </span>
-                );
+                return <SuperAdminBadge className="ml-1" />;
               }}
             />
             {hasMore && (
