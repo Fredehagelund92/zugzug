@@ -223,6 +223,18 @@ export function Dashboard() {
     return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(dim.id)]).fg; // e.g. "var(--tint-rose)"
   };
 
+  // Last "Committed" audit entry — used for the Published today KPI.
+  const lastCommit = useMemo(
+    () => auditLog.find((e) => e.action === "Committed"),
+    [auditLog],
+  );
+  // Parse draft count from detail like "3 values → zugzug.map_X · 14 rows recovered"
+  const lastCommitCount = useMemo(() => {
+    if (!lastCommit) return null;
+    const m = lastCommit.detail.match(/^(\d+)/);
+    return m ? Number(m[1]) : null;
+  }, [lastCommit]);
+
   const kpis: Array<{
     label: string;
     value: string;
@@ -230,6 +242,7 @@ export function Dashboard() {
     coveragePct?: number;
     delta?: string;
     dir?: "up" | "down" | "warn";
+    valueColor?: string;
   }> = [
     {
       label: "Tables",
@@ -248,17 +261,19 @@ export function Dashboard() {
     {
       label: "In review",
       value: String(totalNew),
+      valueColor: "var(--accent)",
       delta:
         totalNew > 0 ? `across ${tablesWithNew} table${tablesWithNew === 1 ? "" : "s"}` : undefined,
       dir: undefined,
     },
     {
-      label: "Drafts staged",
-      value: String(staged.length),
+      label: "Published today",
+      value: lastCommit ? lastCommit.at : "—",
+      valueColor: "var(--ak-committed)",
       delta:
-        staged.length > 0
-          ? `${staged.length} draft${staged.length === 1 ? "" : "s"} awaiting publish`
-          : "nothing staged",
+        lastCommit && lastCommitCount !== null
+          ? `↑ folded ${lastCommitCount} draft${lastCommitCount === 1 ? "" : "s"} · ${lastCommit.at}`
+          : undefined,
       dir: undefined,
     },
   ];
@@ -323,7 +338,7 @@ export function Dashboard() {
               >
                 {staged.length}
               </span>{" "}
-              drafts staged
+              {staged.length === 1 ? "draft" : "drafts"} staged
             </span>
           </div>
         }
@@ -349,6 +364,7 @@ export function Dashboard() {
               coveragePct={m.coveragePct}
               delta={m.delta}
               dir={m.dir}
+              valueColor={m.valueColor}
             />
           </div>
         ))}

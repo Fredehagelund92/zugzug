@@ -12,6 +12,7 @@ export function Kpi({
   spark,
   featured = false,
   coveragePct,
+  valueColor,
 }: {
   label: string;
   value: string;
@@ -21,6 +22,8 @@ export function Kpi({
   featured?: boolean;
   /** 0-100 — when provided renders an inline coverage bar (committed teal) */
   coveragePct?: number;
+  /** Optional CSS color override for the value (e.g. "var(--accent)") */
+  valueColor?: string;
 }) {
   return (
     <div
@@ -38,7 +41,7 @@ export function Kpi({
       <div className="mt-2 flex items-end justify-between gap-3">
         <div
           className="font-display text-3xl font-bold tracking-tight tabular-nums"
-          style={{ color: featured ? "var(--ak-committed)" : "var(--ink)" }}
+          style={{ color: valueColor ?? (featured ? "var(--ak-committed)" : "var(--ink)") }}
         >
           {value}
         </div>
