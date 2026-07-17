@@ -34,4 +34,28 @@ describe("CatalogExplorer (drawer)", () => {
     await renderExplorer();
     await waitFor(() => expect(screen.getByText("authco.users")).toBeInTheDocument());
   });
+
+  it("shows a loading state, never the empty message, before the first search settles", async () => {
+    await renderExplorer();
+    // Before results arrive the drawer must not flash the empty/no-tables copy.
+    expect(screen.queryByText(/no tables match/i)).toBeNull();
+    expect(screen.queryByText(/warehouse not attached/i)).toBeNull();
+    expect(screen.getByText(/loading catalog/i)).toBeInTheDocument();
+    // Once the search settles, real results replace the loading state.
+    await waitFor(() => expect(screen.getByText("authco.users")).toBeInTheDocument());
+    expect(screen.queryByText(/loading catalog/i)).toBeNull();
+  });
+
+  it("shows the empty message only after a search returns nothing", async () => {
+    const { searchCatalog } = await import("../src/store");
+    (searchCatalog as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      rows: [],
+      total: 0,
+      schemas: [],
+    });
+    await renderExplorer();
+    await waitFor(() =>
+      expect(screen.getByText(/warehouse not attached|no tables match/i)).toBeInTheDocument(),
+    );
+  });
 });

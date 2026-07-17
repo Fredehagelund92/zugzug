@@ -381,8 +381,8 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const workspaceGroup: NavItem[] = [
     { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
     { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
-    { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
     { to: navLinks.sources, label: "Sources", Icon: IconSources },
+    { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
   ];
   const integrationsGroup: NavItem[] = [
     { to: navLinks.integrationsPullApi, label: "Pull API", Icon: IconIntegrations },

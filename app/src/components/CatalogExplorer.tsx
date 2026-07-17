@@ -69,6 +69,9 @@ export function CatalogExplorer({
   const [total, setTotal] = useState(0);
   const [wiredThisSession, setWiredThisSession] = useState(0);
   const [loading, setLoading] = useState(false);
+  // True once the first search for the current database has settled. Guards the
+  // empty state so "no tables" never flashes before results arrive.
+  const [searched, setSearched] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [databases, setDatabases] = useState<DatabaseOption[]>([]);
@@ -141,9 +144,18 @@ export function CatalogExplorer({
         setTotal(0);
       }
     } finally {
-      if (ticket === seq.current) setLoading(false);
+      if (ticket === seq.current) {
+        setLoading(false);
+        setSearched(true);
+      }
     }
   };
+
+  // Reset the settled flag when the database changes so a switch shows the
+  // loading state, not the previous database's empty/result copy.
+  useEffect(() => {
+    setSearched(false);
+  }, [internalDb]);
 
   // (re)search from the top on database / query change, debounced
   useEffect(() => {
@@ -494,7 +506,13 @@ export function CatalogExplorer({
                 );
               })}
 
-              {!loading && rows.length === 0 && (
+              {(!searched || loading) && rows.length === 0 && (
+                <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
+                  Loading catalog…
+                </div>
+              )}
+
+              {searched && !loading && rows.length === 0 && (
                 <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
                   {q
                     ? "no tables match"
