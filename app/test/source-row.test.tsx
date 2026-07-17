@@ -34,8 +34,9 @@ function renderRow(over: Partial<SourceInfo>, handlers = {}) {
 
 describe("SourceRow", () => {
   it("shows column, target, and 'column not found' when scanned & absent", () => {
-    renderRow({ present: false });
-    expect(screen.getByText(/authco\.users\.plan_type|plan_type/)).toBeInTheDocument();
+    const { container } = renderRow({ present: false });
+    // All three parts (schema., table, .column) must appear in the rendered output.
+    expect(container.textContent).toContain("authco.users.plan_type");
     expect(screen.getByText("Plan")).toBeInTheDocument();
     expect(screen.getByText(/column not found/i)).toBeInTheDocument();
   });
@@ -45,12 +46,32 @@ describe("SourceRow", () => {
     expect(screen.getByText(/never scanned/i)).toBeInTheDocument();
   });
 
-  it("Remove source in the menu calls onRemove", () => {
+  it("Remove source in the menu calls onRemove and closes menu", () => {
     const onRemove = vi.fn();
     renderRow({}, { onRemove });
     fireEvent.click(screen.getByLabelText(/more actions/i));
     fireEvent.click(screen.getByText(/remove source/i));
     expect(onRemove).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/remove source/i)).toBeNull();
+  });
+
+  it("disables Re-scan and Remove source when canEdit is false", () => {
+    const { container: _c } = render(
+      <MemoryRouter>
+        <SourceRow
+          row={{ ...base }}
+          mapValuesHref="/app/default/tables?open=dim-1&active=dim-1&mode=match"
+          canEdit={false}
+          onDerive={vi.fn()}
+          onRemove={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByLabelText(/more actions/i));
+    const rescan = screen.getByText(/re-scan/i).closest("button");
+    const remove = screen.getByText(/remove source/i).closest("button");
+    expect(rescan).toBeDisabled();
+    expect(remove).toBeDisabled();
   });
 
   it("links Open in Map values to mapValuesHref", () => {
