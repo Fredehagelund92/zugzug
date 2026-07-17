@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
-import { Button } from "../../components/Button";
 import { Panel } from "../../components/Panel";
 import { SkeletonList } from "../../components/Skeleton";
 import {
@@ -10,25 +9,9 @@ import {
   type DimensionSummary,
 } from "../../lib/integrations-api";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
+import { CopyButton } from "../../components/CopyButton";
 
 const BASE_URL_PLACEHOLDER = "https://<host>";
-
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => {
-        void navigator.clipboard.writeText(text);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      }}
-    >
-      {copied ? "Copied" : label}
-    </Button>
-  );
-}
 
 function relativeDay(iso: string | null): string {
   if (!iso) return "—";

@@ -151,11 +151,11 @@ export function WebhookDetail() {
         <Row label="Signing secret">
           <div className="flex items-center gap-3 text-[12px] font-mono flex-wrap">
             <span>{w.secret_prefix}••••</span>
-            {inGrace && <Badge>kid=current</Badge>}
+            {inGrace && <Badge>current key</Badge>}
             {inGrace && w.secret_prefix_previous && (
               <>
                 <span className="text-ink-3">{w.secret_prefix_previous}••••</span>
-                <Badge>kid=previous</Badge>
+                <Badge>previous key</Badge>
                 <span className="text-ink-3">
                   expires {new Date(w.secret_previous_expires_at!).toLocaleString()}
                 </span>

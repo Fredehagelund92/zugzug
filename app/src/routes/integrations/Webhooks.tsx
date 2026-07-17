@@ -144,7 +144,7 @@ export function Webhooks() {
                   <td>
                     {w.last_delivery_at
                       ? `${w.last_delivery_at.slice(0, 16)} · ${w.last_delivery_status ?? "—"}`
-                      : "never"}
+                      : "—"}
                   </td>
                   <td className="text-right">
                     <Link to={w.id} className="text-accent hover:underline">
