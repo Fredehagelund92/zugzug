@@ -2,8 +2,9 @@ import { useState, useEffect, type FormEvent } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link } from "react-router-dom";
 import { authFetch } from "../api";
-import { Mark } from "../components/Mark";
 import { useAuthConfig } from "../store";
+import { AuthLayout } from "../components/auth/AuthLayout";
+import { Button } from "../components/Button";
 
 const ERROR_MESSAGES: Record<string, string> = {
   domain: "Your email domain is not allowed on this instance. Contact your admin.",
@@ -34,34 +35,15 @@ export function Login() {
   }, []);
 
   return (
-    <div
-      className="grid min-h-screen place-items-center p-4 sm:p-8"
-      style={{ background: "var(--bg)", color: "var(--ink)" }}
-    >
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-[var(--line)] bg-[var(--surface)] p-5 sm:p-8">
-        <div className="flex items-center gap-2.5">
-          <Mark className="h-7 w-7" />
-          <span className="font-display text-lg font-extrabold tracking-tight">
-            Zug Zug<span style={{ color: "var(--accent)" }}>.</span>
-          </span>
-        </div>
-
+    <AuthLayout>
+      <div className="space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-bold">Sign in</h1>
-          <p className="mt-1 text-[13px]" style={{ color: "var(--ink-2)" }}>
-            Reference table mapping.
-          </p>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Sign in</h1>
+          <p className="mt-1 text-sm text-ink-2">Pick up where your team left off.</p>
         </div>
 
         {error && (
-          <p
-            className="rounded-sm border px-3 py-2 text-[13px]"
-            style={{
-              borderColor: "var(--warn)",
-              color: "var(--warn)",
-              background: "color-mix(in srgb, var(--warn) 10%, transparent)",
-            }}
-          >
+          <p className="rounded-sm border border-warn bg-warn/10 px-3 py-2 text-[13px] text-warn">
             {ERROR_MESSAGES[error] ?? "Something went wrong — please try again."}
           </p>
         )}
@@ -79,13 +61,13 @@ export function Login() {
         {devBypass && (
           <a
             href="/api/auth/dev"
-            className="flex w-full items-center justify-center rounded-sm border border-dashed border-[var(--line-2)] px-4 py-2 text-[12px] text-[var(--ink-3)] transition-colors hover:border-[var(--accent)] hover:text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            className="flex w-full items-center justify-center rounded-sm border border-dashed border-line-2 px-4 py-2 text-[12px] text-ink-3 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             Dev mode login
           </a>
         )}
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -119,18 +101,18 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
   };
 
   return (
-    <form className="space-y-3" onSubmit={onSubmit}>
-      <label className="block text-[12px]" style={{ color: "var(--ink-2)" }}>
+    <form className="space-y-4" onSubmit={onSubmit}>
+      <label className="block text-xs font-semibold text-ink-2">
         Email
         <input
           type="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 block w-full rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-3 py-2 text-[13px] text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="mt-1.5 block w-full rounded-sm border border-line-2 bg-surface-2 px-3 py-[11px] text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       </label>
-      <label className="block text-[12px]" style={{ color: "var(--ink-2)" }}>
+      <label className="block text-xs font-semibold text-ink-2">
         Password
         <input
           type="password"
@@ -138,28 +120,28 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
           minLength={12}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 block w-full rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-3 py-2 text-[13px] text-[var(--ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          className="mt-1.5 block w-full rounded-sm border border-line-2 bg-surface-2 px-3 py-[11px] text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       </label>
       {formError && (
-        <p className="text-[12px]" style={{ color: "var(--warn)" }}>
-          {formError}
-        </p>
+        <p className="text-xs text-warn">{formError}</p>
       )}
-      <button
+      <Button
         type="submit"
-        disabled={submitting}
-        className="flex w-full items-center justify-center rounded-sm border border-[var(--line-2)] bg-[var(--accent)] px-4 py-2.5 text-[13px] font-medium text-[var(--bg)] transition-opacity hover:opacity-90 disabled:opacity-50"
+        variant="primary"
+        size="lg"
+        loading={submitting}
+        className="w-full"
       >
         {submitting ? "Signing in…" : "Sign in"}
-      </button>
-      <p className="text-center text-[12px]" style={{ color: "var(--ink-3)" }}>
-        <Link to="/signup" className="text-[var(--accent)] hover:underline">
+      </Button>
+      <p className="text-center text-xs text-ink-3">
+        <Link to="/signup" className="font-semibold text-accent hover:underline">
           No account? Sign up →
         </Link>
       </p>
       {allowedDomain && (
-        <p className="text-center text-[11px]" style={{ color: "var(--ink-3)" }}>
+        <p className="text-center text-[11px] text-ink-3">
           Only @{allowedDomain} accounts can sign up here.
         </p>
       )}
@@ -172,12 +154,12 @@ function OidcSection({ label, allowedDomain }: { label: string; allowedDomain: s
     <div className="space-y-3">
       <a
         href="/api/auth/oidc/start"
-        className="flex w-full items-center justify-center gap-2.5 rounded-sm border border-[var(--line-2)] bg-[var(--surface-2)] px-4 py-2.5 text-[13px] font-medium transition-colors hover:bg-[var(--hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        className="flex w-full items-center justify-center gap-2.5 rounded-sm border border-line-2 bg-surface-2 px-4 py-[11px] text-sm font-semibold text-ink transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
         Sign in with {label}
       </a>
       {allowedDomain && (
-        <p className="text-center text-[11px]" style={{ color: "var(--ink-3)" }}>
+        <p className="text-center text-[11px] text-ink-3">
           Only @{allowedDomain} accounts can sign in here.
         </p>
       )}
