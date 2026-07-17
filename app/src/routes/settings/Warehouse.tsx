@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
+import { Panel } from "../../components/Panel";
 import {
   useWorkspaceInfo,
   useConnectionHealth,
@@ -147,8 +148,7 @@ function ConnectionsSection() {
           ? `Reads source values from your warehouse (${adapterLabel}); records live where the adapter's writability allows; team state lives in Postgres.`
           : "Where Zug Zug reads from and where your work is kept."
       }
-    >
-      <div className="flex justify-end">
+      action={
         <Button
           variant="ghost"
           size="sm"
@@ -157,10 +157,10 @@ function ConnectionsSection() {
         >
           Refresh
         </Button>
-      </div>
-
+      }
+    >
       {/* Warehouse — where source values come from */}
-      <div className="rounded-sm border border-line bg-surface-2 p-4">
+      <Panel padding="sm">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-display text-[14px] font-semibold text-ink">Warehouse</span>
@@ -181,14 +181,14 @@ function ConnectionsSection() {
             Where Zug Zug looks for new values that need a record.
           </div>
         )}
-      </div>
+      </Panel>
 
       {/* App — the collaborative layer (drafts, history, team) */}
-      <div className="rounded-sm border border-line bg-surface-2 p-4">
+      <Panel padding="sm">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="font-display text-[14px] font-semibold text-ink">App</span>
-            <Badge tone="accent">Postgres</Badge>
+            <Badge>Postgres</Badge>
           </div>
           <HealthBadge state={health?.postgres} />
         </div>
@@ -201,7 +201,7 @@ function ConnectionsSection() {
             Drafts, history, and your team — the collaborative layer.
           </div>
         )}
-      </div>
+      </Panel>
 
       {tenant.isSuperAdmin && (
         <p className="text-[12.5px] text-ink-3">

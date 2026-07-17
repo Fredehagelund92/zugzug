@@ -126,7 +126,7 @@ function RolePopover({
     <div
       ref={ref}
       role="menu"
-      className="zz-pop-in absolute right-0 top-[calc(100%+4px)] z-20 min-w-[10rem] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-[0_18px_40px_-12px_rgba(0,0,0,0.35)]"
+      className="zz-pop-in absolute right-0 top-[calc(100%+4px)] z-20 min-w-[10rem] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
     >
       {(Object.keys(ROLE_META) as RoleKey[]).map((r) => {
         const meta = ROLE_META[r];
