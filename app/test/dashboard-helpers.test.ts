@@ -9,6 +9,7 @@ import {
   warehouseSyncStatusByDim,
   applyFilter,
   applySort,
+  formatTimeAgo,
 } from "../src/routes/dashboard-helpers";
 
 // ── minimal fixtures ──────────────────────────────────────────────────────────
@@ -202,5 +203,21 @@ describe("warehouseSyncStatusByDim", () => {
     expect(warehouseSyncStatusByDim(audits, dims)).toEqual({
       country: "unknown",
     });
+  });
+});
+
+describe("formatTimeAgo", () => {
+  test("passes non-ISO strings through unchanged (e.g. already-formatted)", () => {
+    expect(formatTimeAgo("1m ago")).toBe("1m ago");
+    expect(formatTimeAgo("just now")).toBe("just now");
+  });
+  test("renders an old ISO timestamp as a friendly date, never raw ISO", () => {
+    const out = formatTimeAgo("2020-03-05T12:00:00.000Z");
+    // No ISO artifacts (the "T" separator, the "Z" zone, or the HH:MM colons),
+    // regardless of the runtime locale.
+    expect(out).not.toContain("T");
+    expect(out).not.toContain("Z");
+    expect(out).not.toContain(":");
+    expect(out).not.toContain("2020-03-05");
   });
 });

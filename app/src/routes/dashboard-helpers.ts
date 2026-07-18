@@ -6,6 +6,23 @@ export type FilterKey = "all" | "attention" | "clean";
 export type SortKey = "urgency" | "coverage" | "name" | "rows";
 
 /**
+ * Human-friendly audit timestamp. The backend sends ISO strings; render those
+ * as "just now" / "Nm ago" / "Nh ago" / "Nd ago", then fall back to a short
+ * "Mon D" date for anything older. Non-ISO inputs (already-formatted strings)
+ * are returned unchanged, so a raw ISO never leaks into the UI.
+ */
+export function formatTimeAgo(at: string): string {
+  const t = new Date(at).getTime();
+  if (Number.isNaN(t)) return at;
+  const diff = Date.now() - t;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  return new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
  * Percentage of values already mapped (count-based, not row-weighted).
  * Note: the global "coverage" KPI in Dashboard.tsx is row-weighted via `v.current`.
  * This function counts mapping entries — use it only for per-dim health display.

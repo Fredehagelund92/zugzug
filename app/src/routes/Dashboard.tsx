@@ -17,6 +17,7 @@ import {
   applyFilter,
   applySort,
   coveragePct,
+  formatTimeAgo,
   lastAuditForDim,
   warehouseSyncStatusByDim,
 } from "./dashboard-helpers";
@@ -269,11 +270,11 @@ export function Dashboard() {
     },
     {
       label: "Last published",
-      value: lastCommit ? lastCommit.at : "—",
+      value: lastCommit ? formatTimeAgo(lastCommit.at) : "—",
       valueColor: "var(--ak-committed)",
       delta:
         lastCommit && lastCommitCount !== null
-          ? `↑ folded ${lastCommitCount} draft${lastCommitCount === 1 ? "" : "s"} · ${lastCommit.at}`
+          ? `↑ folded ${lastCommitCount} draft${lastCommitCount === 1 ? "" : "s"} · ${formatTimeAgo(lastCommit.at)}`
           : undefined,
       dir: undefined,
     },
@@ -474,10 +475,14 @@ export function Dashboard() {
                 <tr
                   key={dim.id}
                   onClick={() => navigate(nav.table(dim.id, "match"))}
-                  className="cursor-pointer bg-surface hover:bg-hover"
+                  className="group cursor-pointer"
                 >
-                  {/* table name + dim_* id with 3px tint bar */}
-                  <td className="sticky left-0 z-10 border-b border-line bg-[inherit] py-0 pr-4">
+                  {/* table name + dim_* id with 3px tint bar. Hover is applied
+                     per-cell (group-hover) — not on the <tr> — so the opaque
+                     sticky cell and the transparent cells all composite one
+                     --hover layer over the white container: a single uniform
+                     gray, matching every other table in the app. */}
+                  <td className="sticky left-0 z-10 border-b border-line bg-surface py-0 pr-4 group-hover:bg-hover">
                     <div className="flex items-stretch gap-3">
                       <div className="w-[3px] shrink-0 self-stretch" style={{ background: tint }} />
                       <div className="min-w-0 py-3">
@@ -500,12 +505,12 @@ export function Dashboard() {
                   </td>
 
                   {/* records */}
-                  <td className="border-b border-line px-4 py-3 text-right font-mono text-[11px] tabular-nums text-ink-2">
+                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right font-mono text-[11px] tabular-nums text-ink-2">
                     {dim.canonical.length.toLocaleString()}
                   </td>
 
                   {/* coverage bar + pct */}
-                  <td className="border-b border-line px-4 py-3">
+                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
                     <div className="flex items-center gap-2.5">
                       <div className="h-[3px] w-[72px] overflow-hidden rounded-pill bg-surface-3">
                         <div
@@ -520,7 +525,7 @@ export function Dashboard() {
                   </td>
 
                   {/* in review */}
-                  <td className="border-b border-line px-4 py-3">
+                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
                     {newCount > 0 ? (
                       <Badge tone="warn" dot>
                         {newCount}
@@ -531,7 +536,7 @@ export function Dashboard() {
                   </td>
 
                   {/* drafts staged */}
-                  <td className="border-b border-line px-4 py-3">
+                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
                     {dimStaged.length > 0 ? (
                       <Badge tone="staged">
                         {dimStaged.length} staged
@@ -542,8 +547,8 @@ export function Dashboard() {
                   </td>
 
                   {/* updated */}
-                  <td className="border-b border-line px-4 py-3 text-right font-mono text-[10px] text-ink-3">
-                    {lastAudit ? lastAudit.at : "—"}
+                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right font-mono text-[10px] text-ink-3">
+                    {lastAudit ? formatTimeAgo(lastAudit.at) : "—"}
                   </td>
                 </tr>
               );
@@ -609,7 +614,7 @@ function ScanFailureFeed({ auditLog }: { auditLog: import("../store").AuditEntry
             <div className="min-w-0 flex-1">
               <span className="font-mono text-[11px] text-warn">{e.detail}</span>
             </div>
-            <span className="shrink-0 font-mono text-[10px] text-ink-3">{e.at}</span>
+            <span className="shrink-0 font-mono text-[10px] text-ink-3">{formatTimeAgo(e.at)}</span>
           </li>
         ))}
       </ul>
