@@ -372,6 +372,11 @@ export function Dashboard() {
         ))}
       </div>
 
+      {/* Section heading — gives the table its own titled section (demo parity) */}
+      <h2 className="-mb-1 pt-2 font-display text-[18px] font-semibold tracking-tight text-ink">
+        Table health
+      </h2>
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-0.5 md:overflow-visible md:pb-0">
         {/* filter pills */}
@@ -442,22 +447,22 @@ export function Dashboard() {
         <table className="w-full min-w-[560px] border-collapse">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="sticky left-0 z-10 border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
                 Table
               </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
                 Records
               </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
                 Coverage
               </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
                 In review
               </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
                 Drafts
               </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[9px] uppercase tracking-[0.12em] text-ink-3">
+              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
                 Updated
               </th>
             </tr>
@@ -509,16 +514,16 @@ export function Dashboard() {
                     {dim.canonical.length.toLocaleString()}
                   </td>
 
-                  {/* coverage bar + pct */}
-                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
-                    <div className="flex items-center gap-2.5">
-                      <div className="h-[3px] w-[72px] overflow-hidden rounded-pill bg-surface-3">
+                  {/* coverage bar + pct — wide, prominent bar (demo parity) */}
+                  <td className="w-[220px] border-b border-line px-4 py-3 group-hover:bg-hover">
+                    <div className="flex items-center gap-3">
+                      <div className="h-[6px] flex-1 overflow-hidden rounded-pill bg-surface-3">
                         <div
                           className="h-full rounded-pill bg-committed"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="w-[44px] text-right font-mono text-[11px] tabular-nums text-ink-2">
+                      <span className="w-[42px] shrink-0 text-right font-mono text-[11px] tabular-nums text-ink-2">
                         {pct}%
                       </span>
                     </div>
