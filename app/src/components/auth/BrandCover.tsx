@@ -48,7 +48,11 @@ export function BrandCover() {
           background: var(--accent); color: #fff; font-weight: 800; flex: none;
         }
 
-        .brand-cover-lead { max-width: 20ch; }
+        /* Bound the block for a tidy measure — in rem, NOT ch: a ch max-width
+           resolves against this div's inherited 15px body font (~168px), which
+           would crush the 58px display headline into a word-per-line stack.
+           The headline breaks via its own <br>; the sub keeps its own ch cap. */
+        .brand-cover-lead { max-width: 30rem; }
         .brand-cover-kick {
           font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.22em;
           text-transform: uppercase; color: rgba(234,238,247,0.5);
