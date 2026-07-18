@@ -66,9 +66,17 @@ export function BrandCover() {
         .brand-cover-converge svg { width: 100%; max-width: 360px; height: auto; display: block; }
 
         .brand-cover-foot {
-          display: flex; gap: 24px; color: rgba(234,238,247,0.55); font-size: 12px;
+          display: flex; flex-wrap: wrap; gap: 12px 24px; color: rgba(234,238,247,0.55); font-size: 12px;
         }
         .brand-cover-foot b { color: #eaeef7; font-family: var(--font-mono); font-weight: 500; }
+
+        /* The split shell collapses to a single column below the md breakpoint
+           (see AuthLayout). Hide the cover there so the form stands alone and
+           the cover's footer row can never force horizontal overflow on a
+           phone. Matches docs/ui-demos/01-login.html, which hides .cover small. */
+        @media (max-width: 767px) {
+          .brand-cover { display: none; }
+        }
       `}</style>
 
       <section className="brand-cover">
