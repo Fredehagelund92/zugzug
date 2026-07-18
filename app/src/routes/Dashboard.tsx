@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useNavigate } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
+import { useTenant } from "../lib/tenant-context";
 import { Kpi } from "../components/Kpi";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -157,7 +158,8 @@ function DashboardSkeleton() {
 }
 
 export function Dashboard() {
-  usePageTitle("Home");
+  const tenant = useTenant();
+  usePageTitle(tenant.label);
   const dims = useDimensions();
   const auditLog = useAudit();
   const draftsMap = useDrafts();
@@ -307,8 +309,8 @@ export function Dashboard() {
     <div className="mx-auto w-full max-w-[var(--wide)] space-y-6 p-3 md:space-y-8 md:p-8">
       <PageHeader
         backdrop={<MarkBackdrop />}
-        kicker="Tables"
-        title="Home"
+        kicker="Overview"
+        title={tenant.label}
         meta={
           <div className="mt-3 flex flex-wrap gap-5">
             <span className="text-sm text-ink-2">
@@ -433,8 +435,9 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Dimension health table */}
-      <div {...rise(5)} className="overflow-x-auto rounded-sm">
+      {/* Dimension health table — white surface behind the rows so the
+         translucent hover tint reads as gray, not the lattice showing through. */}
+      <div {...rise(5)} className="overflow-x-auto rounded-lg border border-line bg-surface">
         <table className="w-full min-w-[560px] border-collapse">
           <thead>
             <tr>

@@ -10,10 +10,12 @@ function WorkspaceAvatar({
   label,
   color,
   size,
+  radius = 6,
 }: {
   label: string;
   color: string | null;
   size: number;
+  radius?: number;
 }) {
   return (
     <div
@@ -21,7 +23,7 @@ function WorkspaceAvatar({
         width: size,
         height: size,
         background: workspaceColor(color),
-        borderRadius: 6,
+        borderRadius: radius,
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
@@ -93,11 +95,11 @@ export function WorkspaceSwitcher() {
       {/* ── Trigger ── */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded px-2 py-1 hover:bg-surface-2 w-full text-left"
+        className="flex w-full items-center gap-2.5 rounded-pill border border-line px-2.5 py-1.5 text-left transition-colors hover:bg-surface-2"
         aria-haspopup="dialog"
         aria-expanded={open}
       >
-        <WorkspaceAvatar label={tenant.label} color={tenant.color} size={22} />
+        <WorkspaceAvatar label={tenant.label} color={tenant.color} size={22} radius={999} />
         <span className="font-medium truncate flex-1 text-sm">{tenant.label}</span>
         <span aria-hidden className="shrink-0 text-ink-3 text-[10px]">
           ▾
