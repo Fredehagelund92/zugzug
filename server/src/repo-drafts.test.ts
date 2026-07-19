@@ -7,7 +7,7 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { describe, it, test, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
+import { addDimension, addCanonicalOne, addField, setFieldValue } from "./repo-canonical.ts";
 import { saveDraft, commit, listDrafts, rejectDrafts, listAllDrafts } from "./repo-drafts.ts";
 import { getPreferences, setPreferences } from "./repo-meta.ts";
 
@@ -68,6 +68,31 @@ describe("commit() second-publisher gate", () => {
 
     // Reset the preference so other tests are unaffected
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
+  });
+});
+
+describe("commit() required-field gate", () => {
+  it("blocks publish when a required field is empty, allows it once filled", async () => {
+    const dimId = await addDimension("ReqFieldDim", [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "United States", "usa", U, T);
+    const added = await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
+    expect(added?.field).toBe("region");
+
+    // The record has no region yet — publish is blocked and names the gap.
+    await expect(commit(dimId, U, T)).rejects.toThrow(/required value before you can publish/i);
+
+    // Fill the required value; the same publish now goes through.
+    await setFieldValue(dimId, "usa", "region", "Americas", T);
+    await expect(commit(dimId, U, T)).resolves.toBeDefined();
+  });
+
+  it("does not block when the required field has a value on every record", async () => {
+    const dimId = await addDimension("ReqFieldDim2", [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "Canada", "canada", U, T);
+    await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
+    await setFieldValue(dimId, "canada", "region", "Americas", T);
+
+    await expect(commit(dimId, U, T)).resolves.toBeDefined();
   });
 });
 
