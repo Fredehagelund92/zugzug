@@ -8,6 +8,14 @@ import { toast } from "./Toast";
 import { ComboSelect } from "./ComboSelect";
 import type { PaletteName } from "../data";
 import { useNavLinks } from "../lib/use-tenant-navigate";
+import { prepareCreateFromCsv, type CreateFromCsv } from "../lib/csv";
+
+const MODE_LABEL: Record<CreateTableMode, string> = {
+  blank: "empty table",
+  source: "from a column",
+  file: "from a file",
+  external_id: "from a lookup table",
+};
 
 interface Props {
   open: boolean;
@@ -33,6 +41,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     idColumn: string;
     nameColumn: string;
   } | null>(null);
+  const [csv, setCsv] = useState<{ fileName: string; data: CreateFromCsv } | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   const sources = useSources();
@@ -52,6 +62,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     setColor(defaultTintFor(String(Date.now())));
     setSource(null);
     setExternal(null);
+    setCsv(null);
+    setCsvError(null);
     setConfirmingDiscard(false);
   }, [open, defaultMode]);
 
@@ -60,8 +72,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     if (mode === "source") return !!(source?.table && source?.column);
     if (mode === "external_id")
       return !!(external?.table && external?.idColumn && external?.nameColumn);
+    if (mode === "file") return !!csv;
     return true; // blank: name is enough
-  }, [name, mode, source, external]);
+  }, [name, mode, source, external, csv]);
 
   // Why "Create table" is disabled right now — shown next to the button so the
   // dead-disabled state explains itself instead of leaving the user guessing.
@@ -71,8 +84,29 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     if (mode === "source") return "Pick a column to continue";
     if (mode === "external_id")
       return external?.idColumn ? "Pick a name column to continue" : "Pick an ID column to continue";
+    if (mode === "file") return "Choose a CSV file to continue";
     return null;
   }, [canSubmit, name, mode, external]);
+
+  // Read a chosen CSV, parse it client-side, and stage the result. Errors show
+  // inline in the file panel rather than as a toast (the modal is still open).
+  const handleFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+      const file = e.target.files?.[0];
+      e.target.value = ""; // let the user re-pick the same file after an error
+      if (!file) return;
+      try {
+        const data = prepareCreateFromCsv(await file.text());
+        setCsv({ fileName: file.name, data });
+        setCsvError(null);
+        setName((n) => n.trim() || file.name.replace(/\.csv$/i, ""));
+      } catch (err) {
+        setCsv(null);
+        setCsvError(err instanceof Error ? err.message : "Could not read this file.");
+      }
+    },
+    [],
+  );
 
   // Close request — checks dirty state and prompts to discard if so.
   // Considered "dirty" when the user has typed a name, picked a source, or
@@ -83,10 +117,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
       setConfirmingDiscard(false);
       return;
     }
-    const isDirty = name.trim().length > 0 || source !== null || external !== null;
+    const isDirty = name.trim().length > 0 || source !== null || external !== null || csv !== null;
     if (isDirty) setConfirmingDiscard(true);
     else onClose();
-  }, [confirmingDiscard, name, source, external, onClose]);
+  }, [confirmingDiscard, name, source, external, csv, onClose]);
 
   const submit = useCallback((): void => {
     if (!canSubmit) return;
@@ -98,6 +132,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
       mode,
       ...(mode === "source" && source ? { source } : {}),
       ...(mode === "external_id" && external ? { external } : {}),
+      ...(mode === "file" && csv
+        ? { file: { columns: csv.data.columns, rows: csv.data.rows } }
+        : {}),
     };
 
     // Close immediately — background provisioning continues after this.
@@ -118,7 +155,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
       );
     };
     run(payload);
-  }, [canSubmit, name, description, color, mode, source, external, onCreated, onClose]);
+  }, [canSubmit, name, description, color, mode, source, external, csv, onCreated, onClose]);
 
   // Esc to close (or cancel the discard prompt if it's already showing)
   useEffect(() => {
@@ -249,14 +286,14 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
             aria-label="Start from"
             className="flex flex-wrap gap-0.5 rounded-sm border border-line bg-bg p-0.5"
           >
-            {(["blank", "source", "external_id"] as const).map((m) => (
+            {(["blank", "source", "file", "external_id"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setMode(m)}
                 className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors md:px-2.5 md:text-[12.5px] ${mode === m ? "border border-line-2 bg-surface-3 text-ink shadow-sm" : "text-ink-2 hover:text-ink"}`}
               >
-                {m === "blank" ? "blank" : m === "source" ? "from a column" : "from a lookup table"}
+                {MODE_LABEL[m]}
               </button>
             ))}
           </div>
@@ -334,6 +371,79 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 </div>
               );
             })()}
+
+          {/* ─── file: upload a CSV; headers become text fields, rows records ───── */}
+          {mode === "file" && (
+            <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
+              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
+                Upload a CSV. The first column (or one named “name”) names each record; every other
+                column becomes a text field you can retype later.
+              </p>
+              {!csv ? (
+                <>
+                  <label className="flex cursor-pointer items-center justify-center rounded-sm border border-dashed border-line-2 bg-bg px-3 py-4 font-body text-[12.5px] text-ink-2 hover:border-accent hover:text-ink">
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={handleFile}
+                    />
+                    Choose a CSV file
+                  </label>
+                  {csvError && (
+                    <div className="rounded-sm border border-danger/40 bg-danger/10 px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-danger">
+                      {csvError}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate font-mono text-[11px] text-ink">{csv.fileName}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCsv(null);
+                        setCsvError(null);
+                      }}
+                      className="shrink-0 font-mono text-[11px] text-ink-3 hover:text-ink"
+                    >
+                      change
+                    </button>
+                  </div>
+                  <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
+                    {csv.data.recordCount.toLocaleString()} record
+                    {csv.data.recordCount === 1 ? "" : "s"} · name ← “{csv.data.nameHeader}” ·{" "}
+                    {csv.data.columns.length} field{csv.data.columns.length === 1 ? "" : "s"}
+                  </div>
+                  <div className="max-h-32 overflow-auto rounded-sm border border-line">
+                    <table className="w-full border-collapse font-mono text-[10.5px]">
+                      <thead>
+                        <tr className="bg-bg text-ink-3">
+                          {csv.data.headers.map((h, i) => (
+                            <th key={i} className="border-b border-line px-2 py-1 text-left font-medium">
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csv.data.previewRows.map((r, ri) => (
+                          <tr key={ri} className="text-ink-2">
+                            {csv.data.headers.map((_, ci) => (
+                              <td key={ci} className="border-b border-line px-2 py-1 whitespace-nowrap">
+                                {r[ci] ?? ""}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ─── external_id: 2 pickers ─────────────────────────────────────────── */}
           {mode === "external_id" && (

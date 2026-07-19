@@ -630,7 +630,7 @@ export async function rebalancePositions(dimId: string): Promise<{ rebalanced: n
   );
 }
 
-export type CreateTableMode = "blank" | "source" | "external_id";
+export type CreateTableMode = "blank" | "source" | "external_id" | "file";
 
 export interface ColumnDraft {
   label: string;
@@ -646,6 +646,12 @@ export interface CreateTableInput {
   columns?: ColumnDraft[];
   source?: { table: string; column: string };
   external?: { table: string; idColumn: string; nameColumn: string };
+  /** Parsed CSV: headers become text fields, rows become records (fields keyed
+   *  by header label). mode === "file" */
+  file?: {
+    columns: string[];
+    rows: Array<{ label: string; fields: Record<string, string | null> }>;
+  };
 }
 
 export interface CreateTableError {

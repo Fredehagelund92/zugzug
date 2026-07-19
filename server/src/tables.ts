@@ -7,13 +7,13 @@
 import * as repo from "./repo.ts";
 import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
 import { PALETTE_NAMES } from "./repo-shared.ts";
-import type { QualifiedSource } from "./repo-canonical.ts";
+import type { QualifiedSource, ImportRow } from "./repo-canonical.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
 import { AppError } from "./errors.ts";
 
-export type CreateTableMode = "blank" | "source" | "external_id";
+export type CreateTableMode = "blank" | "source" | "external_id" | "file";
 
 export interface ColumnDraft {
   label: string;
@@ -45,6 +45,13 @@ export interface CreateTableInput {
         nameColumn: string;
       }
     | { table: string; idColumn: string; nameColumn: string };
+  /** Parsed CSV: each header in `columns` becomes a text field; each row a
+   *  record (fields keyed by header label, remapped to field ids server-side).
+   *  mode === 'file' */
+  file?: {
+    columns: string[];
+    rows: Array<{ label: string; fields?: Record<string, string | null> }>;
+  };
 }
 
 function validate(input: CreateTableInput): void {
@@ -94,6 +101,20 @@ function validate(input: CreateTableInput): void {
           throw new AppError("VALIDATION_FAILED", `duplicate option labels in field "${c.label}"`);
         }
       }
+    }
+  } else if (input.mode === "file") {
+    const f = input.file;
+    if (!f || !Array.isArray(f.rows) || f.rows.length === 0) {
+      throw new AppError("VALIDATION_FAILED", "file requires at least one row");
+    }
+    if (f.rows.length > 10000) {
+      throw new AppError("VALIDATION_FAILED", "file has too many rows (max 10,000)");
+    }
+    if ((f.columns ?? []).length > 100) {
+      throw new AppError("VALIDATION_FAILED", "file has too many columns (max 100)");
+    }
+    for (const c of f.columns ?? []) {
+      if (!c?.trim()) throw new AppError("VALIDATION_FAILED", "column name is required");
     }
   }
   if ((input.mode === "source" || input.mode === "external_id") && !env.attachWarehouse) {
@@ -217,6 +238,38 @@ export async function createTable(
     }
   }
 
+  // 4b. File mode — create a text field per CSV column, then import the rows.
+  //     The server owns field creation, so it also owns the header→field-id
+  //     remap (client slug() and server slug() are separate implementations).
+  if (input.mode === "file" && input.file) {
+    const headerToField = new Map<string, string>();
+    for (const header of input.file.columns) {
+      const added = await repo.addField(
+        id,
+        header.trim(),
+        "text",
+        undefined,
+        { silent: true },
+        userId,
+        tenantId,
+      );
+      if (added) {
+        headerToField.set(header, added.field);
+        fieldCount++;
+      }
+    }
+    const rows: ImportRow[] = input.file.rows.map((r) => {
+      const fields: Record<string, string | null> = {};
+      for (const [header, value] of Object.entries(r.fields ?? {})) {
+        const field = headerToField.get(header);
+        if (field) fields[field] = value;
+      }
+      return { label: r.label, fields };
+    });
+    const res = await repo.importCanonical(id, rows, userId, tenantId, { silent: true });
+    derivedCount = res.created;
+  }
+
   // 5. Seeding (source / external_id modes)
   //    deriveCanonical still takes the legacy "schema.table" string; we
   //    reconstruct it from the normalized parts so external clients can keep
@@ -263,9 +316,11 @@ export async function createTable(
   const detail =
     input.mode === "blank"
       ? `${name} · blank · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
-      : input.mode === "source"
-        ? `${name} · from ${sourceLabel} · derived ${derivedCount}`
-        : `${name} · from IDs ${externalTableLabel}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
+      : input.mode === "file"
+        ? `${name} · from a file · ${derivedCount} record${derivedCount === 1 ? "" : "s"} · ${fieldCount} field${fieldCount === 1 ? "" : "s"}`
+        : input.mode === "source"
+          ? `${name} · from ${sourceLabel} · derived ${derivedCount}`
+          : `${name} · from IDs ${externalTableLabel}.${input.external!.idColumn} (names ← ${input.external!.nameColumn}) · derived ${derivedCount}`;
   await repo.appendAuditAs(userId, "Created table", detail, { tenantId });
 
   return { id };

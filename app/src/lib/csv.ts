@@ -122,6 +122,64 @@ export function mapCsvHeaders(
   return mapping;
 }
 
+export interface CreateFromCsv {
+  /** header chosen as the record name */
+  nameHeader: string;
+  /** data-column headers — each becomes a text field */
+  columns: string[];
+  /** one entry per data row; fields keyed by header label (server remaps to ids) */
+  rows: Array<{ label: string; fields: Record<string, string | null> }>;
+  recordCount: number;
+  /** all headers + the first few data rows, for an inline preview */
+  headers: string[];
+  previewRows: string[][];
+}
+
+/** Parse a CSV for the "create table from a file" flow: the first column (or a
+ *  header named name/label/record) names each record; every other column
+ *  becomes a text field. Throws Error with a user-facing message on bad input. */
+export function prepareCreateFromCsv(text: string): CreateFromCsv {
+  const grid = parseCsv(text);
+  if (grid.length < 2) throw new Error("This file needs a header row and at least one data row.");
+  const headers = grid[0]!.map((h) => h.trim());
+  const norm = (s: string) => s.trim().toLowerCase();
+
+  let nameIdx = headers.findIndex((h) => ["name", "label", "record"].includes(norm(h)));
+  if (nameIdx === -1) nameIdx = 0;
+
+  // Data columns: every other non-empty header, de-duped by slug.
+  const seen = new Set<string>();
+  const dataCols: { header: string; idx: number }[] = [];
+  headers.forEach((h, i) => {
+    if (i === nameIdx || !h) return;
+    const s = slug(h);
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    dataCols.push({ header: h, idx: i });
+  });
+
+  const rows = grid.slice(1).flatMap((cells) => {
+    const label = (cells[nameIdx] ?? "").trim();
+    if (!label) return [];
+    const fields: Record<string, string | null> = {};
+    for (const c of dataCols) {
+      const v = (cells[c.idx] ?? "").trim();
+      fields[c.header] = v === "" ? null : v;
+    }
+    return [{ label, fields }];
+  });
+  if (rows.length === 0) throw new Error("No rows with a name were found in this file.");
+
+  return {
+    nameHeader: headers[nameIdx] || "name",
+    columns: dataCols.map((c) => c.header),
+    rows,
+    recordCount: rows.length,
+    headers,
+    previewRows: grid.slice(1, 4),
+  };
+}
+
 /** Check whether a value is incompatible with a field's type.
  *  Returns "empty" when the server would coerce the value to null,
  *  "blocking" when the server would throw (aborting the entire import),

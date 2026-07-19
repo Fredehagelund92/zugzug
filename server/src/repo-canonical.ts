@@ -666,6 +666,7 @@ export async function importCanonical(
   rows: ImportRow[],
   userId: string,
   tenantId: string,
+  opts: { silent?: boolean } = {},
 ): Promise<{ created: number; updated: number; skipped: number }> {
   const m = await dimMeta(dimId, tenantId);
   if (!m) throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
@@ -774,12 +775,14 @@ export async function importCanonical(
       }
     }
   }
-  await appendAuditAs(
-    userId,
-    "Imported CSV",
-    `${created} created · ${updated} updated · ${skipped} skipped`,
-    { tableId: dimId, tenantId },
-  );
+  if (!opts.silent) {
+    await appendAuditAs(
+      userId,
+      "Imported CSV",
+      `${created} created · ${updated} updated · ${skipped} skipped`,
+      { tableId: dimId, tenantId },
+    );
+  }
   return { created, updated, skipped };
 }
 
