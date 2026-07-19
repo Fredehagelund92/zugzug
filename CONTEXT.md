@@ -30,17 +30,18 @@ tables.
 _Avoid_: match, matching, reconciliation, merge
 
 **Draft**:
-A staged mapping awaiting publish. Lives in app state, invisible to dbt.
+A mapping awaiting publish. Lives in app state, invisible to dbt.
 Record edits are not drafted — they apply instantly to the working copy.
+_Avoid_: staged (implementation term), pending
 
 **Working copy**:
-The current, editable state of a table (records + mappings + staged drafts)
+The current, editable state of a table (records + mappings + drafts)
 as seen in the grid. Not yet what dbt consumes.
 
 **Publish**:
-The single act that folds staged drafts and record edits into a new numbered
+The single act that folds drafts and record edits into a new numbered
 table version (v17 → v18) and materializes it for dbt.
-_Avoid_: commit (internal implementation term), merge, sync
+_Avoid_: commit, staged (internal implementation terms), merge, sync
 
 **Review**:
 The cross-table inbox of unmapped source values, ordered by frequency.

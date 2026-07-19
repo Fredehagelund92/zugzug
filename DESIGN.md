@@ -26,7 +26,7 @@ Direct. Specific. Lowercase for state and microcopy; sentence case for actions. 
 | Good | Bad |
 |---|---|
 | `12 unmapped values in dim_country` | `Looks like there are a few things to review!` |
-| `Commit 8 staged changes` | `Save your work` |
+| `Publish 8 drafts` | `Save your work` |
 | `No tables yet — add one to get started` | `Welcome! 🎉 Let's get you set up.` |
 | `Scan failed: connection refused` | `Oops, something went wrong` |
 
@@ -67,12 +67,12 @@ Dark is the lead look. Light is a genuine paper theme for stakeholder PDFs and u
 
 ### Workflow semantics (Zugzug-specific)
 
-Master-data work has two states with no generic analogue. Don't reuse `ok`/`warn` for these.
+Reference-table work has two states with no generic analogue. Don't reuse `ok`/`warn` for these. The token names below are internal code identifiers; the *user-facing* words are "published" and "draft" (never "committed"/"staged" — see CONTEXT.md Language).
 
 | Token | Hex | Means |
 |---|---|---|
-| `--ak-committed` | `#0e9f8a` | Published to the master store. Cooler teal than `ok` green — these are *correct* AND *durable*. |
-| `--ak-staged` | `#c47c18` | In-flight draft awaiting commit. Saturated ochre, not the alerting `warn` yellow. |
+| `--ak-committed` | `#0e9f8a` | Published to the store. Cooler teal than `ok` green — these are *correct* AND *durable*. |
+| `--ak-staged` | `#c47c18` | An unpublished draft awaiting publish. Saturated ochre, not the alerting `warn` yellow. |
 | `--ak-committed-soft`, `--ak-staged-soft` | color-mix | Row backgrounds, badge fills |
 
 ### Generic status
@@ -291,7 +291,7 @@ Lattice spacing is always 74px. Suppress on modals, popovers, and print.
 
 1. **Never hardcode brand color.** Use `var(--accent)` / `var(--accent-2)` / tint tokens.
 2. **One accent per view.** If two things both demand `--accent`, one of them is wrong.
-3. **Committed ≠ ok. Staged ≠ warn.** Master-data workflow has its own semantics — use the right token.
+3. **Published (`--ak-committed`) ≠ ok. Draft (`--ak-staged`) ≠ warn.** The publish workflow has its own semantics — use the right token. (Token names keep the old committed/staged spelling; the user-facing words are "published"/"draft".)
 4. **8px spacing grid.** No 5/7/13px gaps.
 5. **Dark first.** Build the dark theme; verify the light theme reads on paper.
 6. **Respect the engineer-mode toggle.** Surface SQL/table-name jargon only when `engineerMode` is on.

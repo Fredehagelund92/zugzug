@@ -56,5 +56,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 All user-facing strings follow the Language section in CONTEXT.md. Plain
 words only: "table", "record", "source value", "mapping", "Review",
 "publish", "workspace". Never surface: canonical, raw, triage, master,
-golden, commit, sync, tenant, matching. When writing UI copy, prefer a
-concrete example over an abstract term.
+golden, commit, staged, sync, tenant, matching, probe. A change awaiting
+publish is a "draft", not "staged"; the whole batch is "N drafts". When
+writing UI copy, prefer a concrete example over an abstract term.
