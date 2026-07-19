@@ -1547,7 +1547,31 @@ export async function setFieldValue(
           `SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`,
           [fkValue],
         );
-        if (!exists) fkValue = null;
+        if (!exists) {
+          fkValue = null;
+        } else if (f.referencedDimId === dimId) {
+          // Self-link = a parent pointer. Keep the data a valid tree: reject a
+          // record parenting itself, or parenting a record it is already an
+          // ancestor of (which would close a loop). Self-links were impossible
+          // before this feature, so no pre-existing data can be cyclic and the
+          // recursion always terminates.
+          if (fkValue === key) {
+            throw new AppError("HIERARCHY_CYCLE", "A record can't be its own parent.", 422);
+          }
+          const cyclic = await pgGet(
+            `WITH RECURSIVE anc(p) AS (
+               SELECT ${col} FROM ${cq(m.dimTable)} WHERE ${keyc} = $1
+               UNION ALL
+               SELECT d.${col} FROM ${cq(m.dimTable)} d JOIN anc ON d.${keyc} = anc.p
+                WHERE anc.p IS NOT NULL
+             )
+             SELECT 1 FROM anc WHERE p = $2 LIMIT 1`,
+            [fkValue, key],
+          );
+          if (cyclic) {
+            throw new AppError("HIERARCHY_CYCLE", "Setting that parent would create a loop.", 422);
+          }
+        }
       }
     }
     await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [fkValue, key]);

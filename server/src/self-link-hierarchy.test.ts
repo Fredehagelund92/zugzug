@@ -65,4 +65,44 @@ describe("self-referencing linked field", () => {
     const parent = (await listFields(dimId, T)).find((f) => f.field === "parent");
     expect(parent?.referencedDimId).toBe(dimId);
   });
+
+  it("builds a valid parent chain, rejects cycles and self-parenting", async () => {
+    const dimId = await addDimension("Geo", [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "Europe", "europe", U, T);
+    await addCanonicalOne(dimId, "Nordics", "nordics", U, T);
+    await addCanonicalOne(dimId, "Denmark", "denmark", U, T);
+    await addCanonicalOne(dimId, "France", "france", U, T);
+    await addField(dimId, "Parent", "linked", undefined, { referencedDimId: dimId }, U, T);
+
+    // Valid chain: Denmark -> Nordics -> Europe
+    await setFieldValue(dimId, "nordics", "parent", "europe", T);
+    await setFieldValue(dimId, "denmark", "parent", "nordics", T);
+    const chain = await getDimension(dimId, T);
+    expect(chain!.canonical.find((c) => c.key === "denmark")!.fields?.parent).toBe("nordics");
+
+    // Cycle: Europe's parent = Denmark would close the loop
+    await expect(setFieldValue(dimId, "europe", "parent", "denmark", T)).rejects.toThrow(/loop/i);
+
+    // Self-parent is rejected
+    await expect(setFieldValue(dimId, "europe", "parent", "europe", T)).rejects.toThrow(
+      /own parent/i,
+    );
+
+    // Acyclic re-parent still works: France Europe -> Nordics
+    await setFieldValue(dimId, "france", "parent", "europe", T);
+    await setFieldValue(dimId, "france", "parent", "nordics", T);
+    const after = await getDimension(dimId, T);
+    expect(after!.canonical.find((c) => c.key === "france")!.fields?.parent).toBe("nordics");
+  });
+
+  it("a cross-table linked field still coerces an unknown key to null", async () => {
+    const a = await addDimension("Alpha", [], { keyKind: "slug" }, U, T);
+    const b = await addDimension("Beta", [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(a, "One", "one", U, T);
+    await addField(a, "BetaLink", "linked", undefined, { referencedDimId: b }, U, T);
+    // Unknown FK on a NON-self link: no throw, coerced to null.
+    await setFieldValue(a, "one", "betalink", "does_not_exist", T);
+    const dim = await getDimension(a, T);
+    expect(dim!.canonical.find((c) => c.key === "one")!.fields?.betalink ?? null).toBeNull();
+  });
 });
