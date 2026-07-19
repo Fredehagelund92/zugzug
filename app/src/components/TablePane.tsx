@@ -55,7 +55,6 @@ import { useOpenTabs } from "../lib/open-tabs";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { ManageLinkedFieldsPopover } from "./linked/ManageLinkedFieldsPopover";
 import { ConflictBanner, type FieldDiff } from "./ConflictBanner";
-import { useEngineerMode } from "../lib/engineer-mode";
 import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
@@ -226,7 +225,6 @@ function RecordsBody({
   const sources = useSources();
   const allDims = useDimensions();
   const drafts = useDrafts();
-  const { engineer } = useEngineerMode();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = dim.id;
@@ -417,7 +415,7 @@ function RecordsBody({
       },
       {
         field: "key",
-        label: engineer ? dim.keyCol : "Key",
+        label: "Key",
         config: { type: "text" },
         pinnedLeft: true,
         editable: false,
@@ -466,7 +464,7 @@ function RecordsBody({
         return ai - bi;
       });
     return ordered;
-  }, [fields, engineer, dim.keyCol, external, layout, linkedTargets, canEdit]);
+  }, [fields, external, layout, linkedTargets, canEdit]);
 
   const changedKeySet = useMemo(() => new Set(pubState?.changedKeys ?? []), [pubState]);
   const visibleFields = useMemo(
@@ -871,16 +869,6 @@ function RecordsBody({
             {dim.dimension}
           </span>
           <div className="hidden shrink-0 items-center border-l border-line pl-2.5 font-mono text-ink-2 @5xl:flex">
-            {engineer && (
-              <div className="flex items-center gap-2 border-r border-line px-3 text-[11px] first:pl-0">
-                <span>
-                  table <span className="text-ink">{dim.dimTable}</span>
-                </span>
-                <span>
-                  key <span className="text-ink">{dim.keyCol}</span>
-                </span>
-              </div>
-            )}
             {gauge(list.length, list.length === 1 ? "record" : "records")}
             {gauge(fields.length, fields.length === 1 ? "field" : "fields")}
             {gauge(totalVariants.toLocaleString(), "source values")}
@@ -1694,11 +1682,6 @@ function RecordsBody({
               placeholder={`new ${dim.dimension.toLowerCase()} record…`}
               className="w-full max-w-xs rounded-sm border border-line-2 bg-bg px-3 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
             />
-            {draft.trim() && engineer && (
-              <span className="font-mono text-[11px] text-ink-3">
-                {dim.keyCol} = <span className="text-accent">{slug(draft)}</span>
-              </span>
-            )}
             <Button
               size="sm"
               icon={<IconPlus className="h-3.5 w-3.5" />}

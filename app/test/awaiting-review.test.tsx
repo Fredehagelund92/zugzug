@@ -316,7 +316,6 @@ describe("Review empty states", () => {
           writable: false,
           canonicalMode: "postgres-export",
           warehouseDb: null,
-          defaultEngineerMode: false,
           allowedDomain: null,
         }),
         useStoreLoading: () => false,

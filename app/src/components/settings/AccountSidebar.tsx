@@ -1,7 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { useTenant } from "../../lib/tenant-context";
 import { cx } from "../../lib/cx";
-import { IconUser, IconPalette, IconLayers } from "../Icons";
+import { IconUser, IconLayers } from "../Icons";
 import type { SVGProps, ComponentType } from "react";
 
 interface Item {
@@ -12,7 +12,6 @@ interface Item {
 
 const ITEMS: Item[] = [
   { label: "Profile", to: "profile", Icon: IconUser },
-  { label: "Appearance", to: "appearance", Icon: IconPalette },
   { label: "Memberships", to: "memberships", Icon: IconLayers },
 ];
 

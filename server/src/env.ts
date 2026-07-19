@@ -103,9 +103,6 @@ export const env = {
   selfHosted: process.env.ZUGZUG_SELF_HOSTED?.trim() === "1",
   /** Webhook dispatcher on/off. Default differs by deployment — see .env.example. */
   webhooksEnabled: process.env.WEBHOOKS_ENABLED?.trim() === "1",
-  /** Default value of the engineer-mode toggle for users who haven't set a
-   *  preference yet. OSS default: true. BC override: DEFAULT_ENGINEER_MODE=false. */
-  defaultEngineerMode: process.env.DEFAULT_ENGINEER_MODE?.trim() !== "false",
   canonicalSchema: process.env.ZUGZUG_DB?.trim() || "zugzug",
   oltpCatalog: "oltp",
   appSchema: "zugzug_app",

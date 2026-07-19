@@ -381,7 +381,6 @@ function AuditRow({
           </div>
 
           <div className="mt-1 flex items-center gap-2 text-[11px] text-ink-3">
-            <code className="font-mono">{row.action}</code>
             {renderActorBadge?.(row)}
             {hasMeta && (
               <button

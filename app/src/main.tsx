@@ -4,7 +4,6 @@ import * as Sentry from "@sentry/react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
-import { EngineerModeProvider } from "./lib/engineer-mode";
 import { BootGate } from "./components/BootGate";
 import { AppShell } from "./components/AppShell";
 import { AdminLayout } from "./components/admin/AdminLayout";
@@ -35,7 +34,6 @@ import { WebhookDetail } from "./routes/integrations/WebhookDetail";
 import { ServiceAccounts } from "./routes/integrations/ServiceAccounts";
 import { Account } from "./routes/account/Account";
 import { Profile } from "./routes/account/Profile";
-import { Appearance as AccountAppearance } from "./routes/account/Appearance";
 import { Memberships } from "./routes/account/Memberships";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -77,7 +75,6 @@ createRoot(root).render(
           path="*"
           element={
             <RouteErrorBoundary>
-              <EngineerModeProvider>
                 <BootGate>
                   {(boot) => (
                     <Routes>
@@ -152,7 +149,6 @@ createRoot(root).render(
                           <Route path="account" element={<Account />}>
                             <Route index element={<Navigate to="profile" replace />} />
                             <Route path="profile" element={<Profile />} />
-                            <Route path="appearance" element={<AccountAppearance />} />
                             <Route path="memberships" element={<Memberships />} />
                             <Route
                               path="notifications"
@@ -166,7 +162,6 @@ createRoot(root).render(
                     </Routes>
                   )}
                 </BootGate>
-              </EngineerModeProvider>
             </RouteErrorBoundary>
           }
         />

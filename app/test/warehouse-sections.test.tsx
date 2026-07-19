@@ -34,7 +34,6 @@ vi.mock("../src/api", () => ({
   authFetch: vi.fn(async () => new Response("", { status: 200 })),
   fetchWarehouseDatabases: vi.fn(async () => []),
 }));
-vi.mock("../src/lib/engineer-mode", () => ({ useEngineerMode: () => ({ engineer: false }) }));
 
 function harness(role: "viewer" | "editor" | "admin") {
   const value: TenantContextValue = {

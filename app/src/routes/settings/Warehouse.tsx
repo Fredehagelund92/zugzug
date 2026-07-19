@@ -12,7 +12,6 @@ import {
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
-import { useEngineerMode } from "../../lib/engineer-mode";
 import { Scans } from "./Scans";
 import { useTenant } from "../../lib/tenant-context";
 import { fetchWarehouseDatabases } from "../../api";
@@ -96,7 +95,6 @@ function StatusPill() {
 
 function DatabasesSection() {
   const tenant = useTenant();
-  const { engineer } = useEngineerMode();
   const isSuperAdmin = tenant.isSuperAdmin === true;
   const [databases, setDatabases] = useState<DatabaseRow[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -137,9 +135,6 @@ function DatabasesSection() {
             onAdd={() => setShowAdd(true)}
             onRemove={isSuperAdmin ? (db) => setRemoving(db) : undefined}
           />
-        )}
-        {engineer && !dbError && (
-          <p className="font-mono text-[11px] text-ink-3">token from env · MOTHERDUCK_TOKEN</p>
         )}
       </div>
 
@@ -207,7 +202,6 @@ function ConnCard({
 }
 
 function ConnectionsSection() {
-  const { engineer } = useEngineerMode();
   const tenant = useTenant();
   const wsInfo = useWorkspaceInfo();
   const adapterLabel = wsInfo
@@ -223,11 +217,7 @@ function ConnectionsSection() {
   return (
     <SettingsSection
       title="Connections"
-      hint={
-        engineer
-          ? `Reads source values from your warehouse (${adapterLabel}); records live where the adapter's writability allows; team state lives in Postgres.`
-          : "Where Zug Zug reads from and where your work is kept."
-      }
+      hint="Where Zug Zug reads from and where your work is kept."
       action={
         <Button
           variant="ghost"
@@ -245,13 +235,7 @@ function ConnectionsSection() {
           name="Warehouse"
           tag={adapterLabel}
           state={health?.warehouse}
-          desc={
-            engineer
-              ? wsInfo?.writable
-                ? "Scanned for source values; writes records via MERGE."
-                : "Scanned for source values — never written to."
-              : "Where Zug Zug looks for new values that need a record."
-          }
+          desc="Where Zug Zug looks for new values that need a record."
           stats={[
             { k: "Access", v: wsInfo?.writable ? "Read + write" : "Read only" },
             { k: "Reads", v: "Source values" },
@@ -261,11 +245,7 @@ function ConnectionsSection() {
           name="App"
           tag="Postgres"
           state={health?.postgres}
-          desc={
-            engineer
-              ? "Drafts · audit log · users · sessions · preferences."
-              : "Drafts, history, and your team — the collaborative layer."
-          }
+          desc="Drafts, history, and your team — the collaborative layer."
           stats={[
             { k: "Access", v: "Read + write" },
             { k: "Holds", v: "Drafts · audit · team" },

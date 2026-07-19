@@ -111,7 +111,7 @@ describe("refreshDrafts() boot path — single batch request", () => {
       }
       // audit, sources, preferences → empty array / object
       if (url.includes("/preferences")) {
-        return jsonOk({ engineerMode: false });
+        return jsonOk({});
       }
       return jsonOk([]);
     }) as unknown as typeof fetch;

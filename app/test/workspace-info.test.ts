@@ -13,7 +13,6 @@ describe("useWorkspaceInfo", () => {
       writable: false,
       canonicalMode: "postgres-export" as const,
       warehouseDb: "analytics",
-      defaultEngineerMode: true,
     };
     global.fetch = vi.fn(async () => ({
       ok: true,

@@ -94,8 +94,6 @@ vi.mock("../src/api", () => ({
   fetchWarehouseDatabases: vi.fn(async () => []),
 }));
 
-vi.mock("../src/lib/engineer-mode", () => ({ useEngineerMode: () => ({ engineer: false }) }));
-
 import { Dashboard } from "../src/routes/Dashboard";
 
 function renderDashboard() {

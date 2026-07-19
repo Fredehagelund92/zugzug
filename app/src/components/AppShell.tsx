@@ -43,8 +43,7 @@ import { type Membership } from "./TenantLayout";
      Collapsed state is persisted to localStorage so the user's preference
      survives reloads.
    - On <md the sidebar becomes an off-canvas drawer triggered by a hamburger
-     button. The desktop collapsed/expanded state is preserved independently.
-   - The engineer-mode toggle lives in Settings → Appearance only. */
+     button. The desktop collapsed/expanded state is preserved independently. */
 
 const NAV_COLLAPSED_KEY = "zugzug:nav-collapsed";
 const PALETTE_RECENTS_KEY = "zugzug:palette-recents";

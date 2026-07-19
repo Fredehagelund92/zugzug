@@ -8,7 +8,6 @@ import { ComboSelect } from "../ComboSelect";
 import { DataGrid, useUndoStack } from "../datagrid";
 import { IconArrowRight, IconCheck, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
-import { useEngineerMode } from "../../lib/engineer-mode";
 import type { MappingDimension, MappingValue, SourceOccurrence } from "../../data";
 import { matchColumns } from "./match-columns";
 import {
@@ -102,7 +101,6 @@ function adaptRow(r: ScanValueRow): MappingValue {
 
 export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const allDrafts = useDrafts();
-  const { engineer } = useEngineerMode();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const undo = useUndoStack();
@@ -112,7 +110,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const [filter, setFilter] = useSessionState<Filter>("zz:mapping:filter", "new");
   const [searchText, setSearchText] = useState("");
   const [open, setOpen] = useState<string | null>(null);
-  const [showSql, setShowSql] = useState(false);
   const [review, setReview] = useState(false);
   const [flash, setFlash] = useState<{ n: number } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
@@ -352,24 +349,10 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   );
   const staged = stagedDrafts.map((d) => ({ raw: d.raw, label: d.targetLabel! }));
 
-  const sql = useMemo(() => {
-    if (!staged.length) return "";
-    const created = [...new Set(staged.map((s) => s.label))].filter(
-      (l) => !dim.canonical.some((c) => c.label === l),
-    );
-    const dimSql = created.length
-      ? `-- new master records → ${dim.dimTable}\nINSERT INTO ${dim.dimTable} (${dim.keyCol}, label) VALUES\n${created.map((l) => `  ('${keyFor(l)}', '${l.replace(/'/g, "''")}')`).join(",\n")}\nON CONFLICT (${dim.keyCol}) DO NOTHING;\n\n`
-      : "";
-    const merge = `-- value lookup → ${dim.mapTable}\nMERGE INTO ${dim.mapTable} AS m\nUSING (VALUES\n${staged.map((s) => `  ('${s.raw.replace(/'/g, "''")}', '${keyFor(s.label)}')`).join(",\n")}\n) AS s(raw, ${dim.keyCol})\nON lower(m.raw) = lower(s.raw)\nWHEN NOT MATCHED THEN INSERT (raw, ${dim.keyCol}) VALUES (s.raw, s.${dim.keyCol});`;
-    return dimSql + merge;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [staged, dim]);
-
   const approveAndCommit = async () => {
     setCommitError(null);
     if (staged.length === 0) return;
     setFlash({ n: staged.length });
-    setShowSql(false);
     setReview(false);
     try {
       const res = await commit(dim.id);
@@ -600,24 +583,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 </div>
                 <div className="mt-3 font-mono text-[10.5px] text-ink-3">
                   {row?.target ? (
-                    engineer ? (
-                      <>
-                        → writes{" "}
-                        <span className="text-accent">
-                          (&#39;{r.value}&#39;, &#39;{keyFor(row.target)}&#39;)
-                        </span>{" "}
-                        to {dim.mapTable}
-                      </>
-                    ) : (
-                      <>
-                        → will resolve to <span className="text-accent">{row.target}</span> in{" "}
-                        {dim.dimension}
-                      </>
-                    )
-                  ) : engineer ? (
                     <>
-                      ⚠ unresolved — these {totalRows.toLocaleString()} rows currently{" "}
-                      <span className="text-danger">LEFT JOIN to NULL</span>
+                      → will resolve to <span className="text-accent">{row.target}</span> in{" "}
+                      {dim.dimension}
                     </>
                   ) : (
                     <>
@@ -650,7 +618,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       </span>
                       staged {d.status === "skipped" ? "(skipped) " : ""}by{" "}
                       {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
-                      {engineer ? " · uncommitted draft" : " · awaiting publish"}
+                      {" · awaiting publish"}
                     </div>
                   );
                 })()}
@@ -728,23 +696,14 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   className="zz-rise text-committed"
                   style={{ animationDuration: "var(--dur-slide)" }}
                 >
-                  ✓ {flash.n} {engineer ? "draft" : "change"}
-                  {flash.n === 1 ? "" : "s"}{" "}
-                  {engineer ? <>merged into {dim.mapTable}</> : <>published to {dim.dimension}</>}
+                  ✓ {flash.n} change
+                  {flash.n === 1 ? "" : "s"} published to {dim.dimension}
                 </span>
               ) : staged.length > 0 ? (
-                engineer ? (
-                  <>
-                    {staged.length} staged draft{staged.length === 1 ? "" : "s"} → batch MERGE to{" "}
-                    <span className="text-ink-2">{dim.dimTable}</span> +{" "}
-                    <span className="text-ink-2">{dim.mapTable}</span>
-                  </>
-                ) : (
-                  <>
-                    {staged.length} change{staged.length === 1 ? "" : "s"} ready to publish to{" "}
-                    <span className="text-ink-2">{dim.dimension}</span>
-                  </>
-                )
+                <>
+                  {staged.length} change{staged.length === 1 ? "" : "s"} ready to publish to{" "}
+                  <span className="text-ink-2">{dim.dimension}</span>
+                </>
               ) : (
                 <>nothing to publish yet — accept or merge values above to stage them</>
               )}
@@ -778,16 +737,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
               >
                 {review ? "Hide preview" : `Preview ${staged.length}`}
               </Button>
-              {engineer && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={staged.length === 0}
-                  onClick={() => setShowSql((s) => !s)}
-                >
-                  {showSql ? "Hide SQL" : "Preview SQL"}
-                </Button>
-              )}
               <Button
                 size="sm"
                 disabled={staged.length === 0 || !canEdit}
@@ -884,11 +833,6 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 })()}
               </div>
             </div>
-          )}
-          {showSql && staged.length > 0 && (
-            <pre className="overflow-x-auto border-t border-line bg-bg px-5 py-4 font-mono text-[11.5px] leading-relaxed text-ink-2">
-              {sql}
-            </pre>
           )}
         </div>
       </div>

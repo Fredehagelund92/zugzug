@@ -61,7 +61,6 @@ function setupMocks(writable: boolean) {
         writable,
         canonicalMode: writable ? "warehouse" : "postgres-export",
         warehouseDb: "analytics",
-        defaultEngineerMode: true,
         allowedDomain: null,
       }),
       useStoreLoading: () => false,

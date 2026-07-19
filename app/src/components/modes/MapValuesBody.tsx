@@ -12,7 +12,7 @@ type View = "focused" | "grid";
 
 /* MapValuesBody — the Map values tab. Default is the focused cluster card
    (ClusterMapperCard) with a publish bar; the Grid toggle drops to the existing
-   MatchModeBody power view (bulk / paste / engineer SQL). Both stage into the
+   MatchModeBody power view (bulk / paste). Both stage into the
    same drafts, so the publish bar works from either. */
 export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
   const [view, setView] = useState<View>("focused");
@@ -71,8 +71,8 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
         </p>
       ) : (
         <p className="border-b border-line bg-surface px-4 py-2 font-mono text-[11px] text-ink-3">
-          Grid keeps the same staged drafts and publish bar — a spreadsheet with range-select,
-          copy/paste, and (in engineer mode) SQL. This is the power surface.
+          Grid keeps the same staged drafts and publish bar — a spreadsheet with range-select and
+          copy/paste. This is the power surface.
         </p>
       )}
 

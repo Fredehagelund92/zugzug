@@ -10,12 +10,6 @@ import { env } from "../src/env.ts";
 // These tests verify that the env fields serialised into GET /api/workspace/info
 // have the expected types and pre-Task-11 defaults.
 
-test("env.defaultEngineerMode is boolean (defaults true when DEFAULT_ENGINEER_MODE not set)", () => {
-  // DEFAULT_ENGINEER_MODE is not set in the test harness, so the default applies.
-  expect(typeof env.defaultEngineerMode).toBe("boolean");
-  expect(env.defaultEngineerMode).toBe(true);
-});
-
 test("workspace/info response shape includes all required fields", () => {
   // Validates the shape of the object returned by the /api/workspace/info handler.
   // Note: allowedDomain has moved to /api/auth/config (Task 10).
@@ -24,14 +18,12 @@ test("workspace/info response shape includes all required fields", () => {
     writable: false,
     canonicalMode: "postgres-export" as const,
     warehouseDb: env.warehouseDb || null,
-    defaultEngineerMode: env.defaultEngineerMode,
   };
 
   expect(body).toMatchObject({
     adapter: expect.any(String),
     writable: expect.any(Boolean),
     canonicalMode: expect.any(String),
-    defaultEngineerMode: expect.any(Boolean),
   });
   // warehouseDb is a nullable string
   expect(body.warehouseDb === null || typeof body.warehouseDb === "string").toBe(true);

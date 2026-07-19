@@ -40,7 +40,7 @@ describe("Audit (primary nav)", () => {
         <Audit />
       </MemoryRouter>,
     );
-    expect(await screen.findByText("draft.created")).toBeInTheDocument();
+    expect(await screen.findByText("created")).toBeInTheDocument();
     expect(await screen.findByText("channel/web")).toBeInTheDocument();
   });
 });

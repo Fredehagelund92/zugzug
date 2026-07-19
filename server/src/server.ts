@@ -845,7 +845,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           adapter: adapterInstance.capabilities.id,
           writable: adapterInstance.capabilities.writable,
           canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
-          defaultEngineerMode: env.defaultEngineerMode,
         });
       }
 

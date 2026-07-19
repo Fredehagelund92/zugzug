@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { IconPlus, IconCheck, IconChevron, IconSearch } from "./Icons";
-import { useEngineerMode } from "../lib/engineer-mode";
 import type { MappingDimension } from "../data";
 import type { PaletteName } from "../data";
 import { PALETTE } from "../lib/palette";
@@ -59,7 +58,6 @@ export function TablePicker({
   onSelect: (id: string) => void;
   onCreateRequested: () => void;
 }) {
-  const { engineer } = useEngineerMode();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -161,11 +159,9 @@ export function TablePicker({
             )}
           </div>
           <div className="truncate font-mono text-[10px] text-ink-3">
-            {engineer
-              ? active.mapTable
-              : active.description
-                ? active.description
-                : `${aStats.total - aStats.fresh} mapped · ${aStats.fresh} new`}
+            {active.description
+              ? active.description
+              : `${aStats.total - aStats.fresh} mapped · ${aStats.fresh} new`}
           </div>
         </div>
         <IconChevron
@@ -222,11 +218,9 @@ export function TablePicker({
                           )}
                         </div>
                         <div className="truncate font-mono text-[10px] text-ink-3">
-                          {engineer
-                            ? d.mapTable
-                            : d.description
-                              ? d.description
-                              : `${s.total - s.fresh} mapped · ${s.fresh} new`}
+                          {d.description
+                            ? d.description
+                            : `${s.total - s.fresh} mapped · ${s.fresh} new`}
                         </div>
                       </div>
                       <span className="shrink-0 font-mono text-[10px] text-ink-3 tabular-nums">
