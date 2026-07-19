@@ -52,7 +52,7 @@ export function Memberships() {
       {memberships.length === 0 ? (
         <EmptyState glyph="🎉" title="No workspaces yet" body="Ask an admin to add you to one." />
       ) : (
-        <ul className="divide-y divide-line border border-line">
+        <ul className="rounded-lg divide-y divide-line border border-line">
           {memberships.map((m) => (
             <li key={m.slug} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">

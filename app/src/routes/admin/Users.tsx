@@ -127,7 +127,7 @@ export function Users() {
         action={
           <form onSubmit={handleSearch} className="flex gap-2">
             <input
-              className="bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+              className="rounded-sm bg-surface border border-line-2 px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search name or email…"
@@ -153,7 +153,7 @@ export function Users() {
             data-active={filter === c.key}
             onClick={() => setFilter(c.key)}
             className={
-              "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs border transition-colors " +
+              "inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs border transition-colors " +
               (filter === c.key
                 ? "bg-accent-soft border-accent text-accent"
                 : "bg-surface-2 border-line text-ink-2 hover:text-ink hover:bg-hover")

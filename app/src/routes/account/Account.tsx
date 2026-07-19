@@ -9,10 +9,10 @@ export function Account() {
   const ctx = useOutletContext<{ memberships: Membership[] }>();
   return (
     <>
-      <PageContainer className="md:pb-0">
+      <PageContainer max="doc" className="md:pb-0">
         <PageHeader kicker="Personal" title="Account" lede="Your profile and preferences." />
       </PageContainer>
-      <SettingsShell sidebar={<AccountSidebar />}>
+      <SettingsShell max="doc" sidebar={<AccountSidebar />}>
         <Outlet context={ctx} />
       </SettingsShell>
     </>

@@ -2,6 +2,7 @@ import { ThresholdRange } from "../../components/ThresholdRange";
 import { usePreferences, setPreferences, invalidate } from "../../store";
 import { useTenant } from "../../lib/tenant-context";
 import { SettingsSection } from "../../components/settings/SettingsSection";
+import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { FormField } from "../../components/FormField";
@@ -14,10 +15,12 @@ export function Matching() {
   const prefs = usePreferences();
 
   return (
-    <SettingsSection
-      title="Mapping defaults"
-      hint="How aggressively Zug Zug maps new source values when a scan finds them."
-    >
+    <div className="space-y-8">
+      <SettingsPageHeader title="Mapping" />
+      <SettingsSection
+        title="Mapping defaults"
+        hint="How aggressively Zug Zug maps new source values when a scan finds them."
+      >
       <ReadOnly enabled={!canEdit}>
         <FormField label="Confidence bands">
           <ThresholdRange
@@ -49,6 +52,7 @@ export function Matching() {
           aria-label="Require a second publisher"
         />
       </FormField>
-    </SettingsSection>
+      </SettingsSection>
+    </div>
   );
 }

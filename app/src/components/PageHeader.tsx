@@ -34,7 +34,7 @@ export function PageHeader({
             {count !== undefined && (
               <span
                 data-testid="page-header-count"
-                className="font-mono text-xs tabular-nums bg-surface-2 border border-line text-ink-3 px-2 py-0.5"
+                className="rounded-sm font-mono text-xs tabular-nums bg-surface-2 border border-line text-ink-3 px-2 py-0.5"
               >
                 {count}
               </span>

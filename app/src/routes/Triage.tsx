@@ -5,7 +5,7 @@ import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
-import { IconArrowRight, IconX } from "../components/Icons";
+import { IconArrowRight, IconSearch, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { toast } from "../components/Toast";
 import { GetSuggestionButton } from "../components/GetSuggestionButton";
@@ -45,6 +45,17 @@ import { apiFetch } from "../api";
 
 type Filter = "new" | "all" | "mapped";
 type RStatus = "mapped" | "new" | "skipped" | "rejected";
+
+// Keyboard shortcuts surfaced in the toolbar as keycaps (desktop only). "Ranked
+// by impact" lives in the page lede, so it's intentionally not repeated here.
+const KBD_HINTS: ReadonlyArray<readonly [string, string]> = [
+  ["↑↓", "navigate"],
+  ["A", "accept"],
+  ["↵", "pick"],
+  ["S", "skip"],
+  ["N", "next"],
+  ["⌘↵", "publish"],
+];
 
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 function flashRow(selector: string): void {
@@ -423,8 +434,8 @@ function TriageInner() {
           style={{ animationDelay: "150ms" }}
         >
           {/* toolbar */}
-          <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-2">
-            <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-3 py-2.5 md:px-4">
+            <div className="flex flex-wrap items-center gap-1">
               {(["new", "all", "mapped"] as Filter[]).map((k) => (
                 <button
                   key={k}
@@ -441,16 +452,38 @@ function TriageInner() {
                 </button>
               ))}
             </div>
-            <input
-              type="search"
-              placeholder="Search source values…"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              className="min-h-[32px] rounded-sm border border-line bg-bg px-2 font-mono text-[11px]"
-            />
-            <span className="ml-auto hidden font-mono text-[10px] uppercase tracking-wider text-ink-3 md:inline">
-              ranked by impact · ↑↓ navigate · A accept · ↵/M pick · S skip · N next · ⌘↵ publish
-            </span>
+
+            <div className="flex min-w-[10rem] max-w-md flex-1 items-center gap-2 rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 text-ink-3 transition-colors focus-within:border-accent">
+              <IconSearch className="h-3.5 w-3.5 shrink-0" />
+              <input
+                type="search"
+                placeholder="Search values…"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="w-full min-w-0 bg-transparent font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:appearance-none"
+              />
+              {searchText && (
+                <button
+                  type="button"
+                  onClick={() => setSearchText("")}
+                  aria-label="Clear search"
+                  className="shrink-0 text-ink-3 transition-colors hover:text-ink"
+                >
+                  <IconX className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="ml-auto hidden shrink-0 items-center gap-2.5 lg:flex">
+              {KBD_HINTS.map(([keys, label]) => (
+                <span key={label} className="flex items-center gap-1 text-ink-3">
+                  <kbd className="rounded-sm border border-line bg-surface-2 px-1 py-0.5 font-mono text-[10px] leading-none text-ink-2">
+                    {keys}
+                  </kbd>
+                  <span className="font-mono text-[10px] uppercase tracking-wider">{label}</span>
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-auto">
@@ -458,7 +491,9 @@ function TriageInner() {
               <AwaitingReview />
             </div>
             {rankedDims.length === 0 ? (
-              <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
+              <div className="px-3 pt-3">
+                <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
+              </div>
             ) : (
               rankedDims.map((rd, i) => (
                 <DimSection

@@ -5,12 +5,14 @@ import { EmptyState } from "../../components/EmptyState";
 import { useTenant } from "../../lib/tenant-context";
 import { cx } from "../../lib/cx";
 import { SettingsSection } from "../../components/settings/SettingsSection";
+import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { toast } from "../../components/Toast";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { currentUser, useAuthConfig, invalidate, subscribeInvalidate } from "../../store";
 import { SuperAdminBanner } from "../../components/SuperAdminBanner";
+import { formatTimeAgo } from "../dashboard-helpers";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -60,28 +62,40 @@ type RoleKey = "admin" | "editor" | "viewer";
 
 const ROLE_META: Record<
   RoleKey,
-  { label: string; chip: string; ring: string; glyph: string; order: number }
+  {
+    label: string;
+    chip: string;
+    glyph: string;
+    order: number;
+    /** Plain-language capability, shown in the roles legend. */
+    desc: string;
+    /** Spine-node border color — how this member reads on the junction rail. */
+    node: string;
+  }
 > = {
   admin: {
     label: "admin",
     chip: "border-accent/40 bg-accent/10 text-accent",
-    ring: "ring-2 ring-accent/30",
     glyph: "◼",
     order: 0,
+    desc: "Manages members and settings, plus everything editors can do.",
+    node: "border-accent",
   },
   editor: {
     label: "editor",
     chip: "border-line-2 bg-surface-2 text-ink",
-    ring: "ring-1 ring-line-2",
     glyph: "◇",
     order: 1,
+    desc: "Maps source values, edits records, and publishes new versions.",
+    node: "border-ink-3",
   },
   viewer: {
     label: "viewer",
     chip: "border-line bg-bg text-ink-3",
-    ring: "ring-1 ring-line",
     glyph: "·",
     order: 2,
+    desc: "Reads tables, mappings, and review — no edits.",
+    node: "border-line-2",
   },
 };
 
@@ -246,13 +260,20 @@ function MemberRow({
   onRemove?: () => void;
 }) {
   const displayName = member.name ?? member.email;
+  const meta = ROLE_META[member.role];
   return (
-    <div className="group/row flex items-center gap-3 px-3 py-2 transition-colors hover:bg-hover/60">
+    <div className="group/row relative flex items-center gap-3 py-2 pl-9 pr-3 transition-colors hover:bg-hover/60">
+      {/* junction spine — the workspace rail every member is wired into */}
+      <span aria-hidden className="pointer-events-none absolute inset-y-0 left-[18px] w-px bg-line" />
       <span
+        aria-hidden
         className={cx(
-          "grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[10px] text-ink-2",
-          ROLE_META[member.role].ring,
+          "absolute left-[18px] top-1/2 h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-pill border-[1.5px] bg-surface",
+          meta.node,
         )}
+      />
+      <span
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[10px] text-ink-2"
         aria-hidden
       >
         {userInitials(displayName ?? "?", member.email)}
@@ -270,6 +291,9 @@ function MemberRow({
           <div className="truncate font-mono text-[10.5px] text-ink-3">{member.email}</div>
         )}
       </div>
+      <span className="hidden shrink-0 font-mono text-[10.5px] text-ink-3 sm:block">
+        joined {formatTimeAgo(member.joined_at)}
+      </span>
       <MemberRoleControl
         member={member}
         isAdmin={isAdmin}
@@ -334,104 +358,86 @@ function TeamRoster({
     });
   }, [users, query, filter]);
 
-  const sortByName = (a: MemberRecord, b: MemberRecord) =>
-    (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
+  const sorted = useMemo(
+    () =>
+      filtered.slice().sort((a, b) => {
+        const ro = ROLE_META[a.role].order - ROLE_META[b.role].order;
+        if (ro !== 0) return ro;
+        return (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
+      }),
+    [filtered],
+  );
 
-  const bucketed = useMemo(() => {
-    const groups: Record<RoleKey, MemberRecord[]> = { admin: [], editor: [], viewer: [] };
-    for (const u of filtered) groups[u.role].push(u);
-    for (const k of Object.keys(groups) as RoleKey[]) {
-      groups[k].sort(sortByName);
-    }
-    return groups;
-  }, [filtered]);
-
-  const showBuckets = filter === "all" && !query;
   const total = users.length;
   const visible = filtered.length;
+  const canEdit = counts.admin + counts.editor;
 
   return (
-    <div className="space-y-2.5">
-      {/* Section sub-header: title + count */}
-      <div className="flex items-baseline justify-between">
-        <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">
-          Members <span className="text-ink-3/60">·</span> roles
-        </h3>
-        <span className="font-mono text-[10.5px] tabular-nums text-ink-3">
-          {visible === total ? (
-            <>{total} total</>
-          ) : (
-            <>
-              <span className="text-ink-2">{visible}</span>
-              <span className="text-ink-3/60"> / </span>
-              {total}
-            </>
-          )}
-        </span>
+    <div className="space-y-3">
+      {/* Summary: who's here, and how many can change the working copy */}
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-[13px] text-ink-2">
+          <span className="font-medium text-ink">
+            {total} {total === 1 ? "member" : "members"}
+          </span>
+          <span className="mx-1.5 text-ink-3">·</span>
+          <span className="tabular-nums text-ink">{canEdit}</span> can edit
+        </p>
+        {visible !== total && (
+          <span className="font-mono text-[10.5px] tabular-nums text-ink-3">
+            showing <span className="text-ink-2">{visible}</span>
+          </span>
+        )}
       </div>
 
-      {/* Search + role filter chips */}
-      <div className="space-y-2">
-        <div className="relative">
-          <svg
-            viewBox="0 0 16 16"
-            aria-hidden
-            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+      {/* Roles legend — states each role in plain words, and filters the roster */}
+      <CapabilityLegend
+        counts={counts}
+        filter={filter}
+        onToggle={(r) => setFilter((f) => (f === r ? "all" : r))}
+      />
+
+      {/* Search */}
+      <div className="relative">
+        <svg
+          viewBox="0 0 16 16"
+          aria-hidden
+          className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-3"
+        >
+          <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M11 11 L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter by name, email, or role…"
+          className="w-full rounded-sm border border-line-2 bg-bg py-1.5 pl-8 pr-16 font-mono text-[12px] text-ink placeholder:text-ink-3 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              searchRef.current?.focus();
+            }}
+            aria-label="Clear search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 hover:bg-hover hover:text-ink"
           >
-            <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M11 11 L14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          <input
-            ref={searchRef}
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter by name, email, or role…"
-            className="w-full rounded-sm border border-line-2 bg-bg py-1.5 pl-8 pr-16 font-mono text-[12px] text-ink placeholder:text-ink-3 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
-          />
-          {query ? (
-            <button
-              type="button"
-              onClick={() => {
-                setQuery("");
-                searchRef.current?.focus();
-              }}
-              aria-label="Clear search"
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-ink-3 hover:bg-hover hover:text-ink"
-            >
-              clear
-            </button>
-          ) : (
-            <span
-              className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-ink-3 sm:inline"
-              aria-hidden
-            >
-              ⌘ K
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-1">
-          <RoleFilterPill
-            label="all"
-            count={total}
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          />
-          {(["admin", "editor", "viewer"] as RoleKey[]).map((r) => (
-            <RoleFilterPill
-              key={r}
-              label={r}
-              glyph={ROLE_META[r].glyph}
-              count={counts[r]}
-              active={filter === r}
-              onClick={() => setFilter(filter === r ? "all" : r)}
-            />
-          ))}
-        </div>
+            clear
+          </button>
+        ) : (
+          <span
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 hidden rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-ink-3 sm:inline"
+            aria-hidden
+          >
+            ⌘ K
+          </span>
+        )}
       </div>
 
-      {/* Roster body */}
+      {/* Roster body — one flat list, wired to the workspace spine */}
       {visible === 0 ? (
         <div className="rounded-sm border border-dashed border-line py-8 text-center font-mono text-[11.5px] text-ink-3">
           no matches
@@ -456,48 +462,10 @@ function TeamRoster({
             </div>
           )}
         </div>
-      ) : showBuckets ? (
-        <div className="overflow-hidden rounded-sm border border-line">
-          {(["admin", "editor", "viewer"] as RoleKey[])
-            .filter((r) => bucketed[r].length > 0)
-            .map((r, i) => (
-              <div key={r} className={cx(i > 0 && "border-t border-line")}>
-                <div className="sticky top-0 z-10 flex items-baseline justify-between bg-surface-2 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
-                  <span className="flex items-center gap-1.5">
-                    <span aria-hidden className="opacity-60">
-                      {ROLE_META[r].glyph}
-                    </span>
-                    {r}
-                  </span>
-                  <span className="tabular-nums">{bucketed[r].length}</span>
-                </div>
-                <div className="divide-y divide-line/70">
-                  {bucketed[r].map((u) => (
-                    <MemberRow
-                      key={u.user_id}
-                      member={u}
-                      isAdmin={isAdmin}
-                      isMe={u.email === currentEmail}
-                      pending={rolePending.has(u.user_id)}
-                      lockedReason={lockedReasonFor(u)}
-                      onRoleChange={(role) => onRoleChange(u.user_id, role)}
-                      onRemove={() => onRemove(u.user_id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-        </div>
       ) : (
-        <div className="overflow-hidden divide-y divide-line/70 rounded-sm border border-line">
-          {filtered
-            .slice()
-            .sort((a, b) => {
-              const ro = ROLE_META[a.role].order - ROLE_META[b.role].order;
-              if (ro !== 0) return ro;
-              return (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? "");
-            })
-            .map((u) => (
+        <div className="overflow-hidden rounded-sm border border-line">
+          <div className="divide-y divide-line/70">
+            {sorted.map((u) => (
               <MemberRow
                 key={u.user_id}
                 member={u}
@@ -509,51 +477,68 @@ function TeamRoster({
                 onRemove={() => onRemove(u.user_id)}
               />
             ))}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-function RoleFilterPill({
-  label,
-  count,
-  active,
-  glyph,
-  onClick,
+/**
+ * The roles legend. Three cards that explain each role in plain words and
+ * double as the roster filter — click one to show only that role, click it
+ * again to clear. The active card is the one filter in accent.
+ */
+function CapabilityLegend({
+  counts,
+  filter,
+  onToggle,
 }: {
-  label: string;
-  count: number;
-  active: boolean;
-  glyph?: string;
-  onClick: () => void;
+  counts: Record<RoleKey, number>;
+  filter: "all" | RoleKey;
+  onToggle: (r: RoleKey) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        "inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wider transition-colors",
-        active
-          ? "border-accent/50 bg-accent/10 text-accent"
-          : "border-line bg-bg text-ink-3 hover:border-line-2 hover:text-ink-2",
-      )}
-    >
-      {glyph && (
-        <span aria-hidden className="opacity-70">
-          {glyph}
-        </span>
-      )}
-      <span>{label}</span>
-      <span
-        className={cx(
-          "rounded-sm px-1 tabular-nums",
-          active ? "bg-accent/15 text-accent" : "bg-surface-2 text-ink-3",
-        )}
-      >
-        {count}
-      </span>
-    </button>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {(["admin", "editor", "viewer"] as RoleKey[]).map((r) => {
+        const meta = ROLE_META[r];
+        const active = filter === r;
+        return (
+          <button
+            key={r}
+            type="button"
+            onClick={() => onToggle(r)}
+            aria-pressed={active}
+            title={`Show only ${meta.label}s`}
+            className={cx(
+              "rounded-sm border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+              active
+                ? "border-accent/60 bg-accent/[0.07]"
+                : "border-line bg-bg hover:border-line-2 hover:bg-hover/50",
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className={cx(
+                  "grid h-5 w-5 shrink-0 place-items-center rounded-sm font-mono text-[11px]",
+                  r === "admin" ? "bg-accent-soft text-accent" : "bg-surface-3 text-ink-2",
+                )}
+              >
+                {meta.glyph}
+              </span>
+              <span className="font-mono text-[11.5px] uppercase tracking-wide text-ink">
+                {meta.label}
+              </span>
+              <span className="ml-auto font-mono text-[11px] tabular-nums text-ink-3">
+                {counts[r]}
+              </span>
+            </div>
+            <p className="mt-1.5 text-[11.5px] leading-snug text-ink-2">{meta.desc}</p>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -569,27 +554,42 @@ function PendingInvitesList({
   if (invites.length === 0) return null;
   return (
     <div className="space-y-1.5">
+      {/* Invites are "in flight" toward becoming members — the amber
+          source-lamp accent the design system reserves for things in transit. */}
       <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">
-        Pending invites <span className="text-ink-3/60">·</span>{" "}
-        <span className="tabular-nums">{invites.length}</span>
+        <span className="text-accent-2">[</span> in flight{" "}
+        <span className="text-accent-2">]</span>{" "}
+        <span className="tabular-nums text-ink-3">{invites.length}</span>
       </h3>
-      <div className="overflow-hidden rounded-sm border border-line">
+      <div className="overflow-hidden rounded-sm border border-accent-2/30">
         <ul className="divide-y divide-line/70">
           {invites.map((inv) => {
             const meta = ROLE_META[inv.role];
             return (
               <li
                 key={inv.email}
-                className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-hover/60"
+                className="relative flex items-center gap-3 py-2 pl-9 pr-3 transition-colors hover:bg-hover/60"
               >
+                {/* in-flight spine: dashed amber rail, not yet a solid member */}
                 <span
-                  className="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[10px] text-ink-3 ring-1 ring-line"
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 left-[18px] w-px bg-accent-2/25"
+                />
+                <span
+                  aria-hidden
+                  className="absolute left-[18px] top-1/2 h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-pill border-[1.5px] border-accent-2 bg-bg"
+                />
+                <span
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-pill bg-surface-3 font-mono text-[10px] text-ink-3"
                   aria-hidden
                 >
                   {userInitials(inv.email, null)}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-mono text-[12px] text-ink-2">{inv.email}</div>
+                  <div className="font-mono text-[10.5px] text-ink-3">
+                    invited {formatTimeAgo(inv.invited_at)}
+                  </div>
                 </div>
                 <span
                   className={cx(
@@ -915,7 +915,14 @@ export function Members() {
   const showSuperAdminBanner = tenant.isSuperAdmin && !isMember && teamUsers.length > 0;
 
   return (
-    <SettingsSection title="Team" hint="Manage who has access to this workspace and their roles.">
+    <div className="space-y-8">
+      <SettingsPageHeader title="Members" />
+      <SettingsSection
+        title="Team"
+        hint="Manage who has access to this workspace and their roles."
+        wide
+      >
+
       {showSuperAdminBanner && (
         <SuperAdminBanner>
           You&apos;re viewing this workspace as a super-admin. You can manage members but
@@ -1148,6 +1155,7 @@ export function Members() {
           </div>
         )}
       </ReadOnly>
-    </SettingsSection>
+      </SettingsSection>
+    </div>
   );
 }

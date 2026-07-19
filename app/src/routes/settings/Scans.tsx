@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
-import { FormField } from "../../components/FormField";
 import { SegControl } from "../../components/SegControl";
 import { SkeletonRow } from "../../components/Skeleton";
 import { cx } from "../../lib/cx";
@@ -94,64 +93,72 @@ export function Scans() {
     <SettingsSection
       title="Scans"
       hint="How often Zug Zug checks your warehouse sources for new unmapped values."
+      bare
     >
       <ReadOnly enabled={!canEdit}>
-        <FormField label="Schedule">
-          <SegControl
-            value={prefs.scanSchedule}
-            options={scheduleOptions}
-            onChange={handleScheduleChange}
-          />
-        </FormField>
-
-        {status && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-line bg-surface-2 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span
-                className={cx(
-                  "inline-block h-2 w-2 shrink-0 rounded-full",
-                  status.unmappedCount > 0
-                    ? "bg-accent shadow-[0_0_6px_var(--accent)]"
-                    : "bg-ok shadow-[0_0_6px_var(--ok)]",
-                )}
-              />
-              <span className="font-mono text-[11.5px] text-ink-2">
-                last scan {relativeTime(status.lastScanAt)}
-                {" · "}
-                {status.sourceCount} {status.sourceCount === 1 ? "source" : "sources"}
-                {status.unmappedCount > 0 && (
-                  <span className="text-accent"> · {status.unmappedCount} unmapped</span>
-                )}
-              </span>
+        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+          {/* Schedule — label left, control right */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-4 py-3.5">
+            <div>
+              <div className="text-[13px] font-semibold text-ink">Schedule</div>
+              <div className="mt-0.5 text-[11.5px] text-ink-3">
+                Automatic scans run in the background.
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {scanNow.isPending && (
-                <span className="font-mono text-[10.5px] text-ink-3" aria-live="polite">
-                  scanning…
+            <SegControl
+              value={prefs.scanSchedule}
+              options={scheduleOptions}
+              onChange={handleScheduleChange}
+            />
+          </div>
+
+          {/* Live scan status */}
+          {status && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={cx(
+                    "inline-block h-2.5 w-2.5 shrink-0 rounded-full",
+                    status.unmappedCount > 0
+                      ? "bg-accent shadow-[0_0_0_3px_var(--accent-soft)]"
+                      : "bg-ok shadow-[0_0_0_3px_var(--ak-ok-soft)]",
+                  )}
+                />
+                <span className="font-mono text-[11.5px] text-ink-2">
+                  last scan {relativeTime(status.lastScanAt)}
+                  {" · "}
+                  {status.sourceCount} {status.sourceCount === 1 ? "source" : "sources"}
+                  {status.unmappedCount > 0 && (
+                    <span className="text-accent"> · {status.unmappedCount} unmapped</span>
+                  )}
                 </span>
-              )}
-              <Button onClick={() => void scanNow.run()} loading={scanNow.isPending}>
-                Scan now
+              </div>
+              <div className="flex items-center gap-2">
+                {scanNow.isPending && (
+                  <span className="font-mono text-[10.5px] text-ink-3" aria-live="polite">
+                    scanning…
+                  </span>
+                )}
+                <Button size="sm" onClick={() => void scanNow.run()} loading={scanNow.isPending}>
+                  Scan now
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!status && !statusError && prefs.scanSchedule && (
+            <SkeletonRow columns={[16, "minmax(0,1fr)", 80]} className="px-4 py-3.5" />
+          )}
+
+          {statusError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-danger/30 bg-danger-soft px-4 py-3 font-mono text-[11.5px] text-danger">
+              <span>Couldn&rsquo;t load scan status — {statusError}</span>
+              <Button variant="ghost" size="sm" onClick={() => void loadStatus()}>
+                Retry
               </Button>
             </div>
-          </div>
-        )}
-
-        {!status && !statusError && prefs.scanSchedule && (
-          <SkeletonRow
-            columns={[16, "minmax(0,1fr)", 80]}
-            className="rounded-sm border border-line bg-surface-2 py-3"
-          />
-        )}
-
-        {statusError && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-            <span>Couldn&rsquo;t load scan status — {statusError}</span>
-            <Button variant="ghost" size="sm" onClick={() => void loadStatus()}>
-              Retry
-            </Button>
-          </div>
-        )}
+          )}
+        </div>
       </ReadOnly>
     </SettingsSection>
   );

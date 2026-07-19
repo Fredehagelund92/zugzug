@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Zug Zug · Warehouse (light-mode redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ------- tokens (light) — copied from app/src/tokens.css [data-theme=light] ------- */
+  :root {
+    --bg: #f4f6fc;
+    --surface: #ffffff;
+    --surface-2: #eaeef7;
+    --surface-3: #dfe5f2;
+    --surface-elevated: #ffffff;
+    --ink: #0c1020;
+    --ink-2: #48526a;
+    --ink-3: #8893a8;
+    --line: rgba(12, 16, 32, 0.11);
+    --line-2: rgba(12, 16, 32, 0.2);
+    --node-line: rgba(12, 16, 32, 0.06);
+    --shadow-sm: 0 1px 2px rgba(20, 30, 60, 0.08), 0 0 0 1px rgba(20, 30, 60, 0.04);
+    --shadow: 0 8px 22px -10px rgba(20, 30, 60, 0.18);
+    --shadow-lg: 0 24px 50px -20px rgba(20, 30, 60, 0.22);
+    --accent: #d6336c;
+    --accent-ink: #ffffff;
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+    --accent-2: #f0a323;
+    --ok: #2a8c5e;
+    --ok-soft: color-mix(in srgb, var(--ok) 14%, transparent);
+    --warn: #c68410;
+    --warn-soft: color-mix(in srgb, var(--warn) 16%, transparent);
+    --danger: #c64432;
+    --danger-soft: color-mix(in srgb, var(--danger) 12%, transparent);
+    --font-display: "Bricolage Grotesque", sans-serif;
+    --font-body: "Hanken Grotesk", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
+    --r-sm: 4px; --r: 8px; --r-lg: 12px; --r-pill: 999px;
+    --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    /* subtle paper texture so the white cards read as elevated */
+    background-image: radial-gradient(120% 90% at 50% -10%, #ffffff 0%, var(--bg) 46%);
+    background-attachment: fixed;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 40px 28px 96px; }
+
+  /* ---------- page header ---------- */
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 8px; }
+  .crumb { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: -0.02em; margin: 6px 0 0; }
+  .page-sub { color: var(--ink-2); font-size: 13.5px; margin-top: 4px; max-width: 52ch; }
+
+  /* overall status pill in the header */
+  .sys-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r-pill); padding: 6px 13px 6px 11px;
+    box-shadow: var(--shadow-sm); white-space: nowrap;
+  }
+  .sys-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+  .sys-pill .sys-text { display: inline-flex; align-items: baseline; gap: 9px; }
+  .sys-pill b { font-weight: 600; font-size: 12.5px; color: var(--ink-2); }
+  .sys-pill small { font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); }
+
+  /* ---------- section scaffold ---------- */
+  section { margin-top: 34px; }
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+  .sec-head .titles { min-width: 0; }
+  .sec-title { font-family: var(--font-display); font-weight: 600; font-size: 16px; letter-spacing: -0.01em; margin: 0; }
+  .sec-hint { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; max-width: 62ch; }
+
+  /* card + panel */
+  .card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--r); box-shadow: var(--shadow-sm); overflow: hidden;
+  }
+  .card + .card { margin-top: 12px; }
+
+  /* buttons */
+  .btn {
+    font-family: var(--font-body); font-weight: 600; font-size: 12.5px;
+    border-radius: var(--r-sm); padding: 7px 13px; cursor: pointer;
+    border: 1px solid var(--line-2); background: var(--surface); color: var(--ink);
+    transition: background var(--r-sm), border-color .12s, transform .06s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); padding: 6px 10px; }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, #000); }
+  .btn.sm { font-size: 11.5px; padding: 5px 10px; }
+
+  /* badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .02em;
+    border-radius: var(--r-pill); padding: 3px 9px 3px 8px;
+    border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2);
+  }
+  .badge .d { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); }
+  .badge.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+  .badge.ok .d { background: var(--ok); }
+  .badge.warn { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+  .badge.warn .d { background: var(--warn); }
+  .badge.plain { background: var(--surface-2); color: var(--ink-2); }
+
+  .mono { font-family: var(--font-mono); }
+  .muted { color: var(--ink-2); }
+  .faint { color: var(--ink-3); }
+  .new-tag {
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill);
+    padding: 2px 7px; vertical-align: middle; margin-left: 8px; font-weight: 600;
+  }
+
+  /* ============ SECTION 1 · Warehouse databases ============ */
+  .db-strip {
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
+    padding: 11px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+  }
+  .db-strip .lead { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+  .db-strip .lead .env { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+
+  .db-row { border-bottom: 1px solid var(--line); }
+  .db-row:last-child { border-bottom: none; }
+  .db-main {
+    display: grid; grid-template-columns: 22px 1.4fr 1fr auto; align-items: center; gap: 14px;
+    padding: 13px 16px; cursor: pointer; transition: background .12s;
+  }
+  .db-main:hover { background: var(--surface-2); }
+  .db-caret { color: var(--ink-3); transition: transform .18s var(--ease-spring); font-size: 11px; }
+  .db-row.open .db-caret { transform: rotate(90deg); }
+  .db-name { font-family: var(--font-mono); font-size: 12.5px; font-weight: 500; }
+  .db-name .label { display: block; font-family: var(--font-body); font-size: 11.5px; color: var(--ink-3); font-style: italic; margin-top: 1px; }
+  .db-meta { display: flex; gap: 18px; font-size: 12px; color: var(--ink-2); }
+  .db-meta b { color: var(--ink); font-weight: 600; }
+  .db-actions { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+
+  /* drill-down (new) */
+  .db-detail { display: none; padding: 4px 16px 16px 52px; background: var(--surface-2); border-top: 1px dashed var(--line); }
+  .db-row.open .db-detail { display: block; }
+  .schema-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 12px; }
+  .schema {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
+    padding: 9px 11px; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .schema .s-name { font-family: var(--font-mono); font-size: 11.5px; }
+  .schema .s-count { font-size: 11px; color: var(--ink-3); }
+  .detail-cap { font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+
+  /* ============ SECTION 2 · Connections ============ */
+  .conn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .conn {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+    box-shadow: var(--shadow-sm); padding: 16px 16px 14px; position: relative; overflow: hidden;
+  }
+  .conn::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--ok); opacity: .8; }
+  .conn.warnbar::before { background: var(--warn); }
+  .conn-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .conn-name { display: flex; align-items: center; gap: 9px; }
+  .conn-name h3 { font-family: var(--font-display); font-weight: 600; font-size: 14.5px; margin: 0; }
+  .conn-desc { color: var(--ink-2); font-size: 12.5px; margin-top: 8px; }
+  .conn-stats { display: flex; gap: 20px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .stat .k { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  .stat .v { font-size: 13px; font-weight: 600; margin-top: 3px; }
+  .stat .v.mono { font-family: var(--font-mono); font-size: 12px; }
+  .conn-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .conn-foot .test { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+
+  .manage-note { color: var(--ink-2); font-size: 12.5px; margin-top: 12px; }
+  .manage-note a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .manage-note a:hover { text-decoration: underline; }
+
+  /* ============ SECTION 3 · Scans ============ */
+  .field-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 16px; border-bottom: 1px solid var(--line); }
+  .field-label { font-weight: 600; font-size: 13px; }
+  .field-sub { color: var(--ink-3); font-size: 11.5px; margin-top: 1px; }
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px; }
+  .seg button {
+    font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--ink-2);
+    border: none; background: transparent; padding: 5px 14px; border-radius: 3px; cursor: pointer;
+  }
+  .seg button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+
+  .scan-status { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; }
+  .scan-status .left { display: flex; align-items: center; gap: 10px; }
+  .pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .scan-line { font-family: var(--font-mono); font-size: 12px; color: var(--ink-2); }
+  .scan-line .hot { color: var(--accent); font-weight: 600; }
+
+  /* sparkline history (new) */
+  .scan-history { padding: 6px 16px 16px; border-top: 1px dashed var(--line); }
+  .spark { display: flex; align-items: flex-end; gap: 5px; height: 46px; margin-top: 10px; }
+  .spark .bar { flex: 1; background: var(--surface-3); border-radius: 2px 2px 0 0; min-height: 3px; position: relative; transition: background .12s; }
+  .spark .bar:hover { background: var(--accent); }
+  .spark .bar.hot { background: var(--accent-soft); }
+  .spark-axis { display: flex; justify-content: space-between; margin-top: 6px; font-family: var(--font-mono); font-size: 9.5px; color: var(--ink-3); }
+
+  .foot { margin-top: 44px; text-align: center; font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ PAGE HEADER ============ -->
+  <div class="page-head">
+    <div>
+      <div class="crumb">Settings / Warehouse</div>
+      <h1>Warehouse</h1>
+      <p class="page-sub">Where Zug Zug reads source values from, and where your team's work is kept.</p>
+    </div>
+    <div class="sys-pill" title="Rolls up the health of every connection below">
+      <span class="dot"></span>
+      <span class="sys-text"><b>Everything reachable</b><small>2 databases · 2 connections · 3s ago</small></span>
+    </div>
+  </div>
+
+  <!-- ============ SECTION 1 · WAREHOUSE DATABASES ============ -->
+  <section>
+    <div class="sec-head">
+      <div class="titles">
+        <h2 class="sec-title">Warehouse databases</h2>
+        <p class="sec-hint">Pick which MotherDuck databases this deployment uses. The token is loaded from the environment; databases are shared across all workspaces.</p>
+      </div>
+      <button class="btn primary sm">+ Add database</button>
+    </div>
+
+    <div class="card">
+      <div class="db-strip">
+        <div class="lead">
+          <span class="badge plain"><span class="d" style="background:var(--accent)"></span>MotherDuck</span>
+          <span class="muted">2 databases registered</span>
+        </div>
+        <span class="env">env · MOTHERDUCK_TOKEN</span>
+      </div>
+
+      <!-- row 1 (expandable) -->
+      <div class="db-row open">
+        <div class="db-main" onclick="this.closest('.db-row').classList.toggle('open')">
+          <span class="db-caret">▶</span>
+          <span class="db-name">md:analytics<span class="label">Production analytics</span></span>
+          <span class="db-meta"><span><b>4</b> schemas</span><span><b>1,284</b> source values</span></span>
+          <span class="db-actions">
+            <span class="badge ok"><span class="d"></span>reachable · 3s</span>
+            <button class="btn sm">Remove</button>
+          </span>
+        </div>
+        <div class="db-detail">
+          <span class="detail-cap">Schemas feeding this deployment <span class="new-tag">new · drill-down</span></span>
+          <div class="schema-grid">
+            <div class="schema"><span class="s-name">public</span><span class="s-count">612 values</span></div>
+            <div class="schema"><span class="s-name">marketing</span><span class="s-count">318 values</span></div>
+            <div class="schema"><span class="s-name">finance</span><span class="s-count">241 values</span></div>
+            <div class="schema"><span class="s-name">raw_events</span><span class="s-count">113 values</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- row 2 -->
+      <div class="db-row">
+        <div class="db-main" onclick="this.closest('.db-row').classList.toggle('open')">
+          <span class="db-caret">▶</span>
+          <span class="db-name">md:sandbox<span class="label">Sandbox / staging</span></span>
+          <span class="db-meta"><span><b>1</b> schema</span><span><b>96</b> source values</span></span>
+          <span class="db-actions">
+            <span class="badge warn"><span class="d"></span>unreachable · 4m</span>
+            <button class="btn sm">Remove</button>
+          </span>
+        </div>
+        <div class="db-detail">
+          <span class="detail-cap">Last probe failed — <span class="mono" style="color:var(--warn)">Catalog 'sandbox' not attached (token scope)</span></span>
+          <div class="schema-grid">
+            <div class="schema"><span class="s-name">public</span><span class="s-count">96 values</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SECTION 2 · CONNECTIONS ============ -->
+  <section>
+    <div class="sec-head">
+      <div class="titles">
+        <h2 class="sec-title">Connections</h2>
+        <p class="sec-hint">Where Zug Zug reads from, and where your work is kept.</p>
+      </div>
+      <button class="btn ghost sm">↻ Refresh</button>
+    </div>
+
+    <div class="conn-grid">
+      <!-- Warehouse -->
+      <div class="conn">
+        <div class="conn-top">
+          <div class="conn-name">
+            <h3>Warehouse</h3>
+            <span class="badge plain">MotherDuck</span>
+          </div>
+          <span class="badge ok"><span class="d"></span>ok · 3s ago</span>
+        </div>
+        <p class="conn-desc">Where Zug Zug looks for new values that need a record.</p>
+        <div class="conn-stats">
+          <div class="stat"><div class="k">Latency</div><div class="v mono">41 ms</div></div>
+          <div class="stat"><div class="k">Access</div><div class="v">Read + write</div></div>
+        </div>
+        <div class="conn-foot">
+          <span class="test">last checked 3s ago</span>
+          <button class="btn ghost sm">Test connection <span class="new-tag" style="margin-left:4px">new</span></button>
+        </div>
+      </div>
+
+      <!-- App -->
+      <div class="conn">
+        <div class="conn-top">
+          <div class="conn-name">
+            <h3>App</h3>
+            <span class="badge plain">Postgres</span>
+          </div>
+          <span class="badge ok"><span class="d"></span>ok · 3s ago</span>
+        </div>
+        <p class="conn-desc">Drafts, history, and your team — the collaborative layer.</p>
+        <div class="conn-stats">
+          <div class="stat"><div class="k">Latency</div><div class="v mono">8 ms</div></div>
+          <div class="stat"><div class="k">Holds</div><div class="v">Drafts · audit · team</div></div>
+        </div>
+        <div class="conn-foot">
+          <span class="test">last checked 3s ago</span>
+          <button class="btn ghost sm">Test connection <span class="new-tag" style="margin-left:4px">new</span></button>
+        </div>
+      </div>
+    </div>
+
+    <p class="manage-note">Need a fresh database? <a href="#">Manage warehouses →</a></p>
+  </section>
+
+  <!-- ============ SECTION 3 · SCANS ============ -->
+  <section>
+    <div class="sec-head">
+      <div class="titles">
+        <h2 class="sec-title">Scans</h2>
+        <p class="sec-hint">How often Zug Zug checks your warehouse sources for new unmapped values.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="field-row">
+        <div>
+          <div class="field-label">Schedule</div>
+          <div class="field-sub">Automatic scans run in the background.</div>
+        </div>
+        <div class="seg">
+          <button>Off</button>
+          <button class="on">Hourly</button>
+          <button>Daily</button>
+        </div>
+      </div>
+
+      <div class="scan-status">
+        <div class="left">
+          <span class="pulse"></span>
+          <span class="scan-line">last scan 12m ago · 1,380 sources<span class="hot"> · 23 unmapped</span></span>
+        </div>
+        <button class="btn primary sm">Scan now</button>
+      </div>
+
+      <!-- history (new) -->
+      <div class="scan-history">
+        <span class="detail-cap">Recent scans — new values found per run <span class="new-tag">new · activity</span></span>
+        <div class="spark">
+          <div class="bar" style="height:20%" title="Mon · 4 new"></div>
+          <div class="bar" style="height:38%" title="Tue · 9 new"></div>
+          <div class="bar" style="height:14%" title="Wed · 3 new"></div>
+          <div class="bar" style="height:60%" title="Thu · 15 new"></div>
+          <div class="bar" style="height:30%" title="Fri · 7 new"></div>
+          <div class="bar" style="height:10%" title="Sat · 2 new"></div>
+          <div class="bar" style="height:24%" title="Sun · 6 new"></div>
+          <div class="bar hot" style="height:92%" title="Today · 23 new"></div>
+        </div>
+        <div class="spark-axis"><span>7 days ago</span><span>today · 23 new → Review</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">Zug Zug · light-mode redesign demo · same three sections, refined + 3 in-section proposals</div>
+
+</div>
+</body>
+</html>

@@ -22,9 +22,18 @@ describe("PageContainer", () => {
     expect(container.firstElementChild!.className).toContain("max-w-[var(--wide)]");
   });
 
+  it("max='doc' uses the narrow --doc cap (1040)", () => {
+    const { container } = render(<PageContainer max="doc">x</PageContainer>);
+    const cls = container.firstElementChild!.className;
+    expect(cls).toContain("max-w-[var(--doc)]");
+    expect(cls).not.toContain("max-w-[var(--wide)]");
+  });
+
   it("max='full' removes the width cap", () => {
     const { container } = render(<PageContainer max="full">x</PageContainer>);
-    expect(container.firstElementChild!.className).not.toContain("max-w-[var(--wide)]");
+    const cls = container.firstElementChild!.className;
+    expect(cls).not.toContain("max-w-[var(--wide)]");
+    expect(cls).not.toContain("max-w-[var(--doc)]");
   });
 
   it("merges a custom className", () => {

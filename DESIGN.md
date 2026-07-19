@@ -143,24 +143,35 @@ Display headings are tight: `letter-spacing: -.03em` on `h1`, `-.02em` on `h2/h3
 
 ### Radius
 
-`--r-sm 4 · --r 8 · --r-lg 12 · --r-pill 999`
+`--r-sm 4 · --r 8 · --r-lg 8 · --r-pill 999`
 
-**Square-mode is active and permanent** (`app/src/globals.css`): `--r-sm/--r/--r-lg`
-are overridden to `0`, so every non-pill corner renders square by design. The
-values above are the brand's dormant scale — `rounded-*` utilities are
-cosmetically inert today. Author them semantically anyway (`--r-lg` for
-containers) so the source doesn't lie; radius standardization is code hygiene,
-not a user-facing change. Pills (`--r-pill 999`) are exempt from square-mode and
-remain the only rounded shapes — used only on tags, switches, and the workspace
-switcher.
+Corners render **rounded** at a deliberately gentle scale (ADR-0004). Fine
+controls (chips, small buttons, segmented switches) tighten to `--r-sm` (4px);
+every container — Panel, cards, inputs, popovers — sits at 8px. `--r` and
+`--r-lg` are *both* 8: the scale matches the redesign's subtle card radius and
+nothing rounds harder than that. Author `rounded-*` utilities semantically
+anyway (`--r-lg` for containers, `--r-sm` for controls) so intent reads even
+though the two values coincide today. Pills (`--r-pill 999`) are the only
+fully-round shape — tags, switches, the workspace switcher.
+
+Square-mode — the old `globals.css` override that forced all non-pill radii to
+`0` — is **retired**. `rounded-*` utilities are live, not cosmetically inert.
 
 ### Layout widths
 
-`--maxw 1180 · --wide 1320 · --ak-sidebar 264 · --ak-nav 248 · --ak-topbar 60`
+`--doc 1040 · --maxw 1180 · --wide 1320 · --ak-sidebar 264 · --ak-nav 248 · --ak-topbar 60`
 
-App document pages cap at `--wide` (1320) via `PageContainer` (§7). `--maxw`
-(1180) is retired — nothing uses it. Marketing/brand pages also use `--wide`.
-The topbar is a hard 60px and never changes.
+Document width is **split** (ADR-0004), both caps applied via `PageContainer` (§7):
+
+- **`--doc` (1040)** — single-column reading/forms pages: tenant settings,
+  Account. The narrow, framed column.
+- **`--wide` (1320, default)** — table-dominant pages where width *is* the
+  content: the admin console (Users/Workspaces), the Activity log.
+  Marketing/brand pages also use `--wide`.
+
+Grid pages (Sources, Review, Master tables) are full-bleed and bypass
+`PageContainer` entirely (ADR-0003). `--maxw` (1180) is retired — nothing uses
+it. The topbar is a hard 60px and never changes.
 
 ### Z-index layers
 
@@ -200,16 +211,18 @@ Two primitives own every framed surface. Don't hand-roll `border + bg-surface`
 divs on document pages — reach for these.
 
 **`Panel`** — the one container. `background: var(--surface); border: 1px solid
-var(--line); border-radius: var(--r-lg);` (square under square-mode),
-`overflow: hidden`, and **no shadow** — the lattice ground does the separation.
+var(--line); border-radius: var(--r-lg);` (a gentle 8px — §5), `overflow:
+hidden`, and **no shadow** — the lattice ground does the separation.
 One knob: `padding="none" | "sm" | "md"` (default `md` = `--ak-space-5`, 24px;
 `sm` = 16px; `none` for tables/grids that fill the frame). Replaces the old
 `Card` component.
 
 **`PageContainer`** — the one page frame. Centered, padded (`p-4 md:p-8`),
-`max="wide" (1320, default) | "full"`. Every document page's outermost element.
-Applied once at the layout for homogeneous route subtrees (Settings, Account),
-per-page for the mixed AppShell routes.
+`max="wide" (1320, default) | "doc" (1040, narrow single-column) | "full"`.
+Every document page's outermost element. Single-column settings/Account routes
+pass `max="doc"`; the table-heavy admin console and Activity log stay `wide`
+(§5). Applied once at the layout for homogeneous route subtrees, per-page for
+the mixed AppShell routes.
 
 **Surface color is structural, not semantic** — depth alone decides the tint:
 

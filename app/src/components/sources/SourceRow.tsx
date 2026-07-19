@@ -65,7 +65,7 @@ export function SourceRow({ row, mapValuesHref, canEdit = true, busy, onDerive, 
         {menu && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
-            <div className="absolute right-0 top-full z-20 mt-1 min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop">
+            <div className="rounded-lg absolute right-0 top-full z-20 mt-1 min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop">
               <button
                 type="button"
                 disabled={!canEdit || !!busy}

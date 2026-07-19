@@ -372,73 +372,78 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Section heading — gives the table its own titled section (demo parity) */}
-      <h2 className="-mb-1 pt-2 font-display text-[18px] font-semibold tracking-tight text-ink">
-        Table health
-      </h2>
+      {/* Table-health section: title + sort on one row (demo parity), the
+         health filter facets on their own row below. Grouped in one block so
+         the title sits close to its controls; the table keeps the section gap. */}
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <h2 className="font-display text-[18px] font-semibold tracking-tight text-ink">
+            Table health
+          </h2>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-1.5 overflow-x-auto pb-0.5 md:overflow-visible md:pb-0">
-        {/* filter pills */}
-        {(
-          [
-            { key: "all" as FilterKey, label: "All", count: dims.length },
-            {
-              key: "attention" as FilterKey,
-              label: "Needs attention",
-              count: attentionTables.length,
-            },
-            {
-              key: "clean" as FilterKey,
-              label: "Clean",
-              count: cleanTables.length,
-            },
-          ] as const
-        ).map(({ key, label, count }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setFilter(key)}
-            className={cx(
-              "flex h-6 items-center gap-1.5 rounded-sm border px-2.5 font-mono text-[10px] transition-colors",
-              filter === key && key === "attention"
-                ? "border-warn/40 bg-warn-soft text-warn"
-                : filter === key
-                  ? "border-accent/40 bg-accent-wash text-accent"
-                  : "border-line-2 bg-surface-2 text-ink-3 hover:text-ink-2",
-            )}
-          >
-            {label}
-            <span className="opacity-50">{count}</span>
-          </button>
-        ))}
+          {/* sort — secondary control, right-aligned */}
+          <div className="flex items-center gap-1 overflow-x-auto">
+            {(
+              [
+                { key: "urgency" as SortKey, label: "Urgency" },
+                { key: "coverage" as SortKey, label: "Coverage" },
+                { key: "name" as SortKey, label: "Name" },
+                { key: "rows" as SortKey, label: "Rows" },
+              ] as const
+            ).map(({ key, label }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSort(key)}
+                className={cx(
+                  "flex h-7 items-center gap-1 rounded-sm border px-2.5 font-mono text-[10px] transition-colors",
+                  sort === key
+                    ? "border-line bg-surface-3 text-ink-2"
+                    : "border-transparent text-ink-3 hover:text-ink-2",
+                )}
+              >
+                {sort === key && <span className="opacity-60">↑</span>}
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
 
-        <div className="mx-1 h-4 w-px bg-line-2" />
-
-        {/* sort pills */}
-        {(
-          [
-            { key: "urgency" as SortKey, label: "Urgency" },
-            { key: "coverage" as SortKey, label: "Coverage" },
-            { key: "name" as SortKey, label: "Name" },
-            { key: "rows" as SortKey, label: "Rows" },
-          ] as const
-        ).map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSort(key)}
-            className={cx(
-              "flex h-6 items-center gap-1 rounded-sm border px-2.5 font-mono text-[10px] transition-colors",
-              sort === key
-                ? "border-line bg-surface-3 text-ink-2"
-                : "border-transparent text-ink-3 hover:text-ink-2",
-            )}
-          >
-            {sort === key && <span className="opacity-60">↑</span>}
-            {label}
-          </button>
-        ))}
+        {/* health filter facets — primary control */}
+        <div className="mt-3 flex flex-wrap items-center gap-2 overflow-x-auto pb-0.5 md:overflow-visible md:pb-0">
+          {(
+            [
+              { key: "all" as FilterKey, label: "All", count: dims.length },
+              {
+                key: "attention" as FilterKey,
+                label: "Needs attention",
+                count: attentionTables.length,
+              },
+              {
+                key: "clean" as FilterKey,
+                label: "Clean",
+                count: cleanTables.length,
+              },
+            ] as const
+          ).map(({ key, label, count }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={cx(
+                "flex h-7 items-center gap-1.5 rounded-sm border px-3 font-mono text-[10px] transition-colors",
+                filter === key && key === "attention"
+                  ? "border-warn/40 bg-warn-soft text-warn"
+                  : filter === key
+                    ? "border-accent/40 bg-accent-wash text-accent"
+                    : "border-line-2 bg-surface-2 text-ink-3 hover:text-ink-2",
+              )}
+            >
+              {label}
+              <span className="opacity-50">{count}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Dimension health table — white surface behind the rows so the

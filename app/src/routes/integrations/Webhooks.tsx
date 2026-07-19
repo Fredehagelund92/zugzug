@@ -103,7 +103,7 @@ export function Webhooks() {
       {dupSet.size > 0 && (
         <div
           role="alert"
-          className="border border-warn/40 bg-warn-soft px-4 py-2.5 text-[13px] text-warn"
+          className="rounded-lg border border-warn/40 bg-warn-soft px-4 py-2.5 text-[13px] text-warn"
         >
           {dupSet.size} webhook{dupSet.size === 1 ? "" : "s"} share a URL — deliveries may be duplicated.
         </div>

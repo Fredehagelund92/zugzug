@@ -54,19 +54,19 @@ export function AdminTenants() {
         <h2 className="font-display text-lg font-bold mb-2">New workspace</h2>
         <div className="flex gap-2">
           <input
-            className="border px-2 py-1"
+            className="rounded-sm border px-2 py-1"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
             placeholder="slug"
           />
           <input
-            className="border px-2 py-1"
+            className="rounded-sm border px-2 py-1"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="label"
           />
           <input
-            className="border px-2 py-1"
+            className="rounded-sm border px-2 py-1"
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
             placeholder="warehouse_id"

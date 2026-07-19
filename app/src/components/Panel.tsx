@@ -2,7 +2,7 @@ import type { ComponentPropsWithoutRef, ElementType } from "react";
 import { cx } from "../lib/cx";
 
 /* Panel — the one framed container for document pages. White surface, hairline
-   border, large radius (square under square-mode), clipped. No shadow: shadow
+   border, gentle 8px radius (--r-lg, see DESIGN.md §5), clipped. No shadow: shadow
    signals "floating above the page" and belongs to overlays only; an in-page
    Panel separates via the border and the lattice ground. See DESIGN.md §7.
 

@@ -1,3 +1,6 @@
+import { Badge } from "../Badge";
+import { Button } from "../Button";
+
 export interface DatabaseRow {
   id: string;
   databaseName: string;
@@ -16,58 +19,89 @@ interface Props {
   onRemove?: (db: DatabaseRow) => void;
 }
 
+function ago(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  return `${Math.floor(s / 3600)}h`;
+}
+
+function ProbeBadge({ db }: { db: DatabaseRow }) {
+  if (db.lastProbeError) {
+    return (
+      <span title={db.lastProbeError}>
+        <Badge tone="warn" dot>
+          unreachable{db.lastProbeAt ? ` · ${ago(db.lastProbeAt)}` : ""}
+        </Badge>
+      </span>
+    );
+  }
+  if (db.lastProbeAt) {
+    return (
+      <Badge tone="ok" dot>
+        reachable · {ago(db.lastProbeAt)}
+      </Badge>
+    );
+  }
+  return <Badge dot>not probed</Badge>;
+}
+
+function schemaText(n: number | null): string {
+  if (n === null) return "— schemas";
+  return `${n} schema${n === 1 ? "" : "s"}`;
+}
+
 export function DatabaseTable(props: Props): JSX.Element {
+  const n = props.databases.length;
   return (
-    <div className="rounded-sm border border-line bg-surface">
-      <div className="flex items-center justify-between border-b border-line p-3">
-        <span className="font-display text-[14px] font-semibold text-ink">Databases</span>
+    <div className="overflow-hidden rounded-lg border border-line bg-surface">
+      <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-2.5">
+        <span className="flex items-center gap-2.5 text-[12px] text-ink-2">
+          <Badge tone="accent">MotherDuck</Badge>
+          {n} database{n === 1 ? "" : "s"} registered
+        </span>
         {props.canAdd && (
-          <button
-            onClick={props.onAdd}
-            className="rounded-sm border border-accent bg-accent px-3 py-1 font-mono text-[11px] text-bg hover:opacity-90"
-          >
+          <Button size="sm" onClick={props.onAdd}>
             + Add database
-          </button>
+          </Button>
         )}
       </div>
+
       {props.databases.length === 0 ? (
-        <div className="p-4 text-[12.5px] text-ink-2">
+        <div className="px-4 py-6 text-[12.5px] text-ink-2">
           No databases registered yet — click “+ Add database” to pick one discovered in MotherDuck.
         </div>
       ) : (
         <table className="w-full">
-          <thead>
-            <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
-              <th className="p-3">Name</th>
-              <th className="p-3">Label</th>
-              <th className="p-3">Schemas</th>
-              <th className="p-3" />
-            </tr>
-          </thead>
           <tbody>
             {props.databases.map((d) => (
-              <tr key={d.id} data-row={d.id} className="border-b border-line last:border-b-0">
-                <td className="p-3 font-mono text-[12px] text-ink">{d.databaseName}</td>
-                <td className="p-3 italic text-ink-2">{d.label ?? "—"}</td>
-                <td className="p-3 text-ink-2">
-                  {d.schemaCount === null
-                    ? "—"
-                    : `${d.schemaCount} schema${d.schemaCount === 1 ? "" : "s"}`}
+              <tr
+                key={d.id}
+                data-row={d.id}
+                className="border-b border-line transition-colors last:border-b-0 hover:bg-surface-2"
+              >
+                <td className="px-4 py-3 align-middle">
+                  <div className="font-mono text-[12.5px] font-medium text-ink">
+                    {d.databaseName}
+                  </div>
+                  {d.label && (
+                    <div className="mt-0.5 text-[11.5px] italic text-ink-3">{d.label}</div>
+                  )}
                 </td>
-                <td className="p-3 text-right">
-                  {d.lastProbeError && (
-                    <span className="mr-2 rounded-pill bg-danger-soft px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-danger">
-                      unreachable
-                    </span>
-                  )}
-                  {props.onRemove && (
-                    <button
-                      onClick={() => props.onRemove?.(d)}
-                      className="rounded-sm border border-line-2 px-2 py-0.5 font-mono text-[11px] text-ink hover:bg-bg-2"
-                    >
-                      Remove
-                    </button>
-                  )}
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[12px] text-ink-2">
+                  {schemaText(d.schemaCount)}
+                  <span className="mx-2 text-ink-3">·</span>
+                  {d.sourceCount} source value{d.sourceCount === 1 ? "" : "s"}
+                </td>
+                <td className="px-4 py-3 text-right align-middle">
+                  <div className="inline-flex items-center gap-2.5">
+                    <ProbeBadge db={d} />
+                    {props.onRemove && (
+                      <Button variant="secondary" size="sm" onClick={() => props.onRemove?.(d)}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

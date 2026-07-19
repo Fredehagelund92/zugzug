@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../../components/Button";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { SettingsSection } from "../../components/settings/SettingsSection";
+import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
 import { RoleGate } from "../../components/settings/RoleGate";
 import { DangerZone } from "../../components/settings/DangerZone";
 import { useTenant } from "../../lib/tenant-context";
@@ -39,7 +40,8 @@ export function Danger() {
   }
 
   return (
-    <>
+    <div className="space-y-8">
+      <SettingsPageHeader title="Danger" />
       <SettingsSection
         title="Danger zone"
         hint="Irreversible actions affecting the workspace itself."
@@ -89,6 +91,6 @@ export function Danger() {
         onConfirm={() => void deleteWorkspace()}
         onCancel={() => setDeleteOpen(false)}
       />
-    </>
+    </div>
   );
 }

@@ -54,7 +54,7 @@ export function Profile() {
           }
         >
           <input
-            className="w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+            className="rounded-sm w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Your name"

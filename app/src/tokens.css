@@ -34,10 +34,11 @@
   --font-mono: "JetBrains Mono", monospace;
   --r-sm: 4px;
   --r: 8px;
-  --r-lg: 12px;
+  --r-lg: 8px; /* gentle scale — containers match the redesign's subtle 8px card radius, not a heavy 12px round (ADR-0004). Only fine controls tighten to --r-sm 4px. */
   --r-pill: 999px;
   --maxw: 1180px;
   --wide: 1320px;
+  --doc: 1040px; /* narrow single-column document pages — ADR-0004 (app-added; re-add if re-exporting from the brand guide) */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   /* Per-table palette — appended outside the generated block; see palette.ts.
      Move upstream once the brand guide adds a 'tints' export. */

@@ -21,7 +21,7 @@ interface Tenant {
 }
 
 const inputCls =
-  "w-full bg-surface-2 border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
+  "w-full rounded-sm bg-surface-2 border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
 
 export function Workspaces() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -156,7 +156,7 @@ export function Workspaces() {
                         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                         else if (e.key === "Escape") setEditingId(null);
                       }}
-                      className="w-full bg-surface-2 border border-accent px-2 py-0.5 text-sm text-ink focus:outline-none"
+                      className="rounded-sm w-full bg-surface-2 border border-accent px-2 py-0.5 text-sm text-ink focus:outline-none"
                     />
                   ) : (
                     <button

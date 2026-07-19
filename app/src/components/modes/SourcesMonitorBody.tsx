@@ -48,7 +48,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
     return (
       <div className="flex h-full items-center justify-center px-8 py-16">
         <div className="max-w-[46ch] text-center">
-          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center border border-line bg-surface-2 text-ink-3">
+          <div className="rounded-lg mx-auto mb-4 grid h-12 w-12 place-items-center border border-line bg-surface-2 text-ink-3">
             <IconWand className="h-5 w-5" />
           </div>
           <div className="font-display text-[20px] font-semibold text-ink">
@@ -71,7 +71,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
                 key={step.n}
                 className="flex items-start gap-2.5 text-[12px] leading-snug text-ink-2"
               >
-                <span className="grid h-4 w-4 flex-none place-items-center border border-line font-mono text-[9px] text-ink-3">
+                <span className="rounded-sm grid h-4 w-4 flex-none place-items-center border border-line font-mono text-[9px] text-ink-3">
                   {step.n}
                 </span>
                 <span>{step.text}</span>
@@ -215,7 +215,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
                     type="button"
                     aria-label={`Re-check ${s.column}`}
                     onClick={() => void recheck.run(s.table, s.column)}
-                    className="grid h-8 w-8 place-items-center border border-line text-ink-3 hover:bg-hover hover:text-ink"
+                    className="rounded-sm grid h-8 w-8 place-items-center border border-line text-ink-3 hover:bg-hover hover:text-ink"
                   >
                     <IconWand className="h-4 w-4" />
                   </button>

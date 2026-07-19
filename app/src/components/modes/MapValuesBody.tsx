@@ -45,7 +45,7 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
           map values · {dim.dimension}
         </span>
-        <div className="ml-auto inline-flex border border-line">
+        <div className="rounded-sm ml-auto inline-flex border border-line">
           {(["focused", "grid"] as const).map((v) => (
             <button
               key={v}

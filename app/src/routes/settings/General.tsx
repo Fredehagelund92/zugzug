@@ -6,6 +6,7 @@ import { apiFetch } from "../../api";
 import { Button } from "../../components/Button";
 import { FormField } from "../../components/FormField";
 import { SettingsSection } from "../../components/settings/SettingsSection";
+import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
 import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { useAutosave } from "../../hooks/useAutosave";
@@ -65,9 +66,13 @@ export function General() {
   });
 
   return (
-    <>
-      <SettingsSection
+    <div className="space-y-8">
+      <SettingsPageHeader
         title="General"
+        subtitle="Your workspace’s name, color, and address."
+      />
+      <SettingsSection
+        title="Identity"
         hint={canChangeSlug ? "Workspace identity." : "Workspace identity. Slug is immutable."}
       >
         <ReadOnly enabled={!canEdit}>
@@ -88,7 +93,7 @@ export function General() {
             }
           >
             <input
-              className="w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+              className="rounded-sm w-full bg-surface border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder={tenant.label}
@@ -142,7 +147,7 @@ export function General() {
           <FormField label="Slug">
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-surface border border-line-2 px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
+                className="rounded-sm flex-1 bg-surface border border-line-2 px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors"
                 value={newSlug}
                 onChange={(e) => setNewSlug(e.target.value)}
                 placeholder={tenant.slug}
@@ -165,6 +170,6 @@ export function General() {
           </FormField>
         </SettingsSection>
       )}
-    </>
+    </div>
   );
 }

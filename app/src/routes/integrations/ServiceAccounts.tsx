@@ -151,45 +151,47 @@ export function ServiceAccounts() {
           }
         />
       ) : (
-        <table className="w-full text-[13px]">
-          <thead className="text-ink-3 text-left">
-            <tr>
-              <th className="py-2">Name</th>
-              <th>Prefix</th>
-              <th>Scopes</th>
-              <th>Last used</th>
-              <th>Expires</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((sa) => (
-              <tr key={sa.id} className="border-t border-line">
-                <td className="py-2">{sa.name}</td>
-                <td className="font-mono text-[12px]">{sa.token_prefix}•••</td>
-                <td>
-                  {sa.scopes.map((s) => (
-                    <Badge key={s}>{s}</Badge>
-                  ))}
-                </td>
-                <td>{sa.last_used_at?.slice(0, 10) ?? "never"}</td>
-                <td>{sa.expires_at?.slice(0, 10) ?? "never"}</td>
-                <td className="text-right">
-                  {canEdit && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-danger hover:text-danger"
-                      onClick={() => setRevoke({ id: sa.id, name: sa.name })}
-                    >
-                      Revoke
-                    </Button>
-                  )}
-                </td>
+        <Panel padding="sm">
+          <table className="w-full text-[13px]">
+            <thead className="text-ink-3 text-left">
+              <tr>
+                <th className="py-2">Name</th>
+                <th>Prefix</th>
+                <th>Scopes</th>
+                <th>Last used</th>
+                <th>Expires</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {items.map((sa) => (
+                <tr key={sa.id} className="border-t border-line">
+                  <td className="py-2">{sa.name}</td>
+                  <td className="font-mono text-[12px]">{sa.token_prefix}•••</td>
+                  <td>
+                    {sa.scopes.map((s) => (
+                      <Badge key={s}>{s}</Badge>
+                    ))}
+                  </td>
+                  <td>{sa.last_used_at?.slice(0, 10) ?? "never"}</td>
+                  <td>{sa.expires_at?.slice(0, 10) ?? "never"}</td>
+                  <td className="text-right">
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-danger hover:text-danger"
+                        onClick={() => setRevoke({ id: sa.id, name: sa.name })}
+                      >
+                        Revoke
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
       )}
 
       <DeveloperDetails id="sa-list" summary="Developer details">

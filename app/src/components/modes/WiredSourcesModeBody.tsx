@@ -102,7 +102,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
     return (
       <div className="flex h-full items-center justify-center px-8 py-16">
         <div className="zz-rise max-w-[42ch] text-center" style={{ animationDelay: "60ms" }}>
-          <div className="mx-auto mb-4 grid h-12 w-12 place-items-center border border-line bg-surface-2 text-ink-3">
+          <div className="rounded-lg mx-auto mb-4 grid h-12 w-12 place-items-center border border-line bg-surface-2 text-ink-3">
             <IconWand className="h-5 w-5" />
           </div>
           <div className="font-display text-[20px] font-semibold tracking-[-0.01em] text-ink">

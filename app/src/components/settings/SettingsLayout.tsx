@@ -3,7 +3,7 @@ import { PageContainer } from "../PageContainer";
 
 export function SettingsLayout() {
   return (
-    <PageContainer>
+    <PageContainer max="doc">
       <Outlet />
     </PageContainer>
   );

@@ -274,18 +274,11 @@
   }
 }
 
-/* SQUARE-MODE: override the brand's rounded-corner tokens to 0 app-wide.
-   The brand defines --r-sm/--r/--r-lg; squaring them flattens every
-   `rounded-sm`/`rounded-md`/`rounded-lg` utility (and the kit components
-   that reference the raw var) to crisp 90° corners. --r-pill stays at
-   999px so inherently-round affordances (status dots, the live pulse)
-   keep their shape. Tightens visual rhythm + competes against
-   eddytor.com's squared editorial feel. */
-:root {
-  --r-sm: 0px;
-  --r: 0px;
-  --r-lg: 0px;
-}
+/* Corners render at the brand's own radius scale (`--r-sm/--r/--r-lg` =
+   4/8/12, declared in tokens.css). Square-mode — the app-wide override that
+   forced those to 0 — is retired (ADR-0004): rounded cards in a framed column
+   read better than flat full-width square surfaces. --r-pill (999px) is
+   unchanged and remains the only fully-round shape. */
 
 /* dual-range thumb pointer events: the input wrapper has pointer-events:none
    so it doesn't block the colored band underneath; the thumbs re-enable. */
@@ -302,7 +295,9 @@
   :focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
-    border-radius: var(--r-sm);
+    /* --r (8px) so the ring's corners aren't tighter than the 8/12px
+       elements it wraps now that corners render rounded (ADR-0004). */
+    border-radius: var(--r);
   }
 }
 

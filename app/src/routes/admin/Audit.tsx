@@ -121,14 +121,14 @@ export function Audit() {
               value={qInput}
               onChange={(e) => setQInput(e.target.value)}
               placeholder="Search…"
-              className="w-[200px] border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+              className="rounded-sm w-[200px] border border-line-2 bg-surface px-3 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
             />
             <button
               type="button"
               data-active={onlyElevated}
               onClick={() => setParam("elevated", onlyElevated ? null : "1")}
               className={
-                "border px-3 py-1.5 text-sm transition-colors " +
+                "rounded-sm border px-3 py-1.5 text-sm transition-colors " +
                 (onlyElevated
                   ? "border-accent bg-accent-soft text-accent"
                   : "border-line bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink")
@@ -153,14 +153,14 @@ export function Audit() {
             Workspace
           </span>
           <input
-            className="w-[220px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+            className="rounded-sm w-[220px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
             value={tenantInput}
             onChange={(e) => setTenantInput(e.target.value)}
             placeholder="All workspaces — tenant ID…"
           />
           <button
             type="submit"
-            className="border border-line bg-surface-2 px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-hover hover:text-ink"
+            className="rounded-sm border border-line bg-surface-2 px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-hover hover:text-ink"
           >
             Apply
           </button>
@@ -215,7 +215,7 @@ export function Audit() {
                   type="button"
                   onClick={() => void loadMore()}
                   disabled={loadingMore}
-                  className="border border-line bg-surface-2 px-4 py-1.5 text-xs text-ink-2 transition-colors hover:bg-hover hover:text-ink disabled:opacity-50"
+                  className="rounded-sm border border-line bg-surface-2 px-4 py-1.5 text-xs text-ink-2 transition-colors hover:bg-hover hover:text-ink disabled:opacity-50"
                 >
                   {loadingMore ? "Loading…" : "Load more"}
                 </button>
@@ -275,7 +275,7 @@ function TypePicker({
         data-active={Boolean(value)}
         onClick={() => setOpen((v) => !v)}
         className={
-          "inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs transition-colors " +
+          "inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs transition-colors " +
           (value
             ? "border-accent bg-accent-soft text-accent"
             : "border-line bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink")
@@ -289,14 +289,14 @@ function TypePicker({
       </button>
 
       {open && (
-        <div className="zz-rise absolute left-0 z-20 mt-1 w-[280px] border border-line bg-surface shadow-lg">
+        <div className="rounded-lg zz-rise absolute left-0 z-20 mt-1 w-[280px] border border-line bg-surface shadow-lg">
           <div className="border-b border-line p-2">
             <input
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Find a type…"
-              className="w-full border border-line-2 bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+              className="rounded-sm w-full border border-line-2 bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
             />
           </div>
           <ul className="max-h-64 overflow-auto py-1">

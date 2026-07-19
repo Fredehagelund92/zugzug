@@ -8,7 +8,7 @@ interface SuperAdminBadgeProps {
 export function SuperAdminBadge({ className }: SuperAdminBadgeProps) {
   return (
     <span
-      className={`inline-flex items-center border px-1.5 py-px font-mono text-[9px] uppercase tracking-widest${className ? ` ${className}` : ""}`}
+      className={`inline-flex items-center rounded-sm border px-1.5 py-px font-mono text-[9px] uppercase tracking-widest${className ? ` ${className}` : ""}`}
       style={{
         borderColor: "color-mix(in srgb, var(--tint-violet) 50%, transparent)",
         color: "var(--tint-violet)",

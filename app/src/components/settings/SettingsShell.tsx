@@ -1,9 +1,19 @@
 import type { ReactNode } from "react";
-import { PageContainer } from "../PageContainer";
+import { PageContainer, type PageContainerProps } from "../PageContainer";
 
-export function SettingsShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+/* Shared by the admin console (wide Users/Workspaces tables → default `wide`)
+   and Account (single-column forms → `doc`). See ADR-0004. */
+export function SettingsShell({
+  sidebar,
+  children,
+  max,
+}: {
+  sidebar: ReactNode;
+  children: ReactNode;
+  max?: PageContainerProps["max"];
+}) {
   return (
-    <PageContainer>
+    <PageContainer max={max}>
       {/* Stack on mobile (sidebar above content); restore the fixed-width side
          rail at md+. A shrink-0 240px sidebar would otherwise crush the content
          into a ~90px strip on a phone. Shared by the admin console + Account. */}

@@ -123,7 +123,7 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
       </div>
 
       {/* search */}
-      <label className="mx-5 mt-4 flex items-center gap-2 border border-line-2 bg-surface">
+      <label className="rounded-sm mx-5 mt-4 flex items-center gap-2 border border-line-2 bg-surface">
         <span className="pl-3 text-ink-3">
           <IconSearch className="h-4 w-4" />
         </span>

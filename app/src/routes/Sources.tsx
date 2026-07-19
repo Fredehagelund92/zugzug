@@ -271,7 +271,7 @@ export function Sources() {
 
       {/* ─────────── CONNECTION SURFACE (paper) ─────────── */}
       <section
-        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden border border-line bg-surface shadow-pop"
+        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-pop"
         style={{ animationDelay: "60ms" }}
       >
         {/* a thin accent edge at the very top — the 'folder tab' that signals
@@ -283,13 +283,15 @@ export function Sources() {
 
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {groups.length === 0 ? (
-            <SetupCard
-              title="No sources connected yet"
-              glyph={<span className="text-2xl" aria-hidden>🔌</span>}
-              body="Pick a warehouse column from the catalog — Zug Zug will scan it for values."
-              action={<Button onClick={() => setCatalog(true)}>Browse catalog</Button>}
-              secondary={<BrowseWarehouse settingsBase={nav.settings} />}
-            />
+            <div className="p-3">
+              <SetupCard
+                title="No sources connected yet"
+                glyph={<span className="text-2xl" aria-hidden>🔌</span>}
+                body="Pick a warehouse column from the catalog — Zug Zug will scan it for values."
+                action={<Button onClick={() => setCatalog(true)}>Browse catalog</Button>}
+                secondary={<BrowseWarehouse settingsBase={nav.settings} />}
+              />
+            </div>
           ) : (
             <>
               {/* ─── REVIEW POINTER (above the fold when unmapped values exist) ─── */}
