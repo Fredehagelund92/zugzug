@@ -269,7 +269,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 type="button"
                 onClick={() => setColor(c)}
                 title={c}
-                className={`h-3.5 w-3.5 rounded-sm transition-transform hover:scale-110 ${color === c ? "ring-1 ring-ink" : ""}`}
+                aria-label={`Tint ${c}`}
+                aria-pressed={color === c}
+                className={`h-3.5 w-3.5 rounded-sm transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-1 ${color === c ? "ring-1 ring-ink" : ""}`}
                 style={{ background: PALETTE[c].bg }}
               />
             ))}
@@ -290,8 +292,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               <button
                 key={m}
                 type="button"
+                aria-pressed={mode === m}
                 onClick={() => setMode(m)}
-                className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors md:px-2.5 md:text-[12.5px] ${mode === m ? "border border-line-2 bg-surface-3 text-ink shadow-sm" : "text-ink-2 hover:text-ink"}`}
+                className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent md:px-2.5 md:text-[12.5px] ${mode === m ? "border border-line-2 bg-surface-3 text-ink shadow-sm" : "text-ink-2 hover:text-ink"}`}
               >
                 {MODE_LABEL[m]}
               </button>
@@ -359,6 +362,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                         options={sourceOpts}
                         value={source ? `${source.table}.${source.column}` : null}
                         placeholder="pick a warehouse column…"
+                        ariaLabel="Warehouse column"
                         onPick={(opt) => {
                           const dot = opt.lastIndexOf(".");
                           if (dot > 0)
@@ -381,11 +385,11 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               </p>
               {!csv ? (
                 <>
-                  <label className="flex cursor-pointer items-center justify-center rounded-sm border border-dashed border-line-2 bg-bg px-3 py-4 font-body text-[12.5px] text-ink-2 hover:border-accent hover:text-ink">
+                  <label className="flex cursor-pointer items-center justify-center rounded-sm border border-dashed border-line-2 bg-bg px-3 py-4 font-body text-[12.5px] text-ink-2 hover:border-accent hover:text-ink focus-within:border-accent focus-within:text-ink">
                     <input
                       type="file"
                       accept=".csv,text/csv"
-                      className="hidden"
+                      className="sr-only"
                       onChange={handleFile}
                     />
                     Choose a CSV file
@@ -490,6 +494,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                         options={sourceOpts}
                         value={external ? `${external.table}.${external.idColumn}` : null}
                         placeholder="pick the id column…"
+                        ariaLabel="ID column"
                         onPick={(opt) => {
                           const dot = opt.lastIndexOf(".");
                           if (dot > 0) {
@@ -518,6 +523,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                         placeholder={
                           external?.table ? "pick the name column…" : "pick an id column first"
                         }
+                        ariaLabel="Name column"
                         disabled={!external?.table}
                         onPick={(opt) =>
                           setExternal((prev) => (prev ? { ...prev, nameColumn: opt } : prev))

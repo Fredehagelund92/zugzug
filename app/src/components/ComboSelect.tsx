@@ -37,6 +37,8 @@ interface ComboSelectProps {
   /** Fires when the popover closes WITHOUT a pick (Escape, outside-click,
    *  trigger toggle, Tab). Used by edit-cell hosts to call ctx.cancel(). */
   onClose?: () => void;
+  /** Accessible name for the trigger when there's no associated <label>. */
+  ariaLabel?: string;
 }
 
 const DROPDOWN_W = 240; // px — matches original w-60
@@ -51,6 +53,7 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
     disabled = false,
     onPick,
     onClose,
+    ariaLabel,
   },
   imperativeRef,
 ) {
@@ -186,9 +189,10 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-disabled={disabled}
+        aria-label={ariaLabel}
         disabled={disabled}
         className={cx(
-          "flex w-full items-center justify-between gap-2 rounded-sm border px-2.5 py-1.5 text-[12.5px] transition-colors",
+          "flex w-full items-center justify-between gap-2 rounded-sm border px-2.5 py-1.5 text-[12.5px] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
           disabled
             ? "cursor-not-allowed border-dashed border-line font-mono text-ink-4 opacity-50"
             : value
