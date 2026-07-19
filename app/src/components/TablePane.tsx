@@ -1370,9 +1370,14 @@ function RecordsBody({
                   const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
                   try {
                     await setFieldValue(activeId, rowKey, field, v);
-                  } catch {
+                  } catch (e) {
                     // Store reverted the optimistic value; surface the failure.
-                    toast("Couldn't save that change — try again.", "error");
+                    // A cycle rejection carries a specific, user-ready message.
+                    const msg =
+                      e instanceof ApiCodeError && e.code === "HIERARCHY_CYCLE"
+                        ? e.message
+                        : "Couldn't save that change — try again.";
+                    toast(msg, "error");
                     return;
                   }
                   if (prev !== v)

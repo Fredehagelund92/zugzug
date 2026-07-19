@@ -584,13 +584,11 @@ export function AddFieldPopover({
                 className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
               >
                 <option value="">— pick a table —</option>
-                {(allDims ?? [])
-                  .filter((d) => d.id !== currentDimId)
-                  .map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.dimension}
-                    </option>
-                  ))}
+                {(allDims ?? []).map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.id === currentDimId ? `${d.dimension} (this table)` : d.dimension}
+                  </option>
+                ))}
               </select>
             </div>
           </>
