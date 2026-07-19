@@ -131,11 +131,11 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
                           }}
                           title={
                             r.signing_kid === "previous"
-                              ? "Original signing key expired — replay will re-sign with current secret"
+                              ? "Original signing key expired — resend will re-sign with the current secret"
                               : undefined
                           }
                         >
-                          Replay
+                          Resend
                         </Button>
                       )}
                     </td>

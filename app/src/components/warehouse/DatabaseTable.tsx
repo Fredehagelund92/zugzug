@@ -43,7 +43,11 @@ function ProbeBadge({ db }: { db: DatabaseRow }) {
       </Badge>
     );
   }
-  return <Badge dot>not probed</Badge>;
+  return (
+    <span title="Zug Zug hasn't tried connecting to this database yet">
+      <Badge dot>not checked yet</Badge>
+    </span>
+  );
 }
 
 function schemaText(n: number | null): string {

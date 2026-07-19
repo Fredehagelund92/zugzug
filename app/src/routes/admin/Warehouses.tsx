@@ -97,7 +97,11 @@ export function Warehouses() {
                       <span>
                         {db.sourceCount} source{db.sourceCount === 1 ? "" : "s"}
                       </span>
-                      {db.lastProbeError && <Badge tone="warn">probe error</Badge>}
+                      {db.lastProbeError && (
+                        <span title={db.lastProbeError}>
+                          <Badge tone="warn">unreachable</Badge>
+                        </span>
+                      )}
                     </div>
                   </li>
                 ))}

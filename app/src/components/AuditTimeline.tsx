@@ -55,6 +55,25 @@ const KIND_BY_VERB: Record<string, EventKind> = {
   invited: "security",
 };
 
+// Server action codes carry internal vocabulary; translate the display verb and
+// noun to the plain words the rest of the UI uses (CLAUDE.md §5, DESIGN.md §2)
+// before anything reaches the screen. Anything not listed passes through.
+const VERB_PLAIN: Record<string, string> = {
+  committed: "published",
+  synced: "refreshed",
+  replayed: "resent",
+};
+const NOUN_PLAIN: Record<string, string> = {
+  canonical: "record",
+};
+function plain(p: Phrase): Phrase {
+  return {
+    ...p,
+    verb: VERB_PLAIN[p.verb] ?? p.verb,
+    noun: p.noun ? (NOUN_PLAIN[p.noun] ?? p.noun) : p.noun,
+  };
+}
+
 function humanize(row: AuditEntry): Phrase {
   const a = row.action;
   const d = row.detail || "";
@@ -64,7 +83,7 @@ function humanize(row: AuditEntry): Phrase {
   if (m) {
     const verb = m[1]!.toLowerCase();
     const noun = m[2]!.toLowerCase();
-    return { verb, noun, target: d || undefined, kind: KIND_BY_VERB[verb] ?? "other" };
+    return plain({ verb, noun, target: d || undefined, kind: KIND_BY_VERB[verb] ?? "other" });
   }
 
   // Dotted lower-case actions: "invite.create", "warehouse.database.add", …
@@ -82,22 +101,22 @@ function humanize(row: AuditEntry): Phrase {
       update: "updated",
     };
     const verb = verbMap[last] ?? last;
-    return { verb, noun, target: d || undefined, kind: KIND_BY_VERB[verb] ?? "other" };
+    return plain({ verb, noun, target: d || undefined, kind: KIND_BY_VERB[verb] ?? "other" });
   }
 
   // snake_case actions: "scan_failed", "discard_draft", …
   if (a.includes("_")) {
     const [head, ...rest] = a.split("_");
     const tail = rest.join(" ");
-    return {
+    return plain({
       verb: tail || head!,
       noun: tail ? head : undefined,
       target: d || undefined,
       kind: a.endsWith("_failed") ? "system" : "other",
-    };
+    });
   }
 
-  return { verb: a, target: d || undefined, kind: "other" };
+  return plain({ verb: a, target: d || undefined, kind: "other" });
 }
 
 /* ────────────────────────── time helpers ────────────────────────── */
