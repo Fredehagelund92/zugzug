@@ -57,7 +57,7 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
           {dim.dimension} is all mapped 🎉
         </div>
         <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">
-          {m.coverage.pct}% of at-risk rows resolved · {m.staged} staged
+          {m.coverage.pct}% of at-risk rows resolved · {m.staged} draft{m.staged === 1 ? "" : "s"}
         </div>
       </div>
     );
@@ -187,7 +187,7 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
       {/* footer: staged + undo + skip */}
       <div className="flex items-center gap-3 border-t border-line bg-surface px-4 py-3">
         <span className="font-mono text-[11px] text-ink-3">
-          <span className="text-ink-2">{m.staged}</span> staged · Tab takes the suggestion
+          <span className="text-ink-2">{m.staged}</span> draft{m.staged === 1 ? "" : "s"} · Tab takes the suggestion
         </span>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={m.undo}>

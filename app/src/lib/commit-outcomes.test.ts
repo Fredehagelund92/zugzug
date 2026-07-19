@@ -30,7 +30,7 @@ describe("summarizeOutcomes", () => {
     expect(s.committed).toBe(3);
     expect(s.failed).toHaveLength(1);
     expect(s.message).toBe(
-      "Published 3 changes, but channel failed (timeout) — its drafts are still staged.",
+      "Published 3 changes, but channel failed (timeout) — its drafts weren't published.",
     );
   });
   it("singulars", () => {
@@ -46,6 +46,6 @@ describe("summarizeOutcomes", () => {
     ]);
     expect(s.ok).toBe(false);
     expect(s.failed).toHaveLength(2);
-    expect(s.message).toContain("their drafts are still staged.");
+    expect(s.message).toContain("their drafts weren't published.");
   });
 });

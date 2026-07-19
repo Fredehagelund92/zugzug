@@ -340,7 +340,7 @@ export function Dashboard() {
               >
                 {staged.length}
               </span>{" "}
-              {staged.length === 1 ? "draft" : "drafts"} staged
+              {staged.length === 1 ? "draft" : "drafts"}
             </span>
           </div>
         }
@@ -549,7 +549,7 @@ export function Dashboard() {
                   <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
                     {dimStaged.length > 0 ? (
                       <Badge tone="staged">
-                        {dimStaged.length} staged
+                        {dimStaged.length} draft{dimStaged.length === 1 ? "" : "s"}
                       </Badge>
                     ) : (
                       <span className="font-mono text-[11px] text-ink-3">—</span>

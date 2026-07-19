@@ -47,7 +47,7 @@ describe("MapValuesBody", () => {
       { dimId: "other", status: "mapped" }, // other dim, not counted
     ];
     const { getByText } = render(<MapValuesBody dim={DIM} isActive />);
-    expect(getByText(/2 staged changes/i)).toBeTruthy();
+    expect(getByText(/2 drafts/i)).toBeTruthy();
     fireEvent.click(getByText(/Publish 2 changes/i));
     expect(commitMock).toHaveBeenCalledWith("d1");
   });

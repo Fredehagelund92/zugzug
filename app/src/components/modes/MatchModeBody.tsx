@@ -616,7 +616,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                       <span className="grid h-4 w-4 place-items-center rounded-pill bg-surface-3 text-[8px] text-ink-2">
                         {d.user.initials}
                       </span>
-                      staged {d.status === "skipped" ? "(skipped) " : ""}by{" "}
+                      drafted {d.status === "skipped" ? "(skipped) " : ""}by{" "}
                       {d.user.id === currentUser.id ? "you" : d.user.name} · {d.at}
                       {" · awaiting publish"}
                     </div>
@@ -750,7 +750,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           {review && staged.length > 0 && (
             <div className="border-t border-line">
               <div className="px-5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                Staged to publish · {stagedDrafts.length}
+                Ready to publish · {stagedDrafts.length}
               </div>
               <div className="mt-1 max-h-64 overflow-y-auto px-5 pb-2">
                 {(() => {

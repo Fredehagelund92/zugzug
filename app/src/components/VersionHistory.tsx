@@ -129,7 +129,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
         <ConfirmDialog
           open={true}
           title={`Roll back to v${rollbackTarget.version}?`}
-          body={`Publishes a new version v${latestVersion != null ? latestVersion + 1 : "?"} with v${rollbackTarget.version}'s content — ${rollbackTarget.counts.records} records, ${rollbackTarget.counts.mappings} mappings. Your staged drafts are kept. Downstream systems receive a normal publish event marked as a rollback.`}
+          body={`Publishes a new version v${latestVersion != null ? latestVersion + 1 : "?"} with v${rollbackTarget.version}'s content — ${rollbackTarget.counts.records} records, ${rollbackTarget.counts.mappings} mappings. Your drafts are kept. Downstream systems receive a normal publish event marked as a rollback.`}
           confirmLabel={`Roll back to v${rollbackTarget.version}`}
           confirmPhrase={`v${rollbackTarget.version}`}
           danger

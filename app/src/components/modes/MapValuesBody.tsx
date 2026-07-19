@@ -84,12 +84,12 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
               {staged > 0 ? (
                 <>
                   <span className="font-semibold text-ink">
-                    {staged} staged change{staged === 1 ? "" : "s"}
+                    {staged} draft{staged === 1 ? "" : "s"}
                   </span>{" "}
                   ready to publish to {dim.dimension}
                 </>
               ) : (
-                <>nothing staged yet — map values above</>
+                <>no drafts yet — map values above</>
               )}
             </span>
             <Button

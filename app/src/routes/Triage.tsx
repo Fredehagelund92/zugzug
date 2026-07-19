@@ -1001,7 +1001,7 @@ function CrossDimFooter(p: FooterProps) {
       {review && stagedCount > 0 && (
         <div className="border-b border-line">
           <div className="px-4 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
-            Staged to publish · {stagedCount} across {grouped.length} table
+            Ready to publish · {stagedCount} across {grouped.length} table
             {grouped.length === 1 ? "" : "s"}
           </div>
           <div className="mt-1 max-h-72 overflow-y-auto">
@@ -1010,7 +1010,7 @@ function CrossDimFooter(p: FooterProps) {
                 <div className="flex items-center gap-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-2">
                   <Chip label={g.dimName} bucket="chip-3" />
                   <span className="tabular-nums">
-                    {g.groups.reduce((n, x) => n + x.drafts.length, 0)} staged
+                    {g.groups.reduce((n, x) => n + x.drafts.length, 0)} drafts
                   </span>
                 </div>
                 {g.groups.map((tg) => (
@@ -1088,7 +1088,7 @@ function CrossDimFooter(p: FooterProps) {
         <span className="font-mono text-[11px] text-ink-2">
           {stagedCount > 0 ? (
             <>
-              {stagedCount} change{stagedCount === 1 ? "" : "s"} staged across {grouped.length} dim
+              {stagedCount} change{stagedCount === 1 ? "" : "s"} across {grouped.length} dim
               {grouped.length === 1 ? "" : "s"}, ready to publish
             </>
           ) : (

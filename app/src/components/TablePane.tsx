@@ -673,7 +673,7 @@ function RecordsBody({
     setBusy(true);
     const result = await deriveCanonical(activeId, s.table, s.column);
     setBusy(false);
-    flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)} · staged drafts untouched`);
+    flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)} · drafts untouched`);
   };
 
   const deriveExternal = async (idColOpt: string, nameColOpt: string) => {
@@ -684,7 +684,7 @@ function RecordsBody({
     const result = await deriveCanonical(activeId, s.table, s.column, nameCol);
     setBusy(false);
     flash(
-      `Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · staged drafts untouched`,
+      `Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · drafts untouched`,
     );
   };
 

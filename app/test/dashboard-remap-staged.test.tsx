@@ -116,13 +116,14 @@ function renderDashboard() {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("Dashboard — staged remap detection", () => {
-  test("page meta shows '1 draft staged' (singular) for the remap-only dim", () => {
+  test("page meta shows '1 draft' (singular) for the remap-only dim", () => {
     renderDashboard();
-    // Status chip now renders the count in a nested <span>, so match on the
-    // parent span's full text content using a function matcher.
-    expect(
-      screen.getByText((_, el) => el?.textContent?.replace(/\s+/g, " ").trim() === "1 draft staged"),
-    ).toBeInTheDocument();
+    // Both the header summary and the per-row badge now render "1 draft"; scope
+    // to the header one (not inside a table row). Confirms the singular form.
+    const headerChip = screen
+      .getAllByText((_, el) => el?.textContent?.replace(/\s+/g, " ").trim() === "1 draft")
+      .find((el) => !el.closest("tr"));
+    expect(headerChip).toBeDefined();
   });
 
   test("'Needs attention' toolbar pill counts dims with unmapped OR staged drafts (2)", () => {
@@ -139,13 +140,13 @@ describe("Dashboard — staged remap detection", () => {
     expect(within(pill as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  test("Dim C (remap-only) row shows a 'staged' drafts badge with count", () => {
+  test("Dim C (remap-only) row shows a drafts badge with count", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const channelRow = rows.find((r) => within(r).queryByText("Channel"));
     expect(channelRow).toBeDefined();
-    // New design: Drafts column shows "<n> staged" badge (not bare "staged")
-    expect(within(channelRow as HTMLElement).getByText(/\d+ staged/i)).toBeInTheDocument();
+    // Drafts column shows a "<n> draft(s)" badge (not a bare word)
+    expect(within(channelRow as HTMLElement).getByText(/\d+ drafts?/i)).toBeInTheDocument();
   });
 
   test("Dim B (no drafts, all mapped) row shows '—' placeholders for in-review and drafts", () => {
