@@ -78,7 +78,7 @@ describe("CreateTableModal — optimistic close", () => {
     );
 
     // Type a table name so the Create button is enabled.
-    fireEvent.change(screen.getByPlaceholderText("Untitled table"), {
+    fireEvent.change(screen.getByPlaceholderText("Name this table"), {
       target: { value: "My Table" },
     });
 
@@ -112,7 +112,7 @@ describe("CreateTableModal — optimistic close", () => {
       </>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Untitled table"), {
+    fireEvent.change(screen.getByPlaceholderText("Name this table"), {
       target: { value: "My Table" },
     });
 
@@ -146,7 +146,7 @@ describe("CreateTableModal — optimistic close", () => {
       </>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Untitled table"), {
+    fireEvent.change(screen.getByPlaceholderText("Name this table"), {
       target: { value: "My Table" },
     });
 
@@ -182,7 +182,7 @@ describe("CreateTableModal — optimistic close", () => {
       </>,
     );
 
-    fireEvent.change(screen.getByPlaceholderText("Untitled table"), {
+    fireEvent.change(screen.getByPlaceholderText("Name this table"), {
       target: { value: "My Table" },
     });
 

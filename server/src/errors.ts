@@ -14,7 +14,8 @@ export type ErrorCode =
   | "READ_ONLY_TOKEN"
   | "INTERNAL"
   | "NO_SNAPSHOT"
-  | "SECOND_PUBLISHER_REQUIRED";
+  | "SECOND_PUBLISHER_REQUIRED"
+  | "REQUIRED_FIELDS_EMPTY";
 
 export class AppError extends Error {
   constructor(

@@ -44,6 +44,7 @@ export interface FieldDef {
   displayFields?: string[];
   description?: string;
   rules?: import("./components/datagrid/types").ConditionalRule[];
+  required?: boolean;
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {

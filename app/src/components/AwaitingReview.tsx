@@ -18,6 +18,20 @@ import { cx } from "../lib/cx";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 
 const SYSTEM_USER_ID = "u_system";
+
+/** Turn a REQUIRED_FIELDS_EMPTY error into a message that names the records and
+ *  fields still needing a value, so the publisher knows exactly what to fix. */
+function requiredEmptyMessage(err: ApiCodeError): string {
+  const violations =
+    (err.details?.violations as Array<{ label: string; fieldLabel: string }> | undefined) ?? [];
+  if (violations.length === 0)
+    return "Some records need a required value before you can publish.";
+  const fields = [...new Set(violations.map((v) => v.fieldLabel))].join(", ");
+  const records = [...new Set(violations.map((v) => v.label))];
+  const shown = records.slice(0, 3).join(", ");
+  const rest = records.length > 3 ? ` +${records.length - 3} more` : "";
+  return `${shown}${rest} need ${fields} before you can publish.`;
+}
 const COLLAPSE_THRESHOLD = 20;
 
 function relativeTime(iso: string): string {
@@ -188,16 +202,20 @@ export function AwaitingReview() {
         } catch (err) {
           const isSecondPublisher =
             err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED";
+          const isRequiredEmpty =
+            err instanceof ApiCodeError && err.code === "REQUIRED_FIELDS_EMPTY";
           outcomes.push({
             dimId: g.dimId,
             dimName: g.dimName,
             committed: 0,
             rowsRecovered: 0,
-            error: isSecondPublisher
-              ? "These drafts need a second publisher."
-              : err instanceof Error
-                ? err.message
-                : "unknown error",
+            error: isRequiredEmpty
+              ? requiredEmptyMessage(err)
+              : isSecondPublisher
+                ? "These drafts need a second publisher."
+                : err instanceof Error
+                  ? err.message
+                  : "unknown error",
           });
         }
       }

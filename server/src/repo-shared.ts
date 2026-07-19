@@ -114,6 +114,7 @@ export function parseFieldConfig(
   referencedDimId?: string;
   displayFields?: string[];
   rules?: ConditionalRule[];
+  required?: boolean;
 } {
   // Parse the raw JSON once for rules extraction (type-specific parsers re-parse as needed)
   let parsedJson: Record<string, unknown> | null = null;
@@ -157,7 +158,14 @@ export function parseFieldConfig(
       ? (parsedJson.rules as ConditionalRule[])
       : undefined;
 
-  return rules !== undefined ? { ...typeSpecific, rules } : typeSpecific;
+  // Required flag — allowed on any type (empty values block publish).
+  const required = parsedJson?.required === true;
+
+  return {
+    ...typeSpecific,
+    ...(rules !== undefined ? { rules } : {}),
+    ...(required ? { required: true } : {}),
+  };
 }
 
 export interface FieldDef {
@@ -171,6 +179,7 @@ export interface FieldDef {
   displayFields?: string[]; // fields from target dim to surface as lookup cols
   description?: string;
   rules?: ConditionalRule[];
+  required?: boolean; // empty values block publish
 }
 
 export type { ConditionalRule } from "./conditional-format-types.ts";

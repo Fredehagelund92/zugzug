@@ -553,9 +553,9 @@ export async function addDimension(
        )`,
     );
     await pgRun(
-      `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at, tenant_id)
-       VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7)`,
-      [id, name.trim(), dimTable, mapTable, keyCol, keyKind, tenantId],
+      `INSERT INTO ${pg("dimension")} (id, label, dim_table, map_table, key_col, key_kind, created_at, owner_user_id, tenant_id)
+       VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7, $8)`,
+      [id, name.trim(), dimTable, mapTable, keyCol, keyKind, userId, tenantId],
     );
     if (!opts.silent) {
       await appendAuditAs(
@@ -1176,6 +1176,7 @@ export async function addField(
     ratingMax?: number;
     referencedDimId?: string;
     displayFields?: string[];
+    required?: boolean;
   } = {},
   userId: string,
   tenantId: string,
@@ -1212,19 +1213,16 @@ export async function addField(
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
   const sqlType = SQL_TYPE[t] ?? "VARCHAR";
   await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
-  const optsJson =
-    t === "select"
-      ? JSON.stringify({ options: options ?? [] })
-      : t === "number" && opts.numberFormat != null
-        ? JSON.stringify({ numberFormat: opts.numberFormat })
-        : t === "rating"
-          ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
-          : t === "linked"
-            ? JSON.stringify({
-                targetDimId: opts.referencedDimId,
-                displayFields: opts.displayFields ?? ["label"],
-              })
-            : null;
+  const cfg: Record<string, unknown> = {};
+  if (t === "select") cfg.options = options ?? [];
+  else if (t === "number" && opts.numberFormat != null) cfg.numberFormat = opts.numberFormat;
+  else if (t === "rating") cfg.ratingMax = opts.ratingMax ?? 5;
+  else if (t === "linked") {
+    cfg.targetDimId = opts.referencedDimId;
+    cfg.displayFields = opts.displayFields ?? ["label"];
+  }
+  if (opts.required) cfg.required = true;
+  const optsJson = Object.keys(cfg).length > 0 ? JSON.stringify(cfg) : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, field_config, created_at, tenant_id)
      VALUES ($1, $2, $3, $4, $5, current_timestamp, $6) ON CONFLICT (tenant_id, dim_id, field) DO NOTHING`,

@@ -16,6 +16,7 @@ import {
   pgRun,
   pgTx,
   pg,
+  parseFieldConfig,
 } from "./repo-shared.ts";
 import { appendAuditAs, getPreferences } from "./repo-meta.ts";
 import { writeVersionSnapshot } from "./repo-versions.ts";
@@ -372,6 +373,48 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
 
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
+/** Records with an empty value in a required field — these block publish so a
+ *  table can't ship with holes a steward marked as mandatory. Rollbacks skip
+ *  this (they restore a past version verbatim). */
+async function emptyRequiredViolations(
+  dimId: string,
+  tenantId: string,
+  meta: { dimTable: string; keyCol: string },
+): Promise<Array<{ key: string; label: string; field: string; fieldLabel: string }>> {
+  const fieldRows = await pgAll<{
+    field: string;
+    label: string;
+    type: string;
+    field_config: string | null;
+  }>(
+    `SELECT field, label, type, field_config FROM ${pg("dimension_field")}
+     WHERE dim_id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
+  );
+  const required = fieldRows.filter((r) => parseFieldConfig(r.type, r.field_config).required);
+  if (required.length === 0) return [];
+
+  const DIMT = cq(meta.dimTable);
+  const keyCol = qid(meta.keyCol);
+  const violations: Array<{ key: string; label: string; field: string; fieldLabel: string }> = [];
+  for (const f of required) {
+    const col = qid(f.field);
+    const empties = await pgAll<{ key: string; label: string | null }>(
+      `SELECT ${keyCol} AS key, label FROM ${DIMT}
+       WHERE ${col} IS NULL OR CAST(${col} AS VARCHAR) = ''`,
+    );
+    for (const e of empties) {
+      violations.push({
+        key: String(e.key),
+        label: e.label == null ? String(e.key) : String(e.label),
+        field: f.field,
+        fieldLabel: f.label,
+      });
+    }
+  }
+  return violations;
+}
+
 export async function commit(
   dimId: string,
   userId: string,
@@ -452,6 +495,24 @@ export async function commit(
   const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null);
   if (!committed && canonicalChanged.length === 0)
     return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
+
+  // Required-field gate: a publish can't ship records that are missing a value
+  // a steward marked mandatory. Skipped for rollbacks (they restore verbatim).
+  if (opts?.kind !== "rollback") {
+    const violations = await emptyRequiredViolations(dimId, tenantId, {
+      dimTable: meta.dimTable,
+      keyCol: meta.keyCol,
+    });
+    if (violations.length > 0) {
+      const records = new Set(violations.map((v) => v.key)).size;
+      throw new AppError(
+        "REQUIRED_FIELDS_EMPTY",
+        `${records} record${records === 1 ? "" : "s"} need a required value before you can publish`,
+        422,
+        { violations },
+      );
+    }
+  }
 
   // Four-eyes governance gate: when requireSecondPublisher is enabled, the
   // committer must not have authored any of the mapped drafts being published.

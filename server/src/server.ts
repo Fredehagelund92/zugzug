@@ -1222,23 +1222,32 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const { label, type, options, numberFormat, ratingMax, referencedDimId, displayFields } =
-            (await req.json()) as {
-              label: string;
-              type?: string;
-              options?: { label: string; color: string | null }[];
-              numberFormat?: NumberFormat;
-              ratingMax?: number;
-              referencedDimId?: string;
-              displayFields?: string[];
-            };
+          const {
+            label,
+            type,
+            options,
+            numberFormat,
+            ratingMax,
+            referencedDimId,
+            displayFields,
+            required,
+          } = (await req.json()) as {
+            label: string;
+            type?: string;
+            options?: { label: string; color: string | null }[];
+            numberFormat?: NumberFormat;
+            ratingMax?: number;
+            referencedDimId?: string;
+            displayFields?: string[];
+            required?: boolean;
+          };
           return json(
             await reqRepo.addField(
               id,
               label,
               type,
               options as OptionDef[] | undefined,
-              { numberFormat, ratingMax, referencedDimId, displayFields },
+              { numberFormat, ratingMax, referencedDimId, displayFields, required },
               me,
             ),
           );

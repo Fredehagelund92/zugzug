@@ -355,6 +355,15 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                 }}
               >
                 {c.label}
+                {c.config.required && (
+                  <span
+                    className="ml-0.5 text-warn"
+                    title="Required — every record needs a value before publishing"
+                    aria-label="Required field"
+                  >
+                    *
+                  </span>
+                )}
                 {c.linkedStale && (
                   <span
                     className="ml-1 text-warn"

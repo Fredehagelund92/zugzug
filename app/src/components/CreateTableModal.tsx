@@ -63,6 +63,17 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     return true; // blank: name is enough
   }, [name, mode, source, external]);
 
+  // Why "Create table" is disabled right now — shown next to the button so the
+  // dead-disabled state explains itself instead of leaving the user guessing.
+  const blockReason = useMemo((): string | null => {
+    if (canSubmit) return null;
+    if (!name.trim()) return "Name your table to continue";
+    if (mode === "source") return "Pick a column to continue";
+    if (mode === "external_id")
+      return external?.idColumn ? "Pick a name column to continue" : "Pick an ID column to continue";
+    return null;
+  }, [canSubmit, name, mode, external]);
+
   // Close request — checks dirty state and prompts to discard if so.
   // Considered "dirty" when the user has typed a name, picked a source, or
   // bound an external id. The optional description/colour aren't counted —
@@ -198,7 +209,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Untitled table"
+              placeholder="Name this table"
               className="w-full border-0 border-b border-line bg-transparent py-1.5 font-display text-[18px] font-semibold text-ink outline-none placeholder:text-ink-3 focus:border-accent"
             />
           </div>
@@ -262,8 +273,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {mode === "blank" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
               <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                Start with an empty list. You name each record; Zug Zug generates a stable ID from
-                the name.
+                Start with an empty list. Name each record; a permanent key is created from the name
+                automatically.
               </p>
               <p className="font-mono text-[11px] leading-[1.5] text-ink-3">
                 You can add extra columns (region, currency, owner…) from the table view later —
@@ -284,7 +295,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                   ? "Distinct values from the chosen column become records. Already-mapped values are skipped."
                   : !info.scanned
                     ? "Scan pending — count will appear after the first scan."
-                    : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one record. Already-mapped values are skipped.`;
+                    : info.values === 0
+                      ? "No values found in this column yet. You can still create the table — it fills in as data arrives."
+                      : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one record. Already-mapped values are skipped.`;
               return (
                 <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
                   <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
@@ -301,7 +314,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                       </a>{" "}
                       page.
                       <br />
-                      Until then, start with a blank table — you can wire a source later.
+                      Until then, start with a blank table — you can add a source later.
                     </div>
                   ) : (
                     <>
@@ -330,8 +343,20 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                 provides the human name shown alongside it.
               </p>
               <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
-                ⚠ The ID column is permanent — it becomes the join key in your warehouse mapping
-                tables. Pick a column that never changes (a database ID, not a name).
+                {external?.idColumn ? (
+                  <>
+                    ⚠ <span className="text-ink">
+                      {external.table}.{external.idColumn}
+                    </span>{" "}
+                    becomes the permanent key — it can&rsquo;t be changed later. Pick a column that
+                    never changes, like a database ID, not a name.
+                  </>
+                ) : (
+                  <>
+                    ⚠ The ID column is permanent — it becomes the key other tables map to. Pick a
+                    column that never changes, like a database ID, not a name.
+                  </>
+                )}
               </div>
               {sourceOpts.length === 0 ? (
                 <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
@@ -342,7 +367,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                   </a>{" "}
                   page.
                   <br />
-                  Until then, start with a blank table — you can wire a source later.
+                  Until then, start with a blank table — you can add a source later.
                 </div>
               ) : (
                 <>
@@ -399,13 +424,28 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                     if (!info.scanned)
                       return (
                         <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                          Scan pending — ID count will appear after the first scan.
+                          Scan pending — the uniqueness check appears after the first scan.
                         </div>
                       );
-                    return (
-                      <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                        {info.values.toLocaleString()} distinct ID
-                        {info.values === 1 ? "" : "s"} found in the warehouse.
+                    if (info.rows === 0)
+                      return (
+                        <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
+                          No values found in this column yet. You can still create the table — it
+                          fills in as data arrives.
+                        </div>
+                      );
+                    // A good permanent key has one row per value. If distinct &lt; total, some IDs
+                    // repeat and the column can't safely be the join key.
+                    return info.values >= info.rows ? (
+                      <div className="font-mono text-[11px] leading-[1.5] text-ok">
+                        {info.values.toLocaleString()} / {info.rows.toLocaleString()} unique — every
+                        value appears once. A reliable key.
+                      </div>
+                    ) : (
+                      <div className="font-mono text-[11px] leading-[1.5] text-warn">
+                        Only {info.values.toLocaleString()} of {info.rows.toLocaleString()} values are
+                        unique — some repeat. This column won&rsquo;t work as a permanent key; pick one
+                        with no duplicates.
                       </div>
                     );
                   })()}
@@ -433,7 +473,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
             </>
           ) : (
             <>
-              <span />
+              <span className="font-mono text-[11px] text-ink-3">{blockReason}</span>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={requestClose}>
                   Cancel

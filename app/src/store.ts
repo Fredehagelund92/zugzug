@@ -16,6 +16,7 @@ export class ApiCodeError extends Error {
   constructor(
     msg: string,
     public code: string,
+    public details?: Record<string, unknown>,
   ) {
     super(msg);
     this.name = "ApiCodeError";
@@ -367,15 +368,24 @@ async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
         throw new ConflictError(body.details.current, body.details.conflictedKeys);
       }
     }
-    if (res.status === 403) {
-      const body = (await res.json().catch(() => null)) as { code?: string } | null;
-      if (body?.code) {
-        throw new ApiCodeError(`${opts?.method ?? "GET"} ${path} → 403 ${body.code}`, body.code);
-      }
+    // Any coded error body (403 governance, 422 validation, …) surfaces as a
+    // typed ApiCodeError so callers can branch on `.code` and read `.details`.
+    const text = await res.text().catch(() => "");
+    type ErrBody = { code?: string; error?: string; details?: Record<string, unknown> };
+    let body: ErrBody | null = null;
+    try {
+      body = text ? (JSON.parse(text) as ErrBody) : null;
+    } catch {
+      /* not JSON — fall through to the generic Error */
     }
-    throw new Error(
-      `${opts?.method ?? "GET"} ${path} → ${res.status} ${await res.text().catch(() => "")}`,
-    );
+    if (body?.code) {
+      throw new ApiCodeError(
+        body.error ?? `${opts?.method ?? "GET"} ${path} → ${res.status} ${body.code}`,
+        body.code,
+        body.details,
+      );
+    }
+    throw new Error(`${opts?.method ?? "GET"} ${path} → ${res.status} ${text}`);
   }
   return res.status === 204 ? (undefined as T) : (res.json() as Promise<T>);
 }
@@ -1052,6 +1062,7 @@ export async function addField(
     ratingMax?: number;
     referencedDimId?: string;
     displayFields?: string[];
+    required?: boolean;
   },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {

@@ -31,7 +31,7 @@ interface TypeTile {
 const TYPE_TILES: TypeTile[] = [
   { type: "text", icon: "A", label: "Text" },
   { type: "number", icon: "#", label: "Number" },
-  { type: "boolean", icon: "☑", label: "Boolean" },
+  { type: "boolean", icon: "☑", label: "Checkbox" },
   { type: "date", icon: "⊞", label: "Date" },
   { type: "select", icon: "◉", label: "Select" },
   { type: "url", icon: "↗", label: "URL" },
@@ -65,6 +65,7 @@ export function AddFieldPopover({
   const [ratingMaxCustom, setRatingMaxCustom] = useState("");
   const [durationDisplay, setDurationDisplay] = useState<"hm" | "hms">("hm");
   const [linkedTargetDimId, setLinkedTargetDimId] = useState<string>("");
+  const [required, setRequired] = useState(false);
 
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
@@ -204,6 +205,7 @@ export function AddFieldPopover({
     setRatingMaxCustom("");
     setDurationDisplay("hm");
     setLinkedTargetDimId("");
+    setRequired(false);
     setError(null);
     nameInputRef.current?.focus();
   };
@@ -212,7 +214,7 @@ export function AddFieldPopover({
     const trimmed = label.trim();
     if (!trimmed) return;
     if (type === "linked" && !linkedTargetDimId) {
-      setError("Select a dimension to link to.");
+      setError("Pick the table this field links to.");
       return;
     }
     setError(null);
@@ -253,6 +255,7 @@ export function AddFieldPopover({
     } else {
       config = { type } as ColumnConfig;
     }
+    config.required = required;
 
     const input: AddFieldInput = { label: trimmed, config };
 
@@ -573,7 +576,7 @@ export function AddFieldPopover({
             <div className="border-t border-line" />
             <div className="space-y-3">
               <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-                Link to dimension
+                Link to table
               </div>
               <select
                 value={linkedTargetDimId}
@@ -600,6 +603,25 @@ export function AddFieldPopover({
           </div>
         )}
 
+        {/* Required toggle — an empty value in a required field blocks publish */}
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={required}
+            onChange={(e) => setRequired(e.target.checked)}
+            className="mt-0.5 rounded-sm"
+            style={{ accentColor: "var(--accent)" }}
+          />
+          <span className="leading-tight">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-ink-2">
+              Required
+            </span>
+            <span className="mt-0.5 block font-body text-[11px] text-ink-3">
+              Every record must have a value before the table can be published.
+            </span>
+          </span>
+        </label>
+
         {/* Footer */}
         <div className="flex items-center gap-2 pt-1">
           <label className="flex items-center gap-1.5 cursor-pointer">
@@ -611,7 +633,7 @@ export function AddFieldPopover({
               style={{ accentColor: "var(--accent)" }}
             />
             <span className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-              create another
+              add another
             </span>
           </label>
           <div className="ml-auto flex items-center gap-2">
@@ -619,7 +641,7 @@ export function AddFieldPopover({
               Cancel
             </Button>
             <Button size="sm" type="button" onClick={handleSubmit} disabled={!canSubmit}>
-              Create field
+              Add field
             </Button>
           </div>
         </div>

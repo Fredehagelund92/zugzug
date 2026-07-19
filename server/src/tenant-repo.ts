@@ -287,6 +287,7 @@ export class TenantRepo {
       ratingMax?: number;
       referencedDimId?: string;
       displayFields?: string[];
+      required?: boolean;
     } = {},
     userId: string,
   ): Promise<{ field: string } | null> {

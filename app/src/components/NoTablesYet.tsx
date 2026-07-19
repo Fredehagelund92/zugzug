@@ -26,7 +26,7 @@ export function NoTablesYet({
         Nothing to {from === "mapping" ? "map" : from === "triage" ? "review" : "manage"} yet.
       </h1>
       <p className="mt-3 text-ink-2">
-        Create a table from scratch, or import one from a warehouse column.
+        Create a table from scratch, or build one from a warehouse column.
       </p>
       <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
         {onCreateRequested ? (
@@ -47,7 +47,7 @@ export function NoTablesYet({
           icon={<IconArrowRight className="h-4 w-4" />}
           onClick={() => navigate(nav.sources)}
         >
-          Wire a source
+          Pick a source column
         </Button>
       </div>
       {!onCreateRequested && (

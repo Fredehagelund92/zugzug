@@ -78,24 +78,28 @@ import { PALETTE, defaultTintFor } from "../lib/palette";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
-  switch (f.type) {
-    case "number":
-      return { type: "number", numberFormat: f.numberFormat };
-    case "boolean":
-      return { type: "boolean" };
-    case "date":
-      return { type: "date" };
-    case "select":
-      return { type: "select", options: f.options ?? [] };
-    case "url":
-      return { type: "url" };
-    case "email":
-      return { type: "email" };
-    case "rating":
-      return { type: "rating", ratingMax: f.ratingMax ?? 5 };
-    default:
-      return { type: "text" };
-  }
+  const config: ColumnConfig = (() => {
+    switch (f.type) {
+      case "number":
+        return { type: "number", numberFormat: f.numberFormat };
+      case "boolean":
+        return { type: "boolean" };
+      case "date":
+        return { type: "date" };
+      case "select":
+        return { type: "select", options: f.options ?? [] };
+      case "url":
+        return { type: "url" };
+      case "email":
+        return { type: "email" };
+      case "rating":
+        return { type: "rating", ratingMax: f.ratingMax ?? 5 };
+      default:
+        return { type: "text" };
+    }
+  })();
+  config.required = f.required;
+  return config;
 }
 
 interface TablePaneProps {
@@ -1604,23 +1608,27 @@ function RecordsBody({
             allDims={allDims.map((d) => ({ id: d.id, dimension: d.dimension }))}
             currentDimId={activeId}
             onSubmit={async ({ label, config }) => {
+              const required = config.required;
               if (config.type === "linked") {
                 await addField(activeId, label, "linked", undefined, {
                   referencedDimId: config.targetDimId,
                   displayFields: config.displayFields,
+                  required,
                 });
               } else if (config.type === "number") {
                 await addField(activeId, label, "number", undefined, {
                   numberFormat: config.numberFormat,
+                  required,
                 });
               } else if (config.type === "select") {
-                await addField(activeId, label, "select", config.options);
+                await addField(activeId, label, "select", config.options, { required });
               } else if (config.type === "rating") {
                 await addField(activeId, label, "rating", undefined, {
                   ratingMax: config.ratingMax,
+                  required,
                 });
               } else {
-                await addField(activeId, label, config.type);
+                await addField(activeId, label, config.type, undefined, { required });
               }
             }}
           />

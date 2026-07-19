@@ -35,7 +35,7 @@ export type ConditionalRule =
 /* types.ts — the DataGrid contract. Both MasterTables and Mapping mount the
    grid through these types; new cell types slot in via the union. */
 
-export type ColumnConfig =
+export type ColumnConfig = (
   | { type: "text" }
   | { type: "number"; numberFormat?: NumberFormat }
   | { type: "boolean" }
@@ -49,7 +49,8 @@ export type ColumnConfig =
       targetDimId: string;
       displayFields: string[];
       candidates: { key: string; label: string }[];
-    };
+    }
+) & { required?: boolean };
 
 export type CellType = ColumnConfig["type"];
 
