@@ -25,6 +25,7 @@ import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { saveDraft } from "./repo-drafts.ts";
 import { materializeDimScanValues } from "./repo-dim-scan.ts";
+import { clusterForSeed } from "./cluster-values.ts";
 import { AppError } from "./errors.ts";
 
 export interface UnmappedSample {
@@ -875,12 +876,16 @@ export async function deriveCanonical(
     return { derived: ids.length, mode, matched: 0, unmatched: 0 };
   }
 
-  const dimByKey = new Map<string, string>(); // key → label (first wins)
+  // Cluster look-alikes exactly the way the review path does (normalizeKey folds
+  // case, punctuation and diacritics), so "U.S.A." and "usa" seed as one record
+  // instead of two. The stored key stays a readable slug of the cluster's rep;
+  // distinct normalized keys yield distinct slugs, so records never collide.
+  const dimByKey = new Map<string, string>(); // key → label (cluster rep)
   const mapPairs: [string, string][] = []; // raw → key
-  for (const v of vals) {
-    const k = slug(v) || v.toLowerCase().slice(0, 60) || "_";
-    if (!dimByKey.has(k)) dimByKey.set(k, v);
-    mapPairs.push([v, k]);
+  for (const c of clusterForSeed(vals)) {
+    const k = slug(c.rep) || c.rep.toLowerCase().slice(0, 60) || "_";
+    dimByKey.set(k, c.rep);
+    for (const raw of c.raws) mapPairs.push([raw, k]);
   }
   await bulkInsert(
     `INSERT INTO ${cq(meta.dimTable)} (${key}, label)`,

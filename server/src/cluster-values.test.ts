@@ -1,5 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { normalizeKey, clusterValues, clusterScanRows } from "./cluster-values.ts";
+import {
+  normalizeKey,
+  clusterValues,
+  clusterScanRows,
+  clusterForSeed,
+} from "./cluster-values.ts";
 import type { ScanValueRow } from "./repo-dim-scan.ts";
 
 function scanRow(
@@ -16,6 +21,31 @@ function scanRow(
     occurrences: [{ table: "orders", column: "ship_country", rows: totalRows }],
   };
 }
+
+describe("clusterForSeed", () => {
+  it("folds case, punctuation and diacritics into one cluster (matches review)", () => {
+    const out = clusterForSeed(["USA", "U.S.A.", "usa"]);
+    expect(out).toHaveLength(1);
+    expect(out[0].rep).toBe("USA"); // first-seen wins the representative
+    expect(out[0].raws).toEqual(["USA", "U.S.A.", "usa"]);
+  });
+
+  it("merges accented variants", () => {
+    expect(clusterForSeed(["Café", "cafe"])).toHaveLength(1);
+  });
+
+  it("keeps genuinely different values separate (US vs USA)", () => {
+    expect(clusterForSeed(["US", "USA"]).map((c) => c.rep)).toEqual(["US", "USA"]);
+  });
+
+  it("never merges punctuation-only values with each other", () => {
+    expect(clusterForSeed(["!!!", "???"])).toHaveLength(2);
+  });
+
+  it("preserves first-seen order", () => {
+    expect(clusterForSeed(["Zeta", "Alpha", "zeta"]).map((c) => c.rep)).toEqual(["Zeta", "Alpha"]);
+  });
+});
 
 describe("normalizeKey", () => {
   it("folds case, punctuation, and spacing to one key", () => {

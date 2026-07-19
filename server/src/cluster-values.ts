@@ -22,6 +22,24 @@ export function normalizeKey(raw: string): string {
   return folded === "" ? `\u0000${raw}` : folded;
 }
 
+/**
+ * Group raw values for SEEDING a dimension the same way review clusters them:
+ * members folding to one `normalizeKey` become one cluster (case, punctuation
+ * and diacritics all fold — "U.S.A." and "usa" merge; "US" stays separate).
+ * The first-seen raw is the representative; the caller derives a readable key
+ * from it. Preserves first-seen order. Pure — no slug/DB dependency here.
+ */
+export function clusterForSeed(values: string[]): Array<{ rep: string; raws: string[] }> {
+  const byKey = new Map<string, { rep: string; raws: string[] }>();
+  for (const v of values) {
+    const k = normalizeKey(v);
+    const c = byKey.get(k);
+    if (c) c.raws.push(v);
+    else byKey.set(k, { rep: v, raws: [v] });
+  }
+  return [...byKey.values()];
+}
+
 /** A raw value plus its downstream row weight. */
 export interface ClusterInput {
   raw: string;
