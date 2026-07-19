@@ -1201,7 +1201,6 @@ export async function addField(
 
   if (t === "linked") {
     if (!opts.referencedDimId) return null;
-    if (opts.referencedDimId === dimId) return null;
     const targetMeta = await dimMeta(opts.referencedDimId, tenantId);
     if (!targetMeta) return null;
     const targetFieldNames = new Set(

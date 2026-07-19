@@ -15,7 +15,8 @@ export type ErrorCode =
   | "INTERNAL"
   | "NO_SNAPSHOT"
   | "SECOND_PUBLISHER_REQUIRED"
-  | "REQUIRED_FIELDS_EMPTY";
+  | "REQUIRED_FIELDS_EMPTY"
+  | "HIERARCHY_CYCLE";
 
 export class AppError extends Error {
   constructor(
