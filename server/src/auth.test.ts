@@ -85,6 +85,43 @@ describe("first-admin role assignment", () => {
     expect(await roleOf(a)).toBe("admin");
     expect(await roleOf(b)).toBe("editor");
   });
+
+  it("seeded placeholder (null password_hash) does not block the first real signup from becoming admin", async () => {
+    const PLACEHOLDER_EMAIL = "placeholder-test@zugzug.test";
+
+    // Start from a clean state: only the seeded placeholder, no real login accounts.
+    await pgRun(`DELETE FROM "zugzug_app"."users"`).catch(() => {});
+    // Simulate a bootstrap-seeded placeholder user (no password, no login).
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, initials, auth_provider)
+       VALUES ('u_system', 'Auto-match', 'AM', 'password')`,
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."tenant_invite"
+         (tenant_id, email, role, invited_by, invited_at)
+       VALUES ('default', $1, 'editor', 'system', now())
+       ON CONFLICT DO NOTHING`,
+      [PLACEHOLDER_EMAIL],
+    );
+
+    let placeholderUserId: string | undefined;
+    try {
+      const id = await signup(PLACEHOLDER_EMAIL);
+      placeholderUserId = id;
+      expect(await roleOf(id)).toBe("admin");
+    } finally {
+      // Clean up placeholder user and the real signup.
+      await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = 'u_system'`).catch(() => {});
+      await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = 'u_system'`).catch(() => {});
+      await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = 'u_system'`).catch(() => {});
+      await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE email = $1`, [PLACEHOLDER_EMAIL]).catch(() => {});
+      if (placeholderUserId) {
+        await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [placeholderUserId]).catch(() => {});
+        await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = $1`, [placeholderUserId]).catch(() => {});
+        await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [placeholderUserId]).catch(() => {});
+      }
+    }
+  });
 });
 
 // ── cross-path advisory lock invariant ───────────────────────────────────────
