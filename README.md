@@ -35,7 +35,23 @@ Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres reco
 
 The warehouse adapter is a TypeScript interface (`WarehouseAdapter`). DuckDB/MotherDuck and Snowflake are shipped. Additional adapters (Postgres-as-warehouse, BigQuery, Databricks) are community-roadmapped — see the issue template below.
 
-## Quickstart
+## Try it in 30 seconds
+
+Requires [Docker](https://docs.docker.com/get-docker/). No warehouse or Google account needed.
+
+```bash
+git clone https://github.com/Fredehagelund92/zugzug.git
+cd zugzug
+docker compose up
+```
+
+Open `http://localhost:8080` and create your account — the first user becomes the admin. The demo boots with sample reference tables like `Country` and `Product Category` so you can explore the grid right away. (First run builds the images; that takes a few minutes. Later runs start in seconds.)
+
+To connect your own warehouse or turn off the demo seed, see [Develop locally](#develop-locally) and `server/.env.example`.
+
+## Develop locally
+
+For hacking on Zugzug with hot reload (Vite + `bun --watch`), run the two processes directly:
 
 Prerequisites: [Bun](https://bun.sh) 1.x, Postgres 14+, and a warehouse you have read access to.
 
