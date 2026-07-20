@@ -220,7 +220,7 @@ export function Sources() {
   if (loading) return <SourcesLoader />;
 
   return (
-    <div className="flex h-full min-h-0 flex-col px-2 pb-3 pt-3 md:px-5 md:pb-5 md:pt-4">
+    <div className="flex flex-col px-2 pb-3 md:px-5 md:pb-5">
       {catalog && (
         <CatalogExplorer
           dims={dims}
@@ -230,8 +230,11 @@ export function Sources() {
         />
       )}
 
-      {/* ─────────── HEADER (above the surface, on the canvas) ─────────── */}
-      <div className="mb-3 shrink-0">
+      {/* ─────────── HEADER (above the surface, on the canvas) ───────────
+          Sticky so it stays put while the page scrolls at the window edge.
+          Carries the .zz-canvas background (fixed-attachment, so its grid
+          lines up with the canvas) to occlude the surface sliding under it. */}
+      <div className="sticky top-0 z-10 zz-canvas pb-3 pt-3 md:pt-4">
         <PageHeader
           kicker="Warehouse"
           title="Sources"
@@ -271,7 +274,7 @@ export function Sources() {
 
       {/* ─────────── CONNECTION SURFACE (paper) ─────────── */}
       <section
-        className="zz-rise relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-pop"
+        className="zz-rise relative flex flex-col overflow-hidden rounded-lg border border-line bg-surface shadow-pop"
         style={{ animationDelay: "60ms" }}
       >
         {/* a thin accent edge at the very top — the 'folder tab' that signals
@@ -281,7 +284,7 @@ export function Sources() {
           aria-hidden="true"
         />
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex flex-col">
           {groups.length === 0 ? (
             <div className="p-3">
               <SetupCard
