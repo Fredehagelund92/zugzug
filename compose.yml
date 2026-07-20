@@ -1,0 +1,55 @@
+name: zugzug
+
+# One-command demo. `docker compose up` → http://localhost:8080
+# Password auth (first signup = admin), demo reference tables seeded, no warehouse.
+# For a real self-host: set SEED_DEMO=false, supply your own ORIGIN, and wire a
+# warehouse (ATTACH_WAREHOUSE=true + WAREHOUSE_ADAPTER + MOTHERDUCK_TOKEN).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zugzug
+      POSTGRES_PASSWORD: zugzug
+      POSTGRES_DB: zugzug
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zugzug -d zugzug"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  server:
+    build: ./server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://zugzug:zugzug@postgres:5432/zugzug
+      PORT: "8787"
+      ATTACH_WAREHOUSE: "false"
+      SEED_DEMO: "true"
+      ORIGIN: http://localhost:8080
+      ZUGZUG_SELF_HOSTED: "1"
+      ZUGZUG_DATA_DIR: /data
+    volumes:
+      - serverdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "printf \"const r = await fetch('http://localhost:8787/health'); process.exit(r.ok ? 0 : 1)\" | bun run -"]
+      interval: 5s
+      timeout: 10s
+      start_period: 30s
+      retries: 20
+
+  app:
+    build: ./app
+    depends_on:
+      server:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:
+  serverdata:
