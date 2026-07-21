@@ -7,9 +7,9 @@ Here is how the tests are organized and how to add one.
 
 | Layer | Where | Command |
 |---|---|---|
-| Unit (app) | `app/test/unit`, colocated | `cd app && bun run test` |
-| Component (app) | `app/test/component`, datagrid `test-kit` | `cd app && bun run test` |
-| Unit + integration (server) | `server/test` | `cd server && bun run test` |
+| Unit (app) | `app/test/` + colocated `app/src/**/*.test.ts(x)` | `cd app && bun run test` |
+| Component (app) | `app/test/` + datagrid `test-kit` | `cd app && bun run test` |
+| Unit + integration (server) | `server/test/` + colocated `server/src/**/*.test.ts` | `cd server && bun run test` |
 | End-to-end | `e2e/` (added in a later phase) | see below |
 
 Run everything the way CI does with one command from the repo root:
@@ -28,21 +28,21 @@ tests for what you touch. Aim for 80%+ on your diff.
 
 ## Writing a unit test (server, pure logic)
 
-    // server/test/unit/example.test.ts
+    // server/test/example.test.ts
     import { test, expect } from "bun:test";
-    import { signPayload } from "../../src/repo-webhooks";
+    import { signPayload } from "../src/webhook-signing";
 
-    test("signPayload is stable for the same input", () => {
-      const a = signPayload("secret", "{}");
-      const b = signPayload("secret", "{}");
+    test("signPayload is deterministic for the same input", () => {
+      const a = signPayload("{}", "secret", "current", 0);
+      const b = signPayload("{}", "secret", "current", 0);
       expect(a).toBe(b);
     });
 
 ## Writing an integration test (server, hits Postgres)
 
-    // server/test/integration/example.test.ts
+    // server/test/example-db.test.ts
     import { test, expect, beforeEach } from "bun:test";
-    import { resetDb } from "../setup";
+    import { resetDb } from "./setup";
 
     beforeEach(async () => {
       await resetDb();
@@ -57,7 +57,7 @@ Bring the database up first with `cd server && bun run test:db:up`.
 
 ## Writing a component test (app, React + Testing Library)
 
-    // app/test/component/example.test.tsx
+    // app/test/example.test.tsx
     import { render, screen } from "@testing-library/react";
     import { test, expect } from "vitest";
 
