@@ -52,7 +52,7 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
   }
   if (m.done || !m.current) {
     return (
-      <div className="px-4 py-10 text-center">
+      <div className="bg-surface px-4 py-10 text-center">
         <div className="font-display text-[18px] font-semibold text-ink">
           {dim.dimension} is all mapped 🎉
         </div>
