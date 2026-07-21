@@ -12,7 +12,13 @@ export function makeColumns(): ColumnDef<Row>[] {
     {
       field: "region",
       label: "Region",
-      config: { type: "select", options: [{ label: "EMEA", color: null }, { label: "AMER", color: null }] },
+      config: {
+        type: "select",
+        options: [
+          { label: "EMEA", color: null },
+          { label: "AMER", color: null },
+        ],
+      },
       editable: true,
     },
   ];

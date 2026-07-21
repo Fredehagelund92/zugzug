@@ -112,13 +112,23 @@ describe("first-admin role assignment", () => {
     } finally {
       // Clean up placeholder user and the real signup.
       await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = 'u_system'`).catch(() => {});
-      await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = 'u_system'`).catch(() => {});
+      await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = 'u_system'`).catch(
+        () => {},
+      );
       await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = 'u_system'`).catch(() => {});
-      await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE email = $1`, [PLACEHOLDER_EMAIL]).catch(() => {});
+      await pgRun(`DELETE FROM "zugzug_app"."tenant_invite" WHERE email = $1`, [
+        PLACEHOLDER_EMAIL,
+      ]).catch(() => {});
       if (placeholderUserId) {
-        await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [placeholderUserId]).catch(() => {});
-        await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = $1`, [placeholderUserId]).catch(() => {});
-        await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [placeholderUserId]).catch(() => {});
+        await pgRun(`DELETE FROM "zugzug_app"."sessions" WHERE user_id = $1`, [
+          placeholderUserId,
+        ]).catch(() => {});
+        await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE user_id = $1`, [
+          placeholderUserId,
+        ]).catch(() => {});
+        await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [placeholderUserId]).catch(
+          () => {},
+        );
       }
     }
   });

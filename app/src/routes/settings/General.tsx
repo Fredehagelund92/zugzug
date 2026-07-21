@@ -67,10 +67,7 @@ export function General() {
 
   return (
     <div className="space-y-8">
-      <SettingsPageHeader
-        title="General"
-        subtitle="Your workspace’s name, color, and address."
-      />
+      <SettingsPageHeader title="General" subtitle="Your workspace’s name, color, and address." />
       <SettingsSection
         title="Identity"
         hint={canChangeSlug ? "Workspace identity." : "Workspace identity. Slug is immutable."}

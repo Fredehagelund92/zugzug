@@ -83,30 +83,29 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
     if (!name.trim()) return "Name your table to continue";
     if (mode === "source") return "Pick a column to continue";
     if (mode === "external_id")
-      return external?.idColumn ? "Pick a name column to continue" : "Pick an ID column to continue";
+      return external?.idColumn
+        ? "Pick a name column to continue"
+        : "Pick an ID column to continue";
     if (mode === "file") return "Choose a CSV file to continue";
     return null;
   }, [canSubmit, name, mode, external]);
 
   // Read a chosen CSV, parse it client-side, and stage the result. Errors show
   // inline in the file panel rather than as a toast (the modal is still open).
-  const handleFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-      const file = e.target.files?.[0];
-      e.target.value = ""; // let the user re-pick the same file after an error
-      if (!file) return;
-      try {
-        const data = prepareCreateFromCsv(await file.text());
-        setCsv({ fileName: file.name, data });
-        setCsvError(null);
-        setName((n) => n.trim() || file.name.replace(/\.csv$/i, ""));
-      } catch (err) {
-        setCsv(null);
-        setCsvError(err instanceof Error ? err.message : "Could not read this file.");
-      }
-    },
-    [],
-  );
+  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // let the user re-pick the same file after an error
+    if (!file) return;
+    try {
+      const data = prepareCreateFromCsv(await file.text());
+      setCsv({ fileName: file.name, data });
+      setCsvError(null);
+      setName((n) => n.trim() || file.name.replace(/\.csv$/i, ""));
+    } catch (err) {
+      setCsv(null);
+      setCsvError(err instanceof Error ? err.message : "Could not read this file.");
+    }
+  }, []);
 
   // Close request — checks dirty state and prompts to discard if so.
   // Considered "dirty" when the user has typed a name, picked a source, or
@@ -425,7 +424,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                       <thead>
                         <tr className="bg-bg text-ink-3">
                           {csv.data.headers.map((h, i) => (
-                            <th key={i} className="border-b border-line px-2 py-1 text-left font-medium">
+                            <th
+                              key={i}
+                              className="border-b border-line px-2 py-1 text-left font-medium"
+                            >
                               {h}
                             </th>
                           ))}
@@ -435,7 +437,10 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                         {csv.data.previewRows.map((r, ri) => (
                           <tr key={ri} className="text-ink-2">
                             {csv.data.headers.map((_, ci) => (
-                              <td key={ci} className="border-b border-line px-2 py-1 whitespace-nowrap">
+                              <td
+                                key={ci}
+                                className="border-b border-line px-2 py-1 whitespace-nowrap"
+                              >
                                 {r[ci] ?? ""}
                               </td>
                             ))}
@@ -459,7 +464,8 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
               <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
                 {external?.idColumn ? (
                   <>
-                    ⚠ <span className="text-ink">
+                    ⚠{" "}
+                    <span className="text-ink">
                       {external.table}.{external.idColumn}
                     </span>{" "}
                     becomes the permanent key — it can&rsquo;t be changed later. Pick a column that
@@ -559,9 +565,9 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                       </div>
                     ) : (
                       <div className="font-mono text-[11px] leading-[1.5] text-warn">
-                        Only {info.values.toLocaleString()} of {info.rows.toLocaleString()} values are
-                        unique — some repeat. This column won&rsquo;t work as a permanent key; pick one
-                        with no duplicates.
+                        Only {info.values.toLocaleString()} of {info.rows.toLocaleString()} values
+                        are unique — some repeat. This column won&rsquo;t work as a permanent key;
+                        pick one with no duplicates.
                       </div>
                     );
                   })()}

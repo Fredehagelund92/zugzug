@@ -79,7 +79,11 @@ describe("createTable() file mode", () => {
 
   it("defaults ownership to the creator", async () => {
     const { id } = await createTable(
-      { name: "Owned FM", mode: "file", file: { columns: [], rows: [{ label: "Solo", fields: {} }] } },
+      {
+        name: "Owned FM",
+        mode: "file",
+        file: { columns: [], rows: [{ label: "Solo", fields: {} }] },
+      },
       U,
       T,
     );

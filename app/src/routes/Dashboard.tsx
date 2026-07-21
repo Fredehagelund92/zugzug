@@ -226,10 +226,7 @@ export function Dashboard() {
   };
 
   // Last "Committed" audit entry — used for the Published today KPI.
-  const lastCommit = useMemo(
-    () => auditLog.find((e) => e.action === "Committed"),
-    [auditLog],
-  );
+  const lastCommit = useMemo(() => auditLog.find((e) => e.action === "Committed"), [auditLog]);
   // Parse draft count from detail like "3 values → zugzug.map_X · 14 rows recovered"
   const lastCommitCount = useMemo(() => {
     if (!lastCommit) return null;

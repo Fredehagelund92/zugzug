@@ -24,8 +24,7 @@ const SYSTEM_USER_ID = "u_system";
 function requiredEmptyMessage(err: ApiCodeError): string {
   const violations =
     (err.details?.violations as Array<{ label: string; fieldLabel: string }> | undefined) ?? [];
-  if (violations.length === 0)
-    return "Some records need a required value before you can publish.";
+  if (violations.length === 0) return "Some records need a required value before you can publish.";
   const fields = [...new Set(violations.map((v) => v.fieldLabel))].join(", ");
   const records = [...new Set(violations.map((v) => v.label))];
   const shown = records.slice(0, 3).join(", ");

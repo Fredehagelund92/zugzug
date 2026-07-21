@@ -6,7 +6,10 @@ describe("grid selection + clear", () => {
     const g = renderGrid();
     await g.focusCell(0, "name");
     await g.press("{Shift>}{ArrowDown}{/Shift}");
-    const sel = g.selectedCells().map((c) => `${c.rowKey}::${c.field}`).sort();
+    const sel = g
+      .selectedCells()
+      .map((c) => `${c.rowKey}::${c.field}`)
+      .sort();
     expect(sel).toEqual(["r0::name", "r1::name"]);
   });
 

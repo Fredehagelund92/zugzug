@@ -256,7 +256,10 @@ function ConnectionsSection() {
       {tenant.isSuperAdmin && (
         <p className="mt-3 text-[12.5px] text-ink-3">
           Need a fresh database?{" "}
-          <Link to="/app/admin/warehouse" className="text-accent underline-offset-2 hover:underline">
+          <Link
+            to="/app/admin/warehouse"
+            className="text-accent underline-offset-2 hover:underline"
+          >
             Manage warehouses →
           </Link>
         </p>

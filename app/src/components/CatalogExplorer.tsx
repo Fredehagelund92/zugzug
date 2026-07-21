@@ -514,9 +514,7 @@ export function CatalogExplorer({
 
               {searched && !loading && rows.length === 0 && (
                 <div className="px-5 py-16 text-center font-mono text-[12px] text-ink-3">
-                  {q
-                    ? "no tables match"
-                    : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
+                  {q ? "no tables match" : "warehouse not attached — set ATTACH_WAREHOUSE=true"}
                 </div>
               )}
 

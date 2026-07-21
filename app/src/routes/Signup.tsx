@@ -98,16 +98,8 @@ export function Signup() {
           <span id={passwordHintId} className="mt-1 block text-[11px] font-normal text-ink-3">
             At least 12 characters.
           </span>
-          {formError && (
-            <p className="text-xs text-warn">{formError}</p>
-          )}
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            className="w-full"
-          >
+          {formError && <p className="text-xs text-warn">{formError}</p>}
+          <Button type="submit" variant="primary" size="lg" loading={submitting} className="w-full">
             {submitting ? "Creating account…" : "Sign up"}
           </Button>
           <p className="text-center text-xs text-ink-3">

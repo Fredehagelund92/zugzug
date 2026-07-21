@@ -289,7 +289,11 @@ export function Sources() {
             <div className="p-3">
               <SetupCard
                 title="No sources connected yet"
-                glyph={<span className="text-2xl" aria-hidden>🔌</span>}
+                glyph={
+                  <span className="text-2xl" aria-hidden>
+                    🔌
+                  </span>
+                }
                 body="Pick a warehouse column from the catalog — Zug Zug will scan it for values."
                 action={<Button onClick={() => setCatalog(true)}>Browse catalog</Button>}
                 secondary={<BrowseWarehouse settingsBase={nav.settings} />}

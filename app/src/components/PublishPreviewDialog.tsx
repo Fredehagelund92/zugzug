@@ -95,8 +95,8 @@ export function PublishPreviewDialog({
           ))}
           <p className="text-[12px] text-ink-3">
             Publishing creates {totalDrafts + totalEdits === 1 ? "a new version" : "new versions"}{" "}
-            that dbt consumers pick up immediately. Draft mappings can still be removed here;
-            record edits are listed for awareness.
+            that dbt consumers pick up immediately. Draft mappings can still be removed here; record
+            edits are listed for awareness.
           </p>
         </div>
       }

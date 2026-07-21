@@ -264,7 +264,10 @@ function MemberRow({
   return (
     <div className="group/row relative flex items-center gap-3 py-2 pl-9 pr-3 transition-colors hover:bg-hover/60">
       {/* junction spine — the workspace rail every member is wired into */}
-      <span aria-hidden className="pointer-events-none absolute inset-y-0 left-[18px] w-px bg-line" />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-[18px] w-px bg-line"
+      />
       <span
         aria-hidden
         className={cx(
@@ -557,8 +560,7 @@ function PendingInvitesList({
       {/* Invites are "in flight" toward becoming members — the amber
           source-lamp accent the design system reserves for things in transit. */}
       <h3 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">
-        <span className="text-accent-2">[</span> in flight{" "}
-        <span className="text-accent-2">]</span>{" "}
+        <span className="text-accent-2">[</span> in flight <span className="text-accent-2">]</span>{" "}
         <span className="tabular-nums text-ink-3">{invites.length}</span>
       </h3>
       <div className="overflow-hidden rounded-sm border border-accent-2/30">
@@ -922,239 +924,238 @@ export function Members() {
         hint="Manage who has access to this workspace and their roles."
         wide
       >
+        {showSuperAdminBanner && (
+          <SuperAdminBanner>
+            You&apos;re viewing this workspace as a super-admin. You can manage members but
+            aren&apos;t a member yourself.
+          </SuperAdminBanner>
+        )}
+        <ReadOnly enabled={!isAdmin}>
+          {/* Error banners */}
+          {membersError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+              <span>{membersError}</span>
+              <Button variant="ghost" size="sm" onClick={() => void loadMembers()}>
+                Retry
+              </Button>
+            </div>
+          )}
+          {roleError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+              <span>{roleError}</span>
+              <Button variant="ghost" size="sm" onClick={() => setRoleError(null)}>
+                Dismiss
+              </Button>
+            </div>
+          )}
+          {removeError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
+              <span>{removeError}</span>
+              <Button variant="ghost" size="sm" onClick={() => setRemoveError(null)}>
+                Dismiss
+              </Button>
+            </div>
+          )}
 
-      {showSuperAdminBanner && (
-        <SuperAdminBanner>
-          You&apos;re viewing this workspace as a super-admin. You can manage members but
-          aren&apos;t a member yourself.
-        </SuperAdminBanner>
-      )}
-      <ReadOnly enabled={!isAdmin}>
-        {/* Error banners */}
-        {membersError && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-            <span>{membersError}</span>
-            <Button variant="ghost" size="sm" onClick={() => void loadMembers()}>
-              Retry
-            </Button>
-          </div>
-        )}
-        {roleError && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-            <span>{roleError}</span>
-            <Button variant="ghost" size="sm" onClick={() => setRoleError(null)}>
-              Dismiss
-            </Button>
-          </div>
-        )}
-        {removeError && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-danger/40 bg-danger-soft px-4 py-2.5 font-mono text-[11.5px] text-danger">
-            <span>{removeError}</span>
-            <Button variant="ghost" size="sm" onClick={() => setRemoveError(null)}>
-              Dismiss
-            </Button>
-          </div>
-        )}
-
-        {/* Member roster */}
-        {teamUsers.length > 0 ? (
-          <TeamRoster
-            users={teamUsers}
-            isAdmin={isAdmin}
-            currentEmail={myEmail ?? ""}
-            rolePending={rolePending}
-            onRoleChange={(userId, role) => void handleRoleChange(userId, role)}
-            onRemove={(userId) => {
-              const u = teamUsers.find((m) => m.user_id === userId);
-              setRemoveTarget({ userId, email: u?.email ?? userId });
-            }}
-          />
-        ) : (
-          !membersError && (
-            <EmptyState
-              title="You're flying solo"
-              body="Invite teammates to collaborate on this workspace."
-              action={
-                <Button size="sm" onClick={() => inputRef.current?.focus()}>
-                  Send invites
-                </Button>
-              }
+          {/* Member roster */}
+          {teamUsers.length > 0 ? (
+            <TeamRoster
+              users={teamUsers}
+              isAdmin={isAdmin}
+              currentEmail={myEmail ?? ""}
+              rolePending={rolePending}
+              onRoleChange={(userId, role) => void handleRoleChange(userId, role)}
+              onRemove={(userId) => {
+                const u = teamUsers.find((m) => m.user_id === userId);
+                setRemoveTarget({ userId, email: u?.email ?? userId });
+              }}
             />
-          )
-        )}
-
-        {/* Pending invites */}
-        {invitesError && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-warn/40 bg-warn-soft px-4 py-2.5 font-mono text-[11.5px] text-warn">
-            <span>Couldn&rsquo;t load invites — {invitesError}</span>
-            <Button variant="ghost" size="sm" onClick={() => void loadInvites()}>
-              Retry
-            </Button>
-          </div>
-        )}
-        <PendingInvitesList
-          invites={invites}
-          isAdmin={isAdmin}
-          onRevoke={(email) => void revokeInvite(email)}
-        />
-
-        {/* Confirm remove member */}
-        <ConfirmDialog
-          open={removeTarget !== null}
-          title="Remove this member?"
-          body={
-            removeTarget && (
-              <>
-                <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
-                  {removeTarget.email}
-                </code>{" "}
-                will lose access immediately. They can be re-invited from this screen if needed.
-              </>
-            )
-          }
-          confirmLabel="Remove"
-          danger
-          onConfirm={async () => {
-            if (!removeTarget) return;
-            await removeMember(removeTarget.userId, removeTarget.email);
-            setRemoveTarget(null);
-          }}
-          onCancel={() => setRemoveTarget(null)}
-        />
-
-        {/* Invite input — chip-based, admin only */}
-        {isAdmin && (
-          <div className="space-y-2">
-            <div
-              className={cx(
-                "flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-sm border border-line-2 bg-bg px-2 py-1.5 transition-colors",
-                "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/40",
-                submitting && "opacity-70",
-              )}
-              onClick={() => inputRef.current?.focus()}
-            >
-              {chips.map((c) => (
-                <ChipPill key={c.id} chip={c} onRemove={() => removeChip(c.id)} />
-              ))}
-              <input
-                ref={inputRef}
-                className="min-w-[160px] flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
-                placeholder={
-                  chips.length === 0
-                    ? allowedDomain
-                      ? `colleague@${allowedDomain.slice(1)}, another@${allowedDomain.slice(1)}…`
-                      : "colleague@example.com, another@example.com…"
-                    : ""
+          ) : (
+            !membersError && (
+              <EmptyState
+                title="You're flying solo"
+                body="Invite teammates to collaborate on this workspace."
+                action={
+                  <Button size="sm" onClick={() => inputRef.current?.focus()}>
+                    Send invites
+                  </Button>
                 }
-                value={buffer}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (/[,;\n\t]/.test(v)) {
-                    v.split(/[,;\n\t]+/)
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                      .forEach(addChip);
-                    setBuffer("");
-                  } else {
-                    setBuffer(v);
+              />
+            )
+          )}
+
+          {/* Pending invites */}
+          {invitesError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-warn/40 bg-warn-soft px-4 py-2.5 font-mono text-[11.5px] text-warn">
+              <span>Couldn&rsquo;t load invites — {invitesError}</span>
+              <Button variant="ghost" size="sm" onClick={() => void loadInvites()}>
+                Retry
+              </Button>
+            </div>
+          )}
+          <PendingInvitesList
+            invites={invites}
+            isAdmin={isAdmin}
+            onRevoke={(email) => void revokeInvite(email)}
+          />
+
+          {/* Confirm remove member */}
+          <ConfirmDialog
+            open={removeTarget !== null}
+            title="Remove this member?"
+            body={
+              removeTarget && (
+                <>
+                  <code className="rounded-sm bg-surface-2 px-1 font-mono text-[12px]">
+                    {removeTarget.email}
+                  </code>{" "}
+                  will lose access immediately. They can be re-invited from this screen if needed.
+                </>
+              )
+            }
+            confirmLabel="Remove"
+            danger
+            onConfirm={async () => {
+              if (!removeTarget) return;
+              await removeMember(removeTarget.userId, removeTarget.email);
+              setRemoveTarget(null);
+            }}
+            onCancel={() => setRemoveTarget(null)}
+          />
+
+          {/* Invite input — chip-based, admin only */}
+          {isAdmin && (
+            <div className="space-y-2">
+              <div
+                className={cx(
+                  "flex min-h-[42px] flex-wrap items-center gap-1.5 rounded-sm border border-line-2 bg-bg px-2 py-1.5 transition-colors",
+                  "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/40",
+                  submitting && "opacity-70",
+                )}
+                onClick={() => inputRef.current?.focus()}
+              >
+                {chips.map((c) => (
+                  <ChipPill key={c.id} chip={c} onRemove={() => removeChip(c.id)} />
+                ))}
+                <input
+                  ref={inputRef}
+                  className="min-w-[160px] flex-1 bg-transparent font-mono text-[13px] text-ink outline-none placeholder:text-ink-3"
+                  placeholder={
+                    chips.length === 0
+                      ? allowedDomain
+                        ? `colleague@${allowedDomain.slice(1)}, another@${allowedDomain.slice(1)}…`
+                        : "colleague@example.com, another@example.com…"
+                      : ""
                   }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
+                  value={buffer}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (/[,;\n\t]/.test(v)) {
+                      v.split(/[,;\n\t]+/)
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .forEach(addChip);
+                      setBuffer("");
+                    } else {
+                      setBuffer(v);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (buffer.trim()) {
+                        addChip(buffer);
+                        setBuffer("");
+                      } else if (validCount > 0) {
+                        void submit();
+                      }
+                    } else if (e.key === "Tab" && buffer.trim()) {
+                      addChip(buffer);
+                      setBuffer("");
+                    } else if (e.key === "Backspace" && !buffer && chips.length > 0) {
+                      e.preventDefault();
+                      removeChip(chips[chips.length - 1]!.id);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData("text");
+                    if (/[\s,;]/.test(text)) {
+                      e.preventDefault();
+                      text
+                        .split(/[\s,;]+/)
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .forEach(addChip);
+                      setBuffer("");
+                    }
+                  }}
+                  onBlur={() => {
                     if (buffer.trim()) {
                       addChip(buffer);
                       setBuffer("");
-                    } else if (validCount > 0) {
-                      void submit();
                     }
-                  } else if (e.key === "Tab" && buffer.trim()) {
-                    addChip(buffer);
-                    setBuffer("");
-                  } else if (e.key === "Backspace" && !buffer && chips.length > 0) {
-                    e.preventDefault();
-                    removeChip(chips[chips.length - 1]!.id);
-                  }
-                }}
-                onPaste={(e) => {
-                  const text = e.clipboardData.getData("text");
-                  if (/[\s,;]/.test(text)) {
-                    e.preventDefault();
-                    text
-                      .split(/[\s,;]+/)
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                      .forEach(addChip);
-                    setBuffer("");
-                  }
-                }}
-                onBlur={() => {
-                  if (buffer.trim()) {
-                    addChip(buffer);
-                    setBuffer("");
-                  }
-                }}
-                disabled={submitting}
-                aria-label="Invite team members"
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3 font-mono text-[11px]">
-              {chips.length === 0 ? (
-                <p className="text-ink-3">
-                  Type or paste emails — separate with commas. Press Enter to add.
-                </p>
-              ) : (
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  {validCount > 0 && (
-                    <span className="text-ink-2">
-                      <span className="tabular-nums text-ink">{validCount}</span> ready
-                    </span>
-                  )}
-                  {invalidCount > 0 && (
-                    <span className="text-warn">
-                      <span className="tabular-nums">{invalidCount}</span> invalid
-                    </span>
-                  )}
-                  {failedCount > 0 && (
-                    <span className="text-danger">
-                      <span className="tabular-nums">{failedCount}</span> failed
-                    </span>
-                  )}
-                </div>
-              )}
-              {chips.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setChips([]);
-                    setBuffer("");
-                    inputRef.current?.focus();
                   }}
                   disabled={submitting}
-                  className="shrink-0 text-ink-3 transition-colors hover:text-warn disabled:opacity-50"
-                >
-                  clear all
-                </button>
-              )}
-            </div>
+                  aria-label="Invite team members"
+                />
+              </div>
 
-            <div className="flex justify-end">
-              <Button
-                onClick={() => void submit()}
-                disabled={submitting || (validCount === 0 && !buffer.trim())}
-                className="max-md:w-full max-md:justify-center"
-              >
-                {submitting
-                  ? "Sending…"
-                  : validCount > 1
-                    ? `Send ${validCount} invites`
-                    : "Send invite"}
-              </Button>
+              <div className="flex items-center justify-between gap-3 font-mono text-[11px]">
+                {chips.length === 0 ? (
+                  <p className="text-ink-3">
+                    Type or paste emails — separate with commas. Press Enter to add.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {validCount > 0 && (
+                      <span className="text-ink-2">
+                        <span className="tabular-nums text-ink">{validCount}</span> ready
+                      </span>
+                    )}
+                    {invalidCount > 0 && (
+                      <span className="text-warn">
+                        <span className="tabular-nums">{invalidCount}</span> invalid
+                      </span>
+                    )}
+                    {failedCount > 0 && (
+                      <span className="text-danger">
+                        <span className="tabular-nums">{failedCount}</span> failed
+                      </span>
+                    )}
+                  </div>
+                )}
+                {chips.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChips([]);
+                      setBuffer("");
+                      inputRef.current?.focus();
+                    }}
+                    disabled={submitting}
+                    className="shrink-0 text-ink-3 transition-colors hover:text-warn disabled:opacity-50"
+                  >
+                    clear all
+                  </button>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => void submit()}
+                  disabled={submitting || (validCount === 0 && !buffer.trim())}
+                  className="max-md:w-full max-md:justify-center"
+                >
+                  {submitting
+                    ? "Sending…"
+                    : validCount > 1
+                      ? `Send ${validCount} invites`
+                      : "Send invite"}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </ReadOnly>
+          )}
+        </ReadOnly>
       </SettingsSection>
     </div>
   );

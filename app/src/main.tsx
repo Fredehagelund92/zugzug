@@ -75,93 +75,93 @@ createRoot(root).render(
           path="*"
           element={
             <RouteErrorBoundary>
-                <BootGate>
-                  {(boot) => (
-                    <Routes>
-                      {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
-                      <Route path="/" element={<Navigate to="/app" replace />} />
-                      <Route
-                        path="/app"
-                        element={
-                          <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
-                        }
-                      />
+              <BootGate>
+                {(boot) => (
+                  <Routes>
+                    {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
+                    <Route path="/" element={<Navigate to="/app" replace />} />
+                    <Route
+                      path="/app"
+                      element={
+                        <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
+                      }
+                    />
 
-                      {/* Super-admin shell */}
-                      {boot.isSuperAdmin ? (
-                        <Route path="/app/admin/*" element={<AdminLayout />}>
-                          <Route index element={<Navigate to="workspaces" replace />} />
-                          <Route path="workspaces" element={<Workspaces />} />
-                          <Route path="users" element={<AdminUsers />} />
-                          <Route path="audit" element={<AdminAudit />} />
-                          <Route path="warehouse" element={<AdminWarehouses />} />
+                    {/* Super-admin shell */}
+                    {boot.isSuperAdmin ? (
+                      <Route path="/app/admin/*" element={<AdminLayout />}>
+                        <Route index element={<Navigate to="workspaces" replace />} />
+                        <Route path="workspaces" element={<Workspaces />} />
+                        <Route path="users" element={<AdminUsers />} />
+                        <Route path="audit" element={<AdminAudit />} />
+                        <Route path="warehouse" element={<AdminWarehouses />} />
+                      </Route>
+                    ) : null}
+
+                    {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
+                    <Route
+                      path="/app/:tenantSlug/*"
+                      element={<TenantLayout isSuperAdmin={boot.isSuperAdmin} />}
+                    >
+                      <Route element={<AppShell memberships={boot.memberships} />}>
+                        <Route index element={<Dashboard />} />
+                        <Route path="triage" element={<Triage />} />
+                        <Route path="sources" element={<Sources />} />
+                        <Route path="tables" element={<MasterTables />} />
+                        <Route path="audit" element={<Audit />} />
+                        <Route path="settings" element={<SettingsLayout />}>
+                          <Route index element={<Navigate to="general" replace />} />
+                          <Route path="general" element={<General />} />
+                          <Route path="members" element={<Members />} />
+                          <Route
+                            path="tokens"
+                            element={<Navigate to="../service-accounts" replace />}
+                          />
+                          <Route
+                            path="scans"
+                            element={<Navigate to="../warehouse#scans" replace />}
+                          />
+                          <Route path="mapping" element={<Matching />} />
+                          <Route path="matching" element={<Navigate to="../mapping" replace />} />
+                          <Route path="warehouse" element={<Warehouse />} />
+                          <Route path="danger" element={<Danger />} />
+                          <Route path="pull-api" element={<PullApi />} />
+                          <Route path="webhooks" element={<Webhooks />} />
+                          <Route path="webhooks/:id" element={<WebhookDetail />} />
+                          <Route path="service-accounts" element={<ServiceAccounts />} />
                         </Route>
-                      ) : null}
-
-                      {/* Per-tenant shell — TenantLayout validates slug, drives session lifecycle */}
-                      <Route
-                        path="/app/:tenantSlug/*"
-                        element={<TenantLayout isSuperAdmin={boot.isSuperAdmin} />}
-                      >
-                        <Route element={<AppShell memberships={boot.memberships} />}>
-                          <Route index element={<Dashboard />} />
-                          <Route path="triage" element={<Triage />} />
-                          <Route path="sources" element={<Sources />} />
-                          <Route path="tables" element={<MasterTables />} />
-                          <Route path="audit" element={<Audit />} />
-                          <Route path="settings" element={<SettingsLayout />}>
-                            <Route index element={<Navigate to="general" replace />} />
-                            <Route path="general" element={<General />} />
-                            <Route path="members" element={<Members />} />
-                            <Route
-                              path="tokens"
-                              element={<Navigate to="../service-accounts" replace />}
-                            />
-                            <Route
-                              path="scans"
-                              element={<Navigate to="../warehouse#scans" replace />}
-                            />
-                            <Route path="mapping" element={<Matching />} />
-                            <Route path="matching" element={<Navigate to="../mapping" replace />} />
-                            <Route path="warehouse" element={<Warehouse />} />
-                            <Route path="danger" element={<Danger />} />
-                            <Route path="pull-api" element={<PullApi />} />
-                            <Route path="webhooks" element={<Webhooks />} />
-                            <Route path="webhooks/:id" element={<WebhookDetail />} />
-                            <Route path="service-accounts" element={<ServiceAccounts />} />
-                          </Route>
-                          <Route path="integrations">
-                            <Route index element={<Navigate to="../settings/pull-api" replace />} />
-                            <Route
-                              path="pull-api"
-                              element={<Navigate to="../../settings/pull-api" replace />}
-                            />
-                            <Route
-                              path="webhooks"
-                              element={<Navigate to="../../settings/webhooks" replace />}
-                            />
-                            <Route path="webhooks/:id" element={<WebhookDetailRedirect />} />
-                            <Route
-                              path="service-accounts"
-                              element={<Navigate to="../../settings/service-accounts" replace />}
-                            />
-                          </Route>
-                          <Route path="account" element={<Account />}>
-                            <Route index element={<Navigate to="profile" replace />} />
-                            <Route path="profile" element={<Profile />} />
-                            <Route path="memberships" element={<Memberships />} />
-                            <Route
-                              path="notifications"
-                              element={<Navigate to="../memberships" replace />}
-                            />
-                          </Route>
+                        <Route path="integrations">
+                          <Route index element={<Navigate to="../settings/pull-api" replace />} />
+                          <Route
+                            path="pull-api"
+                            element={<Navigate to="../../settings/pull-api" replace />}
+                          />
+                          <Route
+                            path="webhooks"
+                            element={<Navigate to="../../settings/webhooks" replace />}
+                          />
+                          <Route path="webhooks/:id" element={<WebhookDetailRedirect />} />
+                          <Route
+                            path="service-accounts"
+                            element={<Navigate to="../../settings/service-accounts" replace />}
+                          />
+                        </Route>
+                        <Route path="account" element={<Account />}>
+                          <Route index element={<Navigate to="profile" replace />} />
+                          <Route path="profile" element={<Profile />} />
+                          <Route path="memberships" element={<Memberships />} />
+                          <Route
+                            path="notifications"
+                            element={<Navigate to="../memberships" replace />}
+                          />
                         </Route>
                       </Route>
+                    </Route>
 
-                      <Route path="*" element={<Navigate to="/app" replace />} />
-                    </Routes>
-                  )}
-                </BootGate>
+                    <Route path="*" element={<Navigate to="/app" replace />} />
+                  </Routes>
+                )}
+              </BootGate>
             </RouteErrorBoundary>
           }
         />

@@ -21,37 +21,37 @@ export function Matching() {
         title="Mapping defaults"
         hint="How aggressively Zug Zug maps new source values when a scan finds them."
       >
-      <ReadOnly enabled={!canEdit}>
-        <FormField label="Confidence bands">
-          <ThresholdRange
-            publish={prefs.publishThreshold}
-            suggest={prefs.suggestThreshold}
-            onChange={({ publish, suggest }) => {
+        <ReadOnly enabled={!canEdit}>
+          <FormField label="Confidence bands">
+            <ThresholdRange
+              publish={prefs.publishThreshold}
+              suggest={prefs.suggestThreshold}
+              onChange={({ publish, suggest }) => {
+                void setPreferences({
+                  ...prefs,
+                  publishThreshold: publish,
+                  suggestThreshold: suggest,
+                }).then(() => invalidate.tenant(tenant.slug));
+              }}
+            />
+          </FormField>
+        </ReadOnly>
+        <FormField
+          label="Four eyes on publish"
+          hint="When on, a draft's author can't publish it — a second editor must. Applies to mapping drafts only; record edits are not drafted."
+        >
+          <Checkbox
+            state={prefs.requireSecondPublisher ? "on" : "off"}
+            disabled={!canEditGov}
+            onClick={() =>
               void setPreferences({
                 ...prefs,
-                publishThreshold: publish,
-                suggestThreshold: suggest,
-              }).then(() => invalidate.tenant(tenant.slug));
-            }}
+                requireSecondPublisher: !prefs.requireSecondPublisher,
+              }).then(() => invalidate.tenant(tenant.slug))
+            }
+            aria-label="Require a second publisher"
           />
         </FormField>
-      </ReadOnly>
-      <FormField
-        label="Four eyes on publish"
-        hint="When on, a draft's author can't publish it — a second editor must. Applies to mapping drafts only; record edits are not drafted."
-      >
-        <Checkbox
-          state={prefs.requireSecondPublisher ? "on" : "off"}
-          disabled={!canEditGov}
-          onClick={() =>
-            void setPreferences({
-              ...prefs,
-              requireSecondPublisher: !prefs.requireSecondPublisher,
-            }).then(() => invalidate.tenant(tenant.slug))
-          }
-          aria-label="Require a second publisher"
-        />
-      </FormField>
       </SettingsSection>
     </div>
   );

@@ -49,7 +49,9 @@ describe("prepareCreateFromCsv", () => {
   });
 
   it("rejects a file with no data rows", () => {
-    expect(() => prepareCreateFromCsv("Name,Region")).toThrow(/header row and at least one data row/i);
+    expect(() => prepareCreateFromCsv("Name,Region")).toThrow(
+      /header row and at least one data row/i,
+    );
   });
 });
 

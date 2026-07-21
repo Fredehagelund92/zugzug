@@ -14,7 +14,14 @@ interface SourceRowProps {
   onRemove: () => void;
 }
 
-export function SourceRow({ row, mapValuesHref, canEdit = true, busy, onDerive, onRemove }: SourceRowProps) {
+export function SourceRow({
+  row,
+  mapValuesHref,
+  canEdit = true,
+  busy,
+  onDerive,
+  onRemove,
+}: SourceRowProps) {
   const [menu, setMenu] = useState(false);
 
   // Derive connection state
@@ -23,7 +30,10 @@ export function SourceRow({ row, mapValuesHref, canEdit = true, busy, onDerive, 
       ? { label: "⚠ column not found", tone: "text-danger" }
       : !row.scanned && !row.scannedAt
         ? { label: "never scanned", tone: "text-warn" }
-        : { label: row.scannedAt ? `scanned ${ago(row.scannedAt)} ago` : "scanned", tone: "text-ink-3" };
+        : {
+            label: row.scannedAt ? `scanned ${ago(row.scannedAt)} ago` : "scanned",
+            tone: "text-ink-3",
+          };
 
   // Render schema.table.column as one mono string:
   //   schema.  — dimmed (text-ink-3)
@@ -69,7 +79,10 @@ export function SourceRow({ row, mapValuesHref, canEdit = true, busy, onDerive, 
               <button
                 type="button"
                 disabled={!canEdit || !!busy}
-                onClick={() => { setMenu(false); onDerive(); }}
+                onClick={() => {
+                  setMenu(false);
+                  onDerive();
+                }}
                 className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
               >
                 <IconWand className="h-3 w-3" /> Re-scan
@@ -85,7 +98,10 @@ export function SourceRow({ row, mapValuesHref, canEdit = true, busy, onDerive, 
               <button
                 type="button"
                 disabled={!canEdit}
-                onClick={() => { setMenu(false); onRemove(); }}
+                onClick={() => {
+                  setMenu(false);
+                  onRemove();
+                }}
                 className="block w-full px-2.5 py-1.5 text-left text-[12.5px] text-danger hover:bg-danger-soft disabled:opacity-40"
               >
                 Remove source

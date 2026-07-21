@@ -123,16 +123,8 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
           className="mt-1.5 block w-full rounded-sm border border-line-2 bg-surface-2 px-3 py-[11px] text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         />
       </label>
-      {formError && (
-        <p className="text-xs text-warn">{formError}</p>
-      )}
-      <Button
-        type="submit"
-        variant="primary"
-        size="lg"
-        loading={submitting}
-        className="w-full"
-      >
+      {formError && <p className="text-xs text-warn">{formError}</p>}
+      <Button type="submit" variant="primary" size="lg" loading={submitting} className="w-full">
         {submitting ? "Signing in…" : "Sign in"}
       </Button>
       <p className="text-center text-xs text-ink-3">

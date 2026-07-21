@@ -17,7 +17,11 @@ export function cursorCell(container: HTMLElement): { rowKey: string; field: str
 }
 
 export function selectedCells(container: HTMLElement): Array<{ rowKey: string; field: string }> {
-  const els = Array.from(container.querySelectorAll('[role="gridcell"][data-in-range="true"], [role="gridcell"][aria-selected="true"]'));
+  const els = Array.from(
+    container.querySelectorAll(
+      '[role="gridcell"][data-in-range="true"], [role="gridcell"][aria-selected="true"]',
+    ),
+  );
   // de-dupe (cursor cell may also be in-range)
   const seen = new Set<string>();
   const out: Array<{ rowKey: string; field: string }> = [];
@@ -32,7 +36,9 @@ export function selectedCells(container: HTMLElement): Array<{ rowKey: string; f
 
 export function editingCell(container: HTMLElement): { rowKey: string; field: string } | null {
   // the active editor (input / contenteditable) is rendered inside the editing cell
-  const editor = container.querySelector('[role="gridcell"] input, [role="gridcell"] [contenteditable="true"]');
+  const editor = container.querySelector(
+    '[role="gridcell"] input, [role="gridcell"] [contenteditable="true"]',
+  );
   const cell = editor?.closest('[role="gridcell"]');
   return cell ? parseCell(cell) : null;
 }
