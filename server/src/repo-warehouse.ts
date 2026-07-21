@@ -76,6 +76,29 @@ export async function refreshSchemaCounts(): Promise<void> {
   }
 }
 
+/** Probe every registered database and persist the outcome, resolving the
+ *  "not checked yet" badge. Never throws — callers fire-and-forget it. */
+export async function probeRegisteredDatabases(): Promise<void> {
+  try {
+    const adapter = await getAdapter();
+    const rows = await pgAll<{ id: string; databaseName: string }>(
+      `SELECT id AS "id", database_name AS "databaseName"
+         FROM "zugzug_app"."warehouse_database"`,
+    );
+    for (const row of rows) {
+      const result = await adapter.probeDatabase(row.databaseName);
+      await pgRun(
+        `UPDATE "zugzug_app"."warehouse_database"
+            SET last_probe_at = now(), last_probe_error = $1
+          WHERE id = $2`,
+        [result.ok ? null : result.reason, row.id],
+      );
+    }
+  } catch (err) {
+    console.warn("[warehouse] probe failed:", err instanceof Error ? err.message : err);
+  }
+}
+
 export async function addWarehouseDatabase(opts: {
   databaseName: string;
   label?: string;
@@ -97,6 +120,7 @@ export async function addWarehouseDatabase(opts: {
     throw err;
   }
   await refreshSchemaCounts();
+  await probeRegisteredDatabases();
   const rows = await listWarehouseDatabases();
   const row = rows.find((r) => r.id === id);
   if (!row) throw new Error("database not visible after insert");

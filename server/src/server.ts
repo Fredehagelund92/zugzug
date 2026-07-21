@@ -457,10 +457,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
     // GET /api/warehouse/databases — list registered databases. Any authenticated user.
     if (seg[2] === "databases" && seg.length === 3 && method === "GET") {
-      const { listWarehouseDatabases, refreshSchemaCounts } = await import("./repo-warehouse.ts");
+      const { listWarehouseDatabases, refreshSchemaCounts, probeRegisteredDatabases } =
+        await import("./repo-warehouse.ts");
       // Respond from Postgres immediately; re-snapshot the warehouse's schema
-      // counts in the background so the next load reflects any drift.
+      // counts and reachability in the background so the next load reflects
+      // any drift.
       void refreshSchemaCounts();
+      void probeRegisteredDatabases();
       return json(await listWarehouseDatabases());
     }
 

@@ -55,3 +55,31 @@ test("addWarehouseDatabase returns the new row with a fresh schema count", async
   const row = await addWarehouseDatabase({ databaseName: "memory", actorUserId: "u_test" });
   expect(row.schemaCount).toBe(1);
 });
+
+test("probeRegisteredDatabases marks a reachable database as checked", async () => {
+  await addWarehouseDatabase({ databaseName: "memory", actorUserId: "u_test" });
+  await pgRun(
+    `UPDATE "zugzug_app"."warehouse_database" SET last_probe_at = NULL, last_probe_error = NULL`,
+  );
+  const { probeRegisteredDatabases } = await import("../src/repo-warehouse.ts");
+  await probeRegisteredDatabases();
+  const rows = await listWarehouseDatabases();
+  expect(rows[0]?.lastProbeAt).not.toBeNull();
+  expect(rows[0]?.lastProbeError).toBeNull();
+});
+
+test("probeRegisteredDatabases records the failure reason for an unreachable database", async () => {
+  await addWarehouseDatabase({ databaseName: "no_such_db", actorUserId: "u_test" });
+  const { probeRegisteredDatabases } = await import("../src/repo-warehouse.ts");
+  await probeRegisteredDatabases();
+  const rows = await listWarehouseDatabases();
+  expect(rows[0]?.lastProbeError).toBeTruthy();
+  // The badge shows "unreachable · Xm ago" — the timestamp must be set on failure too.
+  expect(rows[0]?.lastProbeAt).not.toBeNull();
+});
+
+test("addWarehouseDatabase probes the new database right away", async () => {
+  const row = await addWarehouseDatabase({ databaseName: "memory", actorUserId: "u_test" });
+  expect(row.lastProbeAt).not.toBeNull();
+  expect(row.lastProbeError).toBeNull();
+});

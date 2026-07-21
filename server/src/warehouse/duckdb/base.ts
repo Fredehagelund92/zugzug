@@ -123,15 +123,27 @@ export abstract class DuckDbBase {
 
   async probeDatabase(databaseName: string): Promise<ProbeResult> {
     try {
-      await withTimeout(
+      const found = await withTimeout(
         async () => {
           const conn = await this.connect();
-          const quoted = this.quoteIdentifier(databaseName);
-          await conn.runAndReadAll(`SELECT 1 FROM ${quoted}.information_schema.schemata LIMIT 1`);
+          // Catalog-qualified information_schema doesn't resolve on MotherDuck
+          // (or bare in-memory) catalogs — duckdb_schemas() is the query that
+          // works across every attached catalog.
+          const escaped = databaseName.replace(/'/g, "''");
+          const result = await conn.runAndReadAll(
+            `SELECT 1 FROM duckdb_schemas() WHERE database_name = '${escaped}' LIMIT 1`,
+          );
+          return result.getRows().length > 0;
         },
         5_000,
         "probeDatabase",
       );
+      if (!found) {
+        return {
+          ok: false,
+          reason: `database "${databaseName}" is not visible to the warehouse connection`,
+        };
+      }
       return { ok: true };
     } catch (err) {
       return { ok: false, reason: err instanceof Error ? err.message : String(err) };
