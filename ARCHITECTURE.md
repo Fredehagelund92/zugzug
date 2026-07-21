@@ -72,6 +72,7 @@ data, not entity resolution) and
 
 - **Try it / self-host demo**: `docker compose up` — Postgres + server + nginx-served SPA, `ATTACH_WAREHOUSE=false`, seeded demo tables, password signup. See the README "Try it in 30 seconds". CI's `compose-smoke` job guards this path on every push.
 - **Real self-host**: point `DATABASE_URL` at your Postgres, set `ORIGIN`, and (optionally) wire a warehouse (`ATTACH_WAREHOUSE=true` + `WAREHOUSE_ADAPTER` + `MOTHERDUCK_TOKEN`) and OIDC. `SEED_DEMO=false`. Config reference: `server/.env.example`.
+- **Production stack**: `compose.prod.yml` fronts the app container with **Caddy** for automatic HTTPS (only Caddy is exposed to the host) over the same nginx-served SPA + Bun API, with a bundled or external Postgres. See [docs/deploy.md](./docs/deploy.md).
 
 ## Secrets & the `/data` volume
 

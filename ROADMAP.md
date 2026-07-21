@@ -1,29 +1,28 @@
 # Zugzug Roadmap
 
-> Living document. Source of truth for sequencing. Re-reviewed at the start of each release cycle.
+> Living document — directional, not a commitment. This file is about what's
+> next and why; shipped work lives in the git history and tagged releases.
 
-**Current release:** v0.3 — shipped. Working toward v1.0.
-**Toward v1.0:** stable adapter interface, broader warehouse coverage, the rough edges sanded down.
+**Toward v1.0:** a stable `WarehouseAdapter` interface, broader warehouse coverage,
+and the rough edges — surfaced by the one-command demo and production-deploy paths —
+sanded down.
 
 ---
 
 ## Now (in active development)
 
-v0.3 shipped the reference-tables release (governed lists + versioned publish),
-the one-command demo, and a production self-host path. Current focus is hardening
-toward v1.0: stabilizing the `WarehouseAdapter` interface and sanding the rough
-edges surfaced by the demo and production-deploy paths. See the `Next` queue below
-for the concrete follow-ons.
+Hardening toward v1.0: stabilizing the `WarehouseAdapter` interface and closing the
+gaps the demo and self-host paths expose. One primary initiative at a time.
 
 ---
 
 ## Next (queued)
 
-Planned for the next release. Subject to scope refinement.
+Planned next. Subject to scope refinement.
 
-- **[#53] row_touched invalidation** — commit-time hint over the presence WebSocket that collapses activity-badge staleness from 5 s poll to ~50 ms push. Deferred from E1; small standalone task.
+- **[#53] row-touched invalidation** — a publish-time hint over the presence WebSocket that collapses activity-badge staleness from a 5 s poll to a ~50 ms push.
 - **[#17] Review: bulk Skip action** — the floating bulk bar ships Merge; Skip and Map-to are the remaining actions from the original Review bulk spec.
-- **Snowflake auth: password and SSO modes** — v0.1 shipped with key-pair auth (SNOWFLAKE_JWT) only. Tracking inbound demand to prioritize.
+- **Snowflake auth: password and SSO modes** — key-pair auth (`SNOWFLAKE_JWT`) ships today; password/SSO tracked against inbound demand.
 
 ---
 
@@ -35,8 +34,8 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 
 | Item | Status | Trigger |
 |---|---|---|
-| [#45 — Error recovery: canonical_history + per-record revert](https://github.com/Fredehagelund92/zugzug/issues/45) | Planned | After first incident where committed mutations need rolling back, or sufficient inbound demand. |
-| [#33 — Bulk operations in Triage + cascade delete](https://github.com/Fredehagelund92/zugzug/issues/33) | Wanted | Merge action shipped; cascade delete (#18) + remaining bulk actions are the open scope. |
+| [#45 — Error recovery: per-record revert](https://github.com/Fredehagelund92/zugzug/issues/45) | Planned | After the first incident where published mutations need rolling back, or sufficient inbound demand. |
+| [#33 — Bulk operations in Review + cascade delete](https://github.com/Fredehagelund92/zugzug/issues/33) | Wanted | Merge action shipped; cascade delete (#18) + remaining bulk actions are the open scope. |
 | [#35 — Unified search (Cmd-K)](https://github.com/Fredehagelund92/zugzug/issues/35) | Wanted | After v1.0. |
 | [#3](https://github.com/Fredehagelund92/zugzug/issues/3), [#4](https://github.com/Fredehagelund92/zugzug/issues/4), [#5](https://github.com/Fredehagelund92/zugzug/issues/5) — AI-assisted suggestions | Exploring | Need design first; not adoption-blocking. |
 
@@ -44,8 +43,8 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 
 | Item | Status | Trigger |
 |---|---|---|
-| E3 — History & Rollback | Wanted | Superseded by #45 scope; after #45 ships. |
-| E4 — Branching / sandbox | Out of scope | See below. |
+| History & rollback | Wanted | Superseded by #45 scope; after #45 ships. |
+| Branching / sandbox | Out of scope | See below. |
 
 ### Auth + access control
 
@@ -57,85 +56,45 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 
 | Item | Status | Trigger |
 |---|---|---|
-| Per-tenant warehouse tokens (phase 3) | Gated | `tenant.warehouse_id` exists in schema; wiring per-tenant tokens is triggered by a hosted offering decision. |
-| Super-admin tenant management UI (phase 3) | Gated | CLI only for now; triggered by non-engineer ops or 50+ tenants. |
+| Per-workspace warehouse tokens | Gated | The schema supports it; wiring per-workspace tokens is triggered by a hosted-offering decision. |
+| Super-admin workspace-management UI | Gated | CLI-driven today; triggered by non-engineer ops or many workspaces. |
 
 ### More adapters
 
 | Adapter | Status | What would move it forward |
 |---|---|---|
-| Postgres-as-warehouse | Wanted | Community PR, or self-host request. Cheap follow-on for Redshift via PG wire protocol. |
-| BigQuery | Wanted | Community PR, or 5+ inbound "does it support BigQuery?" issues. |
-| Databricks | Wanted | Community PR, or 5+ inbound "does it support Databricks?" issues. |
+| Postgres-as-warehouse | Wanted | Community PR, or self-host request. Cheap follow-on for Redshift via the PG wire protocol. |
+| BigQuery | Wanted | Community PR, or sustained inbound demand. |
+| Databricks | Wanted | Community PR, or sustained inbound demand. |
 | Redshift | Wanted | After Postgres-as-warehouse lands. |
 
 ### Ecosystem
 
 | Item | Status | Trigger |
 |---|---|---|
-| `zugzug_utils` dbt package (macros over `dim_*`/`map_*`) | Considering | After v0.2 launch metrics show dbt-team adoption. |
-| S3 / GCS snapshot push, scheduled exports, webhook-on-commit | Wanted | First user request for scheduled exports. |
-
-### Internal cleanup
-
-| Item | Status |
-|---|---|
-| `Sql` branded-type project-wide adoption | Wanted alongside any refactor touching `qid` / `cq` / `whTable` callsites. |
-
----
-
-## Shipped
-
-### v0.3
-
-- **Reference tables** — dimensions as governed maintained lists, edited in place, per [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md) and [ADR-0002](./docs/adr/0002-publish-gates-materialization.md).
-- **Versioned publish** — per-table "Published vN", a derived unpublished-changes view, and a "changed only" filter. Editing stays instant; publish gates what dbt consumes.
-- **Self-referencing hierarchy** — a linked field can target its own table, with cycle rejection.
-- **One-command demo** — `docker compose up` boots Postgres + server + SPA with seeded tables; no warehouse or OAuth needed.
-- **Production self-host** — `compose.prod.yml` with Caddy auto-HTTPS + bundled Postgres; see [docs/deploy.md](./docs/deploy.md).
-- **Grid test-kit** — reusable RTL/jsdom kit + suites (navigation, editing, selection, undo/redo, virtualization) and a `compose-smoke` CI job guarding the self-host path.
-
-### v0.2
-
-- **Scheduler hardening (epic #15)** — scan_run table, failure surfacing, graceful shutdown, drift/overlap logging, per-source duration, scheduler extracted to own module.
-- **Role-based permissions (epic #36)** — admin/editor/viewer roles, `canAdminister` gating.
-- **CSV import/export** — `POST /dimensions/:id/import`, per-dim Export button, `ImportCSVModal`.
-- **E1 — Activity & Presence** — row-activity badges (audit log + API + DataGrid pip), live cursors (yjs WebSocket awareness), presence strip.
-- **E2 — Optimistic concurrency** — version-column conflict detection on record edits.
-- **Grid-feel sprint** — optimistic mutations, undo persistence, floating bulk-action bar, vocabulary unification, unified toast stack.
-- **Multi-tenant workspaces** — Deploy 1 + Deploy 2 migrations, TenantRepo, withTenantTx, auth middleware, sign-in invite flow, provisionTenant/teardownTenant, super-admin routes, scheduler per-tenant scoping, `/app/:slug/*` routes, workspace switcher, apiFetch, RLS.
-- **Settings IA redesign** — Account, Danger zone, Admin console, Team roster.
-- **v0.1 launch readiness** — public README, issue templates, PR template, license-checker CI, history scrub.
-- **Snowflake auth: password + OIDC** — validated against the abstraction and wired through.
+| `zugzug_utils` dbt package (macros over `dim_*`/`map_*`) | Considering | Once metrics show dbt-team adoption. |
+| S3 / GCS snapshot push, scheduled exports, webhook-on-publish | Wanted | First user request for scheduled exports. |
 
 ---
 
 ## Out of scope (not planned)
 
-Decisions taking items off the table. Listed so they don't re-litigate in issues. Reopenable in principle if circumstances change.
+Decisions taking items off the table, listed so they don't re-litigate in issues. Reopenable in principle if circumstances change.
 
 | Item | Why | What would change our mind |
 |---|---|---|
-| Generic MDM positioning (Tamr / Stibo / Reltio space) | Different market; competitive landscape. Entity resolution / golden records explicitly rejected in [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md); reference tables are in scope, probabilistic matching is not. | Never — explicit anti-goal. |
+| Generic MDM positioning (Tamr / Stibo / Reltio space) | Different market. Entity resolution / golden records explicitly rejected in [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md); reference tables are in scope, probabilistic matching is not. | Never — explicit anti-goal. |
 | Airtable-like surface (rich types, attachments, app builder) | Out of focus. Reference tables ([ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md)) are governed lists, not an app platform. | Never — explicit anti-goal. |
-| ADBC as the warehouse abstraction | No production Node binding with Snowflake + BigQuery + Databricks driver coverage in 2026. | A production-grade Node ADBC binding with the full driver set. |
+| ADBC as the warehouse abstraction | No production Node binding with Snowflake + BigQuery + Databricks driver coverage today. | A production-grade Node ADBC binding with the full driver set. |
 | OpenRefine Reconciliation API | Different distribution channel; would split focus. | A 10× distribution opportunity tied specifically to OpenRefine. |
-| Apache-2.0 + CLA + BSL relicense | One-way door taken at v0.1 with MIT + DCO. Relicense would require every contributor to re-sign. | Effectively closed. |
-| Pre-1.0 rebrand | "Zugzug" is unconventional but distinctive; defer until traction warrants it. | Cease-and-desist, USPTO opposition, or a clear breakout where the name is friction. |
-| [#57 — Branching / "what-if" sandbox](https://github.com/Fredehagelund92/zugzug/issues/57) | Closed pre-v0.1 — UX implications outweighed value for the cases we'd seen. | A steward who needs "preview my remap before committing" with concrete examples. |
+| Relicense (Apache-2.0 + CLA, or BSL) | One-way door taken at launch with MIT + DCO. A relicense would require every contributor to re-sign. | Effectively closed. |
+| Pre-1.0 rebrand | "Zugzug" is unconventional but distinctive; defer until traction warrants it. | Cease-and-desist, USPTO opposition, or clear evidence the name is friction. |
+| Branching / "what-if" sandbox | UX implications outweighed the value for the cases seen so far. | A steward who needs "preview my remap before publishing" with concrete examples. |
 
 ---
 
 ## Maintenance cadence
 
-- **Per-release:** Update the `Now` section to reflect what's actively being shipped.
-- **Quarterly review:** Re-evaluate `Next` and `Later` based on inbound demand and community contributions.
-- **Phase completion:** Move shipped items into the `Shipped` section (not into git tags — releases carry that).
-
-### When `Now` holds more than one item
-
-The rule of one is for cognitive load, not dogma. Two items in `Now` is fine when:
-- They have zero shared files or shared mental model.
-- One is genuinely small (e.g. a CI gate alongside a bigger refactor).
-
-If both conditions don't hold, ship serially.
+- **Now** reflects the one initiative actively being shipped.
+- **Next / Later** get re-evaluated periodically against inbound demand and community contributions.
+- Shipped work drops off this list — the git history and tagged releases carry it.
