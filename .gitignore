@@ -24,5 +24,19 @@ dist/
 
 # local worktrees (subagent-driven execution)
 .worktrees/
+.clone/
 .claude/worktrees/
 .claire/
+
+# internal development artifacts — kept locally, not published
+# (plans, specs, mockups, design explorations, audit findings)
+docs/superpowers/
+app/docs/
+docs/archive/
+docs/ui-demos/
+docs/redesign/
+docs/brand-preview/
+docs/ux-audit/
+docs/grid-*.md
+docs/*.html
+warehouse-redesign.html
