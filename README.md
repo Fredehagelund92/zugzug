@@ -51,6 +51,8 @@ Open `http://localhost:8080` and create your account — the first user becomes 
 
 To connect your own warehouse or turn off the demo seed, see [Develop locally](#develop-locally) and `server/.env.example`.
 
+Running it for real? See [Deploy to production](./docs/deploy.md) — Caddy auto-HTTPS + bundled Postgres, with escape hatches for existing ingress and managed databases.
+
 ## Develop locally
 
 For hacking on Zugzug with hot reload (Vite + `bun --watch`), run the two processes directly:
