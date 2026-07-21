@@ -8,6 +8,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 
 # local DuckDB engine files
 *.duckdb
