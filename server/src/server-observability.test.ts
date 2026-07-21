@@ -29,6 +29,7 @@ describe("server.ts observability call-site filtering", () => {
     //    (up to the closing `}`) and asserting none of them contain `captureError`.
     const appErrorBlockRe = /if\s*\(\s*e\s+instanceof\s+AppError\s*\)[\s\S]*?\n\s*\}/g;
     const appErrorBlocks = [...src.matchAll(appErrorBlockRe)].map((m) => m[0]);
+    expect(appErrorBlocks.length).toBeGreaterThan(0); // guard: the filter check must actually have blocks to check
     for (const block of appErrorBlocks) {
       expect(block).not.toContain("captureError(");
     }
