@@ -35,12 +35,8 @@ services:
       ZUGZUG_DATA_DIR: /data
     volumes:
       - serverdata:/data
-    healthcheck:
-      test: ["CMD-SHELL", "printf \"const r = await fetch('http://localhost:8787/health'); process.exit(r.ok ? 0 : 1)\" | bun run -"]
-      interval: 5s
-      timeout: 10s
-      start_period: 30s
-      retries: 20
+    # Healthcheck comes from server/Dockerfile (bun-based probe). app gates on
+    # `condition: service_healthy` below.
 
   app:
     build: ./app

@@ -13,6 +13,8 @@ COPY src ./src
 COPY start.sh ./
 RUN chmod +x start.sh
 EXPOSE 8787
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8787/health || exit 1
+# Probe with bun (always present in this image); wget/curl are not installed in
+# oven/bun. Generous start-period covers migrations + optional seed on boot.
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=5 \
+  CMD printf "const r = await fetch('http://localhost:8787/health'); process.exit(r.ok ? 0 : 1)" | bun run -
 CMD ["./start.sh"]
