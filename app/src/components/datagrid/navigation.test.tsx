@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderGrid } from "./test-kit/render-grid";
+import { makeRows } from "./test-kit/fixtures";
 
 describe("grid navigation", () => {
   it("ArrowDown moves the cursor to the next row, same column", async () => {
@@ -104,5 +105,18 @@ describe("grid navigation", () => {
     await g.focusCell(4, "name");
     await g.press("{Control>}{ArrowUp}{/Control}");
     expect(g.cursorCell()).toEqual({ rowKey: "r0", field: "name" });
+  });
+
+  it("cursor recovers to the last valid row when its row is removed", async () => {
+    // Start with 5 rows (r0..r4), focus the last one.
+    const g = renderGrid();
+    await g.focusCell(4, "name");
+    expect(g.cursorCell()).toEqual({ rowKey: "r4", field: "name" });
+
+    // Shrink to 2 rows (r0, r1). r4 no longer exists.
+    // useGridCursor.ts line 254: targetIdx = Math.max(0, Math.min(lastIndexRef(4), rows.length-1(1))) = 1
+    // So the cursor clamps to the new last row: r1.
+    g.rerender({ rows: makeRows(2) });
+    expect(g.cursorCell()).toEqual({ rowKey: "r1", field: "name" });
   });
 });
