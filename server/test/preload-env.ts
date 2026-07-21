@@ -12,8 +12,11 @@
  * behavior for direct `bun test <file>` invocations.
  */
 process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
-process.env.ATTACH_WAREHOUSE ??= "false";
-process.env.MOTHERDUCK_TOKEN ??= "test-stub";
+// Forced, not `??=`: bun auto-loads server/.env before this preload runs, so a
+// soft assignment keeps the dev values (ATTACH_WAREHOUSE=true + real token) and
+// direct `bun test <file>` runs silently attach to the real warehouse.
+process.env.ATTACH_WAREHOUSE = "false";
+process.env.MOTHERDUCK_TOKEN = "test-stub";
 process.env.GOOGLE_CLIENT_ID ??= "test-stub";
 process.env.GOOGLE_CLIENT_SECRET ??= "test-stub";
 process.env.ZUGZUG_CURSOR_KEY ??= "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
