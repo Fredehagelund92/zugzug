@@ -10,15 +10,16 @@ import { Mark } from "../components/Mark";
 import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useDimensions, useAudit, useDrafts, useWorkspaceInfo, useStoreLoading } from "../store";
+import { useDimensions, useAudit, useWorkspaceInfo, useStoreLoading } from "../store";
 import {
   type FilterKey,
   type SortKey,
+  type SortDir,
   applyFilter,
   applySort,
   coveragePct,
   formatTimeAgo,
-  lastAuditForDim,
+  toPublishCount,
   warehouseSyncStatusByDim,
 } from "./dashboard-helpers";
 import { PALETTE, defaultTintFor, type PaletteName } from "../lib/palette";
@@ -163,24 +164,11 @@ export function Dashboard() {
   usePageTitle(tenant.label);
   const dims = useDimensions();
   const auditLog = useAudit();
-  const draftsMap = useDrafts();
   const wsInfo = useWorkspaceInfo();
   const loading = useStoreLoading();
   const navigate = useNavigate();
   const nav = useNavLinks();
   const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
-  // Treat every mapped draft as "staged" for dashboard urgency purposes. The
-  // old per-value staleness check (raw already mapped to the same target) needed
-  // the full values list; with paginated scan values we can't do that on the
-  // client without a fetch per draft, and the cost of an occasional false
-  // positive on the dashboard is negligible.
-  const staged = useMemo(
-    () => Object.values(draftsMap).filter((d) => d.status === "mapped"),
-    [draftsMap],
-  );
-
-  // Dim ids that have at least one staged draft (for filter + row highlighting)
-  const stagedDimIds = useMemo(() => new Set(staged.map((d) => d.dimId)), [staged]);
 
   // Live KPI derivations — replace the static fixtures.
   // Values mapped = total raw-value entries already in the map tables.
@@ -192,30 +180,24 @@ export function Dashboard() {
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
   const tablesWithNew = dims.filter((d) => d.counts.newCount > 0).length;
-  const attentionTables = dims.filter((d) => d.counts.newCount > 0 || stagedDimIds.has(d.id));
-  const cleanTables = dims.filter((d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id));
+  const attentionTables = dims.filter((d) => d.counts.newCount > 0 || toPublishCount(d) > 0);
+  const cleanTables = dims.filter((d) => d.counts.newCount === 0 && toPublishCount(d) === 0);
+  const toPublishTotal = dims.reduce((n, d) => n + toPublishCount(d), 0);
+  const toPublishTables = dims.filter((d) => toPublishCount(d) > 0).length;
 
   const [filter, setFilter] = useState<FilterKey>("all");
-  const [sort, setSort] = useState<SortKey>("urgency");
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "review", dir: "desc" });
 
-  // Staged drafts grouped by dimId for the inline flag in table rows
-  const stagedByDim = useMemo(() => {
-    const map: Record<string, typeof staged> = {};
-    for (const d of staged) {
-      if (!map[d.dimId]) map[d.dimId] = [];
-      map[d.dimId].push(d);
-    }
-    return map;
-  }, [staged]);
+  const toggleSort = (key: SortKey) =>
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "name" ? "asc" : "desc" }, // text A→Z, everything else high→low
+    );
 
   const visibleDims = useMemo(
-    () => applySort(applyFilter(dims, filter, stagedDimIds), sort, stagedDimIds),
-    [dims, filter, sort, stagedDimIds],
-  );
-
-  const lastAuditByDim = useMemo(
-    () => Object.fromEntries(dims.map((d) => [d.id, lastAuditForDim(d.id, d.dimension, auditLog)])),
-    [dims, auditLog],
+    () => applySort(applyFilter(dims, filter), sort.key, sort.dir),
+    [dims, filter, sort],
   );
 
   const syncStatus = useMemo(() => warehouseSyncStatusByDim(auditLog, dims), [auditLog, dims]);
@@ -224,15 +206,6 @@ export function Dashboard() {
     const palette = dim.color ?? defaultTintFor(dim.id);
     return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(dim.id)]).fg; // e.g. "var(--tint-rose)"
   };
-
-  // Last "Committed" audit entry — used for the Published today KPI.
-  const lastCommit = useMemo(() => auditLog.find((e) => e.action === "Committed"), [auditLog]);
-  // Parse draft count from detail like "3 values → zugzug.map_X · 14 rows recovered"
-  const lastCommitCount = useMemo(() => {
-    if (!lastCommit) return null;
-    const m = lastCommit.detail.match(/^(\d+)/);
-    return m ? Number(m[1]) : null;
-  }, [lastCommit]);
 
   const kpis: Array<{
     label: string;
@@ -266,15 +239,24 @@ export function Dashboard() {
       dir: undefined,
     },
     {
-      label: "Last published",
-      value: lastCommit ? formatTimeAgo(lastCommit.at) : "—",
-      valueColor: "var(--ak-committed)",
+      label: "To publish",
+      value: String(toPublishTotal),
+      valueColor: "var(--ak-staged)",
       delta:
-        lastCommit && lastCommitCount !== null
-          ? `↑ folded ${lastCommitCount} draft${lastCommitCount === 1 ? "" : "s"} · ${formatTimeAgo(lastCommit.at)}`
+        toPublishTotal > 0
+          ? `across ${toPublishTables} table${toPublishTables === 1 ? "" : "s"}`
           : undefined,
       dir: undefined,
     },
+  ];
+
+  const COLS: Array<{ key: SortKey; label: string; align: "left" | "right" }> = [
+    { key: "name", label: "Table", align: "left" },
+    { key: "records", label: "Records", align: "right" },
+    { key: "coverage", label: "Coverage", align: "left" },
+    { key: "review", label: "In review", align: "left" },
+    { key: "toPublish", label: "To publish", align: "left" },
+    { key: "published", label: "Published", align: "right" },
   ];
 
   if (loading) return <DashboardSkeleton />;
@@ -335,9 +317,9 @@ export function Dashboard() {
                 className="font-display text-base font-bold tabular-nums"
                 style={{ color: "var(--ak-staged)" }}
               >
-                {staged.length}
+                {toPublishTotal}
               </span>{" "}
-              {staged.length === 1 ? "draft" : "drafts"}
+              to publish
             </span>
           </div>
         }
@@ -377,33 +359,7 @@ export function Dashboard() {
           <h2 className="font-display text-[18px] font-semibold tracking-tight text-ink">
             Table health
           </h2>
-
-          {/* sort — secondary control, right-aligned */}
-          <div className="flex items-center gap-1 overflow-x-auto">
-            {(
-              [
-                { key: "urgency" as SortKey, label: "Urgency" },
-                { key: "coverage" as SortKey, label: "Coverage" },
-                { key: "name" as SortKey, label: "Name" },
-                { key: "rows" as SortKey, label: "Rows" },
-              ] as const
-            ).map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSort(key)}
-                className={cx(
-                  "flex h-7 items-center gap-1 rounded-sm border px-2.5 font-mono text-[10px] transition-colors",
-                  sort === key
-                    ? "border-line bg-surface-3 text-ink-2"
-                    : "border-transparent text-ink-3 hover:text-ink-2",
-                )}
-              >
-                {sort === key && <span className="opacity-60">↑</span>}
-                {label}
-              </button>
-            ))}
-          </div>
+          <span className="font-mono text-[10px] text-ink-3">Click a column to sort</span>
         </div>
 
         {/* health filter facets — primary control */}
@@ -449,32 +405,46 @@ export function Dashboard() {
         <table className="w-full min-w-[560px] border-collapse">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                Table
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                Records
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                Coverage
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                In review
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-left font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                Drafts
-              </th>
-              <th className="border-b border-line-2 bg-surface px-4 py-2 text-right font-mono text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                Updated
-              </th>
+              {COLS.map((col, i) => {
+                const active = sort.key === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    className={cx(
+                      "border-b border-line-2 bg-surface p-0",
+                      i === 0 && "sticky left-0 z-10",
+                    )}
+                    aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.key)}
+                      className={cx(
+                        "flex w-full items-center gap-1.5 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.08em] transition-colors",
+                        col.align === "right" ? "justify-end" : "justify-start",
+                        active ? "text-ink" : "text-ink-3 hover:text-ink-2",
+                      )}
+                    >
+                      {col.label}
+                      <span
+                        className={cx(
+                          "text-[9px] transition-opacity",
+                          active ? "text-accent opacity-100" : "opacity-0",
+                        )}
+                        aria-hidden="true"
+                      >
+                        {sort.dir === "asc" ? "▲" : "▼"}
+                      </span>
+                    </button>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {visibleDims.map((dim) => {
               const pct = coveragePct(dim);
               const newCount = dim.counts.newCount;
-              const dimStaged = stagedByDim[dim.id] ?? [];
-              const lastAudit = lastAuditByDim[dim.id] ?? null;
               const tint = dimTint(dim);
               const dimId = dim.dimTable.replace(/^[^.]+\./, "");
 
@@ -542,20 +512,40 @@ export function Dashboard() {
                     )}
                   </td>
 
-                  {/* drafts staged */}
+                  {/* to publish — drafts + edited records; hover for the split */}
                   <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
-                    {dimStaged.length > 0 ? (
-                      <Badge tone="staged">
-                        {dimStaged.length} draft{dimStaged.length === 1 ? "" : "s"}
-                      </Badge>
-                    ) : (
-                      <span className="font-mono text-[11px] text-ink-3">—</span>
-                    )}
+                    {(() => {
+                      const p = dim.publish;
+                      const total = toPublishCount(dim);
+                      if (total === 0) return <span className="font-mono text-[11px] text-ink-3">—</span>;
+                      const drafts = p?.pendingDrafts ?? 0;
+                      const edits = p?.changedRecords ?? 0;
+                      return (
+                        <span
+                          title={`${drafts} draft${drafts === 1 ? "" : "s"}, ${edits} record edit${edits === 1 ? "" : "s"}`}
+                          className="inline-flex items-center gap-1.5 rounded-sm border border-transparent bg-staged-soft px-2 py-0.5 font-mono text-[11px] font-medium text-staged"
+                        >
+                          {total} to publish
+                        </span>
+                      );
+                    })()}
                   </td>
 
-                  {/* updated */}
-                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right font-mono text-[10px] text-ink-3">
-                    {lastAudit ? formatTimeAgo(lastAudit.at) : "—"}
+                  {/* published — per-table version + when; "Never" when unpublished */}
+                  <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right">
+                    {dim.publish && dim.publish.version > 0 && dim.publish.publishedAt ? (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-medium text-committed">
+                          <span className="h-[5px] w-[5px] rounded-pill bg-committed" />v
+                          {dim.publish.version}
+                        </span>
+                        <span className="font-mono text-[10px] text-ink-3">
+                          {formatTimeAgo(dim.publish.publishedAt)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="font-mono text-[11px] text-ink-3">Never</span>
+                    )}
                   </td>
                 </tr>
               );

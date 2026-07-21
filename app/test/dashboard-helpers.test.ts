@@ -116,25 +116,29 @@ describe("lastAuditForDim", () => {
 // ── applyFilter ───────────────────────────────────────────────────────────────
 
 describe("applyFilter", () => {
-  const staged = new Set(["post_type"]);
-
   test("'all' returns all dims", () => {
-    expect(applyFilter([cleanDim, dirtyDim], "all", staged)).toHaveLength(2);
+    expect(applyFilter([cleanDim, dirtyDim], "all")).toHaveLength(2);
   });
   test("'attention' returns dims with new values", () => {
-    const result = applyFilter([cleanDim, dirtyDim], "attention", new Set());
+    const result = applyFilter([cleanDim, dirtyDim], "attention");
     expect(result.map((d) => d.id)).toEqual(["country"]);
   });
-  test("'attention' also includes staged dims", () => {
-    const result = applyFilter([cleanDim, dirtyDim], "attention", staged);
+  test("'attention' includes dims with pending publish (toPublishCount > 0)", () => {
+    const withPublish = { ...cleanDim, publish: { version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedRecords: 0 } };
+    const result = applyFilter([withPublish, dirtyDim], "attention");
     expect(result.map((d) => d.id)).toContain("post_type");
   });
-  test("'clean' excludes dims with new values and staged dims", () => {
-    const result = applyFilter([cleanDim, dirtyDim], "clean", staged);
+  test("'clean' excludes dims with new values", () => {
+    const result = applyFilter([cleanDim, dirtyDim], "clean");
+    expect(result.map((d) => d.id)).toEqual(["post_type"]);
+  });
+  test("'clean' excludes dims with pending publish", () => {
+    const withPublish = { ...cleanDim, publish: { version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedRecords: 0 } };
+    const result = applyFilter([withPublish, dirtyDim], "clean");
     expect(result).toHaveLength(0);
   });
   test("'clean' includes truly clean dims", () => {
-    const result = applyFilter([cleanDim, dirtyDim], "clean", new Set());
+    const result = applyFilter([cleanDim, dirtyDim], "clean");
     expect(result.map((d) => d.id)).toEqual(["post_type"]);
   });
 });
@@ -142,36 +146,27 @@ describe("applyFilter", () => {
 // ── applySort ─────────────────────────────────────────────────────────────────
 
 describe("applySort", () => {
-  test("'urgency' puts dirty dim first", () => {
-    const result = applySort([cleanDim, dirtyDim], "urgency");
+  test("'review' desc puts dim with most in-review first", () => {
+    const result = applySort([cleanDim, dirtyDim], "review", "desc");
     expect(result[0].id).toBe("country");
   });
-  test("'coverage' puts worst coverage first", () => {
-    const result = applySort([cleanDim, dirtyDim], "coverage");
+  test("'coverage' asc puts worst coverage first", () => {
+    const result = applySort([cleanDim, dirtyDim], "coverage", "asc");
     expect(result[0].id).toBe("country"); // 50% < 100%
   });
-  test("'name' sorts alphabetically", () => {
-    const result = applySort([dirtyDim, cleanDim], "name");
+  test("'name' asc sorts alphabetically", () => {
+    const result = applySort([dirtyDim, cleanDim], "name", "asc");
     expect(result[0].id).toBe("country"); // "Country" < "Post Type"
   });
-  test("'rows' puts highest row count first", () => {
-    const result = applySort([cleanDim, dirtyDim], "rows");
-    expect(result[0].id).toBe("country"); // 500 > 100
+  test("'records' desc puts highest record count first", () => {
+    const result = applySort([cleanDim, dirtyDim], "records", "desc");
+    // cleanDim has canonical=[], dirtyDim has canonical=[] too → tie; order preserved
+    expect(result).toHaveLength(2);
   });
   test("does not mutate the input array", () => {
     const input = [cleanDim, dirtyDim];
-    applySort(input, "urgency");
+    applySort(input, "review", "desc");
     expect(input[0].id).toBe("post_type");
-  });
-  test("'urgency' ranks a staged clean dim above an unstaged clean dim", () => {
-    const otherClean: MappingDimension = {
-      ...cleanDim,
-      id: "other_clean",
-      dimension: "Other Clean",
-    };
-    const result = applySort([otherClean, cleanDim], "urgency", new Set(["post_type"]));
-    expect(result[0].id).toBe("post_type");
-    expect(result[1].id).toBe("other_clean");
   });
 });
 
