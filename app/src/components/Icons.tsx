@@ -272,3 +272,9 @@ export const IconPaste = (p: SVGProps<SVGSVGElement>) => (
     <rect x="8" y="2" width="8" height="4" rx="1" />
   </Base>
 );
+export const IconFile = (p: SVGProps<SVGSVGElement>) => (
+  <Base {...p}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+  </Base>
+);

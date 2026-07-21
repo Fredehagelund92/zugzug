@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SVGProps } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
-import { IconX } from "./Icons";
+import { IconX, IconPlus, IconSources, IconFile, IconMapping, IconCheck } from "./Icons";
 import { PALETTE, PALETTE_NAMES, defaultTintFor } from "../lib/palette";
 import { createTable, useSources, type CreateTableMode, type CreateTableInput } from "../store";
 import { toast } from "./Toast";
@@ -9,13 +9,42 @@ import { ComboSelect } from "./ComboSelect";
 import type { PaletteName } from "../data";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { prepareCreateFromCsv, type CreateFromCsv } from "../lib/csv";
+import { cx } from "../lib/cx";
 
-const MODE_LABEL: Record<CreateTableMode, string> = {
-  blank: "empty table",
-  source: "from a column",
-  file: "from a file",
-  external_id: "from a lookup table",
-};
+/* The four starting points, each self-describing. The one-line hint carries the
+   "what it does" that used to open every mode panel below, so the picker itself
+   is the explanation and the panels hold only their controls. */
+const MODE_OPTIONS: {
+  mode: CreateTableMode;
+  label: string;
+  hint: string;
+  Icon: (p: SVGProps<SVGSVGElement>) => React.JSX.Element;
+}[] = [
+  {
+    mode: "blank",
+    label: "Empty table",
+    hint: "Start blank; add columns from the table later",
+    Icon: IconPlus,
+  },
+  {
+    mode: "source",
+    label: "From a column",
+    hint: "One warehouse column’s values become records",
+    Icon: IconSources,
+  },
+  {
+    mode: "file",
+    label: "From a file",
+    hint: "Upload a CSV; its headers become columns",
+    Icon: IconFile,
+  },
+  {
+    mode: "external_id",
+    label: "From a lookup table",
+    hint: "Key a warehouse ID column to a name column",
+    Icon: IconMapping,
+  },
+];
 
 interface Props {
   open: boolean;
@@ -25,9 +54,10 @@ interface Props {
 }
 
 /* CreateTableModal — Airtable-style one-page scaffold. Identity (monogram tint
-   + description) lives at the top; a three-pill mode segment swaps the form
-   below it (blank → column scaffold; source → 1 picker; from IDs → 2 pickers).
-   Posts to /api/tables in one round-trip and consolidates the audit log entry. */
+   + description) lives at the top; a four-row "start from" picker swaps the form
+   below it (blank → no controls; source → 1 picker; file → CSV upload;
+   external_id → 2 pickers + a key-uniqueness check). Posts to /api/tables in one
+   round-trip and consolidates the audit log entry. */
 
 export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreated }: Props) {
   const [name, setName] = useState("");
@@ -277,51 +307,62 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           </div>
         </div>
 
-        {/* mode segment */}
-        <div className="space-y-2 px-6 pb-2">
+        {/* mode picker — one self-describing row per starting point. Each row
+            carries its own one-line explanation, so the panels below hold only
+            their controls. Radio semantics: one choice, always exactly one set. */}
+        <div className="space-y-2 px-6 pb-4">
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">
             Start from
           </div>
-          <div
-            role="group"
-            aria-label="Start from"
-            className="flex flex-wrap gap-0.5 rounded-sm border border-line bg-bg p-0.5"
-          >
-            {(["blank", "source", "file", "external_id"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={mode === m}
-                onClick={() => setMode(m)}
-                className={`min-w-0 flex-1 rounded-sm px-2 py-1.5 font-body text-[11.5px] leading-tight transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent md:px-2.5 md:text-[12.5px] ${mode === m ? "border border-line-2 bg-surface-3 text-ink shadow-sm" : "text-ink-2 hover:text-ink"}`}
-              >
-                {MODE_LABEL[m]}
-              </button>
-            ))}
+          <div role="radiogroup" aria-label="Start from" className="space-y-1">
+            {MODE_OPTIONS.map(({ mode: m, label, hint, Icon }) => {
+              const active = mode === m;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setMode(m)}
+                  className={cx(
+                    "flex w-full items-center gap-3 rounded-sm border p-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent",
+                    active
+                      ? "border-accent bg-accent-wash"
+                      : "border-line hover:border-line-2 hover:bg-hover",
+                  )}
+                >
+                  <span
+                    className={cx(
+                      "grid h-8 w-8 shrink-0 place-items-center rounded-sm transition-colors",
+                      active ? "bg-accent text-accent-ink" : "bg-surface-2 text-ink-2",
+                    )}
+                    aria-hidden
+                  >
+                    <Icon className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-body text-[13px] font-medium text-ink">
+                      {label}
+                    </span>
+                    <span className="block font-body text-[11.5px] leading-tight text-ink-3">
+                      {hint}
+                    </span>
+                  </span>
+                  {active && (
+                    <IconCheck className="ml-auto h-4 w-4 shrink-0 text-accent" aria-hidden />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* errors surface as toasts after the modal closes (optimistic submit) */}
 
-        {/* swappable region */}
-        <div className="px-6 pb-4 pt-2">
-          {/* ─── blank: just the intent + a note. Fields are added later from
-              the table view via AddFieldPopover, which already handles the type
-              picker + per-type options. Deferring keeps this modal focused on
-              the irreversible decisions (name + key kind). ─────────────────── */}
-          {mode === "blank" && (
-            <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
-              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                Start with an empty list. Name each record; a permanent key is created from the name
-                automatically.
-              </p>
-              <p className="font-mono text-[11px] leading-[1.5] text-ink-3">
-                You can add extra columns (region, currency, owner…) from the table view later —
-                nothing is locked in here.
-              </p>
-            </div>
-          )}
-
+        {/* swappable region — controls only; the picker row above states what
+            each mode does. Blank has nothing to configure, so it renders no
+            panel: fields are added later from the table view (AddFieldPopover). */}
+        <div className="px-6 pb-4 pt-2 empty:hidden">
           {/* ─── source: 1 picker ───────────────────────────────────────────────── */}
           {mode === "source" &&
             (() => {
@@ -339,11 +380,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                       : `${info.values.toLocaleString()} distinct value${info.values === 1 ? "" : "s"} found — each becomes one record. Already-mapped values are skipped.`;
               return (
                 <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
-                  <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                    Seed records from a warehouse column. Example: a country column with ‘USA’,
-                    ‘Canada’ and ‘United States’ becomes records usa, canada and united_states — you
-                    can merge and rename them afterwards.
-                  </p>
                   {sourceOpts.length === 0 ? (
                     <div className="font-mono text-[11px] leading-[1.5] text-ink-3">
                       No warehouse columns available yet. An admin connects a database under
@@ -360,7 +396,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                       <ComboSelect
                         options={sourceOpts}
                         value={source ? `${source.table}.${source.column}` : null}
-                        placeholder="pick a warehouse column…"
+                        placeholder="pick a column…"
                         ariaLabel="Warehouse column"
                         onPick={(opt) => {
                           const dot = opt.lastIndexOf(".");
@@ -378,10 +414,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {/* ─── file: upload a CSV; headers become text fields, rows records ───── */}
           {mode === "file" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
-              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                Upload a CSV. The first column (or one named “name”) names each record; every other
-                column becomes a text field you can retype later.
-              </p>
               {!csv ? (
                 <>
                   <label className="flex cursor-pointer items-center justify-center rounded-sm border border-dashed border-line-2 bg-bg px-3 py-4 font-body text-[12.5px] text-ink-2 hover:border-accent hover:text-ink focus-within:border-accent focus-within:text-ink">
@@ -457,10 +489,6 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
           {/* ─── external_id: 2 pickers ─────────────────────────────────────────── */}
           {mode === "external_id" && (
             <div className="space-y-2 rounded-sm border border-line bg-surface-2 p-3">
-              <p className="font-body text-[12.5px] leading-[1.5] text-ink-2">
-                For lookup tables. The warehouse ID becomes the permanent key; a second column
-                provides the human name shown alongside it.
-              </p>
               <div className="rounded-sm border border-warn/30 bg-warn-soft px-2.5 py-1.5 font-mono text-[11px] leading-[1.5] text-warn">
                 {external?.idColumn ? (
                   <>
@@ -499,7 +527,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                       <ComboSelect
                         options={sourceOpts}
                         value={external ? `${external.table}.${external.idColumn}` : null}
-                        placeholder="pick the id column…"
+                        placeholder="pick…"
                         ariaLabel="ID column"
                         onPick={(opt) => {
                           const dot = opt.lastIndexOf(".");
@@ -526,9 +554,7 @@ export function CreateTableModal({ open, defaultMode = "blank", onClose, onCreat
                             : []
                         }
                         value={external?.nameColumn || null}
-                        placeholder={
-                          external?.table ? "pick the name column…" : "pick an id column first"
-                        }
+                        placeholder={external?.table ? "pick…" : "pick id first"}
                         ariaLabel="Name column"
                         disabled={!external?.table}
                         onPick={(opt) =>
