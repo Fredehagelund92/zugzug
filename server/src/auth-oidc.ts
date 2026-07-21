@@ -11,7 +11,7 @@
 import * as defaultClient from "openid-client";
 import { env, pg } from "./env.ts";
 import { pgTx } from "./pg.ts";
-import { issueSession } from "./auth.ts";
+import { issueSession, countRealLoginUsers } from "./auth.ts";
 import { acceptInvitesFor } from "./tenant.ts";
 import { log } from "./log.ts";
 
@@ -204,8 +204,9 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   const oidcResult = await pgTx(async (tx) => {
     await tx.run(`SELECT pg_advisory_xact_lock(hashtext('zz:first-admin'))`);
 
-    const countRow = await tx.get<{ n: number }>(`SELECT count(*)::int AS n FROM ${pg("users")}`);
-    const userCount = countRow?.n ?? 0;
+    // Count only real login accounts — shared with auth-password.ts so seeded
+    // placeholders (u_system, demo team) don't lock out the first real OIDC user.
+    const userCount = await countRealLoginUsers(tx);
 
     // Gate check (with bootstrap: first OIDC user becomes admin).
     // Subsequent users must have a tenant_member or tenant_invite row.

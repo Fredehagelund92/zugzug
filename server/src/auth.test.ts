@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { requireAdmin, type TenantAuthContext } from "./auth.ts";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
+import { requireAdmin, countRealLoginUsers, type TenantAuthContext } from "./auth.ts";
 import { handleSignup } from "./auth-password.ts";
-import { pgRun, pgGet } from "./pg.ts";
+import { pgRun, pgGet, pgTx } from "./pg.ts";
 
 function ctx(role: "admin" | "editor" | "viewer", isSuperAdmin = false): TenantAuthContext {
   return { tenantId: "t1", role, isSuperAdmin };
@@ -124,17 +124,68 @@ describe("first-admin role assignment", () => {
   });
 });
 
-// ── cross-path advisory lock invariant ───────────────────────────────────────
+// ── shared first-admin predicate ──────────────────────────────────────────────
+// countRealLoginUsers is the single source of truth for "how many real accounts
+// exist" in the first-admin election. Seeded placeholders (u_system, demo team —
+// null password_hash, auth_provider='password') must not count, or they'd block
+// the first real signup (password OR OIDC) from becoming admin.
+describe("countRealLoginUsers (shared first-admin predicate)", () => {
+  beforeEach(async () => {
+    await pgRun(`DELETE FROM "zugzug_app"."users"`).catch(() => {});
+  });
+  afterAll(async () => {
+    await pgRun(`DELETE FROM "zugzug_app"."users"`).catch(() => {});
+  });
+
+  it("excludes seeded placeholders (null password_hash, auth_provider='password')", async () => {
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, initials, auth_provider) VALUES
+         ('u_system', 'Auto-match', 'AM', 'password'),
+         ('u_ada', 'Ada Berg', 'AB', 'password')`,
+    );
+    const n = await pgTx((tx) => countRealLoginUsers(tx));
+    expect(n).toBe(0);
+  });
+
+  it("counts real password and OIDC accounts, not placeholders", async () => {
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, initials, auth_provider) VALUES
+         ('u_system', 'Auto-match', 'AM', 'password')`,
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, initials, auth_provider, password_hash)
+       VALUES ('u_pw', 'PW User', 'PW', 'password', '$argon2id$fake')`,
+    );
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, initials, auth_provider, google_sub)
+       VALUES ('u_oidc', 'OIDC User', 'OU', 'oidc', 'sub-123')`,
+    );
+    const n = await pgTx((tx) => countRealLoginUsers(tx));
+    expect(n).toBe(2); // u_pw + u_oidc; u_system excluded
+  });
+});
+
+// ── cross-path first-admin invariants ─────────────────────────────────────────
 // A source-text assertion is a smell in general; here it is the honest cheap
-// guard for a cross-file invariant that no integration test can reach without
+// guard for cross-file invariants that no integration test can reach without
 // an OIDC issuer.
-describe("cross-path advisory lock key", () => {
+describe("cross-path first-admin election", () => {
   it("password and OIDC first-admin paths share one advisory lock key", async () => {
     const pw = await Bun.file("src/auth-password.ts").text();
     const oidc = await Bun.file("src/auth-oidc.ts").text();
     const key = "hashtext('zz:first-admin')";
     expect(pw).toContain(key);
     expect(oidc).toContain(key);
+  });
+
+  it("both paths elect first-admin via the shared countRealLoginUsers helper (no divergent inline count)", async () => {
+    const pw = await Bun.file("src/auth-password.ts").text();
+    const oidc = await Bun.file("src/auth-oidc.ts").text();
+    expect(pw).toContain("countRealLoginUsers");
+    expect(oidc).toContain("countRealLoginUsers");
+    // Neither may keep an unfiltered users count for the election.
+    expect(pw).not.toContain("count(*)::int AS n FROM");
+    expect(oidc).not.toContain("count(*)::int AS n FROM");
   });
 });
 

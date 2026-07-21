@@ -16,8 +16,23 @@
 */
 
 import { env, pg } from "./env.ts";
-import { pgRun as run, pgGet as get, pgAll } from "./pg.ts";
+import { pgRun as run, pgGet as get, pgAll, type TxHelpers } from "./pg.ts";
 import { AppError } from "./errors.ts";
+
+/** Count real login accounts — the single source of truth for the first-admin
+ *  election, shared by the password (auth-password.ts) and OIDC (auth-oidc.ts)
+ *  signup paths so the two cannot drift. Excludes seeded placeholders
+ *  (u_system, demo team) which have a null password_hash and are never logged
+ *  into; a real account is a password user (password_hash set) or an OIDC user
+ *  (auth_provider='oidc'). Runs inside the caller's first-admin advisory-lock
+ *  transaction — pass the `tx` handle from that pgTx. */
+export async function countRealLoginUsers(tx: TxHelpers): Promise<number> {
+  const row = await tx.get<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${pg("users")}
+      WHERE password_hash IS NOT NULL OR auth_provider = 'oidc'`,
+  );
+  return row?.n ?? 0;
+}
 
 export interface SessionUser {
   id: string;

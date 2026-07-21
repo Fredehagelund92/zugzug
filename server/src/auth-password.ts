@@ -4,7 +4,7 @@
 
 import { env, pg } from "./env.ts";
 import { pgRun, pgGet, pgTx } from "./pg.ts";
-import { issueSession } from "./auth.ts";
+import { issueSession, countRealLoginUsers } from "./auth.ts";
 import { acceptInvitesFor } from "./tenant.ts";
 import { log } from "./log.ts";
 
@@ -80,11 +80,7 @@ export async function handleSignup(req: Request): Promise<Response> {
   // first-signups from both seeing count=0 and both becoming admin.
   const signupResult = await pgTx(async (tx) => {
     await tx.run(`SELECT pg_advisory_xact_lock(hashtext('zz:first-admin'))`);
-    const countRow = await tx.get<{ n: number }>(
-      `SELECT count(*)::int AS n FROM ${pg("users")}
-        WHERE password_hash IS NOT NULL OR auth_provider = 'oidc'`,
-    );
-    const userCount = countRow?.n ?? 0;
+    const userCount = await countRealLoginUsers(tx);
 
     // First user becomes admin and is seeded into the default tenant.
     // Subsequent users must already have a tenant_member or tenant_invite row.
