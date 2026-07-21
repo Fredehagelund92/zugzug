@@ -1,78 +1,54 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderGrid } from "./test-kit/render-grid";
 
-// Undo-routing characterization
+// Real undo/redo round-trip suite
 // ──────────────────────────────────────────────────────────────────────────────
-// DataGrid wraps range-clear in undo.beginTransaction / undo.endTransaction
-// (DataGrid.tsx:1125-1131).  Undo entries are pushed by the HOST's onCommit
-// via undo.push() — see TablePane.tsx:542, 591, 630.  The grid itself never
-// calls undo.push().
-//
-// In the test harness, onCommit is vi.fn(async () => {}) — a no-op spy that
-// never calls undo.push().  As a result:
-//   • beginTransaction opens a group, commitValue calls onCommit(rk, field, null)
-//     for each target cell, but endTransaction finds tx.entries.length === 0
-//     and discards the group (UndoStack.tsx:109).
-//   • The undo stack remains empty after a range clear.
-//   • Ctrl+Z / Cmd+Z calls undo.undo() which returns early (no entry to pop).
-//
-// These tests assert the STRONGEST TRUE PROPERTIES:
-//   1. Range-clear (Delete on r0+r1 name) fires null commits for both cells
-//      within a single keyboard action — confirming the single-transaction
-//      grouping design (all targets are dispatched via one Promise.all inside
-//      one beginTransaction/endTransaction scope).
-//   2. With a no-op onCommit, Ctrl+Z cannot restore cells — no additional
-//      onCommit calls are made after undo, because the undo stack is empty.
-//   3. Redo likewise has nothing to re-apply.
-//
-// If the host provides a real onCommit that pushes undo entries, the inverse
-// would call onCommit with the original values for each cell.  The test for
-// that path belongs in an integration test with a stateful host, not here.
+// The stateful Host in render-grid.tsx pushes UndoEntry objects on every commit
+// so Cmd+Z / Cmd+Shift+Z round-trips are observable via the DOM cell text.
+// The spy (onCommit) is NOT re-called on undo — the inverse runs commitValue
+// directly. Assertions read cellAt(i, field).textContent.
+
+const text = (el: HTMLElement) => el.textContent?.trim() ?? "";
 
 describe("grid undo/redo", () => {
-  it("range-clear commits null for every cell in one Delete action", async () => {
+  it("single-edit undo restores the original value", async () => {
     const g = renderGrid();
+
+    await g.editCell(0, "name", "Edited");
+    expect(text(g.cellAt(0, "name"))).toBe("Edited");
+
+    // Undo via Cmd+Z — inverse runs commitValue(rk, "name", "Name 0")
+    await g.press("{Meta>}z{/Meta}");
+    expect(text(g.cellAt(0, "name"))).toBe("Name 0");
+  });
+
+  it("redo re-applies the edit after undo", async () => {
+    const g = renderGrid();
+
+    await g.editCell(0, "name", "Edited");
+    await g.press("{Meta>}z{/Meta}");
+    expect(text(g.cellAt(0, "name"))).toBe("Name 0");
+
+    // Redo via Cmd+Shift+Z — apply runs commitValue(rk, "name", "Edited")
+    await g.press("{Meta>}{Shift>}z{/Shift}{/Meta}");
+    expect(text(g.cellAt(0, "name"))).toBe("Edited");
+  });
+
+  it("range-clear undoes as ONE transaction (both cells restored by one Cmd+Z)", async () => {
+    const g = renderGrid();
+
+    // Select r0 + r1 in the name column and clear
     await g.focusCell(0, "name");
-    // Extend selection to r0 + r1
     await g.press("{Shift>}{ArrowDown}{/Shift}");
     await g.press("{Delete}");
 
-    // Both cells must receive a null commit — these are the writes the grid
-    // dispatches inside a single beginTransaction/endTransaction block.
-    expect(g.onCommit).toHaveBeenCalledWith("r0", "name", null);
-    expect(g.onCommit).toHaveBeenCalledWith("r1", "name", null);
+    // Both cells should be empty after the clear (grid renders null as "—")
+    expect(text(g.cellAt(0, "name"))).toBe("—");
+    expect(text(g.cellAt(1, "name"))).toBe("—");
 
-    // Exactly two commits — no bystander cells touched.
-    const clearedCalls = g.onCommit.mock.calls.length;
-    expect(clearedCalls).toBe(2);
-  });
-
-  it("Ctrl+Z with a no-op onCommit does not produce extra commits (undo stack empty)", async () => {
-    const g = renderGrid();
-    await g.focusCell(0, "name");
-    await g.press("{Shift>}{ArrowDown}{/Shift}");
-    await g.press("{Delete}");
-
-    const callsAfterClear = g.onCommit.mock.calls.length;
-
-    // Undo — the stack is empty because the spy never called undo.push(),
-    // so this is a no-op; no inverse commits should fire.
-    await g.press("{Control>}z{/Control}");
-
-    expect(g.onCommit.mock.calls.length).toBe(callsAfterClear);
-  });
-
-  it("redo with a no-op onCommit does not produce extra commits (redo stack empty)", async () => {
-    const g = renderGrid();
-    await g.focusCell(0, "name");
-    await g.press("{Delete}");
-    await g.press("{Control>}z{/Control}");
-
-    const callsAfterUndo = g.onCommit.mock.calls.length;
-
-    // Redo — nothing on the redo stack either.
-    await g.press("{Control>}{Shift>}z{/Shift}{/Control}");
-
-    expect(g.onCommit.mock.calls.length).toBe(callsAfterUndo);
+    // ONE Cmd+Z undoes the entire transaction (both cells restored)
+    await g.press("{Meta>}z{/Meta}");
+    expect(text(g.cellAt(0, "name"))).toBe("Name 0");
+    expect(text(g.cellAt(1, "name"))).toBe("Name 1");
   });
 });
