@@ -4,6 +4,7 @@ import { vi } from "vitest";
 import { DataGrid } from "../DataGrid";
 import { UndoStackProvider } from "../UndoStack";
 import type { ColumnDef } from "../types";
+import { makeDriver } from "./driver";
 import { makeColumns, makeRows, rowKeyFn, type Row } from "./fixtures";
 import * as q from "./queries";
 
@@ -43,5 +44,6 @@ export function renderGrid(overrides: RenderGridOverrides = {}) {
     cursorCell: () => q.cursorCell(container),
     selectedCells: () => q.selectedCells(container),
     editingCell: () => q.editingCell(container),
+    ...makeDriver(user, (i, field) => q.cellAt(container, idToKey(i), field)),
   };
 }
