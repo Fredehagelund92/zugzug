@@ -12,5 +12,19 @@ export default defineConfig({
     // unrelated files run-to-run). Per-file overrides proved whack-a-mole —
     // the contention is suite-wide, so the default is raised globally.
     testTimeout: 15000,
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "lcov"],
+      reportsDirectory: "./coverage",
+      reportOnFailure: true,
+      exclude: [
+        "**/*.test.*",
+        "**/test-kit/**",
+        "test/**",
+        "src/main.tsx",
+        "**/*.d.ts",
+        "**/verify-*.ts",
+      ],
+    },
   },
 });
