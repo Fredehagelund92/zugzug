@@ -78,6 +78,9 @@ describe("applySort", () => {
   it("published asc keeps never-published (null) last", () => {
     expect(ids(applySort(all, "published", "asc"))).toEqual(["a", "b", "c"]);
   });
+  it("records desc ranks by record count", () => {
+    expect(ids(applySort(all, "records", "desc"))).toEqual(["a", "c", "b"]);
+  });
   it("never mutates the input array", () => {
     const before = ids(all);
     applySort(all, "records", "desc");
