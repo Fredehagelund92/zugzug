@@ -38,6 +38,13 @@ _Avoid_: staged (implementation term), pending
 The current, editable state of a table (records + mappings + drafts)
 as seen in the grid. Not yet what dbt consumes.
 
+**Unpublished changes**:
+The delta between a table's working copy and its last published version:
+its drafts (mappings awaiting publish) plus the records edited since that
+publish. Everything a single Publish would fold into the next version.
+A table with zero unpublished changes is level with dbt.
+_Avoid_: staged, pending, dirty, diff
+
 **Publish**:
 The single act that folds drafts and record edits into a new numbered
 table version (v17 → v18) and materializes it for dbt.
