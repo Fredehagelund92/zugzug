@@ -432,6 +432,22 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
   };
 }
 
+/** Count-only publish summary for the dimension list (ADR-0005). Reuses
+ *  getPublishState so "what's waiting" stays defined in exactly one place. */
+export async function publishSummaryFor(
+  dimId: string,
+  tenantId: string,
+): Promise<import("./repo-shared.ts").PublishSummary> {
+  const s = await getPublishState(dimId, tenantId);
+  return {
+    version: s.version,
+    publishedAt: s.publishedAt,
+    publishedByName: s.publishedByName,
+    pendingDrafts: s.pendingDrafts,
+    changedRecords: s.changedKeys.length,
+  };
+}
+
 /** Restore every record with unpublished changes back to the last published
  *  snapshot: edited records get their published values, records added since
  *  are removed, records removed since come back. Mapping drafts are untouched. */

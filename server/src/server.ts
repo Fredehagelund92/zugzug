@@ -7,6 +7,7 @@ import { initSentry, captureError, flushSentry } from "./observability.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
 import type { ImportRow } from "./repo-canonical.ts";
 import { rebalanceDimPositions } from "./repo-canonical.ts";
+import { publishSummaryFor } from "./repo-drafts.ts";
 import { dimMeta } from "./repo-shared.ts";
 import {
   getSessionUser,
@@ -974,7 +975,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               const metas = await reqRepo.listDimensions();
               const scalars = await reqRepo.getDimScanScalars();
               const fulls = await Promise.all(
-                metas.map((m) => reqRepo.getDimension(m.id, { scalars })),
+                metas.map(async (m) => {
+                  const full = await reqRepo.getDimension(m.id, { scalars });
+                  if (!full) return null;
+                  return { ...full, publish: await publishSummaryFor(m.id, tenantCtx.tenantId) };
+                }),
               );
               return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
             }

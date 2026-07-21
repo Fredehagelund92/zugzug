@@ -242,6 +242,16 @@ export interface CatalogTable {
   table: string;
   columns: string[];
 }
+/** Compact per-table publish state for the dimension list (ADR-0005). The
+ *  count-only sibling of PublishState — the dashboard needs the size of the
+ *  delta, not the keys. changedRecords = PublishState.changedKeys.length. */
+export interface PublishSummary {
+  version: number; // 0 = never published
+  publishedAt: string | null;
+  publishedByName: string | null;
+  pendingDrafts: number;
+  changedRecords: number;
+}
 export interface MappingDimension extends DimensionMeta {
   description: string | null;
   color: PaletteName | null;
@@ -258,6 +268,8 @@ export interface MappingDimension extends DimensionMeta {
     scannedAt: string | null;
   };
   fields: FieldDef[];
+  /** Per-table publish summary (ADR-0005). Present only on the ?full=true list. */
+  publish?: PublishSummary;
 }
 export interface Draft {
   dimId: string;
