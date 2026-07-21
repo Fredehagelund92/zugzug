@@ -76,22 +76,6 @@ test("field edit shows as changed; publish clears it", async () => {
   expect(s.changedKeys).toEqual([]);
 });
 
-test("field edit writes an audit entry for the activity feed", async () => {
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
-  const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
-  await repo.addCanonicalOne(dimId, "Germany", "germany", U, "default");
-
-  await repo.setFieldValue(dimId, "germany", f!.field, "Europe", U, "default");
-
-  const rows = await pgAll<{ action: string; detail: string; row_key: string }>(
-    `SELECT action, detail, row_key FROM "zugzug_app"."audit_log"
-     WHERE table_id = $1 AND row_key = 'germany' AND action = 'Edited record'`,
-    [dimId],
-  );
-  expect(rows.length).toBe(1);
-  expect(rows[0]!.detail).toContain(f!.field);
-});
-
 test("reverting an edit to its published value clears it from changed", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
   const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
@@ -128,6 +112,61 @@ test("never-published table counts every record, even without version rows", asy
 
   const s = await repo.getPublishState(dimId, "default");
   expect(s.changedKeys).toEqual(["france", "germany"]);
+});
+
+test("field edit writes an audit entry for the activity feed", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
+  await repo.addCanonicalOne(dimId, "Germany", "germany", U, "default");
+
+  await repo.setFieldValue(dimId, "germany", f!.field, "Europe", U, "default");
+
+  const rows = await pgAll<{ action: string; detail: string; row_key: string }>(
+    `SELECT action, detail, row_key FROM "zugzug_app"."audit_log"
+     WHERE table_id = $1 AND row_key = 'germany' AND action = 'Edited record'`,
+    [dimId],
+  );
+  expect(rows.length).toBe(1);
+  expect(rows[0]!.detail).toContain(f!.field);
+});
+
+test("revert all changes restores the last published version", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  const f = await repo.addField(dimId, "Notes", "text", undefined, {}, U, "default");
+  await repo.addCanonicalOne(dimId, "Alpha", "alpha", U, "default");
+  await repo.addCanonicalOne(dimId, "Beta", "beta", U, "default");
+  await repo.commit(dimId, U, "default");
+
+  // Drift: edit a field, add a record, remove a record.
+  await repo.setFieldValue(dimId, "alpha", f!.field, "x", U, "default");
+  await repo.addCanonicalOne(dimId, "Gamma", "gamma", U, "default");
+  await repo.retireCanonical(dimId, "beta", U, 1, "default");
+
+  let s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual(["alpha", "beta", "gamma"]);
+  expect(s.canRevert).toBe(true);
+
+  const r = await repo.revertToPublished(dimId, U, "default");
+  expect(r.reverted).toBe(3);
+
+  s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual([]);
+
+  const rows = await pgAll<{ key: string; label: string; notes: string | null }>(
+    `SELECT country_code AS key, label, ${f!.field} AS notes FROM "zugzug"."dim_country" ORDER BY 1`,
+  );
+  expect(rows).toEqual([
+    { key: "alpha", label: "Alpha", notes: null },
+    { key: "beta", label: "Beta", notes: null },
+  ]);
+});
+
+test("revert refuses when there is no published version", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  await repo.addCanonicalOne(dimId, "Alpha", "alpha", U, "default");
+  const s = await repo.getPublishState(dimId, "default");
+  expect(s.canRevert).toBe(false);
+  await expect(repo.revertToPublished(dimId, U, "default")).rejects.toThrow(/publish/i);
 });
 
 test("publish with nothing to publish is a no-op (no version bump)", async () => {

@@ -1426,6 +1426,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             : undefined;
           return json(await reqRepo.commit(id, me, draftKeys));
         }
+        // POST /api/dimensions/:id/revert — restore all changed records to the last published version
+        if (seg[3] === "revert" && seg.length === 4 && method === "POST") {
+          const denied = gateOrJson(tenantCtx, "curate");
+          if (denied) return denied;
+          return json(await reqRepo.revertToPublished(id, me));
+        }
         // POST /api/dimensions/:id/positions/rebalance
         if (
           seg[3] === "positions" &&

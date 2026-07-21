@@ -826,6 +826,7 @@ export interface PublishState {
   publishedByName: string | null;
   pendingDrafts: number;
   changedKeys: string[];
+  canRevert: boolean;
 }
 
 export async function fetchPublishState(dimId: string): Promise<PublishState> {
@@ -849,6 +850,18 @@ export async function commit(
   await refreshDim(dimId);
   await refreshDrafts(dimId);
   await refreshSources();
+  await refreshAudit();
+  emit();
+  return res;
+}
+
+/** Restore every changed record to the last published version. */
+export async function revertChanges(dimId: string): Promise<{ reverted: number }> {
+  const res = await api<{ reverted: number }>(
+    `/dimensions/${encodeURIComponent(dimId)}/revert`,
+    { method: "POST" },
+  );
+  await refreshDim(dimId);
   await refreshAudit();
   emit();
   return res;

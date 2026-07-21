@@ -44,6 +44,7 @@ import {
   refreshDimAndNotify,
   commit,
   fetchPublishState,
+  revertChanges,
   type PublishState,
   type GridLayoutConfig,
 } from "../store";
@@ -294,6 +295,8 @@ function RecordsBody({
   const [pubState, setPubState] = useState<PublishState | null>(null);
   const [changedOnly, setChangedOnly] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [revertConfirm, setRevertConfirm] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [rebalanceConfirm, setRebalanceConfirm] = useState(false);
   const [publishPreview, setPublishPreview] = useState(false);
   const [publishGroups, setPublishGroups] = useState<PublishGroup[]>([]);
@@ -514,6 +517,24 @@ function RecordsBody({
   useEffect(() => setChangedOnly(false), [activeId]);
 
   const unpublished = pubState ? pubState.pendingDrafts + pubState.changedKeys.length : 0;
+
+  const doRevert = async () => {
+    if (reverting) return;
+    setReverting(true);
+    try {
+      const r = await revertChanges(activeId);
+      const s = await fetchPublishState(activeId);
+      setPubState(s);
+      setChangedOnly(false);
+      setRevertConfirm(false);
+      flash(`Reverted ${r.reverted} record${r.reverted === 1 ? "" : "s"} to Version ${s.version}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error";
+      flash(`Revert failed — ${msg}`, "danger");
+    } finally {
+      setReverting(false);
+    }
+  };
 
   const doPublish = async (draftKeys?: string[]) => {
     if (publishing || unpublished === 0) return;
@@ -949,6 +970,16 @@ function RecordsBody({
               <span className="tabular-nums">{pubState.changedKeys.length}</span>
               <span className="@max-5xl:hidden">changed</span>
               {changedOnly && <IconX className="h-3 w-3 shrink-0 opacity-70" />}
+            </button>
+          )}
+          {canEdit && pubState && pubState.canRevert && pubState.changedKeys.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setRevertConfirm(true)}
+              title={`Restore Version ${pubState.version} — undo the ${pubState.changedKeys.length} record change${pubState.changedKeys.length === 1 ? "" : "s"}`}
+              className="inline-flex shrink-0 items-center rounded-sm border border-line-2 px-2 py-1.5 text-xs font-semibold text-ink-2 transition-colors hover:border-danger/40 hover:bg-danger/10 hover:text-danger"
+            >
+              Revert
             </button>
           )}
 
@@ -1799,6 +1830,23 @@ function RecordsBody({
           }
         }}
         onCancel={() => setPendingImport(null)}
+      />
+
+      <ConfirmDialog
+        open={revertConfirm}
+        title={`Revert ${pubState?.changedKeys.length ?? 0} change${(pubState?.changedKeys.length ?? 0) === 1 ? "" : "s"}?`}
+        body={
+          <>
+            Every changed record goes back to Version {pubState?.version}: edits are undone,
+            records added since are removed, and records removed since come back. This can't be
+            undone.
+          </>
+        }
+        confirmLabel="Revert changes"
+        danger
+        loading={reverting}
+        onConfirm={doRevert}
+        onCancel={() => setRevertConfirm(false)}
       />
 
       <ConfirmDialog

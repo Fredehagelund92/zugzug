@@ -427,6 +427,11 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDrafts.getPublishState(dimId, this.tenantId));
   }
 
+  revertToPublished(dimId: string, userId: string): Promise<{ reverted: number }> {
+    this.assertRole("curate");
+    return this.withClearCtx(() => repoDrafts.revertToPublished(dimId, userId, this.tenantId));
+  }
+
   listVersions(dimId: string): Promise<repoVersions.VersionInfo[]> {
     return this.withClearCtx(() => repoVersions.listVersions(dimId, this.tenantId));
   }

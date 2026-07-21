@@ -308,6 +308,20 @@ export interface PublishState {
    *  derived from canonical_version, not a staging queue). Keys created by
    *  draft folding don't appear here — they go out in the same publish. */
   changedKeys: string[];
+  /** True when a published snapshot exists to revert the working copy to. */
+  canRevert: boolean;
+}
+
+/** Latest version with a usable record snapshot (legacy double-encoded
+ *  snapshots are skipped — reverting against those would drop rows). */
+async function latestSnapshotVersion(dimId: string, tenantId: string): Promise<number | null> {
+  const row = await pgGet<{ version: number }>(
+    `SELECT version FROM ${pg("dimension_version")}
+     WHERE dim_id = $1 AND tenant_id = $2 AND jsonb_typeof(snapshot->'records') = 'array'
+     ORDER BY version DESC LIMIT 1`,
+    [dimId, tenantId],
+  );
+  return row ? Number(row.version) : null;
 }
 
 /** Stable serialisation of a flat to_jsonb row for value comparison. */
@@ -414,9 +428,74 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
     publishedByName,
     pendingDrafts: Number(pending?.n ?? 0),
     changedKeys: dimMeta ? await changedKeysSince(dimId, tenantId, publishedAt, dimMeta) : [],
+    canRevert: version > 0 && (await latestSnapshotVersion(dimId, tenantId)) !== null,
   };
 }
 
+/** Restore every record with unpublished changes back to the last published
+ *  snapshot: edited records get their published values, records added since
+ *  are removed, records removed since come back. Mapping drafts are untouched. */
+export async function revertToPublished(
+  dimId: string,
+  userId: string,
+  tenantId: string,
+): Promise<{ reverted: number }> {
+  const meta = await pgGet<{ dimTable: string; keyCol: string }>(
+    `SELECT dim_table AS "dimTable", key_col AS "keyCol"
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
+  );
+  if (!meta) throw new AppError("NOT_FOUND", `table ${dimId} not found`, 404);
+  const last = await pgGet<{ at: Date | null }>(
+    `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
+     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
+    [tenantId, dimId],
+  );
+  const snapVersion = await latestSnapshotVersion(dimId, tenantId);
+  if (!last?.at || snapVersion === null) {
+    throw new AppError("VALIDATION_FAILED", "publish a version first — nothing to revert to", 422);
+  }
+  const changed = await changedKeysSince(dimId, tenantId, last.at, meta);
+  if (changed.length === 0) return { reverted: 0 };
+
+  const DIMT = cq(meta.dimTable);
+  const keyc = qid(meta.keyCol);
+  await pgTx(async (tx) => {
+    await tx.run(`DELETE FROM ${DIMT} WHERE ${keyc}::text = ANY($1)`, [changed]);
+    await tx.run(
+      `INSERT INTO ${DIMT}
+       SELECT rec.* FROM ${pg("dimension_version")} v
+       CROSS JOIN LATERAL jsonb_array_elements(v.snapshot->'records') AS e(obj)
+       CROSS JOIN LATERAL jsonb_populate_record(NULL::${DIMT}, e.obj) AS rec
+       WHERE v.dim_id = $1 AND v.tenant_id = $2 AND v.version = $3
+         AND e.obj->>$4 = ANY($5)`,
+      [dimId, tenantId, snapVersion, meta.keyCol, changed],
+    );
+    // Stamp the touched records so concurrent editors conflict cleanly; values
+    // now equal the snapshot, so they no longer count as changed.
+    await tx.run(
+      `UPDATE ${pg("canonical_version")}
+          SET version = version + 1, updated_at = now(), updated_by = $4
+        WHERE dim_id = $1 AND tenant_id = $2 AND key = ANY($3)`,
+      [dimId, tenantId, changed, userId],
+    );
+    // Records restored from the snapshot are live again — clear retire flags.
+    await tx.run(
+      `UPDATE ${pg("canonical_version")} cv
+          SET retired_at = NULL, retired_into = NULL
+        WHERE cv.dim_id = $1 AND cv.tenant_id = $2 AND cv.key = ANY($3)
+          AND EXISTS (SELECT 1 FROM ${DIMT} d WHERE d.${keyc}::text = cv.key)`,
+      [dimId, tenantId, changed],
+    );
+  });
+  await appendAuditAs(
+    userId,
+    "Reverted changes",
+    `${changed.length} record${changed.length === 1 ? "" : "s"} → Version ${snapVersion}`,
+    { tableId: dimId, tenantId },
+  );
+  return { reverted: changed.length };
+}
 
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
