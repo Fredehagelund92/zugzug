@@ -9,7 +9,7 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md) for the stack and
 
 ## Prerequisites
 
-- A host with [Docker](https://docs.docker.com/get-docker/) and ports **80 + 443** open to the internet.
+- A host with [Docker](https://docs.docker.com/get-docker/) and ports **80 + 443** open to the internet and free on the host (not already bound by another web server or reverse proxy — if they are, Caddy can't bind them and ACME will fail).
 - A DNS **A**/**AAAA** record for your domain pointing at the host.
 
 ## 1. Configure
@@ -49,8 +49,10 @@ terminate TLS in your upstream proxy, and keep `ORIGIN=https://<domain>`.
 
 **Managed / external Postgres** — remove the `postgres` service, set
 `DATABASE_URL` in `.env` to your managed instance (e.g.
-`postgres://user:pass@host:5432/db?sslmode=require`). Recommended at scale for
-managed backups/PITR.
+`postgres://user:pass@host:5432/db?sslmode=require`), and also remove the
+`depends_on: postgres` block from the `server` service in `compose.prod.yml`
+(leaving it causes `docker compose` to error with "undefined service postgres").
+Recommended at scale for managed backups/PITR.
 
 ## Operate
 
