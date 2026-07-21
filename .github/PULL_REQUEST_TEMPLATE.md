@@ -13,8 +13,10 @@
 ## Test plan
 
 - [ ] <!-- Describe what you tested and how -->
+- [ ] Added or updated tests for the lines this PR changes
+- [ ] Ran `make test` locally and it passed
+- [ ] Added an end-to-end spec if a user journey changed (see `docs/testing.md`)
 - [ ] Typechecks pass (`bun run typecheck` in both `server/` and `app/`)
-- [ ] No regressions in existing behavior (manual smoke test or test run)
 
 ---
 
