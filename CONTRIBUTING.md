@@ -33,9 +33,10 @@ For security issues, please follow the disclosure flow in [SECURITY.md](./SECURI
 1. Open an issue first if the change is substantial — saves rework
 2. Fork the repo and create a topic branch
 3. Make your changes; add tests
-4. Sign your commits (`git commit -s`)
-5. Run `bun run typecheck && bun run lint && bun run format:check && bun run test` in both `server/` and `app/` workspaces
-6. Open the PR
+4. Install pre-commit hooks once with `make hooks` (runs Prettier + ESLint on staged files)
+5. Sign your commits (`git commit -s`)
+6. Run `bun run typecheck && bun run lint && bun run format:check && bun run test` in both `server/` and `app/` workspaces
+7. Open the PR
 
 ## Development setup
 

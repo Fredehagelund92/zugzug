@@ -1,0 +1,22 @@
+# Fast pre-commit checks on staged files. Install with `make hooks`.
+# Full typecheck + tests run in CI; keep this fast so nobody disables it.
+pre-commit:
+  parallel: true
+  commands:
+    # {,**/} matches files BOTH directly in src/ and nested; a bare **/ skips the top-level files.
+    app-format:
+      root: "app/"
+      glob: "app/src/{,**/}*.{ts,tsx,css}"
+      run: bunx prettier --check {staged_files}
+    app-lint:
+      root: "app/"
+      glob: "app/src/{,**/}*.{ts,tsx}"
+      run: bunx eslint {staged_files}
+    server-format:
+      root: "server/"
+      glob: "server/src/{,**/}*.ts"
+      run: bunx prettier --check {staged_files}
+    server-lint:
+      root: "server/"
+      glob: "server/src/{,**/}*.ts"
+      run: bunx eslint {staged_files}
