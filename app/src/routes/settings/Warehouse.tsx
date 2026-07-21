@@ -97,6 +97,7 @@ function DatabasesSection() {
   const tenant = useTenant();
   const isSuperAdmin = tenant.isSuperAdmin === true;
   const [databases, setDatabases] = useState<DatabaseRow[]>([]);
+  const [dbLoading, setDbLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [removing, setRemoving] = useState<DatabaseRow | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
@@ -107,6 +108,8 @@ function DatabasesSection() {
       setDatabases(await fetchWarehouseDatabases());
     } catch (err) {
       setDbError(err instanceof Error ? err.message : "Could not reach the server.");
+    } finally {
+      setDbLoading(false);
     }
   }, []);
 
@@ -131,6 +134,7 @@ function DatabasesSection() {
         ) : (
           <DatabaseTable
             databases={databases}
+            loading={dbLoading}
             canAdd={isSuperAdmin}
             onAdd={() => setShowAdd(true)}
             onRemove={isSuperAdmin ? (db) => setRemoving(db) : undefined}

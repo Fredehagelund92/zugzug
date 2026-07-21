@@ -415,6 +415,9 @@ export const warehouseDatabase = app.table(
     id:               varchar("id").notNull().primaryKey(),
     database_name:    varchar("database_name", { length: 255 }).notNull(),
     label:            varchar("label", { length: 255 }),
+    // Snapshot of the warehouse's schema count, refreshed out-of-band so the
+    // list endpoint never blocks on a live warehouse query. Null = never counted.
+    schema_count:     integer("schema_count"),
     last_probe_at:    timestamp("last_probe_at"),
     last_probe_error: text("last_probe_error"),
     added_at:         timestamp("added_at").notNull(),

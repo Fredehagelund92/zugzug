@@ -1,0 +1,1 @@
+ALTER TABLE "zugzug_app"."warehouse_database" ADD COLUMN "schema_count" integer;

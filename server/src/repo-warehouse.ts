@@ -17,7 +17,7 @@ export interface DatabaseRow {
   label: string | null;
   addedAt: Date;
   sourceCount: number;
-  /** Live count from the warehouse — `null` if the adapter call failed. */
+  /** Snapshot from the last refreshSchemaCounts() — `null` if never counted. */
   schemaCount: number | null;
   lastProbeAt: Date | null;
   lastProbeError: string | null;
@@ -43,11 +43,12 @@ export async function discoverDatabases(): Promise<
 }
 
 export async function listWarehouseDatabases(): Promise<DatabaseRow[]> {
-  const rows = await pgAll<Omit<DatabaseRow, "schemaCount">>(
+  return pgAll<DatabaseRow>(
     `SELECT wd.id            AS "id",
             wd.database_name AS "databaseName",
             wd.label         AS "label",
             wd.added_at      AS "addedAt",
+            wd.schema_count  AS "schemaCount",
             wd.last_probe_at AS "lastProbeAt",
             wd.last_probe_error AS "lastProbeError",
             (SELECT count(*)::int FROM "zugzug_app"."dimension_source" ds
@@ -55,17 +56,24 @@ export async function listWarehouseDatabases(): Promise<DatabaseRow[]> {
        FROM "zugzug_app"."warehouse_database" wd
       ORDER BY wd.added_at`,
   );
-  let counts: Map<string, number> | null = null;
+}
+
+/** Snapshot the warehouse's per-database schema counts into Postgres so the
+ *  list above never blocks on a live warehouse query. Never throws — callers
+ *  fire-and-forget it; a failure just leaves the stored counts untouched. */
+export async function refreshSchemaCounts(): Promise<void> {
   try {
     const adapter = await getAdapter();
-    counts = await adapter.schemaCounts();
+    const counts = await adapter.schemaCounts();
+    for (const [databaseName, n] of counts) {
+      await pgRun(
+        `UPDATE "zugzug_app"."warehouse_database" SET schema_count = $1 WHERE database_name = $2`,
+        [n, databaseName],
+      );
+    }
   } catch (err) {
     console.warn("[warehouse] schemaCounts failed:", err instanceof Error ? err.message : err);
   }
-  return rows.map((r) => ({
-    ...r,
-    schemaCount: counts ? (counts.get(r.databaseName) ?? 0) : null,
-  }));
 }
 
 export async function addWarehouseDatabase(opts: {
@@ -88,6 +96,7 @@ export async function addWarehouseDatabase(opts: {
     }
     throw err;
   }
+  await refreshSchemaCounts();
   const rows = await listWarehouseDatabases();
   const row = rows.find((r) => r.id === id);
   if (!row) throw new Error("database not visible after insert");

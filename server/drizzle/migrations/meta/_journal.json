@@ -267,6 +267,13 @@
       "when": 1784280461631,
       "tag": "0037_rename_event_taxonomy",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784664058613,
+      "tag": "0038_warehouse_schema_count",
+      "breakpoints": true
     }
   ]
 }

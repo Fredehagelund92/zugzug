@@ -14,6 +14,9 @@ export interface DatabaseRow {
 
 interface Props {
   databases: DatabaseRow[];
+  /** True while the first fetch is in flight — shows a placeholder instead of
+   *  flashing the "No databases registered yet" empty state. */
+  loading?: boolean;
   canAdd: boolean;
   onAdd: () => void;
   onRemove?: (db: DatabaseRow) => void;
@@ -62,7 +65,7 @@ export function DatabaseTable(props: Props): JSX.Element {
       <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-2.5">
         <span className="flex items-center gap-2.5 text-[12px] text-ink-2">
           <Badge tone="accent">MotherDuck</Badge>
-          {n} database{n === 1 ? "" : "s"} registered
+          {props.loading && n === 0 ? "" : `${n} database${n === 1 ? "" : "s"} registered`}
         </span>
         {props.canAdd && (
           <Button size="sm" onClick={props.onAdd}>
@@ -71,7 +74,9 @@ export function DatabaseTable(props: Props): JSX.Element {
         )}
       </div>
 
-      {props.databases.length === 0 ? (
+      {props.loading && props.databases.length === 0 ? (
+        <div className="px-4 py-6 text-[12.5px] text-ink-3">Loading databases…</div>
+      ) : props.databases.length === 0 ? (
         <div className="px-4 py-6 text-[12.5px] text-ink-2">
           No databases registered yet — click “+ Add database” to pick one discovered in MotherDuck.
         </div>
