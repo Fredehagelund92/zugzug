@@ -19,7 +19,13 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run format:check
-      - run: bun run test
+      - run: bun run test:coverage
+      - name: Normalize app lcov paths
+        run: bash "$GITHUB_WORKSPACE/scripts/normalize-lcov.sh" coverage/lcov.info app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-app
+          path: app/coverage/lcov.info
       - name: License check (app deps)
         run: |
           cd "$GITHUB_WORKSPACE"
@@ -61,13 +67,20 @@ jobs:
           GOOGLE_CLIENT_ID: dummy
           GOOGLE_CLIENT_SECRET: dummy
           ATTACH_WAREHOUSE: "false"
-      - run: bun run test
+      - run: bun test --coverage
         env:
           DATABASE_URL: postgres://zugzug:zugzug@localhost:55432/zugzug_test
           MOTHERDUCK_TOKEN: dummy-for-ci
           GOOGLE_CLIENT_ID: dummy
           GOOGLE_CLIENT_SECRET: dummy
           ATTACH_WAREHOUSE: "false"
+          ZUGZUG_CURSOR_KEY: lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=
+      - name: Normalize server lcov paths
+        run: bash "$GITHUB_WORKSPACE/scripts/normalize-lcov.sh" coverage/lcov.info server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-server
+          path: server/coverage/lcov.info
       - name: License check (server deps)
         run: |
           cd "$GITHUB_WORKSPACE"
@@ -179,3 +192,31 @@ jobs:
           else
             echo "NOTICE.md already up to date."
           fi
+
+  coverage-gate:
+    needs: [app, server]
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-app
+          path: cov-app
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-server
+          path: cov-server
+      - name: Install diff-cover
+        run: pipx install diff-cover
+      - name: Patch coverage report
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          diff-cover cov-app/lcov.info cov-server/lcov.info \
+            --compare-branch "origin/${{ github.base_ref }}" \
+            --fail-under 0 \
+            --markdown-report patch-coverage.md
+          echo "## Patch coverage" >> "$GITHUB_STEP_SUMMARY"
+          cat patch-coverage.md >> "$GITHUB_STEP_SUMMARY"
