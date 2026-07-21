@@ -28,6 +28,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
     "@duckdb/node-api": "^1.5.3-r.3",
+    "@sentry/bun": "^10.67.0",
     "drizzle-orm": "^0.45.2",
     "jose": "^6.2.3",
     "openid-client": "^6.8.4",

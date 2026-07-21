@@ -129,6 +129,9 @@ export const env = {
   devBypassAuth: process.env.DEV_BYPASS_AUTH?.trim() === "true",
   /** Optional: Anthropic API key for AI features. Soft-fail (empty string when absent). */
   anthropicApiKey: readOptional("ANTHROPIC_API_KEY"),
+  /** Opt-in server error tracking. Empty = disabled (no telemetry). */
+  sentryDsn: readOptional("SENTRY_DSN"),
+  sentryEnvironment: readOptional("SENTRY_ENVIRONMENT"),
   /** Per-credential rate-limit budget for the /v1/ surface. Default 600
    *  req/min; set to 0 to disable. */
   pullApiRpm: process.env.ZUGZUG_PULL_API_RPM ? Number(process.env.ZUGZUG_PULL_API_RPM) : 600,
