@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
-import { vi } from "vitest";
+import { vi, type Mock } from "vitest";
 import { DataGrid } from "../DataGrid";
 import { UndoStackProvider, useUndoStack } from "../UndoStack";
 import type { ColumnDef } from "../types";
@@ -11,10 +11,13 @@ import * as q from "./queries";
 
 let scopeSeq = 0;
 
+/** The grid's commit callback, recorded so tests can assert on its calls. */
+type CommitFn = (rowKey: string, field: string, value: unknown) => Promise<void>;
+
 export interface RenderGridOverrides {
   rows?: Row[];
   columns?: ColumnDef<Row>[];
-  onCommit?: ReturnType<typeof vi.fn>;
+  onCommit?: Mock<CommitFn>;
   [prop: string]: unknown; // passthrough DataGridProps
 }
 
@@ -23,7 +26,7 @@ interface HostProps {
   /** When provided, overrides internal row state (used by rerender). */
   rowsOverride?: Row[];
   columns: ColumnDef<Row>[];
-  onCommitSpy: ReturnType<typeof vi.fn>;
+  onCommitSpy: Mock<CommitFn>;
   rest: Record<string, unknown>;
 }
 
@@ -65,7 +68,7 @@ function Host({ initialRows, rowsOverride, columns, onCommitSpy, rest }: HostPro
 export function renderGrid(overrides: RenderGridOverrides = {}) {
   const initialRows = overrides.rows ?? makeRows();
   const columns = overrides.columns ?? makeColumns();
-  const onCommitSpy = overrides.onCommit ?? vi.fn(async () => {});
+  const onCommitSpy = overrides.onCommit ?? vi.fn<CommitFn>(async () => {});
   const { rows: _r, columns: _c, onCommit: _o, ...rest } = overrides;
   const user = userEvent.setup();
 
