@@ -36,7 +36,9 @@ test("commit writes one per-row audit entry per committed key + one rollup", asy
   await repo.saveDraft(dimId, "acme inc.", "mapped", "Acme", "acme", userId, "default");
   await repo.saveDraft(dimId, "Globex Corp", "mapped", "Globex", "globex", userId, "default");
 
-  const before = new Date();
+  // DB clock, not host clock — created_at is stamped by Postgres, and even a
+  // few ms of host↔container skew makes a host-side `new Date()` flaky here.
+  const before = (await repo.pgGet<{ t: Date }>(`SELECT now() AS t`))!.t;
   await repo.commit(dimId, userId, "default");
 
   const audit = await repo.pgAll<{ action: string; table_id: string | null; row_key: string | null }>(
