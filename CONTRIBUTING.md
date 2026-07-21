@@ -36,7 +36,8 @@ For security issues, please follow the disclosure flow in [SECURITY.md](./SECURI
 4. Install pre-commit hooks once with `make hooks` (runs Prettier + ESLint on staged files)
 5. Sign your commits (`git commit -s`)
 6. Run `bun run typecheck && bun run lint && bun run format:check && bun run test` in both `server/` and `app/` workspaces
-7. Open the PR
+7. See [docs/testing.md](docs/testing.md) for how the test layers are organized and how to add a test.
+8. Open the PR
 
 ## Development setup
 
