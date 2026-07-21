@@ -58,14 +58,20 @@ describe("Sources route", () => {
 
   it("collapsing a system hides its rows", async () => {
     await renderPage();
+    // Groups start collapsed — expand authco first, then collapse it again.
+    const toggle = screen.getByRole("button", { name: /authco/i });
+    expect(screen.queryByText("Plan")).toBeNull();
+    fireEvent.click(toggle);
     expect(screen.getByText("Plan")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /authco/i }));
+    fireEvent.click(toggle);
     expect(screen.queryByText("Plan")).toBeNull();
   });
 
   it("Remove source (with confirm) calls store.removeSource", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await renderPage();
+    // Groups start collapsed — expand authco to make its rows visible.
+    fireEvent.click(screen.getByRole("button", { name: /authco/i }));
     // Scope to the Plan row (the grid container) so the "more actions" button
     // of that specific row is reachable. SourceRow wraps the target name in a
     // classed <span>, so we walk up to the row's grid rather than the target cell.
