@@ -92,6 +92,44 @@ test("field edit writes an audit entry for the activity feed", async () => {
   expect(rows[0]!.detail).toContain(f!.field);
 });
 
+test("reverting an edit to its published value clears it from changed", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
+  await repo.saveDraft(dimId, "Deutschland", "mapped", "Germany", "germany", U, "default");
+  await repo.commit(dimId, U, "default");
+
+  // Field edit, then revert to the published value (empty).
+  await repo.setFieldValue(dimId, "germany", f!.field, "Europe", U, "default");
+  let s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual(["germany"]);
+  await repo.setFieldValue(dimId, "germany", f!.field, null, U, "default");
+  s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual([]);
+
+  // Rename, then revert to the published label.
+  await repo.renameCanonical(dimId, "germany", "Deutschland", U, 2, "default");
+  s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual(["germany"]);
+  await repo.renameCanonical(dimId, "germany", "Germany", U, 3, "default");
+  s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual([]);
+
+  // Nothing net-changed → publish is a no-op.
+  await repo.commit(dimId, U, "default");
+  s = await repo.getPublishState(dimId, "default");
+  expect(s.version).toBe(1);
+});
+
+test("never-published table counts every record, even without version rows", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  await repo.addCanonicalOne(dimId, "Germany", "germany", U, "default");
+  // Bulk path: creates the record without a canonical_version row.
+  await repo.addCanonical(dimId, [{ key: "france", label: "France" }], "default");
+
+  const s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual(["france", "germany"]);
+});
+
 test("publish with nothing to publish is a no-op (no version bump)", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
   await repo.saveDraft(dimId, "Deutschland", "mapped", "Germany", "germany", U, "default");

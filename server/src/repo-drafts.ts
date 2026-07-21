@@ -310,30 +310,76 @@ export interface PublishState {
   changedKeys: string[];
 }
 
-/** Live canonical keys touched since `since` (or ever, when never published). */
+/** Stable serialisation of a flat to_jsonb row for value comparison. */
+function canonRow(row: unknown): string {
+  const o = (typeof row === "string" ? JSON.parse(row) : row) as Record<string, unknown>;
+  return JSON.stringify(
+    Object.keys(o)
+      .sort()
+      .map((k) => [k, o[k]]),
+  );
+}
+
+/** Record keys with unpublished changes. Never published → every record (the
+ *  first publish ships the whole table). Otherwise: keys stamped in
+ *  canonical_version since the last publish, minus records whose values are
+ *  back to identical with the last snapshot — so reverting an edit clears it. */
 async function changedKeysSince(
   dimId: string,
   tenantId: string,
   since: Date | null,
+  meta: { dimTable: string; keyCol: string },
 ): Promise<string[]> {
-  const rows = since
-    ? await pgAll<{ key: string }>(
-        `SELECT key FROM ${pg("canonical_version")}
-         WHERE dim_id = $1 AND tenant_id = $2
-           AND (updated_at > $3 OR retired_at > $3)
-         ORDER BY key`,
-        [dimId, tenantId, since],
-      )
-    : await pgAll<{ key: string }>(
-        `SELECT key FROM ${pg("canonical_version")}
-         WHERE dim_id = $1 AND tenant_id = $2
-         ORDER BY key`,
-        [dimId, tenantId],
-      );
-  return rows.map((r) => r.key);
+  if (!since) {
+    const rows = await pgAll<{ key: string }>(
+      `SELECT ${qid(meta.keyCol)}::text AS key FROM ${cq(meta.dimTable)} ORDER BY 1`,
+    );
+    return rows.map((r) => r.key);
+  }
+  const stamped = await pgAll<{ key: string }>(
+    `SELECT key FROM ${pg("canonical_version")}
+     WHERE dim_id = $1 AND tenant_id = $2
+       AND (updated_at > $3 OR retired_at > $3)
+     ORDER BY key`,
+    [dimId, tenantId, since],
+  );
+  if (stamped.length === 0) return [];
+  const keys = stamped.map((r) => r.key);
+
+  // Legacy double-encoded snapshots yield no rows here → every stamped key
+  // counts as changed, which degrades to the pre-diff behaviour.
+  const snapRows = await pgAll<{ key: string; row: unknown }>(
+    `SELECT e.rec->>$4 AS key, e.rec AS row
+       FROM ${pg("dimension_version")} v
+       CROSS JOIN LATERAL jsonb_array_elements(v.snapshot->'records') AS e(rec)
+      WHERE v.dim_id = $1 AND v.tenant_id = $2
+        AND v.version = (SELECT max(version) FROM ${pg("dimension_version")}
+                          WHERE dim_id = $1 AND tenant_id = $2)
+        AND e.rec->>$4 = ANY($3)`,
+    [dimId, tenantId, keys, meta.keyCol],
+  );
+  const curRows = await pgAll<{ key: string; row: unknown }>(
+    `SELECT ${qid(meta.keyCol)}::text AS key, to_jsonb(t) AS row
+       FROM ${cq(meta.dimTable)} t
+      WHERE ${qid(meta.keyCol)}::text = ANY($1)`,
+    [keys],
+  );
+  const snapBy = new Map(snapRows.map((r) => [r.key, canonRow(r.row)]));
+  const curBy = new Map(curRows.map((r) => [r.key, canonRow(r.row)]));
+  return keys.filter((k) => {
+    const before = snapBy.get(k);
+    const now = curBy.get(k);
+    if (before === undefined && now === undefined) return false; // added then removed — nets out
+    return before !== now; // added, retired, or values still differ
+  });
 }
 
 export async function getPublishState(dimId: string, tenantId: string): Promise<PublishState> {
+  const dimMeta = await pgGet<{ dimTable: string; keyCol: string }>(
+    `SELECT dim_table AS "dimTable", key_col AS "keyCol"
+     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+    [dimId, tenantId],
+  );
   const last = await pgGet<{ v: number; at: Date | null }>(
     `SELECT count(*)::int AS v, max(occurred_at) AS at
      FROM ${pg("outbound_event")}
@@ -367,9 +413,10 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
     publishedAt: publishedAt ? publishedAt.toISOString() : null,
     publishedByName,
     pendingDrafts: Number(pending?.n ?? 0),
-    changedKeys: await changedKeysSince(dimId, tenantId, publishedAt),
+    changedKeys: dimMeta ? await changedKeysSince(dimId, tenantId, publishedAt, dimMeta) : [],
   };
 }
+
 
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
@@ -492,7 +539,10 @@ export async function commit(
      WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
     [tenantId, dimId],
   );
-  const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null);
+  const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null, {
+    dimTable: meta.dimTable,
+    keyCol: meta.keyCol,
+  });
   if (!committed && canonicalChanged.length === 0)
     return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
