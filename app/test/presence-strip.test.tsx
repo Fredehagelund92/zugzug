@@ -44,6 +44,15 @@ describe("PresenceStrip", () => {
     expect(avatar.getAttribute("style")).toContain("--tint-sky");
   });
 
+  test("ring uses the surface color so it separates the avatar from its fill", () => {
+    render(<PresenceStrip peers={[makePeer({ color: "sky" })]} />);
+    const avatar = screen.getByText("MB");
+    const style = avatar.getAttribute("style") ?? "";
+    // A ring the same color as the fill is invisible — it must contrast.
+    expect(style).toMatch(/box-shadow:[^;]*var\(--surface\)/);
+    expect(style).not.toMatch(/box-shadow:[^;]*--tint-/);
+  });
+
   test("overflow: shows first 8 avatars + '+N' counter when peers > 8", () => {
     const peers = Array.from({ length: 11 }, (_, i) =>
       makePeer({ userId: `u_${i}`, displayName: `User Number${i}` }),

@@ -51,6 +51,43 @@ const AWAY_AFTER_MS = 120_000; // 2 min: peer disappears from cursors
 const REMOVE_AFTER_MS = 600_000; // 10 min: peer fully removed
 const CURSOR_THROTTLE_MS = 33; // ~30 Hz
 
+/** Projects the raw awareness states map down to at most one PeerState per
+ *  remote user. Awareness keys peers by ephemeral clientID (one per page
+ *  load), so a reload leaves the old clientID behind as a ghost until the
+ *  awareness timeout prunes it — the map can hold several entries per user,
+ *  including stale copies of self. Identity here is the user, not the
+ *  connection: drop self by userId, and per user keep the newest state. */
+export function collapsePeers(
+  states: Iterable<[number, unknown]>,
+  self: { clientID: number; userId: string },
+  now: number,
+): PeerState[] {
+  const byUser = new Map<string, { peer: PeerState; lastActiveAt: number }>();
+  for (const [clientId, raw] of states) {
+    if (clientId === self.clientID) continue;
+    const s = raw as (Partial<PeerState> & { lastActiveAt?: number }) | null;
+    if (!s || !s.userId || !s.displayName || !s.color) continue;
+    if (s.userId === self.userId) continue; // ghost of self from a previous page load
+    const last = s.lastActiveAt ?? now;
+    const ageMs = now - last;
+    if (ageMs > REMOVE_AFTER_MS) continue;
+    const isAway = ageMs > AWAY_AFTER_MS;
+    const peer: PeerState = {
+      userId: s.userId,
+      displayName: s.displayName,
+      color: s.color,
+      cell: isAway ? null : sanitizePeerCell(s.cell),
+      selection: isAway ? null : (s.selection ?? null),
+      away: isAway,
+    };
+    const existing = byUser.get(s.userId);
+    if (!existing || last > existing.lastActiveAt) {
+      byUser.set(s.userId, { peer, lastActiveAt: last });
+    }
+  }
+  return Array.from(byUser.values(), (e) => e.peer);
+}
+
 /** Subscribes to live presence in a given table.
  *  - `peers`: array of remote PeerState (self excluded).
  *  - `setCell(rowKey, field)`: publish self cursor position (throttled to ~30 Hz).
@@ -124,37 +161,38 @@ export function usePresence(
     provider.on("status", onStatus);
     attachSocketListener(); // in case the socket already exists synchronously
 
-    awareness.setLocalState({
-      userId: me.userId,
-      displayName: me.displayName,
-      color: presenceColorFor(me.userId),
-      cell: null,
-      selection: null,
-      lastActiveAt: Date.now(),
-    });
+    const publishLocalState = () => {
+      awareness.setLocalState({
+        userId: me.userId,
+        displayName: me.displayName,
+        color: presenceColorFor(me.userId),
+        cell: null,
+        selection: null,
+        lastActiveAt: Date.now(),
+      });
+    };
+    publishLocalState();
+
+    // A reload/navigation can kill the socket before the awareness removal
+    // frame flushes, leaving this session behind as a ghost peer until the
+    // awareness timeout prunes it (~30s). Null the state on pagehide so peers
+    // drop us immediately; re-publish on a bfcache restore, since the state
+    // was nulled on the way out.
+    const onPageHide = () => awareness.setLocalState(null);
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) publishLocalState();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
 
     const syncPeers = () => {
-      const states = Array.from(awareness.getStates().entries());
-      const now = Date.now();
-      const next: PeerState[] = [];
-      for (const [clientId, raw] of states) {
-        if (clientId === awareness.clientID) continue;
-        const s = raw as Partial<PeerState> & { lastActiveAt?: number };
-        if (!s.userId || !s.displayName || !s.color) continue;
-        const last = s.lastActiveAt ?? now;
-        const ageMs = now - last;
-        if (ageMs > REMOVE_AFTER_MS) continue;
-        const isAway = ageMs > AWAY_AFTER_MS;
-        next.push({
-          userId: s.userId,
-          displayName: s.displayName,
-          color: s.color,
-          cell: isAway ? null : sanitizePeerCell(s.cell),
-          selection: isAway ? null : (s.selection ?? null),
-          away: isAway,
-        });
-      }
-      setPeers(next);
+      setPeers(
+        collapsePeers(
+          awareness.getStates(),
+          { clientID: awareness.clientID, userId: me.userId },
+          Date.now(),
+        ),
+      );
     };
     awareness.on("change", syncPeers);
     const peerTick = window.setInterval(syncPeers, 5_000);
@@ -180,6 +218,8 @@ export function usePresence(
     window.addEventListener("keydown", bump);
 
     return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("mousemove", bump);
       window.removeEventListener("keydown", bump);
       window.clearInterval(idleTimer);

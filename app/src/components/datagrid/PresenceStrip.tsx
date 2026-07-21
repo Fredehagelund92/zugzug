@@ -28,7 +28,8 @@ export function PresenceStrip({ peers }: { peers: PeerState[] }) {
               ? undefined
               : {
                   backgroundColor: `var(--tint-${p.color})`,
-                  boxShadow: `0 0 0 1.5px var(--tint-${p.color})`,
+                  // Surface-colored ring: a ring in the fill color is invisible.
+                  boxShadow: `0 0 0 1.5px var(--surface)`,
                 }
           }
         >

@@ -76,9 +76,7 @@ const { getLastProvider, MockWebsocketProvider } = vi.hoisted(() => {
     /** Simulate the provider emitting status: connected, which causes the hook
      *  to call attachSocketListener() and bind to provider.ws. */
     emitConnected() {
-      this.dispatchEvent(
-        new CustomEvent("status", { detail: { status: "connected" } }),
-      );
+      this.dispatchEvent(new CustomEvent("status", { detail: { status: "connected" } }));
     }
 
     destroy = vi.fn();
@@ -127,9 +125,7 @@ describe("usePresence — socket-level binary-frame guard", () => {
   test("binary ArrayBuffer frame does NOT call onRowTouched", async () => {
     const onRowTouched = vi.fn();
 
-    renderHook(() =>
-      usePresence("tbl_1", { userId: "u1", displayName: "Alice", onRowTouched }),
-    );
+    renderHook(() => usePresence("tbl_1", { userId: "u1", displayName: "Alice", onRowTouched }));
 
     // The hook attaches the listener on mount (synchronously, before status fires)
     // and again when status: connected fires.
@@ -151,9 +147,7 @@ describe("usePresence — socket-level binary-frame guard", () => {
   test("valid row_touched string frame calls onRowTouched exactly once with the hint", async () => {
     const onRowTouched = vi.fn();
 
-    renderHook(() =>
-      usePresence("tbl_1", { userId: "u1", displayName: "Alice", onRowTouched }),
-    );
+    renderHook(() => usePresence("tbl_1", { userId: "u1", displayName: "Alice", onRowTouched }));
 
     await act(async () => {
       getLastProvider()!.emitConnected();
@@ -173,9 +167,7 @@ describe("usePresence — socket-level binary-frame guard", () => {
   test("malformed string frame does NOT call onRowTouched", async () => {
     const onRowTouched = vi.fn();
 
-    renderHook(() =>
-      usePresence("tbl_1", { userId: "u1", displayName: "Alice", onRowTouched }),
-    );
+    renderHook(() => usePresence("tbl_1", { userId: "u1", displayName: "Alice", onRowTouched }));
 
     await act(async () => {
       getLastProvider()!.emitConnected();
@@ -192,11 +184,72 @@ describe("usePresence — socket-level binary-frame guard", () => {
 
     // Unparseable string.
     act(() => {
-      getLastProvider()!.ws.dispatchEvent(
-        new MessageEvent("message", { data: "not-json" }),
-      );
+      getLastProvider()!.ws.dispatchEvent(new MessageEvent("message", { data: "not-json" }));
     });
 
     expect(onRowTouched).not.toHaveBeenCalled();
+  });
+});
+
+describe("usePresence — pagehide/pageshow lifecycle", () => {
+  beforeEach(() => {
+    Object.defineProperty(window, "location", {
+      value: { protocol: "http:", host: "localhost", pathname: "/app/test/" },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("pagehide clears local awareness state so peers drop the ghost instantly", () => {
+    renderHook(() => usePresence("tbl_1", { userId: "u1", displayName: "Alice" }));
+    const awareness = getLastProvider()!.awareness;
+    awareness.setLocalState.mockClear();
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(awareness.setLocalState).toHaveBeenCalledWith(null);
+  });
+
+  test("pageshow after a bfcache restore re-publishes the full local state", () => {
+    renderHook(() => usePresence("tbl_1", { userId: "u1", displayName: "Alice" }));
+    const awareness = getLastProvider()!.awareness;
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+    awareness.setLocalState.mockClear();
+
+    const pageshow = new Event("pageshow");
+    Object.defineProperty(pageshow, "persisted", { value: true });
+    act(() => {
+      window.dispatchEvent(pageshow);
+    });
+
+    expect(awareness.setLocalState).toHaveBeenCalledTimes(1);
+    expect(awareness.setLocalState.mock.calls[0]![0]).toMatchObject({
+      userId: "u1",
+      displayName: "Alice",
+    });
+  });
+
+  test("unmount removes the pagehide listener", () => {
+    const { unmount } = renderHook(() =>
+      usePresence("tbl_1", { userId: "u1", displayName: "Alice" }),
+    );
+    const awareness = getLastProvider()!.awareness;
+    unmount();
+    awareness.setLocalState.mockClear();
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    expect(awareness.setLocalState).not.toHaveBeenCalled();
   });
 });
