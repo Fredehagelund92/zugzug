@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useNavigate } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
@@ -26,10 +26,6 @@ import { toast } from "../components/Toast";
 /* Sources — a calm connection surface. The wired warehouse columns, grouped by
    system so a user with 100 schemas navigates by collapsing not scrolling, plus
    a single review pointer to the most-affected table. No monitoring dashboard. */
-
-/* schemas auto-expand when there are this many or fewer wired; beyond that,
-   only the schema containing the most-affected source opens by default. */
-const AUTO_EXPAND_MAX_SCHEMAS = 6;
 
 interface SchemaGroup {
   schema: string;
@@ -83,7 +79,6 @@ export function Sources() {
   // so a returning user lands on the same db without having to reselect it.
   const [catalogDb, setCatalogDb] = useState<string | null>(null);
   const [openSchemas, setOpenSchemas] = useState<Set<string>>(new Set());
-  const [openInit, setOpenInit] = useState(false);
 
   const scanAction = useAsyncAction(async () => {
     try {
@@ -186,22 +181,6 @@ export function Sources() {
     list.sort((a, b) => a.schema.localeCompare(b.schema));
     return list;
   }, [sources]);
-
-  /* ---- initial open-schemas: auto-expand small workspaces, fold large ones ---- */
-  useEffect(() => {
-    if (openInit) return;
-    if (sources.length === 0) {
-      setOpenInit(true);
-      return;
-    }
-    const allSchemas = new Set(sources.map((s) => s.table.split(".")[0]));
-    if (allSchemas.size <= AUTO_EXPAND_MAX_SCHEMAS) {
-      setOpenSchemas(allSchemas);
-    } else if (agg.worst) {
-      setOpenSchemas(new Set([agg.worst.table.split(".")[0]]));
-    }
-    setOpenInit(true);
-  }, [sources, agg.worst, openInit]);
 
   const toggleSchema = (k: string) => {
     setOpenSchemas((s) => {
