@@ -30,8 +30,13 @@ const CONCURRENCY = 16;
 const PER_TENANT_CAP = 32;
 const RETRY_SCHEDULE_SEC = [0, 5, 30, 300, 3600];
 const REAP_AFTER_MS = 30_000;
-const HTTP_TIMEOUT_MS = 10_000;
+let HTTP_TIMEOUT_MS = 10_000;
 const RESPONSE_BODY_TRUNC = 4096;
+
+/** Override HTTP_TIMEOUT_MS for deterministic tests. Reset to 10_000 after use. */
+export function _setHttpTimeoutMsForTest(ms: number): void {
+  HTTP_TIMEOUT_MS = ms;
+}
 
 interface ClaimedRow {
   id: string;

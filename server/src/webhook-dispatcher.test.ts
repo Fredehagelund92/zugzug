@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
-import { webhookDispatcherJob } from "./webhook-dispatcher.ts";
+import { webhookDispatcherJob, _setHttpTimeoutMsForTest } from "./webhook-dispatcher.ts";
 import { _setMasterKeyForTest } from "./webhook-secrets.ts";
 import { encryptSecret, generateMasterKeyB64 } from "./crypto-secret.ts";
 import type { JobContext } from "./scheduler.ts";
@@ -224,25 +224,32 @@ describe("webhookDispatcherJob", () => {
   });
 
   it("schedules a retry when fetch times out", async () => {
-    const T = "test_disp_timeout";
-    await seedTenant(T);
-    const wh = await seedWebhook(T);
-    handler = async () => {
-      await new Promise((r) => setTimeout(r, 12_000));
-      return new Response("late");
-    };
-    const id = await seedDelivery({
-      tenantId: T,
-      webhookId: wh.id,
-      nextAttemptAt: "past",
-    });
-    await webhookDispatcherJob.run(ctx);
+    // Use a 200 ms HTTP timeout so the test finishes in < 1 s instead of 10 s.
+    _setHttpTimeoutMsForTest(200);
+    try {
+      const T = "test_disp_timeout";
+      await seedTenant(T);
+      const wh = await seedWebhook(T);
+      // Handler sleeps longer than the injected timeout so AbortSignal fires.
+      handler = async () => {
+        await new Promise((r) => setTimeout(r, 2_000));
+        return new Response("late");
+      };
+      const id = await seedDelivery({
+        tenantId: T,
+        webhookId: wh.id,
+        nextAttemptAt: "past",
+      });
+      await webhookDispatcherJob.run(ctx);
 
-    const row = await getRow(id);
-    expect(row.status).toBe("retry");
-    expect(row.attempts).toBe(1);
-    expect((row.last_error ?? "").toLowerCase()).toMatch(/abort|timeout|timed/);
-  }, 15_000);
+      const row = await getRow(id);
+      expect(row.status).toBe("retry");
+      expect(row.attempts).toBe(1);
+      expect((row.last_error ?? "").toLowerCase()).toMatch(/abort|timeout|timed/);
+    } finally {
+      _setHttpTimeoutMsForTest(10_000);
+    }
+  });
 
   it("moves to dlq after the 5th attempt fails", async () => {
     const T = "test_disp_dlq";
