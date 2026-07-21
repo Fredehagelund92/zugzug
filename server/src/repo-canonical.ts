@@ -1774,6 +1774,10 @@ export async function deleteDimension(
     "source_stat",
     "ai_hint_cache",
     "canonical_version",
+    // Publish history — a recreated table with the same name must start at
+    // version 0, not inherit the deleted table's versions and snapshots.
+    "dimension_version",
+    "outbound_event",
   ];
   for (const t of tenantSweeps) {
     await pgRun(`DELETE FROM ${pg(t)} WHERE dim_id = $1 AND tenant_id = $2`, [id, tenantId]);
