@@ -75,22 +75,22 @@ describe("self-referencing linked field", () => {
     await addField(dimId, "Parent", "linked", undefined, { referencedDimId: dimId }, U, T);
 
     // Valid chain: Denmark -> Nordics -> Europe
-    await setFieldValue(dimId, "nordics", "parent", "europe", T);
-    await setFieldValue(dimId, "denmark", "parent", "nordics", T);
+    await setFieldValue(dimId, "nordics", "parent", "europe", U, T);
+    await setFieldValue(dimId, "denmark", "parent", "nordics", U, T);
     const chain = await getDimension(dimId, T);
     expect(chain!.canonical.find((c) => c.key === "denmark")!.fields?.parent).toBe("nordics");
 
     // Cycle: Europe's parent = Denmark would close the loop
-    await expect(setFieldValue(dimId, "europe", "parent", "denmark", T)).rejects.toThrow(/loop/i);
+    await expect(setFieldValue(dimId, "europe", "parent", "denmark", U, T)).rejects.toThrow(/loop/i);
 
     // Self-parent is rejected
-    await expect(setFieldValue(dimId, "europe", "parent", "europe", T)).rejects.toThrow(
+    await expect(setFieldValue(dimId, "europe", "parent", "europe", U, T)).rejects.toThrow(
       /own parent/i,
     );
 
     // Acyclic re-parent still works: France Europe -> Nordics
-    await setFieldValue(dimId, "france", "parent", "europe", T);
-    await setFieldValue(dimId, "france", "parent", "nordics", T);
+    await setFieldValue(dimId, "france", "parent", "europe", U, T);
+    await setFieldValue(dimId, "france", "parent", "nordics", U, T);
     const after = await getDimension(dimId, T);
     expect(after!.canonical.find((c) => c.key === "france")!.fields?.parent).toBe("nordics");
   });
@@ -101,7 +101,7 @@ describe("self-referencing linked field", () => {
     await addCanonicalOne(a, "One", "one", U, T);
     await addField(a, "BetaLink", "linked", undefined, { referencedDimId: b }, U, T);
     // Unknown FK on a NON-self link: no throw, coerced to null.
-    await setFieldValue(a, "one", "betalink", "does_not_exist", T);
+    await setFieldValue(a, "one", "betalink", "does_not_exist", U, T);
     const dim = await getDimension(a, T);
     expect(dim!.canonical.find((c) => c.key === "one")!.fields?.betalink ?? null).toBeNull();
   });

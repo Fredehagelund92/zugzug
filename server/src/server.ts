@@ -1364,7 +1364,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
             const { value } = (await req.json()) as { value: string | null };
-            await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null);
+            await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null, me);
             return noContent();
           }
           // PUT /api/dimensions/:id/canonical/:key/position

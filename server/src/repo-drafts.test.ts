@@ -82,7 +82,7 @@ describe("commit() required-field gate", () => {
     await expect(commit(dimId, U, T)).rejects.toThrow(/required value before you can publish/i);
 
     // Fill the required value; the same publish now goes through.
-    await setFieldValue(dimId, "usa", "region", "Americas", T);
+    await setFieldValue(dimId, "usa", "region", "Americas", U, T);
     await expect(commit(dimId, U, T)).resolves.toBeDefined();
   });
 
@@ -90,7 +90,7 @@ describe("commit() required-field gate", () => {
     const dimId = await addDimension("ReqFieldDim2", [], { keyKind: "slug" }, U, T);
     await addCanonicalOne(dimId, "Canada", "canada", U, T);
     await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
-    await setFieldValue(dimId, "canada", "region", "Americas", T);
+    await setFieldValue(dimId, "canada", "region", "Americas", U, T);
 
     await expect(commit(dimId, U, T)).resolves.toBeDefined();
   });

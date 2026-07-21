@@ -1,7 +1,7 @@
 // DATABASE_URL is forced by test/preload-env.ts (bunfig [test].preload).
 import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "./setup.ts";
-import { pgRun } from "../src/pg.ts";
+import { pgAll, pgRun } from "../src/pg.ts";
 import * as repo from "../src/repo.ts";
 
 const U = "u_publish";
@@ -57,6 +57,39 @@ test("canonical edit after publish shows as changed; canonical-only publish bump
   s = await repo.getPublishState(dimId, "default");
   expect(s.version).toBe(2);
   expect(s.changedKeys).toEqual([]);
+});
+
+test("field edit shows as changed; publish clears it", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
+  await repo.saveDraft(dimId, "Deutschland", "mapped", "Germany", "germany", U, "default");
+  await repo.commit(dimId, U, "default");
+
+  await repo.setFieldValue(dimId, "germany", f!.field, "Europe", U, "default");
+
+  let s = await repo.getPublishState(dimId, "default");
+  expect(s.changedKeys).toEqual(["germany"]);
+
+  await repo.commit(dimId, U, "default");
+  s = await repo.getPublishState(dimId, "default");
+  expect(s.version).toBe(2);
+  expect(s.changedKeys).toEqual([]);
+});
+
+test("field edit writes an audit entry for the activity feed", async () => {
+  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
+  const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
+  await repo.addCanonicalOne(dimId, "Germany", "germany", U, "default");
+
+  await repo.setFieldValue(dimId, "germany", f!.field, "Europe", U, "default");
+
+  const rows = await pgAll<{ action: string; detail: string; row_key: string }>(
+    `SELECT action, detail, row_key FROM "zugzug_app"."audit_log"
+     WHERE table_id = $1 AND row_key = 'germany' AND action = 'Edited record'`,
+    [dimId],
+  );
+  expect(rows.length).toBe(1);
+  expect(rows[0]!.detail).toContain(f!.field);
 });
 
 test("publish with nothing to publish is a no-op (no version bump)", async () => {

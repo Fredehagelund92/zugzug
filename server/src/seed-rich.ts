@@ -148,13 +148,13 @@ for (const opt of new Set(Object.values(COUNTRY_CURRENCY)))
   await ensureOption("country", currencyField, opt);
 
 for (const [key, v] of Object.entries(COUNTRY_REGIONS))
-  await setFieldValue("country", key, regionField, v, T);
+  await setFieldValue("country", key, regionField, v, "u_verify", T);
 for (const [key, v] of Object.entries(COUNTRY_CURRENCY))
-  await setFieldValue("country", key, currencyField, v, T);
+  await setFieldValue("country", key, currencyField, v, "u_verify", T);
 for (const [key, v] of Object.entries(COUNTRY_TIER))
-  await setFieldValue("country", key, tierField, String(v), T);
+  await setFieldValue("country", key, tierField, String(v), "u_verify", T);
 for (const [key, v] of Object.entries(COUNTRY_GDPR))
-  await setFieldValue("country", key, gdprField, v ? "true" : "false", T);
+  await setFieldValue("country", key, gdprField, v ? "true" : "false", "u_verify", T);
 
 console.log("  Country: +Region (select), +Currency (select), +Tier (number), +GDPR (boolean)");
 
@@ -169,9 +169,9 @@ const paidField = await ensureField("channel", "Paid", "boolean");
 for (const opt of new Set(Object.values(CHANNEL_FUNNEL)))
   await ensureOption("channel", funnelField, opt);
 for (const [key, v] of Object.entries(CHANNEL_FUNNEL))
-  await setFieldValue("channel", key, funnelField, v, T);
+  await setFieldValue("channel", key, funnelField, v, "u_verify", T);
 for (const [key, v] of Object.entries(CHANNEL_PAID))
-  await setFieldValue("channel", key, paidField, v ? "true" : "false", T);
+  await setFieldValue("channel", key, paidField, v ? "true" : "false", "u_verify", T);
 
 console.log("  Channel: +Funnel stage (select), +Paid (boolean)");
 

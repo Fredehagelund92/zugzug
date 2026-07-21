@@ -736,7 +736,8 @@ export async function importCanonical(
 
     // Apply field updates outside the tx (pgRun is fine here)
     for (const { key, entries } of fieldUpdates) {
-      for (const [f, v] of entries) await setFieldValue(dimId, key, f, v, tenantId);
+      for (const [f, v] of entries)
+        await setFieldValue(dimId, key, f, v, userId, tenantId, { silent: true });
     }
   } else {
     for (const row of rows) {
@@ -754,7 +755,8 @@ export async function importCanonical(
           skipped++;
           continue;
         }
-        for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v, tenantId);
+        for (const [f, v] of fieldEntries)
+          await setFieldValue(dimId, key, f, v, userId, tenantId, { silent: true });
         updated++;
       } else {
         if (!label) {
@@ -769,7 +771,8 @@ export async function importCanonical(
           );
           await seedVersionRow(tx, dimId, key, userId, tenantId);
         });
-        for (const [f, v] of fieldEntries) await setFieldValue(dimId, key, f, v, tenantId);
+        for (const [f, v] of fieldEntries)
+          await setFieldValue(dimId, key, f, v, userId, tenantId, { silent: true });
         existing.add(key);
         created++;
       }
@@ -1515,7 +1518,9 @@ export async function setFieldValue(
   key: string,
   field: string,
   value: string | null,
+  userId: string,
   tenantId: string,
+  opts: { silent?: boolean } = {},
 ): Promise<void> {
   const m = await dimMeta(dimId, tenantId);
   if (!m) return;
@@ -1524,20 +1529,37 @@ export async function setFieldValue(
   const col = qid(field);
   const keyc = qid(m.keyCol);
   const empty = value == null || value.trim() === "";
+  // Update the column and stamp canonical_version in one tx so the edit shows
+  // up as an unpublished change (ADR-0002). The upsert also seeds a version row
+  // for records created by bulk paths that never got one. RETURNING guards the
+  // stamp: no dim row updated → no stamp (don't touch retired/unknown keys).
+  const applyUpdate = (val: unknown, cast = "") =>
+    pgTx(async (tx) => {
+      const updated = await tx.all<{ k: string }>(
+        `UPDATE ${cq(m.dimTable)} SET ${col} = $1${cast} WHERE ${keyc} = $2 RETURNING ${keyc} AS k`,
+        [val, key],
+      );
+      if (updated.length === 0) return false;
+      await tx.run(
+        `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+         VALUES ($1, $2, 1, now(), $3, $4)
+         ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
+            SET version    = "canonical_version".version + 1,
+                updated_at = now(),
+                updated_by = EXCLUDED.updated_by`,
+        [dimId, key, userId, tenantId],
+      );
+      return true;
+    });
+  let changed = false;
   if (f.type === "number") {
     const n = empty ? null : Number(value);
-    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [
-      Number.isFinite(n as number) ? n : null,
-      key,
-    ]);
+    changed = await applyUpdate(Number.isFinite(n as number) ? n : null);
   } else if (f.type === "boolean") {
     const b = value === "true" ? true : value === "false" ? false : null;
-    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [b, key]);
+    changed = await applyUpdate(b);
   } else if (f.type === "date") {
-    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1::date WHERE ${keyc} = $2`, [
-      empty ? null : value!.trim(),
-      key,
-    ]);
+    changed = await applyUpdate(empty ? null : value!.trim(), "::date");
   } else if (f.type === "linked") {
     let fkValue: string | null = empty ? null : value!.trim();
     if (fkValue !== null && f.referencedDimId) {
@@ -1574,12 +1596,17 @@ export async function setFieldValue(
         }
       }
     }
-    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [fkValue, key]);
+    changed = await applyUpdate(fkValue);
   } else {
-    await pgRun(`UPDATE ${cq(m.dimTable)} SET ${col} = $1 WHERE ${keyc} = $2`, [
-      empty ? null : value,
-      key,
-    ]);
+    changed = await applyUpdate(empty ? null : value);
+  }
+  if (changed && !opts.silent) {
+    await appendAuditAs(
+      userId,
+      "Edited record",
+      `${key}.${field} → ${empty ? "(empty)" : `"${value}"`}`,
+      { tableId: dimId, rowKey: key, tenantId },
+    );
   }
 }
 

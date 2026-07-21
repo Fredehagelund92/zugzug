@@ -140,8 +140,8 @@ async function cleanup() {
     // first, add a couple of canonical rows and set capital values
     await repo.addCanonicalOne(dimId, "Denmark", "denmark", "u_verify", T);
     await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify", T);
-    await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen", T);
-    await repo.setFieldValue(dimId, "germany", "capital", "Berlin", T);
+    await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen", "u_verify", T);
+    await repo.setFieldValue(dimId, "germany", "capital", "Berlin", "u_verify", T);
     const res = await repo.changeColumnType(
       dimId,
       "capital",

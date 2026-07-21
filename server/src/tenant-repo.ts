@@ -341,10 +341,16 @@ export class TenantRepo {
     );
   }
 
-  setFieldValue(dimId: string, key: string, field: string, value: string | null): Promise<void> {
+  setFieldValue(
+    dimId: string,
+    key: string,
+    field: string,
+    value: string | null,
+    userId: string,
+  ): Promise<void> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.setFieldValue(dimId, key, field, value, this.tenantId),
+      repoCanonical.setFieldValue(dimId, key, field, value, userId, this.tenantId),
     );
   }
 
