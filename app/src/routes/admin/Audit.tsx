@@ -10,6 +10,12 @@ import { SuperAdminBadge } from "../../components/admin/SuperAdminBadge";
 
 const PAGE_SIZE = 30;
 
+interface Workspace {
+  id: string;
+  slug: string;
+  label: string;
+}
+
 export function Audit() {
   const [params, setParams] = useSearchParams();
 
@@ -101,9 +107,21 @@ export function Audit() {
     return () => clearTimeout(t);
   }, [qInput, query, setParam]);
 
-  /* ---- tenant filter (applied on submit) ---- */
-  const [tenantInput, setTenantInput] = useState(tenantParam);
-  useEffect(() => setTenantInput(tenantParam), [tenantParam]);
+  /* ---- workspaces, for the filter dropdown (pick by name, not tenant ID) ---- */
+  const [tenants, setTenants] = useState<Workspace[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void apiFetch("/tenants")
+      .then(async (r) => {
+        if (!r.ok) return;
+        const data = (await r.json()) as { tenants: Workspace[] };
+        if (!cancelled) setTenants(data.tenants);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeFilterCount =
     (tenantParam ? 1 : 0) + (typeParam ? 1 : 0) + (onlyElevated ? 1 : 0) + (query ? 1 : 0);
@@ -142,29 +160,11 @@ export function Audit() {
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setParam("tenant", tenantInput.trim() || null);
-          }}
-          className="flex items-center gap-2"
-        >
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-            Workspace
-          </span>
-          <input
-            className="rounded-sm w-[220px] border border-line-2 bg-surface px-3 py-1.5 font-mono text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
-            value={tenantInput}
-            onChange={(e) => setTenantInput(e.target.value)}
-            placeholder="All workspaces — tenant ID…"
-          />
-          <button
-            type="submit"
-            className="rounded-sm border border-line bg-surface-2 px-3 py-1.5 text-sm text-ink-2 transition-colors hover:bg-hover hover:text-ink"
-          >
-            Apply
-          </button>
-        </form>
+        <WorkspacePicker
+          tenants={tenants}
+          value={tenantParam}
+          onChange={(id) => setParam("tenant", id || null)}
+        />
 
         <TypePicker
           actions={actions}
@@ -176,7 +176,6 @@ export function Audit() {
           <button
             type="button"
             onClick={() => {
-              setTenantInput("");
               setQInput("");
               setParams(new URLSearchParams(), { replace: true });
             }}
@@ -306,6 +305,103 @@ function TypePicker({
             ))}
             {shown.length === 0 && (
               <li className="px-3 py-2 text-xs text-ink-3">No type matches “{filter}”.</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────── workspace picker ────────────────────────── */
+
+/* Dropdown over the real workspaces so an admin filters by picking a name,
+   never by pasting a tenant ID. Shares TypePicker's chip idiom; the button shows
+   the workspace label while the URL still carries the tenant id. */
+function WorkspacePicker({
+  tenants,
+  value,
+  onChange,
+}: {
+  tenants: Workspace[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const f = filter.trim().toLowerCase();
+  const shown = f
+    ? tenants.filter((t) => t.label.toLowerCase().includes(f) || t.slug.toLowerCase().includes(f))
+    : tenants;
+  const selected = tenants.find((t) => t.id === value);
+
+  const pick = (id: string) => {
+    onChange(id);
+    setOpen(false);
+    setFilter("");
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        data-active={Boolean(value)}
+        onClick={() => setOpen((v) => !v)}
+        className={
+          "inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs transition-colors " +
+          (value
+            ? "border-accent bg-accent-soft text-accent"
+            : "border-line bg-surface-2 text-ink-2 hover:bg-hover hover:text-ink")
+        }
+      >
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-70">
+          Workspace
+        </span>
+        <span>{selected ? selected.label : "All workspaces"}</span>
+        <span aria-hidden className="text-ink-3">
+          ▾
+        </span>
+      </button>
+
+      {open && (
+        <div className="rounded-lg zz-rise absolute left-0 z-20 mt-1 w-[280px] border border-line bg-surface shadow-lg">
+          <div className="border-b border-line p-2">
+            <input
+              autoFocus
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Find a workspace…"
+              className="rounded-sm w-full border border-line-2 bg-surface px-2 py-1 text-xs text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none"
+            />
+          </div>
+          <ul className="max-h-64 overflow-auto py-1">
+            <TypeOption label="All workspaces" active={!value} onClick={() => pick("")} />
+            {shown.map((t) => (
+              <TypeOption
+                key={t.id}
+                label={t.label}
+                active={value === t.id}
+                onClick={() => pick(t.id)}
+              />
+            ))}
+            {shown.length === 0 && (
+              <li className="px-3 py-2 text-xs text-ink-3">No workspace matches “{filter}”.</li>
             )}
           </ul>
         </div>
