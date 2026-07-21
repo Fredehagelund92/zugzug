@@ -73,6 +73,49 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           bash scripts/run-license-check.sh server
 
+  # Guards the one-command self-host path: builds the images and boots the full
+  # `docker compose up` demo stack, then smoke-tests it end to end. Catches
+  # Dockerfile / nginx-proxy / compose regressions that the unit suites can't
+  # (e.g. the wget-healthcheck and missing /api proxy bugs both shipped unseen).
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start the stack
+        run: docker compose up --build -d
+      - name: Wait for the server to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            health="$(docker compose ps server --format '{{.Health}}' 2>/dev/null || true)"
+            if [ "$health" = "healthy" ]; then echo "server healthy"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::server did not become healthy within 5 minutes"
+          docker compose ps
+          exit 1
+      - name: Smoke — API health through nginx
+        run: curl -fsS http://localhost:8080/api/health | grep -q '"ok":true'
+      - name: Smoke — SPA is served
+        run: curl -fsS http://localhost:8080/ | grep -q '<title'
+      - name: Smoke — demo dimensions were seeded
+        run: |
+          docker compose exec -T postgres \
+            psql -U zugzug -d zugzug -tAc "select count(*) from zugzug_app.dimension" \
+            | grep -qE '^[1-9]'
+      - name: Smoke — first signup succeeds and becomes admin
+        run: |
+          code="$(curl -s -o /dev/null -w '%{http_code}' \
+            -X POST http://localhost:8080/api/auth/signup \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.com","password":"ci-password-123","name":"CI Admin"}')"
+          test "$code" = "200" || { echo "::error::signup returned $code, expected 200"; exit 1; }
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+
   license-placeholder-check:
     runs-on: ubuntu-latest
     continue-on-error: true
