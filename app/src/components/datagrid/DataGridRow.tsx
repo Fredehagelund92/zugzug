@@ -128,6 +128,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
       role="gridcell"
       aria-colindex={idx + 1}
       aria-selected={focused ? true : undefined}
+      data-in-range={inRange ? "true" : undefined}
       id={`${gridId}${encodeURIComponent(rk)}::${c.field}`}
       data-cell={data}
       data-field={c.field}
