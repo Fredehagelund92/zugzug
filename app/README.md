@@ -1,36 +1,21 @@
-# Zug Zug — app
+# Zugzug — app
 
-The Zug Zug frontend: a reference-table layer over a DuckDB warehouse. Built **from**
-the brand guide — the look is imported, never re-interpreted.
+The Zugzug frontend: a React SPA over the Bun API in `../server/`. See
+[ARCHITECTURE.md](../ARCHITECTURE.md) for how the frontend fits the whole system
+and [DESIGN.md](../DESIGN.md) for the design-token system.
 
-> **Now wired to a real backend** (`../server/`): `src/store.ts` fetches `/api`
-> (Vite proxies it to the Bun server on :8787; records/drafts/audit in Postgres,
-> warehouse scan in MotherDuck). Start the API first — `cd ../server && bun run start`
-> — see `../server/.env.example` and `ARCHITECTURE.md`. The store still exposes the
-> same hooks, so components are unchanged.
+`src/store.ts` calls the backend over `/api` (Vite proxies it to the Bun server
+on `:8787` in dev); records, drafts, and audit live in Postgres, warehouse scans
+go through the server's adapter. Start the API first:
+`cd ../server && bun run start`.
 
 ## Stack
-- **Bun** (package manager) · **Vite 6** (bundler/dev) · **React 18 + TypeScript**
-- **Tailwind v4** — its theme is aliased to the brand tokens via `@theme inline`
-  in `src/globals.css`, so every utility (`bg-accent`, `text-ink`, `font-display`,
-  `rounded-md`, …) resolves to a live `var(--token)`.
-
-## The trust chain (why it can't drift)
-1. `src/tokens.css` is the brand's single source of truth, exported **verbatim**
-   from `../brand/zugzug-brand-guide.html`. Never hand-edit it.
-2. `src/globals.css` imports it and maps each token into Tailwind's theme.
-3. Components use token-backed utilities only — **no hex literals**, no `dark:`
-   variants (light/dark flows through `tokens.css`'s `[data-theme]` block).
-4. The gate proves it:
-   ```
-   python3 ../../brand/../?  # from repo root:
-   python3 ~/.claude/skills/brand-guide/check_app.py \
-     --tokens brand --src app/src --source brand/zugzug-brand-guide.html
-   ```
-   → round-trip, zero-leak, wrapper-purity, token-ref all PASS.
-
-To re-brand the whole app: re-run the brand guide (new accent/fonts), re-export
-`tokens.css`, copy it to `src/` — zero component changes.
+- **Bun** (package manager) · **Vite** (bundler/dev) · **React 18 + TypeScript** · **React Router**
+- **Tailwind v4** — its theme aliases the design tokens via `@theme inline` in
+  `src/globals.css`, so every utility (`bg-accent`, `text-ink`, `rounded-md`, …)
+  resolves to a live `var(--token)`. Tokens are defined in `src/tokens.css`; never
+  hardcode hex in components.
+- **Yjs** for live presence/cursors · **Sentry** for error tracking.
 
 ## Run
 ```
@@ -43,16 +28,13 @@ bun run typecheck
 ## Layout
 ```
 src/
-  globals.css        tailwind + tokens.css import + @theme alias + base
-  tokens.css         brand source of truth (verbatim; do not edit)
-  theme.ts           useTheme(): light/dark toggle + setAccent (fidelity proof)
-  data.ts            typed mock fixtures (reference/source tables, mappings)
-  lib/cx.ts          className joiner
-  components/        Button, Mark (ZZ logomark) — Tailwind, token-backed
-  routes/Showcase    the design-system surface (tokens, type, buttons, live theming)
-reference/           app-kit.css + component gallery — the pixel spec to match
+  main.tsx           React entry + router + Sentry
+  store.ts           app state + API-backed data (records, drafts, audit)
+  api.ts             fetch wrapper (apiFetch)
+  globals.css        Tailwind + tokens import + @theme alias
+  tokens.css         design tokens (source of truth; do not hardcode hex)
+  theme.ts           light/dark toggle
+  components/        UI library — datagrid, admin, auth, settings, integrations
+  routes/            page-level React Router views
+  lib/, hooks/       API clients, business logic, hooks
 ```
-
-`reference/` is the verified component kit + gallery from the brand guide. It is
-the fidelity target when converting more components to Tailwind, not linked into
-the app.

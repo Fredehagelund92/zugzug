@@ -1,44 +1,20 @@
 # scripts/
 
-Operational scripts for Phase 5/6 OSS launch readiness.
+Operational scripts — mostly license/attribution tooling enforced in CI.
 
-## Per-script reference
+## Ongoing (CI-enforced)
 
-| Script | When to run | What it does |
+| Script | When it runs | What it does |
 |---|---|---|
-| `check-license-placeholder.sh` | CI (auto) | Fails if `<COPYRIGHT_HOLDER>` is still in LICENSE. Intentionally failing during Phase 5. |
-| `run-license-check.sh <workspace>` | CI (auto) + ad-hoc | Runs license-checker against the named workspace with the deny-list + allowlist exceptions. |
-| `generate-notice.sh` | When deps change | Regenerates NOTICE.md from license-checker output. CI fails if NOTICE.md drifts. |
-| `audit-history.sh` | Pre-Phase-6 (manual) | Runs gitleaks + greps for BC-internal strings. Reports findings. |
-| `scrub-history.sh` | Phase 6 only (manual, against mirror clone) | Rewrites history using `git-filter-repo`. Refuses to run against the upstream repo. |
+| `run-license-check.sh <workspace>` | CI + ad-hoc | Runs license-checker against the named workspace (`app`/`server`) with the deny-list + `licenses.allowlist.json` exceptions. |
+| `generate-notice.sh` | When deps change | Regenerates `NOTICE.md` from license-checker output. CI fails if `NOTICE.md` drifts. |
+| `check-license-placeholder.sh` | CI | Guards `LICENSE` against a `<COPYRIGHT_HOLDER>` placeholder regressing back in. |
 
-## Phase 6 runbook
+## One-time launch tooling (kept for reference)
 
-When BC legal signs off and we're ready for the public push:
+These were used once to prepare the repository for its public release and are not
+part of normal development:
 
-```bash
-# 1. Clone the repo as a bare mirror to a fresh working dir
-git clone --mirror https://github.com/Fredehagelund92/zugzug zugzug-mirror
-cd zugzug-mirror
-
-# 2. Run the scrub (rewrites history per scripts/replacements.txt + re-audits)
-../zugzug/scripts/scrub-history.sh
-
-# 3. Verify the audit passes cleanly
-../zugzug/scripts/audit-history.sh
-
-# 4. Update LICENSE: swap <COPYRIGHT_HOLDER> for the real value
-sed -i.bak 's/<COPYRIGHT_HOLDER>/<actual-holder>/' LICENSE
-
-# 5. Confirm placeholder check passes
-bash ../zugzug/scripts/check-license-placeholder.sh
-
-# 6. Point at the new public remote and force-push
-git remote set-url origin <PUBLIC_REPO_URL>
-git push --mirror
-
-# 7. Tag v1.0.0 on the new public repo
-cd ../<new-public-clone>
-git tag v1.0.0
-git push origin v1.0.0
-```
+- `audit-history.sh` — gitleaks + string audit over history.
+- `scrub-history.sh` — history rewrite via `git-filter-repo` (see `replacements.txt`).
+- `deploy-pr5-cutover.sh` — the multi-tenant cutover migration runner.

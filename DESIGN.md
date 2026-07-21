@@ -3,15 +3,15 @@
 > The narrative layer for building UI that matches Zugzug's brand. Tokens are defined in code; this document explains *what to reach for and when*.
 
 **Live source of truth:** [`app/src/tokens.css`](app/src/tokens.css) (CSS variables), [`app/src/app-kit.css`](app/src/app-kit.css) (utility layer), [`app/src/lib/palette.ts`](app/src/lib/palette.ts) (per-table tints), [`app/src/theme.ts`](app/src/theme.ts).
-**Visual specimen / PDF leave-behind:** [`docs/brand-preview/`](docs/brand-preview/) — original brand book, kept as historical reference; the app has since evolved past it.
+**Visual specimen / PDF leave-behind:** the original brand book (`docs/brand-preview/`) is kept locally, out of the published repo; the app has since evolved past it.
 
 ---
 
 ## 1. Identity
 
-Zugzug is a **master-data layer for a DuckDB warehouse** — the place where messy source values converge on one canonical record you can trust.
+Zugzug is a **curation layer between a data warehouse and dbt** — the place where messy source values converge on one approved record you can trust.
 
-The visual metaphor is a **control-room junction diagram**: source columns enter from many places and meet at a single canonical node. The signature ground is a faint lattice — node dots on a wide grid joined by hairline connectors. Every surface in the app should feel like it's wired into that diagram.
+The visual metaphor is a **control-room junction diagram**: source columns enter from many places and meet at a single record node. The signature ground is a faint lattice — node dots on a wide grid joined by hairline connectors. Every surface in the app should feel like it's wired into that diagram.
 
 **Personality:** infrastructural, technical, calm. Not playful, not corporate, not "delightful." A data steward should feel they're operating a precise instrument, not browsing a SaaS landing page.
 

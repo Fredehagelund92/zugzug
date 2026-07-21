@@ -2,19 +2,18 @@
 
 > Living document. Source of truth for sequencing. Re-reviewed at the start of each release cycle.
 
-**Current release:** v0.2 — shipped. Working toward v1.0.
+**Current release:** v0.3 — shipped. Working toward v1.0.
 **Toward v1.0:** stable adapter interface, broader warehouse coverage, the rough edges sanded down.
 
 ---
 
 ## Now (in active development)
 
-The one initiative actively being worked on. One thing at a time.
-
-- **Reference tables (v0.3)** — dimensions as governed maintained lists, per [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md) and [ADR-0002](./docs/adr/0002-publish-gates-materialization.md). Design reference: `docs/mdm-reference-table.html`. Scope, in shipping order:
-  1. Land the activity/audit timeline + grid cursor perf work (in flight).
-  2. Dimension `owner` metadata (description and color already exist).
-  3. Versioned publish: surface the existing per-dim version counter as "Published vN", derived unpublished-changes panel, "changed only" filter, unify user-facing vocabulary on **publish**. Editing stays instant; publish gates what dbt consumes.
+v0.3 shipped the reference-tables release (governed lists + versioned publish),
+the one-command demo, and a production self-host path. Current focus is hardening
+toward v1.0: stabilizing the `WarehouseAdapter` interface and sanding the rough
+edges surfaced by the demo and production-deploy paths. See the `Next` queue below
+for the concrete follow-ons.
 
 ---
 
@@ -86,6 +85,15 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 ---
 
 ## Shipped
+
+### v0.3
+
+- **Reference tables** — dimensions as governed maintained lists, edited in place, per [ADR-0001](./docs/adr/0001-reference-data-not-entity-resolution.md) and [ADR-0002](./docs/adr/0002-publish-gates-materialization.md).
+- **Versioned publish** — per-table "Published vN", a derived unpublished-changes view, and a "changed only" filter. Editing stays instant; publish gates what dbt consumes.
+- **Self-referencing hierarchy** — a linked field can target its own table, with cycle rejection.
+- **One-command demo** — `docker compose up` boots Postgres + server + SPA with seeded tables; no warehouse or OAuth needed.
+- **Production self-host** — `compose.prod.yml` with Caddy auto-HTTPS + bundled Postgres; see [docs/deploy.md](./docs/deploy.md).
+- **Grid test-kit** — reusable RTL/jsdom kit + suites (navigation, editing, selection, undo/redo, virtualization) and a `compose-smoke` CI job guarding the self-host path.
 
 ### v0.2
 
