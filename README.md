@@ -35,6 +35,8 @@ Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres reco
 
 The warehouse adapter is a TypeScript interface (`WarehouseAdapter`). DuckDB/MotherDuck and Snowflake are shipped. Additional adapters (Postgres-as-warehouse, BigQuery, Databricks) are community-roadmapped — see the issue template below.
 
+For the full picture — the three stores, the request path, and the server subsystems — see [ARCHITECTURE.md](./ARCHITECTURE.md). Self-hosting? Read [backup & restore](./docs/operations.md) before you have real data to lose.
+
 ## Try it in 30 seconds
 
 Requires [Docker](https://docs.docker.com/get-docker/). No warehouse or Google account needed.
