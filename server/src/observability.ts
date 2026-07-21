@@ -9,7 +9,10 @@ let active = false;
 
 /** Initialize error tracking. No-op when dsn is empty. Idempotent per dsn:
  *  active is derived from the dsn argument so calls are order-independent. */
-export function initSentry(dsn: string = env.sentryDsn, environment: string = env.sentryEnvironment): void {
+export function initSentry(
+  dsn: string = env.sentryDsn,
+  environment: string = env.sentryEnvironment,
+): void {
   active = Boolean(dsn);
   if (!active) return;
   Sentry.init({

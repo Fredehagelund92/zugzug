@@ -3,6 +3,7 @@
    (app/) talks to this; Vite proxies /api → :PORT in dev. */
 
 import { env } from "./env.ts";
+import { initSentry, captureError, flushSentry } from "./observability.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
 import type { ImportRow } from "./repo-canonical.ts";
 import { rebalanceDimPositions } from "./repo-canonical.ts";
@@ -430,6 +431,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         );
       }
       console.error(`✗ ${method} ${pathname}:`, e);
+      captureError(e, { method, path: pathname });
       return err(e);
     }
   }
@@ -1628,11 +1630,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       );
     }
     console.error(`✗ ${method} ${pathname}:`, e);
+    captureError(e, { method, path: pathname });
     return err(e);
   }
 }
 
 if (import.meta.main) {
+  initSentry();
+
   registerFactories({
     duckdb: async (creds) => createDuckDbAdapter(creds),
     snowflake: async (creds) => new SnowflakeAdapter(creds),
@@ -1725,6 +1730,7 @@ if (import.meta.main) {
         return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
       } catch (e) {
         console.error(`✗ ${req.method} ${new URL(req.url).pathname}:`, e);
+        captureError(e, { method: req.method, path: new URL(req.url).pathname });
         status = 500;
         return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), {
           status: 500,
@@ -1796,8 +1802,16 @@ if (import.meta.main) {
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error("pgEnd timeout")), 5000)),
     ]).catch((e) => console.error("pgEnd failed:", e));
     console.log("· shutdown complete");
+    await flushSentry(2000);
     process.exit(0);
   }
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
   process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("unhandledRejection", (reason) =>
+    captureError(reason, { kind: "unhandledRejection" }),
+  );
+  process.on("uncaughtException", (e) => {
+    captureError(e, { kind: "uncaughtException" });
+    void flushSentry(2000).finally(() => process.exit(1));
+  });
 }

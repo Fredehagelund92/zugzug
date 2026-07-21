@@ -14,6 +14,7 @@
 
 import { pgAll, pgRun, pgTxScoped } from "./pg.ts";
 import { pg } from "./env.ts";
+import { captureError } from "./observability.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import type { TenantRepo } from "./tenant-repo.ts";
 
@@ -63,6 +64,7 @@ async function recordScanRun(
     console.error(`scheduler: scan_run INSERT failed for ${jobName}:`, e);
     await fn().catch((jobErr) => {
       console.error(`scheduler job '${jobName}' failed:`, jobErr);
+      captureError(jobErr, { job: jobName });
     });
     return;
   }
@@ -93,6 +95,7 @@ async function recordScanRun(
       tenantId,
     }).catch((e) => console.error(`scheduler: audit emission failed for ${runId}:`, e));
     console.error(`scheduler job '${jobName}' failed:`, jobErr);
+    captureError(jobErr, { job: jobName });
   }
 }
 
