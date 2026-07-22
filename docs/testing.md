@@ -5,12 +5,12 @@ Here is how the tests are organized and how to add one.
 
 ## The layers
 
-| Layer | Where | Command |
-|---|---|---|
-| Unit (app) | `app/test/` + colocated `app/src/**/*.test.ts(x)` | `cd app && bun run test` |
-| Component (app) | `app/test/` + datagrid `test-kit` | `cd app && bun run test` |
-| Unit + integration (server) | `server/test/` + colocated `server/src/**/*.test.ts` | `cd server && bun run test` |
-| End-to-end | `e2e/` (added in a later phase) | see below |
+| Layer                       | Where                                                | Command                          |
+| --------------------------- | ---------------------------------------------------- | -------------------------------- |
+| Unit (app)                  | `app/test/` + colocated `app/src/**/*.test.ts(x)`    | `cd app && bun run test`         |
+| Component (app)             | `app/test/` + datagrid `test-kit`                    | `cd app && bun run test`         |
+| Unit + integration (server) | `server/test/` + colocated `server/src/**/*.test.ts` | `cd server && bun run test`      |
+| End-to-end (Playwright)     | `e2e/`                                               | `cd e2e && bunx playwright test` |
 
 Run everything the way CI does with one command from the repo root:
 
@@ -22,7 +22,7 @@ See coverage locally:
 
 ## Coverage
 
-Every PR reports **patch coverage** — the share of the lines *your PR changed*
+Every PR reports **patch coverage** — the share of the lines _your PR changed_
 that are covered by tests. Legacy untested code never blocks you; you only owe
 tests for what you touch. The gate is enforced: a PR whose changed lines are
 under 80% covered fails CI. External-integration code (AI providers, warehouse
@@ -82,6 +82,35 @@ For the grid, use the helpers in `app/src/components/datagrid/test-kit/`.
   `window.history.pushState({}, "", "/app/<slug>/x")`.
 - Datagrid cells are `{ Renderer, Editor }` with no providers — render the `Renderer`
   directly with a `CellCtx`-shaped prop.
+
+## End-to-end (Playwright)
+
+The `e2e/` suite covers the critical journeys through the real Docker stack: first-admin
+signup, workspace creation, table and source wiring, grid editing, and the scan-to-mapping
+flow (including the seed route used by the map-values spec). There are currently ~9 specs.
+
+**Run locally:**
+
+1. Bring up the stack with the e2e override:
+
+       bash scripts/e2e-up.sh
+
+   The `compose.e2e.yml` override sets `ZUGZUG_E2E_TEST_ROUTES=1`, which enables a
+   test-only seed endpoint used by the map-values spec. This route is off in production.
+
+2. Run the suite:
+
+       cd e2e && bunx playwright test
+
+   Playwright's global setup signs up and authenticates as the first admin against the
+   running stack before any spec runs.
+
+3. Tear down when done:
+
+       bash scripts/e2e-down.sh
+
+**Reports and traces** land in `e2e/playwright-report/` and `e2e/test-results/`. On CI,
+they are uploaded as artifacts on failure so you can open the HTML report or replay traces.
 
 ## Selectors (for end-to-end tests)
 
