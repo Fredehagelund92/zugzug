@@ -110,6 +110,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
                       className="shrink-0 rounded-sm border border-line-2 px-2 py-0.5 text-[11.5px] text-ink-2 hover:border-accent hover:text-accent disabled:opacity-40"
                       disabled={rolling}
                       onClick={() => setRollbackTarget(v)}
+                      data-testid="rollback-button"
                     >
                       Roll back to v{v.version}
                     </button>

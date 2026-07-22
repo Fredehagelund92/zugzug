@@ -1056,6 +1056,7 @@ function RecordsBody({
               title="Version history"
               desc="Roll back to a previous publish"
               onClick={() => setHistoryOpen(true)}
+              testId="version-history-button"
             />
             {canEdit && sourceOpts.length > 0 && (
               <MenuItem
@@ -1092,6 +1093,7 @@ function RecordsBody({
               title={
                 publishSummary ? `Publish ${publishSummary} since the last version` : undefined
               }
+              data-testid="publish-button"
             >
               Publish {unpublished} change{unpublished === 1 ? "" : "s"}
             </Button>
@@ -1837,9 +1839,8 @@ function RecordsBody({
         title={`Revert ${pubState?.changedKeys.length ?? 0} change${(pubState?.changedKeys.length ?? 0) === 1 ? "" : "s"}?`}
         body={
           <>
-            Every changed record goes back to Version {pubState?.version}: edits are undone,
-            records added since are removed, and records removed since come back. This can't be
-            undone.
+            Every changed record goes back to Version {pubState?.version}: edits are undone, records
+            added since are removed, and records removed since come back. This can&apos;t be undone.
           </>
         }
         confirmLabel="Revert changes"

@@ -159,6 +159,7 @@ export function MenuItem({
   href,
   download,
   onClick,
+  testId,
 }: {
   glyph?: ReactNode;
   title: ReactNode;
@@ -168,6 +169,7 @@ export function MenuItem({
   href?: string;
   download?: string;
   onClick?: () => void;
+  testId?: string;
 }) {
   const close = useContext(MenuCtx);
   const handle = () => {
@@ -203,13 +205,26 @@ export function MenuItem({
   );
   if (href) {
     return (
-      <a role="menuitem" href={href} download={download} className={itemBase} onClick={handle}>
+      <a
+        role="menuitem"
+        href={href}
+        download={download}
+        className={itemBase}
+        onClick={handle}
+        data-testid={testId}
+      >
         {body}
       </a>
     );
   }
   return (
-    <button type="button" role="menuitem" className={itemBase} onClick={handle}>
+    <button
+      type="button"
+      role="menuitem"
+      className={itemBase}
+      onClick={handle}
+      data-testid={testId}
+    >
       {body}
     </button>
   );

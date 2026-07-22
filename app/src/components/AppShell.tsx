@@ -92,15 +92,17 @@ interface SidebarLinkProps {
   count?: number;
   end?: boolean;
   onClick?: () => void;
+  testId?: string;
 }
 
-function SidebarLink({ to, label, Icon, count, end, onClick }: SidebarLinkProps) {
+function SidebarLink({ to, label, Icon, count, end, onClick, testId }: SidebarLinkProps) {
   return (
     <NavLink
       to={to}
       end={end}
       onClick={onClick}
       title={count != null ? `${label} · ${count}` : label}
+      data-testid={testId}
       className={({ isActive }) =>
         cx(
           "group flex items-center gap-2.5 rounded-sm px-2 py-[7px] text-[13px] transition-colors",
@@ -365,6 +367,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     Icon: (p: React.SVGProps<SVGSVGElement>) => JSX.Element;
     count?: number;
     end?: boolean;
+    testId?: string;
   }
   const homeItem: NavItem = {
     to: navLinks.dashboard,
@@ -373,15 +376,32 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     end: true,
   };
   const tablesGroup: NavItem[] = [
-    { to: navLinks.tables, label: "Tables", Icon: IconTables, count: dims.length },
-    { to: navLinks.triage, label: "Review", Icon: IconMapping, count: totalNew },
+    {
+      to: navLinks.tables,
+      label: "Tables",
+      Icon: IconTables,
+      count: dims.length,
+      testId: "nav-tables",
+    },
+    {
+      to: navLinks.triage,
+      label: "Review",
+      Icon: IconMapping,
+      count: totalNew,
+      testId: "nav-review",
+    },
     { to: navLinks.audit, label: "Activity", Icon: IconAudit },
   ];
   const workspaceGroup: NavItem[] = [
     { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
     { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
-    { to: navLinks.sources, label: "Sources", Icon: IconLayers },
-    { to: `${settingsBase}/general`, label: "Preferences", Icon: IconSettings },
+    { to: navLinks.sources, label: "Sources", Icon: IconLayers, testId: "nav-sources" },
+    {
+      to: `${settingsBase}/general`,
+      label: "Preferences",
+      Icon: IconSettings,
+      testId: "nav-settings",
+    },
   ];
   const integrationsGroup: NavItem[] = [
     { to: navLinks.integrationsPullApi, label: "Pull API", Icon: IconIntegrations },
@@ -553,6 +573,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
                 <SidebarLink
                   key={item.to}
                   {...item}
+                  testId={item.testId}
                   onClick={isMobile ? () => setDrawerOpen(false) : undefined}
                 />
               ))}
@@ -563,6 +584,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
                 <SidebarLink
                   key={item.to}
                   {...item}
+                  testId={item.testId}
                   onClick={isMobile ? () => setDrawerOpen(false) : undefined}
                 />
               ))}

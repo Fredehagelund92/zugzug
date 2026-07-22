@@ -164,6 +164,7 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
           type="button"
           onClick={create.open}
           className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-accent bg-accent px-3 py-1.5 font-display text-[12.5px] font-semibold text-accent-ink transition-colors hover:brightness-105"
+          data-testid="create-table-button"
         >
           <IconPlus className="h-3.5 w-3.5" /> New table
         </button>

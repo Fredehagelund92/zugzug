@@ -98,6 +98,7 @@ export function WorkspaceSwitcher() {
         className="flex w-full items-center gap-2.5 rounded-pill border border-line px-2.5 py-1.5 text-left transition-colors hover:bg-surface-2"
         aria-haspopup="dialog"
         aria-expanded={open}
+        data-testid="workspace-switcher"
       >
         <WorkspaceAvatar label={tenant.label} color={tenant.color} size={22} radius={999} />
         <span className="font-medium truncate flex-1 text-sm">{tenant.label}</span>
@@ -181,6 +182,7 @@ export function WorkspaceSwitcher() {
                           "w-full flex items-center gap-2.5 px-3.5 py-1.5 text-left transition-colors",
                           focusedIdx === i ? "bg-hover" : "hover:bg-hover",
                         )}
+                        data-testid={`workspace-option-${m.slug}`}
                       >
                         <WorkspaceAvatar label={m.label} color={m.color} size={26} />
                         <span className="flex-1 text-sm text-ink truncate">{m.label}</span>
