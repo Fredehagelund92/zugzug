@@ -38,23 +38,4 @@ describe("useCatalogTree", () => {
       expect(result.current.roots[0].children[0].children[0].name).toBe("authco"),
     );
   });
-
-  it("ensureColumns fetches and patches columns onto the table node", async () => {
-    const { result } = renderHook(() => useCatalogTree());
-    await waitFor(() => expect(result.current.roots.length).toBe(1));
-    // Expand database node to load schemas
-    await act(async () => result.current.toggle("conn/db-1"));
-    await waitFor(() =>
-      expect(result.current.roots[0].children[0].children[0].name).toBe("authco"),
-    );
-    // Expand schema node to load tables (id: conn/db-1/authco)
-    await act(async () => result.current.toggle("conn/db-1/authco"));
-    await waitFor(() =>
-      expect(result.current.roots[0].children[0].children[0].children.length).toBeGreaterThan(0),
-    );
-    // Now fetch columns for the table node
-    await act(async () => result.current.ensureColumns("conn/db-1/authco/authco.users"));
-    const tableNode = result.current.roots[0].children[0].children[0].children[0];
-    expect(tableNode.columns).toEqual(["country"]);
-  });
 });

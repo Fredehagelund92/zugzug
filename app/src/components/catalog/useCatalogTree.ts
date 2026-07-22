@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchWarehouseDatabases, fetchWarehouseInfo } from "../../api";
-import { fetchColumns, listSchemas, listTablesInSchema } from "../../store";
+import { listSchemas, listTablesInSchema } from "../../store";
 import { tintForSchema, type TreeNode } from "./catalog-tree";
 
 const CONN_META: Record<string, { name: string; glyph: string }> = {
@@ -125,17 +125,7 @@ export function useCatalogTree() {
     }
   };
 
-  const ensureColumns = async (tableId: string) => {
-    const node = findNode(rootsRef.current, tableId);
-    if (!node || node.columns) return;
-    // Table id: conn/<dbId>/<schema>/<schema.table>
-    // Last segment (index 3) is the "schema.table" string fetchColumns expects.
-    const tablePath = tableId.split("/").slice(3).join("/");
-    const cols = await fetchColumns(dbIdOf(tableId), tablePath);
-    patch(tableId, (n) => ({ ...n, columns: cols.map((c) => c.name) }));
-  };
-
-  return { roots, open, loadingIds, toggle, ensureColumns };
+  return { roots, open, loadingIds, toggle };
 }
 
 function findNode(roots: TreeNode[], id: string): TreeNode | null {
