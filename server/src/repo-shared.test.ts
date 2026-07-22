@@ -156,7 +156,12 @@ test("parseFieldConfig type=linked uses provided displayFields", () => {
 });
 
 test("parseFieldConfig extracts rules alongside type-specific config", () => {
-  const rule = { field: "status", operator: "eq", value: "active", color: "mint" };
+  const rule = {
+    id: "r1",
+    field: "status",
+    trigger: { kind: "equals" as const, value: "active" },
+    style: { cellBg: "mint" },
+  };
   const raw = JSON.stringify({ options: [{ label: "Active", color: null }], rules: [rule] });
   const result = parseFieldConfig("select", raw);
   expect(result.rules).toEqual([rule]);
