@@ -1315,6 +1315,14 @@ export interface CatalogResult {
   total: number;
   schemas: { schema: string; tables: number }[];
 }
+export interface SchemaFacet {
+  schema: string;
+  tables: number;
+}
+export interface CatalogColumn {
+  name: string;
+  type: string;
+}
 
 /** Browse/search the warehouse catalog — server-side, paginated. Not cached:
  *  the explorer holds its own results, so it scales to any catalog size. The
@@ -1354,6 +1362,38 @@ export async function searchCatalog(opts: {
     columns: t.columns,
   }));
   return { rows, total: tables.length, schemas };
+}
+
+/** Lazy: schema list for one registered database. */
+export async function listSchemas(database: string): Promise<SchemaFacet[]> {
+  return api<SchemaFacet[]>(`/warehouse/schemas?database=${encodeURIComponent(database)}`);
+}
+
+/** Lazy: tables in one schema (reuses the paginated catalog search, scoped by schema). */
+export async function listTablesInSchema(
+  database: string,
+  schema: string,
+): Promise<CatalogTable[]> {
+  const r = await searchCatalog({ database, schema, limit: 100, offset: 0 });
+  return r.rows;
+}
+
+/** Columns (with types) for one table. */
+export async function fetchColumns(database: string, table: string): Promise<CatalogColumn[]> {
+  const qs = new URLSearchParams({ database, table });
+  return api<CatalogColumn[]>(`/warehouse/columns?${qs.toString()}`);
+}
+
+/** On-demand distinct sample values for one column. */
+export async function fetchColumnValues(
+  database: string,
+  table: string,
+  column: string,
+  limit = 5,
+): Promise<string[]> {
+  const qs = new URLSearchParams({ database, table, column, limit: String(limit) });
+  const r = await api<{ values: string[] }>(`/warehouse/values?${qs.toString()}`);
+  return r.values;
 }
 
 // ---------------------------------------------------------------------------

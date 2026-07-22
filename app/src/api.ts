@@ -62,3 +62,13 @@ export async function fetchWarehouseDatabases(): Promise<
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
+
+/** Deployment-global connection metadata (adapter type). Backed by `GET /api/warehouse/info`. */
+export async function fetchWarehouseInfo(): Promise<{
+  adapter: "duckdb" | "snowflake";
+  databaseTerm: string;
+}> {
+  const res = await authFetch("/warehouse/info");
+  if (!res.ok) throw new Error(`warehouse/info ${res.status}`);
+  return res.json();
+}
