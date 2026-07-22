@@ -794,6 +794,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           throw err;
         }
       }
+
+      // GET /api/t/:slug/warehouse/schemas — schema list with table counts.
+      if (seg[2] === "schemas" && seg.length === 3 && method === "GET") {
+        const databaseId = url.searchParams.get("database");
+        if (!databaseId) return json({ error: "database query param required" }, 400);
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const dbs = await listWarehouseDatabases();
+        const db = dbs.find((d) => d.id === databaseId);
+        if (!db) return json({ error: "database not found" }, 404);
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const adapter = await getAdapterFn();
+        const tables = await adapter.listTables({ database: db.databaseName });
+        const counts = new Map<string, number>();
+        for (const t of tables) counts.set(t.schema, (counts.get(t.schema) ?? 0) + 1);
+        const out = [...counts.entries()]
+          .map(([schema, tables]) => ({ schema, tables }))
+          .sort((a, b) => b.tables - a.tables || a.schema.localeCompare(b.schema));
+        return json(out);
+      }
     }
 
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must

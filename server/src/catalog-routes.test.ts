@@ -124,3 +124,26 @@ describe("GET /api/warehouse/info", () => {
     expect(body).toEqual({ adapter: "duckdb", databaseTerm: "database" });
   });
 });
+
+// --- Task 2: GET /api/t/:slug/warehouse/schemas ---
+describe("GET /api/t/:slug/warehouse/schemas", () => {
+  it("groups tables by schema with counts, sorted desc then by name", async () => {
+    const res = await handle(tenantReq("/warehouse/schemas?database=db-1"), noop);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([
+      { schema: "authco", tables: 2 },
+      { schema: "billing", tables: 1 },
+    ]);
+  });
+
+  it("returns 400 when database param is missing", async () => {
+    const res = await handle(tenantReq("/warehouse/schemas"), noop);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when database id is unknown", async () => {
+    const res = await handle(tenantReq("/warehouse/schemas?database=no-such-db"), noop);
+    expect(res.status).toBe(404);
+  });
+});
