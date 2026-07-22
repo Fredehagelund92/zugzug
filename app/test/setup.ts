@@ -1,4 +1,8 @@
 import "@testing-library/jest-dom/vitest";
+import "vitest-axe/extend-expect";
+import * as axeMatchers from "vitest-axe/matchers";
+import { expect } from "vitest";
+expect.extend(axeMatchers);
 
 // jsdom does not implement scrollIntoView — polyfill it so components that
 // call el.scrollIntoView() don't throw in the test environment.
