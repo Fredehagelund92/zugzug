@@ -280,7 +280,7 @@ export async function acceptInvitesFor(userId: string, email: string): Promise<A
        SELECT tenant_id, $1, role, now()
          FROM "zugzug_app"."tenant_invite"
         WHERE lower(email) = $2
-       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+       ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = EXCLUDED.role WHERE tenant_member.role != 'admin'`,
       [userId, normalized],
     );
     await tx.run(`DELETE FROM "zugzug_app"."tenant_invite" WHERE lower(email) = $1`, [normalized]);
