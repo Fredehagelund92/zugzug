@@ -4,12 +4,19 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeAll, afterAll } from "bun:test";
 import { pgGet, pgAll, pgRun } from "../src/pg.ts";
+import { resetDb } from "./setup.ts";
 
 // A "pre-existing" user: seeded BEFORE we (re-)run the migration's membership
 // backfill, so the backfill must give it a default-tenant seat.
 const SEED_USER_ID = "u_mig_seed";
 
 beforeAll(async () => {
+  // Reset to a pristine, freshly-migrated schema first. This test asserts on the
+  // migration's global outcome (e.g. no dimension rows with a non-'default'
+  // tenant_id), so it must run against a clean DB — otherwise data left behind by
+  // earlier test files (e.g. factories creating a workspace-scoped dimension) leaks
+  // in and fails the assertion. Every other data-mutating suite isolates the same way.
+  await resetDb();
   // users.role was dropped in PR5 migration 0016; role now lives on tenant_member.
   await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials)
