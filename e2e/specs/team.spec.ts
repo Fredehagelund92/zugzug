@@ -5,20 +5,12 @@
  * Invite path: POST /api/t/default/team/invites (viewer role) via API request
  * context (the UI's invite form hardcodes role "editor" and has no role picker).
  * Signup path: /signup with the invited email — acceptInvitesFor runs automatically.
- *
- * KNOWN-FAILING (test.fixme): this E2E surfaced a real RBAC bug — an invited
- * member to the `default` workspace always becomes `editor`, ignoring the invited
- * role. `auth-password.ts` pre-seeds every non-first signup into `default` as
- * `editor` (ON CONFLICT DO NOTHING) BEFORE `acceptInvitesFor` runs, and
- * `acceptInvitesFor` (tenant.ts) also uses ON CONFLICT DO NOTHING — so the
- * invite's `viewer` role is silently discarded and the invited user gets editor
- * write access. Marked fixme until the bug is fixed; then remove `.fixme`.
  */
 import { test, expect, uniqueSuffix } from "../fixtures";
 
 const BASE = process.env.E2E_BASE_URL ?? "http://localhost:8080";
 
-test.fixme("admin invites a viewer; viewer signs up and sees read-only UI", async ({
+test("admin invites a viewer; viewer signs up and sees read-only UI", async ({
   page,
   browser,
   request,
