@@ -813,6 +813,26 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           .sort((a, b) => b.tables - a.tables || a.schema.localeCompare(b.schema));
         return json(out);
       }
+
+      // GET /api/t/:slug/warehouse/columns?database=<id>&table=<schema.table> — columns + types.
+      if (seg[2] === "columns" && seg.length === 3 && method === "GET") {
+        const databaseId = url.searchParams.get("database");
+        const tableParam = url.searchParams.get("table");
+        if (!databaseId || !tableParam) return json({ error: "database and table required" }, 400);
+        const dot = tableParam.indexOf(".");
+        if (dot < 0) return json({ error: "table must be schema.table" }, 400);
+        const schema = tableParam.slice(0, dot);
+        const table = tableParam.slice(dot + 1);
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const dbs = await listWarehouseDatabases();
+        const db = dbs.find((d) => d.id === databaseId);
+        if (!db) return json({ error: "database not found" }, 404);
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const adapter = await getAdapterFn();
+        const ref = { catalog: db.databaseName, schema, table };
+        const cols = await adapter.listColumns(ref);
+        return json(cols.map((c) => ({ name: c.name, type: c.type })));
+      }
     }
 
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
