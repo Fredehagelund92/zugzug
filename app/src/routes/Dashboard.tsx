@@ -189,10 +189,11 @@ export function Dashboard() {
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "review", dir: "desc" });
 
   const toggleSort = (key: SortKey) =>
-    setSort((s) =>
-      s.key === key
-        ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: key === "name" ? "asc" : "desc" }, // text A→Z, everything else high→low
+    setSort(
+      (s) =>
+        s.key === key
+          ? { key, dir: s.dir === "asc" ? "desc" : "asc" }
+          : { key, dir: key === "name" ? "asc" : "desc" }, // text A→Z, everything else high→low
     );
 
   const visibleDims = useMemo(
@@ -517,7 +518,8 @@ export function Dashboard() {
                     {(() => {
                       const p = dim.publish;
                       const total = toPublishCount(dim);
-                      if (total === 0) return <span className="font-mono text-[11px] text-ink-3">—</span>;
+                      if (total === 0)
+                        return <span className="font-mono text-[11px] text-ink-3">—</span>;
                       const drafts = p?.pendingDrafts ?? 0;
                       const edits = p?.changedRecords ?? 0;
                       return (

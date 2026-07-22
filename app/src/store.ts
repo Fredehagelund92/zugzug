@@ -857,10 +857,9 @@ export async function commit(
 
 /** Restore every changed record to the last published version. */
 export async function revertChanges(dimId: string): Promise<{ reverted: number }> {
-  const res = await api<{ reverted: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/revert`,
-    { method: "POST" },
-  );
+  const res = await api<{ reverted: number }>(`/dimensions/${encodeURIComponent(dimId)}/revert`, {
+    method: "POST",
+  });
   await refreshDim(dimId);
   await refreshAudit();
   emit();

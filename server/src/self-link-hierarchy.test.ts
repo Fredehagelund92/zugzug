@@ -81,7 +81,9 @@ describe("self-referencing linked field", () => {
     expect(chain!.canonical.find((c) => c.key === "denmark")!.fields?.parent).toBe("nordics");
 
     // Cycle: Europe's parent = Denmark would close the loop
-    await expect(setFieldValue(dimId, "europe", "parent", "denmark", U, T)).rejects.toThrow(/loop/i);
+    await expect(setFieldValue(dimId, "europe", "parent", "denmark", U, T)).rejects.toThrow(
+      /loop/i,
+    );
 
     // Self-parent is rejected
     await expect(setFieldValue(dimId, "europe", "parent", "europe", U, T)).rejects.toThrow(
