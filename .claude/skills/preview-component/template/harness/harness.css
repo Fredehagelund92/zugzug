@@ -1,0 +1,8 @@
+/* Harness CSS: pull in the app's real Tailwind + tokens pipeline, then point
+   Tailwind's source scanner at ../src so utilities used by the real components
+   get generated even though the Vite root is harness/.
+
+   main.tsx MUST import this file, not ../src/globals.css directly — the @source
+   line is the whole reason the preview isn't unstyled. */
+@import "../src/globals.css";
+@source "../src";

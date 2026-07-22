@@ -28,6 +28,10 @@ dist/
 .claude/worktrees/
 .claire/
 
+# personal / runtime Claude Code state (shared skills under .claude/skills/ are tracked)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
 # internal development artifacts — kept locally, not published
 # (plans, specs, mockups, design explorations, audit findings)
 docs/superpowers/
