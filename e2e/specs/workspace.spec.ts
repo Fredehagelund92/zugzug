@@ -7,12 +7,12 @@
  * workspace (and the URL-change assertion) is deferred until a super-admin
  * session is available in a later task.
  *
- * Version history: seeded tables have no published versions, so the panel
- * correctly shows "No versions published yet." A rollback assertion requires
- * at least two published versions and is deferred to Journey #3 (Task 6)
- * which creates and publishes content.
+ * Version history: the test creates its own fresh table so it is fully
+ * independent of other specs. A rollback assertion requires at least two
+ * published versions and is deferred to Journey #3 (Task 6) which creates
+ * and publishes content.
  */
-import { test, expect } from "../fixtures";
+import { test, expect, uniqueSuffix } from "../fixtures";
 
 test("workspace switcher opens and displays the current workspace", async ({ page }) => {
   await page.goto("/app/default");
@@ -40,12 +40,31 @@ test("workspace switcher opens and displays the current workspace", async ({ pag
   await expect(dialog).not.toBeVisible();
 });
 
-test("version history panel opens on a seeded table and shows its state", async ({ page }) => {
-  // Navigate directly to the tables route; the app auto-opens the first table.
-  await page.goto("/app/default/tables");
+test("version history panel opens on a fresh table and shows its state", async ({ page }) => {
+  const tableName = `E2E VersionHistory ${uniqueSuffix()}`;
 
-  // Wait for a TablePane to render — the toolbar's "More actions" button
-  // is the reliable signal that a pane is visible and fully mounted.
+  await page.goto("/app/default/tables");
+  // Wait for the tab strip to boot.
+  await expect(page.getByRole("button", { name: "Open table" })).toBeVisible();
+
+  // Create a fresh table via the tab-strip create flow.
+  await page.getByRole("button", { name: "Open table" }).click();
+  await page.getByTestId("create-table-button").click();
+
+  const dialog = page.getByRole("dialog", { name: /new table/i });
+  await expect(dialog).toBeVisible();
+
+  const radioGroup = dialog.getByRole("radiogroup", { name: "Start from" });
+  await radioGroup.getByRole("radio", { name: /empty table/i }).click();
+
+  await dialog.getByPlaceholder("Name this table").fill(tableName);
+  await dialog.getByRole("button", { name: "Create table" }).click();
+
+  // Confirm the new table is active in the tab strip.
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("tablist").getByText(tableName)).toBeVisible();
+
+  // Wait for the TablePane toolbar to mount before interacting with it.
   const moreActionsButton = page.getByRole("button", { name: "More actions" });
   await expect(moreActionsButton).toBeVisible();
 
@@ -59,7 +78,7 @@ test("version history panel opens on a seeded table and shows its state", async 
   // avoid the "Versions published before version history existed…" footnote).
   await expect(page.getByText("Version history", { exact: true })).toBeVisible();
 
-  // Seeded tables have no published versions yet.
+  // A brand-new table has no published versions.
   await expect(page.getByText("No versions published yet.")).toBeVisible();
 
   // Close the panel.
