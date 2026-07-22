@@ -1635,6 +1635,24 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
       }
 
+      // POST /api/e2e/seed-scan-values — E2E test helper: materialize dim_scan_value
+      // rows so the Review page has unmapped values without a live warehouse.
+      // Workspace-admin gated. Body: { dimId, occurrences: [{raw,table,column,rows}] }
+      if (seg[1] === "e2e" && seg[2] === "seed-scan-values" && method === "POST") {
+        const denied = gateOrJson(tenantCtx, "manage_adapter");
+        if (denied) return denied;
+        const { materializeDimScanValues } = await import("./repo-dim-scan.ts");
+        const body = (await req.json()) as {
+          dimId: string;
+          occurrences: Array<{ raw: string; table: string; column: string; rows: number }>;
+        };
+        await materializeDimScanValues(body.dimId, tenantCtx.tenantId, {
+          occurrences: body.occurrences,
+          scannedAt: new Date(),
+        });
+        return json({ ok: true });
+      }
+
       return json({ error: `no route for ${method} ${pathname}` }, 404);
     });
   } catch (e) {
