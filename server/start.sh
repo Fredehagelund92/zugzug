@@ -16,6 +16,22 @@ if [ -z "$ZUGZUG_CURSOR_KEY" ]; then
   export ZUGZUG_CURSOR_KEY
 fi
 
+# Auto-generate the webhook master key on first boot if none supplied.
+# Persisted in the mounted data volume so it MUST survive restarts: losing it
+# would invalidate every stored webhook signing secret (AES-256-GCM encrypted
+# with this key), making all webhooks fail to dispatch. Unlike the cursor key,
+# regeneration here is destructive — always read from the persisted file.
+if [ -z "$ZUGZUG_WEBHOOK_MASTER_KEY" ] && [ -z "$ZUGZUG_WEBHOOK_MASTER_KEY_FILE" ]; then
+  WEBHOOK_KEY_FILE="${ZUGZUG_DATA_DIR:-/data}/webhook-master.key"
+  mkdir -p "$(dirname "$WEBHOOK_KEY_FILE")"
+  if [ ! -f "$WEBHOOK_KEY_FILE" ]; then
+    head -c 32 /dev/urandom | base64 | tr -d '\n' > "$WEBHOOK_KEY_FILE"
+    echo "· generated webhook master key at $WEBHOOK_KEY_FILE"
+  fi
+  ZUGZUG_WEBHOOK_MASTER_KEY="$(cat "$WEBHOOK_KEY_FILE")"
+  export ZUGZUG_WEBHOOK_MASTER_KEY
+fi
+
 if [ "$SEED_DEMO" = "true" ]; then
   echo "· bootstrapping (migrations + demo seed)…"
   bun run bootstrap -- --seed

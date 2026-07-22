@@ -33,6 +33,7 @@ services:
       ORIGIN: http://localhost:8080
       ZUGZUG_SELF_HOSTED: "1"
       ZUGZUG_DATA_DIR: /data
+      WEBHOOKS_ENABLED: "1"
     volumes:
       - serverdata:/data
     # Healthcheck comes from server/Dockerfile (bun-based probe). app gates on
