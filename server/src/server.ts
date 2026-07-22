@@ -1638,7 +1638,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       // POST /api/e2e/seed-scan-values — E2E test helper: materialize dim_scan_value
       // rows so the Review page has unmapped values without a live warehouse.
       // Workspace-admin gated. Body: { dimId, occurrences: [{raw,table,column,rows}] }
-      if (seg[1] === "e2e" && seg[2] === "seed-scan-values" && method === "POST") {
+      // Only available when ZUGZUG_E2E_TEST_ROUTES=1; absent in production.
+      if (
+        env.e2eTestRoutes &&
+        seg[1] === "e2e" &&
+        seg[2] === "seed-scan-values" &&
+        method === "POST"
+      ) {
         const denied = gateOrJson(tenantCtx, "manage_adapter");
         if (denied) return denied;
         const { materializeDimScanValues } = await import("./repo-dim-scan.ts");

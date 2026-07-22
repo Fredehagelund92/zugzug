@@ -1,0 +1,10 @@
+# compose.e2e.yml — overlay for running the Playwright E2E suite.
+# Usage: docker compose -f compose.yml -f compose.e2e.yml up --build -d server
+#
+# Enables ZUGZUG_E2E_TEST_ROUTES so the seed-scan-values helper route is
+# reachable. Never apply this override in a production deployment.
+
+services:
+  server:
+    environment:
+      ZUGZUG_E2E_TEST_ROUTES: "1"

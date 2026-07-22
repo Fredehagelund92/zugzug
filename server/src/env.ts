@@ -135,6 +135,10 @@ export const env = {
   /** Per-credential rate-limit budget for the /v1/ surface. Default 600
    *  req/min; set to 0 to disable. */
   pullApiRpm: process.env.ZUGZUG_PULL_API_RPM ? Number(process.env.ZUGZUG_PULL_API_RPM) : 600,
+  /** Enable E2E-test-only routes (e.g. POST /api/e2e/seed-scan-values).
+   *  MUST NOT be set in production. Set ZUGZUG_E2E_TEST_ROUTES=1 in the
+   *  compose.e2e.yml override when running the Playwright suite. */
+  e2eTestRoutes: process.env.ZUGZUG_E2E_TEST_ROUTES === "1",
 };
 
 /** Qualified Postgres app-state table name: "zugzug_app"."table" */
