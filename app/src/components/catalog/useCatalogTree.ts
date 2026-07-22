@@ -121,7 +121,7 @@ export function useCatalogTree() {
     });
     if (!isOpen) {
       const node = findNode(rootsRef.current, id);
-      if (node && !node.childrenLoaded) void loadChildren(node);
+      if (node && !node.childrenLoaded && !loadingIds.has(id)) void loadChildren(node);
     }
   };
 
