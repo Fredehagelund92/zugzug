@@ -1,11 +1,9 @@
 /**
  * Journey #2 — create a reference table.
  *
- * Note: the `create-table-button` testid (from Task 2) lives in
- * `SidebarTableTree.tsx`, a component that is exported but not mounted in the
- * current app shell. The create-table flow is instead accessed via the tab
- * strip's "Open table" (+) button → "New table" popover item, which calls the
- * same `CreateTableModal`. This spec uses that real path.
+ * The create-table flow is reached via the tab strip's "Open table" (+) button →
+ * "New table" popover item (carrying the `create-table-button` testid), which
+ * opens the `CreateTableModal`.
  */
 import { test, expect, uniqueSuffix } from "../fixtures";
 
@@ -19,8 +17,8 @@ test("create an empty table and see it in the tab strip", async ({ page }) => {
   // Click the + button in the tab strip to open the "add tab" popover.
   await page.getByRole("button", { name: "Open table" }).click();
 
-  // Click "New table" in the popover.
-  await page.getByRole("button", { name: "New table" }).click();
+  // Click "New table" in the popover (via the create-table-button testid).
+  await page.getByTestId("create-table-button").click();
 
   // The create-table dialog opens.
   const dialog = page.getByRole("dialog", { name: /new table/i });

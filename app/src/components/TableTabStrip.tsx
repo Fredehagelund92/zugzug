@@ -166,6 +166,7 @@ function AddTabPopover({
       {onCreate && (
         <button
           type="button"
+          data-testid="create-table-button"
           onClick={() => {
             onClose();
             onCreate();
