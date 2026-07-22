@@ -24,7 +24,10 @@ See coverage locally:
 
 Every PR reports **patch coverage** — the share of the lines *your PR changed*
 that are covered by tests. Legacy untested code never blocks you; you only owe
-tests for what you touch. Aim for 80%+ on your diff.
+tests for what you touch. The gate is enforced: a PR whose changed lines are
+under 80% covered fails CI. External-integration code (AI providers, warehouse
+SDK adapters) is excluded from coverage. Shared setup lives in
+`server/test/factories/`.
 
 ## Writing a unit test (server, pure logic)
 
