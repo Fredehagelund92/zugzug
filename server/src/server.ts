@@ -986,7 +986,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(await reqRepo.listDimensions());
           }
           if (method === "POST") {
-            const denied = gateOrJson(tenantCtx, "curate");
+            const denied = gateOrJson(tenantCtx, "manage_adapter");
             if (denied) return denied;
             const { name, keyKind } = (await req.json()) as {
               name: string;
@@ -1233,7 +1233,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "curate");
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
           const {
             label,
@@ -1285,7 +1285,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
-            const denied = gateOrJson(tenantCtx, "curate");
+            const denied = gateOrJson(tenantCtx, "manage_adapter");
             if (denied) return denied;
             const body = (await req.json()) as {
               label?: string;
@@ -1327,7 +1327,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "DELETE") {
-            const denied = gateOrJson(tenantCtx, "curate");
+            const denied = gateOrJson(tenantCtx, "manage_adapter");
             if (denied) return denied;
             return json(await reqRepo.deleteColumn(id, field, me));
           }
