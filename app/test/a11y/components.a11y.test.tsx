@@ -51,6 +51,7 @@ const tenant: TenantContextValue = {
   id: "t1",
   slug: "acme",
   label: "Acme",
+  color: null,
   role: "admin",
   isSuperAdmin: false,
 };

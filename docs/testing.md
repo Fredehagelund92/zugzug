@@ -127,12 +127,14 @@ form, the dashboard, and the data grid.
 Each check is `render → axe → toHaveNoViolations`:
 
     import { axe } from "vitest-axe";
-    import { renderWithProviders } from "../render";
 
     test("Login has no accessibility violations", async () => {
-      const { container } = renderWithProviders(<Login />, { route: "/login" });
+      const { container } = withRouter(<Login />);
       expect(await axe(container)).toHaveNoViolations();
     });
+
+(`withRouter`/`withAll` are small local wrappers in the test file that supply the
+router and workspace context each component needs.)
 
 The matcher is wired once in `app/test/setup.ts` (`expect.extend(axeMatchers)`).
 When axe reports a real violation, fix the component (a missing label, role, or
