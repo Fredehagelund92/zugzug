@@ -96,6 +96,14 @@ export interface MappingDimension {
   fields?: FieldDef[]; // enrichment attribute columns
   orderingMode?: "derived" | "manual";
   nextPosition?: string | null;
+  /** Per-table publish summary from ?full=true (ADR-0005). */
+  publish?: {
+    version: number; // 0 = never published
+    publishedAt: string | null;
+    publishedByName: string | null;
+    pendingDrafts: number;
+    changedRecords: number;
+  } | null;
 }
 
 const rowsOf = (s: SourceOccurrence[]) => s.reduce((n, o) => n + o.rows, 0);

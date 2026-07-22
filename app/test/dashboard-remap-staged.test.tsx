@@ -116,53 +116,57 @@ function renderDashboard() {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("Dashboard — staged remap detection", () => {
-  test("page meta shows '1 draft' (singular) for the remap-only dim", () => {
+  test("page meta shows '0 to publish' when no dims have publish data", () => {
     renderDashboard();
-    // Both the header summary and the per-row badge now render "1 draft"; scope
-    // to the header one (not inside a table row). Confirms the singular form.
-    const headerChip = screen
-      .getAllByText((_, el) => el?.textContent?.replace(/\s+/g, " ").trim() === "1 draft")
+    // Header meta now shows "to publish" figure (no drafts concept at this level).
+    // Dims in this fixture have no publish field → toPublishTotal = 0.
+    const headerSpan = screen
+      .getAllByText((_, el) => el?.textContent?.replace(/\s+/g, " ").trim() === "0 to publish")
       .find((el) => !el.closest("tr"));
-    expect(headerChip).toBeDefined();
+    expect(headerSpan).toBeDefined();
   });
 
-  test("'Needs attention' toolbar pill counts dims with unmapped OR staged drafts (2)", () => {
+  test("'Needs attention' toolbar pill counts only dims with unmapped values (1)", () => {
     renderDashboard();
+    // With no publish summaries, toPublishCount=0 for all dims.
+    // Only Country (newCount=1) triggers attention; Channel's staged draft no longer counts.
     const pill = screen.getByText("Needs attention").closest("button");
-    expect(pill).not.toBeNull();
-    expect(within(pill as HTMLElement).getByText("2")).toBeInTheDocument();
-  });
-
-  test("'Clean' toolbar pill counts only the truly clean dim (1)", () => {
-    renderDashboard();
-    const pill = screen.getByText("Clean").closest("button");
     expect(pill).not.toBeNull();
     expect(within(pill as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  test("Dim C (remap-only) row shows a drafts badge with count", () => {
+  test("'Clean' toolbar pill counts dims with no in-review and no to-publish (2)", () => {
+    renderDashboard();
+    // Region (newCount=0, no publish) and Channel (newCount=0, no publish) are both clean.
+    const pill = screen.getByText("Clean").closest("button");
+    expect(pill).not.toBeNull();
+    expect(within(pill as HTMLElement).getByText("2")).toBeInTheDocument();
+  });
+
+  test("Dim C (remap-only, no publish data) row shows '—' in To publish column", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const channelRow = rows.find((r) => within(r).queryByText("Channel"));
     expect(channelRow).toBeDefined();
-    // Drafts column shows a "<n> draft(s)" badge (not a bare word)
-    expect(within(channelRow as HTMLElement).getByText(/\d+ drafts?/i)).toBeInTheDocument();
+    // No publish summary → toPublishCount = 0 → "—" in To publish column
+    const dashes = within(channelRow as HTMLElement).getAllByText("—");
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("Dim B (no drafts, all mapped) row shows '—' placeholders for in-review and drafts", () => {
+  test("Dim B (no drafts, all mapped) row shows '—' placeholders for in-review and to-publish", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const regionRow = rows.find((r) => within(r).queryByText("Region"));
     expect(regionRow).toBeDefined();
-    // New design: clean rows show '—' in In review and Drafts columns; no 'clean' badge
+    // Clean rows show '—' in In review and To publish columns
     const dashes = within(regionRow as HTMLElement).getAllByText("—");
     expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("Urgency sort order: Dim A (unmapped) → Dim C (staged) → Dim B (clean)", () => {
+  test("Default sort (In review desc): Dim A (unmapped) comes first", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
-    // First row is the header; body rows follow.
+    // First row is the header; body rows follow. Country (newCount=1) should be first.
     const bodyDimNames = rows
       .map((r) => {
         if (within(r).queryByText("Country")) return "Country";
@@ -171,6 +175,6 @@ describe("Dashboard — staged remap detection", () => {
         return null;
       })
       .filter((x): x is string => x !== null);
-    expect(bodyDimNames).toEqual(["Country", "Channel", "Region"]);
+    expect(bodyDimNames[0]).toBe("Country");
   });
 });

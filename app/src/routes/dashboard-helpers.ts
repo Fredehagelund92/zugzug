@@ -3,7 +3,8 @@ import type { MappingDimension } from "../data";
 import type { AuditEntry } from "../store";
 
 export type FilterKey = "all" | "attention" | "clean";
-export type SortKey = "urgency" | "coverage" | "name" | "rows";
+export type SortKey = "name" | "records" | "coverage" | "review" | "toPublish" | "published";
+export type SortDir = "asc" | "desc";
 
 /**
  * Human-friendly audit timestamp. The backend sends ISO strings; render those
@@ -31,6 +32,13 @@ export function coveragePct(dim: MappingDimension): number {
   const total = dim.counts.totalDistinct;
   if (total === 0) return 100;
   return Math.round((dim.counts.mappedCount / total) * 100);
+}
+
+/** Unpublished changes = drafts awaiting publish + records edited since the
+ *  last publish (CONTEXT.md "Unpublished changes"). 0 when the dim is level. */
+export function toPublishCount(dim: MappingDimension): number {
+  const p = dim.publish;
+  return p ? p.pendingDrafts + p.changedRecords : 0;
 }
 
 /**
@@ -75,39 +83,45 @@ export function lastAuditForDim(
   );
 }
 
-/** Filter dims by tab selection. `stagedDimIds` is the set of dim ids that have
- *  at least one staged draft so the "Needs attention" filter surfaces them too. */
-export function applyFilter(
-  dims: MappingDimension[],
-  filter: FilterKey,
-  stagedDimIds: Set<string>,
-): MappingDimension[] {
+export function applyFilter(dims: MappingDimension[], filter: FilterKey): MappingDimension[] {
   if (filter === "all") return dims;
   if (filter === "attention") {
-    return dims.filter((d) => d.counts.newCount > 0 || stagedDimIds.has(d.id));
+    return dims.filter((d) => d.counts.newCount > 0 || toPublishCount(d) > 0);
   }
   // "clean"
-  return dims.filter((d) => d.counts.newCount === 0 && !stagedDimIds.has(d.id));
+  return dims.filter((d) => d.counts.newCount === 0 && toPublishCount(d) === 0);
 }
 
-/** Sort dims. Returns a new array — never mutates the input. */
+/** Sort dims by a column. Returns a new array — never mutates the input.
+ *  Never-published rows (no publishedAt) always sort last on the published
+ *  column, in both directions. */
 export function applySort(
   dims: MappingDimension[],
   sort: SortKey,
-  stagedDimIds: Set<string> = new Set(),
+  dir: SortDir,
 ): MappingDimension[] {
+  const flip = dir === "asc" ? 1 : -1;
   const copy = [...dims];
   switch (sort) {
-    case "urgency":
-      return copy.sort(
-        (a, b) => urgencyScore(b, stagedDimIds.has(b.id)) - urgencyScore(a, stagedDimIds.has(a.id)),
-      );
-    case "coverage":
-      return copy.sort((a, b) => coveragePct(a) - coveragePct(b));
     case "name":
-      return copy.sort((a, b) => a.dimension.localeCompare(b.dimension));
-    case "rows":
-      return copy.sort((a, b) => b.rows - a.rows);
+      return copy.sort((a, b) => a.dimension.localeCompare(b.dimension) * flip);
+    case "records":
+      return copy.sort((a, b) => (a.canonical.length - b.canonical.length) * flip);
+    case "coverage":
+      return copy.sort((a, b) => (coveragePct(a) - coveragePct(b)) * flip);
+    case "review":
+      return copy.sort((a, b) => (a.counts.newCount - b.counts.newCount) * flip);
+    case "toPublish":
+      return copy.sort((a, b) => (toPublishCount(a) - toPublishCount(b)) * flip);
+    case "published":
+      return copy.sort((a, b) => {
+        const at = a.publish?.publishedAt ?? null;
+        const bt = b.publish?.publishedAt ?? null;
+        if (!at && !bt) return 0;
+        if (!at) return 1; // nulls last, regardless of dir
+        if (!bt) return -1;
+        return (at < bt ? -1 : at > bt ? 1 : 0) * flip;
+      });
   }
 }
 
