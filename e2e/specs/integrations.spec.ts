@@ -1,23 +1,15 @@
 /**
  * Journey #5 — service account created in UI; zzsa_ token used against pull-API.
- * Journey #6 — webhook creation + signed delivery (DONE_WITH_CONCERNS; see below).
+ * Journey #6 — webhook creation + signed delivery (end-to-end).
  *
- * === Journey #6 known limitation ===
- * The running stack (compose.yml) does not set ZUGZUG_WEBHOOK_MASTER_KEY, and
- * start.sh does not auto-generate one (unlike ZUGZUG_CURSOR_KEY). This means
- * webhook creation fails at the server with "webhook master key not configured".
- * The fix is to add auto-generation in start.sh, mirroring the cursor-key logic.
- * Journey #6 therefore: (a) verifies URL validation and event selection via the
- * UI, (b) confirms the specific error that blocks creation, (c) verifies the
- * HMAC-SHA256 signing algorithm independently using the test utilities so the
- * cryptographic correctness is not left untested.
+ * start.sh now auto-generates ZUGZUG_WEBHOOK_MASTER_KEY on first boot (mirroring
+ * the cursor-key logic), so webhook creation succeeds in the compose stack.
  *
  * === Cross-container networking note ===
- * Even if the master key were configured, http://localhost:<port> webhooks route
- * to the container itself (not the host). The dispatcher still computes and
- * stores the signature before each POST attempt, so signature verification via
- * the delivery-log API would work even on a failed delivery. This path remains
- * exercisable once ZUGZUG_WEBHOOK_MASTER_KEY is set.
+ * http://localhost:<port> webhooks route inside the container (not to the host).
+ * The dispatcher signs the payload and stores the signature in the delivery row
+ * BEFORE making the POST, so signature verification via the delivery-log API
+ * works even when the HTTP delivery itself fails (connection refused).
  */
 
 import { createHmac } from "node:crypto";
@@ -127,33 +119,29 @@ test("create service account and call pull-API with zzsa_ token", async ({ page,
   }
 });
 
-// ── Journey #6: webhook signing algorithm + UI smoke ─────────────────────────
+// ── Journey #6: webhook creation + signed delivery ───────────────────────────
 
-test("webhook signing algorithm verifies correctly (DONE_WITH_CONCERNS)", async ({ page }) => {
-  // Part A: Verify the HMAC-SHA256 signing algorithm is correct.
-  // This is independent of the running stack and confirms the cryptographic
-  // contract (format: t=<unix>,kid=<kid>,v1=sha256=HMAC_SHA256(secret, "<t>.<body>")).
-  const secret = "whsec_testSecretForAlgorithmVerification";
-  const rawBody = JSON.stringify({ event: "table.published", table: "country", kind: "publish" });
-  const t = Math.floor(Date.now() / 1000);
+test("create webhook and verify signed delivery", async ({ page, request }) => {
+  // The webhook dispatcher runs on a 60 s scheduler tick; give the whole test
+  // enough headroom to cover one full tick cycle plus UI interaction time.
+  test.setTimeout(120_000);
+  // Part A: Verify the HMAC-SHA256 signing algorithm contract independently.
+  // Format: HMAC_SHA256(secret, "<unix>.<rawBody>"), encoded as t=…,kid=…,v1=sha256=…
+  const algoSecret = "whsec_testSecretForAlgorithmVerification";
+  const algoBody = JSON.stringify({ event: "table.published", table: "country", kind: "publish" });
+  const algoT = Math.floor(Date.now() / 1000);
+  const algoHex = createHmac("sha256", algoSecret).update(`${algoT}.${algoBody}`).digest("hex");
+  const algoHeader = `t=${algoT},kid=current,v1=sha256=${algoHex}`;
 
-  const hex = createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex");
-  const sigHeader = `t=${t},kid=current,v1=sha256=${hex}`;
+  const algoParsed = parseSignature(algoHeader);
+  expect(algoParsed).not.toBeNull();
+  expect(algoParsed!.kid).toBe("current");
+  expect(algoParsed!.t).toBe(algoT);
+  expect(verifySignature(algoBody, algoSecret, algoParsed!.t, algoParsed!.hex)).toBe(true);
+  expect(verifySignature(algoBody + "!", algoSecret, algoParsed!.t, algoParsed!.hex)).toBe(false);
+  expect(verifySignature(algoBody, "wrong_secret", algoParsed!.t, algoParsed!.hex)).toBe(false);
 
-  const parsed = parseSignature(sigHeader);
-  expect(parsed).not.toBeNull();
-  expect(parsed!.kid).toBe("current");
-  expect(parsed!.t).toBe(t);
-  expect(verifySignature(rawBody, secret, parsed!.t, parsed!.hex)).toBe(true);
-
-  // Tampered body must NOT verify.
-  expect(verifySignature(rawBody + "!", secret, parsed!.t, parsed!.hex)).toBe(false);
-
-  // Wrong secret must NOT verify.
-  expect(verifySignature(rawBody, "wrong_secret", parsed!.t, parsed!.hex)).toBe(false);
-
-  // Part B: UI smoke — navigate to webhooks page and attempt webhook creation.
-  // Confirms the form is reachable and documents the stack limitation.
+  // Part B: Create a webhook via the UI and capture the signing secret.
   await page.goto("/app/default/settings/webhooks");
 
   const createBtn = page
@@ -162,38 +150,84 @@ test("webhook signing algorithm verifies correctly (DONE_WITH_CONCERNS)", async 
   await expect(createBtn).toBeVisible();
   await createBtn.click();
 
-  // The "New webhook" dialog must be present and contain the required fields.
-  const modal = page.getByRole("dialog");
-  await expect(modal.getByRole("heading", { name: "New webhook", exact: true })).toBeVisible();
-  await expect(modal.getByPlaceholder(/https:\/\/api\.acme\.com/i)).toBeVisible();
+  const createModal = page.getByRole("dialog");
+  await expect(
+    createModal.getByRole("heading", { name: "New webhook", exact: true }),
+  ).toBeVisible();
+  await expect(createModal.getByPlaceholder(/https:\/\/api\.acme\.com/i)).toBeVisible();
 
-  // Fill the URL — http://localhost is allowed in self-hosted mode.
-  await modal.getByPlaceholder(/https:\/\/api\.acme\.com/i).fill("http://localhost:19876/e2e-hook");
+  // Use http://localhost — allowed by self-hosted URL policy, but the port won't
+  // be open inside the container. The dispatcher still signs + stores the signature
+  // before the POST attempt, so delivery-log verification works even on a failed POST.
+  await createModal
+    .getByPlaceholder(/https:\/\/api\.acme\.com/i)
+    .fill("http://localhost:19876/e2e-hook");
 
-  // Attempt to submit.
-  await modal.getByRole("button", { name: "Create webhook" }).click();
+  await createModal.getByRole("button", { name: "Create webhook" }).click();
 
-  // The stack does not have ZUGZUG_WEBHOOK_MASTER_KEY configured: the server
-  // returns an error which the UI surfaces. Assert it matches the known limitation
-  // rather than silently passing or hiding the failure.
-  //
-  // If ZUGZUG_WEBHOOK_MASTER_KEY is eventually configured in compose.yml (e.g.
-  // auto-generated in start.sh like the cursor key), this branch will no longer
-  // match and the test will need updating to follow the full signed-delivery path.
-  const errorMsg = modal.locator(".text-danger");
-  await expect(errorMsg).toBeVisible({ timeout: 10_000 });
-  const errText = (await errorMsg.textContent()) ?? "";
+  // After successful creation the "New webhook" heading disappears and the
+  // SecretRevealModal opens. Wait for the reveal heading directly.
+  const revealModal = page.getByRole("dialog");
+  await expect(
+    revealModal.getByRole("heading", { name: "Copy your signing secret", exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
 
-  if (errText.includes("master key")) {
-    // Known misconfiguration: ZUGZUG_WEBHOOK_MASTER_KEY not set in compose.yml.
-    // The test documents this gap; the full signed-delivery assertion requires the
-    // key to be present. See DONE_WITH_CONCERNS note at the top of this file.
-    console.warn(
-      "[DONE_WITH_CONCERNS] Webhook creation blocked: ZUGZUG_WEBHOOK_MASTER_KEY not" +
-        " configured in compose.yml. start.sh should auto-generate it like cursor.key.",
-    );
-  } else {
-    // If the error is something else (e.g. URL validation), fail the test.
-    throw new Error(`Unexpected webhook error: "${errText}"`);
+  const secretEl = revealModal.locator("code");
+  await expect(secretEl).toBeVisible();
+  const signingSecret = (await secretEl.textContent())?.trim() ?? "";
+  expect(signingSecret).toMatch(/^whsec_/);
+
+  // Copy and dismiss.
+  await revealModal.getByRole("button", { name: "Copy" }).click();
+  await revealModal.getByRole("button", { name: /i've copied it/i }).click();
+  await expect(revealModal).not.toBeVisible();
+
+  // Part C: Find the newly created webhook ID via the API.
+  const listRes = await request.get("/api/t/default/v1/webhooks");
+  expect(listRes.status()).toBe(200);
+  const { webhooks } = (await listRes.json()) as { webhooks: Array<{ id: string; url: string }> };
+  const hook = webhooks.find((w) => w.url.includes("19876"));
+  expect(hook).toBeDefined();
+  const webhookId = hook!.id;
+
+  // Part D: Trigger a test delivery.
+  const testRes = await request.post(`/api/t/default/v1/webhooks/${webhookId}/test`);
+  expect(testRes.status()).toBe(200);
+  const { delivery_id } = (await testRes.json()) as { delivery_id: string };
+  expect(delivery_id).toMatch(/^whd_/);
+
+  // Part E: Poll the delivery log until the dispatcher signs + attempts the delivery.
+  // The scheduler tick interval is 60 s in production; give it up to 90 s.
+  let delivery: {
+    status: string;
+    signature: string | null;
+    payload: unknown;
+  } | null = null;
+
+  for (let i = 0; i < 180; i++) {
+    await page.waitForTimeout(500);
+    const dr = await request.get(`/api/t/default/v1/webhook-deliveries/${delivery_id}`);
+    if (dr.status() !== 200) continue;
+    const d = (await dr.json()) as typeof delivery;
+    if (d && d.status !== "pending" && d.status !== "in_flight" && d.signature) {
+      delivery = d;
+      break;
+    }
   }
+
+  expect(delivery).not.toBeNull();
+  expect(delivery!.signature).toBeTruthy();
+
+  // Part F: Verify the stored signature against the signing secret.
+  const parsed = parseSignature(delivery!.signature!);
+  expect(parsed).not.toBeNull();
+  expect(parsed!.kid).toBe("current");
+
+  const rawBody =
+    typeof delivery!.payload === "string"
+      ? delivery!.payload
+      : JSON.stringify(delivery!.payload);
+
+  const verified = verifySignature(rawBody, signingSecret, parsed!.t, parsed!.hex);
+  expect(verified).toBe(true);
 });
