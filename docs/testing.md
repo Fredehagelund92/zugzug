@@ -112,6 +112,51 @@ flow (including the seed route used by the map-values spec). There are currently
 **Reports and traces** land in `e2e/playwright-report/` and `e2e/test-results/`. On CI,
 they are uploaded as artifacts on failure so you can open the HTML report or replay traces.
 
+## Accessibility (axe)
+
+Key components are checked for accessibility violations with
+[`vitest-axe`](https://github.com/chaance/vitest-axe), which runs axe-core against
+a component rendered in jsdom and asserts there are no violations. The checks live
+in `app/test/a11y/components.a11y.test.tsx` and cover the auth pages, a settings
+form, the dashboard, and the data grid.
+
+**Run them:**
+
+    cd app && bun run test test/a11y
+
+Each check is `render → axe → toHaveNoViolations`:
+
+    import { axe } from "vitest-axe";
+    import { renderWithProviders } from "../render";
+
+    test("Login has no accessibility violations", async () => {
+      const { container } = renderWithProviders(<Login />, { route: "/login" });
+      expect(await axe(container)).toHaveNoViolations();
+    });
+
+The matcher is wired once in `app/test/setup.ts` (`expect.extend(axeMatchers)`).
+When axe reports a real violation, fix the component (a missing label, role, or
+accessible name) — do not weaken or skip the assertion to get green.
+
+## Grid performance budget
+
+`app/src/components/datagrid/scale.test.tsx` guards against a catastrophic grid
+performance regression. jsdom timing is too coarse for a micro-benchmark, so the
+**primary** guard is timing-independent: at 20k rows the grid must still mount only
+a bounded number of `[role="row"]` elements (virtualization holds). A
+de-virtualization regression that rendered all 20k rows would blow this bound and
+tank real-world performance. A generous wall-clock ceiling (`elapsed < 5000ms`,
+observed ~170ms) is a coarse backstop only — tune it up if it flakes on a loaded
+machine; the mounted-count bound is the real test.
+
+## Visual regression
+
+Deferred — see [#132](https://github.com/Fredehagelund92/zugzug/issues/132).
+Playwright screenshot snapshots are high-maintenance (platform-baseline flake) and
+additive to correctness; axe covers a11y regressions and the grid perf budget covers
+the highest-risk rendering regression, so visual diffing waits until it can run in a
+pinned image.
+
 ## Selectors (for end-to-end tests)
 
 Prefer role, label, and visible text. Add a `data-testid` only when the
