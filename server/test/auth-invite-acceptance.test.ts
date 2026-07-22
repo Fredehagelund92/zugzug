@@ -78,7 +78,11 @@ test("viewer invite is honored on signup — role must be viewer, not editor", a
     new Request("http://localhost/api/auth/signup", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: "admin@example.com", password: "longenoughpw12", name: "Admin" }),
+      body: JSON.stringify({
+        email: "admin@example.com",
+        password: "longenoughpw12",
+        name: "Admin",
+      }),
     }),
     () => {},
   );
