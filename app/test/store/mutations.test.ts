@@ -173,27 +173,31 @@ describe("createTable — success", () => {
   test("resolves with the new dim id and refreshes dimensions", async () => {
     const NEW_DIM = { ...DIM, id: "d2", dimension: "Products", dimTable: "dim_products" };
 
+    // Boot returns ONLY the existing dim, so d2 is absent after initStore().
     server.use(
       http.post("/api/t/:slug/tables", () => HttpResponse.json({ id: "d2" })),
-      // After creation, refreshDims + refreshSources + refreshAudit run
-      http.get("/api/t/:slug/dimensions", () => HttpResponse.json([DIM, NEW_DIM])),
+      http.get("/api/t/:slug/dimensions", () => HttpResponse.json([DIM])),
     );
 
     const store = await import("../../src/store.ts");
     await store.initStore();
+
+    // Swap the /dimensions handler AFTER boot: now d2 only enters the cache if
+    // createTable actually runs its post-create refreshDims. (If it didn't, dims
+    // would stay [DIM] and the assertion below would fail — this gates the refresh,
+    // not what initStore already loaded.)
+    server.use(http.get("/api/t/:slug/dimensions", () => HttpResponse.json([DIM, NEW_DIM])));
 
     const id = await store.createTable({
       name: "Products",
       mode: "blank",
     });
 
-    // createTable returns the new dim id on success
+    // createTable returns the new dim id on success...
     expect(id).toBe("d2");
 
-    // ...and the store's dimensions cache positively reflects the refresh
-    // (createTable triggers refreshDims, which the /dimensions handler answers
-    // with [DIM, NEW_DIM]). Read it through the hook since there is no non-hook
-    // dims accessor.
+    // ...and its post-create refreshDims positively updates the dimensions cache.
+    // Read via the hook since there is no non-hook dims accessor.
     const { result } = renderHook(() => store.useDimensions());
     await waitFor(() => expect(result.current.some((d) => d.id === "d2")).toBe(true));
   });
