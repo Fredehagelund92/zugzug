@@ -67,7 +67,7 @@ jobs:
           GOOGLE_CLIENT_ID: dummy
           GOOGLE_CLIENT_SECRET: dummy
           ATTACH_WAREHOUSE: "false"
-      - run: bun test --coverage && bun test --coverage ./src/catalog-routes.itest.ts
+      - run: bun run test:coverage
         env:
           DATABASE_URL: postgres://zugzug:zugzug@localhost:55432/zugzug_test
           MOTHERDUCK_TOKEN: dummy-for-ci
