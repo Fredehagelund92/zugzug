@@ -71,6 +71,18 @@ Bring the database up first with `cd server && bun run test:db:up`.
 
 For the grid, use the helpers in `app/src/components/datagrid/test-kit/`.
 
+### Frontend: MSW + renderWithProviders
+
+- `renderWithProviders(ui, { route })` (`app/test/render.tsx`) renders a component
+  inside `MemoryRouter`.
+- For tests that exercise the API client, opt into MSW: import `server` from
+  `app/test/msw/server.ts`, call `server.listen()/resetHandlers()/close()` in
+  `beforeAll/afterEach/afterAll`, and add/override handlers in `app/test/msw/handlers.ts`.
+  Handlers match the REWRITTEN URLs (`/api/t/:slug/...`); set the workspace with
+  `window.history.pushState({}, "", "/app/<slug>/x")`.
+- Datagrid cells are `{ Renderer, Editor }` with no providers — render the `Renderer`
+  directly with a `CellCtx`-shaped prop.
+
 ## Selectors (for end-to-end tests)
 
 Prefer role, label, and visible text. Add a `data-testid` only when the
