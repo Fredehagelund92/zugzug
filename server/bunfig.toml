@@ -10,6 +10,7 @@ coveragePathIgnorePatterns = [
   "src/seed",
   "src/verify-",
   ".test.ts",
+  ".itest.ts",
   "src/ai-providers/**",
   "src/warehouse/duckdb/read-only.ts",
   "src/warehouse/snowflake/sdk-wrapper.ts",
