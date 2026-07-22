@@ -185,3 +185,41 @@ describe("GET /api/t/:slug/warehouse/columns", () => {
     expect(res.status).toBe(404);
   });
 });
+
+// --- Task 4: GET /api/t/:slug/warehouse/values ---
+describe("GET /api/t/:slug/warehouse/values", () => {
+  it("returns distinct sample values up to limit", async () => {
+    const res = await handle(
+      tenantReq("/warehouse/values?database=db-1&table=authco.users&column=country&limit=2"),
+      noop,
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ values: ["US", "DK"] });
+  });
+
+  it("returns 400 when database param is missing", async () => {
+    const res = await handle(
+      tenantReq("/warehouse/values?table=authco.users&column=country"),
+      noop,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when table param is missing", async () => {
+    const res = await handle(tenantReq("/warehouse/values?database=db-1&column=country"), noop);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when column param is missing", async () => {
+    const res = await handle(tenantReq("/warehouse/values?database=db-1&table=authco.users"), noop);
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when table has no dot (schema.table format required)", async () => {
+    const res = await handle(
+      tenantReq("/warehouse/values?database=db-1&table=users&column=country"),
+      noop,
+    );
+    expect(res.status).toBe(400);
+  });
+});

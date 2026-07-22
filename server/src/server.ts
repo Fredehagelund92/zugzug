@@ -833,6 +833,29 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const cols = await adapter.listColumns(ref);
         return json(cols.map((c) => ({ name: c.name, type: c.type })));
       }
+
+      // GET /api/t/:slug/warehouse/values?database=<id>&table=<schema.table>&column=<c>&limit=<n> — sample values.
+      if (seg[2] === "values" && seg.length === 3 && method === "GET") {
+        const databaseId = url.searchParams.get("database");
+        const tableParam = url.searchParams.get("table");
+        const column = url.searchParams.get("column");
+        if (!databaseId || !tableParam || !column)
+          return json({ error: "database, table, column required" }, 400);
+        const dot = tableParam.indexOf(".");
+        if (dot < 0) return json({ error: "table must be schema.table" }, 400);
+        const schema = tableParam.slice(0, dot);
+        const table = tableParam.slice(dot + 1);
+        const limit = Math.min(20, Math.max(1, Number(url.searchParams.get("limit") ?? 5) || 5));
+        const { listWarehouseDatabases } = await import("./repo-warehouse.ts");
+        const dbs = await listWarehouseDatabases();
+        const db = dbs.find((d) => d.id === databaseId);
+        if (!db) return json({ error: "database not found" }, 404);
+        const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
+        const adapter = await getAdapterFn();
+        const ref = { catalog: db.databaseName, schema, table };
+        const values = await adapter.distinctValues(ref, column, limit);
+        return json({ values });
+      }
     }
 
     // Liveness probe — hoisted OUT of pgTxScoped. A wedged warehouse ping must
