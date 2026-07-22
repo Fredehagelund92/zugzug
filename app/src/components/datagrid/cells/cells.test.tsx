@@ -1,6 +1,7 @@
+import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { test, expect, describe } from "vitest";
-import type { ColumnDef } from "../types";
+import type { CellCtx, ColumnDef } from "../types";
 import { BooleanCell } from "./BooleanCell.tsx";
 import { EmailCell } from "./EmailCell.tsx";
 import { UrlCell } from "./UrlCell.tsx";
@@ -10,27 +11,29 @@ import { LinkedCell } from "./LinkedCell.tsx";
 import { NumberCell } from "./NumberCell.tsx";
 
 // Minimal CellCtx factory — column comes from a real fixture when config matters.
-function ctx(value: unknown, column: unknown) {
-  return { row: {}, rowKey: "r0", field: "f", value, focused: false, column } as never;
+function ctx(value: unknown, column: ColumnDef<Record<string, unknown>>) {
+  return { row: {}, rowKey: "r0", field: "f", value, focused: false, column } as unknown as CellCtx<
+    Record<string, unknown>
+  >;
 }
 
-function boolColumn(): ColumnDef<object> {
+function boolColumn(): ColumnDef<Record<string, unknown>> {
   return { field: "active", label: "Active", config: { type: "boolean" } };
 }
 
-function emailColumn(): ColumnDef<object> {
+function emailColumn(): ColumnDef<Record<string, unknown>> {
   return { field: "email", label: "Email", config: { type: "email" } };
 }
 
-function urlColumn(): ColumnDef<object> {
+function urlColumn(): ColumnDef<Record<string, unknown>> {
   return { field: "url", label: "URL", config: { type: "url" } };
 }
 
-function ratingColumn(ratingMax = 5): ColumnDef<object> {
+function ratingColumn(ratingMax = 5): ColumnDef<Record<string, unknown>> {
   return { field: "rating", label: "Rating", config: { type: "rating", ratingMax } };
 }
 
-function selectColumn(): ColumnDef<object> {
+function selectColumn(): ColumnDef<Record<string, unknown>> {
   return {
     field: "region",
     label: "Region",
@@ -44,7 +47,7 @@ function selectColumn(): ColumnDef<object> {
   };
 }
 
-function linkedColumn(): ColumnDef<object> {
+function linkedColumn(): ColumnDef<Record<string, unknown>> {
   return {
     field: "owner",
     label: "Owner",
@@ -60,7 +63,7 @@ function linkedColumn(): ColumnDef<object> {
   };
 }
 
-function numberColumn(): ColumnDef<object> {
+function numberColumn(): ColumnDef<Record<string, unknown>> {
   return { field: "count", label: "Count", config: { type: "number" } };
 }
 
@@ -215,7 +218,7 @@ describe("NumberCell.Renderer", () => {
   });
 
   test("number with integer format renders with locale separators", () => {
-    const col: ColumnDef<object> = {
+    const col: ColumnDef<Record<string, unknown>> = {
       field: "count",
       label: "Count",
       config: { type: "number", numberFormat: { format: "integer" } },
