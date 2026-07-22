@@ -8,7 +8,7 @@
  *
  * The warehouse "scan trigger" itself (Sources UI → POST /api/sources/scan)
  * requires a live warehouse adapter and is out of scope for the default E2E
- * stack; this is documented in task-7-report.md.
+ * stack.
  */
 import { test, expect, uniqueSuffix } from "../fixtures";
 
@@ -102,7 +102,7 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   await expect(row.getByText(targetLabel)).toBeVisible();
 
   // ── 8. Open the publish preview ───────────────────────────────────────────
-  // The footer shows "Publish" when there are staged drafts and no warehouse.
+  // The footer shows "Publish" when there are pending drafts and no warehouse.
   const publishBtn = page.getByRole("button", { name: /^Publish/ }).last();
   await expect(publishBtn).toBeVisible({ timeout: 5_000 });
   await expect(publishBtn).not.toBeDisabled();
