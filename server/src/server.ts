@@ -799,6 +799,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[1] === "preferences" && seg.length === 2) {
         if (method === "GET") return json(await reqRepo.getPreferences());
         if (method === "PUT") {
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          if (denied) return denied;
           const p = (await req.json()) as {
             publishThreshold: number;
             suggestThreshold: number;

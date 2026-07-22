@@ -215,3 +215,35 @@ test("admin is not blocked from renaming a field", async () => {
   });
   expect(res.status).not.toBe(403);
 });
+
+// ── PUT /preferences (workspace settings: manage_adapter, admin-only) ──────────
+// The route now gates at the HTTP layer to match TenantRepo.setPreferences, which
+// requires manage_adapter. Previously the route had no gate and relied on the repo.
+
+const PREFS_BODY = {
+  publishThreshold: 1,
+  suggestThreshold: 1,
+  scanSchedule: null,
+  requireSecondPublisher: false,
+};
+
+test("viewer is blocked from updating preferences", async () => {
+  await makeWorkspace("w_rbac_v8");
+  const { cookie } = await makeMember("u_viewer_v8", "w_rbac_v8", "viewer");
+  const res = await req("PUT", "/api/t/w_rbac_v8/preferences", cookie, PREFS_BODY);
+  expect(res.status).toBe(403);
+});
+
+test("editor is blocked from updating preferences (admin-only)", async () => {
+  await makeWorkspace("w_rbac_e8");
+  const { cookie } = await makeMember("u_editor_e8", "w_rbac_e8", "editor");
+  const res = await req("PUT", "/api/t/w_rbac_e8/preferences", cookie, PREFS_BODY);
+  expect(res.status).toBe(403);
+});
+
+test("admin can update preferences", async () => {
+  await makeWorkspace("w_rbac_a8");
+  const { cookie } = await makeMember("u_admin_a8", "w_rbac_a8", "admin");
+  const res = await req("PUT", "/api/t/w_rbac_a8/preferences", cookie, PREFS_BODY);
+  expect(res.status).not.toBe(403);
+});
