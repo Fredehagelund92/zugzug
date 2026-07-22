@@ -20,8 +20,8 @@
     "db:studio": "drizzle-kit studio",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
-    "test": "DATABASE_URL=postgres://zugzug:zugzug@localhost:55432/zugzug_test ATTACH_WAREHOUSE=false MOTHERDUCK_TOKEN=test-stub GOOGLE_CLIENT_ID=test-stub GOOGLE_CLIENT_SECRET=test-stub ZUGZUG_CURSOR_KEY=lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8= bun test",
-    "test:coverage": "DATABASE_URL=postgres://zugzug:zugzug@localhost:55432/zugzug_test ATTACH_WAREHOUSE=false MOTHERDUCK_TOKEN=test-stub GOOGLE_CLIENT_ID=test-stub GOOGLE_CLIENT_SECRET=test-stub ZUGZUG_CURSOR_KEY=lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8= bun test --coverage",
+    "test": "DATABASE_URL=postgres://zugzug:zugzug@localhost:55432/zugzug_test ATTACH_WAREHOUSE=false MOTHERDUCK_TOKEN=test-stub GOOGLE_CLIENT_ID=test-stub GOOGLE_CLIENT_SECRET=test-stub ZUGZUG_CURSOR_KEY=lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8= bun test --isolate",
+    "test:coverage": "DATABASE_URL=postgres://zugzug:zugzug@localhost:55432/zugzug_test ATTACH_WAREHOUSE=false MOTHERDUCK_TOKEN=test-stub GOOGLE_CLIENT_ID=test-stub GOOGLE_CLIENT_SECRET=test-stub ZUGZUG_CURSOR_KEY=lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8= bun test --isolate --coverage",
     "lint": "eslint src",
     "format": "prettier --write src",
     "format:check": "prettier --check src"
