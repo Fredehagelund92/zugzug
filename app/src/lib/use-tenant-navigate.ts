@@ -24,6 +24,7 @@ export function useNavLinks() {
       dashboard: `/app/${slug}`,
       triage: `/app/${slug}/triage`,
       sources: `/app/${slug}/sources`,
+      catalog: `/app/${slug}/catalog`,
       tables: `/app/${slug}/tables`,
       audit: `/app/${slug}/audit`,
       settings: `/app/${slug}/settings`,
