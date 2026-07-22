@@ -1551,7 +1551,7 @@ export async function setFieldValue(
       );
       return true;
     });
-  let changed = false;
+  let changed: boolean;
   if (f.type === "number") {
     const n = empty ? null : Number(value);
     changed = await applyUpdate(Number.isFinite(n as number) ? n : null);
