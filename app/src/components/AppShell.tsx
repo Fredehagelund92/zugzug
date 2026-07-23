@@ -396,7 +396,6 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     { to: `${settingsBase}/members`, label: "Members", Icon: IconUsers },
     { to: `${settingsBase}/warehouse`, label: "Warehouse", Icon: IconDatabase },
     { to: navLinks.sources, label: "Sources", Icon: IconLayers, testId: "nav-sources" },
-    { to: navLinks.catalog, label: "Catalog", Icon: IconDatabase },
     {
       to: `${settingsBase}/general`,
       label: "Preferences",
@@ -452,15 +451,6 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       icon: <IconLayers className="h-4 w-4" />,
       action: () => navigate(navLinks.sources),
       keywords: "warehouse catalog",
-      priority: true,
-    });
-    out.push({
-      id: "nav:catalog",
-      group: "Navigate",
-      label: "Catalog",
-      icon: <IconDatabase className="h-4 w-4" />,
-      action: () => navigate(navLinks.catalog),
-      keywords: "warehouse catalog tables schemas",
       priority: true,
     });
     out.push({

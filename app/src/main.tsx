@@ -14,7 +14,6 @@ import { Signup } from "./routes/Signup";
 import { Dashboard } from "./routes/Dashboard";
 import { Triage } from "./routes/Triage";
 import { Sources } from "./routes/Sources";
-import { Catalog } from "./routes/Catalog";
 import { MasterTables } from "./routes/MasterTables";
 import { SettingsLayout } from "./components/settings/SettingsLayout";
 import { General } from "./routes/settings/General";
@@ -108,7 +107,6 @@ createRoot(root).render(
                         <Route index element={<Dashboard />} />
                         <Route path="triage" element={<Triage />} />
                         <Route path="sources" element={<Sources />} />
-                        <Route path="catalog" element={<Catalog />} />
                         <Route path="tables" element={<MasterTables />} />
                         <Route path="audit" element={<Audit />} />
                         <Route path="settings" element={<SettingsLayout />}>

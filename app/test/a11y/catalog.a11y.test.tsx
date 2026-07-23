@@ -1,12 +1,10 @@
 /**
- * Accessibility smoke test for the Catalog page and CatalogModal (axe-core via vitest-axe).
- * Mocks match the shape used in app/src/routes/Catalog.test.tsx and
- * app/src/components/catalog/CatalogModal.test.tsx.
+ * Accessibility smoke test for CatalogModal (axe-core via vitest-axe).
+ * Mocks match the shape used in app/src/components/catalog/CatalogModal.test.tsx.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import { axe } from "vitest-axe";
-import { Catalog } from "../../src/routes/Catalog";
 import { CatalogModal } from "../../src/components/catalog/CatalogModal";
 
 // ── mocks (hoisted by vitest) ────────────────────────────────────────────────
@@ -34,15 +32,6 @@ vi.mock("../../src/store", async (orig) => ({
 afterEach(cleanup);
 
 // ── a11y tests ───────────────────────────────────────────────────────────────
-
-describe("a11y: Catalog page", () => {
-  it("has no axe violations (tree loaded, no table selected)", async () => {
-    const { container } = render(<Catalog />);
-    await waitFor(() => screen.getByText("md:demo"));
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-});
 
 describe("a11y: CatalogModal", () => {
   it("has no axe violations when open (catalog loaded)", async () => {
