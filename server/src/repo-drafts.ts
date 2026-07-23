@@ -515,14 +515,16 @@ export async function revertToPublished(
 
 /** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
-/** Records with an empty value in a required field — these block publish so a
- *  table can't ship with holes a steward marked as mandatory. Rollbacks skip
- *  this (they restore a past version verbatim). */
-async function emptyRequiredViolations(
+/** Collect all validation violations across required, unique, and range rules.
+ *  Returns one entry per offending record+field pair. Rollbacks skip this gate
+ *  (they restore a past version verbatim). */
+async function validationViolations(
   dimId: string,
   tenantId: string,
   meta: { dimTable: string; keyCol: string },
-): Promise<Array<{ key: string; label: string; field: string; fieldLabel: string }>> {
+): Promise<
+  Array<{ key: string; label: string; field: string; fieldLabel: string; reason: string }>
+> {
   const fieldRows = await pgAll<{
     field: string;
     label: string;
@@ -533,28 +535,87 @@ async function emptyRequiredViolations(
      WHERE dim_id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );
-  const required = fieldRows.filter((r) => parseFieldConfig(r.type, r.field_config).required);
-  if (required.length === 0) return [];
-
   const DIMT = cq(meta.dimTable);
   const keyCol = qid(meta.keyCol);
-  const violations: Array<{ key: string; label: string; field: string; fieldLabel: string }> = [];
-  for (const f of required) {
+  const out: Array<{
+    key: string;
+    label: string;
+    field: string;
+    fieldLabel: string;
+    reason: string;
+  }> = [];
+
+  for (const f of fieldRows) {
+    const cfg = parseFieldConfig(f.type, f.field_config);
     const col = qid(f.field);
-    const empties = await pgAll<{ key: string; label: string | null }>(
-      `SELECT ${keyCol} AS key, label FROM ${DIMT}
-       WHERE ${col} IS NULL OR CAST(${col} AS VARCHAR) = ''`,
-    );
-    for (const e of empties) {
-      violations.push({
-        key: String(e.key),
-        label: e.label == null ? String(e.key) : String(e.label),
-        field: f.field,
-        fieldLabel: f.label,
-      });
+
+    // Required — empty value
+    if (cfg.required) {
+      const empties = await pgAll<{ key: string; label: string | null }>(
+        `SELECT ${keyCol} AS key, label FROM ${DIMT} WHERE ${col} IS NULL OR CAST(${col} AS VARCHAR) = ''`,
+      );
+      for (const e of empties)
+        out.push({
+          key: String(e.key),
+          label: e.label == null ? String(e.key) : String(e.label),
+          field: f.field,
+          fieldLabel: f.label,
+          reason: "needs a value",
+        });
+    }
+
+    // Unique — case-insensitive duplicate among non-empty values
+    if (cfg.validation?.unique) {
+      const dups = await pgAll<{ key: string; label: string | null }>(
+        `SELECT ${keyCol} AS key, label FROM ${DIMT} t
+         WHERE CAST(${col} AS VARCHAR) <> '' AND ${col} IS NOT NULL
+           AND EXISTS (
+             SELECT 1 FROM ${DIMT} u
+             WHERE u.${meta.keyCol} <> t.${meta.keyCol}
+               AND LOWER(CAST(u.${col} AS VARCHAR)) = LOWER(CAST(t.${col} AS VARCHAR)))`,
+      );
+      for (const d of dups)
+        out.push({
+          key: String(d.key),
+          label: d.label == null ? String(d.key) : String(d.label),
+          field: f.field,
+          fieldLabel: f.label,
+          reason: "duplicate value",
+        });
+    }
+
+    // Range — numeric/text-length bounds (dates compared lexically as ISO)
+    const v = cfg.validation;
+    if (v && (v.min != null || v.max != null)) {
+      const isText = f.type === "text";
+      const expr = isText ? `LENGTH(CAST(${col} AS VARCHAR))` : `CAST(${col} AS DOUBLE PRECISION)`;
+      const cmpCol = isText || f.type !== "date" ? expr : `CAST(${col} AS VARCHAR)`;
+      const clauses: string[] = [];
+      const params: unknown[] = [];
+      if (v.min != null) {
+        clauses.push(`${cmpCol} < $${params.length + 1}`);
+        params.push(f.type === "date" ? String(v.min) : Number(v.min));
+      }
+      if (v.max != null) {
+        clauses.push(`${cmpCol} > $${params.length + 1}`);
+        params.push(f.type === "date" ? String(v.max) : Number(v.max));
+      }
+      const oob = await pgAll<{ key: string; label: string | null }>(
+        `SELECT ${keyCol} AS key, label FROM ${DIMT}
+         WHERE ${col} IS NOT NULL AND CAST(${col} AS VARCHAR) <> '' AND (${clauses.join(" OR ")})`,
+        params,
+      );
+      for (const o of oob)
+        out.push({
+          key: String(o.key),
+          label: o.label == null ? String(o.key) : String(o.label),
+          field: f.field,
+          fieldLabel: f.label,
+          reason: "out of range",
+        });
     }
   }
-  return violations;
+  return out;
 }
 
 export async function commit(
@@ -641,21 +702,23 @@ export async function commit(
   if (!committed && canonicalChanged.length === 0)
     return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
-  // Required-field gate: a publish can't ship records that are missing a value
-  // a steward marked mandatory. Skipped for rollbacks (they restore verbatim).
+  // Validation gate: blocks publish on required, unique, or range violations.
+  // Skipped for rollbacks (they restore verbatim).
+  // Error code: REQUIRED_FIELDS_EMPTY when every violation is "needs a value"
+  // (preserves existing frontend behavior); VALIDATION_FAILED otherwise.
   if (opts?.kind !== "rollback") {
-    const violations = await emptyRequiredViolations(dimId, tenantId, {
+    const violations = await validationViolations(dimId, tenantId, {
       dimTable: meta.dimTable,
       keyCol: meta.keyCol,
     });
     if (violations.length > 0) {
       const records = new Set(violations.map((v) => v.key)).size;
-      throw new AppError(
-        "REQUIRED_FIELDS_EMPTY",
-        `${records} record${records === 1 ? "" : "s"} need a required value before you can publish`,
-        422,
-        { violations },
-      );
+      const allRequired = violations.every((v) => v.reason === "needs a value");
+      const code = allRequired ? "REQUIRED_FIELDS_EMPTY" : "VALIDATION_FAILED";
+      const msg = allRequired
+        ? `${records} record${records === 1 ? "" : "s"} need a required value before you can publish`
+        : `${records} record${records === 1 ? "" : "s"} need a fix before you can publish`;
+      throw new AppError(code, msg, 422, { violations });
     }
   }
 
