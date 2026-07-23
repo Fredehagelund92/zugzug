@@ -1650,6 +1650,7 @@ function RecordsBody({
             currentDimId={activeId}
             onSubmit={async ({ label, config }) => {
               const required = config.required;
+              const validation = config.validation;
               if (config.type === "linked") {
                 await addField(activeId, label, "linked", undefined, {
                   referencedDimId: config.targetDimId,
@@ -1660,6 +1661,7 @@ function RecordsBody({
                 await addField(activeId, label, "number", undefined, {
                   numberFormat: config.numberFormat,
                   required,
+                  validation,
                 });
               } else if (config.type === "select") {
                 await addField(activeId, label, "select", config.options, { required });
@@ -1669,7 +1671,7 @@ function RecordsBody({
                   required,
                 });
               } else {
-                await addField(activeId, label, config.type, undefined, { required });
+                await addField(activeId, label, config.type, undefined, { required, validation });
               }
             }}
           />

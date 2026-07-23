@@ -288,6 +288,7 @@ export class TenantRepo {
       referencedDimId?: string;
       displayFields?: string[];
       required?: boolean;
+      validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
     } = {},
     userId: string,
   ): Promise<{ field: string } | null> {

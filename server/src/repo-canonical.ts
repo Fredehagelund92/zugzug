@@ -1184,6 +1184,7 @@ export async function addField(
     referencedDimId?: string;
     displayFields?: string[];
     required?: boolean;
+    validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   } = {},
   userId: string,
   tenantId: string,
@@ -1228,6 +1229,7 @@ export async function addField(
     cfg.displayFields = opts.displayFields ?? ["label"];
   }
   if (opts.required) cfg.required = true;
+  if (opts.validation && Object.keys(opts.validation).length > 0) cfg.validation = opts.validation;
   const optsJson = Object.keys(cfg).length > 0 ? JSON.stringify(cfg) : null;
   await pgRun(
     `INSERT INTO ${pg("dimension_field")} (dim_id, field, label, type, field_config, created_at, tenant_id)

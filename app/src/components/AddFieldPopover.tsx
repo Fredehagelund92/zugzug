@@ -66,6 +66,11 @@ export function AddFieldPopover({
   const [durationDisplay, setDurationDisplay] = useState<"hm" | "hms">("hm");
   const [linkedTargetDimId, setLinkedTargetDimId] = useState<string>("");
   const [required, setRequired] = useState(false);
+  const [unique, setUnique] = useState(false);
+  const [min, setMin] = useState("");
+  const [max, setMax] = useState("");
+  const uniqueable = ["text", "number", "date", "url", "email"].includes(type);
+  const rangeable = type === "number" || type === "date" || type === "text";
 
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
@@ -206,6 +211,9 @@ export function AddFieldPopover({
     setDurationDisplay("hm");
     setLinkedTargetDimId("");
     setRequired(false);
+    setUnique(false);
+    setMin("");
+    setMax("");
     setError(null);
     nameInputRef.current?.focus();
   };
@@ -256,6 +264,14 @@ export function AddFieldPopover({
       config = { type } as ColumnConfig;
     }
     config.required = required;
+
+    const num = (s: string) =>
+      s.trim() === "" ? undefined : type === "date" ? s.trim() : Number(s);
+    const validationObj: NonNullable<typeof config.validation> = {};
+    if (unique) validationObj.unique = true;
+    if (num(min) !== undefined) validationObj.min = num(min)!;
+    if (num(max) !== undefined) validationObj.max = num(max)!;
+    if (Object.keys(validationObj).length > 0) config.validation = validationObj;
 
     const input: AddFieldInput = { label: trimmed, config };
 
@@ -619,6 +635,55 @@ export function AddFieldPopover({
             </span>
           </span>
         </label>
+
+        {/* Unique toggle */}
+        {uniqueable && (
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="checkbox"
+              checked={unique}
+              onChange={(e) => setUnique(e.target.checked)}
+              className="mt-0.5 rounded-sm"
+              style={{ accentColor: "var(--accent)" }}
+            />
+            <span className="leading-tight">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-2">
+                Unique
+              </span>
+              <span className="mt-0.5 block font-body text-[11px] text-ink-3">
+                No two records share a value.
+              </span>
+            </span>
+          </label>
+        )}
+
+        {/* Range inputs */}
+        {rangeable && (
+          <div className="flex gap-2">
+            <label className="flex flex-1 flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                {type === "text" ? "Min length" : "Min"}
+              </span>
+              <input
+                value={min}
+                onChange={(e) => setMin(e.target.value)}
+                placeholder="—"
+                className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
+              />
+            </label>
+            <label className="flex flex-1 flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
+                {type === "text" ? "Max length" : "Max"}
+              </span>
+              <input
+                value={max}
+                onChange={(e) => setMax(e.target.value)}
+                placeholder="—"
+                className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
+              />
+            </label>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex items-center gap-2 pt-1">

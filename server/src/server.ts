@@ -1333,6 +1333,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             referencedDimId,
             displayFields,
             required,
+            validation,
           } = (await req.json()) as {
             label: string;
             type?: string;
@@ -1342,6 +1343,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             referencedDimId?: string;
             displayFields?: string[];
             required?: boolean;
+            validation?: {
+              unique?: boolean;
+              min?: number | string | null;
+              max?: number | string | null;
+            };
           };
           return json(
             await reqRepo.addField(
@@ -1349,7 +1355,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               label,
               type,
               options as OptionDef[] | undefined,
-              { numberFormat, ratingMax, referencedDimId, displayFields, required },
+              { numberFormat, ratingMax, referencedDimId, displayFields, required, validation },
               me,
             ),
           );

@@ -1081,6 +1081,7 @@ export async function addField(
     referencedDimId?: string;
     displayFields?: string[];
     required?: boolean;
+    validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   },
 ): Promise<void> {
   await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
