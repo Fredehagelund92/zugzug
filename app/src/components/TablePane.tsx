@@ -250,6 +250,7 @@ function RecordsBody({
   const undo = useUndoStack();
 
   const [search, setSearch] = useState("");
+  const [searchScope, setSearchScope] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const [sel, setSel] = useState<string[]>([]);
@@ -496,13 +497,14 @@ function RecordsBody({
     }));
     const q = search.trim().toLowerCase();
     if (!q) return all;
+    const scopeFields = searchScope ? [searchScope] : visibleFields;
     return all.filter((row) =>
-      visibleFields.some((f) => {
+      scopeFields.some((f) => {
         const v = (row as Record<string, unknown>)[f];
         return v != null && String(v).toLowerCase().includes(q);
       }),
     );
-  }, [list, changedOnly, changedKeySet, search, visibleFields]);
+  }, [list, changedOnly, changedKeySet, search, visibleFields, searchScope]);
 
   const flash = (m: string, tone: "info" | "danger" = "info") => {
     setNotice({ msg: m, tone });
@@ -1013,6 +1015,17 @@ function RecordsBody({
             placeholder="Search records…"
             className="w-full min-w-0 bg-transparent font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3"
           />
+          <ToolbarMenu
+            label={`in ${searchScope ? (columns.find((c) => c.field === searchScope)?.label ?? searchScope) : "all columns"}`}
+            className="shrink-0 border-l border-line pl-2 font-mono text-[12px] text-ink-2"
+          >
+            <MenuItem title="All columns" onClick={() => setSearchScope(null)} />
+            {columns
+              .filter((c) => !c.hidden)
+              .map((c) => (
+                <MenuItem key={c.field} title={c.label} onClick={() => setSearchScope(c.field)} />
+              ))}
+          </ToolbarMenu>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
@@ -1539,16 +1552,23 @@ function RecordsBody({
             <div className="px-5 py-12 text-center font-mono text-[12px] text-ink-3">
               {list.length > 0 ? (
                 <>
-                  No records match
-                  {search.trim() ? ` “${search.trim()}”` : " the current filter"}.
-                  {search.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => setSearch("")}
-                      className="ml-2 text-accent hover:underline"
-                    >
-                      Clear search
-                    </button>
+                  {search.trim() ? (
+                    <>
+                      {`No records match "${search.trim()}"`}
+                      {searchScope
+                        ? ` in ${columns.find((c) => c.field === searchScope)?.label ?? searchScope}`
+                        : null}
+                      {`.`}
+                      <button
+                        type="button"
+                        onClick={() => setSearch(``)}
+                        className="ml-2 text-accent hover:underline"
+                      >
+                        Clear search
+                      </button>
+                    </>
+                  ) : (
+                    `No records match the current filter.`
                   )}
                 </>
               ) : (
