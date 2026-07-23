@@ -60,7 +60,7 @@ import { ConflictBanner, type FieldDiff } from "./ConflictBanner";
 import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
-import { pruneValidationForType } from "./datagrid/validation";
+import { pruneValidationForType, valueShapeError } from "./datagrid/validation";
 import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
@@ -506,6 +506,19 @@ function RecordsBody({
     );
   }, [list, changedOnly, changedKeySet, search, visibleFields, searchScope]);
 
+  const validate = useCallback(
+    (field: string, value: unknown, rowKey: string): string | null => {
+      const col = columns.find((c) => c.field === field);
+      if (!col) return null;
+      const others = rowsForGrid.map((r) => ({
+        key: r.key,
+        value: (r as Record<string, unknown>)[field],
+      }));
+      return valueShapeError(col.config, value, rowKey, others);
+    },
+    [columns, rowsForGrid],
+  );
+
   const flash = (m: string, tone: "info" | "danger" = "info") => {
     setNotice({ msg: m, tone });
     setTimeout(() => setNotice(null), 3000);
@@ -556,13 +569,46 @@ function RecordsBody({
       setPubState(s);
       flash(`Published v${s.version}`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "unknown error";
-      flash(
-        err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED"
-          ? "These drafts need a second publisher — another editor has to press Publish (workspace setting: Four eyes on publish)."
-          : `Publish failed — ${msg}`,
-        "danger",
-      );
+      if (err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED") {
+        flash(
+          "These drafts need a second publisher — another editor has to press Publish (workspace setting: Four eyes on publish).",
+          "danger",
+        );
+      } else if (
+        err instanceof ApiCodeError &&
+        (err.code === "VALIDATION_FAILED" || err.code === "REQUIRED_FIELDS_EMPTY")
+      ) {
+        const violations =
+          (err.details?.violations as
+            | Array<{
+                key: string;
+                label: string;
+                field: string;
+                fieldLabel: string;
+                reason: string;
+              }>
+            | undefined) ?? [];
+        const recordCount = new Set(violations.map((v) => v.key)).size;
+        const count = recordCount > 0 ? recordCount : 1;
+        flash(
+          `${count} record${count === 1 ? "" : "s"} need a fix before you can publish.`,
+          "danger",
+        );
+        // Scroll to the first violating record so the user can see what needs fixing.
+        const firstKey = violations[0]?.key;
+        if (firstKey) {
+          requestAnimationFrame(() => {
+            const el = document.querySelector<HTMLElement>(`[data-row="${CSS.escape(firstKey)}"]`);
+            if (!el) return;
+            el.scrollIntoView({ block: "center", behavior: "smooth" });
+            el.classList.add("zz-row-flash");
+            window.setTimeout(() => el.classList.remove("zz-row-flash"), 1700);
+          });
+        }
+      } else {
+        const msg = err instanceof Error ? err.message : "unknown error";
+        flash(`Publish failed — ${msg}`, "danger");
+      }
     } finally {
       setPublishing(false);
     }
@@ -1442,6 +1488,8 @@ function RecordsBody({
           showRowNumbers
           selection={{ selected: sel, onChange: setSel }}
           onCommit={canEdit ? commitCell : undefined}
+          validate={canEdit ? validate : undefined}
+          onInvalidCommit={(_rk, _f, msg) => flash(msg, "danger")}
           onAddColumnOption={
             canEdit
               ? (field, label, color) => addColumnOption(activeId, field, label, color ?? null)
