@@ -12,6 +12,7 @@ import {
   pgGet,
   pgRun,
   pg,
+  parseJsonbMeta,
 } from "./repo-shared.ts";
 import { presence } from "./realtime/presence-room.ts";
 
@@ -136,7 +137,7 @@ export async function listAudit(
     action: r.action,
     detail: r.detail,
     at: r.at,
-    metadata: r.metadata,
+    metadata: parseJsonbMeta(r.metadata),
   }));
 }
 

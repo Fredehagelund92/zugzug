@@ -1,6 +1,6 @@
 /* repo-activity.ts — derives per-row "last edited" entries from audit_log. */
 
-import { pgAll, pg, type AuditEntry } from "./repo-shared.ts";
+import { pgAll, pg, parseJsonbMeta, type AuditEntry } from "./repo-shared.ts";
 
 export type AuditOp = "rename" | "create" | "archive" | "field-write" | "merge" | "commit";
 
@@ -128,22 +128,8 @@ export async function listRecordHistory(
       action: r.action,
       detail: r.detail,
       at: r.at,
-      metadata: parseMeta(r.metadata),
+      metadata: parseJsonbMeta(r.metadata),
     })),
     nextCursor,
   };
-}
-
-// The pg driver hands jsonb back as a raw string here; parse it so consumers get
-// a real object (the drawer reads metadata.before/after to render diffs).
-function parseMeta(m: unknown): Record<string, unknown> | null {
-  if (m == null) return null;
-  if (typeof m === "string") {
-    try {
-      return JSON.parse(m) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }
-  return m as Record<string, unknown>;
 }

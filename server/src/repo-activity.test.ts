@@ -17,6 +17,7 @@ import {
   deleteDimension,
 } from "./repo-canonical.ts";
 import { listRecordHistory } from "./repo-activity.ts";
+import { listAudit } from "./repo-meta.ts";
 
 const T = "test_record_history";
 const U = "u_test_history";
@@ -126,6 +127,20 @@ describe("listRecordHistory", () => {
     });
     expect(page2.entries).toHaveLength(1);
     expect(page2.entries[0]!.id).not.toBe(page1.entries[0]!.id);
+  });
+
+  it("returns audit metadata as a parsed object, not a raw jsonb string", async () => {
+    const dimId = await addDimension("MetaDim", [], { keyKind: "slug" }, U, T);
+    await addCanonicalOne(dimId, "Norway", "norway", U, T);
+    await addField(dimId, "Region", "text", undefined, {}, U, T);
+    await setFieldValue(dimId, "norway", "region", "Europe", U, T);
+
+    const feed = await listAudit(50, T);
+    const edit = feed.find((e) => e.action === "Edited record" && e.detail.includes("norway"));
+    expect(edit).toBeDefined();
+    // The activity feed expands metadata as key/value — it must be an object.
+    expect(typeof edit!.metadata).toBe("object");
+    expect(edit!.metadata).toMatchObject({ field: "region", after: "Europe" });
   });
 
   it("does not leak history across tenants", async () => {
