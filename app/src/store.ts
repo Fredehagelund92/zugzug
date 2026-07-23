@@ -1191,7 +1191,9 @@ export async function updateFieldDisplayFields(
 
 /** Persist required / validation rules for a field. The server merges the
  *  incoming field_config patch with the existing stored config, so only the
- *  keys you send are overwritten (options / rules / numberFormat survive). */
+ *  keys you send are overwritten (options / rules / numberFormat survive).
+ *  Applies optimistically so badges / enforcement reflect the new value
+ *  immediately without waiting for the server round-trip. */
 export async function updateFieldValidation(
   dimId: string,
   field: string,
@@ -1200,6 +1202,32 @@ export async function updateFieldValidation(
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   },
 ): Promise<void> {
+  // Optimistic local write — mutate the cached dim so subscribers re-render
+  // immediately with the new required / validation values.
+  dims = dims.map((d) => {
+    if (d.id !== dimId) return d;
+    return {
+      ...d,
+      fields: (d.fields ?? []).map((f) => {
+        if (f.field !== field) return f;
+        const patched = { ...f };
+        if (next.required !== undefined) patched.required = next.required;
+        if ("validation" in next) {
+          // Filter out undefined values so cleared fields don't linger
+          const v = next.validation;
+          if (v == null || Object.values(v).every((x) => x === undefined)) {
+            delete patched.validation;
+          } else {
+            patched.validation = Object.fromEntries(
+              Object.entries(v).filter(([, x]) => x !== undefined),
+            ) as typeof patched.validation;
+          }
+        }
+        return patched;
+      }),
+    };
+  });
+  emit();
   await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
     body: JSON.stringify({ field_config: JSON.stringify(next) }),

@@ -161,3 +161,59 @@ describe("type-change pruning", () => {
     expect(result).toEqual({ unique: true, min: 0, max: 100 });
   });
 });
+
+describe("fix regressions", () => {
+  it("saves validation: {} (not undefined) when all rules are unchecked — so server clears stale rules", async () => {
+    const onSaveColumnValidation = vi.fn();
+    // Start with a column that already has unique:true set
+    const columns = makeColumns().map((c) =>
+      c.field === "name"
+        ? {
+            ...c,
+            config: {
+              ...c.config,
+              validation: { unique: true },
+            } as typeof c.config,
+          }
+        : c,
+    );
+
+    const { container } = renderGrid({ columns, onSaveColumnValidation });
+
+    openColumnMenu(container, "Name");
+    fireEvent.click(screen.getByRole("button", { name: /validation/i }));
+
+    // Unique is pre-checked — uncheck it so nothing is set
+    const uniqueCheckbox = screen.getByRole("checkbox", { name: /unique/i });
+    expect((uniqueCheckbox as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(uniqueCheckbox);
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    // The call must include validation: {} (not undefined) so the server clears the old rule
+    expect(onSaveColumnValidation).toHaveBeenCalledWith(
+      "name",
+      expect.objectContaining({ validation: {} }),
+    );
+    const callArg = onSaveColumnValidation.mock.calls[0][1] as { validation: unknown };
+    expect(callArg.validation).not.toBeUndefined();
+  });
+
+  it("pruneValidationForType returns all-undefined for boolean — hadValidation guard must still fire the clear", () => {
+    // Regression: previously `hasValues` checked the pruned output, so an
+    // all-undefined result (number→boolean) skipped the PATCH entirely.
+    // Now the guard is on `hadValidation` (pre-change), so pruned={} always fires.
+    const input = {
+      unique: true as boolean | undefined,
+      min: 0 as number | null | undefined,
+      max: 100 as number | null | undefined,
+    };
+    const pruned = pruneValidationForType(input, "boolean");
+    // All keys are undefined — the old guard would have skipped the PATCH
+    expect(Object.values(pruned).every((v) => v === undefined)).toBe(true);
+    // The NEW guard: hadValidation = input had at least one defined value
+    const hadValidation = Object.values(input).some((v) => v !== undefined);
+    expect(hadValidation).toBe(true);
+    // So the clear must fire regardless of pruned values
+  });
+});

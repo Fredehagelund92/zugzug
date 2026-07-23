@@ -1,4 +1,3 @@
-import { cx } from "../../lib/cx";
 import type { CellType } from "./types";
 
 export interface ValidationFieldsProps {
@@ -85,9 +84,7 @@ export function ValidationFields({
               onChange={(e) => onMinChange(e.target.value)}
               placeholder="—"
               aria-label={isText ? "Min length" : "Min"}
-              className={cx(
-                "w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent",
-              )}
+              className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
             />
           </label>
           <label className="flex flex-1 flex-col gap-1">
@@ -99,9 +96,7 @@ export function ValidationFields({
               onChange={(e) => onMaxChange(e.target.value)}
               placeholder="—"
               aria-label={isText ? "Max length" : "Max"}
-              className={cx(
-                "w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent",
-              )}
+              className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
             />
           </label>
         </div>

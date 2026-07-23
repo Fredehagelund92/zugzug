@@ -1455,21 +1455,21 @@ function RecordsBody({
                     newConfig.type === "number" ? newConfig.numberFormat : undefined,
                     newConfig.type === "rating" ? newConfig.ratingMax : undefined,
                   );
-                  // Prune now-inapplicable validation when type changes
+                  // Prune now-inapplicable validation when type changes.
+                  // Guard on whether the column HAD validation before the change;
+                  // if it did, always persist the pruned result (even when empty)
+                  // so stale rules are cleared on the server.
                   if (result.ok) {
                     const existingField = fields.find((f) => f.field === field);
-                    if (
-                      existingField?.validation &&
-                      Object.keys(existingField.validation).length > 0
-                    ) {
+                    const hadValidation =
+                      existingField?.validation != null &&
+                      Object.values(existingField.validation).some((v) => v !== undefined);
+                    if (hadValidation) {
                       const pruned = pruneValidationForType(
-                        existingField.validation,
+                        existingField!.validation!,
                         newConfig.type,
                       );
-                      const hasValues = Object.values(pruned).some((v) => v !== undefined);
-                      if (hasValues) {
-                        void updateFieldValidation(activeId, field, { validation: pruned });
-                      }
+                      void updateFieldValidation(activeId, field, { validation: pruned });
                     }
                   }
                   return result;

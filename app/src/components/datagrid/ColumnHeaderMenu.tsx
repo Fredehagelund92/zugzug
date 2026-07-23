@@ -875,7 +875,7 @@ export function ColumnHeaderMenu<Row>({
                 if (maxV !== undefined) validationObj.max = maxV;
                 onSaveValidation?.({
                   required: valRequired,
-                  validation: Object.keys(validationObj).length > 0 ? validationObj : undefined,
+                  validation: validationObj,
                 });
                 onClose();
               }}
