@@ -29,16 +29,20 @@ export function useCatalogTree() {
           count: dbs.length,
           depth: 0,
           childrenLoaded: true,
-          children: dbs.map((d) => ({
-            id: `conn/${d.id}`,
-            kind: "database" as const,
-            name: d.databaseName,
-            count: typeof d.schemaCount === "number" ? d.schemaCount : null,
-            depth: 1,
-            childrenLoaded: false,
-            children: [],
-            unreachable: !!d.lastProbeError,
-          })),
+          children: [...dbs]
+            .sort((a, b) =>
+              a.databaseName.localeCompare(b.databaseName, undefined, { sensitivity: "base" }),
+            )
+            .map((d) => ({
+              id: `conn/${d.id}`,
+              kind: "database" as const,
+              name: d.databaseName,
+              count: typeof d.schemaCount === "number" ? d.schemaCount : null,
+              depth: 1,
+              childrenLoaded: false,
+              children: [],
+              unreachable: !!d.lastProbeError,
+            })),
         };
         setRoots([conn]);
         setOpen(new Set(["conn"]));
@@ -71,11 +75,14 @@ export function useCatalogTree() {
     try {
       if (node.kind === "database") {
         const schemas = await listSchemas(dbIdOf(node.id));
+        const sortedSchemas = [...schemas].sort((a, b) =>
+          a.schema.localeCompare(b.schema, undefined, { sensitivity: "base" }),
+        );
         patch(node.id, (n) => ({
           ...n,
           childrenLoaded: true,
           count: schemas.length,
-          children: schemas.map((s) => ({
+          children: sortedSchemas.map((s) => ({
             id: `${n.id}/${s.schema}`,
             kind: "schema" as const,
             name: s.schema,
@@ -89,10 +96,13 @@ export function useCatalogTree() {
       } else if (node.kind === "schema") {
         const schema = node.name;
         const tables = await listTablesInSchema(dbIdOf(node.id), schema);
+        const sortedTables = [...tables].sort((a, b) =>
+          a.table.localeCompare(b.table, undefined, { sensitivity: "base" }),
+        );
         patch(node.id, (n) => ({
           ...n,
           childrenLoaded: true,
-          children: tables.map((tbl) => ({
+          children: sortedTables.map((tbl) => ({
             // tbl.table is "schema.tablename" (e.g. "authco.users")
             // node id becomes: conn/<dbId>/<schema>/authco.users
             id: `${n.id}/${tbl.table}`,

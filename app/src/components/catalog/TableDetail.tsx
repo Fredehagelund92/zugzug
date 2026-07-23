@@ -157,7 +157,8 @@ export function TableDetail({
                     {values[c.name].slice(0, 4).map((v) => (
                       <span
                         key={v}
-                        className="rounded-sm bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-ink-2"
+                        title={v}
+                        className="max-w-[220px] truncate rounded-sm bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-ink-2"
                       >
                         {v}
                       </span>
