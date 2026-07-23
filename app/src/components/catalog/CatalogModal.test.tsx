@@ -2,6 +2,12 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import { CatalogModal } from "./CatalogModal";
 
+vi.mock("../../lib/use-tenant-navigate", () => ({
+  useNavLinks: () => ({
+    settings: "/app/test/settings",
+  }),
+}));
+
 vi.mock("../../api", () => ({
   fetchWarehouseInfo: () => Promise.resolve({ adapter: "duckdb", databaseTerm: "database" }),
   fetchWarehouseDatabases: () =>

@@ -9,6 +9,12 @@ import { CatalogModal } from "../../src/components/catalog/CatalogModal";
 
 // ── mocks (hoisted by vitest) ────────────────────────────────────────────────
 
+vi.mock("../../src/lib/use-tenant-navigate", () => ({
+  useNavLinks: () => ({
+    settings: "/app/test/settings",
+  }),
+}));
+
 vi.mock("../../src/api", () => ({
   fetchWarehouseInfo: () => Promise.resolve({ adapter: "duckdb", databaseTerm: "database" }),
   fetchWarehouseDatabases: () =>

@@ -11,14 +11,16 @@ function cards(node: TreeNode): Array<{ big: number; cap: string }> {
   if (node.kind === "schema") return [{ big: node.count ?? node.children.length, cap: "tables" }];
   if (node.kind === "database")
     return [
-      { big: node.children.length, cap: "schemas" },
-      { big: node.children.reduce((a, s) => a + (s.count ?? 0), 0), cap: "tables" },
+      { big: node.count ?? node.children.length, cap: "schemas" },
+      ...(node.children.length > 0
+        ? [{ big: node.children.reduce((a, s) => a + (s.count ?? 0), 0), cap: "tables" }]
+        : []),
     ];
   // connection
   const dbs = node.children;
   return [
     { big: dbs.length, cap: "databases" },
-    { big: dbs.reduce((a, d) => a + d.children.length, 0), cap: "schemas" },
+    { big: dbs.reduce((a, d) => a + (d.count ?? 0), 0), cap: "schemas" },
   ];
 }
 

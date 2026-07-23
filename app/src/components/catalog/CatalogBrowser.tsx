@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { IconSearch } from "../Icons";
 import { CatalogTree } from "./CatalogTree";
 import { TableDetail } from "./TableDetail";
@@ -7,6 +8,7 @@ import { useCatalogTree } from "./useCatalogTree";
 import { nodeById } from "./catalog-tree";
 import { searchCatalog, useDimensions } from "../../store";
 import { CatalogSearchResults, type SearchResultRow } from "./CatalogSearchResults";
+import { useNavLinks } from "../../lib/use-tenant-navigate";
 
 const TREE_WIDTH_KEY = "zz.catalog.tree-width";
 const TREE_WIDTH_MIN = 240;
@@ -17,6 +19,7 @@ const TREE_WIDTH_STEP = 16;
 export function CatalogBrowser(): JSX.Element {
   const { roots, open, loadingIds, toggle } = useCatalogTree();
   const dims = useDimensions();
+  const nav = useNavLinks();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResultRow[] | null>(null);
@@ -221,6 +224,19 @@ export function CatalogBrowser(): JSX.Element {
           />
         ) : selected ? (
           <NodeOverview node={selected} />
+        ) : roots[0] && roots[0].children.length === 0 && !isSearching ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2.5 px-10 text-center text-ink-3">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">
+              No warehouse databases
+            </div>
+            <div>
+              No warehouse databases have been registered yet. An admin can add one in Settings →
+              Warehouse.
+            </div>
+            <Link to={`${nav.settings}/warehouse`} className="text-[12px] text-accent">
+              Go to warehouse settings
+            </Link>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2.5 px-10 text-center text-ink-3">
             <div className="font-display text-[17px] text-ink-2">

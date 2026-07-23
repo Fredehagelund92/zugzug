@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { CatalogBrowser } from "./CatalogBrowser";
 import { searchCatalog } from "../../store";
+import { fetchWarehouseDatabases } from "../../api";
+
+vi.mock("../../lib/use-tenant-navigate", () => ({
+  useNavLinks: () => ({
+    settings: "/app/test/settings",
+  }),
+}));
 
 vi.mock("../../api", () => ({
   fetchWarehouseInfo: () => Promise.resolve({ adapter: "duckdb", databaseTerm: "database" }),
-  fetchWarehouseDatabases: () =>
+  fetchWarehouseDatabases: vi.fn(() =>
     Promise.resolve([
       {
         id: "db-1",
@@ -16,6 +24,7 @@ vi.mock("../../api", () => ({
         schemaCount: 1,
       },
     ]),
+  ),
 }));
 
 vi.mock("../../store", async (orig) => ({
@@ -95,6 +104,22 @@ describe("CatalogBrowser", () => {
       const { container } = render(<CatalogBrowser />);
       const grid = container.firstElementChild as HTMLElement;
       expect(grid.style.gridTemplateColumns).toMatch(/^400px/);
+    });
+  });
+
+  describe("empty databases state", () => {
+    beforeEach(() => {
+      vi.mocked(fetchWarehouseDatabases).mockResolvedValueOnce([]);
+    });
+
+    it("shows the no-databases empty state when the connection has no databases", async () => {
+      render(
+        <MemoryRouter>
+          <CatalogBrowser />
+        </MemoryRouter>,
+      );
+      await waitFor(() => screen.getAllByText(/No warehouse databases/i));
+      expect(screen.getByText(/Go to warehouse settings/i)).toBeTruthy();
     });
   });
 });
