@@ -11,7 +11,7 @@ import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { pgAll } from "./repo-shared.ts";
 import { addDimension, addCanonicalOne, addField, deleteDimension } from "./repo-canonical.ts";
-import { commit } from "./repo-drafts.ts";
+import { commit, saveDraft } from "./repo-drafts.ts";
 
 async function dropDims(tenants: string[]): Promise<void> {
   for (const tenant of tenants) {
@@ -182,7 +182,10 @@ describe("publish gate — validation", () => {
       "dk",
     ]);
 
+    // Add a draft so the publish has at least one mapping to fold
+    await saveDraft(dimId, "Danmark", "mapped", "Denmark", "dk", U, T);
+
     const res = await commit(dimId, U, T);
-    expect(res.committed).toBeGreaterThanOrEqual(0);
+    expect(res.committed).toBeGreaterThan(0);
   });
 });

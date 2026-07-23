@@ -571,7 +571,7 @@ async function validationViolations(
          WHERE CAST(${col} AS VARCHAR) <> '' AND ${col} IS NOT NULL
            AND EXISTS (
              SELECT 1 FROM ${DIMT} u
-             WHERE u.${meta.keyCol} <> t.${meta.keyCol}
+             WHERE u.${keyCol} <> t.${keyCol}
                AND LOWER(CAST(u.${col} AS VARCHAR)) = LOWER(CAST(t.${col} AS VARCHAR)))`,
       );
       for (const d of dups)
@@ -587,9 +587,14 @@ async function validationViolations(
     // Range — numeric/text-length bounds (dates compared lexically as ISO)
     const v = cfg.validation;
     if (v && (v.min != null || v.max != null)) {
-      const isText = f.type === "text";
-      const expr = isText ? `LENGTH(CAST(${col} AS VARCHAR))` : `CAST(${col} AS DOUBLE PRECISION)`;
-      const cmpCol = isText || f.type !== "date" ? expr : `CAST(${col} AS VARCHAR)`;
+      let cmpCol: string;
+      if (f.type === "text") {
+        cmpCol = `LENGTH(CAST(${col} AS VARCHAR))`;
+      } else if (f.type === "date") {
+        cmpCol = `CAST(${col} AS VARCHAR)`;
+      } else {
+        cmpCol = `CAST(${col} AS DOUBLE PRECISION)`;
+      }
       const clauses: string[] = [];
       const params: unknown[] = [];
       if (v.min != null) {
