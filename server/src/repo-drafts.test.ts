@@ -7,9 +7,29 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { describe, it, test, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension, addCanonicalOne, addField, setFieldValue } from "./repo-canonical.ts";
+import { pgAll } from "./repo-shared.ts";
+import {
+  addDimension,
+  addCanonicalOne,
+  addField,
+  setFieldValue,
+  deleteDimension,
+} from "./repo-canonical.ts";
 import { saveDraft, commit, listDrafts, rejectDrafts, listAllDrafts } from "./repo-drafts.ts";
 import { getPreferences, setPreferences } from "./repo-meta.ts";
+
+// Drop each tenant's dimensions through deleteDimension so the physical
+// dim_/map_ Postgres tables go too — a plain `DELETE FROM dimension` leaves them
+// orphaned, and the next run's CREATE TABLE IF NOT EXISTS reuses stale data.
+async function dropDims(tenants: string[]): Promise<void> {
+  for (const tenant of tenants) {
+    const dims = await pgAll<{ id: string }>(
+      `SELECT id FROM "zugzug_app"."dimension" WHERE tenant_id = $1`,
+      [tenant],
+    ).catch(() => [] as { id: string }[]);
+    for (const d of dims) await deleteDimension(d.id, "test-teardown", tenant).catch(() => {});
+  }
+}
 
 const T = "test_commit_out";
 const U = "u_test_commit";
@@ -36,13 +56,13 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await dropDims([T]);
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [T]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U2]).catch(() => {});
@@ -136,11 +156,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await dropDims([T1, T2, T_EMPTY]);
   for (const tenant of [T1, T2, T_EMPTY]) {
     await pgRun(`DELETE FROM "zugzug_app"."draft" WHERE tenant_id = $1`, [tenant]).catch(() => {});
-    await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [tenant]).catch(
-      () => {},
-    );
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [tenant]).catch(() => {});
   }
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U_ALL]).catch(() => {});
