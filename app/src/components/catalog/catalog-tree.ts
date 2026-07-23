@@ -11,6 +11,7 @@ export interface TreeNode {
   childrenLoaded: boolean;
   children: TreeNode[];
   columns?: string[];
+  unreachable?: boolean;
 }
 
 const TINTS = [

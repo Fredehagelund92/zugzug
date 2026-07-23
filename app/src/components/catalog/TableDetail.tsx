@@ -129,7 +129,7 @@ export function TableDetail({
               <span
                 className={cx(
                   "absolute top-0.5 h-3.5 w-3.5 rounded-full transition-transform",
-                  onlyUnmapped ? "translate-x-[16px] bg-white" : "translate-x-0.5 bg-ink-2",
+                  onlyUnmapped ? "translate-x-[16px] bg-surface" : "translate-x-0.5 bg-ink-2",
                 )}
               />
             </span>

@@ -37,6 +37,7 @@ export function useCatalogTree() {
             depth: 1,
             childrenLoaded: false,
             children: [],
+            unreachable: !!d.lastProbeError,
           })),
         };
         setRoots([conn]);
@@ -121,7 +122,9 @@ export function useCatalogTree() {
     });
     if (!isOpen) {
       const node = findNode(rootsRef.current, id);
-      if (node && !node.childrenLoaded && !loadingIds.has(id)) void loadChildren(node);
+      if (node && !node.childrenLoaded && !loadingIds.has(id) && !node.unreachable) {
+        loadChildren(node).catch((err) => console.warn("Failed to load children:", err));
+      }
     }
   };
 

@@ -23,6 +23,20 @@ const node = (
 
 const roots = [node("conn", "connection", "MotherDuck", [node("conn/db", "database", "md:demo")])];
 
+const unreachableDb: TreeNode = {
+  id: "conn/db-dead",
+  kind: "database",
+  name: "dead:db",
+  count: null,
+  depth: 1,
+  childrenLoaded: false,
+  children: [],
+  unreachable: true,
+};
+const rootsWithUnreachable = [
+  node("conn", "connection", "MotherDuck", [node("conn/db", "database", "md:demo"), unreachableDb]),
+];
+
 describe("CatalogTree", () => {
   it("renders visible nodes and fires onSelect", () => {
     const onSelect = vi.fn();
@@ -52,5 +66,33 @@ describe("CatalogTree", () => {
       />,
     );
     expect(screen.queryByText("md:demo")).toBeNull();
+  });
+
+  it("shows offline indicator for unreachable database nodes", () => {
+    render(
+      <CatalogTree
+        roots={rootsWithUnreachable}
+        open={new Set(["conn"])}
+        loadingIds={new Set()}
+        selectedId={null}
+        onToggle={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("offline-indicator")).toBeTruthy();
+  });
+
+  it("does not show offline indicator for reachable nodes", () => {
+    render(
+      <CatalogTree
+        roots={roots}
+        open={new Set(["conn"])}
+        loadingIds={new Set()}
+        selectedId={null}
+        onToggle={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId("offline-indicator")).toBeNull();
   });
 });

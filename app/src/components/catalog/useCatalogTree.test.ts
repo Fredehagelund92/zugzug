@@ -12,6 +12,12 @@ vi.mock("../../api", () => ({
         label: null,
         lastProbeError: null,
       },
+      {
+        id: "db-dead",
+        databaseName: "dead:db",
+        label: null,
+        lastProbeError: "connection refused",
+      },
     ]),
 }));
 vi.mock("../../store", () => ({
@@ -37,5 +43,14 @@ describe("useCatalogTree", () => {
     await waitFor(() =>
       expect(result.current.roots[0].children[0].children[0].name).toBe("authco"),
     );
+  });
+
+  it("marks database node as unreachable when lastProbeError is set", async () => {
+    const { result } = renderHook(() => useCatalogTree());
+    await waitFor(() => expect(result.current.roots[0].children.length).toBe(2));
+    const reachable = result.current.roots[0].children.find((c) => c.name === "md:demo");
+    const unreachable = result.current.roots[0].children.find((c) => c.name === "dead:db");
+    expect(reachable?.unreachable).toBeFalsy();
+    expect(unreachable?.unreachable).toBe(true);
   });
 });

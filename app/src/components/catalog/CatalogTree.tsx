@@ -107,6 +107,14 @@ function TreeRow({
       />
       <NodeGlyph node={node} />
       <span className="flex-1 truncate font-mono text-[12px] tracking-tight">{node.name}</span>
+      {node.unreachable && (
+        <span
+          data-testid="offline-indicator"
+          className="shrink-0 rounded-pill bg-danger-soft px-1.5 font-mono text-[10px] text-danger"
+        >
+          offline
+        </span>
+      )}
       {loading ? (
         <span className="font-mono text-[10px] text-ink-3">…</span>
       ) : (
@@ -114,7 +122,7 @@ function TreeRow({
           <span
             className={cx(
               "shrink-0 rounded-pill px-1.5 font-mono text-[10px]",
-              selected ? "bg-white/10 text-ink-2" : "bg-surface-2 text-ink-3",
+              selected ? "bg-surface-3 text-ink-2" : "bg-surface-2 text-ink-3",
             )}
           >
             {node.count >= 120 ? "120+" : node.count}
