@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
 import { RecordHistoryTimeline } from "./RecordHistoryDrawer";
 import type { AuditEntry } from "../store";
 
@@ -60,8 +60,8 @@ describe("RecordHistoryTimeline", () => {
       />,
     );
     // The focused field's diff card carries the accent highlight; the other doesn't.
-    const region = getByText("Region").closest("div")!;
-    const population = getByText("Population").closest("div")!;
+    const region = getByText("Region").closest('[class*="border-l-2"]')!;
+    const population = getByText("Population").closest('[class*="border-l-2"]')!;
     expect(region.className).toContain("bg-accent-soft");
     expect(population.className).not.toContain("bg-accent-soft");
   });
@@ -98,5 +98,50 @@ describe("RecordHistoryTimeline", () => {
     );
     expect(getByText("Today")).toBeTruthy();
     expect(getByText("1 change")).toBeTruthy();
+  });
+
+  it("offers Restore on past values but not the current one", () => {
+    const onRestore = vi.fn();
+    // Newest first: region is currently "Europe"; "Americas" is a past value.
+    const { queryByLabelText } = render(
+      <RecordHistoryTimeline
+        onRestore={onRestore}
+        entries={[
+          entry({
+            id: "1",
+            metadata: { field: "region", label: "Region", before: "Americas", after: "Europe" },
+          }),
+          entry({
+            id: "2",
+            metadata: { field: "region", label: "Region", before: null, after: "Americas" },
+          }),
+        ]}
+      />,
+    );
+    // The current value (Europe) has no Restore — restoring it is a no-op.
+    expect(queryByLabelText('Restore Region to "Europe"')).toBeNull();
+    // The past value (Americas) can be restored.
+    const btn = queryByLabelText('Restore Region to "Americas"');
+    expect(btn).toBeTruthy();
+    fireEvent.click(btn!);
+    expect(onRestore).toHaveBeenCalledWith("region", "Americas");
+  });
+
+  it("shows no Restore controls without an onRestore handler", () => {
+    const { queryByLabelText } = render(
+      <RecordHistoryTimeline
+        entries={[
+          entry({
+            id: "1",
+            metadata: { field: "region", label: "Region", before: "A", after: "B" },
+          }),
+          entry({
+            id: "2",
+            metadata: { field: "region", label: "Region", before: null, after: "A" },
+          }),
+        ]}
+      />,
+    );
+    expect(queryByLabelText(/^Restore/)).toBeNull();
   });
 });

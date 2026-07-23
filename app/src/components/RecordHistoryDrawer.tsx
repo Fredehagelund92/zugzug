@@ -5,7 +5,7 @@
  *  focused lens on the same log the Activity page shows. Opened from the grid's
  *  row / cell context menu; the record stays one Escape away. */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AuditEntry } from "../store";
 import { useRecordHistory } from "../lib/use-record-history";
@@ -25,6 +25,11 @@ export interface RecordHistoryDrawerProps {
   /** When opened from a specific cell, the field id — its entries are
    *  highlighted and can be isolated with the header filter. */
   field?: string | null;
+  /** Whether the reader may restore historical values (edit permission). */
+  canRestore?: boolean;
+  /** Restore a field to a past value. field === "label" renames the record.
+   *  Resolves once the write lands so the timeline can refresh. */
+  onRestore?: (field: string, value: string | null) => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -55,7 +60,8 @@ function extractDiff(metadata: AuditEntry["metadata"]): Diff | null {
 const CLOSE_MS = 280; // keep in step with --dur-slide
 
 export function RecordHistoryDrawer(props: RecordHistoryDrawerProps) {
-  const { open, tableId, rowKey, recordLabel, tableName, field, onClose } = props;
+  const { open, tableId, rowKey, recordLabel, tableName, field, canRestore, onRestore, onClose } =
+    props;
 
   // Mount/unmount around the slide so the panel animates both ways. `shown`
   // drives the transform; it flips on after mount and off before unmount.
@@ -144,7 +150,13 @@ export function RecordHistoryDrawer(props: RecordHistoryDrawerProps) {
         }}
       >
         <DrawerHeader recordLabel={recordLabel} tableName={tableName} onClose={onClose} />
-        <DrawerBody tableId={tableId} rowKey={rowKey} open={open} field={field ?? null} />
+        <DrawerBody
+          tableId={tableId}
+          rowKey={rowKey}
+          open={open}
+          field={field ?? null}
+          onRestore={canRestore ? onRestore : undefined}
+        />
       </div>
     </div>,
     document.body,
@@ -200,16 +212,28 @@ function DrawerBody({
   rowKey,
   open,
   field,
+  onRestore,
 }: {
   tableId: string | null;
   rowKey: string | null;
   open: boolean;
   field: string | null;
+  onRestore?: (field: string, value: string | null) => void | Promise<void>;
 }) {
   const { entries, loading, loadingMore, error, hasMore, loadMore, reload } = useRecordHistory(
     tableId,
     rowKey,
     open,
+  );
+
+  // A restore is an ordinary edit to a past value — after it lands, refresh so
+  // the new entry appears at the top and the "current value" markers update.
+  const handleRestore = useCallback(
+    async (f: string, value: string | null) => {
+      await onRestore?.(f, value);
+      reload();
+    },
+    [onRestore, reload],
   );
   // "Only this field" filter, offered when the drawer was opened from a cell.
   const [fieldOnly, setFieldOnly] = useState(false);
@@ -276,7 +300,11 @@ function DrawerBody({
           <EmptyState fieldOnly={fieldOnly && !!field} />
         ) : (
           <>
-            <RecordHistoryTimeline entries={visible} focusField={field} />
+            <RecordHistoryTimeline
+              entries={visible}
+              focusField={field}
+              onRestore={onRestore ? handleRestore : undefined}
+            />
 
             {hasMore && (
               <div className="mt-6 flex justify-center">
@@ -303,9 +331,11 @@ function DrawerBody({
 export function RecordHistoryTimeline({
   entries,
   focusField = null,
+  onRestore,
 }: {
   entries: AuditEntry[];
   focusField?: string | null;
+  onRestore?: (field: string, value: string | null) => void | Promise<void>;
 }) {
   const grouped = useMemo(() => {
     const out: { key: string; label: string; items: AuditEntry[] }[] = [];
@@ -317,6 +347,25 @@ export function RecordHistoryTimeline({
     }
     return out;
   }, [entries]);
+
+  // Which entries can be restored: a concrete past value that isn't already the
+  // field's current value. Entries are newest-first, so the first diff seen per
+  // field holds the current value (never restorable — it's a no-op).
+  const restorableIds = useMemo(() => {
+    if (!onRestore) return new Set<string>();
+    const current = new Map<string, string | null>();
+    const ok = new Set<string>();
+    for (const e of entries) {
+      const d = extractDiff(e.metadata);
+      if (!d) continue;
+      if (!current.has(d.field)) {
+        current.set(d.field, d.after);
+        continue;
+      }
+      if (d.after !== null && d.after !== current.get(d.field)) ok.add(e.id);
+    }
+    return ok;
+  }, [entries, onRestore]);
 
   return (
     <div className="space-y-7">
@@ -341,7 +390,12 @@ export function RecordHistoryTimeline({
               style={{ background: "var(--line)" }}
             />
             {g.items.map((row) => (
-              <HistoryRow key={row.id} row={row} focusField={focusField} />
+              <HistoryRow
+                key={row.id}
+                row={row}
+                focusField={focusField}
+                onRestore={restorableIds.has(row.id) ? onRestore : undefined}
+              />
             ))}
           </ol>
         </section>
@@ -350,10 +404,19 @@ export function RecordHistoryTimeline({
   );
 }
 
-function HistoryRow({ row, focusField }: { row: AuditEntry; focusField: string | null }) {
+function HistoryRow({
+  row,
+  focusField,
+  onRestore,
+}: {
+  row: AuditEntry;
+  focusField: string | null;
+  onRestore?: (field: string, value: string | null) => void | Promise<void>;
+}) {
   const diff = extractDiff(row.metadata);
   const phrase = humanize(row);
   const isFocused = !!focusField && diff?.field === focusField;
+  const restore = diff && onRestore ? () => onRestore(diff.field, diff.after) : undefined;
 
   return (
     <li className="relative">
@@ -376,7 +439,7 @@ function HistoryRow({ row, focusField }: { row: AuditEntry; focusField: string |
           </div>
 
           {diff ? (
-            <DiffBlock diff={diff} focused={isFocused} />
+            <DiffBlock diff={diff} focused={isFocused} onRestore={restore} />
           ) : (
             phrase.target && (
               <p className="mt-1 truncate font-mono text-[12px] text-ink-2" title={phrase.target}>
@@ -392,19 +455,73 @@ function HistoryRow({ row, focusField }: { row: AuditEntry; focusField: string |
 
 /* The signature element: a value's move from old to new, boxed as a small "value
    card". Old value struck through, new value carried in ink. Colour is reserved
-   for the one thing that needs it — the field the reader came in focused on. */
-function DiffBlock({ diff, focused }: { diff: Diff; focused: boolean }) {
+   for the one thing that needs it — the field the reader came in focused on.
+   When the value is a restorable past state, a quiet "Restore" reveals on hover. */
+function DiffBlock({
+  diff,
+  focused,
+  onRestore,
+}: {
+  diff: Diff;
+  focused: boolean;
+  onRestore?: () => void | Promise<void>;
+}) {
+  const [pending, setPending] = useState(false);
+  const run = async () => {
+    if (!onRestore || pending) return;
+    setPending(true);
+    try {
+      await onRestore();
+    } finally {
+      setPending(false);
+    }
+  };
   return (
     <div
       className={cx(
-        "mt-1.5 rounded-md border-l-2 py-1 pl-2.5 pr-1 transition-colors",
+        "group/diff mt-1.5 rounded-md border-l-2 py-1 pl-2.5 pr-1 transition-colors",
         focused ? "bg-accent-soft" : "bg-surface-2/40",
       )}
       style={{ borderColor: focused ? "var(--accent)" : "var(--line-2)" }}
     >
-      {diff.label && (
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">{diff.label}</p>
-      )}
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
+          {diff.label}
+        </p>
+        {onRestore && (
+          <button
+            type="button"
+            onClick={run}
+            disabled={pending}
+            aria-label={`Restore ${diff.label || "value"} to ${
+              diff.after === null ? "empty" : `"${diff.after}"`
+            }`}
+            className={cx(
+              "inline-flex shrink-0 items-center gap-1 rounded font-mono text-[10px] uppercase tracking-[0.12em] transition-opacity",
+              "text-ink-3 hover:text-ink focus-visible:opacity-100 group-hover/diff:opacity-100",
+              pending ? "opacity-100" : "opacity-0",
+            )}
+          >
+            {pending ? (
+              "Restoring…"
+            ) : (
+              <>
+                <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+                  <path
+                    d="M6 4 3 7l3 3M3.2 7H9a4 4 0 0 1 0 8H7.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Restore
+              </>
+            )}
+          </button>
+        )}
+      </div>
       <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[12.5px]">
         <Value v={diff.before} tone="old" />
         <span aria-hidden className="text-ink-3">
