@@ -298,6 +298,21 @@ export interface AuditEntry {
   detail: string;
   metadata: Record<string, unknown> | null;
 }
+
+/** The pg driver hands the `audit_log.metadata` jsonb column back as a raw
+ *  string; parse it so API consumers get a real object (the history drawer reads
+ *  metadata.before/after, and the activity feed expands it as key/value). */
+export function parseJsonbMeta(m: unknown): Record<string, unknown> | null {
+  if (m == null) return null;
+  if (typeof m === "string") {
+    try {
+      return JSON.parse(m) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+  return m as Record<string, unknown>;
+}
 export interface FilterSetConfig {
   conjunction: "and" | "or";
   conditions: Array<{ id: string; field: string; operator: string; value: string }>;

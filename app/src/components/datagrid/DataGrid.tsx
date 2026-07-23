@@ -943,7 +943,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
               { separator: true, label: "", onClick: () => {} } as MenuItem,
               {
                 label: "View history",
-                onClick: () => props.onViewHistory!(rk),
+                onClick: () => props.onViewHistory!(rk, field),
               } as MenuItem,
             ]
           : []),

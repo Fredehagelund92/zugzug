@@ -1,6 +1,6 @@
 /* repo-activity.ts — derives per-row "last edited" entries from audit_log. */
 
-import { pgAll, pg } from "./repo-shared.ts";
+import { pgAll, pg, parseJsonbMeta, type AuditEntry } from "./repo-shared.ts";
 
 export type AuditOp = "rename" | "create" | "archive" | "field-write" | "merge" | "commit";
 
@@ -58,4 +58,78 @@ export async function getRowActivitySince(
     op: ACTION_TO_OP[r.action] ?? "field-write",
     at: r.created,
   }));
+}
+
+export interface RecordHistoryPage {
+  entries: AuditEntry[];
+  /** Keyset cursor ("<at>|<id>") to pass as `before` for the next page, or null
+   *  when this page reached the end. */
+  nextCursor: string | null;
+}
+
+/** Full change history for one record, newest first, keyset-paginated. Reads the
+ *  `(table_id, row_key, created_at DESC)` index directly, so it stays cheap no
+ *  matter how large the workspace-wide log grows. Scoped to the caller's tenant;
+ *  `tenantId === "*"` (super-admin) spans every workspace. */
+export async function listRecordHistory(
+  tableId: string,
+  rowKey: string,
+  tenantId: string,
+  opts: { before?: string; limit?: number } = {},
+): Promise<RecordHistoryPage> {
+  const clauses = ["a.table_id = $1", "a.row_key = $2"];
+  const params: unknown[] = [tableId, rowKey];
+  const bind = (v: unknown): string => `$${params.push(v)}`;
+
+  if (tenantId !== "*") clauses.push(`a.tenant_id = ${bind(tenantId)}`);
+
+  // Keyset pagination on (created_at DESC, id DESC), matching listAudit so the
+  // feed never drifts as new events land mid-scroll.
+  if (opts.before) {
+    const [at, id] = opts.before.split("|");
+    if (at && id) {
+      clauses.push(`(a.created_at, a.id) < (${bind(at)}::timestamptz, ${bind(id)})`);
+    }
+  }
+
+  const limit = Math.max(1, Math.min(200, opts.limit ?? 50));
+
+  const rows = await pgAll<{
+    id: string;
+    uid: string;
+    action: string;
+    detail: string;
+    at: string;
+    metadata: Record<string, unknown> | null;
+    uname: string | null;
+    uinitials: string | null;
+  }>(
+    `SELECT a.id, a.user_id AS uid, a.action, a.detail, a.metadata,
+            to_char(a.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS at,
+            u.name AS uname, u.initials AS uinitials
+     FROM ${pg("audit_log")} a
+     LEFT JOIN ${pg("users")} u ON u.id = a.user_id
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY a.created_at DESC, a.id DESC
+     LIMIT ${limit + 1}`,
+    params,
+  );
+
+  // Over-fetch by one to learn whether another page exists without a COUNT.
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor = hasMore && last ? `${last.at}|${last.id}` : null;
+
+  return {
+    entries: page.map((r) => ({
+      id: r.id,
+      user: { id: r.uid, name: r.uname ?? "Unknown", initials: r.uinitials ?? "??" },
+      action: r.action,
+      detail: r.detail,
+      at: r.at,
+      metadata: parseJsonbMeta(r.metadata),
+    })),
+    nextCursor,
+  };
 }

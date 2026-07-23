@@ -67,6 +67,7 @@ import { SourcesMonitorBody } from "./modes/SourcesMonitorBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
+import { RecordHistoryDrawer } from "./RecordHistoryDrawer";
 import { VersionHistory } from "./VersionHistory";
 import { toast } from "./Toast";
 import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
@@ -291,6 +292,11 @@ function RecordsBody({
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [recordHistory, setRecordHistory] = useState<{
+    rowKey: string;
+    label: string;
+    field: string | null;
+  } | null>(null);
   const [members, setMembers] = useState<{ user_id: string; name: string | null }[] | null>(null);
   const [pubState, setPubState] = useState<PublishState | null>(null);
   const [changedOnly, setChangedOnly] = useState(false);
@@ -862,6 +868,76 @@ function RecordsBody({
     </div>
   );
 
+  // Set a cell to a value — the single write path shared by the grid's inline
+  // edit and the history drawer's "restore". field === "label" renames the
+  // record; anything else writes a field. Optimistic, with conflict handling,
+  // undo, and a toast on failure.
+  const commitCell = async (rowKey: string, field: string, value: unknown): Promise<void> => {
+    if (field === "label") {
+      const currentRow = list.find((c) => c.key === rowKey);
+      const prev = currentRow?.label;
+      if (typeof value !== "string" || !value.trim() || value === prev) return;
+      try {
+        await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
+        dismissConflict(rowKey);
+      } catch (e) {
+        const serverRow = getCanonical(activeId, rowKey);
+        const labelDiff: FieldDiff[] = [];
+        if (serverRow && serverRow.label !== value) {
+          labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
+        }
+        if (!surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)) {
+          // Not a version conflict (e.g. network / server error). The
+          // store already reverted the optimistic label; tell the user
+          // instead of failing silently.
+          toast("Couldn't rename that record — try again.", "error");
+        }
+        return;
+      }
+      if (prev) {
+        undo.push({
+          label: `rename "${prev}" → "${value}"`,
+          surface: "Records",
+          apply: () => {
+            const v = getCanonical(activeId, rowKey)?.version ?? 1;
+            return renameCanonical(activeId, rowKey, value, v).then(() => undefined);
+          },
+          inverse: () => {
+            const v = getCanonical(activeId, rowKey)?.version ?? 1;
+            return renameCanonical(activeId, rowKey, prev, v).then(() => undefined);
+          },
+        });
+        void fetchVariants(activeId, rowKey).then((vs) => {
+          setRenameFlash({ prev, next: value, variants: vs.length });
+          if (renameFlashTimer.current) window.clearTimeout(renameFlashTimer.current);
+          renameFlashTimer.current = window.setTimeout(() => setRenameFlash(null), 8000);
+        });
+      }
+      return;
+    }
+    const v = value == null ? null : String(value);
+    const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
+    try {
+      await setFieldValue(activeId, rowKey, field, v);
+    } catch (e) {
+      // Store reverted the optimistic value; surface the failure.
+      // A cycle rejection carries a specific, user-ready message.
+      const msg =
+        e instanceof ApiCodeError && e.code === "HIERARCHY_CYCLE"
+          ? e.message
+          : "Couldn't save that change — try again.";
+      toast(msg, "error");
+      return;
+    }
+    if (prev !== v)
+      undo.push({
+        label: `edit ${field} on "${rowKey}"`,
+        surface: "Records",
+        apply: () => setFieldValue(activeId, rowKey, field, v),
+        inverse: () => setFieldValue(activeId, rowKey, field, prev),
+      });
+  };
+
   return (
     <div
       className="@container flex flex-1 flex-col min-h-0"
@@ -1349,80 +1425,7 @@ function RecordsBody({
           columns={columns}
           showRowNumbers
           selection={{ selected: sel, onChange: setSel }}
-          onCommit={
-            canEdit
-              ? async (rowKey, field, value) => {
-                  if (field === "label") {
-                    const currentRow = list.find((c) => c.key === rowKey);
-                    const prev = currentRow?.label;
-                    if (typeof value !== "string" || !value.trim() || value === prev) return;
-                    try {
-                      await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
-                      dismissConflict(rowKey);
-                    } catch (e) {
-                      const serverRow = getCanonical(activeId, rowKey);
-                      const labelDiff: FieldDiff[] = [];
-                      if (serverRow && serverRow.label !== value) {
-                        labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
-                      }
-                      if (
-                        !surfaceConflict(rowKey, e, labelDiff.length > 0 ? labelDiff : undefined)
-                      ) {
-                        // Not a version conflict (e.g. network / server error). The
-                        // store already reverted the optimistic label; tell the user
-                        // instead of failing silently.
-                        toast("Couldn't rename that record — try again.", "error");
-                      }
-                      return;
-                    }
-                    if (prev) {
-                      undo.push({
-                        label: `rename "${prev}" → "${value}"`,
-                        surface: "Records",
-                        apply: () => {
-                          const v = getCanonical(activeId, rowKey)?.version ?? 1;
-                          return renameCanonical(activeId, rowKey, value, v).then(() => undefined);
-                        },
-                        inverse: () => {
-                          const v = getCanonical(activeId, rowKey)?.version ?? 1;
-                          return renameCanonical(activeId, rowKey, prev, v).then(() => undefined);
-                        },
-                      });
-                      void fetchVariants(activeId, rowKey).then((vs) => {
-                        setRenameFlash({ prev, next: value, variants: vs.length });
-                        if (renameFlashTimer.current) window.clearTimeout(renameFlashTimer.current);
-                        renameFlashTimer.current = window.setTimeout(
-                          () => setRenameFlash(null),
-                          8000,
-                        );
-                      });
-                    }
-                    return;
-                  }
-                  const v = value == null ? null : String(value);
-                  const prev = list.find((c) => c.key === rowKey)?.fields?.[field] ?? null;
-                  try {
-                    await setFieldValue(activeId, rowKey, field, v);
-                  } catch (e) {
-                    // Store reverted the optimistic value; surface the failure.
-                    // A cycle rejection carries a specific, user-ready message.
-                    const msg =
-                      e instanceof ApiCodeError && e.code === "HIERARCHY_CYCLE"
-                        ? e.message
-                        : "Couldn't save that change — try again.";
-                    toast(msg, "error");
-                    return;
-                  }
-                  if (prev !== v)
-                    undo.push({
-                      label: `edit ${field} on "${rowKey}"`,
-                      surface: "Records",
-                      apply: () => setFieldValue(activeId, rowKey, field, v),
-                      inverse: () => setFieldValue(activeId, rowKey, field, prev),
-                    });
-                }
-              : undefined
-          }
+          onCommit={canEdit ? commitCell : undefined}
           onAddColumnOption={
             canEdit
               ? (field, label, color) => addColumnOption(activeId, field, label, color ?? null)
@@ -1607,10 +1610,10 @@ function RecordsBody({
             });
           }}
           initialSort={layout.sort ?? undefined}
-          onViewHistory={(rowKey) => {
+          onViewHistory={(rowKey, field) => {
             const row = list.find((c) => c.key === rowKey);
             if (!row) return;
-            navigate(`${navLinks.audit}?q=${encodeURIComponent(row.label)}`);
+            setRecordHistory({ rowKey, label: row.label, field: field ?? null });
           }}
           onSortChange={(sort) => {
             setLayout((cur) => {
@@ -2037,6 +2040,22 @@ function RecordsBody({
           void doPublish(draftKeys).then(() => setPublishPreview(false));
         }}
         onCancel={() => setPublishPreview(false)}
+      />
+
+      <RecordHistoryDrawer
+        open={recordHistory != null}
+        tableId={activeId}
+        rowKey={recordHistory?.rowKey ?? null}
+        recordLabel={recordHistory?.label ?? null}
+        tableName={dim.dimension}
+        field={recordHistory?.field ?? null}
+        canRestore={canEdit}
+        onRestore={
+          recordHistory
+            ? (field, value) => commitCell(recordHistory.rowKey, field, value)
+            : undefined
+        }
+        onClose={() => setRecordHistory(null)}
       />
     </div>
   );

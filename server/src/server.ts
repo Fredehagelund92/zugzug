@@ -1040,6 +1040,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const entries = await reqRepo.getRowActivitySince(tableId, since);
           return json({ entries, serverTime: new Date().toISOString() });
         }
+        // GET /api/tables/:id/records/:key/history?before=<cursor>&limit=<n>
+        if (seg.length === 6 && seg[3] === "records" && seg[5] === "history" && method === "GET") {
+          const tableId = decodeURIComponent(seg[2]!);
+          const rowKey = decodeURIComponent(seg[4]!);
+          const before = url.searchParams.get("before") ?? undefined;
+          const limitParam = url.searchParams.get("limit");
+          const limit = limitParam ? Number(limitParam) : undefined;
+          const page = await reqRepo.listRecordHistory(tableId, rowKey, { before, limit });
+          return json(page);
+        }
         return json({ error: "not found" }, 404);
       }
 

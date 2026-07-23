@@ -173,8 +173,9 @@ export interface DataGridProps<Row> {
   onDeleteRow?: (rowKey: string) => void;
   onReorderRow?: (rowKey: string, before: string | null, after: string | null) => void;
   onDuplicateRow?: (rowKey: string) => void;
-  /** Navigate to the audit trail filtered to this row's label. */
-  onViewHistory?: (rowKey: string) => void;
+  /** Open this record's change history. `field` is set when invoked from a
+   *  specific cell, so the drawer can focus that column. */
+  onViewHistory?: (rowKey: string, field?: string) => void;
   /** Save per-column conditional formatting rules (persisted in field_config). */
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
   /** Save a plain-text description for a column (persisted in dimension_field.description). */
