@@ -456,7 +456,9 @@ function HistoryRow({
 /* The signature element: a value's move from old to new, boxed as a small "value
    card". Old value struck through, new value carried in ink. Colour is reserved
    for the one thing that needs it — the field the reader came in focused on.
-   When the value is a restorable past state, a quiet "Restore" reveals on hover. */
+   When the value is a restorable past state, a quiet "Restore" reveals on hover;
+   because restoring overwrites the current value, it asks for confirmation
+   inline before committing. */
 function DiffBlock({
   diff,
   focused,
@@ -466,14 +468,15 @@ function DiffBlock({
   focused: boolean;
   onRestore?: () => void | Promise<void>;
 }) {
-  const [pending, setPending] = useState(false);
-  const run = async () => {
-    if (!onRestore || pending) return;
-    setPending(true);
+  const [phase, setPhase] = useState<"idle" | "confirm" | "pending">("idle");
+  const valueLabel = diff.after === null ? "empty" : `"${diff.after}"`;
+  const confirm = async () => {
+    if (!onRestore) return;
+    setPhase("pending");
     try {
       await onRestore();
     } finally {
-      setPending(false);
+      setPhase("idle");
     }
   };
   return (
@@ -488,37 +491,49 @@ function DiffBlock({
         <p className="min-w-0 truncate font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">
           {diff.label}
         </p>
-        {onRestore && (
+        {onRestore && phase === "pending" && (
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3">
+            Restoring…
+          </span>
+        )}
+        {onRestore && phase === "confirm" && (
+          <span className="inline-flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPhase("idle")}
+              aria-label="Cancel restore"
+              className="rounded font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3 transition-colors hover:text-ink"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirm}
+              aria-label={`Confirm restoring ${diff.label || "value"} to ${valueLabel}`}
+              className="rounded bg-accent px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-accent-ink"
+            >
+              Restore
+            </button>
+          </span>
+        )}
+        {onRestore && phase === "idle" && (
           <button
             type="button"
-            onClick={run}
-            disabled={pending}
-            aria-label={`Restore ${diff.label || "value"} to ${
-              diff.after === null ? "empty" : `"${diff.after}"`
-            }`}
-            className={cx(
-              "inline-flex shrink-0 items-center gap-1 rounded font-mono text-[10px] uppercase tracking-[0.12em] transition-opacity",
-              "text-ink-3 hover:text-ink focus-visible:opacity-100 group-hover/diff:opacity-100",
-              pending ? "opacity-100" : "opacity-0",
-            )}
+            onClick={() => setPhase("confirm")}
+            aria-label={`Restore ${diff.label || "value"} to ${valueLabel}`}
+            className="inline-flex shrink-0 items-center gap-1 rounded font-mono text-[10px] uppercase tracking-[0.12em] text-ink-3 opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover/diff:opacity-100"
           >
-            {pending ? (
-              "Restoring…"
-            ) : (
-              <>
-                <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
-                  <path
-                    d="M6 4 3 7l3 3M3.2 7H9a4 4 0 0 1 0 8H7.5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Restore
-              </>
-            )}
+            <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden>
+              <path
+                d="M6 4 3 7l3 3M3.2 7H9a4 4 0 0 1 0 8H7.5"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Restore
           </button>
         )}
       </div>

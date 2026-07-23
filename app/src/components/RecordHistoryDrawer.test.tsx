@@ -120,11 +120,37 @@ describe("RecordHistoryTimeline", () => {
     );
     // The current value (Europe) has no Restore — restoring it is a no-op.
     expect(queryByLabelText('Restore Region to "Europe"')).toBeNull();
-    // The past value (Americas) can be restored.
+    // The past value (Americas) can be restored — but only after confirming.
     const btn = queryByLabelText('Restore Region to "Americas"');
     expect(btn).toBeTruthy();
     fireEvent.click(btn!);
+    expect(onRestore).not.toHaveBeenCalled(); // first click asks to confirm
+    fireEvent.click(queryByLabelText('Confirm restoring Region to "Americas"')!);
     expect(onRestore).toHaveBeenCalledWith("region", "Americas");
+  });
+
+  it("cancels a restore without committing", () => {
+    const onRestore = vi.fn();
+    const { queryByLabelText } = render(
+      <RecordHistoryTimeline
+        onRestore={onRestore}
+        entries={[
+          entry({
+            id: "1",
+            metadata: { field: "region", label: "Region", before: "Americas", after: "Europe" },
+          }),
+          entry({
+            id: "2",
+            metadata: { field: "region", label: "Region", before: null, after: "Americas" },
+          }),
+        ]}
+      />,
+    );
+    fireEvent.click(queryByLabelText('Restore Region to "Americas"')!);
+    fireEvent.click(queryByLabelText("Cancel restore")!);
+    expect(onRestore).not.toHaveBeenCalled();
+    // Back to the idle Restore affordance.
+    expect(queryByLabelText('Restore Region to "Americas"')).toBeTruthy();
   });
 
   it("shows no Restore controls without an onRestore handler", () => {
