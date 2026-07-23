@@ -125,6 +125,30 @@ describe("GET /api/warehouse/info", () => {
   });
 });
 
+// --- Task 1b: GET /api/warehouse/info — adapter failure → 503 ---
+describe("GET /api/warehouse/info (adapter failure)", () => {
+  it("returns 503 with error: warehouse_unavailable when getAdapter throws", async () => {
+    // Temporarily override the registry mock to simulate an adapter failure.
+    mock.module("./warehouse/registry.ts", () => ({
+      getAdapter: async () => {
+        throw new Error("adapter init failed");
+      },
+      _resetAdapterCache: () => {},
+    }));
+
+    const res = await handle(globalReq("/warehouse/info"), noop);
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toEqual({ error: "warehouse_unavailable" });
+
+    // Restore the happy-path mock so subsequent tests are unaffected.
+    mock.module("./warehouse/registry.ts", () => ({
+      getAdapter: async () => fakeAdapter,
+      _resetAdapterCache: () => {},
+    }));
+  });
+});
+
 // --- Task 2: GET /api/t/:slug/warehouse/schemas ---
 describe("GET /api/t/:slug/warehouse/schemas", () => {
   it("groups tables by schema with counts, sorted desc then by name", async () => {

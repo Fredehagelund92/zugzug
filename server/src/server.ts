@@ -459,11 +459,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     // GET /api/warehouse/info — connection-level metadata (adapter type). Any authenticated user.
     if (seg[2] === "info" && seg.length === 3 && method === "GET") {
       const { getAdapter: getAdapterFn } = await import("./warehouse/registry.ts");
-      const adapter = await getAdapterFn();
-      return json({
-        adapter: adapter.capabilities.id,
-        databaseTerm: adapter.capabilities.databaseTerm,
-      });
+      try {
+        const adapter = await getAdapterFn();
+        return json({
+          adapter: adapter.capabilities.id,
+          databaseTerm: adapter.capabilities.databaseTerm,
+        });
+      } catch {
+        return json({ error: "warehouse_unavailable" }, 503);
+      }
     }
 
     // GET /api/warehouse/databases — list registered databases. Any authenticated user.
