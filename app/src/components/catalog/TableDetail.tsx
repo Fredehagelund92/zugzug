@@ -117,6 +117,8 @@ export function TableDetail({
           <span className="text-ink-2">{connectionLabel}</span>
           <button
             type="button"
+            role="switch"
+            aria-checked={onlyUnmapped}
             onClick={() => setOnlyUnmapped((v) => !v)}
             className="ml-auto flex items-center gap-2 text-[12px] text-ink-2"
           >
@@ -193,7 +195,7 @@ export function TableDetail({
                   </button>
                 ) : w ? (
                   <span className="flex items-center gap-2 rounded-sm bg-accent/15 px-2.5 py-1 text-[11.5px] text-ink">
-                    <IconCheck className="h-3 w-3 text-accent" />
+                    {w.n !== null && <IconCheck className="h-3 w-3 text-accent" />}
                     {w.n === null ? `Connecting ${w.dim}…` : w.dim}
                     {w.n !== null && (
                       <button

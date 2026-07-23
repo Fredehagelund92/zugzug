@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { TableDetail } from "./TableDetail";
+import type { MappingDimension } from "../../data";
 
 const LONG_VALUE =
   "this-is-a-very-long-varchar-sample-value-that-exceeds-eighty-characters-in-total-length";
@@ -17,7 +18,25 @@ vi.mock("../../store", async (orig) => ({
 }));
 afterEach(cleanup);
 
-const dims = [{ id: "country", dimension: "Country" }] as any;
+const dims: MappingDimension[] = [
+  {
+    id: "country",
+    dimension: "Country",
+    dimTable: "zugzug.dim_country",
+    mapTable: "zugzug.map_country",
+    keyCol: "country_key",
+    rows: 0,
+    canonical: [],
+    counts: {
+      newCount: 0,
+      mappedCount: 0,
+      totalDistinct: 0,
+      unmappedRowsTotal: 0,
+      mappedRowsTotal: 0,
+      scannedAt: null,
+    },
+  },
+];
 
 describe("TableDetail", () => {
   it("lists columns with their types", async () => {
@@ -47,6 +66,28 @@ describe("TableDetail", () => {
     fireEvent.click(screen.getAllByText("peek values")[0]);
     await waitFor(() => screen.getByText("US"));
     expect(screen.getByText("DK")).toBeTruthy();
+  });
+
+  it("toggle has role=switch and aria-checked reflects state", async () => {
+    render(
+      <TableDetail
+        database="db-1"
+        tablePath="authco.users"
+        connectionLabel="🦆 MotherDuck"
+        dims={dims}
+      />,
+    );
+    // Wait for columns to load
+    await waitFor(() => screen.getByText("country"));
+
+    const toggle = screen.getByRole("switch", { name: /only unmapped/i });
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
 
   it("renders sample value chips with title and truncate class", async () => {
