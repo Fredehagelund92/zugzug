@@ -9,8 +9,14 @@ process.env.ZUGZUG_CURSOR_KEY =
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
-import { pgAll } from "./repo-shared.ts";
-import { addDimension, addCanonicalOne, addField, deleteDimension } from "./repo-canonical.ts";
+import { pgAll, parseFieldConfig } from "./repo-shared.ts";
+import {
+  addDimension,
+  addCanonicalOne,
+  addField,
+  deleteDimension,
+  listFields,
+} from "./repo-canonical.ts";
 import { commit, saveDraft } from "./repo-drafts.ts";
 
 async function dropDims(tenants: string[]): Promise<void> {
@@ -151,6 +157,40 @@ describe("publish gate — validation", () => {
       code: "REQUIRED_FIELDS_EMPTY",
       status: 422,
     });
+  });
+
+  it("round-trips validation through addField into field_config", async () => {
+    // Arrange: new dimension with a number field written via addField
+    const dimId = await addDimension("ValidationRoundTripDim", [], { keyKind: "slug" }, U, T);
+
+    const added = await addField(
+      dimId,
+      "Score",
+      "number",
+      undefined,
+      { validation: { unique: true, min: 0 }, required: true },
+      U,
+      T,
+    );
+    expect(added?.field).toBe("score");
+
+    // Act: read field_config back from DB and parse it
+    const raw = await pgGet<{ field_config: string | null }>(
+      `SELECT field_config FROM "zugzug_app"."dimension_field" WHERE dim_id = $1 AND tenant_id = $2 AND field = 'score'`,
+      [dimId, T],
+    );
+    expect(raw).not.toBeNull();
+    const parsed = parseFieldConfig("number", raw!.field_config);
+
+    // Assert: validation and required round-tripped intact
+    expect(parsed.required).toBe(true);
+    expect(parsed.validation).toEqual({ unique: true, min: 0 });
+
+    // Also verify listFields surfaces the same values (full stack)
+    const fields = await listFields(dimId, T);
+    const scoreField = fields.find((f) => f.field === "score");
+    expect(scoreField?.required).toBe(true);
+    expect(scoreField?.validation).toEqual({ unique: true, min: 0 });
   });
 
   it("publishes cleanly when all rules pass", async () => {
