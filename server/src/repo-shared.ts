@@ -104,6 +104,12 @@ export function parseNumberFormat(raw: unknown): NumberFormat | undefined {
   return obj as NumberFormat;
 }
 
+export interface FieldValidation {
+  unique?: boolean;
+  min?: number | string | null; // number/date: value bound; text: length (int)
+  max?: number | string | null;
+}
+
 export function parseFieldConfig(
   type: string,
   raw: unknown,
@@ -115,6 +121,7 @@ export function parseFieldConfig(
   displayFields?: string[];
   rules?: ConditionalRule[];
   required?: boolean;
+  validation?: FieldValidation;
 } {
   // Parse the raw JSON once for rules extraction (type-specific parsers re-parse as needed)
   let parsedJson: Record<string, unknown> | null = null;
@@ -161,10 +168,32 @@ export function parseFieldConfig(
   // Required flag — allowed on any type (empty values block publish).
   const required = parsedJson?.required === true;
 
+  // Validation rules — allowed on any type; per-key sanitized so a malformed
+  // blob can never crash a read. An empty {} means "object present, no live rules".
+  let validation: FieldValidation | undefined;
+  const rawV = parsedJson?.validation;
+  if (rawV != null && typeof rawV === "object" && !Array.isArray(rawV)) {
+    const v = rawV as Record<string, unknown>;
+    const out: FieldValidation = {};
+    if (v.unique === true) out.unique = true;
+    const bound = (x: unknown): number | string | null | undefined => {
+      if (x === null) return null;
+      if (typeof x === "number" && Number.isFinite(x)) return x;
+      if (typeof x === "string" && x.trim() !== "" && type === "date") return x; // ISO date bound
+      return undefined;
+    };
+    const mn = bound(v.min);
+    const mx = bound(v.max);
+    if (mn !== undefined) out.min = mn;
+    if (mx !== undefined) out.max = mx;
+    validation = out;
+  }
+
   return {
     ...typeSpecific,
     ...(rules !== undefined ? { rules } : {}),
     ...(required ? { required: true } : {}),
+    ...(validation !== undefined ? { validation } : {}),
   };
 }
 
@@ -180,6 +209,7 @@ export interface FieldDef {
   description?: string;
   rules?: ConditionalRule[];
   required?: boolean; // empty values block publish
+  validation?: FieldValidation;
 }
 
 export type { ConditionalRule } from "./conditional-format-types.ts";
