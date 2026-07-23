@@ -215,6 +215,8 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
     columns,
     selection,
     onCommit,
+    validate,
+    onInvalidCommit,
     empty,
     onAddFieldClick,
     addFieldRef,
@@ -403,9 +405,17 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // pending edit value lives inside the editor; commit flows back via the props.onCommit
   const commitValue = useCallback(
     async (rk: string, field: string, value: unknown) => {
+      if (validate) {
+        const msg = validate(field, value, rk);
+        if (msg) {
+          flashCell(rk, field); // existing red-flash affordance
+          onInvalidCommit?.(rk, field, msg);
+          return; // refuse — value never lands, cursor already advanced by the editor
+        }
+      }
       if (onCommit) await onCommit(rk, field, value);
     },
-    [onCommit],
+    [onCommit, validate, onInvalidCommit],
   );
 
   // ── Range selection state ───────────────────────────────────────────────────

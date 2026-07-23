@@ -136,6 +136,11 @@ export interface DataGridProps<Row> {
   /** Cell-value mutation. Implementations push an undo entry themselves. When
    *  undefined, cells are read-only (no edit affordances). */
   onCommit?: (rowKey: string, field: string, value: unknown) => Promise<void>;
+  /** Value-shape gate run before onCommit. Return a plain-language message to
+   *  refuse the value (it won't be written; the cell flashes). Null accepts. */
+  validate?: (field: string, value: unknown, rowKey: string) => string | null;
+  /** Fired when `validate` refuses a value — host surfaces the message. */
+  onInvalidCommit?: (rowKey: string, field: string, message: string) => void;
   /** Triggered when the user invokes the header menu's "delete column" item. */
   onDeleteColumn?: (field: string) => void;
   /** Header menu: rename label */
