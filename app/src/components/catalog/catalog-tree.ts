@@ -55,38 +55,3 @@ export function nodeById(roots: TreeNode[], id: string): TreeNode | null {
   }
   return null;
 }
-
-export function filterTree(
-  roots: TreeNode[],
-  query: string,
-): { roots: TreeNode[]; openIds: Set<string>; matchCount: number } {
-  const q = query.trim().toLowerCase();
-  if (!q) return { roots, openIds: new Set(), matchCount: 0 };
-  const openIds = new Set<string>();
-  let matchCount = 0;
-
-  const selfMatches = (n: TreeNode): boolean => {
-    let hit = n.name.toLowerCase().includes(q);
-    if (hit) matchCount++;
-    if (n.kind === "table" && n.columns) {
-      for (const c of n.columns) {
-        if (c.toLowerCase().includes(q)) {
-          matchCount++;
-          hit = true;
-        }
-      }
-    }
-    return hit;
-  };
-
-  const prune = (n: TreeNode): TreeNode | null => {
-    const keptChildren = n.children.map(prune).filter((c): c is TreeNode => c !== null);
-    const self = selfMatches(n);
-    if (!self && keptChildren.length === 0) return null;
-    if (keptChildren.length) openIds.add(n.id);
-    return { ...n, children: keptChildren };
-  };
-
-  const prunedRoots = roots.map(prune).filter((r): r is TreeNode => r !== null);
-  return { roots: prunedRoots, openIds, matchCount };
-}
