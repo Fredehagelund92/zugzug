@@ -67,6 +67,7 @@ import { SourcesMonitorBody } from "./modes/SourcesMonitorBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
+import { RecordHistoryDrawer } from "./RecordHistoryDrawer";
 import { VersionHistory } from "./VersionHistory";
 import { toast } from "./Toast";
 import { parseCsv, prepareImport, type ParsedImport } from "../lib/csv";
@@ -291,6 +292,11 @@ function RecordsBody({
   const [orderingConfirm, setOrderingConfirm] = useState<"derived" | "manual" | null>(null);
   const [ownerOpen, setOwnerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [recordHistory, setRecordHistory] = useState<{
+    rowKey: string;
+    label: string;
+    field: string | null;
+  } | null>(null);
   const [members, setMembers] = useState<{ user_id: string; name: string | null }[] | null>(null);
   const [pubState, setPubState] = useState<PublishState | null>(null);
   const [changedOnly, setChangedOnly] = useState(false);
@@ -1607,10 +1613,10 @@ function RecordsBody({
             });
           }}
           initialSort={layout.sort ?? undefined}
-          onViewHistory={(rowKey) => {
+          onViewHistory={(rowKey, field) => {
             const row = list.find((c) => c.key === rowKey);
             if (!row) return;
-            navigate(`${navLinks.audit}?q=${encodeURIComponent(row.label)}`);
+            setRecordHistory({ rowKey, label: row.label, field: field ?? null });
           }}
           onSortChange={(sort) => {
             setLayout((cur) => {
@@ -2037,6 +2043,16 @@ function RecordsBody({
           void doPublish(draftKeys).then(() => setPublishPreview(false));
         }}
         onCancel={() => setPublishPreview(false)}
+      />
+
+      <RecordHistoryDrawer
+        open={recordHistory != null}
+        tableId={activeId}
+        rowKey={recordHistory?.rowKey ?? null}
+        recordLabel={recordHistory?.label ?? null}
+        tableName={dim.dimension}
+        field={recordHistory?.field ?? null}
+        onClose={() => setRecordHistory(null)}
       />
     </div>
   );

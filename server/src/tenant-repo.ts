@@ -550,6 +550,15 @@ export class TenantRepo {
     return this.withClearCtx(() => repoActivity.getRowActivitySince(tableId, since, scope));
   }
 
+  listRecordHistory(
+    tableId: string,
+    rowKey: string,
+    opts: { before?: string; limit?: number } = {},
+  ): Promise<repoActivity.RecordHistoryPage> {
+    const scope = this.isSuperAdmin && this.tenantId === "*" ? "*" : this.tenantId;
+    return this.withClearCtx(() => repoActivity.listRecordHistory(tableId, rowKey, scope, opts));
+  }
+
   // --- user-scoped (no tenant) ----------------------------------------------
   listUsers(): Promise<User[]> {
     return this.withClearCtx(() => repoMeta.listUsers());

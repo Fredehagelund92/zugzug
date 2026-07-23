@@ -823,6 +823,7 @@ export async function renameCanonical(
     tableId: dimId,
     rowKey: key,
     tenantId,
+    metadata: { field: "label", label: "Name", before: oldRow?.label ?? null, after: label },
   });
 
   // Keep ai_hint_cache consistent: update any hint that was pointing at the old label.
@@ -1529,6 +1530,17 @@ export async function setFieldValue(
   const col = qid(field);
   const keyc = qid(m.keyCol);
   const empty = value == null || value.trim() === "";
+  // Snapshot the prior value so the record-history drawer can show a real
+  // "before → after" diff. Only for user-facing edits — the bulk silent paths
+  // don't surface in history and shouldn't pay for the extra read.
+  const beforeText = opts.silent
+    ? null
+    : ((
+        await pgGet<{ v: string | null }>(
+          `SELECT ${col}::text AS v FROM ${cq(m.dimTable)} WHERE ${keyc} = $1`,
+          [key],
+        )
+      )?.v ?? null);
   // Update the column and stamp canonical_version in one tx so the edit shows
   // up as an unpublished change (ADR-0002). The upsert also seeds a version row
   // for records created by bulk paths that never got one. RETURNING guards the
@@ -1605,7 +1617,18 @@ export async function setFieldValue(
       userId,
       "Edited record",
       `${key}.${field} → ${empty ? "(empty)" : `"${value}"`}`,
-      { tableId: dimId, rowKey: key, tenantId },
+      {
+        tableId: dimId,
+        rowKey: key,
+        tenantId,
+        metadata: {
+          field,
+          label: f.label,
+          type: f.type,
+          before: beforeText,
+          after: empty ? null : value,
+        },
+      },
     );
   }
 }
