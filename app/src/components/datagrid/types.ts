@@ -50,7 +50,10 @@ export type ColumnConfig = (
       displayFields: string[];
       candidates: { key: string; label: string }[];
     }
-) & { required?: boolean };
+) & {
+  required?: boolean;
+  validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+};
 
 export type CellType = ColumnConfig["type"];
 
