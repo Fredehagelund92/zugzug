@@ -4,14 +4,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { EmptyState as SetupCard } from "../components/EmptyState";
-import { CatalogExplorer } from "../components/CatalogExplorer";
+import { CatalogModal } from "../components/catalog/CatalogModal";
 import { PageHeader } from "../components/PageHeader";
 import { SourceRow } from "../components/sources/SourceRow";
 import { ago } from "../components/sources/utils";
 import { IconWand, IconArrowRight, IconChevron } from "../components/Icons";
 import { cx } from "../lib/cx";
 import {
-  useDimensions,
   useSources,
   scanSources,
   deriveCanonical,
@@ -69,15 +68,11 @@ function SourcesLoader() {
 export function Sources() {
   usePageTitle("Sources");
   const sources = useSources();
-  const dims = useDimensions();
   const canEdit = useCanEdit();
   const nav = useNavLinks();
   const loading = useStoreLoading();
 
   const [catalog, setCatalog] = useState(false);
-  // CatalogExplorer owns the database picker; we just remember the last pick
-  // so a returning user lands on the same db without having to reselect it.
-  const [catalogDb, setCatalogDb] = useState<string | null>(null);
   const [openSchemas, setOpenSchemas] = useState<Set<string>>(new Set());
 
   const scanAction = useAsyncAction(async () => {
@@ -200,14 +195,7 @@ export function Sources() {
 
   return (
     <div className="flex flex-col px-2 pb-3 md:px-5 md:pb-5">
-      {catalog && (
-        <CatalogExplorer
-          dims={dims}
-          database={catalogDb}
-          onDatabaseChange={setCatalogDb}
-          onClose={() => setCatalog(false)}
-        />
-      )}
+      <CatalogModal open={catalog} onClose={() => setCatalog(false)} />
 
       {/* ─────────── HEADER (above the surface, on the canvas) ───────────
           Sticky so it stays put while the page scrolls at the window edge.
