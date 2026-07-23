@@ -20,6 +20,7 @@ export function CatalogBrowser(): JSX.Element {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResultRow[] | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchSelected, setSearchSelected] = useState<{
     dbId: string;
@@ -45,7 +46,9 @@ export function CatalogBrowser(): JSX.Element {
   // Debounced server search
   useEffect(() => {
     if (query.trim() === "") {
+      seq.current++;
       setResults(null);
+      setTruncated(false);
       setSearching(false);
       setSearchSelected(null);
       return;
@@ -54,27 +57,38 @@ export function CatalogBrowser(): JSX.Element {
     const ticket = ++seq.current;
     const t = setTimeout(() => {
       const dbs = roots[0]?.children ?? [];
-      Promise.all(
+      Promise.allSettled(
         dbs.map(async (d) => {
           const dbId = d.id.split("/")[1]!;
-          const r = await searchCatalog({ database: dbId, q: query });
-          return r.rows.map((row) => ({
-            dbId,
-            dbName: d.name,
-            schema: row.schema,
-            table: row.table,
-            columns: row.columns,
-          }));
+          const r = await searchCatalog({ database: dbId, q: query, limit: 100 });
+          return {
+            rows: r.rows.map((row) => ({
+              dbId,
+              dbName: d.name,
+              schema: row.schema,
+              table: row.table,
+              columns: row.columns,
+            })),
+            truncated: r.total > r.rows.length,
+          };
         }),
       )
-        .then((groups) => {
+        .then((settled) => {
           if (ticket !== seq.current) return;
-          setResults(groups.flat());
+          const rows: SearchResultRow[] = [];
+          let anyTruncated = false;
+          for (const s of settled) {
+            if (s.status === "fulfilled") {
+              rows.push(...s.value.rows);
+              if (s.value.truncated) anyTruncated = true;
+            }
+          }
+          setResults(rows);
+          setTruncated(anyTruncated);
           setSearching(false);
         })
         .catch(() => {
           if (ticket !== seq.current) return;
-          setResults([]);
           setSearching(false);
         });
     }, 220);
@@ -162,6 +176,7 @@ export function CatalogBrowser(): JSX.Element {
             multiDb={multiDb}
             selectedKey={selectedKey}
             onSelect={handleSearchSelect}
+            truncated={truncated}
           />
         ) : (
           <CatalogTree

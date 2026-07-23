@@ -149,4 +149,34 @@ describe("CatalogSearchResults", () => {
     const btn = screen.getByText("authco.users").closest("button")!;
     expect(btn.className).toContain("bg-accent/15");
   });
+
+  it("renders truncation footer when truncated is true", () => {
+    render(
+      <CatalogSearchResults
+        results={[row]}
+        searching={false}
+        query="users"
+        multiDb={false}
+        selectedKey={null}
+        onSelect={() => {}}
+        truncated={true}
+      />,
+    );
+    expect(screen.getByText(/Showing the first matches/)).toBeTruthy();
+  });
+
+  it("does not render truncation footer when truncated is false", () => {
+    render(
+      <CatalogSearchResults
+        results={[row]}
+        searching={false}
+        query="users"
+        multiDb={false}
+        selectedKey={null}
+        onSelect={() => {}}
+        truncated={false}
+      />,
+    );
+    expect(screen.queryByText(/Showing the first matches/)).toBeNull();
+  });
 });

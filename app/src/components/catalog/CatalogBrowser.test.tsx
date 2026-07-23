@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CatalogBrowser } from "./CatalogBrowser";
+import { searchCatalog } from "../../store";
 
 vi.mock("../../api", () => ({
   fetchWarehouseInfo: () => Promise.resolve({ adapter: "duckdb", databaseTerm: "database" }),
@@ -21,12 +22,13 @@ vi.mock("../../store", async (orig) => ({
   ...(await orig<typeof import("../../store")>()),
   listSchemas: () => Promise.resolve([{ schema: "authco", tables: 1 }]),
   useDimensions: () => [{ id: "country", dimension: "Country" }],
-  searchCatalog: () =>
+  searchCatalog: vi.fn(() =>
     Promise.resolve({
       rows: [{ schema: "authco", table: "authco.users", columns: ["id", "email"] }],
       total: 1,
       schemas: [{ schema: "authco", tables: 1 }],
     }),
+  ),
 }));
 
 afterEach(cleanup);
@@ -63,6 +65,22 @@ describe("CatalogBrowser", () => {
     // Clear the input — tree should return
     await user.clear(input);
     await waitFor(() => screen.getByText("md:demo"));
+  });
+
+  it("does not crash and clears searching when searchCatalog rejects", async () => {
+    vi.mocked(searchCatalog).mockRejectedValueOnce(new Error("db down"));
+
+    const user = userEvent.setup({ delay: null });
+    render(<CatalogBrowser />);
+    await waitFor(() => screen.getByText("md:demo"));
+
+    const input = screen.getByPlaceholderText(/search tables/i);
+    await user.type(input, "users");
+
+    // searching indicator should clear even on rejection
+    await waitFor(() => {
+      expect(screen.queryByText("searching…")).toBeNull();
+    });
   });
 
   describe("tree width persistence", () => {

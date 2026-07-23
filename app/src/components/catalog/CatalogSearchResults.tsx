@@ -13,8 +13,9 @@ export function CatalogSearchResults(props: {
   multiDb: boolean;
   selectedKey: string | null;
   onSelect: (row: SearchResultRow) => void;
+  truncated?: boolean;
 }): JSX.Element {
-  const { results, searching, query, multiDb, selectedKey, onSelect } = props;
+  const { results, searching, query, multiDb, selectedKey, onSelect, truncated } = props;
 
   if (searching && !results) {
     return <div className="px-3 py-2 font-mono text-[10.5px] text-ink-3">searching…</div>;
@@ -24,7 +25,7 @@ export function CatalogSearchResults(props: {
     return <div className="px-3 py-2 text-[12.5px] text-ink-3">No tables or columns match.</div>;
   }
 
-  const q = query.toLowerCase();
+  const q = query.trim().toLowerCase();
 
   const matchedColumn = (row: SearchResultRow): string | null => {
     if (row.table.toLowerCase().includes(q)) return null;
@@ -67,6 +68,11 @@ export function CatalogSearchResults(props: {
           </button>
         );
       })}
+      {truncated && (results ?? []).length > 0 && (
+        <div className="px-3 py-2 font-mono text-[10.5px] text-ink-3">
+          Showing the first matches — refine your search to narrow.
+        </div>
+      )}
     </div>
   );
 }
