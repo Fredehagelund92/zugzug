@@ -12,6 +12,7 @@ import {
   IconChevronLeft,
   IconFilter,
   IconArrowRight,
+  IconCheck,
 } from "../Icons";
 import type { CellType, ColumnConfig, ColumnDef, NumberFormat } from "./types";
 import { ValidationFields } from "./ValidationFields";
@@ -331,7 +332,7 @@ export function ColumnHeaderMenu<Row>({
           )}
           {onSaveValidation && (
             <button type="button" className={item} onClick={() => setMode("validation")}>
-              <IconRules className={iconCls} /> Validation…
+              <IconCheck className={iconCls} /> Validation…
             </button>
           )}
           {onEditDescription && (

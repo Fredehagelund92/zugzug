@@ -510,13 +510,13 @@ function RecordsBody({
     (field: string, value: unknown, rowKey: string): string | null => {
       const col = columns.find((c) => c.field === field);
       if (!col) return null;
-      const others = rowsForGrid.map((r) => ({
-        key: r.key,
-        value: (r as Record<string, unknown>)[field],
+      const others = list.map((c) => ({
+        key: c.key,
+        value: ({ ...c, ...(c.fields ?? {}) } as Record<string, unknown>)[field],
       }));
       return valueShapeError(col.config, value, rowKey, others);
     },
-    [columns, rowsForGrid],
+    [columns, list],
   );
 
   const flash = (m: string, tone: "info" | "danger" = "info") => {

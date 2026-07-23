@@ -8,7 +8,7 @@
  * store/router hooks. Drive validation directly through the stub.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, act } from "@testing-library/react";
+import { render, screen, cleanup, act, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { MappingDimension, CanonicalValue } from "../data";
 
@@ -221,5 +221,23 @@ describe("table-view validation wiring", () => {
     });
     // The notice should appear in the DOM
     expect(screen.getByText(/Already used by apac\./i)).toBeInTheDocument();
+  });
+
+  it("uniqueness is checked against the full list even when the duplicate row is filtered out of the visible grid", async () => {
+    renderPane();
+    expect(capturedValidate).toBeDefined();
+
+    // Type into the search input so only "NAMR" is visible - this hides the
+    // "apac" row from rowsForGrid, but validate must still catch the duplicate.
+    const searchInput = screen.getByPlaceholderText("Search records…");
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "NAMR" } });
+    });
+
+    // At this point the DataGrid only receives the "namr" row (apac is hidden).
+    // Editing "namr" to "APAC" must still be refused because "APAC" is held
+    // by a row currently outside the visible set.
+    const result = capturedValidate!("ticker", "APAC", "namr");
+    expect(result).toContain("Already used by");
   });
 });
