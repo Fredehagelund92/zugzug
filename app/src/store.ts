@@ -1189,6 +1189,25 @@ export async function updateFieldDisplayFields(
   emit();
 }
 
+/** Persist required / validation rules for a field. The server merges the
+ *  incoming field_config patch with the existing stored config, so only the
+ *  keys you send are overwritten (options / rules / numberFormat survive). */
+export async function updateFieldValidation(
+  dimId: string,
+  field: string,
+  next: {
+    required?: boolean;
+    validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+  },
+): Promise<void> {
+  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify(next) }),
+  });
+  await refreshDim(dimId);
+  emit();
+}
+
 /** Persist a plain-text description for a field. Pass null to clear it. */
 export async function updateFieldDescription(
   dimId: string,

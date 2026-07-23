@@ -6,6 +6,7 @@ import { OptionBuilder } from "./OptionBuilder";
 import { toast } from "./Toast";
 import type { NumberFormat, OptionDef } from "../data";
 import type { ColumnConfig } from "./datagrid/types";
+import { ValidationFields } from "./datagrid/ValidationFields";
 
 export interface AddFieldInput {
   label: string;
@@ -69,9 +70,6 @@ export function AddFieldPopover({
   const [unique, setUnique] = useState(false);
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
-  const uniqueable = ["text", "number", "date", "url", "email"].includes(type);
-  const rangeable = type === "number" || type === "date" || type === "text";
-
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
   // extends LEFTWARD into the grid (where there's room — the button sits at
@@ -617,73 +615,17 @@ export function AddFieldPopover({
           </div>
         )}
 
-        {/* Required toggle — an empty value in a required field blocks publish */}
-        <label className="flex cursor-pointer items-start gap-2">
-          <input
-            type="checkbox"
-            checked={required}
-            onChange={(e) => setRequired(e.target.checked)}
-            className="mt-0.5 rounded-sm"
-            style={{ accentColor: "var(--accent)" }}
-          />
-          <span className="leading-tight">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-ink-2">
-              Required
-            </span>
-            <span className="mt-0.5 block font-body text-[11px] text-ink-3">
-              Every record must have a value before the table can be published.
-            </span>
-          </span>
-        </label>
-
-        {/* Unique toggle */}
-        {uniqueable && (
-          <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              checked={unique}
-              onChange={(e) => setUnique(e.target.checked)}
-              className="mt-0.5 rounded-sm"
-              style={{ accentColor: "var(--accent)" }}
-            />
-            <span className="leading-tight">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-2">
-                Unique
-              </span>
-              <span className="mt-0.5 block font-body text-[11px] text-ink-3">
-                No two records share a value.
-              </span>
-            </span>
-          </label>
-        )}
-
-        {/* Range inputs */}
-        {rangeable && (
-          <div className="flex gap-2">
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                {type === "text" ? "Min length" : "Min"}
-              </span>
-              <input
-                value={min}
-                onChange={(e) => setMin(e.target.value)}
-                placeholder="—"
-                className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
-              />
-            </label>
-            <label className="flex flex-1 flex-col gap-1">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                {type === "text" ? "Max length" : "Max"}
-              </span>
-              <input
-                value={max}
-                onChange={(e) => setMax(e.target.value)}
-                placeholder="—"
-                className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
-              />
-            </label>
-          </div>
-        )}
+        <ValidationFields
+          type={type}
+          required={required}
+          onRequiredChange={setRequired}
+          unique={unique}
+          onUniqueChange={setUnique}
+          min={min}
+          onMinChange={setMin}
+          max={max}
+          onMaxChange={setMax}
+        />
 
         {/* Footer */}
         <div className="flex items-center gap-2 pt-1">

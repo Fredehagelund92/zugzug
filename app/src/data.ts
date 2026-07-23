@@ -45,6 +45,7 @@ export interface FieldDef {
   description?: string;
   rules?: import("./components/datagrid/types").ConditionalRule[];
   required?: boolean;
+  validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {

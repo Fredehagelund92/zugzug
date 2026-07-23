@@ -186,6 +186,14 @@ export interface DataGridProps<Row> {
   onViewHistory?: (rowKey: string, field?: string) => void;
   /** Save per-column conditional formatting rules (persisted in field_config). */
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
+  /** Header menu: save Required/validation rules for an existing column. */
+  onSaveColumnValidation?: (
+    field: string,
+    next: {
+      required?: boolean;
+      validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+    },
+  ) => void;
   /** Save a plain-text description for a column (persisted in dimension_field.description). */
   onSaveColumnDescription?: (field: string, description: string | null) => void;
   /** Optional per-row activity map (rowKey → latest audit entry).

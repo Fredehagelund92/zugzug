@@ -1,4 +1,4 @@
-import type { ColumnConfig } from "./types";
+import type { ColumnConfig, CellType } from "./types";
 
 const isEmpty = (v: unknown) => v == null || String(v).trim() === "";
 
@@ -41,6 +41,23 @@ export function valueShapeError(
     if (clash) return `Already used by ${clash.key}.`;
   }
   return null;
+}
+
+/** Strip validation rules that are inapplicable for the given new column type.
+ *  - min/max only make sense for number, date, and text.
+ *  - unique only makes sense for non-select, non-boolean, non-rating types. */
+export function pruneValidationForType(
+  v: NonNullable<ColumnConfig["validation"]>,
+  newType: CellType,
+): NonNullable<ColumnConfig["validation"]> {
+  const rangeTypes: CellType[] = ["number", "date", "text"];
+  const uniqueTypes: CellType[] = ["text", "number", "date", "url", "email"];
+  return {
+    ...v,
+    min: rangeTypes.includes(newType) ? v.min : undefined,
+    max: rangeTypes.includes(newType) ? v.max : undefined,
+    unique: uniqueTypes.includes(newType) ? v.unique : undefined,
+  };
 }
 
 export function columnBadges(config: ColumnConfig): Array<"REQ" | "UNIQ" | "RANGE"> {

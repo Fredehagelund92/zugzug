@@ -28,6 +28,7 @@ import {
   changeColumnType,
   deleteColumn,
   updateFieldRules,
+  updateFieldValidation,
   updateFieldDescription,
   updateFieldDisplayFields,
   getGridLayout,
@@ -59,6 +60,7 @@ import { ConflictBanner, type FieldDiff } from "./ConflictBanner";
 import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
+import { pruneValidationForType } from "./datagrid/validation";
 import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
@@ -101,6 +103,7 @@ function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
     }
   })();
   config.required = f.required;
+  if (f.validation) config.validation = f.validation;
   return config;
 }
 
@@ -1441,9 +1444,9 @@ function RecordsBody({
           }
           onChangeColumnType={
             canEdit
-              ? (field, newConfig, opts) => {
-                  if (field.includes("__")) return Promise.resolve({ ok: false });
-                  return changeColumnType(
+              ? async (field, newConfig, opts) => {
+                  if (field.includes("__")) return { ok: false };
+                  const result = await changeColumnType(
                     activeId,
                     field,
                     newConfig.type,
@@ -1452,6 +1455,24 @@ function RecordsBody({
                     newConfig.type === "number" ? newConfig.numberFormat : undefined,
                     newConfig.type === "rating" ? newConfig.ratingMax : undefined,
                   );
+                  // Prune now-inapplicable validation when type changes
+                  if (result.ok) {
+                    const existingField = fields.find((f) => f.field === field);
+                    if (
+                      existingField?.validation &&
+                      Object.keys(existingField.validation).length > 0
+                    ) {
+                      const pruned = pruneValidationForType(
+                        existingField.validation,
+                        newConfig.type,
+                      );
+                      const hasValues = Object.values(pruned).some((v) => v !== undefined);
+                      if (hasValues) {
+                        void updateFieldValidation(activeId, field, { validation: pruned });
+                      }
+                    }
+                  }
+                  return result;
                 }
               : undefined
           }
@@ -1482,6 +1503,14 @@ function RecordsBody({
               ? (field, rules) => {
                   if (field.includes("__")) return;
                   void updateFieldRules(activeId, field, rules);
+                }
+              : undefined
+          }
+          onSaveColumnValidation={
+            canEdit
+              ? (field, next) => {
+                  if (field.includes("__")) return;
+                  void updateFieldValidation(activeId, field, next);
                 }
               : undefined
           }

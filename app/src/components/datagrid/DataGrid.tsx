@@ -1562,6 +1562,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onLayoutChange={props.onLayoutChange}
           onRenameColumn={props.onRenameColumn}
           onSaveColumnRules={props.onSaveColumnRules}
+          onSaveColumnValidation={props.onSaveColumnValidation}
           onSaveColumnDescription={props.onSaveColumnDescription}
           onChangeColumnType={props.onChangeColumnType}
           onDeleteColumn={props.onDeleteColumn}

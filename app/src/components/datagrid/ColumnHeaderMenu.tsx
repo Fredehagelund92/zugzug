@@ -14,6 +14,7 @@ import {
   IconArrowRight,
 } from "../Icons";
 import type { CellType, ColumnConfig, ColumnDef, NumberFormat } from "./types";
+import { ValidationFields } from "./ValidationFields";
 
 const IconRules = ({ className }: { className?: string }) => (
   <span className={className} style={{ fontSize: "10px" }}>
@@ -35,6 +36,10 @@ interface Props<Row> {
   onDelete: () => void;
   onFilter: (value: string | null) => void;
   onOpenRules?: () => void;
+  onSaveValidation?: (next: {
+    required?: boolean;
+    validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+  }) => void;
   onEditDescription?: () => void;
   // Linked-column (fk / lookup) actions. Present the kind-appropriate subset
   // depending on `column.columnKind`.
@@ -64,6 +69,7 @@ export function ColumnHeaderMenu<Row>({
   onDelete,
   onFilter,
   onOpenRules,
+  onSaveValidation,
   onEditDescription,
   onShowLinkedFields,
   onOpenTargetDimension,
@@ -73,8 +79,21 @@ export function ColumnHeaderMenu<Row>({
   onRemoveLookup,
 }: Props<Row>) {
   const [mode, setMode] = useState<
-    "menu" | "rename" | "type" | "number-format" | "rating-max" | "filter" | "confirm-delete"
+    | "menu"
+    | "rename"
+    | "type"
+    | "number-format"
+    | "rating-max"
+    | "filter"
+    | "confirm-delete"
+    | "validation"
   >("menu");
+
+  // Seed validation panel from current column config
+  const [valRequired, setValRequired] = useState(column.config.required ?? false);
+  const [valUnique, setValUnique] = useState(column.config.validation?.unique ?? false);
+  const [valMin, setValMin] = useState(String(column.config.validation?.min ?? ""));
+  const [valMax, setValMax] = useState(String(column.config.validation?.max ?? ""));
   const [draft, setDraft] = useState(column.label);
   const [filterDraft, setFilterDraft] = useState(filterValue ?? "");
   const existingFmt = column.config.type === "number" ? column.config.numberFormat : undefined;
@@ -308,6 +327,11 @@ export function ColumnHeaderMenu<Row>({
               }}
             >
               <IconRules className={iconCls} /> Conditional formatting…
+            </button>
+          )}
+          {onSaveValidation && (
+            <button type="button" className={item} onClick={() => setMode("validation")}>
+              <IconRules className={iconCls} /> Validation…
             </button>
           )}
           {onEditDescription && (
@@ -803,6 +827,66 @@ export function ColumnHeaderMenu<Row>({
               Delete
             </button>
             <button type="button" className={item + " justify-center"} onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {mode === "validation" && (
+        <div className="p-2 space-y-3">
+          <button
+            type="button"
+            onClick={() => setMode("menu")}
+            className="flex items-center gap-1 font-mono text-[11px] text-ink-3 hover:text-ink"
+          >
+            <IconChevronLeft className="h-3 w-3" /> Back
+          </button>
+          <ValidationFields
+            type={column.config.type}
+            required={valRequired}
+            onRequiredChange={setValRequired}
+            unique={valUnique}
+            onUniqueChange={setValUnique}
+            min={valMin}
+            onMinChange={setValMin}
+            max={valMax}
+            onMaxChange={setValMax}
+          />
+          <div className="flex gap-1 pt-1">
+            <button
+              type="button"
+              className={cx(item, "justify-center bg-accent text-accent-ink hover:brightness-110")}
+              onClick={() => {
+                const num = (s: string) =>
+                  s.trim() === ""
+                    ? undefined
+                    : column.config.type === "date"
+                      ? s.trim()
+                      : Number(s);
+                const validationObj: {
+                  unique?: boolean;
+                  min?: number | string | null;
+                  max?: number | string | null;
+                } = {};
+                if (valUnique) validationObj.unique = true;
+                const minV = num(valMin);
+                const maxV = num(valMax);
+                if (minV !== undefined) validationObj.min = minV;
+                if (maxV !== undefined) validationObj.max = maxV;
+                onSaveValidation?.({
+                  required: valRequired,
+                  validation: Object.keys(validationObj).length > 0 ? validationObj : undefined,
+                });
+                onClose();
+              }}
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              className={item + " justify-center"}
+              onClick={() => setMode("menu")}
+            >
               Cancel
             </button>
           </div>

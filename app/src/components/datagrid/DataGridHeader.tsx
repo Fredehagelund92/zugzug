@@ -139,6 +139,13 @@ interface DataGridHeaderProps<Row> {
   onLayoutChange?: (change: LayoutChange) => void;
   onRenameColumn?: (field: string, label: string) => void;
   onSaveColumnRules?: (field: string, rules: ConditionalRule[]) => void;
+  onSaveColumnValidation?: (
+    field: string,
+    next: {
+      required?: boolean;
+      validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+    },
+  ) => void;
   onSaveColumnDescription?: (field: string, desc: string | null) => void;
   onChangeColumnType?: (
     field: string,
@@ -193,6 +200,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
     onLayoutChange,
     onRenameColumn,
     onSaveColumnRules,
+    onSaveColumnValidation,
     onSaveColumnDescription,
     onChangeColumnType,
     onDeleteColumn,
@@ -452,6 +460,11 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                           setMenuFor(null);
                           setRulesEditor(c.field);
                         }
+                      : undefined
+                  }
+                  onSaveValidation={
+                    onSaveColumnValidation
+                      ? (next) => onSaveColumnValidation(c.field, next)
                       : undefined
                   }
                   onEditDescription={
