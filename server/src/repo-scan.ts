@@ -821,7 +821,7 @@ export async function deriveCanonical(
   }
 
   const adapter = await getAdapter();
-  // Let warehouse errors propagate — callers (CatalogExplorer.wire,
+  // Let warehouse errors propagate — callers (TableDetail wiring,
   // Sources.deriveAction) need to see why a column "has no rows" rather than
   // getting a misleading 0. A genuinely empty column still returns [].
   const vals = await adapter.distinctValues(ref, column, 5000);
