@@ -465,7 +465,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           adapter: adapter.capabilities.id,
           databaseTerm: adapter.capabilities.databaseTerm,
         });
-      } catch {
+      } catch (e) {
+        console.error("✗ warehouse/info adapter unavailable:", e);
         return json({ error: "warehouse_unavailable" }, 503);
       }
     }
