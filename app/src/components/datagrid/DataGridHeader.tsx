@@ -12,6 +12,7 @@ import {
 import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 import { HiddenFieldsPopover } from "./HiddenFieldsPopover";
 import type { CellType, ColumnDef, FilterSet, ColumnConfig, ConditionalRule } from "./types";
+import { columnBadges } from "./validation";
 
 type LayoutChange = {
   widths?: Record<string, number>;
@@ -375,6 +376,17 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                 )}
                 {sortGlyph}
               </span>
+              {columnBadges(c.config).map((b) => (
+                <span
+                  key={b}
+                  className={`ml-1 rounded-[3px] border px-1 text-[9px] leading-tight ${
+                    b === "REQ" ? "border-accent/40 text-accent" : "border-line-2 text-ink-2"
+                  }`}
+                  title={b === "REQ" ? "Required" : b === "UNIQ" ? "Unique" : "Range"}
+                >
+                  {b}
+                </span>
+              ))}
               {filterSet?.conditions.some((fc) => fc.field === c.field) && (
                 <span
                   className="rounded-pill bg-accent-wash px-1 font-mono text-[9px] text-accent"

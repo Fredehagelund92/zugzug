@@ -122,6 +122,7 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
     cellInlineStyle.background = `color-mix(in srgb,var(--tint-${ruleStyle.cellBg}) 18%,transparent)`;
   if (ruleStyle?.textColor) cellInlineStyle.color = `var(--tint-${ruleStyle.textColor})`;
   const data = `${rk}::${c.field}`;
+  const isEmptyRequired = c.config.required && (value == null || String(value).trim() === "");
   return (
     <div
       ref={editing ? editingCellRef : undefined}
@@ -216,6 +217,8 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
             }}
           />
         )
+      ) : isEmptyRequired ? (
+        <span className="italic text-danger/85">Needs a value</span>
       ) : c.render ? (
         c.render(row, ctx)
       ) : c.config.type === "select" ? (
