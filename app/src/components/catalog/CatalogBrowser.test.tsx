@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import { CatalogBrowser } from "./CatalogBrowser";
 
@@ -29,5 +29,28 @@ describe("CatalogBrowser", () => {
     render(<CatalogBrowser />);
     expect(screen.getByPlaceholderText(/filter/i)).toBeTruthy();
     await waitFor(() => screen.getByText("md:demo"));
+  });
+
+  it("renders a vertical separator (divider) between tree and detail panes", () => {
+    render(<CatalogBrowser />);
+    const separator = screen.getByRole("separator");
+    expect(separator).toBeTruthy();
+    const orientation = separator.getAttribute("aria-orientation");
+    expect(orientation).toBe("vertical");
+  });
+
+  describe("tree width persistence", () => {
+    beforeEach(() => {
+      localStorage.setItem("zz.catalog.tree-width", "400");
+    });
+    afterEach(() => {
+      localStorage.removeItem("zz.catalog.tree-width");
+    });
+
+    it("initialises tree pane width from localStorage", () => {
+      const { container } = render(<CatalogBrowser />);
+      const grid = container.firstElementChild as HTMLElement;
+      expect(grid.style.gridTemplateColumns).toMatch(/^400px/);
+    });
   });
 });

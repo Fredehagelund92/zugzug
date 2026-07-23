@@ -95,4 +95,19 @@ describe("CatalogTree", () => {
     );
     expect(screen.queryByTestId("offline-indicator")).toBeNull();
   });
+
+  it("shows the node name as a title tooltip on the label span", () => {
+    render(
+      <CatalogTree
+        roots={roots}
+        open={new Set(["conn"])}
+        loadingIds={new Set()}
+        selectedId={null}
+        onToggle={() => {}}
+        onSelect={() => {}}
+      />,
+    );
+    const span = screen.getByText("md:demo");
+    expect(span.getAttribute("title")).toBe("md:demo");
+  });
 });

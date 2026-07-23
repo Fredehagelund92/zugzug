@@ -106,7 +106,9 @@ function TreeRow({
         )}
       />
       <NodeGlyph node={node} />
-      <span className="flex-1 truncate font-mono text-[12px] tracking-tight">{node.name}</span>
+      <span className="flex-1 truncate font-mono text-[12px] tracking-tight" title={node.name}>
+        {node.name}
+      </span>
       {node.unreachable && (
         <span
           data-testid="offline-indicator"

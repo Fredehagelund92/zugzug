@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { IconSearch } from "../Icons";
 import { CatalogTree } from "./CatalogTree";
 import { TableDetail } from "./TableDetail";
@@ -7,11 +7,31 @@ import { useCatalogTree } from "./useCatalogTree";
 import { filterTree, nodeById } from "./catalog-tree";
 import { useDimensions } from "../../store";
 
+const TREE_WIDTH_KEY = "zz.catalog.tree-width";
+const TREE_WIDTH_MIN = 240;
+const TREE_WIDTH_MAX = 640;
+const TREE_WIDTH_DEFAULT = 326;
+const TREE_WIDTH_STEP = 16;
+
 export function CatalogBrowser(): JSX.Element {
   const { roots, open, loadingIds, toggle } = useCatalogTree();
   const dims = useDimensions();
   const [filter, setFilter] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [treeWidth, setTreeWidth] = useState<number>(() => {
+    const stored = localStorage.getItem(TREE_WIDTH_KEY);
+    if (stored !== null) {
+      const parsed = Number(stored);
+      if (Number.isFinite(parsed)) {
+        return Math.max(TREE_WIDTH_MIN, Math.min(TREE_WIDTH_MAX, parsed));
+      }
+    }
+    return TREE_WIDTH_DEFAULT;
+  });
+  const treeWidthRef = useRef(treeWidth);
+  useEffect(() => {
+    treeWidthRef.current = treeWidth;
+  }, [treeWidth]);
 
   const view = useMemo(() => filterTree(roots, filter), [roots, filter]);
   const shownRoots = filter ? view.roots : roots;
@@ -22,9 +42,41 @@ export function CatalogBrowser(): JSX.Element {
 
   const connectionLabel = `${roots[0]?.glyph ?? ""} ${roots[0]?.name ?? ""}`;
 
+  function handleDividerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = treeWidthRef.current;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.max(
+        TREE_WIDTH_MIN,
+        Math.min(TREE_WIDTH_MAX, startW + (ev.clientX - startX)),
+      );
+      setTreeWidth(next);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      localStorage.setItem(TREE_WIDTH_KEY, String(treeWidthRef.current));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  function handleDividerKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      const delta = e.key === "ArrowRight" ? TREE_WIDTH_STEP : -TREE_WIDTH_STEP;
+      const next = Math.max(TREE_WIDTH_MIN, Math.min(TREE_WIDTH_MAX, treeWidthRef.current + delta));
+      setTreeWidth(next);
+      localStorage.setItem(TREE_WIDTH_KEY, String(next));
+    }
+  }
+
   return (
-    <div className="grid h-full min-h-0 grid-cols-[326px_1fr]">
-      <aside className="flex min-h-0 flex-col border-r border-line bg-surface">
+    <div className="grid h-full min-h-0" style={{ gridTemplateColumns: `${treeWidth}px auto 1fr` }}>
+      <aside className="flex min-h-0 flex-col bg-surface">
         <div className="border-b border-line px-3 pb-2.5 pt-3">
           <label className="flex h-8.5 items-center gap-2 rounded-sm border border-line-2 bg-surface-2 px-2.5 focus-within:border-accent">
             <IconSearch className="h-3.5 w-3.5 shrink-0 text-ink-3" />
@@ -52,6 +104,20 @@ export function CatalogBrowser(): JSX.Element {
           onSelect={setSelectedId}
         />
       </aside>
+
+      {/* Draggable divider */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-valuenow={treeWidth}
+        aria-valuemin={TREE_WIDTH_MIN}
+        aria-valuemax={TREE_WIDTH_MAX}
+        aria-label="Resize tree pane"
+        tabIndex={0}
+        className="w-1 cursor-col-resize self-stretch bg-line hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+        onPointerDown={handleDividerPointerDown}
+        onKeyDown={handleDividerKeyDown}
+      />
 
       <main className="min-h-0 overflow-auto bg-bg">
         {selected?.kind === "table" && dbId ? (
