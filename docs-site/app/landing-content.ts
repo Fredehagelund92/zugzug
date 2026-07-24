@@ -251,8 +251,17 @@ export const LANDING_CSS = `
 
   @media(max-width:820px){
     .navlinks .hide{display:none}
-    .jrow{grid-template-columns:1fr; gap:16px} .jstage{height:auto} .sources{gap:12px}
+    /* junction stacks: chips → record → tables, in normal flow */
+    .jrow{grid-template-columns:1fr; gap:16px}
+    .jlabels{display:none}
+    .jstage{height:auto}
+    .sources{gap:12px}
     .connectors{display:none}
+    .out{height:auto}
+    .record{position:static; transform:none}
+    .tables{position:static; margin-top:12px}
+    .chip.src::after, .record::before{display:none}
+    .joinline{white-space:normal; overflow-x:visible; line-height:1.85}
     .steps{grid-template-columns:1fr}
     .pillars{grid-template-columns:1fr}
   }
