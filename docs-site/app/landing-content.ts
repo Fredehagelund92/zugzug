@@ -317,7 +317,7 @@ export const LANDING_HTML = `
     <h1>Master data management, <span class="em">minus the enterprise</span>.</h1>
     <p class="lede">Every warehouse fills with names nobody agrees on — <code>BCG</code>, <code>B.C.G.</code>, <code>Boston Consulting Group</code>. Zug Zug pins them to one approved record, and keeps the lists everything downstream depends on. Right next to your warehouse. One command to run.</p>
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://demo.zugzug.dev">Try the live demo →</a>
+      <a class="btn btn-primary" href="https://demo.zugzughq.io">Try the live demo →</a>
       <a class="btn btn-ghost" href="https://github.com/Fredehagelund92/zugzug"><span class="prompt">$</span> docker compose up</a>
     </div>
 
