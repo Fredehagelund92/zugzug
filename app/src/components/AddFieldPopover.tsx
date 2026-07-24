@@ -263,8 +263,13 @@ export function AddFieldPopover({
     }
     config.required = required;
 
-    const num = (s: string) =>
-      s.trim() === "" ? undefined : type === "date" ? s.trim() : Number(s);
+    const num = (s: string) => {
+      if (s.trim() === "") return undefined;
+      if (type === "date") return s.trim();
+      const n = Number(s);
+      if (type === "text") return Math.max(0, Math.floor(n));
+      return n;
+    };
     const validationObj: NonNullable<typeof config.validation> = {};
     if (unique) validationObj.unique = true;
     if (num(min) !== undefined) validationObj.min = num(min)!;

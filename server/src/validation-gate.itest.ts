@@ -103,6 +103,49 @@ describe("publish gate — validation", () => {
     });
   });
 
+  it("blocks publish when a date value is before the min bound", async () => {
+    // Arrange: dimension with a date "start_date" field, min bound "2024-01-01"
+    const dimId = await addDimension("DateRangeDim", [], { keyKind: "slug" }, U, T);
+
+    await addCanonicalOne(dimId, "Event A", "event_a", U, T);
+    await addCanonicalOne(dimId, "Event B", "event_b", U, T);
+
+    const added = await addField(dimId, "Start Date", "date", undefined, {}, U, T);
+    expect(added?.field).toBe("start_date");
+
+    // Inject validation: min "2024-01-01"
+    await pgRun(
+      `UPDATE "zugzug_app"."dimension_field"
+       SET field_config = $1
+       WHERE dim_id = $2 AND tenant_id = $3 AND field = 'start_date'`,
+      [JSON.stringify({ validation: { min: "2024-01-01" } }), dimId, T],
+    );
+
+    const meta = await pgGet<{ dimTable: string; keyCol: string }>(
+      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
+      [dimId, T],
+    );
+
+    const schema = meta!.dimTable.split(".")[0];
+    const table = meta!.dimTable.split(".")[1];
+
+    // event_a = valid date, event_b = before the min bound
+    await pgRun(`UPDATE "${schema}"."${table}" SET start_date = $1 WHERE ${meta!.keyCol} = $2`, [
+      "2024-06-15",
+      "event_a",
+    ]);
+    await pgRun(`UPDATE "${schema}"."${table}" SET start_date = $1 WHERE ${meta!.keyCol} = $2`, [
+      "2023-12-31",
+      "event_b",
+    ]);
+
+    // Act + Assert: commit should throw VALIDATION_FAILED
+    await expect(commit(dimId, U, T)).rejects.toMatchObject({
+      code: "VALIDATION_FAILED",
+      status: 422,
+    });
+  });
+
   it("blocks publish on a duplicate in a unique column", async () => {
     // Arrange: dimension with a text "ticker" field that must be unique
     const dimId = await addDimension("UniqueDim", [], { keyKind: "slug" }, U, T);

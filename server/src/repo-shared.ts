@@ -178,7 +178,11 @@ export function parseFieldConfig(
     if (v.unique === true) out.unique = true;
     const bound = (x: unknown): number | string | null | undefined => {
       if (x === null) return null;
-      if (typeof x === "number" && Number.isFinite(x)) return x;
+      if (typeof x === "number" && Number.isFinite(x)) {
+        // text length bounds must be non-negative integers
+        if (type === "text") return Math.max(0, Math.floor(x));
+        return x;
+      }
       if (typeof x === "string" && x.trim() !== "" && type === "date") return x; // ISO date bound
       return undefined;
     };

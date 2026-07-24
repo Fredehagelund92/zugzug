@@ -7,7 +7,7 @@
  * and stub all store / router hooks so RecordsBody mounts cleanly.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import type { MappingDimension, CanonicalValue } from "../data";
 
@@ -76,9 +76,21 @@ vi.mock("../lib/use-tenant-navigate", () => ({
 vi.mock("./Toast", () => ({ toast: vi.fn() }));
 
 // ── DataGrid stub — renders one [data-testid="row"] per row ──────────────────
+// Also captures onLayoutChange so tests can simulate layout changes (e.g., hiding a column).
+let capturedOnLayoutChange: ((partial: Record<string, unknown>) => void) | undefined;
+
 vi.mock("./datagrid", () => ({
-  DataGrid: ({ rows, empty }: { rows: CanonicalValue[]; empty?: React.ReactNode }) =>
-    rows.length === 0 ? (
+  DataGrid: ({
+    rows,
+    empty,
+    onLayoutChange,
+  }: {
+    rows: CanonicalValue[];
+    empty?: React.ReactNode;
+    onLayoutChange?: (partial: Record<string, unknown>) => void;
+  }) => {
+    capturedOnLayoutChange = onLayoutChange;
+    return rows.length === 0 ? (
       <div data-testid="empty-state">{empty}</div>
     ) : (
       <div>
@@ -88,7 +100,8 @@ vi.mock("./datagrid", () => ({
           </div>
         ))}
       </div>
-    ),
+    );
+  },
   UndoStackProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useUndoStack: () => ({
     push: vi.fn(),
@@ -218,5 +231,30 @@ describe("scoped search", () => {
     fireEvent.click(screen.getByText(/in Region/i));
     fireEvent.click(screen.getByRole("menuitem", { name: /All columns/i }));
     expect(screen.getAllByTestId("row")).toHaveLength(2);
+  });
+
+  it("hides the scoped column resets scope to all-columns", async () => {
+    renderPane();
+    const input = screen.getByPlaceholderText("Search records…");
+    fireEvent.change(input, { target: { value: "north" } });
+
+    // Scope to Region — only record B is shown (region="northern")
+    fireEvent.click(screen.getByText(/in all columns/i));
+    fireEvent.click(screen.getByRole("menuitem", { name: /Region/i }));
+    const scopedRows = screen.getAllByTestId("row");
+    expect(scopedRows).toHaveLength(1);
+    expect(scopedRows[0].textContent).toContain("Acme Corp");
+
+    // Simulate hiding the "region" column via onLayoutChange
+    await act(async () => {
+      capturedOnLayoutChange?.({ hidden: ["region"] });
+    });
+
+    // Scope auto-resets to all-columns. Visible fields no longer include "region",
+    // so "north" now matches record A (name="northern") but not record B (region hidden).
+    // The key assertion: it's now record A, not record B — proving scope was reset.
+    const resetRows = screen.getAllByTestId("row");
+    expect(resetRows).toHaveLength(1);
+    expect(resetRows[0].textContent).toContain("Northern Lights Co");
   });
 });

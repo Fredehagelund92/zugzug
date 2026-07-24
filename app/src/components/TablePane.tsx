@@ -489,6 +489,13 @@ function RecordsBody({
     [columns],
   );
 
+  // Reset scoped search when the scoped column is hidden
+  useEffect(() => {
+    if (searchScope != null && !visibleFields.includes(searchScope)) {
+      setSearchScope(null);
+    }
+  }, [searchScope, visibleFields]);
+
   const rowsForGrid = useMemo(() => {
     const src = changedOnly ? list.filter((c) => changedKeySet.has(c.key)) : list;
     const all = src.map((c): CanonicalValue & Record<string, unknown> => ({
@@ -589,11 +596,15 @@ function RecordsBody({
               }>
             | undefined) ?? [];
         const recordCount = new Set(violations.map((v) => v.key)).size;
-        const count = recordCount > 0 ? recordCount : 1;
-        flash(
-          `${count} record${count === 1 ? "" : "s"} need a fix before you can publish.`,
-          "danger",
-        );
+        if (recordCount > 0) {
+          flash(
+            `${recordCount} record${recordCount === 1 ? "" : "s"} need a fix before you can publish.`,
+            "danger",
+          );
+        } else {
+          const msg = err instanceof Error ? err.message : "unknown error";
+          flash(`Publish failed — ${msg}`, "danger");
+        }
         // Scroll to the first violating record so the user can see what needs fixing.
         const firstKey = violations[0]?.key;
         if (firstKey) {
@@ -1606,7 +1617,7 @@ function RecordsBody({
                       {searchScope
                         ? ` in ${columns.find((c) => c.field === searchScope)?.label ?? searchScope}`
                         : null}
-                      {`.`}
+                      .
                       <button
                         type="button"
                         onClick={() => setSearch(``)}

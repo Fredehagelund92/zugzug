@@ -21,4 +21,19 @@ describe("parseFieldConfig validation", () => {
     // unique must be a real boolean; string min for text (length) is invalid → dropped
     expect(cfg.validation).toEqual({}); // present but empty when the object exists yet holds no valid keys
   });
+
+  it("floors a fractional text-length bound to a non-negative integer", () => {
+    const cfg = parseFieldConfig("text", JSON.stringify({ validation: { min: 3.5 } }));
+    expect(cfg.validation?.min).toBe(3);
+  });
+
+  it("clamps a negative text-length bound to 0", () => {
+    const cfg = parseFieldConfig("text", JSON.stringify({ validation: { min: -2 } }));
+    expect(cfg.validation?.min).toBe(0);
+  });
+
+  it("does not floor numeric bounds for number type", () => {
+    const cfg = parseFieldConfig("number", JSON.stringify({ validation: { min: 1.5 } }));
+    expect(cfg.validation?.min).toBe(1.5);
+  });
 });

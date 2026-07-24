@@ -386,7 +386,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
               </span>
               {columnBadges(c.config).map((b) => (
                 <span
-                  key={b}
+                  key={`${c.field}-${b}`}
                   className={`ml-1 rounded-[3px] border px-1 text-[9px] leading-tight ${
                     b === "REQ" ? "border-accent/40 text-accent" : "border-line-2 text-ink-2"
                   }`}

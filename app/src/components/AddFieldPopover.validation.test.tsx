@@ -134,6 +134,29 @@ describe("AddFieldPopover validation", () => {
     expect(screen.queryByLabelText(/^min$/i)).not.toBeInTheDocument();
   });
 
+  it("floors a fractional text min-length to a non-negative integer before submit", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AddFieldPopover
+        anchorRef={{ current: makeAnchor() }}
+        onClose={() => {}}
+        onSubmit={onSubmit}
+        allDims={[]}
+      />,
+    );
+
+    // Text is the default type
+    fireEvent.change(screen.getByPlaceholderText(/field name/i), {
+      target: { value: "Code" },
+    });
+    // Enter a fractional min length
+    fireEvent.change(screen.getByLabelText(/min length/i), { target: { value: "3.9" } });
+    fireEvent.click(screen.getByRole("button", { name: /add field/i }));
+
+    const call = onSubmit.mock.calls[0][0] as { label: string; config: Record<string, unknown> };
+    expect(call.config).toMatchObject({ validation: { min: 3 } });
+  });
+
   it("includes unique true in the submitted field for text type", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
