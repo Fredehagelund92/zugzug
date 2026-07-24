@@ -79,6 +79,7 @@ import { PresenceStrip } from "./datagrid/PresenceStrip";
 import { ToolbarMenu, MenuItem, MenuSection, MenuSep } from "./ToolbarMenu";
 import { OwnerPicker } from "./OwnerPicker";
 import { PALETTE, defaultTintFor } from "../lib/palette";
+import { Avatar } from "./Avatar";
 
 /** Convert a FieldDef (server shape) into a ColumnConfig discriminated union. */
 function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
@@ -893,14 +894,6 @@ function RecordsBody({
   };
 
   const palette = PALETTE[dim.color ?? defaultTintFor(dim.id)];
-  const initials = (name: string) =>
-    name
-      .trim()
-      .split(/\s+/)
-      .map((w) => w[0])
-      .slice(0, 2)
-      .join("")
-      .toUpperCase();
   const publishedTitle = pubState
     ? `Version ${pubState.version}${
         pubState.publishedAt != null
@@ -1038,12 +1031,7 @@ function RecordsBody({
           </div>
           {dim.ownerName && (
             <span className="hidden shrink-0 items-center gap-1.5 rounded-pill border border-line bg-surface-2 py-0.5 pl-0.5 pr-2.5 text-[12px] text-ink-2 @6xl:inline-flex">
-              <span
-                className="grid h-[18px] w-[18px] place-items-center rounded-pill text-[9px] font-bold text-white"
-                style={{ background: palette.bg }}
-              >
-                {initials(dim.ownerName)}
-              </span>
+              <Avatar name={dim.ownerName} color={palette.bg} size={18} />
               {dim.ownerName}
             </span>
           )}

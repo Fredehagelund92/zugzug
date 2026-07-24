@@ -24,6 +24,8 @@ import {
   IconX,
 } from "./Icons";
 import { useDimensions, currentUser } from "../store";
+import { Avatar } from "./Avatar";
+import { PALETTE, defaultTintFor } from "../lib/palette";
 import { RoleBadge } from "./RoleBadge";
 import { SyncPill } from "./SyncPill";
 import { useOpenTabs } from "../lib/open-tabs";
@@ -204,9 +206,15 @@ function UserMenu() {
         onClick={() => setOpen((o) => !o)}
         title={currentUser.name}
         aria-label={`User menu for ${currentUser.name}`}
-        className="grid h-8 w-8 place-items-center rounded-pill border border-line-2 bg-surface-3 font-mono text-[10px] text-ink-2 ring-1 ring-accent transition-colors hover:bg-hover"
+        className="grid h-8 w-8 place-items-center rounded-pill transition-transform hover:scale-[1.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
-        {currentUser.initials}
+        <Avatar
+          name={currentUser.name}
+          initials={currentUser.initials}
+          color={PALETTE[defaultTintFor(currentUser.id)].bg}
+          size={32}
+          className="shadow-sm ring-1 ring-inset ring-white/20"
+        />
       </button>
       {open &&
         createPortal(
