@@ -1,0 +1,37 @@
+---
+title: Concepts
+description: The words Zug Zug uses — table, record, source value, mapping, publish.
+---
+
+Plain words, no glossary required.
+
+## Table
+
+A curated list (Country, Channel, Partner) with an approved set of records.
+Materialized as a `dim_<x>` table where your warehouse can read it.
+
+## Record
+
+A single approved row in a table — a `key` + `label` pair, plus attributes. The
+thing source values map *to*.
+
+## Source value
+
+A distinct string scanned from a registered warehouse column, waiting to be
+mapped. It comes from a source; hence the name.
+
+## Mapping
+
+The assignment of a source value to a record. Materialized in the `map_<x>` table,
+so one join resolves messy input to the agreed key.
+
+## Draft
+
+A mapping awaiting publish. Lives in Zug Zug, invisible to your warehouse until
+published.
+
+## Publish
+
+The single act that folds drafts and record edits into a new numbered table
+version and materializes it. Pull-first: your own pipeline reads the result, or
+you opt into a direct write.

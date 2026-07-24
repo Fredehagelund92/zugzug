@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/* Zug Zug brand into the Fumadocs docs theme (dark-first). The landing page
+   brings its own scoped styles; these only affect /docs + shared chrome. */
+:root,
+.dark {
+  --color-fd-primary: #d6336c;
+  --color-fd-ring: #d6336c;
+}
+
+.dark {
+  --color-fd-background: #080b14;
+  --color-fd-card: #0f1526;
+  --color-fd-popover: #0f1526;
+  --color-fd-secondary: #182240;
+  --color-fd-muted: #182240;
+  --color-fd-accent: #182240;
+  --color-fd-border: color-mix(in srgb, white 10%, transparent);
+}
+
+body {
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Bricolage on docs headings for brand cohesion */
+.dark h1,
+.dark h2,
+.dark h3,
+#nd-docs-layout h1,
+#nd-docs-layout h2,
+#nd-docs-layout h3 {
+  font-family: var(--font-display), ui-sans-serif, sans-serif;
+  letter-spacing: -0.02em;
+}
