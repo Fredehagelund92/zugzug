@@ -27,11 +27,11 @@ warehouse (read-only)
 
 ## How it works
 
-You connect Zugzug to your warehouse with a read-only credential. The adapter scans `DISTINCT` values from the columns you register as dimensions — it never modifies the warehouse unless you explicitly configure a writable adapter.
+You connect Zugzug to your warehouse with a read-only credential. The adapter scans `DISTINCT` values from the columns you register as sources — it never modifies the warehouse unless you explicitly configure a writable adapter.
 
 The UI shows unmapped values alongside their frequency counts. Team members map each source value to a record (a `key` + `label` pair). Mappings sit in Postgres as drafts until an editor publishes them. The audit log records who published what and when.
 
-Publishing writes `dim_<x>` and `map_<x>` tables. In default mode (Postgres record store), results live in Postgres and are downloadable as Parquet on demand. If you configure a writable warehouse adapter, each publish writes directly into your warehouse — for example, into a MotherDuck database your dbt project already reads.
+Publishing writes `dim_<x>` and `map_<x>` tables. The recommended path is **pull-first**: in default mode (Postgres record store) results live in Postgres, and your warehouse team ingests them through their own pipeline — a dbt source, the Pull API, or an on-demand Parquet snapshot — so every publish flows through the dev→prod and review path they already trust. Prefer a direct push? Configure a writable warehouse adapter and each publish writes straight into your warehouse (e.g. a MotherDuck database your dbt reads) — an opt-in convenience that trades that pipeline control for simplicity. See [ADR-0007](./docs/adr/0007-publish-is-pull-first.md).
 
 The warehouse adapter is a TypeScript interface (`WarehouseAdapter`). DuckDB/MotherDuck and Snowflake are shipped. Additional adapters (Postgres-as-warehouse, BigQuery, Databricks) are community-roadmapped — see the issue template below.
 

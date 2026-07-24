@@ -59,3 +59,8 @@ words only: "table", "record", "source value", "mapping", "Review",
 golden, commit, staged, sync, tenant, matching, probe. A change awaiting
 publish is a "draft", not "staged"; the whole batch is "N drafts". When
 writing UI copy, prefer a concrete example over an abstract term.
+Per ADR-0006 this now extends to schema and code identifiers too: the
+entity is `reference_table`/`refTable` and an approved row is a `record`
+— not `dimension`/`canonical`. The only survivors are the dbt-facing
+`dim_<x>`/`map_<x>` output tables and their `dim_table`/`map_table`
+columns (correct Kimball vocabulary — see CONTEXT.md).
