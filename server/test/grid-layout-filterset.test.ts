@@ -10,10 +10,10 @@ const U = "test-user-glfilterset";
 const D = "test-dim-glfilterset";
 
 async function cleanup(): Promise<void> {
-  await pgRun(
-    `DELETE FROM "zugzug_app"."user_grid_layout" WHERE user_id = $1 AND dim_id = $2`,
-    [U, D],
-  );
+  await pgRun(`DELETE FROM "zugzug_app"."user_grid_layout" WHERE user_id = $1 AND dim_id = $2`, [
+    U,
+    D,
+  ]);
 }
 beforeEach(cleanup);
 afterAll(cleanup);

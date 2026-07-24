@@ -21,7 +21,9 @@ describe("Admin/Workspaces", () => {
       </MemoryRouter>,
     );
     expect(screen.queryByText(/^Loading…$/)).toBeNull();
-    const busy = screen.getAllByRole("generic").filter((el) => el.getAttribute("aria-busy") === "true");
+    const busy = screen
+      .getAllByRole("generic")
+      .filter((el) => el.getAttribute("aria-busy") === "true");
     expect(busy.length).toBeGreaterThan(0);
   });
 
@@ -35,9 +37,7 @@ describe("Admin/Workspaces", () => {
         <Workspaces />
       </MemoryRouter>,
     );
-    await waitFor(() =>
-      expect(screen.getByText("No workspaces yet")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("No workspaces yet")).toBeInTheDocument());
     expect(
       screen.getByRole("button", { name: /create your first workspace/i }),
     ).toBeInTheDocument();

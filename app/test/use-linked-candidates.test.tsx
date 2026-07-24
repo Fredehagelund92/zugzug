@@ -3,14 +3,14 @@ import { renderHook } from "@testing-library/react";
 import { useLinkedCandidates } from "../src/lib/use-linked-candidates";
 import type { FieldDef, MappingDimension } from "../src/data";
 
-const mkDim = (id: string, canonical: Array<{ key: string; label: string }>): MappingDimension => ({
+const mkDim = (id: string, record: Array<{ key: string; label: string }>): MappingDimension => ({
   id,
   dimension: id.toUpperCase(),
   dimTable: `zugzug.dim_${id}`,
   mapTable: `zugzug.map_${id}`,
   keyCol: `${id}_code`,
   rows: 0,
-  canonical: canonical.map((c) => ({ ...c, version: 1 })),
+  record: record.map((c) => ({ ...c, version: 1 })),
   values: [],
   fields: [],
 });

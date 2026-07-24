@@ -37,10 +37,10 @@ function makeWritableMock(opts: { failCommit?: boolean } = {}) {
     async ping() {
       return true;
     },
-    async ensureCanonicalTables(d: DimensionSpec) {
+    async ensureRecordTables(d: DimensionSpec) {
       ensured.push(d);
     },
-    async commitCanonical(d: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+    async commitRecord(d: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
       if (opts.failCommit) throw new Error("simulated warehouse failure");
       committed.push({ dim: d, drafts });
       return { rowsWritten: drafts.length };
@@ -98,12 +98,12 @@ test("commit in writable mode (warehouse fails): Postgres committed; warehouseSy
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("failed");
 
-  // Postgres canonical SHOULD reflect the commit (drafts cleared, dim/map rows present, "default").
+  // Postgres record SHOULD reflect the commit (drafts cleared, dim/map rows present, "default").
   const drafts = await repo.listDrafts(dimId, "default");
   expect(drafts).toHaveLength(0);
 
   const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.canonical.some((c) => c.key === "us")).toBe(true);
+  expect(dim?.record.some((c) => c.key === "us")).toBe(true);
 
   const audits = await repo.listAudit(10);
   const failAudit = audits.find((a) => a.action === "Warehouse sync failed");
@@ -129,7 +129,7 @@ test("commit with no approved drafts: returns early; no warehouse call attempted
 });
 
 test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-end", async () => {
-  // A real DuckDbWritableAdapter against :memory:. The Postgres canonical mirror
+  // A real DuckDbWritableAdapter against :memory:. The Postgres record mirror
   // also exists (via the normal pgTx path) — we're verifying both sides happen.
   const writableDuckDb = new DuckDbWritableAdapter({
     type: "duckdb",
@@ -139,7 +139,7 @@ test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-en
     writable: true,
   });
 
-  // Pre-create the schema so ensureCanonicalTables can target it
+  // Pre-create the schema so ensureRecordTables can target it
   // @ts-expect-error — protected connect()
   const c = await writableDuckDb["connect"]();
   await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
@@ -160,7 +160,7 @@ test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-en
   expect(result.warehouseSynced).toBe("synced");
 
   // Verify the writable DuckDB actually has the rows in its dim_/map_ tables.
-  // Note: addDimension creates the dim under the env.canonicalSchema ("zugzug").
+  // Note: addDimension creates the dim under the env.recordSchema ("zugzug").
   const dimRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country ORDER BY 1`);
   expect(dimRows.getRowObjects()).toEqual([{ country_code: "us", label: "United States" }]);
   const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country ORDER BY raw`);

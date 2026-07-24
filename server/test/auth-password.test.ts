@@ -58,7 +58,9 @@ test("signup — second user requires allowlist", async () => {
 });
 
 test("signup — email already in use returns 409", async () => {
-  await handleSignup(jsonReq({ email: "dup@example.com", password: "longenoughpw12", name: "First" }));
+  await handleSignup(
+    jsonReq({ email: "dup@example.com", password: "longenoughpw12", name: "First" }),
+  );
   const res = await handleSignup(
     jsonReq({ email: "dup@example.com", password: "longenoughpw13", name: "Second" }),
   );
@@ -87,7 +89,9 @@ test("login — wrong password returns generic 401", async () => {
 });
 
 test("login — unknown email returns same generic 401 (no enumeration)", async () => {
-  const res = await handleLogin(jsonReq({ email: "ghost@example.com", password: "longenoughpw12" }));
+  const res = await handleLogin(
+    jsonReq({ email: "ghost@example.com", password: "longenoughpw12" }),
+  );
   expect(res.status).toBe(401);
   const body = (await res.json()) as { error: string };
   expect(body.error).toBe("invalid_credentials");
@@ -107,7 +111,9 @@ test("change-password — success path", async () => {
   expect(res.status).toBe(204);
 
   // Login with new password works
-  const login = await handleLogin(jsonReq({ email: "cp@example.com", password: "newpassword1234" }));
+  const login = await handleLogin(
+    jsonReq({ email: "cp@example.com", password: "newpassword1234" }),
+  );
   expect(login.status).toBe(200);
 });
 
@@ -152,7 +158,9 @@ test("signup — first user gets role='admin'", async () => {
 
 test("signup — second user gets role='editor'", async () => {
   // First signup (becomes admin + gets default tenant membership)
-  await handleSignup(jsonReq({ email: "admin@example.com", password: "longenoughpw12", name: "Admin" }));
+  await handleSignup(
+    jsonReq({ email: "admin@example.com", password: "longenoughpw12", name: "Admin" }),
+  );
   // Invite second user via tenant_invite so they pass the gate.
   // Use 'bootstrap' as invited_by — robust to parallel-test environments.
   await pgRun(

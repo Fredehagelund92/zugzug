@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { MappingDimension } from "../../data";
-import { useSources, useCanEdit, deriveCanonical } from "../../store";
+import { useSources, useCanEdit, deriveRecord } from "../../store";
 import { sortByUrgency, summarizeSources, type SourceStatus } from "../../lib/source-status";
 import { useNavLinks } from "../../lib/use-tenant-navigate";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
@@ -31,7 +31,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
 
   const recheck = useAsyncAction(async (table: string, column: string) => {
     try {
-      await deriveCanonical(dim.id, table, column);
+      await deriveRecord(dim.id, table, column);
       toast(`Re-checked ${table}.${column}`);
     } catch (e) {
       toast(

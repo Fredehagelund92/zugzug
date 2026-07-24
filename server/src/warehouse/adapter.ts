@@ -112,8 +112,8 @@ interface BaseWarehouseAdapter {
 
 export interface WritableWarehouseAdapter extends BaseWarehouseAdapter {
   readonly capabilities: AdapterCapabilities & { readonly writable: true };
-  ensureCanonicalTables(dim: DimensionSpec): Promise<void>;
-  commitCanonical(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult>;
+  ensureRecordTables(dim: DimensionSpec): Promise<void>;
+  commitRecord(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult>;
 }
 
 export interface ReadOnlyWarehouseAdapter extends BaseWarehouseAdapter {

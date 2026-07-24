@@ -1,5 +1,5 @@
 /* tables.ts — POST /api/tables orchestrator. Composes the existing repo
-   primitives (addDimension, addField, addColumnOption, addSource, deriveCanonical)
+   primitives (addDimension, addField, addColumnOption, addSource, deriveRecord)
    inside a single Postgres transaction with one consolidated audit entry. The
    per-primitive audit emissions are suppressed via `silent: true`; the wrapper
    emits one summary entry at the end. */
@@ -7,7 +7,7 @@
 import * as repo from "./repo.ts";
 import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
 import { PALETTE_NAMES } from "./repo-shared.ts";
-import type { QualifiedSource, ImportRow } from "./repo-canonical.ts";
+import type { QualifiedSource, ImportRow } from "./repo-record.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
@@ -155,7 +155,7 @@ export async function createTable(
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
         throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${s.table}`, 422);
       }
-      const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+      const { resolveDefaultDatabase } = await import("./repo-record.ts");
       normalizedSource = {
         databaseId: await resolveDefaultDatabase(tenantId),
         schemaName: parts[0],
@@ -203,7 +203,7 @@ export async function createTable(
         if (parts.length !== 2 || !parts[0] || !parts[1]) {
           throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${e.table}`, 422);
         }
-        const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+        const { resolveDefaultDatabase } = await import("./repo-record.ts");
         databaseId = await resolveDefaultDatabase(tenantId);
         schemaName = parts[0];
         tableName = parts[1];
@@ -266,17 +266,17 @@ export async function createTable(
       }
       return { label: r.label, fields };
     });
-    const res = await repo.importCanonical(id, rows, userId, tenantId, { silent: true });
+    const res = await repo.importRecord(id, rows, userId, tenantId, { silent: true });
     derivedCount = res.created;
   }
 
   // 5. Seeding (source / external_id modes)
-  //    deriveCanonical still takes the legacy "schema.table" string; we
+  //    deriveRecord still takes the legacy "schema.table" string; we
   //    reconstruct it from the normalized parts so external clients can keep
   //    using either input shape.
   if (input.mode === "source" && normalizedSource) {
     const sourceTable = `${normalizedSource.schemaName}.${normalizedSource.tableName}`;
-    const r = await repo.deriveCanonical(
+    const r = await repo.deriveRecord(
       id,
       sourceTable,
       normalizedSource.columnName,
@@ -290,7 +290,7 @@ export async function createTable(
   if (input.mode === "external_id" && input.external) {
     const e = input.external;
     const externalTable = "databaseId" in e ? `${e.schemaName}.${e.tableName}` : e.table;
-    const r = await repo.deriveCanonical(
+    const r = await repo.deriveRecord(
       id,
       externalTable,
       e.idColumn,

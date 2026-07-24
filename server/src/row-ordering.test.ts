@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { computeInsertPosition } from "./repo-canonical.ts";
+import { computeInsertPosition } from "./repo-record.ts";
 
 describe("computeInsertPosition", () => {
   it("empty dim: returns 1024", () => {

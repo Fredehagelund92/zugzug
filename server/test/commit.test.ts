@@ -12,11 +12,11 @@ beforeEach(async () => {
   await resetDb();
 });
 
-test("commit folds approved drafts into canonical", async () => {
+test("commit folds approved drafts into record", async () => {
   const userId = "u_test";
   const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
 
-  await repo.addCanonicalOne(dimId, "Acme", undefined, userId, "default");
+  await repo.addRecordOne(dimId, "Acme", undefined, userId, "default");
   await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
 
   const result = await repo.commit(dimId, userId, "default");
@@ -30,8 +30,8 @@ test("commit writes one per-row audit entry per committed key + one rollup", asy
   const userId = "u_test_audit";
   const dimId = await repo.addDimension("AuditBrand", [], { keyKind: "slug" }, userId, "default");
 
-  await repo.addCanonicalOne(dimId, "Acme", undefined, userId, "default");
-  await repo.addCanonicalOne(dimId, "Globex", undefined, userId, "default");
+  await repo.addRecordOne(dimId, "Acme", undefined, userId, "default");
+  await repo.addRecordOne(dimId, "Globex", undefined, userId, "default");
   await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
   await repo.saveDraft(dimId, "acme inc.", "mapped", "Acme", "acme", userId, "default");
   await repo.saveDraft(dimId, "Globex Corp", "mapped", "Globex", "globex", userId, "default");
@@ -41,7 +41,11 @@ test("commit writes one per-row audit entry per committed key + one rollup", asy
   const before = (await repo.pgGet<{ t: Date }>(`SELECT now() AS t`))!.t;
   await repo.commit(dimId, userId, "default");
 
-  const audit = await repo.pgAll<{ action: string; table_id: string | null; row_key: string | null }>(
+  const audit = await repo.pgAll<{
+    action: string;
+    table_id: string | null;
+    row_key: string | null;
+  }>(
     `SELECT action, table_id, row_key FROM "zugzug_app"."audit_log"
      WHERE user_id = $1 AND created_at >= $2
      ORDER BY created_at DESC`,

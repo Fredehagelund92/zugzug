@@ -7,7 +7,7 @@ import { IconSearch } from "./Icons";
    label/secondary/keywords, lets the user keyboard through results with
    ArrowUp/Down/Enter/Esc. Click-outside or Esc closes.
 
-   App-specific data (dims, routes, canonical records) lives in the caller;
+   App-specific data (dims, routes, record records) lives in the caller;
    this component knows nothing about the domain. */
 
 export interface Command {
@@ -19,7 +19,7 @@ export interface Command {
   keywords?: string; // extra match text (e.g. dim id, slug, key)
   /** Show on initial open (empty search). Non-priority items appear only after
    *  the user starts typing — keeps the resting palette short instead of
-   *  dumping every dim + canonical record at once. */
+   *  dumping every dim + record record at once. */
   priority?: boolean;
   action: () => void; // executed on selection; close happens before
 }

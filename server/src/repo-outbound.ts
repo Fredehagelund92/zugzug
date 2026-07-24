@@ -10,10 +10,10 @@ import { env, pg } from "./env.ts";
 import { pgAll, pgGet } from "./pg.ts";
 import { signCursor, verifyCursor, type CursorPayload } from "./cursor.ts";
 import { cq, qid } from "./repo-shared.ts";
-import { listFields } from "./repo-canonical.ts";
+import { listFields } from "./repo-record.ts";
 
-const DEFAULT_LIMIT_CANONICAL = 100;
-const MAX_LIMIT_CANONICAL = 1000;
+const DEFAULT_LIMIT_RECORD = 100;
+const MAX_LIMIT_RECORD = 1000;
 const DEFAULT_LIMIT_TOMBSTONES = 100;
 const MAX_LIMIT_TOMBSTONES = 1000;
 
@@ -31,7 +31,7 @@ export interface SchemaForApi {
   fields: Array<{ name: string; type: string; description: string | null }>;
 }
 
-export interface CanonicalRecord {
+export interface RecordRow {
   key: string;
   label: string;
   fields: Record<string, unknown>;
@@ -44,8 +44,8 @@ export interface PageMeta {
   page_size: number;
 }
 
-export interface CanonicalPageResponse {
-  records: CanonicalRecord[];
+export interface RecordPageResponse {
+  records: RecordRow[];
   cursor: { next: string | null };
   meta: PageMeta;
 }
@@ -86,7 +86,7 @@ function clampLimit(n: number | undefined, def: number, max: number): number {
 /** Split a dim_table value like "zugzug.dim_country" into { schema, table }. */
 function splitDimTable(dimTable: string): { schema: string; table: string } {
   const dot = dimTable.indexOf(".");
-  if (dot < 0) return { schema: env.canonicalSchema, table: dimTable };
+  if (dot < 0) return { schema: env.recordSchema, table: dimTable };
   return { schema: dimTable.slice(0, dot), table: dimTable.slice(dot + 1) };
 }
 
@@ -124,10 +124,10 @@ export async function listDimensionsForApi(
     `SELECT d.id,
             d.label,
             COALESCE(d.key_kind, 'slug') AS key_kind,
-            COALESCE((SELECT count(*) FROM "zugzug_app"."canonical_version" cv
+            COALESCE((SELECT count(*) FROM "zugzug_app"."record_version" cv
                        WHERE cv.dim_id = d.id AND cv.tenant_id = d.tenant_id
                          AND cv.retired_at IS NULL), 0)::int AS record_count,
-            (SELECT max(cv.updated_at)::text FROM "zugzug_app"."canonical_version" cv
+            (SELECT max(cv.updated_at)::text FROM "zugzug_app"."record_version" cv
               WHERE cv.dim_id = d.id AND cv.tenant_id = d.tenant_id
                 AND cv.retired_at IS NULL) AS last_published_at
        FROM ${pg("dimension")} d
@@ -169,14 +169,14 @@ export async function getSchemaForApi(
   };
 }
 
-/* ---------- canonical page ---------- */
+/* ---------- record page ---------- */
 
-export async function listCanonicalPage(
+export async function listRecordPage(
   tenantId: string,
   slug: string,
   opts: PageOpts,
-): Promise<CanonicalPageResponse> {
-  const limit = clampLimit(opts.limit, DEFAULT_LIMIT_CANONICAL, MAX_LIMIT_CANONICAL);
+): Promise<RecordPageResponse> {
+  const limit = clampLimit(opts.limit, DEFAULT_LIMIT_RECORD, MAX_LIMIT_RECORD);
 
   let sinceTs: string | null = opts.since ?? null;
   let sinceKey: string | null = null;
@@ -220,7 +220,7 @@ export async function listCanonicalPage(
            cv.updated_at::text AS updated_at,
            cv.version
       FROM ${cq(dim.dim_table)} d
-      JOIN "zugzug_app"."canonical_version" cv
+      JOIN "zugzug_app"."record_version" cv
         ON cv.dim_id = $2 AND cv.tenant_id = $1 AND cv.key = d.${keyCol}
      WHERE ${where}
      ORDER BY cv.updated_at ASC, d.${keyCol} ASC
@@ -256,13 +256,13 @@ export async function listCanonicalPage(
   };
 }
 
-/* ---------- single canonical row ---------- */
+/* ---------- single record row ---------- */
 
-export async function getCanonicalRow(
+export async function getRecordRow(
   tenantId: string,
   slug: string,
   key: string,
-): Promise<CanonicalRecord | null> {
+): Promise<RecordRow | null> {
   const dim = await pgGet<{ dim_table: string; key_col: string }>(
     `SELECT dim_table, key_col FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
     [slug, tenantId],
@@ -285,7 +285,7 @@ export async function getCanonicalRow(
             cv.updated_at::text AS updated_at,
             cv.version
        FROM ${cq(dim.dim_table)} d
-       JOIN "zugzug_app"."canonical_version" cv
+       JOIN "zugzug_app"."record_version" cv
          ON cv.dim_id = $1 AND cv.tenant_id = $2 AND cv.key = d.${keyCol}
       WHERE d.tenant_id = $2
         AND d.${keyCol} = $3
@@ -334,7 +334,7 @@ export async function listTombstonesPage(
 
   const rows = await pgAll<{ key: string; retired_at: string; retired_into: string | null }>(
     `SELECT key, retired_at::text AS retired_at, retired_into
-       FROM ${pg("canonical_version")}
+       FROM ${pg("record_version")}
       WHERE ${where}
       ORDER BY retired_at ASC, key ASC
       LIMIT $${params.length}`,

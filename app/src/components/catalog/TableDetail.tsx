@@ -3,7 +3,7 @@ import { ComboSelect } from "../ComboSelect";
 import { IconCheck, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
 import {
-  deriveCanonical,
+  deriveRecord,
   fetchColumnValues,
   fetchColumns,
   useCanEdit,
@@ -65,11 +65,7 @@ export function TableDetail({
     if (!dim) return;
     setWired((w) => ({ ...w, [column]: { dim: dimLabel, n: null } }));
     try {
-      const { derived, mode, matched, unmatched } = await deriveCanonical(
-        dim.id,
-        tablePath,
-        column,
-      );
+      const { derived, mode, matched, unmatched } = await deriveRecord(dim.id, tablePath, column);
       setWired((w) => ({
         ...w,
         [column]: { dim: dimLabel, n: derived, mode, matched, unmatched },

@@ -427,8 +427,8 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   // Flat nav — used by the command palette and the collapsed icon rail.
   const nav: NavItem[] = [homeItem, ...tablesGroup, ...workspaceGroup, ...integrationsGroup];
 
-  // Quick-switcher command list — navigation + every dim + every canonical
-  // record across dims. Rebuilt only when dims change (canonical churn here
+  // Quick-switcher command list — navigation + every dim + every record
+  // record across dims. Rebuilt only when dims change (record churn here
   // is rare; the search is fast enough at thousand-record scale).
   const commands = useMemo<Command[]>(() => {
     const out: Command[] = [];
@@ -516,9 +516,9 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       });
     }
 
-    // Section 3: every canonical record — opens the dim as a Tables tab + focus
+    // Section 3: every record record — opens the dim as a Tables tab + focus
     for (const d of dims) {
-      for (const c of d.canonical) {
+      for (const c of d.record) {
         out.push({
           id: `rec:${d.id}:${c.key}`,
           group: "Records",

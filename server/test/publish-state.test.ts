@@ -41,12 +41,12 @@ test("staged draft shows as pending; publish folds it and bumps version", async 
   expect(s.changedKeys).toEqual([]);
 });
 
-test("canonical edit after publish shows as changed; canonical-only publish bumps version", async () => {
+test("record edit after publish shows as changed; record-only publish bumps version", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
   await repo.saveDraft(dimId, "Deutschland", "mapped", "Germany", "germany", U, "default");
   await repo.commit(dimId, U, "default");
 
-  await repo.addCanonicalOne(dimId, "South Sudan", undefined, U, "default");
+  await repo.addRecordOne(dimId, "South Sudan", undefined, U, "default");
 
   let s = await repo.getPublishState(dimId, "default");
   expect(s.changedKeys).toEqual(["south_sudan"]);
@@ -91,10 +91,10 @@ test("reverting an edit to its published value clears it from changed", async ()
   expect(s.changedKeys).toEqual([]);
 
   // Rename, then revert to the published label.
-  await repo.renameCanonical(dimId, "germany", "Deutschland", U, 2, "default");
+  await repo.renameRecord(dimId, "germany", "Deutschland", U, 2, "default");
   s = await repo.getPublishState(dimId, "default");
   expect(s.changedKeys).toEqual(["germany"]);
-  await repo.renameCanonical(dimId, "germany", "Germany", U, 3, "default");
+  await repo.renameRecord(dimId, "germany", "Germany", U, 3, "default");
   s = await repo.getPublishState(dimId, "default");
   expect(s.changedKeys).toEqual([]);
 
@@ -106,9 +106,9 @@ test("reverting an edit to its published value clears it from changed", async ()
 
 test("never-published table counts every record, even without version rows", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
-  await repo.addCanonicalOne(dimId, "Germany", "germany", U, "default");
-  // Bulk path: creates the record without a canonical_version row.
-  await repo.addCanonical(dimId, [{ key: "france", label: "France" }], "default");
+  await repo.addRecordOne(dimId, "Germany", "germany", U, "default");
+  // Bulk path: creates the record without a record_version row.
+  await repo.addRecord(dimId, [{ key: "france", label: "France" }], "default");
 
   const s = await repo.getPublishState(dimId, "default");
   expect(s.changedKeys).toEqual(["france", "germany"]);
@@ -117,7 +117,7 @@ test("never-published table counts every record, even without version rows", asy
 test("field edit writes an audit entry for the activity feed", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
   const f = await repo.addField(dimId, "Region", "text", undefined, {}, U, "default");
-  await repo.addCanonicalOne(dimId, "Germany", "germany", U, "default");
+  await repo.addRecordOne(dimId, "Germany", "germany", U, "default");
 
   await repo.setFieldValue(dimId, "germany", f!.field, "Europe", U, "default");
 
@@ -133,14 +133,14 @@ test("field edit writes an audit entry for the activity feed", async () => {
 test("revert all changes restores the last published version", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
   const f = await repo.addField(dimId, "Notes", "text", undefined, {}, U, "default");
-  await repo.addCanonicalOne(dimId, "Alpha", "alpha", U, "default");
-  await repo.addCanonicalOne(dimId, "Beta", "beta", U, "default");
+  await repo.addRecordOne(dimId, "Alpha", "alpha", U, "default");
+  await repo.addRecordOne(dimId, "Beta", "beta", U, "default");
   await repo.commit(dimId, U, "default");
 
   // Drift: edit a field, add a record, remove a record.
   await repo.setFieldValue(dimId, "alpha", f!.field, "x", U, "default");
-  await repo.addCanonicalOne(dimId, "Gamma", "gamma", U, "default");
-  await repo.retireCanonical(dimId, "beta", U, 1, "default");
+  await repo.addRecordOne(dimId, "Gamma", "gamma", U, "default");
+  await repo.retireRecord(dimId, "beta", U, 1, "default");
 
   let s = await repo.getPublishState(dimId, "default");
   expect(s.changedKeys).toEqual(["alpha", "beta", "gamma"]);
@@ -163,7 +163,7 @@ test("revert all changes restores the last published version", async () => {
 
 test("revert refuses when there is no published version", async () => {
   const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, U, "default");
-  await repo.addCanonicalOne(dimId, "Alpha", "alpha", U, "default");
+  await repo.addRecordOne(dimId, "Alpha", "alpha", U, "default");
   const s = await repo.getPublishState(dimId, "default");
   expect(s.canRevert).toBe(false);
   await expect(repo.revertToPublished(dimId, U, "default")).rejects.toThrow(/publish/i);

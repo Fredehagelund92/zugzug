@@ -87,7 +87,7 @@ export const env = {
   motherduckToken,
   warehouseAdapter,
   attachWarehouse,
-  /** When true, the DuckDB adapter is writable (canonical → MotherDuck via MERGE).
+  /** When true, the DuckDB adapter is writable (record → MotherDuck via MERGE).
    *  Off by default; flip to `true` only when MotherDuck token has write access. */
   motherduckWritable: process.env.MOTHERDUCK_WRITABLE?.trim() === "true",
   /** Encryption key for webhook signing secrets. AES-256-GCM master key
@@ -103,7 +103,7 @@ export const env = {
   selfHosted: process.env.ZUGZUG_SELF_HOSTED?.trim() === "1",
   /** Webhook dispatcher on/off. Default differs by deployment — see .env.example. */
   webhooksEnabled: process.env.WEBHOOKS_ENABLED?.trim() === "1",
-  canonicalSchema: process.env.ZUGZUG_DB?.trim() || "zugzug",
+  recordSchema: process.env.ZUGZUG_DB?.trim() || "zugzug",
   oltpCatalog: "oltp",
   appSchema: "zugzug_app",
   duckPath: process.env.DUCK_PATH?.trim() || ":memory:",

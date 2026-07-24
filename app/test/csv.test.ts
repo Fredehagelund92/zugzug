@@ -54,7 +54,10 @@ describe("mapCsvHeaders", () => {
 
 describe("prepareImport", () => {
   test("builds rows with trimmed values, empty cells become null fields", () => {
-    const { rows } = prepareImport('key,label,Region\nUS,United States, EMEA \nDK,Denmark,\n', OPTS);
+    const { rows } = prepareImport(
+      "key,label,Region\nUS,United States, EMEA \nDK,Denmark,\n",
+      OPTS,
+    );
     expect(rows).toEqual([
       { key: "US", label: "United States", fields: { region: "EMEA" } },
       { key: "DK", label: "Denmark", fields: { region: null } },

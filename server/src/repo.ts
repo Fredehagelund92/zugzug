@@ -13,7 +13,7 @@
  *
  * Module breakdown:
  *   - repo-scan.ts      (warehouse scanning + sources registry)
- *   - repo-canonical.ts (dimensions + canonical CRUD + fields)
+ *   - repo-record.ts (dimensions + record CRUD + fields)
  *   - repo-drafts.ts    (drafts + commit)
  *   - repo-meta.ts      (users, audit, preferences, grid layout)
  *   - repo-shared.ts    (cross-domain types and helpers)
@@ -21,7 +21,7 @@
  *   - repo-activity.ts  (per-row activity feed)
  */
 export * from "./repo-scan.ts";
-export * from "./repo-canonical.ts";
+export * from "./repo-record.ts";
 export * from "./repo-drafts.ts";
 export * from "./repo-meta.ts";
 export * from "./repo-shared.ts";

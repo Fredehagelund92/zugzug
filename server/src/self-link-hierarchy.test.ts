@@ -9,12 +9,12 @@ import "../test/setup.ts";
 import { pgRun, pgAll } from "./pg.ts";
 import {
   addDimension,
-  addCanonicalOne,
+  addRecordOne,
   addField,
   setFieldValue,
   listFields,
   getDimension,
-} from "./repo-canonical.ts";
+} from "./repo-record.ts";
 
 const T = "test_hierarchy";
 const U = "u_test_hierarchy";
@@ -41,7 +41,7 @@ afterAll(async () => {
     await pgRun(`DROP TABLE IF EXISTS ${d.dim_table}`).catch(() => {});
     await pgRun(`DROP TABLE IF EXISTS ${d.map_table}`).catch(() => {});
   }
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -68,17 +68,17 @@ describe("self-referencing linked field", () => {
 
   it("builds a valid parent chain, rejects cycles and self-parenting", async () => {
     const dimId = await addDimension("Geo", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Europe", "europe", U, T);
-    await addCanonicalOne(dimId, "Nordics", "nordics", U, T);
-    await addCanonicalOne(dimId, "Denmark", "denmark", U, T);
-    await addCanonicalOne(dimId, "France", "france", U, T);
+    await addRecordOne(dimId, "Europe", "europe", U, T);
+    await addRecordOne(dimId, "Nordics", "nordics", U, T);
+    await addRecordOne(dimId, "Denmark", "denmark", U, T);
+    await addRecordOne(dimId, "France", "france", U, T);
     await addField(dimId, "Parent", "linked", undefined, { referencedDimId: dimId }, U, T);
 
     // Valid chain: Denmark -> Nordics -> Europe
     await setFieldValue(dimId, "nordics", "parent", "europe", U, T);
     await setFieldValue(dimId, "denmark", "parent", "nordics", U, T);
     const chain = await getDimension(dimId, T);
-    expect(chain!.canonical.find((c) => c.key === "denmark")!.fields?.parent).toBe("nordics");
+    expect(chain!.record.find((c) => c.key === "denmark")!.fields?.parent).toBe("nordics");
 
     // Cycle: Europe's parent = Denmark would close the loop
     await expect(setFieldValue(dimId, "europe", "parent", "denmark", U, T)).rejects.toThrow(
@@ -94,17 +94,17 @@ describe("self-referencing linked field", () => {
     await setFieldValue(dimId, "france", "parent", "europe", U, T);
     await setFieldValue(dimId, "france", "parent", "nordics", U, T);
     const after = await getDimension(dimId, T);
-    expect(after!.canonical.find((c) => c.key === "france")!.fields?.parent).toBe("nordics");
+    expect(after!.record.find((c) => c.key === "france")!.fields?.parent).toBe("nordics");
   });
 
   it("a cross-table linked field still coerces an unknown key to null", async () => {
     const a = await addDimension("Alpha", [], { keyKind: "slug" }, U, T);
     const b = await addDimension("Beta", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(a, "One", "one", U, T);
+    await addRecordOne(a, "One", "one", U, T);
     await addField(a, "BetaLink", "linked", undefined, { referencedDimId: b }, U, T);
     // Unknown FK on a NON-self link: no throw, coerced to null.
     await setFieldValue(a, "one", "betalink", "does_not_exist", U, T);
     const dim = await getDimension(a, T);
-    expect(dim!.canonical.find((c) => c.key === "one")!.fields?.betalink ?? null).toBeNull();
+    expect(dim!.record.find((c) => c.key === "one")!.fields?.betalink ?? null).toBeNull();
   });
 });

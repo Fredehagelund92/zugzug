@@ -8,12 +8,12 @@ process.env.ZUGZUG_CURSOR_KEY =
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
-import { addDimension, mergeCanonical, retireCanonical } from "./repo-canonical.ts";
+import { addDimension, mergeRecord, retireRecord } from "./repo-record.ts";
 
-// Pull API requires both dim_* row + canonical_version row. The bulk `addCanonical`
+// Pull API requires both dim_* row + record_version row. The bulk `addRecord`
 // helper only writes the former, so seed both directly to keep keys verbatim
-// (addCanonicalOne lowercases via slug()).
-async function addCanonical(
+// (addRecordOne lowercases via slug()).
+async function addRecord(
   dimId: string,
   values: { key: string; label: string }[],
   tenantId: string,
@@ -22,7 +22,7 @@ async function addCanonical(
     `SELECT dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );
-  if (!meta) throw new Error(`addCanonical: dim ${dimId} not found`);
+  if (!meta) throw new Error(`addRecord: dim ${dimId} not found`);
   const [schema, table] = meta.dim_table.split(".");
   for (const v of values) {
     await pgRun(
@@ -31,11 +31,11 @@ async function addCanonical(
       [v.key, v.label],
     );
     await pgRun(
-      `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+      `INSERT INTO "zugzug_app"."record_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
        VALUES ($1, $2, 1, now(), $3, $4)
        ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
          SET retired_at = NULL, retired_into = NULL,
-             version = "canonical_version".version + 1,
+             version = "record_version".version + 1,
              updated_at = now(), updated_by = EXCLUDED.updated_by`,
       [dimId, v.key, U, tenantId],
     );
@@ -44,8 +44,8 @@ async function addCanonical(
 import {
   listDimensionsForApi,
   getSchemaForApi,
-  listCanonicalPage,
-  getCanonicalRow,
+  listRecordPage,
+  getRecordRow,
   listTombstonesPage,
 } from "./repo-outbound.ts";
 
@@ -76,7 +76,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
@@ -95,7 +95,7 @@ afterAll(async () => {
 describe("listDimensionsForApi", () => {
   it("returns one entry per dim with slug, label, key_kind, record_count, last_published_at", async () => {
     const dimId = await makeDim("OutCountry");
-    await addCanonical(dimId, [{ key: "DE", label: "Germany" }], T);
+    await addRecord(dimId, [{ key: "DE", label: "Germany" }], T);
 
     const out = await listDimensionsForApi(T);
     const country = out.tables.find((d) => d.slug === dimId);
@@ -122,22 +122,22 @@ describe("getSchemaForApi", () => {
   });
 });
 
-describe("listCanonicalPage", () => {
+describe("listRecordPage", () => {
   it("returns records in updated_at, key order; respects limit; emits a cursor on truncation", async () => {
     const dimId = await makeDim("OutPage");
-    await addCanonical(
+    await addRecord(
       dimId,
       Array.from({ length: 5 }, (_, i) => ({ key: `k${i}`, label: `Label ${i}` })),
       T,
     );
 
-    const page1 = await listCanonicalPage(T, dimId, { limit: 3 });
+    const page1 = await listRecordPage(T, dimId, { limit: 3 });
     expect(page1.records.length).toBe(3);
     expect(page1.cursor.next).not.toBeNull();
     expect(page1.meta.dim_slug).toBe(dimId);
     expect(page1.meta.page_size).toBe(3);
 
-    const page2 = await listCanonicalPage(T, dimId, { limit: 3, cursor: page1.cursor.next! });
+    const page2 = await listRecordPage(T, dimId, { limit: 3, cursor: page1.cursor.next! });
     expect(page2.records.length).toBe(2);
     expect(page2.cursor.next).toBeNull();
 
@@ -145,9 +145,9 @@ describe("listCanonicalPage", () => {
     expect(new Set(allKeys).size).toBe(5);
   });
 
-  it("?since= filters by canonical_version.updated_at (inclusive)", async () => {
+  it("?since= filters by record_version.updated_at (inclusive)", async () => {
     const dimId = await makeDim("OutSince");
-    await addCanonical(dimId, [{ key: "OLD", label: "Old" }], T);
+    await addRecord(dimId, [{ key: "OLD", label: "Old" }], T);
 
     const boundary = await pgGet<{ ts: string }>(
       `SELECT to_char(
@@ -157,9 +157,9 @@ describe("listCanonicalPage", () => {
     );
     await new Promise((r) => setTimeout(r, 250));
 
-    await addCanonical(dimId, [{ key: "NEW", label: "New" }], T);
+    await addRecord(dimId, [{ key: "NEW", label: "New" }], T);
 
-    const res = await listCanonicalPage(T, dimId, { since: boundary!.ts, limit: 100 });
+    const res = await listRecordPage(T, dimId, { since: boundary!.ts, limit: 100 });
     const keys = res.records.map((r) => r.key);
     expect(keys).toContain("NEW");
     expect(keys).not.toContain("OLD");
@@ -167,7 +167,7 @@ describe("listCanonicalPage", () => {
 
   it("excludes soft-deleted rows", async () => {
     const dimId = await makeDim("OutSoftDel");
-    await addCanonical(
+    await addRecord(
       dimId,
       [
         { key: "A", label: "Alpha" },
@@ -176,30 +176,30 @@ describe("listCanonicalPage", () => {
       T,
     );
     const versions = await pgAll<{ key: string; version: number }>(
-      `SELECT key, version FROM "zugzug_app"."canonical_version"
+      `SELECT key, version FROM "zugzug_app"."record_version"
        WHERE dim_id = $1 AND tenant_id = $2`,
       [dimId, T],
     );
     const v = Object.fromEntries(versions.map((r) => [r.key, r.version]));
-    await mergeCanonical(dimId, "A", ["B"], U, v, T);
+    await mergeRecord(dimId, "A", ["B"], U, v, T);
 
-    const res = await listCanonicalPage(T, dimId, { limit: 100 });
+    const res = await listRecordPage(T, dimId, { limit: 100 });
     expect(res.records.map((r) => r.key)).toEqual(["A"]);
   });
 
   it("returns 0 rows for a dim that belongs to a different tenant", async () => {
     const dimId = await makeDim("OutTenantScope");
-    await addCanonical(dimId, [{ key: "X", label: "X" }], T);
-    const res = await listCanonicalPage("other_tenant_id", dimId, { limit: 100 });
+    await addRecord(dimId, [{ key: "X", label: "X" }], T);
+    const res = await listRecordPage("other_tenant_id", dimId, { limit: 100 });
     expect(res.records).toEqual([]);
   });
 });
 
-describe("getCanonicalRow", () => {
+describe("getRecordRow", () => {
   it("returns the row for a live key", async () => {
     const dimId = await makeDim("OutOne");
-    await addCanonical(dimId, [{ key: "ONE", label: "One" }], T);
-    const row = await getCanonicalRow(T, dimId, "ONE");
+    await addRecord(dimId, [{ key: "ONE", label: "One" }], T);
+    const row = await getRecordRow(T, dimId, "ONE");
     expect(row).not.toBeNull();
     expect(row!.key).toBe("ONE");
     expect(row!.label).toBe("One");
@@ -207,21 +207,21 @@ describe("getCanonicalRow", () => {
 
   it("returns null for a retired key", async () => {
     const dimId = await makeDim("OutRetired");
-    await addCanonical(dimId, [{ key: "GONE", label: "Gone" }], T);
+    await addRecord(dimId, [{ key: "GONE", label: "Gone" }], T);
     const v = await pgGet<{ version: number }>(
-      `SELECT version FROM "zugzug_app"."canonical_version"
+      `SELECT version FROM "zugzug_app"."record_version"
        WHERE dim_id = $1 AND key = 'GONE' AND tenant_id = $2`,
       [dimId, T],
     );
-    await retireCanonical(dimId, "GONE", U, v!.version, T);
-    expect(await getCanonicalRow(T, dimId, "GONE")).toBeNull();
+    await retireRecord(dimId, "GONE", U, v!.version, T);
+    expect(await getRecordRow(T, dimId, "GONE")).toBeNull();
   });
 });
 
 describe("listTombstonesPage", () => {
   it("returns retired keys with retired_at + retired_into", async () => {
     const dimId = await makeDim("OutTombs");
-    await addCanonical(
+    await addRecord(
       dimId,
       [
         { key: "SURV", label: "Survivor" },
@@ -231,13 +231,13 @@ describe("listTombstonesPage", () => {
       T,
     );
     const versions = await pgAll<{ key: string; version: number }>(
-      `SELECT key, version FROM "zugzug_app"."canonical_version"
+      `SELECT key, version FROM "zugzug_app"."record_version"
        WHERE dim_id = $1 AND tenant_id = $2`,
       [dimId, T],
     );
     const v = Object.fromEntries(versions.map((r) => [r.key, r.version]));
-    await mergeCanonical(dimId, "SURV", ["MERGED"], U, v, T);
-    await retireCanonical(dimId, "RETIRED", U, v.RETIRED, T);
+    await mergeRecord(dimId, "SURV", ["MERGED"], U, v, T);
+    await retireRecord(dimId, "RETIRED", U, v.RETIRED, T);
 
     const res = await listTombstonesPage(T, dimId, { limit: 100 });
     const byKey = Object.fromEntries(res.removed.map((t) => [t.key, t]));

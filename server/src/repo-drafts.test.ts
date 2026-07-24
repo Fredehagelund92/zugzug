@@ -10,11 +10,11 @@ import { pgRun, pgGet } from "./pg.ts";
 import { pgAll } from "./repo-shared.ts";
 import {
   addDimension,
-  addCanonicalOne,
+  addRecordOne,
   addField,
   setFieldValue,
   deleteDimension,
-} from "./repo-canonical.ts";
+} from "./repo-record.ts";
 import { saveDraft, commit, listDrafts, rejectDrafts, listAllDrafts } from "./repo-drafts.ts";
 import { getPreferences, setPreferences } from "./repo-meta.ts";
 
@@ -60,7 +60,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -75,7 +75,7 @@ describe("commit() second-publisher gate", () => {
     await setPreferences({ ...prefs, requireSecondPublisher: true }, T);
 
     const dimId = await addDimension("GateDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    await addRecordOne(dimId, "United States", undefined, U, T);
     // Alice (U) authors the draft
     await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
 
@@ -94,7 +94,7 @@ describe("commit() second-publisher gate", () => {
 describe("commit() required-field gate", () => {
   it("blocks publish when a required field is empty, allows it once filled", async () => {
     const dimId = await addDimension("ReqFieldDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", "usa", U, T);
+    await addRecordOne(dimId, "United States", "usa", U, T);
     const added = await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
     expect(added?.field).toBe("region");
 
@@ -108,7 +108,7 @@ describe("commit() required-field gate", () => {
 
   it("does not block when the required field has a value on every record", async () => {
     const dimId = await addDimension("ReqFieldDim2", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Canada", "canada", U, T);
+    await addRecordOne(dimId, "Canada", "canada", U, T);
     await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
     await setFieldValue(dimId, "canada", "region", "Americas", U, T);
 
@@ -186,7 +186,7 @@ test("listAllDrafts returns [] for an empty workspace", async () => {
 describe("commit() fires table.published event", () => {
   it("writes an outbound_event row with the right shape", async () => {
     const dimId = await addDimension("CommitDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Alpha", undefined, U, T);
+    await addRecordOne(dimId, "Alpha", undefined, U, T);
     await saveDraft(dimId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
     const result = await commit(dimId, U, T);
     expect(result.committed).toBeGreaterThan(0);
@@ -232,7 +232,7 @@ describe("commit() draft-scoped folding", () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
     const dimId = await addDimension(`ScopedFold_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    await addRecordOne(dimId, "United States", undefined, U, T);
     await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
     await saveDraft(dimId, "u.s.", "mapped", "United States", "united_states", U, T);
     const res = await commit(dimId, U, T, ["usa"]);
@@ -245,7 +245,7 @@ describe("commit() draft-scoped folding", () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
     const dimId = await addDimension(`UnknownKey_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    await addRecordOne(dimId, "United States", undefined, U, T);
     await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
     await expect(commit(dimId, U, T, ["usa", "ghost"])).rejects.toThrow(/ghost/);
     expect((await listDrafts(dimId, T)).length).toBe(1);
@@ -254,8 +254,8 @@ describe("commit() draft-scoped folding", () => {
   it("four-eyes gate checks only the folded set", async () => {
     await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: true }, T);
     const dimId = await addDimension(`FourEyesScoped_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "A", undefined, U, T);
-    await addCanonicalOne(dimId, "B", undefined, U, T);
+    await addRecordOne(dimId, "A", undefined, U, T);
+    await addRecordOne(dimId, "B", undefined, U, T);
     await saveDraft(dimId, "aaa", "mapped", "A", "a", U, T); // U's draft
     await saveDraft(dimId, "bbb", "mapped", "B", "b", U2, T); // U2's draft
     await expect(commit(dimId, U, T, ["bbb"])).resolves.toMatchObject({ committed: 1 }); // U publishes U2's — fine
@@ -263,18 +263,18 @@ describe("commit() draft-scoped folding", () => {
     await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
   });
 
-  it("empty draftKeys folds nothing but publishes when canonical changed", async () => {
+  it("empty draftKeys folds nothing but publishes when record changed", async () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
     const dimId = await addDimension(`EmptyArrayScope_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Alpha", undefined, U, T);
+    await addRecordOne(dimId, "Alpha", undefined, U, T);
 
     // Stage a draft and commit it (v1)
     await saveDraft(dimId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
     await commit(dimId, U, T);
 
-    // Make a canonical change since last publish
-    await addCanonicalOne(dimId, "Beta", undefined, U, T);
+    // Make a record change since last publish
+    await addRecordOne(dimId, "Beta", undefined, U, T);
 
     // Stage another draft
     await saveDraft(dimId, "beta variant", "mapped", "Beta", "beta", U, T);
@@ -286,7 +286,7 @@ describe("commit() draft-scoped folding", () => {
       [T, dimId],
     );
 
-    // Commit with empty array — folds no drafts but publishes (canonical changed)
+    // Commit with empty array — folds no drafts but publishes (record changed)
     const res = await commit(dimId, U, T, []);
     expect(res.committed).toBe(0);
 

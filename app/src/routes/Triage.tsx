@@ -213,7 +213,7 @@ function TriageInner() {
   const keyForLabelIn = (dimId: string, label: string) => {
     const d = dimById.get(dimId);
     return (
-      d?.canonical.find((c) => c.label === label)?.key ??
+      d?.record.find((c) => c.label === label)?.key ??
       label.toLowerCase().replace(/[^a-z0-9]+/g, "_")
     );
   };
@@ -721,7 +721,7 @@ interface DimSectionBodyProps {
 }
 
 function DimSectionBody(p: DimSectionBodyProps) {
-  const options = useMemo(() => p.dim.canonical.map((c) => c.label), [p.dim.canonical]);
+  const options = useMemo(() => p.dim.record.map((c) => c.label), [p.dim.record]);
   const [editingRaw, setEditingRaw] = useState<string | null>(null);
   const me = useCurrentUser();
 

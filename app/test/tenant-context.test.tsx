@@ -17,7 +17,11 @@ vi.mock("../src/store", async (importOriginal) => {
 
 function Probe() {
   const t = useTenant();
-  return <div data-testid="ctx">{t.slug}/{t.role}</div>;
+  return (
+    <div data-testid="ctx">
+      {t.slug}/{t.role}
+    </div>
+  );
 }
 
 // Minimal error boundary to catch render-time throws from hooks
@@ -85,7 +89,9 @@ describe("TenantLayout slug validation", () => {
 describe("TenantProvider", () => {
   test("exposes tenant via useTenant()", () => {
     render(
-      <TenantProvider value={{ id: "t1", slug: "acme", label: "Acme", role: "admin", isSuperAdmin: false }}>
+      <TenantProvider
+        value={{ id: "t1", slug: "acme", label: "Acme", role: "admin", isSuperAdmin: false }}
+      >
         <Probe />
       </TenantProvider>,
     );

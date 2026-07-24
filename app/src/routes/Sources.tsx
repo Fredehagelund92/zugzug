@@ -13,7 +13,7 @@ import { cx } from "../lib/cx";
 import {
   useSources,
   scanSources,
-  deriveCanonical,
+  deriveRecord,
   removeSource,
   useCanEdit,
   useStoreLoading,
@@ -112,7 +112,7 @@ export function Sources() {
 
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {
     try {
-      const result = await deriveCanonical(s.dimId, s.table, s.column);
+      const result = await deriveRecord(s.dimId, s.table, s.column);
       toast(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(

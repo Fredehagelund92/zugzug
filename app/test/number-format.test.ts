@@ -35,7 +35,12 @@ describe("formatNumber", () => {
       formatNumber(42, { format: "currency", symbol: "$", position: "prefix", precision: 2 }),
     ).toBe("$42.00");
     expect(
-      formatNumber(1234.5, { format: "currency", symbol: "USD ", position: "prefix", precision: 2 }),
+      formatNumber(1234.5, {
+        format: "currency",
+        symbol: "USD ",
+        position: "prefix",
+        precision: 2,
+      }),
     ).toBe("USD 1,234.50");
   });
 
@@ -76,7 +81,9 @@ describe("duration format", () => {
     expect(formatNumber(30, { format: "duration", display: "hm" })).toBe("< 1m");
   });
   test("hms: zero-padded H:MM:SS", () => {
-    expect(formatNumber(3600 + 23 * 60 + 45, { format: "duration", display: "hms" })).toBe("1:23:45");
+    expect(formatNumber(3600 + 23 * 60 + 45, { format: "duration", display: "hms" })).toBe(
+      "1:23:45",
+    );
     expect(formatNumber(90, { format: "duration", display: "hms" })).toBe("0:01:30");
   });
   test("null returns em dash", () => {

@@ -17,12 +17,7 @@ function setup() {
   const rows: Row[] = [{ id: "1", name: "First Record" }];
   return render(
     <UndoStackProvider>
-      <DataGrid
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.id}
-        onCommit={async () => {}}
-      />
+      <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} />
     </UndoStackProvider>,
   );
 }
@@ -73,8 +68,8 @@ describe("column rename select-all", () => {
     });
 
     // Find "Rename column" option and click it
-    const renameBtn = Array.from(document.querySelectorAll("button")).find(
-      (b) => b.textContent?.includes("Rename column"),
+    const renameBtn = Array.from(document.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Rename column"),
     );
     if (!renameBtn) throw new Error("No 'Rename column' button found");
 

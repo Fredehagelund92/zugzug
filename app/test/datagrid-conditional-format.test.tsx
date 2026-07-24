@@ -4,7 +4,10 @@ import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef, ConditionalRule } from "../src/components/datagrid/types";
 
-interface Row { id: string; status: string }
+interface Row {
+  id: string;
+  status: string;
+}
 const rows: Row[] = [
   { id: "1", status: "ok" },
   { id: "2", status: "conflict" },
@@ -27,7 +30,7 @@ describe("conditional formatting", () => {
         <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} />
       </UndoStackProvider>,
     );
-    const stripes = container.querySelectorAll('[data-row-stripe]');
+    const stripes = container.querySelectorAll("[data-row-stripe]");
     expect(stripes.length).toBe(1);
     expect((stripes[0] as HTMLElement).dataset.rowStripe).toBe("rose");
   });

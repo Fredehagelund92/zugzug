@@ -13,7 +13,15 @@ beforeEach(async () => {
 test("addField persists integer numberFormat and listFields returns it", async () => {
   const userId = "u_test";
   const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
-  await repo.addField(dimId, "Rank", "number", undefined, { numberFormat: { format: "integer" } }, userId, "default");
+  await repo.addField(
+    dimId,
+    "Rank",
+    "number",
+    undefined,
+    { numberFormat: { format: "integer" } },
+    userId,
+    "default",
+  );
   const fields = await repo.listFields(dimId, "default");
   const f = fields.find((x) => x.label === "Rank");
   expect(f).toBeDefined();
@@ -30,7 +38,8 @@ test("addField persists currency numberFormat and listFields returns it", async 
     "number",
     undefined,
     { numberFormat: { format: "currency", symbol: "$", position: "prefix", precision: 2 } },
-    userId, "default"
+    userId,
+    "default",
   );
   const fields = await repo.listFields(dimId, "default");
   const f = fields.find((x) => x.label === "Price");
@@ -56,34 +65,49 @@ test("changeColumnType to number with currency format persists it", async () => 
   const userId = "u_test";
   const dimId = await repo.addDimension("Region", [], { keyKind: "slug" }, userId, "default");
   await repo.addField(dimId, "Score", "text", undefined, {}, userId, "default");
-  await repo.changeColumnType(dimId, "score", {
-    newType: "number",
-    numberFormat: { format: "currency", symbol: "€", position: "prefix", precision: 2 },
-    coerceInvalidToNull: false,
-    userId,
-  }, "default");
+  await repo.changeColumnType(
+    dimId,
+    "score",
+    {
+      newType: "number",
+      numberFormat: { format: "currency", symbol: "€", position: "prefix", precision: 2 },
+      coerceInvalidToNull: false,
+      userId,
+    },
+    "default",
+  );
   const fields = await repo.listFields(dimId, "default");
   const f = fields.find((x) => x.field === "score");
-  expect(f?.numberFormat).toEqual({ format: "currency", symbol: "€", position: "prefix", precision: 2 });
+  expect(f?.numberFormat).toEqual({
+    format: "currency",
+    symbol: "€",
+    position: "prefix",
+    precision: 2,
+  });
 });
 
 test("changeColumnType to rating persists ratingMax and coerces integer values", async () => {
   const userId = "u_test";
   const dimId = await repo.addDimension("Products", [], { keyKind: "slug" }, userId, "default");
   await repo.addField(dimId, "Score", "number", undefined, {}, userId, "default");
-  // Add a canonical row with score = 3
-  await repo.addCanonicalOne(dimId, "Widget", undefined, userId, "default");
-  const canonical = (await repo.getDimension(dimId, "default"))!.canonical;
-  const key = canonical[0].key;
+  // Add a record row with score = 3
+  await repo.addRecordOne(dimId, "Widget", undefined, userId, "default");
+  const record = (await repo.getDimension(dimId, "default"))!.record;
+  const key = record[0].key;
   const { pgRun } = await import("../src/pg.ts");
   await pgRun(`UPDATE zugzug.dim_products SET score = 3 WHERE products_code = $1`, [key]);
 
-  const res = await repo.changeColumnType(dimId, "score", {
-    newType: "rating",
-    ratingMax: 5,
-    coerceInvalidToNull: false,
-    userId,
-  }, "default");
+  const res = await repo.changeColumnType(
+    dimId,
+    "score",
+    {
+      newType: "rating",
+      ratingMax: 5,
+      coerceInvalidToNull: false,
+      userId,
+    },
+    "default",
+  );
   expect(res.ok).toBe(true);
   const fields = await repo.listFields(dimId, "default");
   const f = fields.find((x) => x.field === "score");
@@ -95,11 +119,16 @@ test("changeColumnType to url is a lossless relabel", async () => {
   const userId = "u_test";
   const dimId = await repo.addDimension("Brands", [], { keyKind: "slug" }, userId, "default");
   await repo.addField(dimId, "Site", "text", undefined, {}, userId, "default");
-  const res = await repo.changeColumnType(dimId, "site", {
-    newType: "url",
-    coerceInvalidToNull: false,
-    userId,
-  }, "default");
+  const res = await repo.changeColumnType(
+    dimId,
+    "site",
+    {
+      newType: "url",
+      coerceInvalidToNull: false,
+      userId,
+    },
+    "default",
+  );
   expect(res.ok).toBe(true);
   const fields = await repo.listFields(dimId, "default");
   expect(fields.find((x) => x.field === "site")?.type).toBe("url");

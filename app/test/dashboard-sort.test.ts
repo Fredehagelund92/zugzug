@@ -24,7 +24,7 @@ function dim(p: {
     mapTable: `zugzug.map_${p.id}`,
     keyCol: "k",
     rows: p.records,
-    canonical: Array.from({ length: p.records }, (_, i) => ({
+    record: Array.from({ length: p.records }, (_, i) => ({
       key: `k${i}`,
       label: `l${i}`,
       version: 1,
@@ -47,9 +47,33 @@ function dim(p: {
   } as MappingDimension;
 }
 
-const a = dim({ id: "a", name: "Alpha", records: 10, newCount: 5, pendingDrafts: 1, changedRecords: 1, publishedAt: "2026-07-20T10:00:00Z" });
-const b = dim({ id: "b", name: "Bravo", records: 3, newCount: 0, pendingDrafts: 0, changedRecords: 0, publishedAt: "2026-07-21T10:00:00Z" });
-const c = dim({ id: "c", name: "Charlie", records: 7, newCount: 2, pendingDrafts: 4, changedRecords: 0, publishedAt: null });
+const a = dim({
+  id: "a",
+  name: "Alpha",
+  records: 10,
+  newCount: 5,
+  pendingDrafts: 1,
+  changedRecords: 1,
+  publishedAt: "2026-07-20T10:00:00Z",
+});
+const b = dim({
+  id: "b",
+  name: "Bravo",
+  records: 3,
+  newCount: 0,
+  pendingDrafts: 0,
+  changedRecords: 0,
+  publishedAt: "2026-07-21T10:00:00Z",
+});
+const c = dim({
+  id: "c",
+  name: "Charlie",
+  records: 7,
+  newCount: 2,
+  pendingDrafts: 4,
+  changedRecords: 0,
+  publishedAt: null,
+});
 const all = [a, b, c];
 
 const ids = (ds: MappingDimension[]) => ds.map((d) => d.id);
@@ -90,7 +114,9 @@ describe("applySort", () => {
 
 describe("applyFilter", () => {
   it("attention = any in-review OR anything to publish", () => {
-    expect(ids(applyFilter(all, "attention")).sort()).toEqual(["a", "b", "c"].filter((x) => x !== "b"));
+    expect(ids(applyFilter(all, "attention")).sort()).toEqual(
+      ["a", "b", "c"].filter((x) => x !== "b"),
+    );
   });
   it("clean = nothing in review AND nothing to publish", () => {
     expect(ids(applyFilter(all, "clean"))).toEqual(["b"]);

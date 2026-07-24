@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CellCtx, EditCtx } from "../types";
 
-/* LinkedCell — FK picker cell that references another dimension's canonical records.
+/* LinkedCell — FK picker cell that references another dimension's record records.
    Renderer resolves the stored key to a label via column.config.candidates.
    Editor is a searchable popover (no create — records are managed in their own table). */
 

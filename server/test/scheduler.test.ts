@@ -22,7 +22,11 @@ test("scheduler — start() invokes each job once per tick", async () => {
     callCount++;
     return {};
   });
-  const scheduler = createScheduler({ tickIntervalMs: 50, listTenants: FAKE_LIST_TENANTS, jobs: [job] });
+  const scheduler = createScheduler({
+    tickIntervalMs: 50,
+    listTenants: FAKE_LIST_TENANTS,
+    jobs: [job],
+  });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 175));
   await scheduler.stop();
@@ -36,8 +40,14 @@ test("scheduler — _tick() runs all jobs once and returns", async () => {
     tickIntervalMs: 999_999, // long enough not to auto-fire
     listTenants: FAKE_LIST_TENANTS,
     jobs: [
-      makeJob("a", async () => { calls.push("a"); return {}; }),
-      makeJob("b", async () => { calls.push("b"); return {}; }),
+      makeJob("a", async () => {
+        calls.push("a");
+        return {};
+      }),
+      makeJob("b", async () => {
+        calls.push("b");
+        return {};
+      }),
     ],
   });
   await scheduler._tick();
@@ -53,7 +63,11 @@ test("scheduler — in-flight guard prevents overlap", async () => {
     finished++;
     return {};
   });
-  const scheduler = createScheduler({ tickIntervalMs: 20, listTenants: FAKE_LIST_TENANTS, jobs: [slowJob] });
+  const scheduler = createScheduler({
+    tickIntervalMs: 20,
+    listTenants: FAKE_LIST_TENANTS,
+    jobs: [slowJob],
+  });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 250));
   await scheduler.stop();
@@ -68,8 +82,14 @@ test("scheduler — failing job logs but doesn't crash; subsequent jobs run", as
     tickIntervalMs: 999_999,
     listTenants: FAKE_LIST_TENANTS,
     jobs: [
-      makeJob("failing", async () => { calls.push("failing"); throw new Error("boom"); }),
-      makeJob("after", async () => { calls.push("after"); return {}; }),
+      makeJob("failing", async () => {
+        calls.push("failing");
+        throw new Error("boom");
+      }),
+      makeJob("after", async () => {
+        calls.push("after");
+        return {};
+      }),
     ],
   });
   await scheduler._tick();
@@ -81,11 +101,13 @@ test("scheduler — stop() drains in-flight job", async () => {
   const scheduler = createScheduler({
     tickIntervalMs: 50,
     listTenants: FAKE_LIST_TENANTS,
-    jobs: [makeJob("slow", async () => {
-      await new Promise((r) => setTimeout(r, 80));
-      finished = true;
-      return {};
-    })],
+    jobs: [
+      makeJob("slow", async () => {
+        await new Promise((r) => setTimeout(r, 80));
+        finished = true;
+        return {};
+      }),
+    ],
   });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 20)); // let first tick start
@@ -97,11 +119,13 @@ test("scheduler — stop(timeoutMs) returns within timeout even if job hangs", a
   const scheduler = createScheduler({
     tickIntervalMs: 50,
     listTenants: FAKE_LIST_TENANTS,
-    jobs: [makeJob("hang", async () => {
-      // Ignore signal — simulate misbehaving job that doesn't honor abort
-      await new Promise((r) => setTimeout(r, 600));
-      return {};
-    })],
+    jobs: [
+      makeJob("hang", async () => {
+        // Ignore signal — simulate misbehaving job that doesn't honor abort
+        await new Promise((r) => setTimeout(r, 600));
+        return {};
+      }),
+    ],
   });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 20));
@@ -122,7 +146,12 @@ test("scheduler — shouldRun() returning false skips the tick", async () => {
     tickIntervalMs: 999_999,
     listTenants: FAKE_LIST_TENANTS,
     shouldRun: async () => false,
-    jobs: [makeJob("counter", async () => { jobCalls++; return {}; })],
+    jobs: [
+      makeJob("counter", async () => {
+        jobCalls++;
+        return {};
+      }),
+    ],
   });
   await scheduler._tick();
   expect(jobCalls).toBe(0);
@@ -131,7 +160,9 @@ test("scheduler — shouldRun() returning false skips the tick", async () => {
 test("scheduler — logs warning on drift > tickIntervalMs/2", async () => {
   const warns: string[] = [];
   const origWarn = console.warn;
-  console.warn = (...args: unknown[]) => { warns.push(args.map(String).join(" ")); };
+  console.warn = (...args: unknown[]) => {
+    warns.push(args.map(String).join(" "));
+  };
 
   try {
     const scheduler = createScheduler({
@@ -143,7 +174,9 @@ test("scheduler — logs warning on drift > tickIntervalMs/2", async () => {
     await new Promise((r) => setTimeout(r, 30));
     // Simulate drift by blocking the event loop briefly before next tick
     const blockUntil = Date.now() + 60;
-    while (Date.now() < blockUntil) {/* block */}
+    while (Date.now() < blockUntil) {
+      /* block */
+    }
     await new Promise((r) => setTimeout(r, 100));
     await scheduler.stop();
     expect(warns.some((w) => w.includes("scheduler: tick drifted"))).toBe(true);
@@ -157,19 +190,27 @@ test("scheduler — stop() aborts the signal passed to in-flight jobs", async ()
   const scheduler = createScheduler({
     tickIntervalMs: 50,
     listTenants: FAKE_LIST_TENANTS,
-    jobs: [{
-      name: "signal-watcher",
-      run: async (ctx) => {
-        // Wait until aborted OR 500ms
-        await new Promise<void>((resolve) => {
-          if (ctx.signal.aborted) { signalSeenAborted = true; return resolve(); }
-          const onAbort = () => { signalSeenAborted = true; resolve(); };
-          ctx.signal.addEventListener("abort", onAbort, { once: true });
-          setTimeout(() => resolve(), 500);
-        });
-        return {};
+    jobs: [
+      {
+        name: "signal-watcher",
+        run: async (ctx) => {
+          // Wait until aborted OR 500ms
+          await new Promise<void>((resolve) => {
+            if (ctx.signal.aborted) {
+              signalSeenAborted = true;
+              return resolve();
+            }
+            const onAbort = () => {
+              signalSeenAborted = true;
+              resolve();
+            };
+            ctx.signal.addEventListener("abort", onAbort, { once: true });
+            setTimeout(() => resolve(), 500);
+          });
+          return {};
+        },
       },
-    }],
+    ],
   });
   scheduler.start();
   await new Promise((r) => setTimeout(r, 20)); // let the job start
@@ -180,16 +221,20 @@ test("scheduler — stop() aborts the signal passed to in-flight jobs", async ()
 test("scheduler — logs error when tick is skipped due to in-flight previous", async () => {
   const errors: string[] = [];
   const origError = console.error;
-  console.error = (...args: unknown[]) => { errors.push(args.map(String).join(" ")); };
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(" "));
+  };
 
   try {
     const scheduler = createScheduler({
       tickIntervalMs: 20,
       listTenants: FAKE_LIST_TENANTS,
-      jobs: [makeJob("slow", async () => {
-        await new Promise((r) => setTimeout(r, 150)); // way longer than interval
-        return {};
-      })],
+      jobs: [
+        makeJob("slow", async () => {
+          await new Promise((r) => setTimeout(r, 150)); // way longer than interval
+          return {};
+        }),
+      ],
     });
     scheduler.start();
     await new Promise((r) => setTimeout(r, 200));

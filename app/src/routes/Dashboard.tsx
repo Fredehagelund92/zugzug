@@ -484,7 +484,7 @@ export function Dashboard() {
 
                   {/* records */}
                   <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right font-mono text-[11px] tabular-nums text-ink-2">
-                    {dim.canonical.length.toLocaleString()}
+                    {dim.record.length.toLocaleString()}
                   </td>
 
                   {/* coverage bar + pct — wide, prominent bar (demo parity) */}

@@ -137,9 +137,9 @@ async function cleanup() {
   });
 
   await step("changeColumnType text → select seeds options from distinct values", async () => {
-    // first, add a couple of canonical rows and set capital values
-    await repo.addCanonicalOne(dimId, "Denmark", "denmark", "u_verify", T);
-    await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify", T);
+    // first, add a couple of record rows and set capital values
+    await repo.addRecordOne(dimId, "Denmark", "denmark", "u_verify", T);
+    await repo.addRecordOne(dimId, "Germany", "germany", "u_verify", T);
     await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen", "u_verify", T);
     await repo.setFieldValue(dimId, "germany", "capital", "Berlin", "u_verify", T);
     const res = await repo.changeColumnType(

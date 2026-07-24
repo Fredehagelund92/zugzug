@@ -43,7 +43,7 @@ interface Diff {
 }
 
 /** A "before → after" edit carries these keys in its audit metadata (see
- *  setFieldValue / renameCanonical). Older entries logged before enrichment
+ *  setFieldValue / renameRecord). Older entries logged before enrichment
  *  won't have them and fall back to the plain event line. */
 function extractDiff(metadata: AuditEntry["metadata"]): Diff | null {
   if (!metadata || typeof metadata !== "object") return null;

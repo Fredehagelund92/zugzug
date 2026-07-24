@@ -7,7 +7,7 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun } from "./pg.ts";
-import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
+import { addDimension, addRecordOne } from "./repo-record.ts";
 import { saveDraft, commit } from "./repo-drafts.ts";
 import { listVersions, getSnapshot } from "./repo-versions.ts";
 
@@ -35,7 +35,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -46,7 +46,7 @@ afterAll(async () => {
 describe("commit writes a snapshot", () => {
   it("commit writes a snapshot with the same version as the outbound event", async () => {
     const dimId = await addDimension("SnapDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    await addRecordOne(dimId, "United States", undefined, U, T);
     await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
     const res = await commit(dimId, U, T);
     expect(res.committed).toBe(1);
@@ -63,11 +63,11 @@ describe("commit writes a snapshot", () => {
 
   it("version number matches outbound_event count", async () => {
     const dimId = await addDimension("VersionCountDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Beta", undefined, U, T);
+    await addRecordOne(dimId, "Beta", undefined, U, T);
     await saveDraft(dimId, "beta raw", "mapped", "Beta", "beta", U, T);
     await commit(dimId, U, T);
 
-    await addCanonicalOne(dimId, "Gamma", undefined, U, T);
+    await addRecordOne(dimId, "Gamma", undefined, U, T);
     await saveDraft(dimId, "gamma raw", "mapped", "Gamma", "gamma", U, T);
     await commit(dimId, U, T);
 

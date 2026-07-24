@@ -21,8 +21,15 @@ const cleanDim: MappingDimension = {
   mapTable: "zugzug.map_post_type",
   keyCol: "post_type",
   rows: 100,
-  canonical: [],
-  counts: { newCount: 0, mappedCount: 2, totalDistinct: 2, unmappedRowsTotal: 0, mappedRowsTotal: 100, scannedAt: null },
+  record: [],
+  counts: {
+    newCount: 0,
+    mappedCount: 2,
+    totalDistinct: 2,
+    unmappedRowsTotal: 0,
+    mappedRowsTotal: 100,
+    scannedAt: null,
+  },
 };
 
 const dirtyDim: MappingDimension = {
@@ -32,8 +39,15 @@ const dirtyDim: MappingDimension = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   rows: 500,
-  canonical: [],
-  counts: { newCount: 2, mappedCount: 2, totalDistinct: 4, unmappedRowsTotal: 500, mappedRowsTotal: 500, scannedAt: null },
+  record: [],
+  counts: {
+    newCount: 2,
+    mappedCount: 2,
+    totalDistinct: 4,
+    unmappedRowsTotal: 500,
+    mappedRowsTotal: 500,
+    scannedAt: null,
+  },
 };
 
 const emptyDim: MappingDimension = {
@@ -43,14 +57,39 @@ const emptyDim: MappingDimension = {
   mapTable: "zugzug.map_empty",
   keyCol: "id",
   rows: 0,
-  canonical: [],
-  counts: { newCount: 0, mappedCount: 0, totalDistinct: 0, unmappedRowsTotal: 0, mappedRowsTotal: 0, scannedAt: null },
+  record: [],
+  counts: {
+    newCount: 0,
+    mappedCount: 0,
+    totalDistinct: 0,
+    unmappedRowsTotal: 0,
+    mappedRowsTotal: 0,
+    scannedAt: null,
+  },
 };
 
 const auditLog: AuditEntry[] = [
-  { id: "1", at: "1h ago", user: { id: "u1", name: "Alice", initials: "AL" }, action: "committed", detail: "3 values in Country" },
-  { id: "2", at: "2h ago", user: { id: "u2", name: "Bob", initials: "BO" }, action: "renamed", detail: "TWEET → Tweet in post_type" },
-  { id: "3", at: "3h ago", user: { id: "u1", name: "Alice", initials: "AL" }, action: "added", detail: "California to US State" },
+  {
+    id: "1",
+    at: "1h ago",
+    user: { id: "u1", name: "Alice", initials: "AL" },
+    action: "committed",
+    detail: "3 values in Country",
+  },
+  {
+    id: "2",
+    at: "2h ago",
+    user: { id: "u2", name: "Bob", initials: "BO" },
+    action: "renamed",
+    detail: "TWEET → Tweet in post_type",
+  },
+  {
+    id: "3",
+    at: "3h ago",
+    user: { id: "u1", name: "Alice", initials: "AL" },
+    action: "added",
+    detail: "California to US State",
+  },
 ];
 
 // ── coveragePct ───────────────────────────────────────────────────────────────
@@ -124,7 +163,16 @@ describe("applyFilter", () => {
     expect(result.map((d) => d.id)).toEqual(["country"]);
   });
   test("'attention' includes dims with pending publish (toPublishCount > 0)", () => {
-    const withPublish = { ...cleanDim, publish: { version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedRecords: 0 } };
+    const withPublish = {
+      ...cleanDim,
+      publish: {
+        version: 1,
+        publishedAt: null,
+        publishedByName: null,
+        pendingDrafts: 1,
+        changedRecords: 0,
+      },
+    };
     const result = applyFilter([withPublish, dirtyDim], "attention");
     expect(result.map((d) => d.id)).toContain("post_type");
   });
@@ -133,7 +181,16 @@ describe("applyFilter", () => {
     expect(result.map((d) => d.id)).toEqual(["post_type"]);
   });
   test("'clean' excludes dims with pending publish", () => {
-    const withPublish = { ...cleanDim, publish: { version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedRecords: 0 } };
+    const withPublish = {
+      ...cleanDim,
+      publish: {
+        version: 1,
+        publishedAt: null,
+        publishedByName: null,
+        pendingDrafts: 1,
+        changedRecords: 0,
+      },
+    };
     const result = applyFilter([withPublish, dirtyDim], "clean");
     expect(result).toHaveLength(0);
   });
@@ -160,7 +217,7 @@ describe("applySort", () => {
   });
   test("'records' desc puts highest record count first", () => {
     const result = applySort([cleanDim, dirtyDim], "records", "desc");
-    // cleanDim has canonical=[], dirtyDim has canonical=[] too → tie; order preserved
+    // cleanDim has record=[], dirtyDim has record=[] too → tie; order preserved
     expect(result).toHaveLength(2);
   });
   test("does not mutate the input array", () => {
@@ -174,9 +231,27 @@ describe("warehouseSyncStatusByDim", () => {
   test("latest event per dim wins", () => {
     const audits: AuditEntry[] = [
       // newest first
-      { id: "1", at: "now", user: { id: "u", name: "U", initials: "U" }, action: "Warehouse sync failed", detail: "1 → zugzug.map_country: timeout" },
-      { id: "2", at: "1m", user: { id: "u", name: "U", initials: "U" }, action: "Warehouse synced", detail: "5 → zugzug.map_partner" },
-      { id: "3", at: "2m", user: { id: "u", name: "U", initials: "U" }, action: "Warehouse synced", detail: "3 → zugzug.map_country" },
+      {
+        id: "1",
+        at: "now",
+        user: { id: "u", name: "U", initials: "U" },
+        action: "Warehouse sync failed",
+        detail: "1 → zugzug.map_country: timeout",
+      },
+      {
+        id: "2",
+        at: "1m",
+        user: { id: "u", name: "U", initials: "U" },
+        action: "Warehouse synced",
+        detail: "5 → zugzug.map_partner",
+      },
+      {
+        id: "3",
+        at: "2m",
+        user: { id: "u", name: "U", initials: "U" },
+        action: "Warehouse synced",
+        detail: "3 → zugzug.map_country",
+      },
     ];
     const dims = [
       { id: "country", mapTable: "zugzug.map_country" },
@@ -192,7 +267,13 @@ describe("warehouseSyncStatusByDim", () => {
 
   test("no warehouse events leaves all dims unknown", () => {
     const audits: AuditEntry[] = [
-      { id: "1", at: "now", user: { id: "u", name: "U", initials: "U" }, action: "Committed", detail: "1 value → zugzug.map_country" },
+      {
+        id: "1",
+        at: "now",
+        user: { id: "u", name: "U", initials: "U" },
+        action: "Committed",
+        detail: "1 value → zugzug.map_country",
+      },
     ];
     const dims = [{ id: "country", mapTable: "zugzug.map_country" }];
     expect(warehouseSyncStatusByDim(audits, dims)).toEqual({

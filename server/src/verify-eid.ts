@@ -32,7 +32,7 @@ const note = (name: string, detail: string) => {
 const NAME = "Verify EID Partner";
 const DIM_ID = "verify_eid_partner"; // slug(NAME)
 const KEYCOL = `${DIM_ID}_code`;
-const canon = (t: string) => `${env.oltpCatalog}.${env.canonicalSchema}.${t}`;
+const canon = (t: string) => `${env.oltpCatalog}.${env.recordSchema}.${t}`;
 const DIMT = canon(`dim_${DIM_ID}`);
 const MAPT = canon(`map_${DIM_ID}`);
 
@@ -78,7 +78,7 @@ check(
 );
 const labelNullable = await pgGet<{ is_nullable: string }>(
   `SELECT is_nullable FROM ${env.oltpCatalog}.information_schema.columns
-   WHERE table_schema = '${env.canonicalSchema}' AND table_name = 'dim_${DIM_ID}' AND column_name = 'label'`,
+   WHERE table_schema = '${env.recordSchema}' AND table_name = 'dim_${DIM_ID}' AND column_name = 'label'`,
 );
 check(
   "addDimension: dim_ label is nullable for external-ID",
@@ -91,7 +91,7 @@ const T = process.env.EID_TABLE?.trim(),
   IDC = process.env.EID_ID_COL?.trim(),
   NMC = process.env.EID_NAME_COL?.trim();
 if (env.attachWarehouse && T && IDC && NMC) {
-  const res = await repo.deriveCanonical(DIM_ID, T, IDC, NMC, {}, "u_verify", "default");
+  const res = await repo.deriveRecord(DIM_ID, T, IDC, NMC, {}, "u_verify", "default");
   check(
     "derive: external-ID keys seeded from master table",
     res.derived > 0,
@@ -106,16 +106,15 @@ if (env.attachWarehouse && T && IDC && NMC) {
     `${bind?.name_table}.${bind?.name_col}`,
   );
   const full = await repo.getDimension(DIM_ID, TENANT);
-  const resolved = full?.canonical.filter((c) => !c.unresolved && c.label !== c.key) ?? [];
+  const resolved = full?.record.filter((c) => !c.unresolved && c.label !== c.key) ?? [];
   check(
     "getDimension: at least one name resolved live",
     resolved.length > 0,
-    `${resolved.length}/${full?.canonical.length ?? 0} resolved`,
+    `${resolved.length}/${full?.record.length ?? 0} resolved`,
   );
   check(
     "getDimension: keys are raw IDs (not slugged)",
-    (full?.canonical.length ?? 0) > 0 &&
-      (full?.canonical.every((c) => c.key === c.key.trim()) ?? false),
+    (full?.record.length ?? 0) > 0 && (full?.record.every((c) => c.key === c.key.trim()) ?? false),
   );
 } else {
   note(
@@ -125,7 +124,7 @@ if (env.attachWarehouse && T && IDC && NMC) {
   // unresolved fallback IS testable without a binding: seed an ID by hand, read it back
   await pgRun(`INSERT INTO ${DIMT} (${KEYCOL}) VALUES ('P-001') ON CONFLICT DO NOTHING`);
   const full = await repo.getDimension(DIM_ID, TENANT);
-  const row = full?.canonical.find((c) => c.key === "P-001");
+  const row = full?.record.find((c) => c.key === "P-001");
   check(
     "getDimension: no binding → row unresolved, label falls back to key",
     !!row && row.unresolved === true && row.label === "P-001",

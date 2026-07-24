@@ -8,14 +8,14 @@ process.env.ZUGZUG_CURSOR_KEY =
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension } from "./repo-canonical.ts";
+import { addDimension } from "./repo-record.ts";
 import { publishSummaryFor } from "./repo-drafts.ts";
 
 const T = "test_publish_summary";
 const U = "u_test_publish_summary";
 const createdDims: string[] = [];
 
-// Seed a canonical record + its canonical_version row (never-published dim).
+// Seed a record record + its record_version row (never-published dim).
 async function seedRecord(dimId: string, key: string, label: string): Promise<void> {
   const meta = await pgGet<{ dim_table: string; key_col: string }>(
     `SELECT dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
@@ -29,7 +29,7 @@ async function seedRecord(dimId: string, key: string, label: string): Promise<vo
     [key, label],
   );
   await pgRun(
-    `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+    `INSERT INTO "zugzug_app"."record_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
      VALUES ($1, $2, 1, now(), $3, $4)
      ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
     [dimId, key, U, T],
@@ -50,7 +50,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});

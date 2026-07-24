@@ -1,7 +1,7 @@
 import { AppError } from "./errors.ts";
 import { pgContext } from "./pg.ts";
 import * as repoMeta from "./repo-meta.ts";
-import * as repoCanonical from "./repo-canonical.ts";
+import * as repoRecord from "./repo-record.ts";
 import * as repoDrafts from "./repo-drafts.ts";
 import * as repoScan from "./repo-scan.ts";
 import * as repoDimScan from "./repo-dim-scan.ts";
@@ -10,7 +10,7 @@ import * as repoActivity from "./repo-activity.ts";
 import * as repoVersions from "./repo-versions.ts";
 import type {
   Preferences,
-  CanonicalValue,
+  RecordValue,
   OptionDef,
   PaletteName,
   NumberFormat,
@@ -99,59 +99,59 @@ export class TenantRepo {
     );
   }
 
-  // --- canonical (read) ------------------------------------------------------
+  // --- record (read) ------------------------------------------------------
   listDimensions(): Promise<DimensionMeta[]> {
-    return this.withClearCtx(() => repoCanonical.listDimensions(this.tenantId));
+    return this.withClearCtx(() => repoRecord.listDimensions(this.tenantId));
   }
 
   getDimension(
     id: string,
     opts?: { scalars?: repoDimScan.DimScanScalars[] },
   ): Promise<MappingDimension | null> {
-    return this.withClearCtx(() => repoCanonical.getDimension(id, this.tenantId, opts));
+    return this.withClearCtx(() => repoRecord.getDimension(id, this.tenantId, opts));
   }
 
   /** Lightweight dimension lookup — id + label only. Used by AI suggest flow
-   *  where the full canonical materialization is overkill. */
+   *  where the full record materialization is overkill. */
   getDimensionBasic(id: string): Promise<{ id: string; label: string } | null> {
-    return this.withClearCtx(() => repoCanonical.getDimensionBasic(id, this.tenantId));
+    return this.withClearCtx(() => repoRecord.getDimensionBasic(id, this.tenantId));
   }
 
-  /** Sample of existing canonical labels for a dimension (default limit 30).
+  /** Sample of existing record labels for a dimension (default limit 30).
    *  Used to build AI context and workbench previews. */
-  getCanonicalValues(id: string, opts: { limit?: number } = {}): Promise<string[]> {
-    return this.withClearCtx(() => repoCanonical.getCanonicalValues(id, this.tenantId, opts));
+  getRecordValues(id: string, opts: { limit?: number } = {}): Promise<string[]> {
+    return this.withClearCtx(() => repoRecord.getRecordValues(id, this.tenantId, opts));
   }
 
   listFields(dimId: string): Promise<FieldDef[]> {
-    return this.withClearCtx(() => repoCanonical.listFields(dimId, this.tenantId));
+    return this.withClearCtx(() => repoRecord.listFields(dimId, this.tenantId));
   }
 
   listVariants(dimId: string, key: string): Promise<string[]> {
-    return this.withClearCtx(() => repoCanonical.listVariants(dimId, key, this.tenantId));
+    return this.withClearCtx(() => repoRecord.listVariants(dimId, key, this.tenantId));
   }
 
-  // --- canonical (mutate) ----------------------------------------------------
+  // --- record (mutate) ----------------------------------------------------
   addDimension(
     name: string,
-    sources: repoCanonical.QualifiedSource[] = [],
+    sources: repoRecord.QualifiedSource[] = [],
     opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
     userId: string,
   ): Promise<string> {
     this.assertRole("manage_adapter");
     return this.withClearCtx(() =>
-      repoCanonical.addDimension(name, sources, opts, userId, this.tenantId),
+      repoRecord.addDimension(name, sources, opts, userId, this.tenantId),
     );
   }
 
   deleteDimension(dimId: string, userId: string): Promise<boolean> {
     this.assertRole("curate");
-    return this.withClearCtx(() => repoCanonical.deleteDimension(dimId, userId, this.tenantId));
+    return this.withClearCtx(() => repoRecord.deleteDimension(dimId, userId, this.tenantId));
   }
 
   updateDimensionMeta(
     dimId: string,
-    patch: repoCanonical.UpdateDimensionMetaInput,
+    patch: repoRecord.UpdateDimensionMetaInput,
     userId: string,
   ): Promise<{
     id: string;
@@ -161,16 +161,16 @@ export class TenantRepo {
   }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.updateDimensionMeta(dimId, patch, userId, this.tenantId),
+      repoRecord.updateDimensionMeta(dimId, patch, userId, this.tenantId),
     );
   }
 
-  addCanonical(dimId: string, values: CanonicalValue[]): Promise<void> {
+  addRecord(dimId: string, values: RecordValue[]): Promise<void> {
     this.assertRole("commit");
-    return this.withClearCtx(() => repoCanonical.addCanonical(dimId, values, this.tenantId));
+    return this.withClearCtx(() => repoRecord.addRecord(dimId, values, this.tenantId));
   }
 
-  addCanonicalOne(
+  addRecordOne(
     dimId: string,
     label: string,
     key: string | undefined,
@@ -178,11 +178,11 @@ export class TenantRepo {
   ): Promise<void> {
     this.assertRole("commit");
     return this.withClearCtx(() =>
-      repoCanonical.addCanonicalOne(dimId, label, key, userId, this.tenantId),
+      repoRecord.addRecordOne(dimId, label, key, userId, this.tenantId),
     );
   }
 
-  addCanonicalOneAt(
+  addRecordOneAt(
     dimId: string,
     label: string,
     key: string | undefined,
@@ -191,11 +191,11 @@ export class TenantRepo {
   ): Promise<void> {
     this.assertRole("commit");
     return this.withClearCtx(() =>
-      repoCanonical.addCanonicalOneAt(dimId, label, key, insertAt, userId, this.tenantId),
+      repoRecord.addRecordOneAt(dimId, label, key, insertAt, userId, this.tenantId),
     );
   }
 
-  reorderCanonicalRow(
+  reorderRecordRow(
     dimId: string,
     rowKey: string,
     before: string | null | undefined,
@@ -204,22 +204,20 @@ export class TenantRepo {
   ): Promise<{ position: string }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.reorderCanonicalRow(dimId, rowKey, before, after, userId, this.tenantId),
+      repoRecord.reorderRecordRow(dimId, rowKey, before, after, userId, this.tenantId),
     );
   }
 
-  importCanonical(
+  importRecord(
     dimId: string,
-    rows: repoCanonical.ImportRow[],
+    rows: repoRecord.ImportRow[],
     userId: string,
   ): Promise<{ created: number; updated: number; skipped: number }> {
     this.assertRole("commit");
-    return this.withClearCtx(() =>
-      repoCanonical.importCanonical(dimId, rows, userId, this.tenantId),
-    );
+    return this.withClearCtx(() => repoRecord.importRecord(dimId, rows, userId, this.tenantId));
   }
 
-  renameCanonical(
+  renameRecord(
     dimId: string,
     key: string,
     label: string,
@@ -228,11 +226,11 @@ export class TenantRepo {
   ): Promise<{ version: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.renameCanonical(dimId, key, label, userId, expectedVersion, this.tenantId),
+      repoRecord.renameRecord(dimId, key, label, userId, expectedVersion, this.tenantId),
     );
   }
 
-  mergeCanonical(
+  mergeRecord(
     dimId: string,
     survivor: string,
     losers: string[],
@@ -241,18 +239,11 @@ export class TenantRepo {
   ): Promise<number> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.mergeCanonical(
-        dimId,
-        survivor,
-        losers,
-        userId,
-        expectedVersions,
-        this.tenantId,
-      ),
+      repoRecord.mergeRecord(dimId, survivor, losers, userId, expectedVersions, this.tenantId),
     );
   }
 
-  retireCanonical(
+  retireRecord(
     dimId: string,
     key: string,
     userId: string,
@@ -260,7 +251,7 @@ export class TenantRepo {
   ): Promise<{ ok: boolean; variants: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.retireCanonical(dimId, key, userId, expectedVersion, this.tenantId),
+      repoRecord.retireRecord(dimId, key, userId, expectedVersion, this.tenantId),
     );
   }
 
@@ -272,7 +263,7 @@ export class TenantRepo {
   ): Promise<void> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.updateField(dimId, field, updates, userId, this.tenantId),
+      repoRecord.updateField(dimId, field, updates, userId, this.tenantId),
     );
   }
 
@@ -294,14 +285,14 @@ export class TenantRepo {
   ): Promise<{ field: string } | null> {
     this.assertRole("manage_adapter");
     return this.withClearCtx(() =>
-      repoCanonical.addField(dimId, label, type, options, opts, userId, this.tenantId),
+      repoRecord.addField(dimId, label, type, options, opts, userId, this.tenantId),
     );
   }
 
   renameColumn(dimId: string, field: string, newLabel: string, userId: string): Promise<void> {
     this.assertRole("manage_adapter");
     return this.withClearCtx(() =>
-      repoCanonical.renameColumn(dimId, field, newLabel, userId, this.tenantId),
+      repoRecord.renameColumn(dimId, field, newLabel, userId, this.tenantId),
     );
   }
 
@@ -318,14 +309,12 @@ export class TenantRepo {
     },
   ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
     this.assertRole("manage_adapter");
-    return this.withClearCtx(() =>
-      repoCanonical.changeColumnType(dimId, field, opts, this.tenantId),
-    );
+    return this.withClearCtx(() => repoRecord.changeColumnType(dimId, field, opts, this.tenantId));
   }
 
   deleteColumn(dimId: string, field: string, userId: string): Promise<{ ok: boolean }> {
     this.assertRole("manage_adapter");
-    return this.withClearCtx(() => repoCanonical.deleteColumn(dimId, field, userId, this.tenantId));
+    return this.withClearCtx(() => repoRecord.deleteColumn(dimId, field, userId, this.tenantId));
   }
 
   addColumnOption(
@@ -338,7 +327,7 @@ export class TenantRepo {
   ): Promise<{ options: OptionDef[] } | null> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.addColumnOption(dimId, field, label, color, opts, userId, this.tenantId),
+      repoRecord.addColumnOption(dimId, field, label, color, opts, userId, this.tenantId),
     );
   }
 
@@ -351,7 +340,7 @@ export class TenantRepo {
   ): Promise<void> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoCanonical.setFieldValue(dimId, key, field, value, userId, this.tenantId),
+      repoRecord.setFieldValue(dimId, key, field, value, userId, this.tenantId),
     );
   }
 
@@ -519,7 +508,7 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDimScan.getDimClusters(this.tenantId, dimId, opts));
   }
 
-  deriveCanonical(
+  deriveRecord(
     dimId: string,
     table: string,
     column: string,
@@ -529,7 +518,7 @@ export class TenantRepo {
   ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
     this.assertRole("commit");
     return this.withClearCtx(() =>
-      repoScan.deriveCanonical(dimId, table, column, nameColumn, opts, userId, this.tenantId),
+      repoScan.deriveRecord(dimId, table, column, nameColumn, opts, userId, this.tenantId),
     );
   }
 
@@ -537,11 +526,11 @@ export class TenantRepo {
   getAiHint(
     dimId: string,
     raw: string,
-    canonicalLabels: string[],
+    recordLabels: string[],
     dim: { label: string },
   ): Promise<repoAiHint.AiHintResult> {
     return this.withClearCtx(() =>
-      repoAiHint.getAiHint(dimId, raw, canonicalLabels, dim, this.tenantId),
+      repoAiHint.getAiHint(dimId, raw, recordLabels, dim, this.tenantId),
     );
   }
 

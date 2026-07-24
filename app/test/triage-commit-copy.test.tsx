@@ -16,7 +16,7 @@ const stubTenant = {
 const stubDim = {
   id: "country",
   dimension: "Country",
-  canonical: [],
+  record: [],
   fields: [],
   rows: 0,
   color: null,
@@ -25,7 +25,14 @@ const stubDim = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   keyKind: "slug",
-  counts: { newCount: 1, mappedCount: 0, totalDistinct: 1, unmappedRowsTotal: 100, mappedRowsTotal: 0, scannedAt: null },
+  counts: {
+    newCount: 1,
+    mappedCount: 0,
+    totalDistinct: 1,
+    unmappedRowsTotal: 100,
+    mappedRowsTotal: 0,
+    scannedAt: null,
+  },
 };
 
 const stubDraft = {
@@ -59,7 +66,7 @@ function setupMocks(writable: boolean) {
       useWorkspaceInfo: () => ({
         adapter: writable ? "snowflake" : "duckdb",
         writable,
-        canonicalMode: writable ? "warehouse" : "postgres-export",
+        recordMode: writable ? "warehouse" : "postgres-export",
         warehouseDb: "analytics",
         allowedDomain: null,
       }),
@@ -69,7 +76,11 @@ function setupMocks(writable: boolean) {
       useDrafts: () => ({ "country::USA": stubDraft }),
       saveDraft: vi.fn(),
       discardDraft: vi.fn(),
-      commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" as const })),
+      commit: vi.fn(async () => ({
+        committed: 0,
+        rowsRecovered: 0,
+        warehouseSynced: "n/a" as const,
+      })),
       dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
     };
   });

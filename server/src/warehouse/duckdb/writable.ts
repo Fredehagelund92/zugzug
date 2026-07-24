@@ -14,7 +14,7 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
-/** DuckDB adapter that writes canonical dim_/map_ records back to the
+/** DuckDB adapter that writes record dim_/map_ records back to the
  *  warehouse (MotherDuck or local). Enabled when MOTHERDUCK_WRITABLE=true
  *  (or for a local DuckDB file with `writable: true`). */
 export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehouseAdapter {
@@ -29,7 +29,7 @@ export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehou
     maxIdentifierLength: 255,
   };
 
-  async ensureCanonicalTables(dim: DimensionSpec): Promise<void> {
+  async ensureRecordTables(dim: DimensionSpec): Promise<void> {
     const dimRef = this.parseTwoPartRef(dim.dimTable);
     const mapRef = this.parseTwoPartRef(dim.mapTable);
     const key = this.quoteIdentifier(dim.keyCol);
@@ -58,13 +58,13 @@ export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehou
     return { schema: this.creds.database ?? "main", table: stored };
   }
 
-  async commitCanonical(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+  async commitRecord(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
     if (drafts.length === 0) return { rowsWritten: 0 };
     const dimRef = this.parseTwoPartRef(dim.dimTable);
     const mapRef = this.parseTwoPartRef(dim.mapTable);
     const key = this.quoteIdentifier(dim.keyCol);
 
-    // Deduplicate canonical rows by key (last-write-wins on label, matches
+    // Deduplicate record rows by key (last-write-wins on label, matches
     // SnowflakeAdapter behavior).
     const canonByKey = new Map<string, string | null>();
     for (const d of drafts) canonByKey.set(d.key, d.label);

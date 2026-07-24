@@ -7,7 +7,7 @@ import { LedgerRow } from "../sources/LedgerRow";
 import { ago } from "../sources/utils";
 import { PALETTE } from "../../lib/palette";
 import { cx } from "../../lib/cx";
-import { deriveCanonical, useSources, useCanEdit } from "../../store";
+import { deriveRecord, useSources, useCanEdit } from "../../store";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { toast } from "../Toast";
 import type { MappingDimension } from "../../data";
@@ -57,7 +57,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
 
   const deriveAction = useAsyncAction(async (dimId: string, table: string, column: string) => {
     try {
-      const result = await deriveCanonical(dimId, table, column);
+      const result = await deriveRecord(dimId, table, column);
       toast(`Re-scanned ${table}.${column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(

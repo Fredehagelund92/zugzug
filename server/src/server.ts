@@ -5,8 +5,8 @@
 import { env } from "./env.ts";
 import { initSentry, captureError, flushSentry } from "./observability.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
-import type { ImportRow } from "./repo-canonical.ts";
-import { rebalanceDimPositions } from "./repo-canonical.ts";
+import type { ImportRow } from "./repo-record.ts";
+import { rebalanceDimPositions } from "./repo-record.ts";
 import { publishSummaryFor } from "./repo-drafts.ts";
 import { dimMeta } from "./repo-shared.ts";
 import {
@@ -902,8 +902,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (!dim) return json({ error: "not found" }, 404);
         if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
         try {
-          const canonicalLabels = dim.canonical.map((c) => c.label);
-          const hint = await reqRepo.getAiHint(dimId, raw, canonicalLabels, {
+          const recordLabels = dim.record.map((c) => c.label);
+          const hint = await reqRepo.getAiHint(dimId, raw, recordLabels, {
             label: dim.dimension,
           });
           return json(hint);
@@ -932,7 +932,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json({
           adapter: adapterInstance.capabilities.id,
           writable: adapterInstance.capabilities.writable,
-          canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
+          recordMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
         });
       }
 
@@ -1055,7 +1055,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
       if (seg[1] === "dimensions") {
         // GET /api/dimensions[?full=true] ; POST /api/dimensions {name}
-        // ?full=true returns the full MappingDimension shapes (canonical rows,
+        // ?full=true returns the full MappingDimension shapes (record rows,
         // values, fields, …) in one response — kills the N+1 the client used to
         // make at boot (1 list + N detail fetches).
         if (seg.length === 2) {
@@ -1141,8 +1141,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const patch =
-            (await req.json()) as import("./repo-canonical.ts").UpdateDimensionMetaInput;
+          const patch = (await req.json()) as import("./repo-record.ts").UpdateDimensionMetaInput;
           const dim = await reqRepo.updateDimensionMeta(id, patch, me);
           return json({ ok: true, dim });
         }
@@ -1203,9 +1202,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
           const raw = (await req.json()) as {
-            source?:
-              | import("./repo-canonical.ts").QualifiedSource
-              | { table: string; column: string };
+            source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
             table?: string;
             column?: string;
           };
@@ -1214,7 +1211,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
           if (!input) return err("source required", 400);
 
-          let qualified: import("./repo-canonical.ts").QualifiedSource;
+          let qualified: import("./repo-record.ts").QualifiedSource;
           if ("databaseId" in input) {
             if (!input.databaseId || !input.schemaName || !input.tableName || !input.columnName) {
               return err("source requires databaseId + schemaName + tableName + columnName", 400);
@@ -1225,7 +1222,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             if (parts.length !== 2 || !parts[0] || !parts[1]) {
               return err(`expected "schema.table", got: ${input.table}`, 400);
             }
-            const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+            const { resolveDefaultDatabase } = await import("./repo-record.ts");
             qualified = {
               databaseId: await resolveDefaultDatabase(tenantCtx.tenantId),
               schemaName: parts[0],
@@ -1262,9 +1259,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
           const raw = (await req.json()) as {
-            source?:
-              | import("./repo-canonical.ts").QualifiedSource
-              | { table: string; column: string };
+            source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
             table?: string;
             column?: string;
           };
@@ -1273,8 +1268,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
           if (!input) return err("source required", 400);
 
-          const { resolveDefaultDatabase, removeSource } = await import("./repo-canonical.ts");
-          let qualified: import("./repo-canonical.ts").QualifiedSource;
+          const { resolveDefaultDatabase, removeSource } = await import("./repo-record.ts");
+          let qualified: import("./repo-record.ts").QualifiedSource;
           if ("databaseId" in input) {
             if (!input.databaseId || !input.schemaName || !input.tableName || !input.columnName) {
               return err("source requires databaseId + schemaName + tableName + columnName", 400);
@@ -1295,7 +1290,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           await removeSource(id, qualified, tenantCtx.tenantId);
           return new Response(null, { status: 204, headers: corsHeaders });
         }
-        // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
+        // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed record
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1305,7 +1300,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             nameColumn?: string;
             force?: boolean;
           };
-          return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, { force }, me));
+          return json(await reqRepo.deriveRecord(id, table, column, nameColumn, { force }, me));
         }
         // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
@@ -1318,7 +1313,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (rows.length > 10_000) {
             throw new AppError("VALIDATION_FAILED", "too many rows (max 10000)", 400);
           }
-          return json(await reqRepo.importCanonical(id, rows, me));
+          return json(await reqRepo.importRecord(id, rows, me));
         }
         // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
@@ -1427,8 +1422,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(await reqRepo.deleteColumn(id, field, me));
           }
         }
-        // canonical record management
-        if (seg[3] === "canonical") {
+        // record record management
+        if (seg[3] === "record") {
           if (seg.length === 4 && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1438,9 +1433,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               insertAt?: { anchor: string; direction: "above" | "below" };
             };
             if (insertAt) {
-              await reqRepo.addCanonicalOneAt(id, label, key, insertAt, me);
+              await reqRepo.addRecordOneAt(id, label, key, insertAt, me);
             } else {
-              await reqRepo.addCanonicalOne(id, label, key, me);
+              await reqRepo.addRecordOne(id, label, key, me);
             }
             return noContent();
           }
@@ -1459,13 +1454,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
             }
             return json({
-              merged: await reqRepo.mergeCanonical(id, survivor, losers, me, expectedVersions),
+              merged: await reqRepo.mergeRecord(id, survivor, losers, me, expectedVersions),
             });
           }
           const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
           if (seg[5] === "variants" && seg.length === 6 && method === "GET")
             return json(await reqRepo.listVariants(id, ck));
-          // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
+          // PUT /api/dimensions/:id/record/:key/field/:field {value}
           if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1473,7 +1468,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null, me);
             return noContent();
           }
-          // PUT /api/dimensions/:id/canonical/:key/position
+          // PUT /api/dimensions/:id/record/:key/position
           if (seg[5] === "position" && seg.length === 6 && method === "PUT" && ck) {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1482,13 +1477,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               after?: string | null;
             };
             try {
-              const result = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
+              const result = await reqRepo.reorderRecordRow(id, ck, before, after, me);
               return json({ ok: true, position: result.position });
             } catch (e) {
               if (e instanceof AppError && e.message.includes("positions too tight")) {
                 const dm = await dimMeta(id, tenantCtx.tenantId);
                 if (dm) await rebalanceDimPositions(id, dm, me, tenantCtx.tenantId, "collision");
-                const result2 = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
+                const result2 = await reqRepo.reorderRecordRow(id, ck, before, after, me);
                 return json({ ok: true, position: result2.position, rebalanced: true });
               }
               throw e;
@@ -1505,7 +1500,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               if (typeof expectedVersion !== "number") {
                 throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
               }
-              const result = await reqRepo.renameCanonical(id, ck, label, me, expectedVersion);
+              const result = await reqRepo.renameRecord(id, ck, label, me, expectedVersion);
               return json(result);
             }
             if (method === "DELETE") {
@@ -1516,7 +1511,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               if (!Number.isFinite(expectedVersion)) {
                 throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
               }
-              return json(await reqRepo.retireCanonical(id, ck, me, expectedVersion));
+              return json(await reqRepo.retireRecord(id, ck, me, expectedVersion));
             }
           }
         }
@@ -1612,14 +1607,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
                 404,
               );
             }
-            const canonicals = await reqRepo.getCanonicalValues(id, { limit: 30 });
+            const records = await reqRepo.getRecordValues(id, { limit: 30 });
             const suggestion = await generateSuggestion(
               tenantCtx.tenantId,
               {
                 dimensionId: id,
                 dimensionName: dimension.label,
                 rawValue,
-                existingCanonicalValues: canonicals,
+                existingRecordValues: records,
               },
               { forceRefresh },
             );
@@ -1627,7 +1622,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               {
                 dim_id: id,
                 raw: rawValue,
-                target_label: suggestion.canonical,
+                target_label: suggestion.record,
                 source: "ai",
                 confidence: suggestion.confidence,
                 reasoning: suggestion.reasoning ?? null,
@@ -1709,8 +1704,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const dimId = seg[2]!;
           const dim = await reqRepo.getDimension(dimId);
           if (!dim) return json({ error: "not found" }, 404);
-          const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
-          const buf = await exportCanonicalToParquet({
+          const { exportRecordToParquet } = await import("./warehouse/parquet-exporter.ts");
+          const buf = await exportRecordToParquet({
             dimId: dim.id,
             dimTable: dim.dimTable,
             mapTable: dim.mapTable,

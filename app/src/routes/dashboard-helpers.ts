@@ -106,7 +106,7 @@ export function applySort(
     case "name":
       return copy.sort((a, b) => a.dimension.localeCompare(b.dimension) * flip);
     case "records":
-      return copy.sort((a, b) => (a.canonical.length - b.canonical.length) * flip);
+      return copy.sort((a, b) => (a.record.length - b.record.length) * flip);
     case "coverage":
       return copy.sort((a, b) => (coveragePct(a) - coveragePct(b)) * flip);
     case "review":

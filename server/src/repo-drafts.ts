@@ -1,7 +1,7 @@
 /* repo-drafts.ts — drafts + the commit fold.
  *
  * Drafts are Postgres-only staging rows; commit() folds them into the
- * canonical dim_/map_ tables atomically. The rowsForUnmappedDrafts helper
+ * record dim_/map_ tables atomically. The rowsForUnmappedDrafts helper
  * is a cross-store read (warehouse occurrences + Postgres drafts) used only
  * inside commit(). */
 
@@ -304,8 +304,8 @@ export interface PublishState {
   publishedByName: string | null;
   /** Staged mapping drafts awaiting publish. */
   pendingDrafts: number;
-  /** Canonical keys edited, added, or retired since the last publish (ADR-0002:
-   *  derived from canonical_version, not a staging queue). Keys created by
+  /** Record keys edited, added, or retired since the last publish (ADR-0002:
+   *  derived from record_version, not a staging queue). Keys created by
    *  draft folding don't appear here — they go out in the same publish. */
   changedKeys: string[];
   /** True when a published snapshot exists to revert the working copy to. */
@@ -336,7 +336,7 @@ function canonRow(row: unknown): string {
 
 /** Record keys with unpublished changes. Never published → every record (the
  *  first publish ships the whole table). Otherwise: keys stamped in
- *  canonical_version since the last publish, minus records whose values are
+ *  record_version since the last publish, minus records whose values are
  *  back to identical with the last snapshot — so reverting an edit clears it. */
 async function changedKeysSince(
   dimId: string,
@@ -351,7 +351,7 @@ async function changedKeysSince(
     return rows.map((r) => r.key);
   }
   const stamped = await pgAll<{ key: string }>(
-    `SELECT key FROM ${pg("canonical_version")}
+    `SELECT key FROM ${pg("record_version")}
      WHERE dim_id = $1 AND tenant_id = $2
        AND (updated_at > $3 OR retired_at > $3)
      ORDER BY key`,
@@ -490,14 +490,14 @@ export async function revertToPublished(
     // Stamp the touched records so concurrent editors conflict cleanly; values
     // now equal the snapshot, so they no longer count as changed.
     await tx.run(
-      `UPDATE ${pg("canonical_version")}
+      `UPDATE ${pg("record_version")}
           SET version = version + 1, updated_at = now(), updated_by = $4
         WHERE dim_id = $1 AND tenant_id = $2 AND key = ANY($3)`,
       [dimId, tenantId, changed, userId],
     );
     // Records restored from the snapshot are live again — clear retire flags.
     await tx.run(
-      `UPDATE ${pg("canonical_version")} cv
+      `UPDATE ${pg("record_version")} cv
           SET retired_at = NULL, retired_into = NULL
         WHERE cv.dim_id = $1 AND cv.tenant_id = $2 AND cv.key = ANY($3)
           AND EXISTS (SELECT 1 FROM ${DIMT} d WHERE d.${keyc}::text = cv.key)`,
@@ -688,23 +688,23 @@ export async function commit(
   );
   const committed = Number(approved?.n ?? 0);
 
-  // ADR-0002: canonical edits are instant in the working copy; publish stamps
+  // ADR-0002: record edits are instant in the working copy; publish stamps
   // them into a version too. A commit with zero drafts still proceeds when
-  // canonical rows changed since the last publish — the draft-driven SQL
+  // record rows changed since the last publish — the draft-driven SQL
   // below all no-ops safely.
   // NOTE: scoped empty-array (draftKeys=[]) is valid — it means "fold no drafts,
   // publish record-state only". The early return must not short-circuit in that
-  // case when canonicalChanged.length > 0. Unscoped (undefined) keeps existing behaviour.
+  // case when recordChanged.length > 0. Unscoped (undefined) keeps existing behaviour.
   const lastPublish = await pgGet<{ at: Date | null }>(
     `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
      WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
     [tenantId, dimId],
   );
-  const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null, {
+  const recordChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null, {
     dimTable: meta.dimTable,
     keyCol: meta.keyCol,
   });
-  if (!committed && canonicalChanged.length === 0)
+  if (!committed && recordChanged.length === 0)
     return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
   // Validation gate: blocks publish on required, unique, or range violations.
@@ -874,7 +874,7 @@ export async function commit(
       [userId],
     );
     // Stamp with the DB clock: publish-state comparisons ("changed since last
-    // publish") run against canonical_version.updated_at, which is DB now().
+    // publish") run against record_version.updated_at, which is DB now().
     // A host/DB clock skew would otherwise resurrect just-published changes.
     const dbNow = await tx.get<{ now: Date }>(`SELECT now() AS now`);
     const remappedRaws = new Set(remappedDrafts.map((r) => r.raw.toLowerCase()));
@@ -907,7 +907,7 @@ export async function commit(
         summary: {
           added: addedKeys.length,
           remapped: remappedKeys.length,
-          updated: canonicalChanged.length,
+          updated: recordChanged.length,
           merged: 0,
           retired: 0,
         },
@@ -919,7 +919,7 @@ export async function commit(
     });
   });
 
-  // Per-row audit: one entry per distinct target_key so each canonical row
+  // Per-row audit: one entry per distinct target_key so each record row
   // gets a "Mia · 3m ago" badge in the activity feed.
   for (const row of committedRows) {
     await appendAuditAs(userId, "Committed mapping", `→ ${row.target_key}`, {
@@ -940,7 +940,7 @@ export async function commit(
     await appendAuditAs(
       userId,
       "Published",
-      `${canonicalChanged.length} record change${canonicalChanged.length === 1 ? "" : "s"} → ${meta.dimTable}`,
+      `${recordChanged.length} record change${recordChanged.length === 1 ? "" : "s"} → ${meta.dimTable}`,
       { tenantId },
     );
   }
@@ -959,8 +959,8 @@ export async function commit(
       keyCol: meta.keyCol,
     };
     try {
-      await adapter.ensureCanonicalTables(dimSpec);
-      await adapter.commitCanonical(dimSpec, approvedDrafts);
+      await adapter.ensureRecordTables(dimSpec);
+      await adapter.commitRecord(dimSpec, approvedDrafts);
       await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`, {
         tenantId,
       });
@@ -978,7 +978,7 @@ export async function commit(
   }
 
   // Prune ai_hint_cache entries whose suggestion no longer matches a valid
-  // canonical label (e.g. after a canonical record was deleted).
+  // record label (e.g. after a record record was deleted).
   const currentLabels = await pgAll<{ label: string }>(
     `SELECT label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
   ).catch(() => [] as { label: string }[]);

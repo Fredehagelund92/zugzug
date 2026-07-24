@@ -42,9 +42,9 @@ async function seedAudit(tenantId: string, rowKey: string, action: string): Prom
 }
 
 test("getRowActivitySince scopes by tenant_id; '*' reads cross-tenant", async () => {
-  await seedAudit(TA, "row1", "Renamed canonical");
-  await seedAudit(TB, "row1", "Renamed canonical");
-  await seedAudit(TB, "row2", "Added canonical");
+  await seedAudit(TA, "row1", "Renamed record");
+  await seedAudit(TB, "row1", "Renamed record");
+  await seedAudit(TB, "row2", "Added record");
 
   const since = new Date(Date.now() - 60_000);
 

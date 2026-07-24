@@ -12,11 +12,11 @@ import { pgRun, pgGet } from "./pg.ts";
 import { pgAll, parseFieldConfig } from "./repo-shared.ts";
 import {
   addDimension,
-  addCanonicalOne,
+  addRecordOne,
   addField,
   deleteDimension,
   listFields,
-} from "./repo-canonical.ts";
+} from "./repo-record.ts";
 import { commit, saveDraft } from "./repo-drafts.ts";
 
 async function dropDims(tenants: string[]): Promise<void> {
@@ -51,7 +51,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -64,9 +64,9 @@ describe("publish gate — validation", () => {
     // Arrange: dimension with a numeric "population" field, min 0
     const dimId = await addDimension("RangeDim", [], { keyKind: "slug" }, U, T);
 
-    // Add two canonical rows directly
-    await addCanonicalOne(dimId, "Country A", "country_a", U, T);
-    await addCanonicalOne(dimId, "Country B", "country_b", U, T);
+    // Add two record rows directly
+    await addRecordOne(dimId, "Country A", "country_a", U, T);
+    await addRecordOne(dimId, "Country B", "country_b", U, T);
 
     // Add a number field
     const added = await addField(dimId, "Population", "number", undefined, {}, U, T);
@@ -107,8 +107,8 @@ describe("publish gate — validation", () => {
     // Arrange: dimension with a date "start_date" field, min bound "2024-01-01"
     const dimId = await addDimension("DateRangeDim", [], { keyKind: "slug" }, U, T);
 
-    await addCanonicalOne(dimId, "Event A", "event_a", U, T);
-    await addCanonicalOne(dimId, "Event B", "event_b", U, T);
+    await addRecordOne(dimId, "Event A", "event_a", U, T);
+    await addRecordOne(dimId, "Event B", "event_b", U, T);
 
     const added = await addField(dimId, "Start Date", "date", undefined, {}, U, T);
     expect(added?.field).toBe("start_date");
@@ -150,8 +150,8 @@ describe("publish gate — validation", () => {
     // Arrange: dimension with a text "ticker" field that must be unique
     const dimId = await addDimension("UniqueDim", [], { keyKind: "slug" }, U, T);
 
-    await addCanonicalOne(dimId, "Asia Pacific", "apac1", U, T);
-    await addCanonicalOne(dimId, "Asia Pacific 2", "apac2", U, T);
+    await addRecordOne(dimId, "Asia Pacific", "apac1", U, T);
+    await addRecordOne(dimId, "Asia Pacific 2", "apac2", U, T);
 
     const added = await addField(dimId, "Ticker", "text", undefined, {}, U, T);
     expect(added?.field).toBe("ticker");
@@ -191,7 +191,7 @@ describe("publish gate — validation", () => {
   it("still blocks on an empty required field with REQUIRED_FIELDS_EMPTY code", async () => {
     // Parity with today's REQUIRED_FIELDS_EMPTY behavior (only required violations present)
     const dimId = await addDimension("ReqOnlyDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", "usa", U, T);
+    await addRecordOne(dimId, "United States", "usa", U, T);
     const added = await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
     expect(added?.field).toBe("region");
 
@@ -238,7 +238,7 @@ describe("publish gate — validation", () => {
 
   it("publishes cleanly when all rules pass", async () => {
     const dimId = await addDimension("CleanDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Denmark", "dk", U, T);
+    await addRecordOne(dimId, "Denmark", "dk", U, T);
 
     const added = await addField(dimId, "Score", "number", undefined, {}, U, T);
     expect(added?.field).toBe("score");

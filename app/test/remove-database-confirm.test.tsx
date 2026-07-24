@@ -51,7 +51,9 @@ test("409 surfaces dependency list and unlocks force button via ack", async () =
         JSON.stringify({
           kind: "DATABASE_IN_USE",
           sourceCount: 3,
-          dimensions: [{ dimId: "country", sources: ["public.users.country", "public.orders.country"] }],
+          dimensions: [
+            { dimId: "country", sources: ["public.users.country", "public.orders.country"] },
+          ],
         }),
         { status: 409 },
       ),
@@ -75,7 +77,7 @@ test("409 surfaces dependency list and unlocks force button via ack", async () =
   expect(force.disabled).toBe(false);
 });
 
-test("409 dependency body uses plain-language copy (tables/records, not dimensions/canonical)", async () => {
+test("409 dependency body uses plain-language copy (tables/records, not dimensions/record)", async () => {
   responses.push(
     () =>
       new Response(
@@ -94,7 +96,7 @@ test("409 dependency body uses plain-language copy (tables/records, not dimensio
   expect(body).toContain("tables");
   expect(body).toContain("records");
   expect(body).not.toContain("dimensions");
-  expect(body).not.toContain("Canonical");
+  expect(body).not.toContain("Record");
 });
 
 test("force delete posts ?force=true and resolves on 204", async () => {

@@ -1,7 +1,7 @@
 /* repo-outbound-events.ts — dispatchOutbound writes an outbound_event row AND
    enqueues a webhook_delivery row for every active webhook that subscribes to
    the event's type. Called from inside an existing pgTx so the event-write is
-   atomic with the canonical mutation that produced it (design §3.1). */
+   atomic with the record mutation that produced it (design §3.1). */
 
 import type { TxHelpers } from "./pg.ts";
 import { pg } from "./env.ts";

@@ -21,9 +21,7 @@ const mockState = vi.hoisted(() => ({
 }));
 
 // Capture onModeChange from the active TablePane so tests can trigger mode switches.
-const paneCallbacks = vi.hoisted(
-  () => ({ onModeChange: null as ((m: string) => void) | null }),
-);
+const paneCallbacks = vi.hoisted(() => ({ onModeChange: null as ((m: string) => void) | null }));
 
 vi.mock("../src/store", () => ({
   useDimensions: () => {

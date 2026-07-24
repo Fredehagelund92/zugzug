@@ -11,7 +11,11 @@ process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeEach } from "bun:test";
-import { generateSuggestion, AINotEnabledError, type SuggestionContext } from "../src/suggestion.ts";
+import {
+  generateSuggestion,
+  AINotEnabledError,
+  type SuggestionContext,
+} from "../src/suggestion.ts";
 import { pgGet, pgRun, pgTxScoped } from "../src/pg.ts";
 import { pg as pgTable } from "../src/env.ts";
 
@@ -19,7 +23,7 @@ const testContext: SuggestionContext = {
   dimensionId: "dim-suggest-test",
   dimensionName: "Test Dimension",
   rawValue: "test-raw-value",
-  existingCanonicalValues: ["Canonical 1", "Canonical 2"],
+  existingRecordValues: ["Record 1", "Record 2"],
 };
 
 // Create a test tenant first (required for FK constraints)
@@ -29,7 +33,7 @@ async function createTestTenant(tenantId: string): Promise<void> {
       `INSERT INTO ${pgTable("tenant")} (id, slug, label, created_at)
        VALUES ($1, $1, $1, now())
        ON CONFLICT (id) DO NOTHING`,
-      [tenantId]
+      [tenantId],
     );
   } catch (e) {
     // Tenant might already exist
@@ -39,14 +43,8 @@ async function createTestTenant(tenantId: string): Promise<void> {
 // Clean up test data
 async function cleanupTestData(tenantId: string): Promise<void> {
   try {
-    await pgRun(
-      `DELETE FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1`,
-      [tenantId]
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("preferences")} WHERE tenant_id = $1`,
-      [tenantId]
-    );
+    await pgRun(`DELETE FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1`, [tenantId]);
+    await pgRun(`DELETE FROM ${pgTable("preferences")} WHERE tenant_id = $1`, [tenantId]);
   } catch (e) {
     // Ignore errors
   }
@@ -59,7 +57,7 @@ async function setAIConfig(
     ai_enabled: boolean;
     ai_provider: "openai" | "anthropic" | "none";
     ai_api_key: string | null;
-  }
+  },
 ): Promise<void> {
   const query = `
     INSERT INTO ${pgTable("preferences")}
@@ -81,7 +79,7 @@ async function insertCachedSuggestion(
   rawValue: string,
   suggestion: string,
   confidence: number,
-  reasoning: string = ""
+  reasoning: string = "",
 ): Promise<void> {
   const query = `
     INSERT INTO ${pgTable("ai_hint_cache")}
@@ -93,7 +91,15 @@ async function insertCachedSuggestion(
       reasoning = EXCLUDED.reasoning,
       model = EXCLUDED.model
   `;
-  await pgRun(query, [tenantId, dimensionId, rawValue, suggestion, confidence, reasoning, "gpt-4o-mini"]);
+  await pgRun(query, [
+    tenantId,
+    dimensionId,
+    rawValue,
+    suggestion,
+    confidence,
+    reasoning,
+    "gpt-4o-mini",
+  ]);
 }
 
 test("integration — cache hit returns cached suggestion marked cached=true", async () => {
@@ -108,14 +114,14 @@ test("integration — cache hit returns cached suggestion marked cached=true", a
     testContext.rawValue,
     "Cached Result",
     90,
-    "Previously cached"
+    "Previously cached",
   );
 
   // Act
   const result = await generateSuggestion(tenantId, testContext);
 
   // Assert
-  expect(result.canonical).toBe("Cached Result");
+  expect(result.record).toBe("Cached Result");
   expect(result.confidence).toBe("high"); // 90 >= 75
   expect(result.cached).toBe(true);
   expect(result.reasoning).toBe("Previously cached");
@@ -196,7 +202,7 @@ test("integration — forceRefresh=true bypasses cache and hits config check", a
     testContext.rawValue,
     "Cached Value",
     90,
-    "Should be bypassed"
+    "Should be bypassed",
   );
   // Also set AI disabled so forceRefresh will hit the error
   await setAIConfig(tenantId, {
@@ -236,7 +242,10 @@ test("integration — confidence score conversion in cache read", async () => {
 
   // Test "medium" confidence (score >= 45 && < 75)
   await insertCachedSuggestion(tenantId, testContext.dimensionId, "test-medium", "Value", 60);
-  const mediumResult = await generateSuggestion(tenantId, { ...testContext, rawValue: "test-medium" });
+  const mediumResult = await generateSuggestion(tenantId, {
+    ...testContext,
+    rawValue: "test-medium",
+  });
   expect(mediumResult.confidence).toBe("medium");
 
   // Test "low" confidence (score < 45)
@@ -254,12 +263,18 @@ test("integration — cache hit increments hits counter", async () => {
   // Setup
   await createTestTenant(tenantId);
   await cleanupTestData(tenantId);
-  await insertCachedSuggestion(tenantId, testContext.dimensionId, testContext.rawValue, "Result", 90);
+  await insertCachedSuggestion(
+    tenantId,
+    testContext.dimensionId,
+    testContext.rawValue,
+    "Result",
+    90,
+  );
 
   // Get initial hits count
   const before = await pgGet<{ hits: number }>(
     `SELECT hits FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1 AND dim_id = $2 AND raw = $3`,
-    [tenantId, testContext.dimensionId, testContext.rawValue]
+    [tenantId, testContext.dimensionId, testContext.rawValue],
   );
   expect(before?.hits).toBe(0);
 
@@ -269,7 +284,7 @@ test("integration — cache hit increments hits counter", async () => {
   // Check hits incremented (note: this is fire-and-forget in the code, so may not be guaranteed)
   const after = await pgGet<{ hits: number }>(
     `SELECT hits FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1 AND dim_id = $2 AND raw = $3`,
-    [tenantId, testContext.dimensionId, testContext.rawValue]
+    [tenantId, testContext.dimensionId, testContext.rawValue],
   );
   // The hits counter is fire-and-forget, so we just verify it exists
   expect(typeof after?.hits).toBe("number");

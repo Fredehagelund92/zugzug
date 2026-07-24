@@ -13,14 +13,14 @@ import {
   useDimensions,
   useDrafts,
   discardDraft,
-  addCanonical,
-  renameCanonical,
-  getCanonical,
+  addRecord,
+  renameRecord,
+  getRecord,
   importRows,
-  mergeCanonical,
-  retireCanonical,
+  mergeRecord,
+  retireRecord,
   fetchVariants,
-  deriveCanonical,
+  deriveRecord,
   addField,
   setFieldValue,
   addColumnOption,
@@ -34,8 +34,8 @@ import {
   getGridLayout,
   getCachedGridLayout,
   setGridLayout,
-  insertCanonicalAt,
-  reorderCanonical,
+  insertRecordAt,
+  reorderRecord,
   patchDimension,
   rebalancePositions,
   useCanEdit,
@@ -61,7 +61,7 @@ import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
 import { pruneValidationForType, valueShapeError } from "./datagrid/validation";
-import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
+import type { RecordValue, MappingDimension, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MapValuesBody } from "./modes/MapValuesBody";
@@ -138,7 +138,7 @@ export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePan
   );
 }
 
-/** Records mode has only the "new" status for canonical values right now —
+/** Records mode has only the "new" status for record values right now —
  *  treat any value whose status is missing as "mapped" for the badge count. */
 function countNewForDim(dim: MappingDimension): number {
   return dim.counts.newCount;
@@ -208,7 +208,7 @@ function exportToCSV(dim: MappingDimension): void {
     if (/[,"\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
     return v;
   };
-  const rows = dim.canonical.map((c) =>
+  const rows = dim.record.map((c) =>
     [c.key, c.label, ...fields.map((f) => String(c.fields?.[f.field] ?? ""))].map(escape).join(","),
   );
   const csv = [headers.map(escape).join(","), ...rows].join("\r\n");
@@ -390,15 +390,15 @@ function RecordsBody({
     });
   }, []);
 
-  const list = dim.canonical;
+  const list = dim.record;
   const fields = useMemo(() => dim.fields ?? [], [dim.fields]);
   const linkedTargets = useLinkedCandidates(fields, allDims);
   const external = dim.keyKind === "external_id";
   const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
   const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
 
-  const columns = useMemo<ColumnDef<CanonicalValue>[]>(() => {
-    const cols: ColumnDef<CanonicalValue>[] = [
+  const columns = useMemo<ColumnDef<RecordValue>[]>(() => {
+    const cols: ColumnDef<RecordValue>[] = [
       {
         field: "label",
         label: "Record",
@@ -443,7 +443,7 @@ function RecordsBody({
           </span>
         ),
       },
-      ...fields.flatMap<ColumnDef<CanonicalValue>>((f) => {
+      ...fields.flatMap<ColumnDef<RecordValue>>((f) => {
         if (f.type === "linked") {
           const target = f.referencedDimId ? linkedTargets.get(f.referencedDimId) : undefined;
           const fieldLabels = target?.fieldLabels ?? new Map<string, string>();
@@ -499,7 +499,7 @@ function RecordsBody({
 
   const rowsForGrid = useMemo(() => {
     const src = changedOnly ? list.filter((c) => changedKeySet.has(c.key)) : list;
-    const all = src.map((c): CanonicalValue & Record<string, unknown> => ({
+    const all = src.map((c): RecordValue & Record<string, unknown> => ({
       ...c,
       ...(c.fields ?? {}),
     }));
@@ -628,15 +628,15 @@ function RecordsBody({
 
   const addQueue = useAddQueue(
     async (label) => {
-      await addCanonical(activeId, label);
+      await addRecord(activeId, label);
       undo.push({
         label: `add "${label}"`,
         surface: "Records",
-        apply: () => addCanonical(activeId, label),
+        apply: () => addRecord(activeId, label),
         inverse: () => {
           const addedKey = slug(label);
-          const v = getCanonical(activeId, addedKey)?.version ?? 1;
-          return retireCanonical(activeId, addedKey, v).then(() => undefined);
+          const v = getRecord(activeId, addedKey)?.version ?? 1;
+          return retireRecord(activeId, addedKey, v).then(() => undefined);
         },
       });
     },
@@ -670,7 +670,7 @@ function RecordsBody({
     setBusy(true);
     let n: number;
     try {
-      n = await mergeCanonical(activeId, survivor, losers, expectedVersions);
+      n = await mergeRecord(activeId, survivor, losers, expectedVersions);
     } catch (e) {
       setBusy(false);
       const anchor =
@@ -684,16 +684,16 @@ function RecordsBody({
       apply: () => {
         const currentExpectedVersions = Object.fromEntries(
           [survivor, ...losers]
-            .map((k) => getCanonical(activeId, k))
-            .filter((r): r is CanonicalValue => r !== undefined)
+            .map((k) => getRecord(activeId, k))
+            .filter((r): r is RecordValue => r !== undefined)
             .map((r) => [r.key, r.version]),
         );
-        return mergeCanonical(activeId, survivor, losers, currentExpectedVersions).then(
+        return mergeRecord(activeId, survivor, losers, currentExpectedVersions).then(
           () => undefined,
         );
       },
       inverse: async () => {
-        for (const s of snapshot) await addCanonical(activeId, s.label);
+        for (const s of snapshot) await addRecord(activeId, s.label);
       },
     });
     setBusy(false);
@@ -709,7 +709,7 @@ function RecordsBody({
     const version = row?.version ?? 1;
     setBusy(true);
     try {
-      const r = await retireCanonical(activeId, key, version);
+      const r = await retireRecord(activeId, key, version);
       if (!r.ok) {
         flash(
           `Can't remove "${label}" — ${r.variants} source value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
@@ -721,10 +721,10 @@ function RecordsBody({
         label: `remove "${label}"`,
         surface: "Records",
         apply: () => {
-          const v = getCanonical(activeId, key)?.version ?? 1;
-          return retireCanonical(activeId, key, v).then(() => undefined);
+          const v = getRecord(activeId, key)?.version ?? 1;
+          return retireRecord(activeId, key, v).then(() => undefined);
         },
-        inverse: () => addCanonical(activeId, label),
+        inverse: () => addRecord(activeId, label),
       });
     } catch (err) {
       if (!surfaceConflict(key, err)) {
@@ -765,7 +765,7 @@ function RecordsBody({
     const s = wired.find((w) => `${w.table}.${w.column}` === opt);
     if (!s || busy) return;
     setBusy(true);
-    const result = await deriveCanonical(activeId, s.table, s.column);
+    const result = await deriveRecord(activeId, s.table, s.column);
     setBusy(false);
     flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)} · drafts untouched`);
   };
@@ -775,7 +775,7 @@ function RecordsBody({
     const nameCol = nameColOpt.split(".").slice(1).join(".");
     if (!s || !nameCol || busy) return;
     setBusy(true);
-    const result = await deriveCanonical(activeId, s.table, s.column, nameCol);
+    const result = await deriveRecord(activeId, s.table, s.column, nameCol);
     setBusy(false);
     flash(
       `Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · drafts untouched`,
@@ -933,10 +933,10 @@ function RecordsBody({
       const prev = currentRow?.label;
       if (typeof value !== "string" || !value.trim() || value === prev) return;
       try {
-        await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
+        await renameRecord(activeId, rowKey, value, currentRow?.version ?? 1);
         dismissConflict(rowKey);
       } catch (e) {
-        const serverRow = getCanonical(activeId, rowKey);
+        const serverRow = getRecord(activeId, rowKey);
         const labelDiff: FieldDiff[] = [];
         if (serverRow && serverRow.label !== value) {
           labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
@@ -954,12 +954,12 @@ function RecordsBody({
           label: `rename "${prev}" → "${value}"`,
           surface: "Records",
           apply: () => {
-            const v = getCanonical(activeId, rowKey)?.version ?? 1;
-            return renameCanonical(activeId, rowKey, value, v).then(() => undefined);
+            const v = getRecord(activeId, rowKey)?.version ?? 1;
+            return renameRecord(activeId, rowKey, value, v).then(() => undefined);
           },
           inverse: () => {
-            const v = getCanonical(activeId, rowKey)?.version ?? 1;
-            return renameCanonical(activeId, rowKey, prev, v).then(() => undefined);
+            const v = getRecord(activeId, rowKey)?.version ?? 1;
+            return renameRecord(activeId, rowKey, prev, v).then(() => undefined);
           },
         });
         void fetchVariants(activeId, rowKey).then((vs) => {
@@ -1480,7 +1480,7 @@ function RecordsBody({
           </div>
         )}
 
-        <DataGrid<CanonicalValue>
+        <DataGrid<RecordValue>
           rows={rowsForGrid}
           rowKey={(c) => c.key}
           columns={columns}
@@ -1630,7 +1630,7 @@ function RecordsBody({
               ? undefined
               : (key, where) => {
                   if (dim.orderingMode === "manual") {
-                    void insertCanonicalAt(activeId, "(new)", key, where);
+                    void insertRecordAt(activeId, "(new)", key, where);
                   } else {
                     addInputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                     addInputRef.current?.focus();
@@ -1649,7 +1649,7 @@ function RecordsBody({
           onReorderRow={
             dim.orderingMode === "manual" && canEdit
               ? (rowKey, before, after) => {
-                  void reorderCanonical(activeId, rowKey, { before, after });
+                  void reorderRecord(activeId, rowKey, { before, after });
                 }
               : undefined
           }
@@ -1667,19 +1667,19 @@ function RecordsBody({
                     e.preventDefault();
                     const before = idx > 1 ? (list[idx - 2]?.key ?? null) : null;
                     const after = idx > 0 ? (list[idx - 1]?.key ?? null) : null;
-                    void reorderCanonical(activeId, focused, { before, after });
+                    void reorderRecord(activeId, focused, { before, after });
                     return;
                   }
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
                     const before = idx < list.length - 1 ? (list[idx + 1]?.key ?? null) : null;
                     const after = idx < list.length - 2 ? (list[idx + 2]?.key ?? null) : null;
-                    void reorderCanonical(activeId, focused, { before, after });
+                    void reorderRecord(activeId, focused, { before, after });
                     return;
                   }
                   if (e.key === "Home") {
                     e.preventDefault();
-                    void reorderCanonical(activeId, focused, {
+                    void reorderRecord(activeId, focused, {
                       before: null,
                       after: list[0]?.key ?? null,
                     });
@@ -1687,7 +1687,7 @@ function RecordsBody({
                   }
                   if (e.key === "End") {
                     e.preventDefault();
-                    void reorderCanonical(activeId, focused, {
+                    void reorderRecord(activeId, focused, {
                       before: list[list.length - 1]?.key ?? null,
                       after: null,
                     });
@@ -1789,7 +1789,7 @@ function RecordsBody({
               type: f.type,
             }));
             // The target's `label` column isn't in `fields` (it's a built-in
-            // canonical column), so prepend it — the picker always pins label
+            // record column), so prepend it — the picker always pins label
             // first and uses it for the FK cell display.
             const fieldsWithLabel = [
               { field: "label", label: "Record", type: "text" },
@@ -1872,7 +1872,7 @@ function RecordsBody({
                     const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
                     if (!survivorKey) return;
                     const loserKeys = sel.filter((k) => k !== survivorKey);
-                    const loserRows = dim.canonical.filter((c) => loserKeys.includes(c.key));
+                    const loserRows = dim.record.filter((c) => loserKeys.includes(c.key));
                     const allUndefined = loserRows.every((c) => c.variants === undefined);
                     const loserVariantSum = allUndefined
                       ? null
@@ -1887,7 +1887,7 @@ function RecordsBody({
               variant="secondary"
               icon={<IconX className="h-3.5 w-3.5" />}
               onClick={() => {
-                const selRows = dim.canonical.filter((c) => sel.includes(c.key));
+                const selRows = dim.record.filter((c) => sel.includes(c.key));
                 const allUndefined = selRows.every((c) => c.variants === undefined);
                 const variantSum = allUndefined
                   ? null

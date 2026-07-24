@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension } from "./repo-canonical.ts";
+import { addDimension } from "./repo-record.ts";
 
 const T = "test_cv_backfill";
 const USER_ID = "u_cv_backfill";
@@ -12,7 +12,7 @@ const DIM_ID = "cv_backfill_dim";
 
 beforeAll(async () => {
   // Clean any prior run.
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -40,7 +40,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -54,7 +54,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
 
-describe("canonical_version backfill from audit_log", () => {
+describe("record_version backfill from audit_log", () => {
   it("populates updated_at from the latest matching audit_log row", async () => {
     // 1. Create dimension (this creates dim_<id>/map_<id> in zugzug schema, plus
     //    a row in zugzug_app.dimension).
@@ -71,8 +71,8 @@ describe("canonical_version backfill from audit_log", () => {
     );
     expect(dim).not.toBeNull();
 
-    // 2. Insert a row directly into dim_<slug> WITHOUT going through addCanonical
-    //    (simulating pre-versioning state — no matching canonical_version row).
+    // 2. Insert a row directly into dim_<slug> WITHOUT going through addRecord
+    //    (simulating pre-versioning state — no matching record_version row).
     const legacyKey = "LEGACY";
     await pgRun(
       `INSERT INTO "${dim!.dim_table.split(".")[0]}"."${dim!.dim_table.split(".")[1]}"
@@ -80,7 +80,7 @@ describe("canonical_version backfill from audit_log", () => {
       [legacyKey, "Legacy Label", T],
     );
 
-    // 3. Insert an audit_log row with action='Added canonical', table_id=dim.id,
+    // 3. Insert an audit_log row with action='Added record', table_id=dim.id,
     //    row_key='LEGACY', created_at=fixed historical ts.
     // audit_log.created_at is timestamp (no tz). Insert via a literal that
     // Postgres reads as naive-local so the round-trip through the JS Date
@@ -89,7 +89,7 @@ describe("canonical_version backfill from audit_log", () => {
     await pgRun(
       `INSERT INTO "zugzug_app"."audit_log"
          (id, created_at, user_id, action, detail, table_id, row_key, tenant_id)
-       VALUES ($1, $2::timestamp, $3, 'Added canonical', $4, $5, $6, $7)`,
+       VALUES ($1, $2::timestamp, $3, 'Added record', $4, $5, $6, $7)`,
       [randomUUID(), historicalLiteral, USER_ID, "Legacy Label (LEGACY)", dimId, legacyKey, T],
     );
     // Read back the audit row's timestamp the same way the UPSERT will — both
@@ -101,9 +101,9 @@ describe("canonical_version backfill from audit_log", () => {
     );
     expect(auditRow).not.toBeNull();
 
-    // Sanity: no canonical_version row yet for this key.
+    // Sanity: no record_version row yet for this key.
     const before = await pgGet(
-      `SELECT key FROM "zugzug_app"."canonical_version"
+      `SELECT key FROM "zugzug_app"."record_version"
         WHERE tenant_id = $1 AND dim_id = $2 AND key = $3`,
       [T, dimId, legacyKey],
     );
@@ -115,7 +115,7 @@ describe("canonical_version backfill from audit_log", () => {
     const [schema, table] = dim!.dim_table.split(".");
     const keyCol = dim!.key_col;
     const sql = `
-      INSERT INTO "zugzug_app"."canonical_version"
+      INSERT INTO "zugzug_app"."record_version"
         (tenant_id, dim_id, key, version, updated_at, updated_by)
       SELECT $1::varchar, $2::varchar, "${keyCol}", 0,
              coalesce(
@@ -123,10 +123,10 @@ describe("canonical_version backfill from audit_log", () => {
                  WHERE tenant_id = $1::varchar
                    AND table_id  = $2::varchar
                    AND row_key   = "${keyCol}"
-                   AND action IN ('Added canonical', 'Renamed canonical',
-                                  'Merged canonical', 'Retired canonical',
-                                  'Inserted canonical at position',
-                                  'Reordered canonical')),
+                   AND action IN ('Added record', 'Renamed record',
+                                  'Merged record', 'Retired record',
+                                  'Inserted record at position',
+                                  'Reordered record')),
                now()),
              'migration:phase1'
       FROM "${schema}"."${table}"
@@ -135,9 +135,9 @@ describe("canonical_version backfill from audit_log", () => {
     `;
     await pgRun(sql, [T, dimId]);
 
-    // 5. SELECT updated_at + updated_by from canonical_version for ('LEGACY').
+    // 5. SELECT updated_at + updated_by from record_version for ('LEGACY').
     const after = await pgGet<{ updated_at: Date; updated_by: string }>(
-      `SELECT updated_at, updated_by FROM "zugzug_app"."canonical_version"
+      `SELECT updated_at, updated_by FROM "zugzug_app"."record_version"
         WHERE tenant_id = $1 AND dim_id = $2 AND key = $3`,
       [T, dimId, legacyKey],
     );
@@ -152,23 +152,29 @@ describe("canonical_version backfill from audit_log", () => {
     expect(drift).toBeLessThan(1000);
   });
 
-  it("audit-log filter list matches every canonical action emitted by repo-canonical", async () => {
-    const src = readFileSync(join(__dirname, "repo-canonical.ts"), "utf8");
-    const matches = [...src.matchAll(/appendAudit\w*\([^,]+,\s*"([^"]+canonical[^"]*)"/g)];
+  it("audit-log filter list matches every record action emitted by repo-record", async () => {
+    const src = readFileSync(join(__dirname, "repo-record.ts"), "utf8");
+    const matches = [...src.matchAll(/appendAudit\w*\([^,]+,\s*"([^"]+record[^"]*)"/g)];
     const actions = new Set(matches.map((m) => m[1]));
     const expected = new Set([
-      "Added canonical",
-      "Renamed canonical",
-      "Merged canonical",
-      "Retired canonical",
-      "Inserted canonical at position",
-      "Reordered canonical",
+      "Added record",
+      "Renamed record",
+      "Merged record",
+      "Retired record",
+      "Inserted record at position",
+      "Reordered record",
     ]);
-    // Every action found in source must be present in the migration's filter
-    // list. If a new canonical mutation appears here, the migration's IN(...)
-    // clause needs to grow to match — otherwise backfilled timestamps drift.
+    // "Edited record" (setFieldValue) mutates the working copy but does not
+    // stamp a new version — versions are stamped at publish (ADR-0002) — so it
+    // is intentionally absent from the 0025 version-backfill filter.
+    const excludedFromBackfill = new Set(["Edited record"]);
+    // Every record action found in source must be a version-stamping mutation
+    // present in the migration's filter list, or an explicitly excluded one.
+    // A genuinely new mutation lands in neither set and fails here — a signal
+    // that the migration's IN(...) clause needs to grow, otherwise backfilled
+    // timestamps drift.
     for (const a of actions) {
-      expect(expected.has(a)).toBe(true);
+      expect(expected.has(a) || excludedFromBackfill.has(a)).toBe(true);
     }
   });
 });

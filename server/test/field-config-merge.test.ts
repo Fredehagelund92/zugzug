@@ -22,7 +22,13 @@ test("updateField fieldConfig merges with existing instead of replacing", async 
     { label: "alpha", color: "rose" as const },
     { label: "beta", color: "teal" as const },
   ];
-  await repo.updateField(dimId, "category", { fieldConfig: JSON.stringify({ options }) }, userId, "default");
+  await repo.updateField(
+    dimId,
+    "category",
+    { fieldConfig: JSON.stringify({ options }) },
+    userId,
+    "default",
+  );
 
   let dim = await repo.getDimension(dimId, "default");
   let cat = dim?.fields.find((f) => f.field === "category");
@@ -37,12 +43,18 @@ test("updateField fieldConfig merges with existing instead of replacing", async 
       style: { rowStripe: "rose" as const },
     },
   ];
-  await repo.updateField(dimId, "category", { fieldConfig: JSON.stringify({ rules }) }, userId, "default");
+  await repo.updateField(
+    dimId,
+    "category",
+    { fieldConfig: JSON.stringify({ rules }) },
+    userId,
+    "default",
+  );
 
   dim = await repo.getDimension(dimId, "default");
   cat = dim?.fields.find((f) => f.field === "category");
   expect(cat?.options).toEqual(options); // still there
-  expect(cat?.rules).toEqual(rules);     // also there
+  expect(cat?.rules).toEqual(rules); // also there
 });
 
 test("updateField fieldConfig merge: setting options does not wipe existing rules", async () => {
@@ -59,11 +71,26 @@ test("updateField fieldConfig merge: setting options does not wipe existing rule
       style: { rowStripe: "amber" as const },
     },
   ];
-  await repo.updateField(dimId, "status", { fieldConfig: JSON.stringify({ rules }) }, userId, "default");
+  await repo.updateField(
+    dimId,
+    "status",
+    { fieldConfig: JSON.stringify({ rules }) },
+    userId,
+    "default",
+  );
 
   // Then overwrite options — rules should survive
-  const options = [{ label: "open", color: null }, { label: "closed", color: null }];
-  await repo.updateField(dimId, "status", { fieldConfig: JSON.stringify({ options }) }, userId, "default");
+  const options = [
+    { label: "open", color: null },
+    { label: "closed", color: null },
+  ];
+  await repo.updateField(
+    dimId,
+    "status",
+    { fieldConfig: JSON.stringify({ options }) },
+    userId,
+    "default",
+  );
 
   const dim = await repo.getDimension(dimId, "default");
   const field = dim?.fields.find((f) => f.field === "status");

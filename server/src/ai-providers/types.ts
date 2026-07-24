@@ -3,11 +3,11 @@
 export interface SuggestionRequest {
   dimensionName: string;
   rawValue: string;
-  existingCanonicalValues: string[];
+  existingRecordValues: string[];
 }
 
 export interface SuggestionResponse {
-  canonical: string;
+  record: string;
   confidence: "high" | "medium" | "low";
   reasoning?: string;
 }

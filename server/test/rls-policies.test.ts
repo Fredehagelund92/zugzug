@@ -30,8 +30,6 @@ test("Each scoped table has a tenant_iso policy", async () => {
   );
   expect(rows.length).toBe(15);
   for (const r of rows) {
-    expect(
-      r.policyname === "tenant_iso" || r.policyname.endsWith("_tenant_isolation"),
-    ).toBe(true);
+    expect(r.policyname === "tenant_iso" || r.policyname.endsWith("_tenant_isolation")).toBe(true);
   }
 });

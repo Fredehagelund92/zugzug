@@ -20,7 +20,7 @@ const DIM = {
   mapTable: "map_vendors",
   keyCol: "vendor_key",
   rows: 0,
-  canonical: [],
+  record: [],
   counts: {
     newCount: 0,
     mappedCount: 0,

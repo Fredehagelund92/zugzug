@@ -16,7 +16,9 @@ async function cleanup(): Promise<void> {
     await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [t]);
     await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [t]).catch(() => {});
-    await pgRun(`DELETE FROM "zugzug_app"."tenant_slug_alias" WHERE tenant_id = $1`, [t]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."tenant_slug_alias" WHERE tenant_id = $1`, [t]).catch(
+      () => {},
+    );
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [t]);
   }
   for (const u of U_IDS) {
@@ -27,11 +29,7 @@ async function cleanup(): Promise<void> {
 beforeEach(cleanup);
 afterAll(cleanup);
 
-async function login(
-  userId: string,
-  role: "admin" | "editor",
-  tenantId: string,
-): Promise<string> {
+async function login(userId: string, role: "admin" | "editor", tenantId: string): Promise<string> {
   await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
      VALUES ($1, $1, 'XX', $2, false)`,

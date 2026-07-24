@@ -20,7 +20,7 @@ const stubTenant = {
 const stubDim = {
   id: "country",
   dimension: "Country",
-  canonical: [],
+  record: [],
   fields: [],
   rows: 1000,
   color: null,
@@ -83,19 +83,28 @@ function setupMocks() {
       useWorkspaceInfo: () => ({
         adapter: "duckdb",
         writable: false,
-        canonicalMode: "postgres-export",
+        recordMode: "postgres-export",
         warehouseDb: null,
         allowedDomain: null,
       }),
       useStoreLoading: () => false,
       useCanEdit: () => true,
       // Return current user matching the rejected-draft author so Re-stage button renders.
-      useCurrentUser: () => ({ id: "u_reviewer", name: "Reviewer", email: "r@example.com", role: "admin" as const }),
+      useCurrentUser: () => ({
+        id: "u_reviewer",
+        name: "Reviewer",
+        email: "r@example.com",
+        role: "admin" as const,
+      }),
       useDimensions: () => [stubDim],
       useDrafts: () => ({ "country::USA": stubRejectedDraft }),
       saveDraft: vi.fn().mockResolvedValue(undefined),
       discardDraft: vi.fn().mockResolvedValue(undefined),
-      commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" as const })),
+      commit: vi.fn(async () => ({
+        committed: 0,
+        rowsRecovered: 0,
+        warehouseSynced: "n/a" as const,
+      })),
       dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
     };
   });
@@ -156,7 +165,9 @@ describe("Triage — rejected draft presentation", () => {
     );
     await waitFor(() => {
       const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
-      expect(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i })).toBeInTheDocument();
+      expect(
+        within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -179,13 +190,7 @@ describe("Triage — rejected draft presentation", () => {
     fireEvent.click(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }));
     // saveDraft should be called to re-stage the draft (clearing rejection on server)
     await waitFor(() => {
-      expect(saveDraftMock).toHaveBeenCalledWith(
-        "country",
-        "USA",
-        "mapped",
-        "United States",
-        "us",
-      );
+      expect(saveDraftMock).toHaveBeenCalledWith("country", "USA", "mapped", "United States", "us");
     });
   });
 
@@ -198,19 +203,28 @@ describe("Triage — rejected draft presentation", () => {
         useWorkspaceInfo: () => ({
           adapter: "duckdb",
           writable: false,
-          canonicalMode: "postgres-export",
+          recordMode: "postgres-export",
           warehouseDb: null,
           allowedDomain: null,
         }),
         useStoreLoading: () => false,
         useCanEdit: () => true,
         // Different user — not the draft author
-        useCurrentUser: () => ({ id: "u_other", name: "Other", email: "o@example.com", role: "admin" as const }),
+        useCurrentUser: () => ({
+          id: "u_other",
+          name: "Other",
+          email: "o@example.com",
+          role: "admin" as const,
+        }),
         useDimensions: () => [stubDim],
         useDrafts: () => ({ "country::USA": stubRejectedDraft }),
         saveDraft: vi.fn().mockResolvedValue(undefined),
         discardDraft: vi.fn().mockResolvedValue(undefined),
-        commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" as const })),
+        commit: vi.fn(async () => ({
+          committed: 0,
+          rowsRecovered: 0,
+          warehouseSynced: "n/a" as const,
+        })),
         dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
       };
     });

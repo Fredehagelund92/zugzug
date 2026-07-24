@@ -24,7 +24,7 @@ import { test, expect, beforeEach, afterEach } from "bun:test";
 import { pgRun, pgGet } from "../src/pg.ts";
 import { pg as pgTable } from "../src/env.ts";
 import { provisionTenant } from "../src/tenant.ts";
-import * as canonical from "../src/repo-canonical.ts";
+import * as record from "../src/repo-record.ts";
 import { resetDb } from "./setup.ts"; // registers warehouse factories, provides resetDb
 
 // ============================================================================
@@ -73,7 +73,7 @@ async function createTestCtx(): Promise<TestCtx> {
 
   // Create test dimension
   try {
-    await canonical.addDimension(
+    await record.addDimension(
       TEST_DIM_ID,
       [],
       { keyKind: "slug", silent: true },
@@ -111,46 +111,22 @@ async function cleanupCtx(ctx: TestCtx): Promise<void> {
     await pgRun(`DROP TABLE IF EXISTS ${pgTable("map_" + TEST_DIM_ID)}`);
 
     // Delete dimension registry (use dim_id, not dimension_id)
-    await pgRun(
-      `DELETE FROM ${pgTable("dimension_field")} WHERE dim_id = $1`,
-      [TEST_DIM_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("dimension_source")} WHERE dim_id = $1`,
-      [TEST_DIM_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("dimension")} WHERE id = $1 AND tenant_id = $2`,
-      [TEST_DIM_ID, TEST_TENANT_ID],
-    );
+    await pgRun(`DELETE FROM ${pgTable("dimension_field")} WHERE dim_id = $1`, [TEST_DIM_ID]);
+    await pgRun(`DELETE FROM ${pgTable("dimension_source")} WHERE dim_id = $1`, [TEST_DIM_ID]);
+    await pgRun(`DELETE FROM ${pgTable("dimension")} WHERE id = $1 AND tenant_id = $2`, [
+      TEST_DIM_ID,
+      TEST_TENANT_ID,
+    ]);
 
     // Delete tenant-specific data (only for non-default tenant if needed)
-    await pgRun(
-      `DELETE FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1`,
-      [TEST_TENANT_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("audit_log")} WHERE tenant_id = $1`,
-      [TEST_TENANT_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("draft")} WHERE tenant_id = $1`,
-      [TEST_TENANT_ID],
-    );
+    await pgRun(`DELETE FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1`, [TEST_TENANT_ID]);
+    await pgRun(`DELETE FROM ${pgTable("audit_log")} WHERE tenant_id = $1`, [TEST_TENANT_ID]);
+    await pgRun(`DELETE FROM ${pgTable("draft")} WHERE tenant_id = $1`, [TEST_TENANT_ID]);
 
     // Delete user & sessions (but keep default tenant)
-    await pgRun(
-      `DELETE FROM ${pgTable("tenant_member")} WHERE user_id = $1`,
-      [ctx.userId],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("sessions")} WHERE user_id = $1`,
-      [ctx.userId],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("users")} WHERE id = $1`,
-      [ctx.userId],
-    );
+    await pgRun(`DELETE FROM ${pgTable("tenant_member")} WHERE user_id = $1`, [ctx.userId]);
+    await pgRun(`DELETE FROM ${pgTable("sessions")} WHERE user_id = $1`, [ctx.userId]);
+    await pgRun(`DELETE FROM ${pgTable("users")} WHERE id = $1`, [ctx.userId]);
   } catch (e) {
     // Cleanup errors are non-fatal
     // console.error("Cleanup error:", e);
@@ -384,7 +360,7 @@ test("POST /api/dimensions/:id/suggest includes reasoning in response", async ()
     await pgRun(
       `INSERT INTO ${pgTable("ai_hint_cache")}
          (tenant_id, dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
-       VALUES ($1, $2, $3, 'Jane Smith', 85, 'Fuzzy match with existing canonical', 'gpt-4o-mini', now(), 0)
+       VALUES ($1, $2, $3, 'Jane Smith', 85, 'Fuzzy match with existing record', 'gpt-4o-mini', now(), 0)
        ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE SET reasoning = EXCLUDED.reasoning`,
       [ctx.tenantId, TEST_DIM_ID, rawValue],
     );
@@ -406,7 +382,7 @@ test("POST /api/dimensions/:id/suggest includes reasoning in response", async ()
 
   expect(res.status).toBe(201);
   const body = (await res.json()) as { draft: { reasoning?: string } };
-  expect(body.draft.reasoning).toBe("Fuzzy match with existing canonical");
+  expect(body.draft.reasoning).toBe("Fuzzy match with existing record");
 
   await cleanupCtx(ctx);
 });

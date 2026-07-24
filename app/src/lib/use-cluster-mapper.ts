@@ -32,8 +32,8 @@ export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
   const feed = useDimClusters({ dimId: dim.id, filter: "all" });
   const pending = useMemo(() => pendingClusters(feed.clusters), [feed.clusters]);
   const records = useMemo<CandidateRecord[]>(
-    () => dim.canonical.map((c) => ({ key: c.key, label: c.label })),
-    [dim.canonical],
+    () => dim.record.map((c) => ({ key: c.key, label: c.label })),
+    [dim.record],
   );
 
   const [state, dispatch] = useReducer(clusterMapperReducer, [] as string[], initMapperState);

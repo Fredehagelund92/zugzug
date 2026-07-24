@@ -346,7 +346,7 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       count: Number(r.N),
     }));
   }
-  async ensureCanonicalTables(dim: DimensionSpec): Promise<void> {
+  async ensureRecordTables(dim: DimensionSpec): Promise<void> {
     // dim.dimTable / dim.mapTable are stored as "SCHEMA.TABLE" (2-part). The database
     // is the adapter's configured default. LIVE-VALIDATION: confirm Snowflake's
     // CREATE TABLE IF NOT EXISTS is idempotent and doesn't error if the table
@@ -369,13 +369,13 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
               )`,
     });
   }
-  async commitCanonical(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+  async commitRecord(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
     if (drafts.length === 0) return { rowsWritten: 0 };
     const dimRef = this.parseTwoPartRef(dim.dimTable);
     const mapRef = this.parseTwoPartRef(dim.mapTable);
     const key = this.quoteIdentifier(dim.keyCol);
 
-    // Deduplicate canonical rows by key (last write wins on label).
+    // Deduplicate record rows by key (last write wins on label).
     const canonByKey = new Map<string, string | null>();
     for (const d of drafts) canonByKey.set(d.key, d.label);
     const canonRows = [...canonByKey.entries()].map(([k, l]) => ({ key: k, label: l }));

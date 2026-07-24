@@ -322,34 +322,34 @@ export const dimScanOccurrence = app.table(
   ],
 );
 
-export const canonicalVersion = app.table(
-  "canonical_version",
+export const recordVersion = app.table(
+  "record_version",
   {
     dim_id:     varchar("dim_id").notNull(),
     key:        varchar("key").notNull(),
     version:    integer("version").notNull(),
     updated_at: timestamp("updated_at").notNull(),
     /** Semantically users.id. No FK constraint — matches existing convention
-     *  (repo-canonical.ts uses userId strings without enforced FKs). */
+     *  (repo-record.ts uses userId strings without enforced FKs). */
     updated_by: varchar("updated_by").notNull(),
     /* Soft-delete: nullable. retired_at NOT NULL marks a tombstone row;
        retired_into is the survivor key when a merge produced the tombstone,
-       NULL when the row was retired without a merge. See repo-canonical.ts
-       mergeCanonical / retireCanonical. */
+       NULL when the row was retired without a merge. See repo-record.ts
+       mergeRecord / retireRecord. */
     retired_at:   timestamp("retired_at"),
     retired_into: varchar("retired_into"),
     tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.dim_id, t.key] }),
-    index("canonical_version_recent_idx").on(t.dim_id, t.updated_at),
-    index("canonical_version_tenant_dim_idx").on(t.tenant_id, t.dim_id),
+    index("record_version_recent_idx").on(t.dim_id, t.updated_at),
+    index("record_version_tenant_dim_idx").on(t.tenant_id, t.dim_id),
     /* Pull API live-row read path (PR2). Partial over un-retired rows. */
-    index("canonical_version_pull_idx")
+    index("record_version_pull_idx")
       .on(t.tenant_id, t.dim_id, t.updated_at, t.key)
       .where(sql`retired_at IS NULL`),
     /* Pull API tombstone read path (PR2). */
-    index("canonical_version_tombstone_idx")
+    index("record_version_tombstone_idx")
       .on(t.tenant_id, t.dim_id, t.retired_at)
       .where(sql`retired_at IS NOT NULL`),
   ],

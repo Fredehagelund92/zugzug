@@ -66,7 +66,8 @@ describe("useSyncStatus", () => {
     // W1 → fails immediately (500), W2 → held until after W1 rejects
     vi.stubGlobal(
       "fetch",
-      vi.fn()
+      vi
+        .fn()
         .mockImplementationOnce(async (_url: string, _opts?: RequestInit) => {
           // W1: fail immediately
           return new Response("boom", { status: 500 });
@@ -77,8 +78,9 @@ describe("useSyncStatus", () => {
           return new Response(null, { status: 204 });
         })
         // GET calls for the initial load
-        .mockImplementation(async () =>
-          new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
+        .mockImplementation(
+          async () =>
+            new Response("[]", { status: 200, headers: { "content-type": "application/json" } }),
         ),
     );
     const { useSyncStatus, discardDraft } = await import("../src/store");
@@ -92,11 +94,15 @@ describe("useSyncStatus", () => {
     });
 
     // Wait for W1 to reject
-    await act(async () => { await w1; });
+    await act(async () => {
+      await w1;
+    });
 
     // Now release W2 so writeSettled runs last
     releaseSuccess();
-    await act(async () => { await w2; });
+    await act(async () => {
+      await w2;
+    });
 
     // Pill must stay on failed — success must not mask the failure
     expect(result.current).toBe("failed");

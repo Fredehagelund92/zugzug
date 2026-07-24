@@ -20,8 +20,8 @@ import { env } from "./env.ts";
 import {
   listDimensionsForApi,
   getSchemaForApi,
-  listCanonicalPage,
-  getCanonicalRow,
+  listRecordPage,
+  getRecordRow,
   listTombstonesPage,
   listEventsPage,
 } from "./repo-outbound.ts";
@@ -158,7 +158,7 @@ async function dispatch(
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "");
     try {
-      const out = await listCanonicalPage(ctx.tenantId, dimSlug, {
+      const out = await listRecordPage(ctx.tenantId, dimSlug, {
         since,
         cursor,
         limit: Number.isFinite(limit) ? limit : undefined,
@@ -175,7 +175,7 @@ async function dispatch(
   if (v1[0] === "tables" && v1[2] === "records" && v1.length === 4 && method === "GET") {
     const dimSlug = decodeURIComponent(v1[1]!);
     const key = decodeURIComponent(v1[3]!);
-    const out = await getCanonicalRow(ctx.tenantId, dimSlug, key);
+    const out = await getRecordRow(ctx.tenantId, dimSlug, key);
     if (!out) return jsonError(404, "not_found");
     return json(out);
   }

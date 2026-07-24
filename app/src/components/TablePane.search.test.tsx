@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import type { MappingDimension, CanonicalValue } from "../data";
+import type { MappingDimension, RecordValue } from "../data";
 
 // ── Store mock ────────────────────────────────────────────────────────────────
 vi.mock("../store", () => ({
@@ -25,14 +25,14 @@ vi.mock("../store", () => ({
   slug: (s: string) => s,
   // action stubs — none are triggered in this test
   discardDraft: vi.fn(),
-  addCanonical: vi.fn(),
-  renameCanonical: vi.fn(),
-  getCanonical: vi.fn(),
+  addRecord: vi.fn(),
+  renameRecord: vi.fn(),
+  getRecord: vi.fn(),
   importRows: vi.fn(),
-  mergeCanonical: vi.fn(),
-  retireCanonical: vi.fn(),
+  mergeRecord: vi.fn(),
+  retireRecord: vi.fn(),
   fetchVariants: vi.fn(),
-  deriveCanonical: vi.fn(),
+  deriveRecord: vi.fn(),
   addField: vi.fn(),
   setFieldValue: vi.fn(),
   addColumnOption: vi.fn(),
@@ -43,8 +43,8 @@ vi.mock("../store", () => ({
   updateFieldValidation: vi.fn(),
   updateFieldDescription: vi.fn(),
   updateFieldDisplayFields: vi.fn(),
-  insertCanonicalAt: vi.fn(),
-  reorderCanonical: vi.fn(),
+  insertRecordAt: vi.fn(),
+  reorderRecord: vi.fn(),
   patchDimension: vi.fn(),
   rebalancePositions: vi.fn(),
   refreshDimAndNotify: vi.fn(),
@@ -85,7 +85,7 @@ vi.mock("./datagrid", () => ({
     empty,
     onLayoutChange,
   }: {
-    rows: CanonicalValue[];
+    rows: RecordValue[];
     empty?: React.ReactNode;
     onLayoutChange?: (partial: Record<string, unknown>) => void;
   }) => {
@@ -135,7 +135,7 @@ afterEach(cleanup);
 /** Two records: "northern" is in the Name field of record A, and in the
  *  Region field of record B. A global search for "north" returns both.
  *  A scope-to-Region search should return only B. */
-const RECORDS: CanonicalValue[] = [
+const RECORDS: RecordValue[] = [
   {
     key: "a",
     label: "Northern Lights Co",
@@ -157,7 +157,7 @@ const DIM: MappingDimension = {
   mapTable: "zz.map_company",
   keyCol: "company_key",
   rows: 2,
-  canonical: RECORDS,
+  record: RECORDS,
   counts: {
     newCount: 0,
     mappedCount: 2,

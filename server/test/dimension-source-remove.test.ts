@@ -6,7 +6,7 @@ import "./setup.ts";
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { pgAll, pgRun } from "../src/pg.ts";
 import { provisionTenant } from "../src/tenant.ts";
-import * as canonical from "../src/repo-canonical.ts";
+import * as record from "../src/repo-record.ts";
 
 const T = "trm_a";
 const D = "trm_thing";
@@ -25,7 +25,7 @@ afterAll(cleanup);
 
 test("removeSource deletes exactly the one wired column row", async () => {
   await provisionTenant({ id: T, label: "A" });
-  await canonical.addDimension(D, [], { keyKind: "slug" }, "u_test", T);
+  await record.addDimension(D, [], { keyKind: "slug" }, "u_test", T);
 
   // register a warehouse database + two wired columns
   await pgRun(
@@ -43,7 +43,7 @@ test("removeSource deletes exactly the one wired column row", async () => {
   await wire("authco", "users", "plan_type");
   await wire("authco", "users", "country");
 
-  await canonical.removeSource(
+  await record.removeSource(
     D,
     { databaseId: DB_ID, schemaName: "authco", tableName: "users", columnName: "plan_type" },
     T,

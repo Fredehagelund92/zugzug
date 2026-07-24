@@ -140,9 +140,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     valuesPage.items.find((r) => r.raw === v) ?? null;
 
   const keyFor = (label: string) =>
-    dim.canonical.find((c) => c.label === label)?.key ??
+    dim.record.find((c) => c.label === label)?.key ??
     label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  const options = useMemo(() => dim.canonical.map((c) => c.label), [dim.canonical]);
+  const options = useMemo(() => dim.record.map((c) => c.label), [dim.record]);
   const external = dim.keyKind === "external_id";
 
   // Committed truth (from the loaded page) overlaid with each value's pending
@@ -293,7 +293,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
 
   // ── Default mapping target (?target=) ────────────────────────────────────
   // A deep link may supply ?target=<recordKey> (e.g. from Task 5's URL writer).
-  // On mount, resolve the key to its canonical record, show an affordance, and
+  // On mount, resolve the key to its record record, show an affordance, and
   // default the filter to "new". Consumed once (active pane only); stale keys
   // are silently ignored.
   const initialTargetRef = useRef<string | null>(isActive ? searchParams.get("target") : null);
@@ -302,12 +302,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     const key = initialTargetRef.current;
     if (!key) return;
     initialTargetRef.current = null;
-    const rec = dim.canonical.find((c) => c.key === key);
+    const rec = dim.record.find((c) => c.key === key);
     if (!rec) return; // stale key → ignore, no crash
     setDefaultTarget({ key: rec.key, label: rec.label });
     setFilter("new");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dim.id, dim.canonical, setFilter]);
+  }, [dim.id, dim.record, setFilter]);
 
   // ── Deep-linking ─────────────────────────────────────────────────────────
   // URL ?value=… points at a specific row. Without an eager values list we

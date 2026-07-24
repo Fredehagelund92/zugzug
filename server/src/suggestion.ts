@@ -13,11 +13,11 @@ export interface SuggestionContext {
   dimensionId: string;
   dimensionName: string;
   rawValue: string;
-  existingCanonicalValues: string[];
+  existingRecordValues: string[];
 }
 
 export interface Suggestion {
-  canonical: string;
+  record: string;
   confidence: "high" | "medium" | "low";
   reasoning?: string;
   cached: boolean;
@@ -30,7 +30,7 @@ interface TenantAIConfig {
 }
 
 /**
- * Generate an AI suggestion mapping a raw value to a canonical value.
+ * Generate an AI suggestion mapping a raw value to a record value.
  *
  * 1. Check cache; return on hit (unless `forceRefresh` is true).
  * 2. Fetch tenant AI config from `preferences`.
@@ -63,21 +63,21 @@ export async function generateSuggestion(
   const aiResponse = await provider.suggestMapping({
     dimensionName: context.dimensionName,
     rawValue: context.rawValue,
-    existingCanonicalValues: context.existingCanonicalValues,
+    existingRecordValues: context.existingRecordValues,
   });
 
   const confidenceScore = confidenceToScore(aiResponse.confidence);
   const model = modelForProvider(config.ai_provider);
 
   await cacheSuggestion(tenantId, dimensionId, rawValue, {
-    suggestion: aiResponse.canonical,
+    suggestion: aiResponse.record,
     confidence: confidenceScore,
     reasoning: aiResponse.reasoning ?? "",
     model,
   });
 
   return {
-    canonical: aiResponse.canonical,
+    record: aiResponse.record,
     confidence: aiResponse.confidence,
     reasoning: aiResponse.reasoning,
     cached: false,
@@ -112,7 +112,7 @@ async function getCachedSuggestion(
   );
 
   return {
-    canonical: row.suggestion,
+    record: row.suggestion,
     confidence: scoreToConfidence(row.confidence),
     reasoning: row.reasoning,
     cached: true,

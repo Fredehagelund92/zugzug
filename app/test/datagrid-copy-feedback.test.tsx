@@ -7,7 +7,10 @@ import type { ColumnDef } from "../src/components/datagrid/types";
 const toastSpy = vi.hoisted(() => vi.fn());
 vi.mock("../src/components/Toast", () => ({ toast: toastSpy }));
 
-interface Row { id: string; name: string }
+interface Row {
+  id: string;
+  name: string;
+}
 const rows: Row[] = [
   { id: "1", name: "Acme" },
   { id: "2", name: "Bravo" },
@@ -58,7 +61,10 @@ describe("copy feedback", () => {
   test("⌘C flashes the copied cell", async () => {
     // Stub rAF to call the callback synchronously so we can assert the class
     // without waiting for a real animation frame.
-    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
     vi.stubGlobal("cancelAnimationFrame", () => {});
 
     try {

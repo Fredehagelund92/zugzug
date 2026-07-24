@@ -150,7 +150,7 @@ export async function teardownTenant(tenantId: string): Promise<void> {
       "draft",
       "audit_log",
       "ai_hint_cache",
-      "canonical_version",
+      "record_version",
       "scan_run",
       "source_stat",
       "dimension_field",

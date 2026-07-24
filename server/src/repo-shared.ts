@@ -1,5 +1,5 @@
 /* repo-shared.ts — cross-domain types, constants, and low-level helpers used by
- * two or more domain files (repo-scan, repo-canonical, repo-drafts, repo-meta).
+ * two or more domain files (repo-scan, repo-record, repo-drafts, repo-meta).
  *
  * Nothing in here imports from any other repo-*.ts module. */
 
@@ -217,7 +217,7 @@ export interface FieldDef {
 }
 
 export type { ConditionalRule } from "./conditional-format-types.ts";
-export interface CanonicalValue {
+export interface RecordValue {
   key: string;
   label: string;
   variants?: number;
@@ -292,7 +292,7 @@ export interface MappingDimension extends DimensionMeta {
   ownerUserId: string | null;
   ownerName: string | null;
   nextPosition: string | null;
-  canonical: CanonicalValue[];
+  record: RecordValue[];
   counts: {
     newCount: number;
     mappedCount: number;
@@ -375,7 +375,7 @@ export const slug = (s: string) =>
 
 export const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
-/** canonical table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
+/** record table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
 export const cq = (display: string) => display.split(".").map(qid).join(".");
 
 export const rel = (secs: number): string => {

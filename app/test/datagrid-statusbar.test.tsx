@@ -4,8 +4,15 @@ import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../src/components/datagrid/types";
 
-interface Row { id: string; n: number }
-const rows: Row[] = [{ id: "1", n: 10 }, { id: "2", n: 20 }, { id: "3", n: 30 }];
+interface Row {
+  id: string;
+  n: number;
+}
+const rows: Row[] = [
+  { id: "1", n: 10 },
+  { id: "2", n: 20 },
+  { id: "3", n: 30 },
+];
 const columns: ColumnDef<Row>[] = [
   { field: "id", label: "ID", config: { type: "text" }, editable: false },
   { field: "n", label: "N", config: { type: "number" } },

@@ -11,7 +11,7 @@ const dim = (id: string): MappingDimension =>
     mapTable: `map_${id}`,
     keyCol: `${id}_id`,
     rows: 0,
-    canonical: [],
+    record: [],
     values: [],
   }) as MappingDimension;
 const src = (dimId: string): SourceInfo =>

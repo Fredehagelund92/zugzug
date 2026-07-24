@@ -37,7 +37,9 @@ async function setupLink(): Promise<{ srcDim: string; tgtDim: string; fkField: s
   return { srcDim, tgtDim, fkField: "country" };
 }
 
-beforeEach(async () => { await resetDb(); });
+beforeEach(async () => {
+  await resetDb();
+});
 
 test("displayFields update accepts label + valid target fields", async () => {
   const { srcDim, fkField } = await setupLink();
@@ -144,7 +146,12 @@ test("displayFields update appends audit entry with before/after", async () => {
     userId,
     tenantId,
   );
-  const rows = await pgAll<{ action: string; metadata: string | null; detail: string; table_id: string | null }>(
+  const rows = await pgAll<{
+    action: string;
+    metadata: string | null;
+    detail: string;
+    table_id: string | null;
+  }>(
     `SELECT action, metadata, detail, table_id FROM ${pg("audit_log")}
      WHERE tenant_id = $1 AND action = $2 AND table_id = $3 AND detail = $4
      ORDER BY created_at DESC

@@ -13,9 +13,22 @@ const dimAlpha: MappingDimension = {
   mapTable: "zugzug.map_alpha",
   keyCol: "alpha_id",
   rows: 100,
-  canonical: [],
-  counts: { newCount: 5, mappedCount: 2, totalDistinct: 7, unmappedRowsTotal: 100, mappedRowsTotal: 200, scannedAt: null },
-  publish: { version: 3, publishedAt: "2026-07-21T12:00:00Z", publishedByName: "Alice", pendingDrafts: 1, changedRecords: 2 },
+  record: [],
+  counts: {
+    newCount: 5,
+    mappedCount: 2,
+    totalDistinct: 7,
+    unmappedRowsTotal: 100,
+    mappedRowsTotal: 200,
+    scannedAt: null,
+  },
+  publish: {
+    version: 3,
+    publishedAt: "2026-07-21T12:00:00Z",
+    publishedByName: "Alice",
+    pendingDrafts: 1,
+    changedRecords: 2,
+  },
 };
 
 const dimBravo: MappingDimension = {
@@ -25,9 +38,22 @@ const dimBravo: MappingDimension = {
   mapTable: "zugzug.map_bravo",
   keyCol: "bravo_id",
   rows: 50,
-  canonical: [],
-  counts: { newCount: 0, mappedCount: 3, totalDistinct: 3, unmappedRowsTotal: 0, mappedRowsTotal: 50, scannedAt: null },
-  publish: { version: 2, publishedAt: "2026-07-20T10:00:00Z", publishedByName: "Bob", pendingDrafts: 0, changedRecords: 0 },
+  record: [],
+  counts: {
+    newCount: 0,
+    mappedCount: 3,
+    totalDistinct: 3,
+    unmappedRowsTotal: 0,
+    mappedRowsTotal: 50,
+    scannedAt: null,
+  },
+  publish: {
+    version: 2,
+    publishedAt: "2026-07-20T10:00:00Z",
+    publishedByName: "Bob",
+    pendingDrafts: 0,
+    changedRecords: 0,
+  },
 };
 
 const dimCharlie: MappingDimension = {
@@ -37,9 +63,22 @@ const dimCharlie: MappingDimension = {
   mapTable: "zugzug.map_charlie",
   keyCol: "charlie_id",
   rows: 75,
-  canonical: [],
-  counts: { newCount: 2, mappedCount: 1, totalDistinct: 3, unmappedRowsTotal: 50, mappedRowsTotal: 75, scannedAt: null },
-  publish: { version: 0, publishedAt: null, publishedByName: null, pendingDrafts: 0, changedRecords: 2 },
+  record: [],
+  counts: {
+    newCount: 2,
+    mappedCount: 1,
+    totalDistinct: 3,
+    unmappedRowsTotal: 50,
+    mappedRowsTotal: 75,
+    scannedAt: null,
+  },
+  publish: {
+    version: 0,
+    publishedAt: null,
+    publishedByName: null,
+    pendingDrafts: 0,
+    changedRecords: 2,
+  },
 };
 
 const dimensionsFixture: MappingDimension[] = [dimAlpha, dimBravo, dimCharlie];
@@ -106,7 +145,10 @@ describe("Dashboard header sorting", () => {
     renderDashboard();
 
     const bodyRows = () =>
-      screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].textContent);
+      screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => within(r).getAllByRole("cell")[0].textContent);
 
     // Default: In review desc → Alpha (5), Charlie (2), Bravo (0)
     expect(bodyRows()[0]).toMatch(/Alpha/);

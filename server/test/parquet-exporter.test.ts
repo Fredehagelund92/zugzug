@@ -3,7 +3,7 @@ process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeEach } from "bun:test";
-import { withExporterConn, exportCanonicalToParquet } from "../src/warehouse/parquet-exporter.ts";
+import { withExporterConn, exportRecordToParquet } from "../src/warehouse/parquet-exporter.ts";
 import { resetDb } from "./setup.ts";
 
 beforeEach(async () => {
@@ -34,14 +34,14 @@ test("withExporterConn reuses the same in-process instance across calls", async 
   });
 });
 
-test("exportCanonicalToParquet: empty map table emits valid empty Parquet", async () => {
+test("exportRecordToParquet: empty map table emits valid empty Parquet", async () => {
   const { pgRun } = await import("../src/pg.ts");
   await pgRun(`CREATE SCHEMA IF NOT EXISTS zugzug`);
   await pgRun(
     `CREATE TABLE zugzug.map_empty_test (raw VARCHAR PRIMARY KEY, country_code VARCHAR NOT NULL)`,
   );
 
-  const buf = await exportCanonicalToParquet({
+  const buf = await exportRecordToParquet({
     dimId: "empty_test",
     dimTable: "zugzug.dim_empty_test",
     mapTable: "zugzug.map_empty_test",
@@ -54,17 +54,19 @@ test("exportCanonicalToParquet: empty map table emits valid empty Parquet", asyn
   expect(buf.subarray(buf.length - 4).toString()).toBe("PAR1");
 });
 
-test("exportCanonicalToParquet: populated map table round-trips through DuckDB", async () => {
+test("exportRecordToParquet: populated map table round-trips through DuckDB", async () => {
   const { pgRun } = await import("../src/pg.ts");
   await pgRun(`CREATE SCHEMA IF NOT EXISTS zugzug`);
   await pgRun(
     `CREATE TABLE zugzug.map_country (raw VARCHAR PRIMARY KEY, country_code VARCHAR NOT NULL)`,
   );
-  await pgRun(`INSERT INTO zugzug.map_country (raw, country_code) VALUES
+  await pgRun(
+    `INSERT INTO zugzug.map_country (raw, country_code) VALUES
                 ($1, $2), ($3, $4), ($5, $6)`,
-    ["USA", "US", "U.S.", "US", "United Kingdom", "GB"]);
+    ["USA", "US", "U.S.", "US", "United Kingdom", "GB"],
+  );
 
-  const buf = await exportCanonicalToParquet({
+  const buf = await exportRecordToParquet({
     dimId: "country",
     dimTable: "zugzug.dim_country",
     mapTable: "zugzug.map_country",
@@ -91,15 +93,18 @@ test("exportCanonicalToParquet: populated map table round-trips through DuckDB",
   }
 });
 
-test("exportCanonicalToParquet: respects keyCol naming (column name reflects dim key)", async () => {
+test("exportRecordToParquet: respects keyCol naming (column name reflects dim key)", async () => {
   const { pgRun } = await import("../src/pg.ts");
   await pgRun(`CREATE SCHEMA IF NOT EXISTS zugzug`);
   await pgRun(
     `CREATE TABLE zugzug.map_partner (raw VARCHAR PRIMARY KEY, partner_id VARCHAR NOT NULL)`,
   );
-  await pgRun(`INSERT INTO zugzug.map_partner (raw, partner_id) VALUES ($1, $2)`, ["acme", "P-001"]);
+  await pgRun(`INSERT INTO zugzug.map_partner (raw, partner_id) VALUES ($1, $2)`, [
+    "acme",
+    "P-001",
+  ]);
 
-  const buf = await exportCanonicalToParquet({
+  const buf = await exportRecordToParquet({
     dimId: "partner",
     dimTable: "zugzug.dim_partner",
     mapTable: "zugzug.map_partner",

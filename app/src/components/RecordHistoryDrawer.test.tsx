@@ -72,14 +72,14 @@ describe("RecordHistoryTimeline", () => {
         entries={[
           entry({
             id: "1",
-            action: "Added canonical",
+            action: "Added record",
             detail: "United States (usa)",
             metadata: null,
           }),
         ]}
       />,
     );
-    // "Added canonical" → plain "added record", with the detail beneath it.
+    // "Added record" → plain "added record", with the detail beneath it.
     expect(getByText("added")).toBeTruthy();
     expect(getByText("United States (usa)")).toBeTruthy();
     expect(queryByText("→")).toBeNull();

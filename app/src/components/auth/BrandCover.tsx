@@ -144,7 +144,7 @@ export function BrandCover() {
                 <circle cx="78" cy="104" r="2.5" />
                 <circle cx="96" cy="132" r="2.5" />
               </g>
-              {/* the canonical record node */}
+              {/* the record record node */}
               <circle cx="272" cy="75" r="15" fill="var(--accent)" />
               <circle
                 cx="272"

@@ -10,7 +10,7 @@ export type { PaletteName } from "./lib/palette";
 
 /* a master record: the human label + the key written to the dim/map tables, how
    many raw values resolve to it, and any enrichment attribute values */
-export interface CanonicalValue {
+export interface RecordValue {
   key: string;
   label: string;
   version: number; // server-managed; client passes it back on mutations
@@ -79,7 +79,7 @@ export interface MappingDimension {
   ownerUserId?: string | null;
   ownerName?: string | null;
   rows: number; // rows already in the map table
-  canonical: CanonicalValue[];
+  record: RecordValue[];
   counts: {
     /** distinct raw values seen in scan that aren't in the map table */
     newCount: number;
@@ -126,7 +126,7 @@ export const mappingSeeds: MappingDimension[] = [
       mappedRowsTotal: 182600,
       scannedAt: null,
     },
-    canonical: [
+    record: [
       { key: "US", label: "United States", version: 1 },
       { key: "GB", label: "United Kingdom", version: 1 },
       { key: "NO", label: "Norway", version: 1 },
@@ -153,7 +153,7 @@ export const mappingSeeds: MappingDimension[] = [
       mappedRowsTotal: 10210,
       scannedAt: null,
     },
-    canonical: [
+    record: [
       { key: "CA", label: "California", version: 1 },
       { key: "AK", label: "Alaska", version: 1 },
       { key: "AZ", label: "Arizona", version: 1 },
@@ -178,7 +178,7 @@ export const mappingSeeds: MappingDimension[] = [
       mappedRowsTotal: 60000,
       scannedAt: null,
     },
-    canonical: [
+    record: [
       { key: "tweet", label: "Tweet", version: 1 },
       { key: "retweet", label: "Retweet", version: 1 },
       { key: "twitter_mention", label: "Twitter Mention", version: 1 },

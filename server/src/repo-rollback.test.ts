@@ -7,7 +7,7 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgAll, pgRun } from "./pg.ts";
-import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
+import { addDimension, addRecordOne } from "./repo-record.ts";
 import { saveDraft, commit } from "./repo-drafts.ts";
 import { listVersions } from "./repo-versions.ts";
 import { rollbackToVersion } from "./repo-rollback.ts";
@@ -44,7 +44,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."draft" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -53,8 +53,8 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
 
-/** List all canonical rows for a dimension directly from the dim_ table. */
-async function listCanonical(
+/** List all record rows for a dimension directly from the dim_ table. */
+async function listRecords(
   dimId: string,
   tenantId: string,
 ): Promise<Array<{ key: string; label: string | null }>> {
@@ -73,14 +73,14 @@ describe("rollbackToVersion", () => {
   it("rollback restores content and publishes a new version", async () => {
     const dimId = await addDimension("RbDim1", [], { keyKind: "slug" }, U, T);
 
-    // Stage + commit v1: one canonical record "United States"
-    await addCanonicalOne(dimId, "United States", "united_states", U, T);
+    // Stage + commit v1: one record record "United States"
+    await addRecordOne(dimId, "United States", "united_states", U, T);
     await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
     await commit(dimId, U, T);
     const v1 = (await listVersions(dimId, T))[0]!.version;
 
     // Stage + commit v2: add a "Mistake Record"
-    await addCanonicalOne(dimId, "Mistake Record", "mistake_record", U, T);
+    await addRecordOne(dimId, "Mistake Record", "mistake_record", U, T);
     await saveDraft(dimId, "mistake", "mapped", "Mistake Record", "mistake_record", U, T);
     await commit(dimId, U, T);
 
@@ -96,8 +96,8 @@ describe("rollbackToVersion", () => {
     expect(versions[0]!.kind).toBe("rollback");
     expect(versions[0]!.restoresVersion).toBe(v1);
 
-    // Canonical rows reflect the v1 snapshot: mistake gone, united_states present
-    const rows = await listCanonical(dimId, T);
+    // Record rows reflect the v1 snapshot: mistake gone, united_states present
+    const rows = await listRecords(dimId, T);
     expect(rows.some((r) => r.label === "Mistake Record")).toBe(false);
     expect(rows.some((r) => r.key === "united_states")).toBe(true);
   });
@@ -106,13 +106,13 @@ describe("rollbackToVersion", () => {
     const dimId = await addDimension("RbDim2", [], { keyKind: "slug" }, U, T);
 
     // v1
-    await addCanonicalOne(dimId, "Alpha", "alpha", U, T);
+    await addRecordOne(dimId, "Alpha", "alpha", U, T);
     await saveDraft(dimId, "alpha_raw", "mapped", "Alpha", "alpha", U, T);
     await commit(dimId, U, T);
     const v1 = (await listVersions(dimId, T))[0]!.version;
 
     // v2: add Beta
-    await addCanonicalOne(dimId, "Beta", "beta", U, T);
+    await addRecordOne(dimId, "Beta", "beta", U, T);
     await saveDraft(dimId, "beta_raw", "mapped", "Beta", "beta", U, T);
     await commit(dimId, U, T);
 

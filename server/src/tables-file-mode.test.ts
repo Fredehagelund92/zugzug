@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgAll } from "./pg.ts";
 import { createTable } from "./tables.ts";
-import { getDimension, listFields } from "./repo-canonical.ts";
+import { getDimension, listFields } from "./repo-record.ts";
 
 const T = "test_file_mode";
 const U = "u_test_file_mode";
@@ -36,7 +36,7 @@ afterAll(async () => {
     await pgRun(`DROP TABLE IF EXISTS ${d.dim_table}`).catch(() => {});
     await pgRun(`DROP TABLE IF EXISTS ${d.map_table}`).catch(() => {});
   }
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -70,10 +70,10 @@ describe("createTable() file mode", () => {
     // Rows became records, with the field values imported.
     const dim = await getDimension(id, T);
     expect(dim).not.toBeNull();
-    expect(dim!.canonical.map((c) => c.label).sort()).toEqual(["Acme Corp", "Globex"]);
+    expect(dim!.record.map((c) => c.label).sort()).toEqual(["Acme Corp", "Globex"]);
 
     const regionField = fields.find((f) => f.label === "Region")!.field;
-    const acme = dim!.canonical.find((c) => c.label === "Acme Corp")!;
+    const acme = dim!.record.find((c) => c.label === "Acme Corp")!;
     expect(acme.fields?.[regionField]).toBe("EMEA");
   });
 

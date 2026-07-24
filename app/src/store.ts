@@ -1,11 +1,5 @@
 import { useSyncExternalStore, useState, useEffect } from "react";
-import type {
-  CanonicalValue,
-  MappingDimension,
-  OptionDef,
-  PaletteName,
-  NumberFormat,
-} from "./data";
+import type { RecordValue, MappingDimension, OptionDef, PaletteName, NumberFormat } from "./data";
 import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
@@ -41,7 +35,7 @@ export class ConflictError extends Error {
 
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
-   The three stores from ARCHITECTURE.md live behind this seam: canonical dim_/map_
+   The three stores from ARCHITECTURE.md live behind this seam: record dim_/map_
    + drafts + audit + users in Postgres; the warehouse scan in MotherDuck (when
    ATTACH_WAREHOUSE=true). The hook shapes are unchanged, so components consume
    them exactly as before — only the source of truth moved from memory to HTTP.
@@ -139,7 +133,7 @@ export interface Preferences {
 export interface WorkspaceInfo {
   adapter: "duckdb" | "snowflake";
   writable: boolean;
-  canonicalMode: "warehouse" | "postgres-export";
+  recordMode: "warehouse" | "postgres-export";
 }
 
 let _workspaceInfoCache: WorkspaceInfo | null = null;
@@ -151,7 +145,7 @@ function isWorkspaceInfo(x: unknown): x is WorkspaceInfo {
   return (
     (o.adapter === "duckdb" || o.adapter === "snowflake") &&
     typeof o.writable === "boolean" &&
-    (o.canonicalMode === "warehouse" || o.canonicalMode === "postgres-export")
+    (o.recordMode === "warehouse" || o.recordMode === "postgres-export")
   );
 }
 
@@ -399,23 +393,17 @@ async function refreshDim(dimId: string): Promise<void> {
   const dim = await api<MappingDimension>(`/dimensions/${encodeURIComponent(dimId)}`);
   dims = dims.map((d) => (d.id === dim.id ? dim : d));
 }
-/** Live read of one canonical record from the cache. Undo/redo closures use
+/** Live read of one record record from the cache. Undo/redo closures use
  *  this instead of a render-captured list — the captured snapshot's version
  *  is always stale after the very mutation being undone. */
-export function getCanonical(dimId: string, key: string): CanonicalValue | undefined {
-  return dims.find((d) => d.id === dimId)?.canonical.find((c) => c.key === key);
+export function getRecord(dimId: string, key: string): RecordValue | undefined {
+  return dims.find((d) => d.id === dimId)?.record.find((c) => c.key === key);
 }
 
-/** Immutably patch one canonical record in the cache (optimistic updates). */
-function patchCanonical(
-  dimId: string,
-  key: string,
-  patch: (c: CanonicalValue) => CanonicalValue,
-): void {
+/** Immutably patch one record record in the cache (optimistic updates). */
+function patchRecord(dimId: string, key: string, patch: (c: RecordValue) => RecordValue): void {
   dims = dims.map((d) =>
-    d.id !== dimId
-      ? d
-      : { ...d, canonical: d.canonical.map((c) => (c.key === key ? patch(c) : c)) },
+    d.id !== dimId ? d : { ...d, record: d.record.map((c) => (c.key === key ? patch(c) : c)) },
   );
 }
 /** Re-fetch a single dimension from the server and notify subscribers.
@@ -591,14 +579,14 @@ export async function patchDimension(
   emit();
 }
 
-export async function insertCanonicalAt(
+export async function insertRecordAt(
   dimId: string,
   label: string,
   anchor: string,
   direction: "above" | "below",
   key?: string,
 ): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/canonical`, {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/record`, {
     method: "POST",
     body: JSON.stringify({ label, key, insertAt: { anchor, direction } }),
   });
@@ -606,13 +594,13 @@ export async function insertCanonicalAt(
   emit();
 }
 
-export async function reorderCanonical(
+export async function reorderRecord(
   dimId: string,
   rowKey: string,
   opts: { before?: string | null; after?: string | null },
 ): Promise<{ position: string }> {
   const result = await api<{ ok: boolean; position: string }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(rowKey)}/position`,
+    `/dimensions/${encodeURIComponent(dimId)}/record/${encodeURIComponent(rowKey)}/position`,
     {
       method: "PUT",
       body: JSON.stringify(opts),
@@ -819,7 +807,7 @@ export async function generateSuggestion(
 }
 
 /** Per-dimension publish state (ADR-0002): last published version + what's
- *  waiting — staged drafts and canonical rows touched since that publish. */
+ *  waiting — staged drafts and record rows touched since that publish. */
 export interface PublishState {
   version: number;
   publishedAt: string | null;
@@ -834,7 +822,7 @@ export async function fetchPublishState(dimId: string): Promise<PublishState> {
 }
 
 /** Approve & commit the dimension's mapped drafts (server folds them into the
- *  canonical tables in one batch). When `draftKeys` is provided, only those
+ *  record tables in one batch). When `draftKeys` is provided, only those
  *  raws are folded (scoped commit). Returns the count + warehouse rows recovered. */
 export async function commit(
   dimId: string,
@@ -960,10 +948,10 @@ export async function fetchUnmappedSample(
 }
 
 /** Wire a source column to a dimension. If the dim is empty, the distinct values
- *  seed the canonical table 1:1 (mode "seed"). If the dim already has records,
+ *  seed the record table 1:1 (mode "seed"). If the dim already has records,
  *  only the source is registered — values land in Match Values for triage
  *  (mode "connect"). Pass `force` to seed regardless (bootstrap-from-many). */
-export async function deriveCanonical(
+export async function deriveRecord(
   dimId: string,
   table: string,
   column: string,
@@ -986,9 +974,9 @@ export async function deriveCanonical(
   return res;
 }
 
-/* ---- canonical record management (governed, persisted) ---- */
-export async function addCanonical(dimId: string, label: string, key?: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/canonical`, {
+/* ---- record record management (governed, persisted) ---- */
+export async function addRecord(dimId: string, label: string, key?: string): Promise<void> {
+  await api(`/dimensions/${encodeURIComponent(dimId)}/record`, {
     method: "POST",
     body: JSON.stringify({ label, key }),
   });
@@ -996,18 +984,18 @@ export async function addCanonical(dimId: string, label: string, key?: string): 
   await refreshAudit();
   emit();
 }
-export async function renameCanonical(
+export async function renameRecord(
   dimId: string,
   key: string,
   label: string,
   expectedVersion: number,
 ): Promise<number> {
-  patchCanonical(dimId, key, (c) => ({ ...c, label }));
+  patchRecord(dimId, key, (c) => ({ ...c, label }));
   emit();
   let version: number;
   try {
     ({ version } = await api<{ version: number }>(
-      `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`,
+      `/dimensions/${encodeURIComponent(dimId)}/record/${encodeURIComponent(key)}`,
       {
         method: "PUT",
         body: JSON.stringify({ label, expectedVersion }),
@@ -1018,21 +1006,21 @@ export async function renameCanonical(
     emit();
     throw e;
   }
-  patchCanonical(dimId, key, (c) => ({ ...c, version }));
+  patchRecord(dimId, key, (c) => ({ ...c, version }));
   emit();
   // values[].current mirrors the label for mapped raws — reconcile off the critical path
   void refreshDim(dimId).then(emit);
   void refreshAudit().then(emit);
   return version;
 }
-export async function mergeCanonical(
+export async function mergeRecord(
   dimId: string,
   survivor: string,
   losers: string[],
   expectedVersions: Record<string, number>,
 ): Promise<number> {
   const { merged } = await api<{ merged: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/merge?confirm=true`,
+    `/dimensions/${encodeURIComponent(dimId)}/record/merge?confirm=true`,
     {
       method: "POST",
       body: JSON.stringify({ survivor, losers, expectedVersions }),
@@ -1044,14 +1032,14 @@ export async function mergeCanonical(
   emit();
   return merged;
 }
-/** Retire a canonical — returns {ok:false, variants} if still mapped (governed). */
-export async function retireCanonical(
+/** Retire a record — returns {ok:false, variants} if still mapped (governed). */
+export async function retireRecord(
   dimId: string,
   key: string,
   expectedVersion: number,
 ): Promise<{ ok: boolean; variants: number }> {
   const res = await api<{ ok: boolean; variants: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
+    `/dimensions/${encodeURIComponent(dimId)}/record/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
     { method: "DELETE" },
   );
   if (res.ok) {
@@ -1061,10 +1049,10 @@ export async function retireCanonical(
   }
   return res;
 }
-/** The raw variants resolving to a canonical key (lineage). */
+/** The raw variants resolving to a record key (lineage). */
 export async function fetchVariants(dimId: string, key: string): Promise<string[]> {
   return api<string[]>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/variants`,
+    `/dimensions/${encodeURIComponent(dimId)}/record/${encodeURIComponent(key)}/variants`,
   );
 }
 
@@ -1324,7 +1312,7 @@ export async function importRows(
   return res;
 }
 
-/** Set an enrichment field value on a canonical record. Applies optimistically
+/** Set an enrichment field value on a record record. Applies optimistically
  *  (the cell flips in the same frame), then PUTs. The server normalises some
  *  types (number parsing, date casts, linked-key validation), so those types
  *  reconcile with a background re-fetch; text/select are stored verbatim. */
@@ -1335,11 +1323,11 @@ export async function setFieldValue(
   value: string | null,
 ): Promise<void> {
   const norm = value == null || value.trim() === "" ? null : value;
-  patchCanonical(dimId, key, (c) => ({ ...c, fields: { ...c.fields, [field]: norm } }));
+  patchRecord(dimId, key, (c) => ({ ...c, fields: { ...c.fields, [field]: norm } }));
   emit();
   try {
     await api(
-      `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
+      `/dimensions/${encodeURIComponent(dimId)}/record/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
       { method: "PUT", body: JSON.stringify({ value }) },
     );
   } catch (e) {

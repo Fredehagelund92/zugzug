@@ -40,7 +40,7 @@ export function useLinkedCandidates(
     const dim = refs[i];
     if (!dim || out.has(id)) return;
     out.set(id, {
-      candidates: dim.canonical.map((c) => ({ key: c.key, label: c.label })),
+      candidates: dim.record.map((c) => ({ key: c.key, label: c.label })),
       fieldLabels: new Map((dim.fields ?? []).map((f) => [f.field, f.label])),
     });
   });

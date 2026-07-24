@@ -12,7 +12,7 @@
  */
 import { test, expect, uniqueSuffix } from "../fixtures";
 
-/** The demo stack seeds a "Country" dimension with canonical records already in
+/** The demo stack seeds a "Country" dimension with record records already in
  *  place. We plant a raw value not yet in map_country so the Review page shows
  *  it as "New". */
 const SEED_DIM_ID = "country";
@@ -23,7 +23,7 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   const suffix = uniqueSuffix();
   // Use a raw value that is definitely not in map_country yet (unique per run).
   const rawValue = `E2E Country ${suffix}`;
-  // We'll map it to "Australia" (a stable canonical label from the demo seed).
+  // We'll map it to "Australia" (a stable record label from the demo seed).
   const targetLabel = "Australia";
 
   // ── 1. Seed dim_scan_value rows via the E2E helper endpoint ───────────────
@@ -90,7 +90,7 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   const comboInput = page.locator('[role="combobox"]');
   await expect(comboInput).toBeVisible({ timeout: 5_000 });
 
-  // ── 6. Search for and pick the target canonical label ─────────────────────
+  // ── 6. Search for and pick the target record label ─────────────────────
   await comboInput.fill(targetLabel);
   const option = page.locator('[role="option"]', { hasText: targetLabel }).first();
   await expect(option).toBeVisible();

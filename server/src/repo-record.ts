@@ -1,6 +1,6 @@
-/* repo-canonical.ts — dimension registry + canonical CRUD + field/column management.
+/* repo-record.ts — dimension registry + record CRUD + field/column management.
  *
- * All data lives in Postgres (dim_/map_ tables in the canonical schema +
+ * All data lives in Postgres (dim_/map_ tables in the record schema +
  * the app-state dimension/dimension_field tables). Warehouse (DuckDB) is
  * touched only in getDimension (to resolve live names for external_id dims). */
 
@@ -8,7 +8,7 @@ import { getAdapter } from "./warehouse/registry.ts";
 import {
   type DimensionMeta,
   type MappingDimension,
-  type CanonicalValue,
+  type RecordValue,
   type FieldDef,
   type OptionDef,
   type PaletteName,
@@ -77,7 +77,7 @@ export type QualifiedSource = {
 
 /** Pick the tenant's default warehouse database: the first one registered.
  *  Used by internal helpers that take bare "schema.table" strings (seed,
- *  deriveCanonical) and need to land a row in dimension_source. Throws if
+ *  deriveRecord) and need to land a row in dimension_source. Throws if
  *  the tenant has no warehouse_database registered. */
 export async function resolveDefaultDatabase(tenantId: string): Promise<string> {
   void tenantId; // warehouse_database is deployment-global, not tenant-scoped
@@ -143,7 +143,7 @@ async function bumpVersionOrThrow(
   meta: DimMeta,
 ): Promise<number> {
   const rows = await tx.all<{ version: number }>(
-    `UPDATE "zugzug_app"."canonical_version"
+    `UPDATE "zugzug_app"."record_version"
         SET version = version + 1, updated_at = now(), updated_by = $1
       WHERE dim_id = $2 AND key = $3 AND version = $4 AND tenant_id = $5
         AND retired_at IS NULL
@@ -155,7 +155,7 @@ async function bumpVersionOrThrow(
   const cur = await tx.get<CurrentVersionRow>(
     `SELECT cv.version, cv.updated_at, cv.updated_by,
             u.name, u.initials
-       FROM "zugzug_app"."canonical_version" cv
+       FROM "zugzug_app"."record_version" cv
        LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
       WHERE cv.dim_id = $1 AND cv.key = $2 AND cv.tenant_id = $3
         AND cv.retired_at IS NULL`,
@@ -163,8 +163,8 @@ async function bumpVersionOrThrow(
   );
   if (!cur) {
     // No version row exists. Rows created by the bulk derive/seed paths
-    // (deriveCanonical, addCanonical) never got one, so the read path reports
-    // them as version 1. If the canonical row actually exists and the client is
+    // (deriveRecord, addRecord) never got one, so the read path reports
+    // them as version 1. If the record row actually exists and the client is
     // at that implied v1, lazily seed the version row and bump it (to 2) rather
     // than 404. This backfills legacy rows on their first edit. Any other
     // expectedVersion for a row with no version row is a genuine mismatch.
@@ -174,11 +174,11 @@ async function bumpVersionOrThrow(
     );
     if (exists && expectedVersion === 1) {
       const seeded = await tx.all<{ version: number }>(
-        `INSERT INTO "zugzug_app"."canonical_version"
+        `INSERT INTO "zugzug_app"."record_version"
               (dim_id, key, version, updated_at, updated_by, tenant_id)
          VALUES ($1, $2, 2, now(), $3, $4)
          ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
-            SET version      = "canonical_version".version + 1,
+            SET version      = "record_version".version + 1,
                 updated_at   = now(),
                 updated_by   = EXCLUDED.updated_by,
                 retired_at   = NULL,
@@ -188,7 +188,7 @@ async function bumpVersionOrThrow(
       );
       if (seeded.length === 1) return seeded[0]!.version;
     }
-    throw new AppError("NOT_FOUND", `canonical ${dimId}/${key} not found`, 404);
+    throw new AppError("NOT_FOUND", `record ${dimId}/${key} not found`, 404);
   }
 
   const current: ConflictCurrent = {
@@ -203,7 +203,7 @@ async function bumpVersionOrThrow(
   throw new AppError("CONFLICT", "Record was modified by another user", 409, { current });
 }
 
-/** New canonical → version row at version=1 owned by userId. Use inside an existing tx. */
+/** New record → version row at version=1 owned by userId. Use inside an existing tx. */
 async function seedVersionRow(
   tx: TxLike,
   dimId: string,
@@ -212,12 +212,12 @@ async function seedVersionRow(
   tenantId: string,
 ): Promise<void> {
   await tx.run(
-    `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+    `INSERT INTO "zugzug_app"."record_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
      VALUES ($1, $2, 1, now(), $3, $4)
      ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
         SET retired_at  = NULL,
             retired_into = NULL,
-            version     = "canonical_version".version + 1,
+            version     = "record_version".version + 1,
             updated_at  = now(),
             updated_by  = EXCLUDED.updated_by`,
     [dimId, key, userId, tenantId],
@@ -232,7 +232,7 @@ async function softRetireVersionRow(
   tenantId: string,
 ): Promise<void> {
   await tx.run(
-    `UPDATE "zugzug_app"."canonical_version"
+    `UPDATE "zugzug_app"."record_version"
         SET retired_at = now(), retired_into = NULL
       WHERE dim_id = $1 AND key = $2 AND tenant_id = $3`,
     [dimId, key, tenantId],
@@ -252,7 +252,7 @@ const SQL_TYPE: Record<string, string> = {
   linked: "VARCHAR",
 };
 
-/* ---- dimension registry (Postgres) + canonical tables ---- */
+/* ---- dimension registry (Postgres) + record tables ---- */
 export async function listDimensions(tenantId: string): Promise<DimensionMeta[]> {
   const metas = await pgAll<Omit<DimensionMeta, "rows">>(
     `SELECT id, label AS dimension, dim_table AS "dimTable", map_table AS "mapTable",
@@ -270,7 +270,7 @@ export async function listDimensions(tenantId: string): Promise<DimensionMeta[]>
 }
 
 /** Lightweight dimension lookup — id + display label only, scoped to tenant.
- *  Used where the full canonical materialization in `getDimension` is overkill
+ *  Used where the full record materialization in `getDimension` is overkill
  *  (e.g. the AI suggestion workflow that just needs the dimension name). */
 export async function getDimensionBasic(
   id: string,
@@ -283,9 +283,9 @@ export async function getDimensionBasic(
   return row ?? null;
 }
 
-/** Sample of existing canonical labels for a dimension, scoped to tenant.
+/** Sample of existing record labels for a dimension, scoped to tenant.
  *  Reads the dynamic `dim_*` table whose name lives in the dimension registry. */
-export async function getCanonicalValues(
+export async function getRecordValues(
   dimId: string,
   tenantId: string,
   opts: { limit?: number } = {},
@@ -383,7 +383,7 @@ export async function getDimension(
       ? `ORDER BY d.position ASC NULLS LAST, variants DESC, ${meta.keyKind === "external_id" ? `d.${qid(meta.keyCol)}` : "d.label"}`
       : `ORDER BY variants DESC, ${meta.keyKind === "external_id" ? `d.${qid(meta.keyCol)}` : "d.label"}`;
 
-  // Fetch canonical rows from Postgres
+  // Fetch record rows from Postgres
   let canonRows: Record<string, unknown>[];
   if (meta.keyKind === "external_id") {
     canonRows = await pgAll<Record<string, unknown>>(
@@ -430,12 +430,12 @@ export async function getDimension(
   // Without this the client can't supply the right expectedVersion and every
   // second rename of a record 409s against the optimistic-concurrency check.
   const versionRows = await pgAll<{ key: string; version: number }>(
-    `SELECT key, version FROM ${pg("canonical_version")} WHERE dim_id = $1 AND tenant_id = $2 AND retired_at IS NULL`,
+    `SELECT key, version FROM ${pg("record_version")} WHERE dim_id = $1 AND tenant_id = $2 AND retired_at IS NULL`,
     [id, tenantId],
   );
   const versions = new Map(versionRows.map((r) => [r.key, Number(r.version)]));
 
-  const canonical = canonRows.map((r) => ({
+  const record = canonRows.map((r) => ({
     key: String(r.key),
     label: r.label == null ? String(r.key) : String(r.label),
     version: versions.get(String(r.key)) ?? 1,
@@ -493,7 +493,7 @@ export async function getDimension(
     ownerName: ownerName ?? null,
     rows: Number(rowsRow?.n ?? 0),
     nextPosition: nextPos,
-    canonical,
+    record,
     counts,
     fields,
   };
@@ -513,8 +513,8 @@ export async function addDimension(
   const id = slug(name);
   if (!id) return id;
   const keyKind = opts.keyKind === "external_id" ? "external_id" : "slug";
-  const dimTable = `${env.canonicalSchema}.dim_${id}`;
-  const mapTable = `${env.canonicalSchema}.map_${id}`;
+  const dimTable = `${env.recordSchema}.dim_${id}`;
+  const mapTable = `${env.recordSchema}.map_${id}`;
   const keyCol = `${id}_code`;
   // Dim ids are globally unique (see 0011_mt_data_foundation.sql "DECISION
   // (dimension identity)"); a same-named dim in two tenants would collide here.
@@ -577,10 +577,10 @@ export async function addDimension(
   return id;
 }
 
-/** Seed canonical values into a dimension's dim_ table (idempotent). */
-export async function addCanonical(
+/** Seed record values into a dimension's dim_ table (idempotent). */
+export async function addRecord(
   dimId: string,
-  values: CanonicalValue[],
+  values: RecordValue[],
   tenantId: string,
 ): Promise<void> {
   const meta = await dimMeta(dimId, tenantId);
@@ -613,8 +613,8 @@ export async function addCanonical(
   }
 }
 
-/** Add one canonical record (key derived from the label if not given). */
-export async function addCanonicalOne(
+/** Add one record record (key derived from the label if not given). */
+export async function addRecordOne(
   dimId: string,
   label: string,
   key: string | undefined,
@@ -645,7 +645,7 @@ export async function addCanonicalOne(
     }
     await seedVersionRow(tx, dimId, k, userId, tenantId);
   });
-  await appendAuditAs(userId, "Added canonical", `${label} (${k})`, {
+  await appendAuditAs(userId, "Added record", `${label} (${k})`, {
     tableId: dimId,
     rowKey: k,
     tenantId,
@@ -661,7 +661,7 @@ export interface ImportRow {
 /** Bulk CSV import. New keys are created (with label + field values); existing
  *  keys get field-value updates only — labels are never renamed here, so the
  *  optimistic-concurrency version machinery stays out of the bulk path. */
-export async function importCanonical(
+export async function importRecord(
   dimId: string,
   rows: ImportRow[],
   userId: string,
@@ -789,8 +789,8 @@ export async function importCanonical(
   return { created, updated, skipped };
 }
 
-/** Rename a canonical's display label (the key is stable). */
-export async function renameCanonical(
+/** Rename a record's display label (the key is stable). */
+export async function renameRecord(
   dimId: string,
   key: string,
   label: string,
@@ -819,7 +819,7 @@ export async function renameCanonical(
     return v;
   });
 
-  await appendAuditAs(userId, "Renamed canonical", `${key} → "${label}"`, {
+  await appendAuditAs(userId, "Renamed record", `${key} → "${label}"`, {
     tableId: dimId,
     rowKey: key,
     tenantId,
@@ -840,9 +840,9 @@ export async function renameCanonical(
   return { version: newVersion };
 }
 
-/** Merge loser canonicals into a survivor: re-point every crosswalk row, drop the
+/** Merge loser records into a survivor: re-point every crosswalk row, drop the
  *  losers' golden records, audit. The core MDM consolidation step. */
-export async function mergeCanonical(
+export async function mergeRecord(
   dimId: string,
   survivor: string,
   losers: string[],
@@ -870,7 +870,7 @@ export async function mergeCanonical(
       `WITH expected(key, expected_version) AS (
          VALUES ${valuesSql}
        )
-       UPDATE "zugzug_app"."canonical_version" cv
+       UPDATE "zugzug_app"."record_version" cv
           SET version = cv.version + 1, updated_at = now(), updated_by = $1
          FROM expected e
         WHERE cv.dim_id = '${dimId.replace(/'/g, "''")}'
@@ -892,7 +892,7 @@ export async function mergeCanonical(
         initials: string | null;
       }>(
         `SELECT cv.version, cv.updated_at, cv.updated_by, u.name, u.initials
-           FROM "zugzug_app"."canonical_version" cv
+           FROM "zugzug_app"."record_version" cv
            LEFT JOIN "zugzug_app"."users" u ON u.id = cv.updated_by
           WHERE cv.dim_id = $1 AND cv.key = $2 AND cv.tenant_id = $3
             AND cv.retired_at IS NULL`,
@@ -919,14 +919,14 @@ export async function mergeCanonical(
     ]);
     await tx.run(`DELETE FROM ${cq(m.dimTable)} WHERE ${key} = ANY($1::text[])`, [real]);
     await tx.run(
-      `UPDATE "zugzug_app"."canonical_version"
+      `UPDATE "zugzug_app"."record_version"
           SET retired_at = now(), retired_into = $4
         WHERE dim_id = $1 AND key = ANY($2::text[]) AND tenant_id = $3`,
       [dimId, real, tenantId, survivor],
     );
   });
 
-  await appendAuditAs(userId, "Merged canonical", `${real.join(", ")} → ${survivor}`, {
+  await appendAuditAs(userId, "Merged record", `${real.join(", ")} → ${survivor}`, {
     tableId: dimId,
     rowKey: survivor,
     tenantId,
@@ -934,8 +934,8 @@ export async function mergeCanonical(
   return real.length;
 }
 
-/** Retire a canonical — governed: refused while raw variants still map to it. */
-export async function retireCanonical(
+/** Retire a record — governed: refused while raw variants still map to it. */
+export async function retireRecord(
   dimId: string,
   key: string,
   userId: string,
@@ -995,7 +995,7 @@ export async function retireCanonical(
   });
 
   if (result.ok) {
-    await appendAuditAs(userId, "Retired canonical", key, {
+    await appendAuditAs(userId, "Retired record", key, {
       tableId: dimId,
       rowKey: key,
       tenantId,
@@ -1514,7 +1514,7 @@ export async function addColumnOption(
   return { options: next };
 }
 
-/** Set one enrichment field on a canonical record (only registered fields),
+/** Set one enrichment field on a record record (only registered fields),
  *  cast to the field's declared type. */
 export async function setFieldValue(
   dimId: string,
@@ -1543,7 +1543,7 @@ export async function setFieldValue(
           [key],
         )
       )?.v ?? null);
-  // Update the column and stamp canonical_version in one tx so the edit shows
+  // Update the column and stamp record_version in one tx so the edit shows
   // up as an unpublished change (ADR-0002). The upsert also seeds a version row
   // for records created by bulk paths that never got one. RETURNING guards the
   // stamp: no dim row updated → no stamp (don't touch retired/unknown keys).
@@ -1555,10 +1555,10 @@ export async function setFieldValue(
       );
       if (updated.length === 0) return false;
       await tx.run(
-        `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+        `INSERT INTO "zugzug_app"."record_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
          VALUES ($1, $2, 1, now(), $3, $4)
          ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
-            SET version    = "canonical_version".version + 1,
+            SET version    = "record_version".version + 1,
                 updated_at = now(),
                 updated_by = EXCLUDED.updated_by`,
         [dimId, key, userId, tenantId],
@@ -1798,7 +1798,7 @@ export async function deleteDimension(
     "draft",
     "source_stat",
     "ai_hint_cache",
-    "canonical_version",
+    "record_version",
     // Publish history — a recreated table with the same name must start at
     // version 0, not inherit the deleted table's versions and snapshots.
     "dimension_version",
@@ -1863,7 +1863,7 @@ export async function rebalanceDimPositions(
   return rows.length;
 }
 
-export async function addCanonicalOneAt(
+export async function addRecordOneAt(
   dimId: string,
   label: string,
   key: string | undefined,
@@ -1874,7 +1874,7 @@ export async function addCanonicalOneAt(
   const m = await dimMeta(dimId, tenantId);
   if (!m) return;
   if (m.orderingMode !== "manual") {
-    return addCanonicalOne(dimId, label, key, userId, tenantId);
+    return addRecordOne(dimId, label, key, userId, tenantId);
   }
   const k = (key && slug(key)) || slug(label);
   if (!k) return;
@@ -1949,7 +1949,7 @@ export async function addCanonicalOneAt(
     await seedVersionRow(tx, dimId, k, userId, tenantId);
   });
 
-  await appendAuditAs(userId, "Inserted canonical at position", `${label} (${k})`, {
+  await appendAuditAs(userId, "Inserted record at position", `${label} (${k})`, {
     tableId: dimId,
     rowKey: k,
     tenantId,
@@ -1957,10 +1957,10 @@ export async function addCanonicalOneAt(
   });
 }
 
-/** Move a canonical row to a new position in manual-ordering mode.
+/** Move a record row to a new position in manual-ordering mode.
  *  before / after are the keys of the immediate neighbours in the desired
  *  final order (null = move to top/bottom). */
-export async function reorderCanonicalRow(
+export async function reorderRecordRow(
   dimId: string,
   rowKey: string,
   before: string | null | undefined,
@@ -2047,7 +2047,7 @@ export async function reorderCanonicalRow(
 
     await tx.run(`UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`, [String(newPos), rowKey]);
 
-    await appendAuditAs(userId, "Reordered canonical", rowKey, {
+    await appendAuditAs(userId, "Reordered record", rowKey, {
       tableId: dimId,
       rowKey,
       tenantId,
@@ -2058,7 +2058,7 @@ export async function reorderCanonicalRow(
   });
 }
 
-/** The raw variants that resolve to a canonical key — the lineage "receipt". */
+/** The raw variants that resolve to a record key — the lineage "receipt". */
 export async function listVariants(
   dimId: string,
   key: string,

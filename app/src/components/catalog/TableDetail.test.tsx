@@ -26,7 +26,7 @@ const dims: MappingDimension[] = [
     mapTable: "zugzug.map_country",
     keyCol: "country_key",
     rows: 0,
-    canonical: [],
+    record: [],
     counts: {
       newCount: 0,
       mappedCount: 0,

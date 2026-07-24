@@ -40,9 +40,9 @@ beforeEach(async () => {
 test("materializeDimScanValues writes one value per distinct raw with summed rows", async () => {
   await materializeDimScanValues(DIM, TENANT, {
     occurrences: [
-      { raw: "Red",   table: "raw.products", column: "color", rows: 100 },
-      { raw: "RED",   table: "raw.orders",   column: "color", rows:  50 },
-      { raw: "Blue",  table: "raw.products", column: "color", rows:  30 },
+      { raw: "Red", table: "raw.products", column: "color", rows: 100 },
+      { raw: "RED", table: "raw.orders", column: "color", rows: 50 },
+      { raw: "Blue", table: "raw.products", column: "color", rows: 30 },
     ],
     scannedAt: new Date("2026-06-17T10:00:00Z"),
   });
@@ -54,14 +54,14 @@ test("materializeDimScanValues writes one value per distinct raw with summed row
   );
   expect(values).toHaveLength(2);
   expect(values[0]).toMatchObject({ raw_lower: "blue", total_rows: 30 });
-  expect(values[1]).toMatchObject({ raw_lower: "red",  total_rows: 150 });
+  expect(values[1]).toMatchObject({ raw_lower: "red", total_rows: 150 });
 });
 
 test("materializeDimScanValues writes per-source occurrences", async () => {
   await materializeDimScanValues(DIM, TENANT, {
     occurrences: [
       { raw: "Red", table: "raw.products", column: "color", rows: 100 },
-      { raw: "RED", table: "raw.orders",   column: "color", rows:  50 },
+      { raw: "RED", table: "raw.orders", column: "color", rows: 50 },
     ],
     scannedAt: new Date(),
   });
@@ -71,7 +71,7 @@ test("materializeDimScanValues writes per-source occurrences", async () => {
     [TENANT, DIM],
   );
   expect(occs).toHaveLength(2);
-  expect(occs[0]).toMatchObject({ table_name: "raw.orders",   rows: 50 });
+  expect(occs[0]).toMatchObject({ table_name: "raw.orders", rows: 50 });
   expect(occs[1]).toMatchObject({ table_name: "raw.products", rows: 100 });
 });
 
@@ -144,9 +144,9 @@ test("getDimScanScalars returns per-dim totals joined against map_<dim>", async 
 
   await materializeDimScanValues(DIM, TENANT, {
     occurrences: [
-      { raw: "Red",   table: "raw.a", column: "c", rows: 100 },
-      { raw: "Blue",  table: "raw.a", column: "c", rows:  50 },
-      { raw: "Green", table: "raw.a", column: "c", rows:  30 },
+      { raw: "Red", table: "raw.a", column: "c", rows: 100 },
+      { raw: "Blue", table: "raw.a", column: "c", rows: 50 },
+      { raw: "Green", table: "raw.a", column: "c", rows: 30 },
     ],
     scannedAt: new Date("2026-06-17T10:00:00Z"),
   });
@@ -216,9 +216,9 @@ test("getDimScanValuesPage q substring matches case-insensitively", async () => 
 
   await materializeDimScanValues(DIM, TENANT, {
     occurrences: [
-      { raw: "ACME Corp",  table: "raw.a", column: "c", rows: 10 },
-      { raw: "acme Inc",   table: "raw.a", column: "c", rows: 20 },
-      { raw: "Globex",     table: "raw.a", column: "c", rows: 30 },
+      { raw: "ACME Corp", table: "raw.a", column: "c", rows: 10 },
+      { raw: "acme Inc", table: "raw.a", column: "c", rows: 20 },
+      { raw: "Globex", table: "raw.a", column: "c", rows: 30 },
     ],
     scannedAt: new Date(),
   });

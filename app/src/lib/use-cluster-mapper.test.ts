@@ -58,7 +58,7 @@ function loadedFeed(): DimClusterFeed {
 
 const DIM = {
   id: "d1",
-  canonical: [
+  record: [
     { key: "us", label: "United States" },
     { key: "de", label: "Germany" },
   ],

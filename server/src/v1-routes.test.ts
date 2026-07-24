@@ -9,7 +9,7 @@ process.env.ZUGZUG_CURSOR_KEY =
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet } from "./pg.ts";
 import { handleV1Route } from "./v1-routes.ts";
-import { addDimension } from "./repo-canonical.ts";
+import { addDimension } from "./repo-record.ts";
 import { createServiceAccount } from "./repo-service-accounts.ts";
 import { recordSlugAlias } from "./slug-alias.ts";
 import { createWebhook } from "./repo-webhooks.ts";
@@ -21,9 +21,9 @@ const T = "test_v1_routes";
 const SLUG = "v1routes";
 const ADMIN = "u_v1_admin";
 
-// Pull API requires both a dim_* row AND a canonical_version row, with the
+// Pull API requires both a dim_* row AND a record_version row, with the
 // exact key (no slug() lowercasing). Mirrors repo-outbound.test.ts helper.
-async function seedCanonical(
+async function seedRecord(
   dimId: string,
   values: { key: string; label: string }[],
   tenantId: string,
@@ -33,7 +33,7 @@ async function seedCanonical(
     `SELECT dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
     [dimId, tenantId],
   );
-  if (!meta) throw new Error(`seedCanonical: dim ${dimId} not found`);
+  if (!meta) throw new Error(`seedRecord: dim ${dimId} not found`);
   const [schema, table] = meta.dim_table.split(".");
   for (const v of values) {
     await pgRun(
@@ -42,11 +42,11 @@ async function seedCanonical(
       [v.key, v.label],
     );
     await pgRun(
-      `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+      `INSERT INTO "zugzug_app"."record_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
        VALUES ($1, $2, 1, now(), $3, $4)
        ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
          SET retired_at = NULL, retired_into = NULL,
-             version = "canonical_version".version + 1,
+             version = "record_version".version + 1,
              updated_at = now(), updated_by = EXCLUDED.updated_by`,
       [dimId, v.key, updatedBy, tenantId],
     );
@@ -76,7 +76,7 @@ beforeAll(async () => {
   );
 
   dimId = await addDimension("V1Country", [], { keyKind: "slug", silent: true }, ADMIN, T);
-  await seedCanonical(
+  await seedRecord(
     dimId,
     [
       { key: "DE", label: "Germany" },
@@ -105,7 +105,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});

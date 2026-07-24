@@ -10,7 +10,13 @@ import { MemoryRouter } from "react-router-dom";
 import { clearToasts } from "../src/components/Toast";
 
 // Shared stub data
-const ME = { id: "u_me", name: "Ada Berg", initials: "AB", email: "ada@example.com", isSuperAdmin: false };
+const ME = {
+  id: "u_me",
+  name: "Ada Berg",
+  initials: "AB",
+  email: "ada@example.com",
+  isSuperAdmin: false,
+};
 const OTHER = { id: "u_other", name: "Max Thorn", initials: "MT" };
 const SYSTEM_USER = { id: "u_system", name: "System", initials: "SY" };
 
@@ -54,7 +60,7 @@ const stubDraftOtherDim = {
 const stubDim = {
   id: "country",
   dimension: "Country",
-  canonical: [],
+  record: [],
   fields: [],
   rows: 0,
   color: null,
@@ -63,7 +69,14 @@ const stubDim = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   keyKind: "slug",
-  counts: { newCount: 1, mappedCount: 1, totalDistinct: 3, unmappedRowsTotal: 100, mappedRowsTotal: 50, scannedAt: null },
+  counts: {
+    newCount: 1,
+    mappedCount: 1,
+    totalDistinct: 3,
+    unmappedRowsTotal: 100,
+    mappedRowsTotal: 50,
+    scannedAt: null,
+  },
 };
 
 const stubCityDim = {
@@ -83,7 +96,7 @@ function setupMocks({
   drafts?: Record<string, typeof stubDraftOther>;
   canEdit?: boolean;
   me?: typeof ME | null;
-  dims?: typeof stubDim[];
+  dims?: (typeof stubDim)[];
 } = {}) {
   vi.doMock("../src/store", async (orig) => {
     const real = await orig<typeof import("../src/store")>();
@@ -95,7 +108,13 @@ function setupMocks({
       useCurrentUser: () => me,
       rejectDrafts: vi.fn(async () => {}),
       commit: vi.fn(async () => ({ committed: 1, rowsRecovered: 0 })),
-      fetchPublishState: vi.fn(async () => ({ version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedKeys: [] })),
+      fetchPublishState: vi.fn(async () => ({
+        version: 1,
+        publishedAt: null,
+        publishedByName: null,
+        pendingDrafts: 1,
+        changedKeys: [],
+      })),
     };
   });
 }
@@ -230,7 +249,13 @@ describe("AwaitingReview", () => {
           if (dimId === "city") throw new Error("city table locked");
         }),
         commit: vi.fn(async () => ({ committed: 1, rowsRecovered: 0 })),
-        fetchPublishState: vi.fn(async () => ({ version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 1, changedKeys: [] })),
+        fetchPublishState: vi.fn(async () => ({
+          version: 1,
+          publishedAt: null,
+          publishedByName: null,
+          pendingDrafts: 1,
+          changedKeys: [],
+        })),
       };
     });
 
@@ -282,7 +307,7 @@ describe("Review empty states", () => {
     const dimWithNoNew = {
       id: "country",
       dimension: "Country",
-      canonical: [],
+      record: [],
       fields: [],
       rows: 0,
       color: null,
@@ -291,7 +316,14 @@ describe("Review empty states", () => {
       mapTable: "zugzug.map_country",
       keyCol: "country_code",
       keyKind: "slug",
-      counts: { newCount: 0, mappedCount: 5, totalDistinct: 5, unmappedRowsTotal: 0, mappedRowsTotal: 50, scannedAt: null },
+      counts: {
+        newCount: 0,
+        mappedCount: 5,
+        totalDistinct: 5,
+        unmappedRowsTotal: 0,
+        mappedRowsTotal: 50,
+        scannedAt: null,
+      },
     };
 
     vi.doMock("../src/lib/use-tenant-navigate", () => ({
@@ -314,7 +346,7 @@ describe("Review empty states", () => {
         useWorkspaceInfo: () => ({
           adapter: "duckdb",
           writable: false,
-          canonicalMode: "postgres-export",
+          recordMode: "postgres-export",
           warehouseDb: null,
           allowedDomain: null,
         }),
@@ -325,7 +357,13 @@ describe("Review empty states", () => {
         saveDraft: vi.fn(),
         discardDraft: vi.fn(),
         commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0 })),
-        fetchPublishState: vi.fn(async () => ({ version: 1, publishedAt: null, publishedByName: null, pendingDrafts: 0, changedKeys: [] })),
+        fetchPublishState: vi.fn(async () => ({
+          version: 1,
+          publishedAt: null,
+          publishedByName: null,
+          pendingDrafts: 0,
+          changedKeys: [],
+        })),
         dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
       };
     });

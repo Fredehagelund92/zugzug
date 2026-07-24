@@ -32,12 +32,12 @@ export function _resetExporterInstance(): void {
 
 /** Export the dimension's MAP table as Parquet bytes.
  *
- *  v1 scope: map rows only (raw + keyCol). The DIM table (canonical records +
+ *  v1 scope: map rows only (raw + keyCol). The DIM table (record records +
  *  enrichment fields) is not included; it has a divergent column shape that
  *  doesn't union cleanly with map rows. dbt's primary use case is a LEFT JOIN
  *  on the map for warehouse cleanup, which this serves directly.
  */
-export async function exportCanonicalToParquet(dim: DimensionSpec): Promise<Buffer> {
+export async function exportRecordToParquet(dim: DimensionSpec): Promise<Buffer> {
   // 1. Read all map rows from Postgres.
   const rows = await pgAll<{ raw: string; key: string }>(
     `SELECT raw, "${dim.keyCol}" AS key FROM ${cq(dim.mapTable)} ORDER BY raw`,

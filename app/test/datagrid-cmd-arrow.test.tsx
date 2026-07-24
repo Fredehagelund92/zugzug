@@ -4,7 +4,10 @@ import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../src/components/datagrid/types";
 
-interface Row { id: string; name: string }
+interface Row {
+  id: string;
+  name: string;
+}
 
 const rows: Row[] = [
   { id: "1", name: "Acme" },

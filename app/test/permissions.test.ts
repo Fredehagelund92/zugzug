@@ -7,21 +7,21 @@ function t(role: "admin" | "editor" | "viewer", isSuperAdmin = false): TenantCon
 }
 
 const MATRIX: Record<Action, Record<"viewer" | "editor" | "admin", boolean>> = {
-  "account.profile.edit":   { viewer: true,  editor: true,  admin: true },
-  "settings.general.view":  { viewer: true,  editor: true,  admin: true },
-  "settings.general.edit":  { viewer: false, editor: false, admin: true },
-  "settings.members.view":  { viewer: true,  editor: true,  admin: true },
-  "settings.members.edit":  { viewer: false, editor: false, admin: true },
-  "settings.scans.view":    { viewer: true,  editor: true,  admin: true },
-  "settings.scans.edit":    { viewer: false, editor: true,  admin: true },
-  "settings.matching.view": { viewer: true,  editor: true,  admin: true },
-  "settings.matching.edit": { viewer: false, editor: true,  admin: true },
-  "settings.warehouse.view":{ viewer: true,  editor: true,  admin: true },
-  "settings.audit.view":    { viewer: true,  editor: true,  admin: true },
-  "settings.danger.leave":  { viewer: true,  editor: true,  admin: true },
+  "account.profile.edit": { viewer: true, editor: true, admin: true },
+  "settings.general.view": { viewer: true, editor: true, admin: true },
+  "settings.general.edit": { viewer: false, editor: false, admin: true },
+  "settings.members.view": { viewer: true, editor: true, admin: true },
+  "settings.members.edit": { viewer: false, editor: false, admin: true },
+  "settings.scans.view": { viewer: true, editor: true, admin: true },
+  "settings.scans.edit": { viewer: false, editor: true, admin: true },
+  "settings.matching.view": { viewer: true, editor: true, admin: true },
+  "settings.matching.edit": { viewer: false, editor: true, admin: true },
+  "settings.warehouse.view": { viewer: true, editor: true, admin: true },
+  "settings.audit.view": { viewer: true, editor: true, admin: true },
+  "settings.danger.leave": { viewer: true, editor: true, admin: true },
   "settings.danger.delete": { viewer: false, editor: false, admin: true },
-  "admin.view":             { viewer: false, editor: false, admin: false },
-  "table.rollback":         { viewer: false, editor: false, admin: true },
+  "admin.view": { viewer: false, editor: false, admin: false },
+  "table.rollback": { viewer: false, editor: false, admin: true },
 };
 
 describe("can()", () => {

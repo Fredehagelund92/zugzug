@@ -11,22 +11,22 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async suggestMapping(request: SuggestionRequest): Promise<SuggestionResponse> {
-    const { dimensionName, rawValue, existingCanonicalValues } = request;
+    const { dimensionName, rawValue, existingRecordValues } = request;
 
-    const prompt = `You are a data quality specialist. Map the raw value to the most likely canonical value.
+    const prompt = `You are a data quality specialist. Map the raw value to the most likely record value.
 
 Dimension: ${dimensionName}
 Raw value: "${rawValue}"
 
-Existing canonical values in this dimension:
-${existingCanonicalValues
+Existing record values in this dimension:
+${existingRecordValues
   .slice(0, 30)
   .map((v) => `- ${v}`)
   .join("\n")}
 
 Respond with valid JSON (no markdown, no extra text):
 {
-  "canonical": "the best matching canonical value (string)",
+  "record": "the best matching record value (string)",
   "confidence": "high" | "medium" | "low",
   "reasoning": "brief explanation (optional, <100 chars)"
 }
@@ -36,7 +36,7 @@ Confidence guidelines:
 - "medium": plausible but requires some interpretation or there's ambiguity
 - "low": unclear, requires human domain knowledge, or unlikely to be correct
 
-Always prefer a canonical value that already exists in the dimension if reasonable.`;
+Always prefer a record value that already exists in the dimension if reasonable.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -84,7 +84,7 @@ Always prefer a canonical value that already exists in the dimension if reasonab
       throw new AIResponseParseError(`Failed to parse OpenAI response: ${content}`);
     }
 
-    if (!parsed.canonical || !["high", "medium", "low"].includes(parsed.confidence)) {
+    if (!parsed.record || !["high", "medium", "low"].includes(parsed.confidence)) {
       throw new AIResponseParseError(
         `OpenAI response missing required fields: ${JSON.stringify(parsed)}`,
       );

@@ -29,7 +29,16 @@ function harness(isSuperAdmin: boolean, path = "/app/acme/triage") {
         <Route
           path="/app/:tenantSlug/*"
           element={
-            <TenantProvider value={{ id: "acme", slug: "acme", label: "Acme", color: null, role: "admin", isSuperAdmin }}>
+            <TenantProvider
+              value={{
+                id: "acme",
+                slug: "acme",
+                label: "Acme",
+                color: null,
+                role: "admin",
+                isSuperAdmin,
+              }}
+            >
               <WorkspaceSwitcher />
             </TenantProvider>
           }
@@ -66,7 +75,12 @@ describe("WorkspaceSwitcher", () => {
 
   test("editor role does NOT see Admin console", () => {
     const value: TenantContextValue = {
-      id: "acme", slug: "acme", label: "Acme", color: null, role: "editor", isSuperAdmin: false,
+      id: "acme",
+      slug: "acme",
+      label: "Acme",
+      color: null,
+      role: "editor",
+      isSuperAdmin: false,
     };
     render(
       <MemoryRouter initialEntries={["/app/acme/triage"]}>

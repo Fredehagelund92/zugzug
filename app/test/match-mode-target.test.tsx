@@ -116,7 +116,14 @@ vi.mock("../src/components/GetSuggestionButton", () => ({
 
 // ── Minimal tenant context ─────────────────────────────────────────────────────
 
-const TENANT = { id: "acme", slug: "acme", label: "Acme", color: null, role: "admin" as const, isSuperAdmin: false };
+const TENANT = {
+  id: "acme",
+  slug: "acme",
+  label: "Acme",
+  color: null,
+  role: "admin" as const,
+  isSuperAdmin: false,
+};
 
 // ── Fixture dim ───────────────────────────────────────────────────────────────
 
@@ -127,7 +134,7 @@ const DIM: MappingDimension = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   rows: 100,
-  canonical: [
+  record: [
     { key: "US", label: "United States", version: 1 },
     { key: "GB", label: "United Kingdom", version: 1 },
   ],
@@ -176,7 +183,11 @@ const { saveDraftSpy } = storeMocks;
 beforeEach(() => {
   vi.clearAllMocks();
   // Clear sessionStorage so filter state is fresh per test.
-  try { sessionStorage.clear(); } catch { /* ignore */ }
+  try {
+    sessionStorage.clear();
+  } catch {
+    /* ignore */
+  }
 });
 
 describe("MatchModeBody ?target= resolution", () => {
@@ -245,8 +256,20 @@ describe("MatchModeBody ?target= resolution", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Map selected/i }));
 
-    expect(saveDraftSpy).toHaveBeenCalledWith(DIM.id, "usa", "mapped", "United Kingdom", expect.any(String));
-    expect(saveDraftSpy).toHaveBeenCalledWith(DIM.id, "uk", "mapped", "United Kingdom", expect.any(String));
+    expect(saveDraftSpy).toHaveBeenCalledWith(
+      DIM.id,
+      "usa",
+      "mapped",
+      "United Kingdom",
+      expect.any(String),
+    );
+    expect(saveDraftSpy).toHaveBeenCalledWith(
+      DIM.id,
+      "uk",
+      "mapped",
+      "United Kingdom",
+      expect.any(String),
+    );
     expect(saveDraftSpy).toHaveBeenCalledTimes(2);
   });
 

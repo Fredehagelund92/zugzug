@@ -258,7 +258,7 @@ type ScanReg = {
 };
 
 /** Scan a single registered source and upsert its row in source_stat. Shared
- *  by scanSources (bulk) and the auto-scan path in deriveCanonical (per-wire). */
+ *  by scanSources (bulk) and the auto-scan path in deriveRecord (per-wire). */
 async function scanOneSource(
   r: ScanReg,
   adapter: Awaited<ReturnType<typeof getAdapter>>,
@@ -354,7 +354,7 @@ export async function dimensionsWithWiredSources(tenantId: string): Promise<stri
 }
 
 /** Auto-stage a draft (owned by u_system) for every warehouse raw value that
- *  case-insensitively matches an existing canonical label and is not yet in
+ *  case-insensitively matches an existing record label and is not yet in
  *  the dimension's lookup table. The match is deterministic — no AI, no fuzzy
  *  — so it always lands above any reasonable publish threshold. */
 export async function autoStageExactMatches(
@@ -382,7 +382,7 @@ export async function autoStageExactMatches(
   if (!rows.length) return { matched: 0, unmatched: 0 };
   const warehouseRaws = rows.map((r) => r.raw);
 
-  // Postgres: canonical labels
+  // Postgres: record labels
   const canonRows = await pgAll<{ key: string; label: string }>(
     `SELECT ${qid(meta.keyCol)} AS key, label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
   ).catch(() => [] as { key: string; label: string }[]);
@@ -422,7 +422,7 @@ export async function autoStageExactMatches(
 /** Register a warehouse column as a source for a dimension (idempotent).
  *
  *  Takes the convenience `"schema.table"` + column shape (used by seed and
- *  deriveCanonical). Resolves the warehouse database via
+ *  deriveRecord). Resolves the warehouse database via
  *  resolveDefaultDatabase() — the first registered warehouse_database for
  *  the deployment. Callers that already hold a databaseId should write the
  *  INSERT directly with that ID. */
@@ -438,7 +438,7 @@ export async function addSource(
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${table}`, 422);
   }
-  const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+  const { resolveDefaultDatabase } = await import("./repo-record.ts");
   const databaseId = await resolveDefaultDatabase(tenantId);
   await pgRun(
     `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
@@ -680,11 +680,11 @@ export async function searchCatalog(opts: {
   return { rows, total: tables.length, schemas };
 }
 
-/* ---- canonical bootstrap from warehouse ---- */
+/* ---- record bootstrap from warehouse ---- */
 
-/** Seed a canonical_version row (version 1) for each derived key so the record
+/** Seed a record_version row (version 1) for each derived key so the record
  *  can be renamed/retired/merged later. Without this, rename/merge/retire 404
- *  ("canonical not found") because bumpVersionOrThrow finds no version row.
+ *  ("record not found") because bumpVersionOrThrow finds no version row.
  *  Idempotent — existing version rows are left untouched. */
 async function seedVersionRows(
   dimId: string,
@@ -697,7 +697,7 @@ async function seedVersionRows(
     const chunk = keys.slice(i, i + CHUNK);
     const placeholders = chunk.map((_, j) => `($1, $${j + 4}, 1, now(), $2, $3)`).join(", ");
     await pgRun(
-      `INSERT INTO "zugzug_app"."canonical_version"
+      `INSERT INTO "zugzug_app"."record_version"
             (dim_id, key, version, updated_at, updated_by, tenant_id)
        VALUES ${placeholders}
        ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
@@ -733,18 +733,18 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
 /** Derive (bootstrap) or connect a source column to a dimension.
  *
  *  Mode is auto-detected from the target dim:
- *   - **seed** (dim is empty): each distinct value populates the canonical table
+ *   - **seed** (dim is empty): each distinct value populates the record table
  *     and is auto-mapped 1:1 in the map table. Slug dims collapse US/us;
  *     external_id dims also persist the name-column binding.
  *   - **connect** (dim already has records): only register the source and refresh
  *     stats. Values land in Triage / Match Values, where exact-label hits get
  *     auto-staged and the rest are mapped by the operator. This is what you want
  *     for every source after the first — otherwise wiring source #2 would create
- *     duplicate canonical records, defeating the whole point of dedup.
+ *     duplicate record records, defeating the whole point of dedup.
  *
  *  Pass `opts.force: true` to seed even when the dim already has records — only
  *  use when bootstrapping a dim from multiple equally-trusted sources. */
-export async function deriveCanonical(
+export async function deriveRecord(
   dimId: string,
   table: string,
   column: string,
@@ -792,7 +792,7 @@ export async function deriveCanonical(
     } catch (err) {
       log({
         level: "warn",
-        msg: "derive-canonical: inline auto-stage failed",
+        msg: "derive-record: inline auto-stage failed",
         dimId,
         table,
         column,
@@ -828,7 +828,7 @@ export async function deriveCanonical(
   if (!vals.length) {
     log({
       level: "warn",
-      msg: "derive-canonical: distinctValues returned 0",
+      msg: "derive-record: distinctValues returned 0",
       dimId,
       table,
       column,
@@ -868,7 +868,7 @@ export async function deriveCanonical(
     if (!opts.silent)
       await appendAuditAs(
         userId,
-        "Derived canonical",
+        "Derived record",
         `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`,
         { tenantId },
       );
@@ -901,7 +901,7 @@ export async function deriveCanonical(
   if (!opts.silent)
     await appendAuditAs(
       userId,
-      "Derived canonical",
+      "Derived record",
       `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
       { tenantId },
     );

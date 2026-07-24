@@ -7,7 +7,7 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension, addCanonicalOne, deleteDimension } from "./repo-canonical.ts";
+import { addDimension, addRecordOne, deleteDimension } from "./repo-record.ts";
 
 const T = "test_del_dim";
 const U = "u_test_del";
@@ -66,7 +66,7 @@ describe("deleteDimension", () => {
 
   it("deletes the dimension row, metadata rows, and drops dim_/map_ tables; keeps audit", async () => {
     await addDimension("Deltest", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(DIM, "Alpha", undefined, U, T);
+    await addRecordOne(DIM, "Alpha", undefined, U, T);
     // Enroll U in tenant T so the layout sweep can target it
     await pgRun(
       `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)

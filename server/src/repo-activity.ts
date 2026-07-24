@@ -13,15 +13,15 @@ export type RowActivityEntry = {
 };
 
 const ACTION_TO_OP: Record<string, AuditOp> = {
-  "Added canonical": "create",
-  "Renamed canonical": "rename",
-  "Merged canonical": "merge",
-  "Retired canonical": "archive",
+  "Added record": "create",
+  "Renamed record": "rename",
+  "Merged record": "merge",
+  "Retired record": "archive",
   "Set field value": "field-write",
   "Committed mapping": "commit",
 };
 
-/** Per-row activity since `since` for a given canonical table. Scoped to the
+/** Per-row activity since `since` for a given record table. Scoped to the
  *  caller's tenant; pass `tenantId === "*"` from a super-admin context to read
  *  across all tenants (cross-tenant feed). */
 export async function getRowActivitySince(

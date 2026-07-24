@@ -1,5 +1,5 @@
 import type { ColumnDef } from "../datagrid/types";
-import type { CanonicalValue, FieldDef } from "../../data";
+import type { RecordValue, FieldDef } from "../../data";
 
 export interface TargetMeta {
   /** Map from target field name → display label. */
@@ -12,14 +12,11 @@ export interface TargetMeta {
 
 /** Synthesize the FK ColumnDef + one read-only lookup ColumnDef per non-label
  *  entry in `field.displayFields`. Pure — no React, no store access. */
-export function buildLinkedColumns(
-  field: FieldDef,
-  target: TargetMeta,
-): ColumnDef<CanonicalValue>[] {
+export function buildLinkedColumns(field: FieldDef, target: TargetMeta): ColumnDef<RecordValue>[] {
   const displayFields = field.displayFields ?? ["label"];
   const targetDimId = field.referencedDimId ?? "";
 
-  const fkCol: ColumnDef<CanonicalValue> = {
+  const fkCol: ColumnDef<RecordValue> = {
     field: field.field,
     label: field.label,
     config: {
@@ -33,7 +30,7 @@ export function buildLinkedColumns(
     columnKind: "fk",
   };
 
-  const lookupCols: ColumnDef<CanonicalValue>[] = displayFields
+  const lookupCols: ColumnDef<RecordValue>[] = displayFields
     .filter((df) => df !== "label")
     .map((df) => {
       const exists = target.fieldExists.has(df);

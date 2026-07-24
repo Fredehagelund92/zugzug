@@ -11,7 +11,7 @@ import { env } from "../src/env.ts";
 const TA = "tah_a";
 const TB = "tah_b";
 const DIM = "tah_dim";
-const RAW = "FRA_IS_NOT_A_REAL_CANONICAL_LABEL";
+const RAW = "FRA_IS_NOT_A_REAL_RECORD_LABEL";
 
 async function cleanup(): Promise<void> {
   await pgRun(`DELETE FROM "zugzug_app"."ai_hint_cache" WHERE dim_id = $1`, [DIM]);
@@ -52,11 +52,11 @@ test("getAiHint cache lookup is scoped by tenant_id", async () => {
     expect(b.cached).toBe(false);
     expect(b.suggestion).toBeNull();
   } else {
-    // With an LLM available, pass an EMPTY canonical list so the function takes
+    // With an LLM available, pass an EMPTY record list so the function takes
     // the path that returns early without a real API hit (path #2 in getAiHint).
     const b = await getAiHint(DIM, RAW, [], { label: "Country" }, TB);
     expect(b.cached).toBe(false);
     expect(b.suggestion).toBeNull();
-    expect(b.reasoning).toContain("No canonical");
+    expect(b.reasoning).toContain("No record");
   }
 });

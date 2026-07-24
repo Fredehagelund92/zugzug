@@ -14,8 +14,15 @@ const dimA: MappingDimension = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   rows: 300,
-  canonical: [],
-  counts: { newCount: 1, mappedCount: 2, totalDistinct: 3, unmappedRowsTotal: 100, mappedRowsTotal: 200, scannedAt: null },
+  record: [],
+  counts: {
+    newCount: 1,
+    mappedCount: 2,
+    totalDistinct: 3,
+    unmappedRowsTotal: 100,
+    mappedRowsTotal: 200,
+    scannedAt: null,
+  },
 };
 
 const dimB: MappingDimension = {
@@ -25,8 +32,15 @@ const dimB: MappingDimension = {
   mapTable: "zugzug.map_region",
   keyCol: "region_code",
   rows: 200,
-  canonical: [],
-  counts: { newCount: 0, mappedCount: 3, totalDistinct: 3, unmappedRowsTotal: 0, mappedRowsTotal: 200, scannedAt: null },
+  record: [],
+  counts: {
+    newCount: 0,
+    mappedCount: 3,
+    totalDistinct: 3,
+    unmappedRowsTotal: 0,
+    mappedRowsTotal: 200,
+    scannedAt: null,
+  },
 };
 
 const dimC: MappingDimension = {
@@ -36,8 +50,15 @@ const dimC: MappingDimension = {
   mapTable: "zugzug.map_channel",
   keyCol: "channel_id",
   rows: 150,
-  canonical: [],
-  counts: { newCount: 0, mappedCount: 3, totalDistinct: 3, unmappedRowsTotal: 0, mappedRowsTotal: 150, scannedAt: null },
+  record: [],
+  counts: {
+    newCount: 0,
+    mappedCount: 3,
+    totalDistinct: 3,
+    unmappedRowsTotal: 0,
+    mappedRowsTotal: 150,
+    scannedAt: null,
+  },
 };
 
 const remapDraft: Draft = {
