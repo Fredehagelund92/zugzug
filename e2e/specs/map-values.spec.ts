@@ -109,7 +109,10 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   await publishBtn.click();
 
   // ── 9. Confirm in the PublishPreviewDialog ────────────────────────────────
-  const previewDialog = page.getByRole("dialog", { name: /publish v/i });
+  // The demo seed leaves in-review drafts in several tables, so the footer
+  // Publish opens the aggregate dialog ("Publish N tables?"); with a single
+  // table pending it's titled "Publish vN". Match either.
+  const previewDialog = page.getByRole("dialog", { name: /^publish/i });
   await expect(previewDialog).toBeVisible({ timeout: 5_000 });
 
   // The dialog lists the raw value being published.

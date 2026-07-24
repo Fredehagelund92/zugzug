@@ -76,4 +76,29 @@ describe("validateWarehouseEnv", () => {
       expect(result.reason).toMatch(/MOTHERDUCK_TOKEN required/);
     }
   });
+
+  it("WAREHOUSE_ADAPTER=duckdb + DUCK_WAREHOUSE_PATH: ok (local warehouse)", () => {
+    const result = validateWarehouseEnv({
+      ATTACH_WAREHOUSE: "true",
+      WAREHOUSE_ADAPTER: "duckdb",
+      DUCK_WAREHOUSE_PATH: "/data/warehouse.duckdb",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.adapter).toBe("duckdb");
+      if (result.adapter === "duckdb") expect(result.path).toBe("/data/warehouse.duckdb");
+    }
+  });
+
+  it("WAREHOUSE_ADAPTER=duckdb + no path: fails", () => {
+    const result = validateWarehouseEnv({
+      ATTACH_WAREHOUSE: "true",
+      WAREHOUSE_ADAPTER: "duckdb",
+      DUCK_WAREHOUSE_PATH: "  ",
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toMatch(/DUCK_WAREHOUSE_PATH required/);
+    }
+  });
 });
