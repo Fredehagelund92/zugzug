@@ -20,6 +20,14 @@ async function build(): Promise<WarehouseAdapter> {
       writable: env.motherduckWritable,
     });
   }
+  if (env.warehouseAdapter === "duckdb") {
+    return resolveAdapter({
+      type: "duckdb",
+      path: env.duckWarehousePath,
+      attached: true,
+      writable: false,
+    });
+  }
   throw new Error(`unsupported warehouse adapter: ${env.warehouseAdapter}`);
 }
 

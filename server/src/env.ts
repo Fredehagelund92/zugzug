@@ -25,7 +25,8 @@ function readOptional(name: string, fallback = ""): string {
 
 type WarehouseEnvOk =
   | { ok: true; adapter: "disabled" }
-  | { ok: true; adapter: "motherduck"; motherduckToken: string };
+  | { ok: true; adapter: "motherduck"; motherduckToken: string }
+  | { ok: true; adapter: "duckdb"; path: string };
 type WarehouseEnvErr = { ok: false; reason: string };
 export type WarehouseEnvResult = WarehouseEnvOk | WarehouseEnvErr;
 
@@ -39,6 +40,15 @@ export function validateWarehouseEnv(vars: Record<string, string | undefined>): 
   }
   if (adapter === "snowflake") {
     return { ok: false, reason: "Snowflake adapter is a stub; not yet supported" };
+  }
+  // Local DuckDB warehouse — attach a `.duckdb` file on disk instead of MotherDuck.
+  // Used by the demo (a bundled sample warehouse); no token required.
+  if (adapter === "duckdb") {
+    const path = vars.DUCK_WAREHOUSE_PATH?.trim();
+    if (!path) {
+      return { ok: false, reason: "DUCK_WAREHOUSE_PATH required for the local duckdb adapter" };
+    }
+    return { ok: true, adapter: "duckdb", path };
   }
   if (adapter !== "motherduck") {
     return { ok: false, reason: `Unknown WAREHOUSE_ADAPTER: ${adapter}` };
@@ -56,13 +66,16 @@ const databaseUrl = readRequired("DATABASE_URL", "required");
 
 const warehouseEnv = validateWarehouseEnv(process.env);
 let motherduckToken = "";
-let warehouseAdapter: "disabled" | "motherduck" = "disabled";
+let duckWarehousePath = "";
+let warehouseAdapter: "disabled" | "motherduck" | "duckdb" = "disabled";
 if (!warehouseEnv.ok) {
   issues.push({ name: "WAREHOUSE_ADAPTER / MOTHERDUCK_TOKEN", reason: warehouseEnv.reason });
 } else {
   warehouseAdapter = warehouseEnv.adapter;
   if (warehouseEnv.adapter === "motherduck") {
     motherduckToken = warehouseEnv.motherduckToken;
+  } else if (warehouseEnv.adapter === "duckdb") {
+    duckWarehousePath = warehouseEnv.path;
   }
 }
 
@@ -85,6 +98,8 @@ if (issues.length > 0) {
 export const env = {
   databaseUrl,
   motherduckToken,
+  /** Path to a local `.duckdb` warehouse file, when WAREHOUSE_ADAPTER=duckdb. */
+  duckWarehousePath,
   warehouseAdapter,
   attachWarehouse,
   /** When true, the DuckDB adapter is writable (record → MotherDuck via MERGE).

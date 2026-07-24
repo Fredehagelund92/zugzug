@@ -37,9 +37,16 @@ ACME_EMAIL=you@example.com
 ORIGIN=https://demo.zugzug.dev
 POSTGRES_PASSWORD=$(openssl rand -hex 32)
 ZUGZUG_CURSOR_KEY=$(openssl rand -base64 32)
-SEED_DEMO=true          # loads the fictional demo dataset on first boot
-ATTACH_WAREHOUSE=false  # demo runs entirely on Postgres — no warehouse needed
+SEED_DEMO=true                             # load the fictional demo dataset on first boot
+ATTACH_WAREHOUSE=true                       # attach the bundled local warehouse
+WAREHOUSE_ADAPTER=duckdb
+DUCK_WAREHOUSE_PATH=/data/warehouse.duckdb  # generated on first boot with sample messy data
 ```
+
+With the local warehouse attached, the demo shows the full loop — browse the
+catalog, wire a source column, scan it, then map and publish. No MotherDuck token
+or cloud needed; the warehouse is a local DuckDB file on the `/data` volume
+(preserved across resets, so it's generated only once).
 
 Launch:
 

@@ -9,8 +9,20 @@
  * Nothing here is real. Company and vendor names are invented. Runs once on a
  * fresh install (bootstrap only). Idempotent-ish. */
 
-import { addRefTable, addRecordOne, addField, setFieldValue, saveDraft, commit } from "./repo.ts";
+import {
+  addRefTable,
+  addRecordOne,
+  addField,
+  setFieldValue,
+  saveDraft,
+  commit,
+  addSource,
+  scanOneDim,
+} from "./repo.ts";
 import { materializeSourceScanValues } from "./repo-source-scan.ts";
+import { addWarehouseDatabase } from "./repo-warehouse.ts";
+import { basename } from "node:path";
+import { env } from "./env.ts";
 
 const T = "default";
 const U = "u_verify";
@@ -58,9 +70,37 @@ const map = (ref: string, raw: string, key: string, label: string) =>
   saveDraft(ref, raw, "mapped", label, key, U, T);
 const publish = (ref: string) => commit(ref, U, T);
 
+// Populate a table's source values for value-mapping. With the bundled local
+// DuckDB warehouse attached, wire the real column and scan it; otherwise inject
+// the same values directly so Review is still populated.
+async function populate(
+  ref: string,
+  schemaTable: string,
+  column: string,
+  fallback: Array<[string, number]>,
+): Promise<void> {
+  if (env.warehouseAdapter === "duckdb") {
+    await addSource(ref, schemaTable, column, T);
+    await scanOneDim(ref, T);
+  } else {
+    await inject(ref, schemaTable, column, fallback);
+  }
+}
+
 // ── the dataset ──────────────────────────────────────────────────────────────
 
 export async function seedDemo(): Promise<void> {
+  // If the bundled local DuckDB warehouse is attached, register it so sources
+  // resolve against it (its catalog name is the file stem).
+  if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
+    const dbName = basename(env.duckWarehousePath).replace(/\.duckdb$/i, "");
+    try {
+      await addWarehouseDatabase({ databaseName: dbName, label: "Demo warehouse", actorUserId: U });
+    } catch {
+      /* already registered on a prior boot — fine */
+    }
+  }
+
   // 1. Currency — a plain governed list with typed attributes.
   const currency = await table("Currency");
   const cSymbol = await field(currency, "Symbol", "text");
@@ -137,7 +177,7 @@ export async function seedDemo(): Promise<void> {
     await val(country, key, coEu, eu);
   }
   // Messy country strings scanned from the warehouse.
-  await inject(country, "raw.orders", "shipping_country", [
+  await populate(country, "raw.orders", "shipping_country", [
     ["United States", 41204],
     ["USA", 18800],
     ["U.S.A.", 2140],
@@ -205,7 +245,7 @@ export async function seedDemo(): Promise<void> {
     await val(vendor, key, vActive, active);
     await val(vendor, key, vSince, since);
   }
-  await inject(vendor, "raw.invoices", "vendor_name", [
+  await populate(vendor, "raw.invoices", "vendor_name", [
     ["Vantage Partners", 4102],
     ["Vantage Partners LLC", 880],
     ["Vantage", 640],
@@ -265,7 +305,7 @@ export async function seedDemo(): Promise<void> {
     await val(channel, key, chType, type);
     await val(channel, key, chPaid, paid);
   }
-  await inject(channel, "raw.sessions", "utm_source", [
+  await populate(channel, "marketing.ad_spend", "channel", [
     ["google", 88200],
     ["google ads", 12400],
     ["adwords", 3100],
