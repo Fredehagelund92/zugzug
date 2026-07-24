@@ -153,8 +153,7 @@ machine; the mounted-count bound is the real test.
 
 ## Visual regression
 
-Deferred — see [#132](https://github.com/Fredehagelund92/zugzug/issues/132).
-Playwright screenshot snapshots are high-maintenance (platform-baseline flake) and
+Deferred. Playwright screenshot snapshots are high-maintenance (platform-baseline flake) and
 additive to correctness; axe covers a11y regressions and the grid perf budget covers
 the highest-risk rendering regression, so visual diffing waits until it can run in a
 pinned image.

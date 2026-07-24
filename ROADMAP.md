@@ -20,8 +20,8 @@ gaps the demo and self-host paths expose. One primary initiative at a time.
 
 Planned next. Subject to scope refinement.
 
-- **[#53] row-touched invalidation** — a publish-time hint over the presence WebSocket that collapses activity-badge staleness from a 5 s poll to a ~50 ms push.
-- **[#17] Review: bulk Skip action** — the floating bulk bar ships Merge; Skip and Map-to are the remaining actions from the original Review bulk spec.
+- **Row-touched invalidation** — a publish-time hint over the presence WebSocket that collapses activity-badge staleness from a 5 s poll to a ~50 ms push.
+- **Review: bulk Skip action** — the floating bulk bar ships Merge; Skip and Map-to are the remaining actions from the original Review bulk spec.
 - **Snowflake auth: password and SSO modes** — key-pair auth (`SNOWFLAKE_JWT`) ships today; password/SSO tracked against inbound demand.
 
 ---
@@ -34,16 +34,16 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 
 | Item | Status | Trigger |
 |---|---|---|
-| [#45 — Error recovery: per-record revert](https://github.com/Fredehagelund92/zugzug/issues/45) | Planned | After the first incident where published mutations need rolling back, or sufficient inbound demand. |
-| [#33 — Bulk operations in Review + cascade delete](https://github.com/Fredehagelund92/zugzug/issues/33) | Wanted | Merge action shipped; cascade delete (#18) + remaining bulk actions are the open scope. |
-| [#35 — Unified search (Cmd-K)](https://github.com/Fredehagelund92/zugzug/issues/35) | Wanted | After v1.0. |
-| [#3](https://github.com/Fredehagelund92/zugzug/issues/3), [#4](https://github.com/Fredehagelund92/zugzug/issues/4), [#5](https://github.com/Fredehagelund92/zugzug/issues/5) — AI-assisted suggestions | Exploring | Need design first; not adoption-blocking. |
+| Error recovery: per-record revert | Planned | After the first incident where published mutations need rolling back, or sufficient inbound demand. |
+| Bulk operations in Review + cascade delete | Wanted | Merge action shipped; cascade delete + remaining bulk actions are the open scope. |
+| Unified search (Cmd-K) | Wanted | After v1.0. |
+| AI-assisted suggestions | Exploring | Need design first; not adoption-blocking. |
 
 ### Collaboration
 
 | Item | Status | Trigger |
 |---|---|---|
-| History & rollback | Wanted | Superseded by #45 scope; after #45 ships. |
+| History & rollback | Wanted | Superseded by the error-recovery scope above; after that ships. |
 | Branching / sandbox | Out of scope | See below. |
 
 ### Auth + access control
