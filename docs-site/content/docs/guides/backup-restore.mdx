@@ -1,0 +1,42 @@
+---
+title: Backup & restore
+description: Postgres holds the state you can't recreate. If you self-host, this is the one thing not to skip.
+---
+
+Zug Zug keeps its durable, hard-to-recreate state in **Postgres** — drafts, audit
+log, users, table versions, and (in the default mode) the published records and
+mappings themselves. Backing it up is the one thing you must not skip.
+
+## What to back up (in priority order)
+
+1. **Postgres (`zugzug_app` schema) — critical.** Drafts and audit history live
+   nowhere else. In the default mode your published records and mappings live
+   here too. Lose this and you lose the workspace.
+2. **The server `/data` volume — important if you use webhooks.** It holds the
+   cursor key and, when webhooks are on, the AES-256-GCM **webhook master key**.
+   Losing the master key makes every stored webhook secret unrecoverable.
+3. **Your warehouse — usually not your job.** It's read-only to Zug Zug. Even in
+   direct-write mode, the `dim_<x>` / `map_<x>` tables can be re-materialized by
+   re-publishing from Postgres — so Postgres is still the source of truth.
+
+## Backing up Postgres
+
+For the Docker Compose stack (Postgres service `postgres`, user + db `zugzug`):
+
+```bash
+docker compose exec -T postgres \
+  pg_dump -U zugzug -d zugzug --format=custom \
+  > "zugzug-$(date +%Y%m%d-%H%M%S).dump"
+```
+
+For an external / managed Postgres, run `pg_dump` against `DATABASE_URL`:
+
+```bash
+pg_dump "$DATABASE_URL" --format=custom > zugzug-$(date +%Y%m%d).dump
+```
+
+<Callout title="Schedule it">
+A backup you don't take doesn't exist. Run the dump on a cron (daily is sane for
+most teams) and keep several days off-box. Match the cadence to how much curation
+work you're willing to lose.
+</Callout>

@@ -1,0 +1,37 @@
+---
+title: Connect a warehouse
+description: Point Zug Zug at a warehouse column with a read-only credential and start scanning source values.
+---
+
+Zug Zug reads your warehouse; it never writes to it unless you explicitly opt in.
+A read-only credential is enough to get started.
+
+## Attach the warehouse
+
+Set these in your server environment (`server/.env`):
+
+```bash
+ATTACH_WAREHOUSE=true
+WAREHOUSE_ADAPTER=motherduck   # or: snowflake
+MOTHERDUCK_TOKEN=...           # read-only token
+```
+
+With `ATTACH_WAREHOUSE=false` (the default demo mode), the whole
+record-and-publish workflow still works against Postgres — handy for trying
+things out without a warehouse at all.
+
+## Register a source
+
+A **source** is a warehouse column you want Zug Zug to watch. Register one
+against a table, and Zug Zug scans its `DISTINCT` values — with frequency counts
+— and surfaces the ones still waiting for a mapping in **Review**.
+
+<Callout title="Read-only, always">
+Scanning issues `SELECT DISTINCT` and nothing else. Your warehouse is never
+modified unless you configure a writable adapter and turn it on.
+</Callout>
+
+## Next
+
+Once values are mapped and approved, [publish](/docs/guides/publishing) to
+materialize the `dim_<x>` / `map_<x>` tables.

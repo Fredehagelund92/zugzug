@@ -1,0 +1,32 @@
+---
+title: What is Zug Zug?
+description: Warehouse-native master data management — the messy-values-to-one-record layer, self-hosted next to your data.
+---
+
+Zug Zug is **master data management, minus the enterprise**. Your warehouse fills
+with names nobody agrees on — `BCG`, `B.C.G.`, `Boston Consulting Group`. Zug Zug
+is where a team pins them to one approved **record**, and keeps the governed
+**lists** — Country, Currency, Partner — that everything downstream depends on.
+
+It runs **next to your warehouse**, sets up with **one command**, and it's yours
+to host.
+
+## The shape of it
+
+- **Read-only in.** Point Zug Zug at a warehouse column with a read-only
+  credential. It scans the distinct values still waiting for a mapping.
+- **Agreed by a human.** The team maps each source value to an approved record in
+  a spreadsheet-fast grid — drafts, review, bulk merge, roles, full audit history.
+- **Written back to your warehouse.** Publishing materializes `dim_<x>` /
+  `map_<x>` tables that whatever reads your warehouse can join directly.
+
+## Not entity resolution. Not an app builder.
+
+Curated lists, and the mappings into them — materialized where your warehouse can
+read them. No probabilistic matching, no golden-record survivorship, no app
+platform.
+
+<Cards>
+  <Card title="Quickstart" href="/docs/quickstart" description="Run the demo in 30 seconds with Docker." />
+  <Card title="Concepts" href="/docs/concepts" description="Tables, records, source values, mappings, publish." />
+</Cards>

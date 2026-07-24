@@ -1,0 +1,35 @@
+---
+title: Publishing
+description: How edits become versioned dim_/map_ tables — and why publishing is pull-first.
+---
+
+Editing is **instant** on the working copy — the grid feels like a spreadsheet.
+**Publish** is the single act that turns that working copy into something
+downstream can trust.
+
+## What publish does
+
+One publish folds every mapped **draft** and every record edit since the last
+version into a new numbered version (`v17` → `v18`) and materializes the
+`dim_<x>` / `map_<x>` tables. Nothing reaches your warehouse consumers until you
+publish. Unpublished changes are *derived* — the delta since the last version —
+not a separate staging queue.
+
+## Pull-first
+
+The recommended path is **pull-first**: published records live in Zug Zug's
+store, and your warehouse team ingests them through their **own** pipeline — a
+scheduled job, a Parquet snapshot, or the Pull API with `?since=` cursors. That
+keeps publishing inside the dev → prod, CI, and review path they already trust.
+
+## Direct write (opt-in)
+
+Prefer a direct push? Set `MOTHERDUCK_WRITABLE=true` and each publish `MERGE`s
+straight into a MotherDuck database. It's simpler for a solo setup, but it writes
+into your warehouse out-of-band — no environment promotion, tables mutated in
+place. Validate against a staging warehouse first.
+
+<Callout type="warn" title="It's the least-tested path">
+Direct write is a convenience, not the default. If a data team owns your
+warehouse, pull-first is almost always the right call.
+</Callout>

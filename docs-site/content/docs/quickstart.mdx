@@ -1,0 +1,27 @@
+---
+title: Quickstart
+description: See Zug Zug agree on a name in 30 seconds — no warehouse or account needed.
+---
+
+Requires [Docker](https://docs.docker.com/get-docker/). No warehouse or Google
+account needed.
+
+```bash
+git clone https://github.com/Fredehagelund92/zugzug.git
+cd zugzug
+docker compose up
+```
+
+Open `http://localhost:8080` and create your account — the first user becomes the
+admin. The demo boots with sample reference tables like `Country` and
+`Product Category` so you can explore the grid right away.
+
+<Callout title="First run">
+Building the images takes a few minutes the first time. Later runs start in
+seconds.
+</Callout>
+
+To connect your own warehouse or turn off the demo seed, see the
+[server configuration](https://github.com/Fredehagelund92/zugzug/blob/main/server/.env.example).
+Running it for real? Read the
+[deploy guide](https://github.com/Fredehagelund92/zugzug/blob/main/docs/deploy.md).

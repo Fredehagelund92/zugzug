@@ -1,0 +1,20 @@
+---
+title: Warehouse adapters
+description: The interface Zug Zug reads (and optionally writes) your warehouse through.
+---
+
+A **warehouse adapter** is the TypeScript interface (`WarehouseAdapter`) through
+which Zug Zug talks to a specific warehouse technology. Each implements a
+read path (the distinct-value scan) and an optional write path.
+
+## Shipped today
+
+- **DuckDB / MotherDuck** — the reference read path, and the writable adapter
+  (`MERGE` into MotherDuck) behind `MOTHERDUCK_WRITABLE`.
+- **Snowflake** — read path shipped; key-pair auth (`SNOWFLAKE_JWT`) today.
+
+## Community-roadmapped
+
+Postgres-as-warehouse, BigQuery, Databricks, and Redshift are wanted but not yet
+built. The adapter is a clean interface — a new one is a focused contribution.
+Open an issue to discuss the design first.
