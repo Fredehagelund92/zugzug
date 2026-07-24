@@ -115,10 +115,10 @@ jobs:
         run: curl -fsS http://localhost:8080/api/health | grep -q '"ok":true'
       - name: Smoke — SPA is served
         run: curl -fsS http://localhost:8080/ | grep -q '<title'
-      - name: Smoke — demo dimensions were seeded
+      - name: Smoke — demo tables were seeded
         run: |
           docker compose exec -T postgres \
-            psql -U zugzug -d zugzug -tAc "select count(*) from zugzug_app.dimension" \
+            psql -U zugzug -d zugzug -tAc "select count(*) from zugzug_app.reference_table" \
             | grep -qE '^[1-9]'
       - name: Smoke — first signup succeeds and becomes admin
         run: |
