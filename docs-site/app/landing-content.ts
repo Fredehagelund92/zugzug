@@ -71,7 +71,7 @@ export const LANDING_CSS = `
   .sec-head .eyebrow{margin-bottom:10px}
 
   /* ---------- hero ---------- */
-  .hero{padding:88px 0 44px}
+  .hero{padding-block:88px 44px}
   .hero h1{font-family:var(--display); font-weight:700; letter-spacing:-.032em;
     line-height:1.02; font-size:clamp(2.7rem,6.1vw,4.7rem); max-width:15ch; margin:26px 0 0}
   .hero h1 .em{color:var(--accent)}
@@ -213,7 +213,7 @@ export const LANDING_CSS = `
     background:var(--tint); transform:translateY(-2px)}
 
   /* closing CTA */
-  .closer{text-align:center; border-top:1px solid var(--line); padding:96px 0}
+  .closer{text-align:center; border-top:1px solid var(--line); padding-block:96px}
   .closer .eyebrow{justify-content:center; display:block; margin-bottom:26px}
   .closer h2{font-family:var(--display); font-weight:700; letter-spacing:-.025em;
     font-size:clamp(2rem,4.5vw,3.1rem); line-height:1.05; max-width:18ch; margin:0 auto}
@@ -258,7 +258,9 @@ export const LANDING_CSS = `
     .sources{gap:12px}
     .connectors{display:none}
     .out{height:auto}
-    .record{position:static; transform:none}
+    /* full-width on mobile: size to content, keep record as the badge's positioning context */
+    .record{position:relative; top:auto; transform:none; height:auto; padding-block:15px}
+    .record .badge{top:15px; transform:none}
     .tables{position:static; margin-top:12px}
     .chip.src::after, .record::before{display:none}
     .joinline{white-space:normal; overflow-x:visible; line-height:1.85}
@@ -267,9 +269,9 @@ export const LANDING_CSS = `
   }
   @media(max-width:560px){
     .wrap{padding-inline:20px}
-    .hero{padding:56px 0 32px}
+    .hero{padding-block:56px 32px}
     section{padding:68px 0}
-    .closer{padding:72px 0}
+    .closer{padding-block:72px}
     .sec-head{margin-bottom:36px}
     .junction{padding:20px 18px 18px}
     .joinline{white-space:normal; overflow-x:visible; line-height:1.9}
@@ -315,8 +317,8 @@ export const LANDING_HTML = `
     <h1>Master data management, <span class="em">minus the enterprise</span>.</h1>
     <p class="lede">Every warehouse fills with names nobody agrees on — <code>BCG</code>, <code>B.C.G.</code>, <code>Boston Consulting Group</code>. Zug Zug pins them to one approved record, and keeps the lists everything downstream depends on. Right next to your warehouse. One command to run.</p>
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/Fredehagelund92/zugzug"><span class="prompt">$</span> docker compose up</a>
-      <a class="btn btn-ghost" href="/docs">Read the docs →</a>
+      <a class="btn btn-primary" href="https://demo.zugzug.dev">Try the live demo →</a>
+      <a class="btn btn-ghost" href="https://github.com/Fredehagelund92/zugzug"><span class="prompt">$</span> docker compose up</a>
     </div>
 
     <!-- SIGNATURE: junction diagram -->
@@ -457,7 +459,6 @@ export const LANDING_HTML = `
     <nav>
       <a href="/docs">Docs</a>
       <a href="https://github.com/Fredehagelund92/zugzug">GitHub</a>
-      <a href="https://github.com/Fredehagelund92/zugzug/tree/main/docs/adr">ADRs</a>
       <a href="https://github.com/Fredehagelund92/zugzug/blob/main/docs/deploy.md">Deploy</a>
     </nav>
   </div>
