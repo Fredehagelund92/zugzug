@@ -109,7 +109,10 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   await publishBtn.click();
 
   // ── 9. Confirm in the PublishPreviewDialog ────────────────────────────────
-  const previewDialog = page.getByRole("dialog", { name: /publish v/i });
+  // The demo seed leaves in-review drafts in several tables, so the footer
+  // Publish opens the aggregate dialog ("Publish N tables?"); with a single
+  // table pending it's titled "Publish vN". Match either.
+  const previewDialog = page.getByRole("dialog", { name: /^publish/i });
   await expect(previewDialog).toBeVisible({ timeout: 5_000 });
 
   // The dialog lists the raw value being published.
@@ -121,7 +124,10 @@ test("seed source values, map in Review, and publish", async ({ page, request })
 
   // ── 10. Assert the mapping is published ───────────────────────────────────
   // Switch to "Mapped" filter and confirm our raw value now appears there.
-  await page.getByRole("button", { name: "Mapped" }).click();
+  // Scope to the filter toolbar (Needs review / All / Mapped) so we don't match
+  // the row-level "Mapped" status buttons that the seed's mapped rows render.
+  const filterBar = page.getByRole("button", { name: "Needs review" }).locator("..");
+  await filterBar.getByRole("button", { name: "Mapped", exact: true }).click();
 
   const mappedSection = page.locator("section").filter({ hasText: "Country" }).first();
   await expect(mappedSection).toBeVisible({ timeout: 10_000 });

@@ -5,11 +5,13 @@
 
 import { runMigrations } from "../drizzle/migrate.ts";
 import { seedDemo } from "./seed.ts";
+import { generateDemoWarehouse } from "./seed-warehouse.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { provisionTenant } from "./tenant.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
+import { env } from "./env.ts";
 
 const seed = process.argv.includes("--seed");
 
@@ -67,10 +69,16 @@ if (seed) {
     console.log("· default tenant provisioned (register warehouse databases via the UI)");
   }
 
+  // Bundled demo warehouse: generate the local DuckDB file the seed will scan.
+  if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
+    console.log("· generating demo warehouse…");
+    await generateDemoWarehouse(env.duckWarehousePath);
+  }
+
   // Warehouse adapter warm-up removed: the registry now lazy-loads per-tenant
   // on first request. Bootstrap doesn't need a representative tenant id.
   await seedDemo();
-  console.log("· demo refTables seeded (Country, Channel)");
+  console.log("· demo dataset seeded");
 }
 
 console.log("\nDone.\n");

@@ -37,13 +37,14 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://zugzug:${POSTGRES_PASSWORD}@postgres:5432/zugzug}
       ORIGIN: ${ORIGIN:?set ORIGIN in .env}
-      SEED_DEMO: "false"
+      SEED_DEMO: ${SEED_DEMO:-false}
       DEV_BYPASS_AUTH: "false"
       ZUGZUG_SELF_HOSTED: "1"
       ZUGZUG_DATA_DIR: /data
       ATTACH_WAREHOUSE: ${ATTACH_WAREHOUSE:-false}
       WAREHOUSE_ADAPTER: ${WAREHOUSE_ADAPTER:-}
       MOTHERDUCK_TOKEN: ${MOTHERDUCK_TOKEN:-}
+      DUCK_WAREHOUSE_PATH: ${DUCK_WAREHOUSE_PATH:-}
       MOTHERDUCK_WRITABLE: ${MOTHERDUCK_WRITABLE:-false}
       ZUGZUG_DB: ${ZUGZUG_DB:-zugzug}
       OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
