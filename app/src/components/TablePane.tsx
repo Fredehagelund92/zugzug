@@ -414,6 +414,7 @@ function RecordsBody({
         label: "Record",
         config: { type: "text" },
         pinnedLeft: true,
+        noValidation: true,
         editable: !external && canEdit,
         render: (c) =>
           c.unresolved ? (
@@ -446,6 +447,7 @@ function RecordsBody({
         label: "Key",
         config: { type: "text" },
         pinnedLeft: true,
+        noValidation: true,
         editable: false,
         render: (c) => (
           <span className="truncate font-mono text-[12px] text-accent">

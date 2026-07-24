@@ -449,8 +449,15 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                     )?.value ?? null
                   }
                   onClose={() => {
+                    // Only close the menu here — do NOT clear menuAnchorRect.
+                    // The "Conditional formatting…" / "Edit description…" items call
+                    // their open-handler and then onClose(); clearing the rect here
+                    // would strip the anchor out from under the popover that just
+                    // opened (fatal on the right-click path, where menuAnchorRef is
+                    // also null), leaving it stuck at the top-left corner / unrendered.
+                    // Each menu-open path re-sets the anchor, and each popover clears
+                    // it on its own close, so a stale value is never read.
                     setMenuFor(null);
-                    setMenuAnchorRect(null);
                   }}
                   onRename={(label) => onRenameColumn?.(c.field, label)}
                   onSort={(dir) => setSort(dir ? { field: c.field, dir } : null)}
@@ -463,7 +470,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                       : undefined
                   }
                   onSaveValidation={
-                    onSaveColumnValidation
+                    onSaveColumnValidation && !c.noValidation
                       ? (next) => onSaveColumnValidation(c.field, next)
                       : undefined
                   }

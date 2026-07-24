@@ -69,6 +69,9 @@ export interface ColumnDef<Row> {
   align?: "left" | "right";
   rules?: ConditionalRule[];
   description?: string;
+  /** System columns (e.g. the key/record columns) whose values are already
+   *  constrained — the "Validation…" menu is suppressed for them. */
+  noValidation?: boolean;
   /** Discriminator used by the right-click menu and rendering layer. */
   columnKind?: "fk" | "lookup";
   /** For lookup columns, the FK column's field name. */
