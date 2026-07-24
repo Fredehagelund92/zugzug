@@ -1,5 +1,5 @@
 /**
- * Integration tests for POST /api/refTables/:refTableId/suggest endpoint
+ * Integration tests for POST /api/tables/:refTableId/suggest endpoint
  *
  * Tests the full HTTP API contract for AI-powered suggestions:
  * - 201 success with draft creation, source='ai', confidence level
@@ -145,12 +145,12 @@ beforeEach(async () => {
   await resetDb();
 });
 
-test("POST /api/refTables/:id/suggest returns 400 when raw_value is missing", async () => {
+test("POST /api/tables/:id/suggest returns 400 when raw_value is missing", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({}),
@@ -166,12 +166,12 @@ test("POST /api/refTables/:id/suggest returns 400 when raw_value is missing", as
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest returns 400 when raw_value is empty", async () => {
+test("POST /api/tables/:id/suggest returns 400 when raw_value is empty", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "" }),
@@ -186,7 +186,7 @@ test("POST /api/refTables/:id/suggest returns 400 when raw_value is empty", asyn
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest returns 400 when AI is not configured", async () => {
+test("POST /api/tables/:id/suggest returns 400 when AI is not configured", async () => {
   const ctx = await createTestCtx();
 
   // Note: This test intentionally doesn't enable AI, which should return 400
@@ -195,7 +195,7 @@ test("POST /api/refTables/:id/suggest returns 400 when AI is not configured", as
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -210,12 +210,12 @@ test("POST /api/refTables/:id/suggest returns 400 when AI is not configured", as
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest returns 404 for non-existent refTable", async () => {
+test("POST /api/tables/:id/suggest returns 404 for non-existent refTable", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/nonexistent_xyz/suggest`, {
+    new Request(`http://localhost/api/tables/nonexistent_xyz/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -230,12 +230,12 @@ test("POST /api/refTables/:id/suggest returns 404 for non-existent refTable", as
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest returns 401 when not authenticated", async () => {
+test("POST /api/tables/:id/suggest returns 401 when not authenticated", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -248,7 +248,7 @@ test("POST /api/refTables/:id/suggest returns 401 when not authenticated", async
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest returns 403 when user is viewer (lacks curate permission)", async () => {
+test("POST /api/tables/:id/suggest returns 403 when user is viewer (lacks curate permission)", async () => {
   const ctx = await createTestCtx();
 
   // Downgrade user to viewer role
@@ -260,7 +260,7 @@ test("POST /api/refTables/:id/suggest returns 403 when user is viewer (lacks cur
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -273,7 +273,7 @@ test("POST /api/refTables/:id/suggest returns 403 when user is viewer (lacks cur
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest returns 201 with cached suggestion when AI enabled", async () => {
+test("POST /api/tables/:id/suggest returns 201 with cached suggestion when AI enabled", async () => {
   const ctx = await createTestCtx();
 
   // Enable AI if the columns exist
@@ -310,7 +310,7 @@ test("POST /api/refTables/:id/suggest returns 201 with cached suggestion when AI
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: rawValue }),
@@ -341,7 +341,7 @@ test("POST /api/refTables/:id/suggest returns 201 with cached suggestion when AI
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest includes reasoning in response", async () => {
+test("POST /api/tables/:id/suggest includes reasoning in response", async () => {
   const ctx = await createTestCtx();
 
   // Enable AI if the columns exist
@@ -376,7 +376,7 @@ test("POST /api/refTables/:id/suggest includes reasoning in response", async () 
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: rawValue }),
@@ -391,7 +391,7 @@ test("POST /api/refTables/:id/suggest includes reasoning in response", async () 
   await cleanupCtx(ctx);
 });
 
-test("POST /api/refTables/:id/suggest response has all draft fields", async () => {
+test("POST /api/tables/:id/suggest response has all draft fields", async () => {
   const ctx = await createTestCtx();
 
   // Enable AI if the columns exist
@@ -425,7 +425,7 @@ test("POST /api/refTables/:id/suggest response has all draft fields", async () =
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/refTables/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: rawValue }),

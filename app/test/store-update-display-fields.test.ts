@@ -39,7 +39,7 @@ test("updateFieldDisplayFields PATCHes the field with stringified field_config",
   await updateFieldDisplayFields("partner", "country", ["label", "iso_code", "region"]);
   const patch = calls.find((c) => c.init?.method === "PATCH");
   expect(patch).toBeDefined();
-  expect(patch!.path).toBe("/refTables/partner/fields/country");
+  expect(patch!.path).toBe("/tables/partner/fields/country");
   const body = JSON.parse(String(patch!.init?.body));
   const cfg = JSON.parse(body.field_config);
   expect(cfg.displayFields).toEqual(["label", "iso_code", "region"]);
@@ -48,5 +48,5 @@ test("updateFieldDisplayFields PATCHes the field with stringified field_config",
 test("encodes refTable and field params for URL safety", async () => {
   await updateFieldDisplayFields("refTable with space", "f/k", ["label"]);
   const patch = calls.find((c) => c.init?.method === "PATCH");
-  expect(patch!.path).toBe("/refTables/refTable%20with%20space/fields/f%2Fk");
+  expect(patch!.path).toBe("/tables/refTable%20with%20space/fields/f%2Fk");
 });

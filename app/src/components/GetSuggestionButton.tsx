@@ -9,7 +9,7 @@ interface Props {
   rawValue: string;
 }
 
-/** Calls POST /api/refTables/:id/suggest for an unmapped value, shows a
+/** Calls POST /api/tables/:id/suggest for an unmapped value, shows a
  *  loading spinner and surfaces the result (or error) as a toast.
  *  The draft is stored server-side and the store's refreshDrafts() fires
  *  automatically inside generateSuggestion, so the review panel updates. */

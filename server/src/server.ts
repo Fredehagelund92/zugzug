@@ -104,7 +104,7 @@ function gateOrJson(
 export async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
   const url = new URL(req.url);
   const { pathname } = url;
-  const seg = pathname.split("/").filter(Boolean); // ["api","refTables",":id",...]
+  const seg = pathname.split("/").filter(Boolean); // ["api","tables",":id",...]
   const method = req.method;
 
   if (method === "OPTIONS")
@@ -146,7 +146,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     seg.splice(1, 2); // remove "t" and the slug
   }
 
-  if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/refTables", { status: 404 });
+  if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/tables", { status: 404 });
 
   // Auth routes — no session required for signup/login/logout/config/oidc/dev
   if (seg[1] === "auth") {
@@ -1051,11 +1051,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const page = await reqRepo.listRecordHistory(tableId, rowKey, { before, limit });
           return json(page);
         }
-        return json({ error: "not found" }, 404);
+        // Fall through to the shared table routes below (list/CRUD/sub-resources).
       }
 
-      if (seg[1] === "refTables") {
-        // GET /api/refTables[?full=true] ; POST /api/refTables {name}
+      if (seg[1] === "tables") {
+        // GET /api/tables[?full=true] ; POST /api/tables {name}
         // ?full=true returns the full MappingRefTable shapes (record rows,
         // values, fields, …) in one response — kills the N+1 the client used to
         // make at boot (1 list + N detail fetches).
@@ -1075,23 +1075,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             }
             return json(await reqRepo.listRefTables());
           }
-          if (method === "POST") {
-            const denied = gateOrJson(tenantCtx, "manage_adapter");
-            if (denied) return denied;
-            const { name, keyKind } = (await req.json()) as {
-              name: string;
-              keyKind?: "slug" | "external_id";
-            };
-            return json({ id: await reqRepo.addRefTable(name, [], { keyKind }, me) }, 201);
-          }
+          // POST /api/tables (create) is handled by the orchestrator route above.
         }
         const id = seg[2] ? decodeURIComponent(seg[2]) : "";
-        // GET /api/refTables/:id
+        // GET /api/tables/:id
         if (seg.length === 3 && id && method === "GET") {
           const refTable = await reqRepo.getRefTable(id);
           return refTable ? json(refTable) : json({ error: "not found" }, 404);
         }
-        // GET /api/refTables/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
+        // GET /api/tables/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
         if (seg[3] === "scan-values" && seg.length === 4 && id && method === "GET") {
           const filter = url.searchParams.get("filter") ?? "new";
           if (filter !== "new" && filter !== "mapped" && filter !== "all") {
@@ -1102,7 +1094,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
           return json(await reqRepo.getSourceScanValuesPage(id, { filter, q, after, limit }));
         }
-        // GET /api/refTables/:id/clusters?filter=new|mapped|all
+        // GET /api/tables/:id/clusters?filter=new|mapped|all
         if (seg[3] === "clusters" && seg.length === 4 && id && method === "GET") {
           const filter = url.searchParams.get("filter") ?? "new";
           if (filter !== "new" && filter !== "mapped" && filter !== "all") {
@@ -1110,7 +1102,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           }
           return json(await reqRepo.getRefTableClusters(id, { filter }));
         }
-        // POST /api/refTables/:id/scan — rescan this refTable's wired sources and
+        // POST /api/tables/:id/scan — rescan this refTable's wired sources and
         // re-materialize its source_scan_value rows. Faster than POST /api/sources/scan.
         if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
@@ -1118,15 +1110,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           await reqRepo.scanOneDim(id);
           return json({ ok: true });
         }
-        // GET /api/refTables/:id/publish-state — version, last publish, pending work
+        // GET /api/tables/:id/publish-state — version, last publish, pending work
         if (seg[3] === "publish-state" && seg.length === 4 && id && method === "GET") {
           return json(await reqRepo.getPublishState(id));
         }
-        // GET /api/refTables/:id/versions — published version history
+        // GET /api/tables/:id/versions — published version history
         if (seg[3] === "versions" && seg.length === 4 && id && method === "GET") {
           return json(await reqRepo.listVersions(id));
         }
-        // POST /api/refTables/:id/rollback — restore a snapshotted version (admin only)
+        // POST /api/tables/:id/rollback — restore a snapshotted version (admin only)
         if (seg[3] === "rollback" && seg.length === 4 && id && method === "POST") {
           const gate = requireAdmin(tenantCtx);
           if (!gate.ok) return json({ error: "forbidden" }, 403);
@@ -1138,7 +1130,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const { rollbackToVersion } = await import("./repo-rollback.ts");
           return json(await rollbackToVersion(id, tenantCtx.tenantId, toVersion, me));
         }
-        // PATCH /api/refTables/:id — update orderingMode / description / color / ownerUserId
+        // PATCH /api/tables/:id — update orderingMode / description / color / ownerUserId
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1146,7 +1138,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const refTable = await reqRepo.updateRefTableMeta(id, patch, me);
           return json({ ok: true, refTable });
         }
-        // DELETE /api/refTables/:id — permanently remove a table
+        // DELETE /api/tables/:id — permanently remove a table
         if (seg.length === 3 && id && method === "DELETE") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1154,7 +1146,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
         }
         if (seg[3] === "drafts") {
-          // GET /api/refTables/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
+          // GET /api/tables/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
           if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
           if (seg.length === 4 && method === "PUT") {
             const denied = gateOrJson(tenantCtx, "curate");
@@ -1181,7 +1173,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
             return noContent();
           }
-          // POST /api/refTables/:id/drafts/reject
+          // POST /api/tables/:id/drafts/reject
           if (seg.length === 5 && seg[4] === "reject" && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1192,7 +1184,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(result);
           }
         }
-        // POST /api/refTables/:id/sources — wire a warehouse column to a refTable.
+        // POST /api/tables/:id/sources — wire a warehouse column to a refTable.
         //   Qualified: { source: { databaseId, schemaName, tableName, columnName } }
         //   Bare:      { source: { table: "schema.table", column } }
         //              or { table: "schema.table", column }   (top-level bare)
@@ -1253,7 +1245,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           );
           return new Response(null, { status: 204, headers: corsHeaders });
         }
-        // DELETE /api/refTables/:id/sources — unwire a column. Same input
+        // DELETE /api/tables/:id/sources — unwire a column. Same input
         // shapes as the POST above (bare "schema.table"+column resolves to the
         // default database; qualified passes databaseId explicitly).
         if (seg[3] === "sources" && seg.length === 4 && method === "DELETE") {
@@ -1291,7 +1283,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           await removeSource(id, qualified, tenantCtx.tenantId);
           return new Response(null, { status: 204, headers: corsHeaders });
         }
-        // POST /api/refTables/:id/derive {table, column, nameColumn?} — seed record
+        // POST /api/tables/:id/derive {table, column, nameColumn?} — seed record
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1303,7 +1295,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           };
           return json(await reqRepo.deriveRecord(id, table, column, nameColumn, { force }, me));
         }
-        // POST /api/refTables/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
+        // POST /api/tables/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1316,7 +1308,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           }
           return json(await reqRepo.importRecord(id, rows, me));
         }
-        // POST /api/refTables/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedRefTableId?, displayFields?} — add an attribute column
+        // POST /api/tables/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedRefTableId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
@@ -1363,7 +1355,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             ),
           );
         }
-        // POST /api/refTables/:id/fields/:field/options {label} — append a select option
+        // POST /api/tables/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1379,7 +1371,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           );
           return res ? json(res) : json({ error: "not a select column" }, 400);
         }
-        // PUT/PATCH/DELETE /api/refTables/:id/fields/:field — rename / change type / update meta / delete
+        // PUT/PATCH/DELETE /api/tables/:id/fields/:field — rename / change type / update meta / delete
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
@@ -1468,7 +1460,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
           if (seg[5] === "variants" && seg.length === 6 && method === "GET")
             return json(await reqRepo.listVariants(id, ck));
-          // PUT /api/refTables/:id/record/:key/field/:field {value}
+          // PUT /api/tables/:id/record/:key/field/:field {value}
           if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1476,7 +1468,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null, me);
             return noContent();
           }
-          // PUT /api/refTables/:id/record/:key/position
+          // PUT /api/tables/:id/record/:key/position
           if (seg[5] === "position" && seg.length === 6 && method === "PUT" && ck) {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1524,7 +1516,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             }
           }
         }
-        // POST /api/refTables/:id/commit
+        // POST /api/tables/:id/commit
         if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "commit");
           if (denied) return denied;
@@ -1536,13 +1528,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             : undefined;
           return json(await reqRepo.commit(id, me, draftKeys));
         }
-        // POST /api/refTables/:id/revert — restore all changed records to the last published version
+        // POST /api/tables/:id/revert — restore all changed records to the last published version
         if (seg[3] === "revert" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
           return json(await reqRepo.revertToPublished(id, me));
         }
-        // POST /api/refTables/:id/positions/rebalance
+        // POST /api/tables/:id/positions/rebalance
         if (
           seg[3] === "positions" &&
           seg[4] === "rebalance" &&
@@ -1592,7 +1584,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           );
           return json({ ok: true, rebalanced, rebalancedAt: gateResult.last_rebalanced_at });
         }
-        // POST /api/refTables/:id/suggest {raw_value, force_refresh?} — AI suggestion
+        // POST /api/tables/:id/suggest {raw_value, force_refresh?} — AI suggestion
         if (seg[3] === "suggest" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1714,7 +1706,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             throw e;
           }
         }
-        // GET /api/refTables/:id/snapshot.parquet — Parquet export of the refTable's map table
+        // GET /api/tables/:id/snapshot.parquet — Parquet export of the refTable's map table
         if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
           const refTableId = seg[2]!;
           const refTable = await reqRepo.getRefTable(refTableId);

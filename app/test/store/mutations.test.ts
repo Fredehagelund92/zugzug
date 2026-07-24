@@ -12,7 +12,7 @@ beforeEach(() => {
   window.history.pushState({}, "", "/app/acme/tables");
 });
 
-// Shared fixture — a refTable returned by /refTables
+// Shared fixture — a refTable returned by /tables
 const REF_TABLE = {
   id: "d1",
   refTable: "Vendors",
@@ -55,12 +55,12 @@ describe("saveDraft — optimistic update", () => {
     });
 
     server.use(
-      http.put("/api/t/:slug/refTables/:refTableId/drafts", async () => {
+      http.put("/api/t/:slug/tables/:refTableId/drafts", async () => {
         await putPending;
         return HttpResponse.json({ ok: true });
       }),
       // refreshDrafts fires after the PUT resolves — handle it so the test can settle
-      http.get("/api/t/:slug/refTables/:refTableId/drafts", () => HttpResponse.json([SAVED_DRAFT])),
+      http.get("/api/t/:slug/tables/:refTableId/drafts", () => HttpResponse.json([SAVED_DRAFT])),
     );
 
     const store = await import("../../src/store.ts");
@@ -89,8 +89,8 @@ describe("saveDraft — optimistic update", () => {
 describe("saveDraft — success", () => {
   test("draft persists after PUT 200 and background refresh", async () => {
     server.use(
-      http.put("/api/t/:slug/refTables/:refTableId/drafts", () => HttpResponse.json({ ok: true })),
-      http.get("/api/t/:slug/refTables/:refTableId/drafts", () => HttpResponse.json([SAVED_DRAFT])),
+      http.put("/api/t/:slug/tables/:refTableId/drafts", () => HttpResponse.json({ ok: true })),
+      http.get("/api/t/:slug/tables/:refTableId/drafts", () => HttpResponse.json([SAVED_DRAFT])),
     );
 
     const store = await import("../../src/store.ts");
@@ -111,7 +111,7 @@ describe("saveDraft — success", () => {
 describe("saveDraft — revert on failure", () => {
   test("optimistic draft is rolled back when PUT returns 500", async () => {
     server.use(
-      http.put("/api/t/:slug/refTables/:refTableId/drafts", () =>
+      http.put("/api/t/:slug/tables/:refTableId/drafts", () =>
         HttpResponse.json({ error: "server error" }, { status: 500 }),
       ),
     );
@@ -134,8 +134,8 @@ describe("saveDraft — revert on failure", () => {
   test("previous draft is restored if one existed before the failing save", async () => {
     // First, successfully save a draft so there is a pre-existing state
     server.use(
-      http.put("/api/t/:slug/refTables/:refTableId/drafts", () => HttpResponse.json({ ok: true })),
-      http.get("/api/t/:slug/refTables/:refTableId/drafts", () =>
+      http.put("/api/t/:slug/tables/:refTableId/drafts", () => HttpResponse.json({ ok: true })),
+      http.get("/api/t/:slug/tables/:refTableId/drafts", () =>
         HttpResponse.json([
           { ...SAVED_DRAFT, status: "skipped", targetLabel: null, targetKey: null },
         ]),
@@ -152,7 +152,7 @@ describe("saveDraft — revert on failure", () => {
     // Now the server will fail
     server.resetHandlers();
     server.use(
-      http.put("/api/t/:slug/refTables/:refTableId/drafts", () =>
+      http.put("/api/t/:slug/tables/:refTableId/drafts", () =>
         HttpResponse.json({ error: "conflict" }, { status: 500 }),
       ),
     );
@@ -176,17 +176,17 @@ describe("createTable — success", () => {
     // Boot returns ONLY the existing refTable, so d2 is absent after initStore().
     server.use(
       http.post("/api/t/:slug/tables", () => HttpResponse.json({ id: "d2" })),
-      http.get("/api/t/:slug/refTables", () => HttpResponse.json([REF_TABLE])),
+      http.get("/api/t/:slug/tables", () => HttpResponse.json([REF_TABLE])),
     );
 
     const store = await import("../../src/store.ts");
     await store.initStore();
 
-    // Swap the /refTables handler AFTER boot: now d2 only enters the cache if
+    // Swap the /tables handler AFTER boot: now d2 only enters the cache if
     // createTable actually runs its post-create refreshDims. (If it didn't, refTables
     // would stay [REF_TABLE] and the assertion below would fail — this gates the refresh,
     // not what initStore already loaded.)
-    server.use(http.get("/api/t/:slug/refTables", () => HttpResponse.json([REF_TABLE, NEW_DIM])));
+    server.use(http.get("/api/t/:slug/tables", () => HttpResponse.json([REF_TABLE, NEW_DIM])));
 
     const id = await store.createTable({
       name: "Products",

@@ -43,7 +43,7 @@ describe("useRefTableClusters", () => {
     expect(result.current.error).toBeNull();
 
     const calledPath = mockFetch.mock.calls[0][0] as string;
-    expect(calledPath).toContain("/refTables/d1/clusters");
+    expect(calledPath).toContain("/tables/d1/clusters");
     expect(calledPath).toContain("filter=new");
   });
 

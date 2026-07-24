@@ -138,7 +138,7 @@ export function PullApi() {
             <tbody>
               {refTables.map((d) => {
                 const curlFor = (path: string) =>
-                  `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/refTables/${d.slug}/${path}`;
+                  `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/tables/${d.slug}/${path}`;
                 return (
                   <tr
                     key={d.slug}

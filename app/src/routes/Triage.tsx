@@ -41,7 +41,7 @@ import { apiFetch } from "../api";
    the *active* section lazy-fetches its scan_value page via useRefTableValuesPage.
    Switching sections re-keys the hook. Search (?q=) filters server-side; the
    ?filter= URL key roundtrips new/all/mapped. Per-section Rescan button calls
-   POST /api/refTables/:id/scan, then refetches. */
+   POST /api/tables/:id/scan, then refetches. */
 
 type Filter = "new" | "all" | "mapped";
 type RStatus = "mapped" | "new" | "skipped" | "rejected";
@@ -401,7 +401,7 @@ function TriageInner() {
   };
 
   const triggerRescan = useCallback(async (refTableId: string) => {
-    const r = await apiFetch(`/refTables/${encodeURIComponent(refTableId)}/scan`, {
+    const r = await apiFetch(`/tables/${encodeURIComponent(refTableId)}/scan`, {
       method: "POST",
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);

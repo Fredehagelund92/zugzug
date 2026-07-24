@@ -10,7 +10,7 @@ export const handlers = [
   http.get("/api/auth/me", () =>
     HttpResponse.json({ id: "u1", name: "Me", email: "me@example.com", initials: "M" }),
   ),
-  http.get("/api/t/:slug/refTables", () =>
+  http.get("/api/t/:slug/tables", () =>
     HttpResponse.json([
       {
         id: "d1",

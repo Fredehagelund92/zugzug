@@ -16,7 +16,7 @@ test("non-member of B is forbidden from B's routes", async () => {
   await makeWorkspace("w_iso_a1");
   await makeWorkspace("w_iso_b1");
   const { cookie } = await makeMember("u_iso_a1", "w_iso_a1", "admin"); // member of A only
-  const res = await req("GET", "/api/t/w_iso_b1/refTables", cookie);
+  const res = await req("GET", "/api/t/w_iso_b1/tables", cookie);
   expect(res.status).toBe(403);
 });
 
@@ -24,7 +24,7 @@ test("non-member of B is forbidden from a write route in B", async () => {
   await makeWorkspace("w_iso_a2");
   await makeWorkspace("w_iso_b2");
   const { cookie } = await makeMember("u_iso_a2", "w_iso_a2", "admin"); // member of A only
-  const res = await req("POST", "/api/t/w_iso_b2/refTables", cookie, { name: "X" });
+  const res = await req("POST", "/api/t/w_iso_b2/tables", cookie, { name: "X" });
   expect(res.status).toBe(403);
 });
 
@@ -33,7 +33,7 @@ test("non-member of B is forbidden from a write route in B", async () => {
 test("unknown workspace slug is 404", async () => {
   await makeWorkspace("w_iso_a3");
   const { cookie } = await makeMember("u_iso_a3", "w_iso_a3", "admin");
-  const res = await req("GET", "/api/t/nope-nope/refTables", cookie);
+  const res = await req("GET", "/api/t/nope-nope/tables", cookie);
   expect(res.status).toBe(404);
 });
 
@@ -45,13 +45,13 @@ test("a table in A is not visible from B, but B sees its own", async () => {
   const aDim = await makeRefTable("w_iso_a4", "Vendors");
   const bDim = await makeRefTable("w_iso_b4", "Customers");
   const { cookie: bCookie } = await makeMember("u_iso_b4", "w_iso_b4", "admin"); // member of B
-  const list = await req("GET", "/api/t/w_iso_b4/refTables", bCookie);
+  const list = await req("GET", "/api/t/w_iso_b4/tables", bCookie);
   expect(list.status).toBe(200);
   const refTables = (await list.json()) as { id: string }[];
   // B sees its OWN table — proves the list is real and workspace-scoped, so the
   // absence of A's table below is a meaningful isolation result (not an empty list).
   expect(refTables.some((d) => d.id === bDim)).toBe(true);
   expect(refTables.some((d) => d.id === aDim)).toBe(false);
-  const direct = await req("GET", `/api/t/w_iso_b4/refTables/${aDim}`, bCookie);
+  const direct = await req("GET", `/api/t/w_iso_b4/tables/${aDim}`, bCookie);
   expect(direct.status).toBe(404);
 });

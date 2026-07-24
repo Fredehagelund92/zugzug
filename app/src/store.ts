@@ -387,10 +387,10 @@ async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
 async function refreshDims(): Promise<void> {
   // Single HTTP request returns every refTable's full shape — the old code did 1
   // list call + N detail fetches (N+1) on every mutation that refreshed refTables.
-  refTables = await api<MappingRefTable[]>("/refTables?full=true");
+  refTables = await api<MappingRefTable[]>("/tables?full=true");
 }
 async function refreshDim(refTableId: string): Promise<void> {
-  const refTable = await api<MappingRefTable>(`/refTables/${encodeURIComponent(refTableId)}`);
+  const refTable = await api<MappingRefTable>(`/tables/${encodeURIComponent(refTableId)}`);
   refTables = refTables.map((d) => (d.id === refTable.id ? refTable : d));
 }
 /** Live read of one record record from the cache. Undo/redo closures use
@@ -419,7 +419,7 @@ export async function refreshRefTableAndNotify(refTableId: string): Promise<void
 }
 async function refreshDrafts(refTableId?: string): Promise<void> {
   if (refTableId) {
-    const list = await api<Draft[]>(`/refTables/${encodeURIComponent(refTableId)}/drafts`);
+    const list = await api<Draft[]>(`/tables/${encodeURIComponent(refTableId)}/drafts`);
     const next: Record<string, Draft> = {};
     for (const [k, d] of Object.entries(draftsFlat)) if (d.refTableId !== refTableId) next[k] = d;
     for (const d of list) next[dkey(d.refTableId, d.raw)] = d;
@@ -539,7 +539,7 @@ export async function setPreferences(p: Preferences): Promise<void> {
 
 /* ---- mutations (write through the API, then refetch the affected slice) ---- */
 export async function addRefTable(name: string, keyKind?: "slug" | "external_id"): Promise<string> {
-  const { id } = await api<{ id: string }>("/refTables", {
+  const { id } = await api<{ id: string }>("/tables", {
     method: "POST",
     body: JSON.stringify({ name, keyKind }),
   });
@@ -553,7 +553,7 @@ export async function addRefTable(name: string, keyKind?: "slug" | "external_id"
 /** Permanently removes a table and everything it owns. The server keeps
  *  history (activity log); the local cache drops the refTable immediately. */
 export async function deleteRefTable(refTableId: string): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}`, { method: "DELETE" });
+  await api(`/tables/${encodeURIComponent(refTableId)}`, { method: "DELETE" });
   refTables = refTables.filter((d) => d.id !== refTableId);
   await Promise.all([refreshAudit(), refreshSources()]);
   // Prune drafts for the deleted refTable without hitting the server for a gone endpoint
@@ -572,7 +572,7 @@ export async function patchRefTable(
     ownerUserId?: string | null;
   },
 ): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
@@ -587,7 +587,7 @@ export async function insertRecordAt(
   direction: "above" | "below",
   key?: string,
 ): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/record`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/record`, {
     method: "POST",
     body: JSON.stringify({ label, key, insertAt: { anchor, direction } }),
   });
@@ -601,7 +601,7 @@ export async function reorderRecord(
   opts: { before?: string | null; after?: string | null },
 ): Promise<{ position: string }> {
   const result = await api<{ ok: boolean; position: string }>(
-    `/refTables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(rowKey)}/position`,
+    `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(rowKey)}/position`,
     {
       method: "PUT",
       body: JSON.stringify(opts),
@@ -614,7 +614,7 @@ export async function reorderRecord(
 
 export async function rebalancePositions(refTableId: string): Promise<{ rebalanced: number }> {
   return api<{ ok: boolean; rebalanced: number }>(
-    `/refTables/${encodeURIComponent(refTableId)}/positions/rebalance`,
+    `/tables/${encodeURIComponent(refTableId)}/positions/rebalance`,
     { method: "POST" },
   );
 }
@@ -704,7 +704,7 @@ export async function saveDraft(
   };
   emit();
   try {
-    await api(`/refTables/${encodeURIComponent(refTableId)}/drafts`, {
+    await api(`/tables/${encodeURIComponent(refTableId)}/drafts`, {
       method: "PUT",
       body: JSON.stringify({ raw, status, targetLabel, targetKey }),
     });
@@ -729,7 +729,7 @@ export async function discardDraft(refTableId: string, raw: string): Promise<voi
     emit();
   }
   try {
-    await api(`/refTables/${encodeURIComponent(refTableId)}/drafts/${encodeURIComponent(raw)}`, {
+    await api(`/tables/${encodeURIComponent(refTableId)}/drafts/${encodeURIComponent(raw)}`, {
       method: "DELETE",
     });
   } catch (e) {
@@ -749,7 +749,7 @@ export function listDrafts(refTableId: string): Draft[] {
 
 /**
  * Generate AI mapping suggestion for an unmapped raw value.
- * POST /api/refTables/:refTableId/suggest
+ * POST /api/tables/:refTableId/suggest
  * Returns a draft created with source='ai' and confidence metadata.
  */
 export async function generateSuggestion(
@@ -772,7 +772,7 @@ export async function generateSuggestion(
   };
   cached?: boolean;
 }> {
-  const response = await apiFetch(`/refTables/${encodeURIComponent(refTableId)}/suggest`, {
+  const response = await apiFetch(`/tables/${encodeURIComponent(refTableId)}/suggest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -819,7 +819,7 @@ export interface PublishState {
 }
 
 export async function fetchPublishState(refTableId: string): Promise<PublishState> {
-  return api<PublishState>(`/refTables/${encodeURIComponent(refTableId)}/publish-state`);
+  return api<PublishState>(`/tables/${encodeURIComponent(refTableId)}/publish-state`);
 }
 
 /** Approve & commit the refTable's mapped drafts (server folds them into the
@@ -830,7 +830,7 @@ export async function commit(
   draftKeys?: string[],
 ): Promise<{ committed: number; rowsRecovered: number }> {
   const res = await api<{ committed: number; rowsRecovered: number }>(
-    `/refTables/${encodeURIComponent(refTableId)}/commit`,
+    `/tables/${encodeURIComponent(refTableId)}/commit`,
     {
       method: "POST",
       ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
@@ -846,12 +846,9 @@ export async function commit(
 
 /** Restore every changed record to the last published version. */
 export async function revertChanges(refTableId: string): Promise<{ reverted: number }> {
-  const res = await api<{ reverted: number }>(
-    `/refTables/${encodeURIComponent(refTableId)}/revert`,
-    {
-      method: "POST",
-    },
-  );
+  const res = await api<{ reverted: number }>(`/tables/${encodeURIComponent(refTableId)}/revert`, {
+    method: "POST",
+  });
   await refreshDim(refTableId);
   await refreshAudit();
   emit();
@@ -872,13 +869,13 @@ export interface VersionInfo {
 
 /** Fetch the full version history for a refTable. */
 export async function fetchVersions(refTableId: string): Promise<VersionInfo[]> {
-  return api<VersionInfo[]>(`/refTables/${encodeURIComponent(refTableId)}/versions`);
+  return api<VersionInfo[]>(`/tables/${encodeURIComponent(refTableId)}/versions`);
 }
 
 /** Roll a refTable back to a prior snapshot version. Refreshes refTable, drafts,
  *  and audit — mirrors the commit() refresh/emit pattern. */
 export async function rollbackDim(refTableId: string, toVersion: number): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/rollback`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/rollback`, {
     method: "POST",
     body: JSON.stringify({ toVersion }),
   });
@@ -895,7 +892,7 @@ export async function rejectDrafts(
   raws: string[],
   reason: string,
 ): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/drafts/reject`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/drafts/reject`, {
     method: "POST",
     body: JSON.stringify({ raws, reason }),
   });
@@ -921,7 +918,7 @@ export async function scanSources(): Promise<number> {
 
 /** Wire a warehouse column to a refTable, then refresh the sources list. */
 export async function addSource(refTableId: string, table: string, column: string): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/sources`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/sources`, {
     method: "POST",
     body: JSON.stringify({ table, column }),
   });
@@ -935,7 +932,7 @@ export async function removeSource(
   table: string,
   column: string,
 ): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/sources`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/sources`, {
     method: "DELETE",
     body: JSON.stringify({ table, column }),
   });
@@ -975,7 +972,7 @@ export async function deriveRecord(
     mode: "seed" | "connect";
     matched: number;
     unmatched: number;
-  }>(`/refTables/${encodeURIComponent(refTableId)}/derive`, {
+  }>(`/tables/${encodeURIComponent(refTableId)}/derive`, {
     method: "POST",
     body: JSON.stringify({ table, column, nameColumn, force: opts.force }),
   });
@@ -988,7 +985,7 @@ export async function deriveRecord(
 
 /* ---- record record management (governed, persisted) ---- */
 export async function addRecord(refTableId: string, label: string, key?: string): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/record`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/record`, {
     method: "POST",
     body: JSON.stringify({ label, key }),
   });
@@ -1007,7 +1004,7 @@ export async function renameRecord(
   let version: number;
   try {
     ({ version } = await api<{ version: number }>(
-      `/refTables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}`,
+      `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}`,
       {
         method: "PUT",
         body: JSON.stringify({ label, expectedVersion }),
@@ -1032,7 +1029,7 @@ export async function mergeRecord(
   expectedVersions: Record<string, number>,
 ): Promise<number> {
   const { merged } = await api<{ merged: number }>(
-    `/refTables/${encodeURIComponent(refTableId)}/record/merge?confirm=true`,
+    `/tables/${encodeURIComponent(refTableId)}/record/merge?confirm=true`,
     {
       method: "POST",
       body: JSON.stringify({ survivor, losers, expectedVersions }),
@@ -1051,7 +1048,7 @@ export async function retireRecord(
   expectedVersion: number,
 ): Promise<{ ok: boolean; variants: number }> {
   const res = await api<{ ok: boolean; variants: number }>(
-    `/refTables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
+    `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
     { method: "DELETE" },
   );
   if (res.ok) {
@@ -1064,7 +1061,7 @@ export async function retireRecord(
 /** The raw variants resolving to a record key (lineage). */
 export async function fetchVariants(refTableId: string, key: string): Promise<string[]> {
   return api<string[]>(
-    `/refTables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}/variants`,
+    `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}/variants`,
   );
 }
 
@@ -1084,7 +1081,7 @@ export async function addField(
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   },
 ): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/fields`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/fields`, {
     method: "POST",
     body: JSON.stringify({ label, type, options, ...extras }),
   });
@@ -1102,7 +1099,7 @@ export async function addColumnOption(
   color: PaletteName | null = null,
 ): Promise<OptionDef[]> {
   const res = await api<{ options: OptionDef[] }>(
-    `/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}/options`,
+    `/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}/options`,
     { method: "POST", body: JSON.stringify({ label, color }) },
   );
   await refreshDim(refTableId);
@@ -1115,7 +1112,7 @@ export async function renameColumn(
   field: string,
   newLabel: string,
 ): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "PUT",
     body: JSON.stringify({ label: newLabel }),
   });
@@ -1133,7 +1130,7 @@ export async function changeColumnType(
   ratingMax?: number,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
-    `/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
+    `/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
     {
       method: "PUT",
       body: JSON.stringify({
@@ -1153,7 +1150,7 @@ export async function changeColumnType(
 }
 
 export async function deleteColumn(refTableId: string, field: string): Promise<void> {
-  await api(`/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "DELETE",
   });
   await refreshDim(refTableId);
@@ -1168,13 +1165,10 @@ export async function updateFieldRules(
   field: string,
   rules: ConditionalRule[],
 ): Promise<void> {
-  await api<void>(
-    `/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ field_config: JSON.stringify({ rules }) }),
-    },
-  );
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify({ rules }) }),
+  });
   await refreshDim(refTableId);
   emit();
 }
@@ -1188,13 +1182,10 @@ export async function updateFieldDisplayFields(
   field: string,
   displayFields: string[],
 ): Promise<void> {
-  await api<void>(
-    `/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ field_config: JSON.stringify({ displayFields }) }),
-    },
-  );
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify({ displayFields }) }),
+  });
   await refreshDim(refTableId);
   emit();
 }
@@ -1238,13 +1229,10 @@ export async function updateFieldValidation(
     };
   });
   emit();
-  await api<void>(
-    `/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ field_config: JSON.stringify(next) }),
-    },
-  );
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ field_config: JSON.stringify(next) }),
+  });
   await refreshDim(refTableId);
   emit();
 }
@@ -1255,13 +1243,10 @@ export async function updateFieldDescription(
   field: string,
   description: string | null,
 ): Promise<void> {
-  await api<void>(
-    `/refTables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ description }),
-    },
-  );
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ description }),
+  });
   await refreshDim(refTableId);
   emit();
 }
@@ -1331,7 +1316,7 @@ export async function importRows(
   rows: Array<{ key?: string; label?: string; fields?: Record<string, string | null> }>,
 ): Promise<{ created: number; updated: number; skipped: number }> {
   const res = await api<{ created: number; updated: number; skipped: number }>(
-    `/refTables/${encodeURIComponent(refTableId)}/import`,
+    `/tables/${encodeURIComponent(refTableId)}/import`,
     { method: "POST", body: JSON.stringify({ rows }) },
   );
   await refreshDim(refTableId);
@@ -1355,7 +1340,7 @@ export async function setFieldValue(
   emit();
   try {
     await api(
-      `/refTables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
+      `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
       { method: "PUT", body: JSON.stringify({ value }) },
     );
   } catch (e) {

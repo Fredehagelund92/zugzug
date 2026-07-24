@@ -3,7 +3,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 /**
  * Verifies that the boot path of refreshDrafts() (no-arg) fetches all drafts
  * in a single batch request to /drafts rather than fanning out one request per
- * refTable via /refTables/:id/drafts.
+ * refTable via /tables/:id/drafts.
  *
  * Mocks global.fetch (the underlying transport used by apiFetch) so there are
  * no hoisting issues, and tracks full tenant-prefixed URLs so we can assert
@@ -87,14 +87,14 @@ describe("refreshDrafts() boot path — single batch request", () => {
     setPathname("/app/acme/tables");
   });
 
-  test("issues exactly one request to /drafts and zero /refTables/:id/drafts calls", async () => {
+  test("issues exactly one request to /drafts and zero /tables/:id/drafts calls", async () => {
     const urls: string[] = [];
 
     global.fetch = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       urls.push(url);
 
-      if (url.endsWith("/drafts") && !url.includes("/refTables/")) {
+      if (url.endsWith("/drafts") && !url.includes("/tables/")) {
         return jsonOk(FAKE_DRAFTS);
       }
       if (url.includes("/users")) {
@@ -103,7 +103,7 @@ describe("refreshDrafts() boot path — single batch request", () => {
           collaborators: [],
         });
       }
-      if (url.includes("/refTables")) {
+      if (url.includes("/tables")) {
         return jsonOk(FAKE_DIMS);
       }
       if (url.includes("/warehouse/health")) {
@@ -123,7 +123,7 @@ describe("refreshDrafts() boot path — single batch request", () => {
     // Exactly one request to /drafts (the batch endpoint)
     expect(urls.filter((u) => u.endsWith("/drafts")).length).toBe(1);
     // Zero per-refTable draft requests
-    expect(urls.some((u) => /\/refTables\/.+\/drafts/.test(u))).toBe(false);
+    expect(urls.some((u) => /\/tables\/.+\/drafts/.test(u))).toBe(false);
 
     // draftsFlat is populated for both refTables via listDrafts (keyed by dkey(refTableId, raw))
     const draftsA = listDrafts(DIM_A);

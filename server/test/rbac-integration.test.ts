@@ -118,7 +118,7 @@ test("gate: admin can perform all operations", () => {
 // Integration: representative endpoint checks via direct handler calls
 // ---------------------------------------------------------------------------
 
-test("POST /api/refTables — editor allowed, viewer blocked (curate)", async () => {
+test("POST /api/tables — editor allowed, viewer blocked (curate)", async () => {
   // admin must exist first so the DB has a refTable registry
   await createAdminViaSignup("admin@example.com", "Admin");
   const editor = await createUserWithRole("editor@example.com", "Editor", "editor");
@@ -164,7 +164,7 @@ test("POST /api/t/:slug/members — admin allowed, editor/viewer blocked (tenant
   expect(canMutate("viewer", "manage_adapter")).toBe(false);
 });
 
-test("POST /api/refTables/:id/commit — editor allowed, viewer blocked (commit)", async () => {
+test("POST /api/tables/:id/commit — editor allowed, viewer blocked (commit)", async () => {
   expect(canMutate("editor", "commit")).toBe(true);
   expect(canMutate("viewer", "commit")).toBe(false);
   expect(canMutate("admin", "commit")).toBe(true);

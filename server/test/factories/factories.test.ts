@@ -35,7 +35,7 @@ test("makeRefTable creates a table visible to the workspace", async () => {
   const id = await makeRefTable("w_fac", "Vendors");
   expect(typeof id).toBe("string");
   const { cookie } = await makeMember("u_fac", "w_fac", "viewer");
-  const res = await req("GET", "/api/t/w_fac/refTables", cookie);
+  const res = await req("GET", "/api/t/w_fac/tables", cookie);
   expect(res.status).toBe(200);
   const refTables = (await res.json()) as { id: string }[];
   expect(refTables.some((d) => d.id === id)).toBe(true);

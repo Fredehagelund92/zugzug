@@ -25,7 +25,7 @@ export interface UseRefTableValuesPage {
   refetch: () => void;
 }
 
-/** Lazy, cursor-paginated fetch over /api/refTables/:id/scan-values. Resets
+/** Lazy, cursor-paginated fetch over /api/tables/:id/scan-values. Resets
  *  when (refTableId, filter, q) changes. No caching across opts changes. */
 export function useRefTableValuesPage(opts: UseRefTableValuesPageOpts): UseRefTableValuesPage {
   const { refTableId, filter, q, enabled = true } = opts;
@@ -46,9 +46,7 @@ export function useRefTableValuesPage(opts: UseRefTableValuesPageOpts): UseRefTa
         const params = new URLSearchParams({ filter, limit: "100" });
         if (q) params.set("q", q);
         if (after) params.set("after", after);
-        const r = await apiFetch(
-          `/refTables/${encodeURIComponent(refTableId)}/scan-values?${params}`,
-        );
+        const r = await apiFetch(`/tables/${encodeURIComponent(refTableId)}/scan-values?${params}`);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const body = (await r.json()) as {
           items: ScanValueRow[];

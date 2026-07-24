@@ -60,7 +60,7 @@ export function useRefTableClusters(opts: UseRefTableClustersOpts): UseRefTableC
     setError(null);
     try {
       const params = new URLSearchParams({ filter });
-      const r = await apiFetch(`/refTables/${encodeURIComponent(refTableId)}/clusters?${params}`);
+      const r = await apiFetch(`/tables/${encodeURIComponent(refTableId)}/clusters?${params}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const body = (await r.json()) as RefTableClusterFeed;
       if (ticket !== seq.current) return;

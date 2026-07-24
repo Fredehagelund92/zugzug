@@ -43,7 +43,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Remove the refTable row so /api/refTables doesn't return a phantom test
+  // Remove the refTable row so /api/tables doesn't return a phantom test
   // refTable against a shared dev/test DB. dim_X/map_X tables stay orphaned but
   // invisible without the registry entry.
   await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE reference_table_id = $1`, [
