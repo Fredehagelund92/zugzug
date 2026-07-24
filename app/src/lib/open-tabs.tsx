@@ -8,7 +8,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { useDimensions, useStoreLoading } from "../store";
+import { useRefTables, useStoreLoading } from "../store";
 import { scopedKey } from "./tenant-storage";
 
 declare const __tabId: unique symbol;
@@ -16,19 +16,21 @@ export type TabId = string & { readonly [__tabId]: true };
 
 const TAB_PREFIX = "tables:";
 
-export function makeTabId(dimId: string): TabId {
-  return `${TAB_PREFIX}${dimId}` as TabId;
+export function makeTabId(refTableId: string): TabId {
+  return `${TAB_PREFIX}${refTableId}` as TabId;
 }
-export function dimIdFromTabId(id: TabId): string {
+export function refTableIdFromTabId(id: TabId): string {
   if (!id.startsWith(TAB_PREFIX)) {
-    throw new Error(`dimIdFromTabId: malformed tab id (missing "${TAB_PREFIX}" prefix): ${id}`);
+    throw new Error(
+      `refTableIdFromTabId: malformed tab id (missing "${TAB_PREFIX}" prefix): ${id}`,
+    );
   }
   return id.slice(TAB_PREFIX.length);
 }
 
 export interface OpenTab {
   id: TabId;
-  dimId: string;
+  refTableId: string;
   pinned: boolean;
   openedAt: number;
 }
@@ -39,7 +41,7 @@ export interface OpenTabsState {
 }
 
 export interface UseOpenTabs extends OpenTabsState {
-  openTab: (dimId: string) => TabId;
+  openTab: (refTableId: string) => TabId;
   closeTab: (id: TabId) => void;
   focusTab: (id: TabId) => void;
   pinTab: (id: TabId, pinned: boolean) => void;
@@ -47,20 +49,23 @@ export interface UseOpenTabs extends OpenTabsState {
 }
 
 type Action =
-  | { type: "open"; dimId: string; now: number }
+  | { type: "open"; refTableId: string; now: number }
   | { type: "close"; id: TabId }
   | { type: "focus"; id: TabId }
   | { type: "pin"; id: TabId; pinned: boolean }
   | { type: "reorder"; fromIdx: number; toIdx: number }
-  | { type: "prune"; validDimIds: Set<string> }
+  | { type: "prune"; validRefTableIds: Set<string> }
   | { type: "hydrate"; state: OpenTabsState };
 
 function reducer(state: OpenTabsState, a: Action): OpenTabsState {
   switch (a.type) {
     case "open": {
-      const id = makeTabId(a.dimId);
+      const id = makeTabId(a.refTableId);
       if (state.tabs.some((t) => t.id === id)) return { ...state, activeId: id };
-      const tabs = [...state.tabs, { id, dimId: a.dimId, pinned: false, openedAt: a.now }];
+      const tabs = [
+        ...state.tabs,
+        { id, refTableId: a.refTableId, pinned: false, openedAt: a.now },
+      ];
       return { tabs, activeId: id };
     }
     case "close": {
@@ -93,7 +98,7 @@ function reducer(state: OpenTabsState, a: Action): OpenTabsState {
       return { ...state, tabs };
     }
     case "prune": {
-      const tabs = state.tabs.filter((t) => a.validDimIds.has(t.dimId));
+      const tabs = state.tabs.filter((t) => a.validRefTableIds.has(t.refTableId));
       if (tabs.length === state.tabs.length) return state;
       const activeId =
         state.activeId && tabs.some((t) => t.id === state.activeId)
@@ -109,7 +114,7 @@ function reducer(state: OpenTabsState, a: Action): OpenTabsState {
 const STORAGE_KEY_BASE = "zugzug:open-tabs";
 
 interface Serialized {
-  tabs: Array<{ id: string; dimId: string; pinned: boolean; openedAt: number }>;
+  tabs: Array<{ id: string; refTableId: string; pinned: boolean; openedAt: number }>;
   activeId: string | null;
 }
 
@@ -130,10 +135,10 @@ function readStored(storageKey: string): OpenTabsState {
     const tabs: OpenTab[] = [];
     for (const t of p.tabs) {
       if (typeof t?.id !== "string" || !t.id.startsWith(TAB_PREFIX)) continue;
-      if (typeof t.dimId !== "string" || t.dimId.length === 0) continue;
+      if (typeof t.refTableId !== "string" || t.refTableId.length === 0) continue;
       tabs.push({
         id: t.id as TabId,
-        dimId: t.dimId,
+        refTableId: t.refTableId,
         pinned: !!t.pinned,
         openedAt: typeof t.openedAt === "number" ? t.openedAt : Date.now(),
       });
@@ -154,7 +159,7 @@ function writeStored(storageKey: string, state: OpenTabsState): void {
     const payload: Serialized = {
       tabs: state.tabs.map((t) => ({
         id: t.id,
-        dimId: t.dimId,
+        refTableId: t.refTableId,
         pinned: t.pinned,
         openedAt: t.openedAt,
       })),
@@ -171,14 +176,14 @@ const Ctx = createContext<UseOpenTabs | null>(null);
 export function OpenTabsProvider({ slug, children }: { slug: string; children: ReactNode }) {
   const storageKey = scopedKey(STORAGE_KEY_BASE, slug);
   const [state, dispatch] = useReducer(reducer, undefined, () => readStored(storageKey));
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const storeLoading = useStoreLoading();
 
   useEffect(() => {
     if (storeLoading) return;
-    const validDimIds = new Set(dims.map((d) => d.id));
-    dispatch({ type: "prune", validDimIds });
-  }, [dims, storeLoading]);
+    const validRefTableIds = new Set(refTables.map((d) => d.id));
+    dispatch({ type: "prune", validRefTableIds });
+  }, [refTables, storeLoading]);
 
   const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -192,9 +197,9 @@ export function OpenTabsProvider({ slug, children }: { slug: string; children: R
     };
   }, [storageKey, state]);
 
-  const openTab = useCallback((dimId: string): TabId => {
-    dispatch({ type: "open", dimId, now: Date.now() });
-    return makeTabId(dimId);
+  const openTab = useCallback((refTableId: string): TabId => {
+    dispatch({ type: "open", refTableId, now: Date.now() });
+    return makeTabId(refTableId);
   }, []);
   const closeTab = useCallback((id: TabId) => dispatch({ type: "close", id }), []);
   const focusTab = useCallback((id: TabId) => dispatch({ type: "focus", id }), []);
@@ -229,7 +234,7 @@ export function useOpenTabs(): UseOpenTabs {
   return v;
 }
 
-export function useActiveDimId(): string | null {
+export function useActiveRefTableId(): string | null {
   const { activeId } = useOpenTabs();
-  return activeId ? dimIdFromTabId(activeId) : null;
+  return activeId ? refTableIdFromTabId(activeId) : null;
 }

@@ -20,18 +20,18 @@ export interface Coverage {
   atRiskRows: number;
   pct: number;
 }
-export interface DimClusterFeed {
+export interface RefTableClusterFeed {
   clusters: Cluster[];
   coverage: Coverage;
   truncated: boolean;
 }
 
-export interface UseDimClustersOpts {
-  dimId: string | null;
+export interface UseRefTableClustersOpts {
+  refTableId: string | null;
   filter: "new" | "mapped" | "all";
   enabled?: boolean;
 }
-export interface UseDimClusters {
+export interface UseRefTableClusters {
   clusters: Cluster[];
   coverage: Coverage;
   truncated: boolean;
@@ -42,10 +42,10 @@ export interface UseDimClusters {
 
 const EMPTY_COVERAGE: Coverage = { resolvedRows: 0, atRiskRows: 0, pct: 0 };
 
-/** Load the whole cluster feed for a dimension. Mirrors useDimValuesPage's
+/** Load the whole cluster feed for a refTable. Mirrors useRefTableValuesPage's
  *  race-safe fetch shape, but the feed is a single (non-paginated) payload. */
-export function useDimClusters(opts: UseDimClustersOpts): UseDimClusters {
-  const { dimId, filter, enabled = true } = opts;
+export function useRefTableClusters(opts: UseRefTableClustersOpts): UseRefTableClusters {
+  const { refTableId, filter, enabled = true } = opts;
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [coverage, setCoverage] = useState<Coverage>(EMPTY_COVERAGE);
   const [truncated, setTruncated] = useState(false);
@@ -54,15 +54,15 @@ export function useDimClusters(opts: UseDimClustersOpts): UseDimClusters {
   const seq = useRef(0);
 
   const fetchFeed = useCallback(async () => {
-    if (!dimId || !enabled) return;
+    if (!refTableId || !enabled) return;
     const ticket = ++seq.current;
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ filter });
-      const r = await apiFetch(`/dimensions/${encodeURIComponent(dimId)}/clusters?${params}`);
+      const r = await apiFetch(`/refTables/${encodeURIComponent(refTableId)}/clusters?${params}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const body = (await r.json()) as DimClusterFeed;
+      const body = (await r.json()) as RefTableClusterFeed;
       if (ticket !== seq.current) return;
       setClusters(body.clusters);
       setCoverage(body.coverage);
@@ -74,7 +74,7 @@ export function useDimClusters(opts: UseDimClustersOpts): UseDimClusters {
     } finally {
       if (ticket === seq.current) setLoading(false);
     }
-  }, [dimId, filter, enabled]);
+  }, [refTableId, filter, enabled]);
 
   useEffect(() => {
     setClusters([]);

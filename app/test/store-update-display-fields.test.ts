@@ -14,7 +14,7 @@ const calls: Call[] = [];
 
 vi.mock("../src/api", () => ({
   // Return a Response-like object that the store's `api` helper treats as 204
-  // (so refreshDim's MappingDimension parse path is short-circuited).
+  // (so refreshDim's MappingRefTable parse path is short-circuited).
   apiFetch: vi.fn(async (path: string, init?: RequestInit) => {
     calls.push({ path, init });
     return new Response(null, { status: 204 });
@@ -39,14 +39,14 @@ test("updateFieldDisplayFields PATCHes the field with stringified field_config",
   await updateFieldDisplayFields("partner", "country", ["label", "iso_code", "region"]);
   const patch = calls.find((c) => c.init?.method === "PATCH");
   expect(patch).toBeDefined();
-  expect(patch!.path).toBe("/dimensions/partner/fields/country");
+  expect(patch!.path).toBe("/refTables/partner/fields/country");
   const body = JSON.parse(String(patch!.init?.body));
   const cfg = JSON.parse(body.field_config);
   expect(cfg.displayFields).toEqual(["label", "iso_code", "region"]);
 });
 
-test("encodes dim and field params for URL safety", async () => {
-  await updateFieldDisplayFields("dim with space", "f/k", ["label"]);
+test("encodes refTable and field params for URL safety", async () => {
+  await updateFieldDisplayFields("refTable with space", "f/k", ["label"]);
   const patch = calls.find((c) => c.init?.method === "PATCH");
-  expect(patch!.path).toBe("/dimensions/dim%20with%20space/fields/f%2Fk");
+  expect(patch!.path).toBe("/refTables/refTable%20with%20space/fields/f%2Fk");
 });

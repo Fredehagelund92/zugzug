@@ -134,14 +134,14 @@ export async function teardownTenant(tenantId: string): Promise<void> {
   }
   await pgTxRaw(async (tx) => {
     // Capture dynamic dim_/map_ table names BEFORE deleting registry rows.
-    // The values were INSERTed by addDimension() with safe construction
+    // The values were INSERTed by addRefTable() with safe construction
     // (schema-qualified, regex-validated identifiers), so splicing them
     // straight into DROP TABLE is sound.
-    const dims = await tx.all<{ dim_table: string; map_table: string }>(
-      `SELECT dim_table, map_table FROM "zugzug_app"."dimension" WHERE tenant_id = $1`,
+    const refTables = await tx.all<{ dim_table: string; map_table: string }>(
+      `SELECT dim_table, map_table FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`,
       [tenantId],
     );
-    for (const d of dims) {
+    for (const d of refTables) {
       await tx.run(`DROP TABLE IF EXISTS ${d.dim_table}`);
       await tx.run(`DROP TABLE IF EXISTS ${d.map_table}`);
     }
@@ -153,9 +153,9 @@ export async function teardownTenant(tenantId: string): Promise<void> {
       "record_version",
       "scan_run",
       "source_stat",
-      "dimension_field",
-      "dimension_source",
-      "dimension",
+      "reference_table_field",
+      "reference_table_source",
+      "reference_table",
       "active_sessions",
       "outbound_event",
       "preferences",

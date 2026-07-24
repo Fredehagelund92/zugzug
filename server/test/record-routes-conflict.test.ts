@@ -6,7 +6,7 @@ import { test, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun } from "../src/pg.ts";
 import * as repo from "../src/repo-record.ts";
 
-const DIM = "d_route_conflict";
+const REF_TABLE = "d_route_conflict";
 const DIM_TABLE = "zugzug_app.dim_route_conflict";
 const MAP_TABLE = "zugzug_app.map_route_conflict";
 const DIM_TABLE_Q = `"zugzug_app"."dim_route_conflict"`;
@@ -15,34 +15,38 @@ const KEY_COL = "country_id";
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."dimension"
+    `INSERT INTO "zugzug_app"."reference_table"
        (id, label, dim_table, map_table, key_col, created_at, tenant_id)
      VALUES ($1, $2, $3, $4, $5, now(), 'default')
      ON CONFLICT (tenant_id, id) DO UPDATE SET dim_table = EXCLUDED.dim_table, map_table = EXCLUDED.map_table, key_col = EXCLUDED.key_col`,
-    [DIM, "Route Conflict", DIM_TABLE, MAP_TABLE, KEY_COL],
+    [REF_TABLE, "Route Conflict", DIM_TABLE, MAP_TABLE, KEY_COL],
   );
   await pgRun(
     `CREATE TABLE IF NOT EXISTS ${DIM_TABLE_Q} (${KEY_COL} varchar PRIMARY KEY, label varchar)`,
   );
   await pgRun(`CREATE TABLE IF NOT EXISTS ${MAP_TABLE_Q} (raw varchar, ${KEY_COL} varchar)`);
   await pgRun(`DELETE FROM ${DIM_TABLE_Q}`);
-  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE dim_id = $1`, [DIM]);
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE reference_table_id = $1`, [
+    REF_TABLE,
+  ]);
   await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials)
      VALUES ('u_route_actor', 'Route Actor', 'RA')
      ON CONFLICT (id) DO NOTHING`,
   );
-  await repo.addRecordOne(DIM, "Denmark", "dk", "u_route_actor", "default");
+  await repo.addRecordOne(REF_TABLE, "Denmark", "dk", "u_route_actor", "default");
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE dim_id = $1`, [DIM]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM]);
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE reference_table_id = $1`, [
+    REF_TABLE,
+  ]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE id = $1`, [REF_TABLE]);
 });
 
 test("renameRecord with stale version throws AppError with details.current shape", async () => {
   // Bump out of band so the next call is stale.
-  await repo.renameRecord(DIM, "dk", "Danmark", "u_route_actor", 1, "default");
+  await repo.renameRecord(REF_TABLE, "dk", "Danmark", "u_route_actor", 1, "default");
   let thrown: {
     code?: string;
     status?: number;
@@ -51,7 +55,7 @@ test("renameRecord with stale version throws AppError with details.current shape
     };
   } = {};
   try {
-    await repo.renameRecord(DIM, "dk", "DenmarkAgain", "u_route_actor", 1, "default");
+    await repo.renameRecord(REF_TABLE, "dk", "DenmarkAgain", "u_route_actor", 1, "default");
   } catch (e) {
     thrown = e as typeof thrown;
   }

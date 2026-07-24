@@ -19,12 +19,12 @@ describe("apiFetch — URL derivation", () => {
     vi.restoreAllMocks();
   });
 
-  test("regular tenant slug: /app/acme/tables + /dimensions → /api/t/acme/dimensions", async () => {
+  test("regular tenant slug: /app/acme/tables + /refTables → /api/t/acme/refTables", async () => {
     setPathname("/app/acme/tables");
     const { apiFetch } = await import("../src/api");
-    await apiFetch("/dimensions");
+    await apiFetch("/refTables");
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "/api/t/acme/dimensions",
+      "/api/t/acme/refTables",
       expect.objectContaining({ credentials: "include" }),
     );
   });

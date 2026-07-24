@@ -2,14 +2,14 @@ import { describe, test, expect, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
-import type { MappingDimension } from "../src/data";
+import type { MappingRefTable } from "../src/data";
 import type { Draft } from "../src/store";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const dimA: MappingDimension = {
+const refTableA: MappingRefTable = {
   id: "country",
-  dimension: "Country",
+  refTable: "Country",
   dimTable: "zugzug.dim_country",
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
@@ -25,9 +25,9 @@ const dimA: MappingDimension = {
   },
 };
 
-const dimB: MappingDimension = {
+const refTableB: MappingRefTable = {
   id: "region",
-  dimension: "Region",
+  refTable: "Region",
   dimTable: "zugzug.dim_region",
   mapTable: "zugzug.map_region",
   keyCol: "region_code",
@@ -43,9 +43,9 @@ const dimB: MappingDimension = {
   },
 };
 
-const dimC: MappingDimension = {
+const refTableC: MappingRefTable = {
   id: "channel",
-  dimension: "Channel",
+  refTable: "Channel",
   dimTable: "zugzug.dim_channel",
   mapTable: "zugzug.map_channel",
   keyCol: "channel_id",
@@ -62,7 +62,7 @@ const dimC: MappingDimension = {
 };
 
 const remapDraft: Draft = {
-  dimId: "channel",
+  refTableId: "channel",
   raw: "fb",
   status: "mapped",
   targetLabel: "facebook-paid",
@@ -74,7 +74,7 @@ const remapDraft: Draft = {
   reasoning: null,
 };
 
-const dimensionsFixture: MappingDimension[] = [dimA, dimB, dimC];
+const refTablesFixture: MappingRefTable[] = [refTableA, refTableB, refTableC];
 const draftsFixture: Record<string, Draft> = {
   "channel::fb": remapDraft,
 };
@@ -82,7 +82,7 @@ const draftsFixture: Record<string, Draft> = {
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
 vi.mock("../src/store", () => ({
-  useDimensions: () => dimensionsFixture,
+  useRefTables: () => refTablesFixture,
   useAudit: () => [],
   useDrafts: () => draftsFixture,
   useWorkspaceInfo: () => ({ adapter: "motherduck", warehouseDb: "md:demo", writable: true }),
@@ -137,26 +137,26 @@ function renderDashboard() {
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("Dashboard — staged remap detection", () => {
-  test("page meta shows '0 to publish' when no dims have publish data", () => {
+  test("page meta shows '0 to publish' when no refTables have publish data", () => {
     renderDashboard();
     // Header meta now shows "to publish" figure (no drafts concept at this level).
-    // Dims in this fixture have no publish field → toPublishTotal = 0.
+    // RefTables in this fixture have no publish field → toPublishTotal = 0.
     const headerSpan = screen
       .getAllByText((_, el) => el?.textContent?.replace(/\s+/g, " ").trim() === "0 to publish")
       .find((el) => !el.closest("tr"));
     expect(headerSpan).toBeDefined();
   });
 
-  test("'Needs attention' toolbar pill counts only dims with unmapped values (1)", () => {
+  test("'Needs attention' toolbar pill counts only refTables with unmapped values (1)", () => {
     renderDashboard();
-    // With no publish summaries, toPublishCount=0 for all dims.
+    // With no publish summaries, toPublishCount=0 for all refTables.
     // Only Country (newCount=1) triggers attention; Channel's staged draft no longer counts.
     const pill = screen.getByText("Needs attention").closest("button");
     expect(pill).not.toBeNull();
     expect(within(pill as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  test("'Clean' toolbar pill counts dims with no in-review and no to-publish (2)", () => {
+  test("'Clean' toolbar pill counts refTables with no in-review and no to-publish (2)", () => {
     renderDashboard();
     // Region (newCount=0, no publish) and Channel (newCount=0, no publish) are both clean.
     const pill = screen.getByText("Clean").closest("button");
@@ -164,7 +164,7 @@ describe("Dashboard — staged remap detection", () => {
     expect(within(pill as HTMLElement).getByText("2")).toBeInTheDocument();
   });
 
-  test("Dim C (remap-only, no publish data) row shows '—' in To publish column", () => {
+  test("RefTable C (remap-only, no publish data) row shows '—' in To publish column", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const channelRow = rows.find((r) => within(r).queryByText("Channel"));
@@ -174,7 +174,7 @@ describe("Dashboard — staged remap detection", () => {
     expect(dashes.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("Dim B (no drafts, all mapped) row shows '—' placeholders for in-review and to-publish", () => {
+  test("RefTable B (no drafts, all mapped) row shows '—' placeholders for in-review and to-publish", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     const regionRow = rows.find((r) => within(r).queryByText("Region"));
@@ -184,11 +184,11 @@ describe("Dashboard — staged remap detection", () => {
     expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
-  test("Default sort (In review desc): Dim A (unmapped) comes first", () => {
+  test("Default sort (In review desc): RefTable A (unmapped) comes first", () => {
     renderDashboard();
     const rows = screen.getAllByRole("row");
     // First row is the header; body rows follow. Country (newCount=1) should be first.
-    const bodyDimNames = rows
+    const bodyRefTableNames = rows
       .map((r) => {
         if (within(r).queryByText("Country")) return "Country";
         if (within(r).queryByText("Channel")) return "Channel";
@@ -196,6 +196,6 @@ describe("Dashboard — staged remap detection", () => {
         return null;
       })
       .filter((x): x is string => x !== null);
-    expect(bodyDimNames[0]).toBe("Country");
+    expect(bodyRefTableNames[0]).toBe("Country");
   });
 });

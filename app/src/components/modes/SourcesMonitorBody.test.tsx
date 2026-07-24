@@ -18,18 +18,18 @@ vi.mock("../Toast", () => ({ toast: vi.fn() }));
 
 import { deriveRecord } from "../../store";
 import { SourcesMonitorBody } from "./SourcesMonitorBody";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 
 const deriveMock = deriveRecord as unknown as ReturnType<typeof vi.fn>;
-const DIM = { id: "d1", dimension: "Country" } as unknown as MappingDimension;
+const REF_TABLE = { id: "d1", refTable: "Country" } as unknown as MappingRefTable;
 const NOW = Date.now();
 
 function src(over: Partial<SourceInfo> = {}): SourceInfo {
   return {
     table: "orders",
     column: "ship_country",
-    dimension: "Country",
-    dimId: "d1",
+    refTable: "Country",
+    refTableId: "d1",
     present: true,
     rows: 1000,
     values: 10,
@@ -42,7 +42,7 @@ function src(over: Partial<SourceInfo> = {}): SourceInfo {
 function renderCard() {
   return render(
     <MemoryRouter>
-      <SourcesMonitorBody dim={DIM} />
+      <SourcesMonitorBody refTable={REF_TABLE} />
     </MemoryRouter>,
   );
 }

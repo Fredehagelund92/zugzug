@@ -281,6 +281,13 @@
       "when": 1784754058613,
       "tag": "0039_rename_canonical_to_record",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784844058613,
+      "tag": "0040_rename_dimension_to_reference_table",
+      "breakpoints": true
     }
   ]
 }

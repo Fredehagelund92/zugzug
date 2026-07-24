@@ -11,14 +11,14 @@ export class OpenAIProvider implements AIProvider {
   }
 
   async suggestMapping(request: SuggestionRequest): Promise<SuggestionResponse> {
-    const { dimensionName, rawValue, existingRecordValues } = request;
+    const { refTableName, rawValue, existingRecordValues } = request;
 
     const prompt = `You are a data quality specialist. Map the raw value to the most likely record value.
 
-Dimension: ${dimensionName}
+RefTable: ${refTableName}
 Raw value: "${rawValue}"
 
-Existing record values in this dimension:
+Existing record values in this refTable:
 ${existingRecordValues
   .slice(0, 30)
   .map((v) => `- ${v}`)
@@ -36,7 +36,7 @@ Confidence guidelines:
 - "medium": plausible but requires some interpretation or there's ambiguity
 - "low": unclear, requires human domain knowledge, or unlikely to be correct
 
-Always prefer a record value that already exists in the dimension if reasonable.`;
+Always prefer a record value that already exists in the refTable if reasonable.`;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

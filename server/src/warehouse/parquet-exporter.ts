@@ -2,7 +2,7 @@ import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
 import { readFileSync, unlinkSync } from "node:fs";
 import { pgAll } from "../pg.ts";
 import { cq } from "../repo-shared.ts";
-import type { DimensionSpec } from "./adapter.ts";
+import type { RefTableSpec } from "./adapter.ts";
 
 // Lazy-init in-process DuckDB instance used purely as a Parquet writer.
 // Reused across calls so we don't pay the instance-startup cost per export.
@@ -30,27 +30,29 @@ export function _resetExporterInstance(): void {
   _instance = null;
 }
 
-/** Export the dimension's MAP table as Parquet bytes.
+/** Export the refTable's MAP table as Parquet bytes.
  *
- *  v1 scope: map rows only (raw + keyCol). The DIM table (record records +
+ *  v1 scope: map rows only (raw + keyCol). The REF_TABLE table (record records +
  *  enrichment fields) is not included; it has a divergent column shape that
  *  doesn't union cleanly with map rows. dbt's primary use case is a LEFT JOIN
  *  on the map for warehouse cleanup, which this serves directly.
  */
-export async function exportRecordToParquet(dim: DimensionSpec): Promise<Buffer> {
+export async function exportRecordToParquet(refTable: RefTableSpec): Promise<Buffer> {
   // 1. Read all map rows from Postgres.
   const rows = await pgAll<{ raw: string; key: string }>(
-    `SELECT raw, "${dim.keyCol}" AS key FROM ${cq(dim.mapTable)} ORDER BY raw`,
+    `SELECT raw, "${refTable.keyCol}" AS key FROM ${cq(refTable.mapTable)} ORDER BY raw`,
   );
 
   // 2-5. Use the lazy in-process DuckDB; create a temp table; bulk-load via Appender;
   //      COPY to a tmp Parquet file; read into Buffer; clean up.
-  const tableName = `_export_${dim.dimId}_${Date.now()}`;
-  const tmpPath = `/tmp/zugzug-snapshot-${dim.dimId}-${Date.now()}.parquet`;
+  const tableName = `_export_${refTable.refTableId}_${Date.now()}`;
+  const tmpPath = `/tmp/zugzug-snapshot-${refTable.refTableId}-${Date.now()}.parquet`;
 
   return withExporterConn(async (conn) => {
     try {
-      await conn.run(`CREATE OR REPLACE TABLE ${tableName} (raw VARCHAR, "${dim.keyCol}" VARCHAR)`);
+      await conn.run(
+        `CREATE OR REPLACE TABLE ${tableName} (raw VARCHAR, "${refTable.keyCol}" VARCHAR)`,
+      );
       const appender = await conn.createAppender(tableName);
       for (const r of rows) {
         appender.appendVarchar(r.raw);

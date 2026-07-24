@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { normalizeKey, clusterValues, clusterScanRows, clusterForSeed } from "./cluster-values.ts";
-import type { ScanValueRow } from "./repo-dim-scan.ts";
+import type { ScanValueRow } from "./repo-source-scan.ts";
 
 function scanRow(
   raw: string,

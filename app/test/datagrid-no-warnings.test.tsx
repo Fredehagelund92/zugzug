@@ -18,7 +18,7 @@ import type { ColumnDef } from "../src/components/datagrid/types";
  * Note (palette duplicate key): the spec's Bug 2 ("duplicate Review key") was
  * in ShortcutsOverlay.tsx and is already resolved upstream — group titles are
  * unique. The speculative dedup guard in AppShell.tsx commands useMemo was
- * removed as YAGNI; command ids (nav:*, dim:${id}, rec:${id}:${key}) cannot
+ * removed as YAGNI; command ids (nav:*, refTable:${id}, rec:${id}:${key}) cannot
  * collide by construction.
  */
 

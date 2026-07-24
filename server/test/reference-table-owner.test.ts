@@ -27,25 +27,25 @@ beforeEach(async () => {
   );
 });
 
-test("owner can be set to a workspace member and is returned by getDimension", async () => {
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, OWNER, "default");
-  await repo.updateDimensionMeta(dimId, { ownerUserId: OWNER }, OWNER, "default");
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.ownerUserId).toBe(OWNER);
-  expect(dim?.ownerName).toBe("Mira Patel");
+test("owner can be set to a workspace member and is returned by getRefTable", async () => {
+  const refTableId = await repo.addRefTable("Country", [], { keyKind: "slug" }, OWNER, "default");
+  await repo.updateRefTableMeta(refTableId, { ownerUserId: OWNER }, OWNER, "default");
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable?.ownerUserId).toBe(OWNER);
+  expect(refTable?.ownerName).toBe("Mira Patel");
 });
 
 test("owner set to a non-member is rejected", async () => {
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, OWNER, "default");
+  const refTableId = await repo.addRefTable("Country", [], { keyKind: "slug" }, OWNER, "default");
   await expect(
-    repo.updateDimensionMeta(dimId, { ownerUserId: OUTSIDER }, OWNER, "default"),
+    repo.updateRefTableMeta(refTableId, { ownerUserId: OUTSIDER }, OWNER, "default"),
   ).rejects.toThrow(/member/i);
 });
 
 test("owner can be cleared with null", async () => {
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, OWNER, "default");
-  await repo.updateDimensionMeta(dimId, { ownerUserId: OWNER }, OWNER, "default");
-  await repo.updateDimensionMeta(dimId, { ownerUserId: null }, OWNER, "default");
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.ownerUserId).toBeNull();
+  const refTableId = await repo.addRefTable("Country", [], { keyKind: "slug" }, OWNER, "default");
+  await repo.updateRefTableMeta(refTableId, { ownerUserId: OWNER }, OWNER, "default");
+  await repo.updateRefTableMeta(refTableId, { ownerUserId: null }, OWNER, "default");
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable?.ownerUserId).toBeNull();
 });

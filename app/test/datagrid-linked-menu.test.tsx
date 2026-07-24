@@ -16,7 +16,7 @@ function fkColumn(): ColumnDef<Row> {
     label: "Country",
     config: {
       type: "linked",
-      targetDimId: "dim_country",
+      targetRefTableId: "dim_country",
       displayFields: ["label", "iso_code"],
       candidates: [{ key: "DE", label: "Germany" }],
     },
@@ -48,7 +48,7 @@ function openHeaderMenu(field: string, container: HTMLElement) {
 }
 
 describe("right-click on FK column", () => {
-  test("shows 'Show linked fields…' and 'Open target dimension →'", () => {
+  test("shows 'Show linked fields…' and 'Open target refTable →'", () => {
     const onShow = vi.fn();
     const onOpen = vi.fn();
     const { container } = render(
@@ -59,13 +59,13 @@ describe("right-click on FK column", () => {
           rowKey={(r) => r.id}
           onCommit={async () => {}}
           onShowLinkedFields={onShow}
-          onOpenTargetDimension={onOpen}
+          onOpenTargetRefTable={onOpen}
         />
       </UndoStackProvider>,
     );
     const menu = openHeaderMenu("country", container);
     expect(menu.textContent).toContain("Show linked fields");
-    expect(menu.textContent).toContain("Open target dimension");
+    expect(menu.textContent).toContain("Open target refTable");
     expect(menu.textContent).not.toContain("Change displayed field");
   });
 });

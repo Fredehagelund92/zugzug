@@ -23,7 +23,7 @@ import {
   IconMenu,
   IconX,
 } from "./Icons";
-import { useDimensions, currentUser } from "../store";
+import { useRefTables, currentUser } from "../store";
 import { Avatar } from "./Avatar";
 import { PALETTE, defaultTintFor } from "../lib/palette";
 import { RoleBadge } from "./RoleBadge";
@@ -253,7 +253,7 @@ function UserMenu() {
 }
 
 export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const tenant = useTenant();
   const { slug, role: tenantRole } = tenant;
   const paletteKey = scopedKey(PALETTE_RECENTS_KEY, slug);
@@ -367,7 +367,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     return () => document.removeEventListener("keydown", onKey);
   }, [focusTab, drawerOpen, navLinks.tables]);
 
-  const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
+  const totalNew = refTables.reduce((n, s) => n + s.counts.newCount, 0);
   const settingsBase = navLinks.settings;
   interface NavItem {
     to: string;
@@ -388,7 +388,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       to: navLinks.tables,
       label: "Tables",
       Icon: IconTables,
-      count: dims.length,
+      count: refTables.length,
       testId: "nav-tables",
     },
     {
@@ -427,8 +427,8 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   // Flat nav — used by the command palette and the collapsed icon rail.
   const nav: NavItem[] = [homeItem, ...tablesGroup, ...workspaceGroup, ...integrationsGroup];
 
-  // Quick-switcher command list — navigation + every dim + every record
-  // record across dims. Rebuilt only when dims change (record churn here
+  // Quick-switcher command list — navigation + every refTable + every record
+  // record across refTables. Rebuilt only when refTables change (record churn here
   // is rare; the search is fast enough at thousand-record scale).
   const commands = useMemo<Command[]>(() => {
     const out: Command[] = [];
@@ -465,7 +465,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       id: "nav:tables",
       group: "Navigate",
       label: "Tables",
-      secondary: `${dims.length}`,
+      secondary: `${refTables.length}`,
       icon: <IconTables className="h-4 w-4" />,
       action: () => navigate(navLinks.tables),
       keywords: "tables records",
@@ -500,12 +500,12 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
     });
 
     // Section 2: jump to a table's Match mode
-    for (const d of dims) {
+    for (const d of refTables) {
       const newCount = d.counts.newCount;
       out.push({
-        id: `dim:${d.id}`,
+        id: `refTable:${d.id}`,
         group: "Tables",
-        label: d.dimension,
+        label: d.refTable,
         secondary: newCount > 0 ? `${newCount} new` : "clean",
         icon: <IconArrowRight className="h-4 w-4" />,
         keywords: `${d.id} ${d.mapTable} ${d.dimTable} ${d.keyCol}`,
@@ -516,15 +516,15 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       });
     }
 
-    // Section 3: every record record — opens the dim as a Tables tab + focus
-    for (const d of dims) {
+    // Section 3: every record record — opens the refTable as a Tables tab + focus
+    for (const d of refTables) {
       for (const c of d.record) {
         out.push({
           id: `rec:${d.id}:${c.key}`,
           group: "Records",
           label: c.label ?? c.key,
-          secondary: `${d.dimension} · ${c.key}`,
-          keywords: `${d.dimension} ${c.key} ${d.id}`,
+          secondary: `${d.refTable} · ${c.key}`,
+          keywords: `${d.refTable} ${c.key} ${d.id}`,
           action: () => {
             openTab(d.id);
             navigate(navLinks.tablesFocus(c.key));
@@ -533,7 +533,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
       }
     }
     return out;
-  }, [dims, totalNew, navigate, openTab, navLinks]);
+  }, [refTables, totalNew, navigate, openTab, navLinks]);
 
   // Shared sidebar content — rendered both in the desktop aside and the mobile drawer.
   const sidebarContent = (

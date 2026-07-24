@@ -12,7 +12,7 @@ beforeEach(() => {
 });
 
 describe("initStore() boots the store from the API", () => {
-  test("loads dimensions, current user, and clears loading", async () => {
+  test("loads refTables, current user, and clears loading", async () => {
     const store = await import("../../src/store.ts");
 
     await store.initStore();
@@ -22,14 +22,14 @@ describe("initStore() boots the store from the API", () => {
     expect(store.currentUser.id).toBe("u1");
     expect(store.collaborators).toEqual([]);
 
-    // Render a tiny probe to read dims via useDimensions() and storeLoading via useStoreLoading().
+    // Render a tiny probe to read refTables via useRefTables() and storeLoading via useStoreLoading().
     function Probe() {
-      const dims = store.useDimensions();
+      const refTables = store.useRefTables();
       const loading = store.useStoreLoading();
       return (
         <div>
-          <span data-testid="dim-count">{dims.length}</span>
-          <span data-testid="first-dim">{dims[0]?.dimension ?? ""}</span>
+          <span data-testid="refTable-count">{refTables.length}</span>
+          <span data-testid="first-refTable">{refTables[0]?.refTable ?? ""}</span>
           <span data-testid="loading">{String(loading)}</span>
         </div>
       );
@@ -37,8 +37,8 @@ describe("initStore() boots the store from the API", () => {
 
     render(<Probe />);
 
-    expect(screen.getByTestId("dim-count").textContent).toBe("1");
-    expect(screen.getByTestId("first-dim").textContent).toBe("Vendors");
+    expect(screen.getByTestId("refTable-count").textContent).toBe("1");
+    expect(screen.getByTestId("first-refTable").textContent).toBe("Vendors");
     expect(screen.getByTestId("loading").textContent).toBe("false");
   });
 });

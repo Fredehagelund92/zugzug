@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { UndoStackProvider } from "../src/components/datagrid";
 import { TenantProvider } from "../src/lib/tenant-context";
 import { MatchModeBody } from "../src/components/modes/MatchModeBody";
-import type { MappingDimension } from "../src/data";
+import type { MappingRefTable } from "../src/data";
 
 /**
  * ?target= URL param contract for MatchModeBody (Task 6).
@@ -38,7 +38,7 @@ vi.mock("../src/store", () => ({
   discardDraft: storeMocks.discardDraftSpy,
   commit: storeMocks.commitSpy,
   listDrafts: () => [],
-  dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+  dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
   currentUser: { id: "u_ada", name: "Ada Berg", initials: "AB" },
 }));
 
@@ -80,10 +80,10 @@ vi.mock("../src/components/datagrid", async (importOriginal) => {
 });
 
 // ── Paged scan-values stub — MatchModeBody sources grid rows from the server
-// paged hook (not the eager dim.values); supply the same two values here. ──────
+// paged hook (not the eager refTable.values); supply the same two values here. ──────
 
-vi.mock("../src/lib/use-dim-values-page", () => ({
-  useDimValuesPage: () => ({
+vi.mock("../src/lib/use-ref-table-values-page", () => ({
+  useRefTableValuesPage: () => ({
     items: [
       {
         raw: "usa",
@@ -125,11 +125,11 @@ const TENANT = {
   isSuperAdmin: false,
 };
 
-// ── Fixture dim ───────────────────────────────────────────────────────────────
+// ── Fixture refTable ───────────────────────────────────────────────────────────────
 
-const DIM: MappingDimension = {
+const REF_TABLE: MappingRefTable = {
   id: "country",
-  dimension: "Country",
+  refTable: "Country",
   dimTable: "zugzug.dim_country",
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
@@ -171,7 +171,7 @@ function renderMatch(search: string, isActive = true) {
     <MemoryRouter initialEntries={[`/app/acme/tables${search}`]}>
       <TenantProvider value={TENANT}>
         <UndoStackProvider scopeKey="test">
-          <MatchModeBody dim={DIM} isActive={isActive} />
+          <MatchModeBody refTable={REF_TABLE} isActive={isActive} />
         </UndoStackProvider>
       </TenantProvider>
     </MemoryRouter>,
@@ -239,7 +239,7 @@ describe("MatchModeBody ?target= resolution", () => {
 
     // saveDraft should be called for "usa" mapping to "United States".
     expect(saveDraftSpy).toHaveBeenCalledWith(
-      DIM.id,
+      REF_TABLE.id,
       "usa",
       "mapped",
       "United States",
@@ -257,14 +257,14 @@ describe("MatchModeBody ?target= resolution", () => {
     fireEvent.click(screen.getByRole("button", { name: /Map selected/i }));
 
     expect(saveDraftSpy).toHaveBeenCalledWith(
-      DIM.id,
+      REF_TABLE.id,
       "usa",
       "mapped",
       "United Kingdom",
       expect.any(String),
     );
     expect(saveDraftSpy).toHaveBeenCalledWith(
-      DIM.id,
+      REF_TABLE.id,
       "uk",
       "mapped",
       "United Kingdom",

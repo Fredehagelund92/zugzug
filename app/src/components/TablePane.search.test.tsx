@@ -9,12 +9,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import type { MappingDimension, RecordValue } from "../data";
+import type { MappingRefTable, RecordValue } from "../data";
 
 // ── Store mock ────────────────────────────────────────────────────────────────
 vi.mock("../store", () => ({
   useSources: () => [],
-  useDimensions: () => [],
+  useRefTables: () => [],
   useDrafts: () => [],
   useCanEdit: () => false,
   useCurrentUser: () => null,
@@ -45,9 +45,9 @@ vi.mock("../store", () => ({
   updateFieldDisplayFields: vi.fn(),
   insertRecordAt: vi.fn(),
   reorderRecord: vi.fn(),
-  patchDimension: vi.fn(),
+  patchRefTable: vi.fn(),
   rebalancePositions: vi.fn(),
-  refreshDimAndNotify: vi.fn(),
+  refreshRefTableAndNotify: vi.fn(),
   commit: vi.fn(),
   revertChanges: vi.fn(),
   ConflictError: class extends Error {},
@@ -150,9 +150,9 @@ const RECORDS: RecordValue[] = [
   },
 ];
 
-const DIM: MappingDimension = {
+const REF_TABLE: MappingRefTable = {
   id: "d1",
-  dimension: "Company",
+  refTable: "Company",
   dimTable: "zz.dim_company",
   mapTable: "zz.map_company",
   keyCol: "company_key",
@@ -175,7 +175,7 @@ const DIM: MappingDimension = {
 function renderPane() {
   return render(
     <MemoryRouter>
-      <TablePane dim={DIM} isActive mode="records" />
+      <TablePane refTable={REF_TABLE} isActive mode="records" />
     </MemoryRouter>,
   );
 }

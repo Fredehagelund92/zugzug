@@ -10,23 +10,26 @@ import { cx } from "../../lib/cx";
 import { deriveRecord, useSources, useCanEdit } from "../../store";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { toast } from "../Toast";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 
 /* WiredSourcesModeBody — third mode for a per-table workbench tab. A console
    panel reading "this table's plumbing": KPI strip up top (coverage, unmapped,
-   last scan, schedules), the LedgerRow list condensed to this dim only, and a
-   reverse handoff into the full Sources route. A per-dim color stripe on the
+   last scan, schedules), the LedgerRow list condensed to this refTable only, and a
+   reverse handoff into the full Sources route. A per-refTable color stripe on the
    left edge signals which table the panel belongs to — mirrors the tab-strip
    monogram convention. */
 
 interface Props {
-  dim: MappingDimension;
+  refTable: MappingRefTable;
 }
 
-export function WiredSourcesModeBody({ dim }: Props) {
+export function WiredSourcesModeBody({ refTable }: Props) {
   const sources = useSources();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
+  const wired = useMemo(
+    () => sources.filter((s) => s.refTableId === refTable.id),
+    [sources, refTable.id],
+  );
   const canEdit = useCanEdit();
   const nav = useNavLinks();
   const outcomeText = (result: {
@@ -55,9 +58,9 @@ export function WiredSourcesModeBody({ dim }: Props) {
     return "no new values";
   };
 
-  const deriveAction = useAsyncAction(async (dimId: string, table: string, column: string) => {
+  const deriveAction = useAsyncAction(async (refTableId: string, table: string, column: string) => {
     try {
-      const result = await deriveRecord(dimId, table, column);
+      const result = await deriveRecord(refTableId, table, column);
       toast(`Re-scanned ${table}.${column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(
@@ -70,9 +73,9 @@ export function WiredSourcesModeBody({ dim }: Props) {
     }
   });
 
-  // Per-dim accent for the left stripe + kicker. Falls back to brand accent
+  // Per-refTable accent for the left stripe + kicker. Falls back to brand accent
   // when the table hasn't been assigned a palette tint.
-  const tint = dim.color ? PALETTE[dim.color] : null;
+  const tint = refTable.color ? PALETTE[refTable.color] : null;
   const stripeBg = tint ? tint.bg : "var(--accent)";
   const kickerFg = tint ? tint.fg : "var(--accent)";
 
@@ -106,10 +109,11 @@ export function WiredSourcesModeBody({ dim }: Props) {
             <IconWand className="h-5 w-5" />
           </div>
           <div className="font-display text-[20px] font-semibold tracking-[-0.01em] text-ink">
-            No sources wired to {dim.dimension} yet.
+            No sources wired to {refTable.refTable} yet.
           </div>
           <p className="mx-auto mt-2 text-[13px] leading-snug text-ink-3">
-            Wire a warehouse column to start watching for new {dim.dimension.toLowerCase()} values.
+            Wire a warehouse column to start watching for new {refTable.refTable.toLowerCase()}{" "}
+            values.
           </p>
           <div className="mt-5 inline-flex">
             <Link to={nav.sources}>
@@ -129,7 +133,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
 
   return (
     <div className="zz-fade-in flex flex-1 flex-col min-h-0">
-      {/* Per-dim color stripe on the left edge — the workbench signature for
+      {/* Per-refTable color stripe on the left edge — the workbench signature for
           "which table am I looking at". The container itself is transparent so
           the canvas grid bleeds through below the last row; the hero header
           and each LedgerRow paint their own bg-surface. */}
@@ -154,7 +158,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
                   className={cx("zz-live h-1.5 w-1.5 rounded-pill")}
                   style={{ background: stripeBg }}
                 />
-                Sources · {dim.dimension}
+                Sources · {refTable.refTable}
               </div>
               <h2 className="mt-2 font-display text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">
                 <span className="tabular-nums">{wired.length}</span>{" "}
@@ -242,7 +246,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
             density in the full Sources ledger; chartjunk in a 1–3 row panel). */}
         <div className="flex-1 overflow-y-auto">
           {wired.map((row) => {
-            const key = `${row.dimId}::${row.table}::${row.column}`;
+            const key = `${row.refTableId}::${row.table}::${row.column}`;
             return (
               <LedgerRow
                 key={key}
@@ -252,7 +256,7 @@ export function WiredSourcesModeBody({ dim }: Props) {
                 onToggle={() => setExpanded(expanded === key ? null : key)}
                 onDerive={
                   canEdit
-                    ? () => void deriveAction.run(row.dimId, row.table, row.column)
+                    ? () => void deriveAction.run(row.refTableId, row.table, row.column)
                     : undefined
                 }
               />

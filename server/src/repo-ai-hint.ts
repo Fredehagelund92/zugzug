@@ -11,7 +11,7 @@ export interface AiHintResult extends AiHint {
   cached: boolean;
 }
 
-interface DimContext {
+interface RefTableContext {
   label: string;
 }
 
@@ -58,7 +58,7 @@ Rules:
 export async function callClaude(
   raw: string,
   recordLabels: string[],
-  dim: DimContext,
+  refTable: RefTableContext,
 ): Promise<AiHint> {
   if (!env.anthropicApiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured");
@@ -69,7 +69,7 @@ export async function callClaude(
       ? recordLabels.map((l, i) => `${i + 1}. ${l}`).join("\n")
       : "(empty — no record records exist yet)";
 
-  const userMessage = `Dimension: ${dim.label}
+  const userMessage = `RefTable: ${refTable.label}
 
 Record options:
 ${recordBlock}
@@ -126,24 +126,24 @@ interface CacheRow {
 }
 
 export async function getAiHint(
-  dimId: string,
+  refTableId: string,
   raw: string,
   recordLabels: string[],
-  dim: DimContext,
+  refTable: RefTableContext,
   tenantId: string,
 ): Promise<AiHintResult> {
   // 1. Postgres cache hit
   const cached = await pgGet<CacheRow>(
     `SELECT suggestion, confidence, reasoning
      FROM ${pg("ai_hint_cache")}
-     WHERE dim_id = $1 AND raw = $2 AND tenant_id = $3`,
-    [dimId, raw, tenantId],
+     WHERE reference_table_id = $1 AND raw = $2 AND tenant_id = $3`,
+    [refTableId, raw, tenantId],
   );
   if (cached) {
     void pgRun(
       `UPDATE ${pg("ai_hint_cache")} SET hits = hits + 1
-       WHERE dim_id = $1 AND raw = $2 AND tenant_id = $3`,
-      [dimId, raw, tenantId],
+       WHERE reference_table_id = $1 AND raw = $2 AND tenant_id = $3`,
+      [refTableId, raw, tenantId],
     );
     return { ...cached, cached: true };
   }
@@ -164,21 +164,21 @@ export async function getAiHint(
   }
 
   // 4. Claude call
-  const result = await callClaude(raw, recordLabels, dim);
+  const result = await callClaude(raw, recordLabels, refTable);
 
   // 5. Store in cache
   await pgRun(
     `INSERT INTO ${pg("ai_hint_cache")}
-       (dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits, tenant_id)
+       (reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits, tenant_id)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, 0, $7)
-     ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE
+     ON CONFLICT (tenant_id, reference_table_id, raw) DO UPDATE
        SET suggestion  = EXCLUDED.suggestion,
            confidence  = EXCLUDED.confidence,
            reasoning   = EXCLUDED.reasoning,
            model       = EXCLUDED.model,
            created_at  = EXCLUDED.created_at`,
     [
-      dimId,
+      refTableId,
       raw,
       result.suggestion,
       result.confidence,

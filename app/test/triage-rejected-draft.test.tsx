@@ -19,7 +19,7 @@ const stubTenant = {
 
 const stubDim = {
   id: "country",
-  dimension: "Country",
+  refTable: "Country",
   record: [],
   fields: [],
   rows: 1000,
@@ -40,7 +40,7 @@ const stubDim = {
 };
 
 const stubRejectedDraft = {
-  dimId: "country",
+  refTableId: "country",
   raw: "USA",
   status: "rejected" as const,
   targetLabel: "United States",
@@ -72,7 +72,7 @@ function setupMocks() {
       sources: "/app/test-ws/sources",
       tables: "/app/test-ws/tables",
       settings: "/app/test-ws/settings",
-      table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+      table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
       tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
     }),
   }));
@@ -96,7 +96,7 @@ function setupMocks() {
         email: "r@example.com",
         role: "admin" as const,
       }),
-      useDimensions: () => [stubDim],
+      useRefTables: () => [stubDim],
       useDrafts: () => ({ "country::USA": stubRejectedDraft }),
       saveDraft: vi.fn().mockResolvedValue(undefined),
       discardDraft: vi.fn().mockResolvedValue(undefined),
@@ -105,15 +105,15 @@ function setupMocks() {
         rowsRecovered: 0,
         warehouseSynced: "n/a" as const,
       })),
-      dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+      dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
     };
   });
   vi.doMock("../src/lib/create-table-modal", () => ({
     useCreateTableModal: () => ({ open: vi.fn() }),
     CreateTableModalProvider: ({ children }: { children: React.ReactNode }) => children,
   }));
-  vi.doMock("../src/lib/use-dim-values-page", () => ({
-    useDimValuesPage: () => ({
+  vi.doMock("../src/lib/use-ref-table-values-page", () => ({
+    useRefTableValuesPage: () => ({
       items: [stubScanValueRow],
       hasMore: false,
       loading: false,
@@ -216,7 +216,7 @@ describe("Triage — rejected draft presentation", () => {
           email: "o@example.com",
           role: "admin" as const,
         }),
-        useDimensions: () => [stubDim],
+        useRefTables: () => [stubDim],
         useDrafts: () => ({ "country::USA": stubRejectedDraft }),
         saveDraft: vi.fn().mockResolvedValue(undefined),
         discardDraft: vi.fn().mockResolvedValue(undefined),
@@ -225,7 +225,7 @@ describe("Triage — rejected draft presentation", () => {
           rowsRecovered: 0,
           warehouseSynced: "n/a" as const,
         })),
-        dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+        dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
       };
     });
     vi.doMock("../src/lib/use-tenant-navigate", () => ({
@@ -237,7 +237,7 @@ describe("Triage — rejected draft presentation", () => {
         sources: "/app/test-ws/sources",
         tables: "/app/test-ws/tables",
         settings: "/app/test-ws/settings",
-        table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+        table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
         tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
       }),
     }));
@@ -245,8 +245,8 @@ describe("Triage — rejected draft presentation", () => {
       useCreateTableModal: () => ({ open: vi.fn() }),
       CreateTableModalProvider: ({ children }: { children: React.ReactNode }) => children,
     }));
-    vi.doMock("../src/lib/use-dim-values-page", () => ({
-      useDimValuesPage: () => ({
+    vi.doMock("../src/lib/use-ref-table-values-page", () => ({
+      useRefTableValuesPage: () => ({
         items: [stubScanValueRow],
         hasMore: false,
         loading: false,
@@ -304,7 +304,7 @@ describe("Match mode — rejected draft guard", () => {
     render(
       <MemoryRouter>
         <UndoStackProvider>
-          <MatchModeBody dim={stubDim as never} isActive />
+          <MatchModeBody refTable={stubDim as never} isActive />
         </UndoStackProvider>
       </MemoryRouter>,
     );

@@ -3,9 +3,9 @@ import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { PALETTE, type PaletteName } from "../lib/palette";
 import { IconPlus, IconX, IconSearch } from "./Icons";
-import { useDimensions, useDrafts, useCanEdit, deleteDimension } from "../store";
+import { useRefTables, useDrafts, useCanEdit, deleteRefTable } from "../store";
 import { useOpenTabs, type OpenTab } from "../lib/open-tabs";
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 import { ContextMenu } from "./datagrid/ContextMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { toast } from "./Toast";
@@ -47,14 +47,14 @@ function TabMono({
 
 function AddTabPopover({
   anchorRef,
-  dims,
+  refTables,
   openIds,
   onPick,
   onClose,
   onCreate,
 }: {
   anchorRef: React.RefObject<HTMLElement | null>;
-  dims: MappingDimension[];
+  refTables: MappingRefTable[];
   openIds: Set<string>;
   onPick: (id: string) => void;
   onClose: () => void;
@@ -119,7 +119,7 @@ function AddTabPopover({
     };
   }, [onClose, anchorRef]);
 
-  const list = dims.filter((d) => d.dimension.toLowerCase().includes(q.toLowerCase().trim()));
+  const list = refTables.filter((d) => d.refTable.toLowerCase().includes(q.toLowerCase().trim()));
 
   return createPortal(
     <div
@@ -150,9 +150,9 @@ function AddTabPopover({
                 }}
                 className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-hover"
               >
-                <TabMono label={d.dimension} color={d.color ?? null} active={false} />
+                <TabMono label={d.refTable} color={d.color ?? null} active={false} />
                 <span className="min-w-0 flex-1 truncate font-display text-[13px] font-semibold text-ink">
-                  {d.dimension}
+                  {d.refTable}
                 </span>
                 {isOpen && <span className="font-mono text-[10px] text-ink-3">open</span>}
               </button>
@@ -183,7 +183,7 @@ function AddTabPopover({
 
 interface TabItemProps {
   tab: OpenTab;
-  dim: MappingDimension;
+  refTable: MappingRefTable;
   active: boolean;
   dirty: boolean;
   onFocus: () => void;
@@ -191,7 +191,7 @@ interface TabItemProps {
   onContextMenu: (e: React.MouseEvent) => void;
 }
 
-function TabItem({ tab, dim, active, dirty, onFocus, onClose, onContextMenu }: TabItemProps) {
+function TabItem({ tab, refTable, active, dirty, onFocus, onClose, onContextMenu }: TabItemProps) {
   return (
     <div
       role="tab"
@@ -221,9 +221,9 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose, onContextMenu }: T
       )}
     >
       {active && <span aria-hidden className="absolute inset-x-0 top-0 h-[2px] bg-accent" />}
-      <TabMono label={dim.dimension} color={dim.color ?? null} active={active} />
+      <TabMono label={refTable.refTable} color={refTable.color ?? null} active={active} />
       <span className="max-w-[120px] truncate font-display font-semibold md:max-w-[160px]">
-        {dim.dimension}
+        {refTable.refTable}
       </span>
       {dirty && (
         <span
@@ -234,7 +234,7 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose, onContextMenu }: T
       )}
       <button
         type="button"
-        aria-label={`Close ${dim.dimension}`}
+        aria-label={`Close ${refTable.refTable}`}
         onClick={(e) => {
           e.stopPropagation();
           onClose();
@@ -253,14 +253,14 @@ function TabItem({ tab, dim, active, dirty, onFocus, onClose, onContextMenu }: T
 }
 
 export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () => void }) {
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const drafts = useDrafts();
   const canEdit = useCanEdit();
   const { tabs, activeId, focusTab, closeTab, openTab } = useOpenTabs();
   const [addOpen, setAddOpen] = useState(false);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; tab: OpenTab } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<MappingDimension | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MappingRefTable | null>(null);
   const [deleting, setDeleting] = useState(false);
   // Dismiss the tab context menu on outside mousedown or Escape
   useEffect(() => {
@@ -281,14 +281,14 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
     };
   }, [tabMenu]);
 
-  const dirtyDimIds = useMemo(() => {
+  const dirtyRefTableIds = useMemo(() => {
     const s = new Set<string>();
-    for (const d of Object.values(drafts)) s.add(d.dimId);
+    for (const d of Object.values(drafts)) s.add(d.refTableId);
     return s;
   }, [drafts]);
 
-  const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
-  const openIds = useMemo(() => new Set(tabs.map((t) => t.dimId)), [tabs]);
+  const refTableById = useMemo(() => new Map(refTables.map((d) => [d.id, d])), [refTables]);
+  const openIds = useMemo(() => new Set(tabs.map((t) => t.refTableId)), [tabs]);
 
   return (
     <div
@@ -297,15 +297,15 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
     >
       <div className="flex flex-1 items-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [-webkit-overflow-scrolling:touch]">
         {tabs.map((tab) => {
-          const dim = dimById.get(tab.dimId);
-          if (!dim) return null;
+          const refTable = refTableById.get(tab.refTableId);
+          if (!refTable) return null;
           return (
             <TabItem
               key={tab.id}
               tab={tab}
-              dim={dim}
+              refTable={refTable}
               active={tab.id === activeId}
-              dirty={dirtyDimIds.has(tab.dimId)}
+              dirty={dirtyRefTableIds.has(tab.refTableId)}
               onFocus={() => focusTab(tab.id)}
               onClose={() => closeTab(tab.id)}
               onContextMenu={(e) => setTabMenu({ x: e.clientX, y: e.clientY, tab })}
@@ -327,7 +327,7 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
         {addOpen && (
           <AddTabPopover
             anchorRef={addBtnRef}
-            dims={dims}
+            refTables={refTables}
             openIds={openIds}
             onPick={(id) => openTab(id)}
             onClose={() => setAddOpen(false)}
@@ -348,8 +348,8 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
                   {
                     label: "Delete table…",
                     onClick: () => {
-                      const dim = dims.find((d) => d.id === tabMenu.tab.dimId);
-                      if (dim) setDeleteTarget(dim);
+                      const refTable = refTables.find((d) => d.id === tabMenu.tab.refTableId);
+                      if (refTable) setDeleteTarget(refTable);
                     },
                   },
                 ]
@@ -363,12 +363,12 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
           open
           danger
           loading={deleting}
-          title={`Delete ${deleteTarget.dimension}?`}
+          title={`Delete ${deleteTarget.refTable}?`}
           confirmLabel="Delete table"
-          confirmPhrase={deleteTarget.dimension}
+          confirmPhrase={deleteTarget.refTable}
           body={
             <>
-              Permanently delete <strong>{deleteTarget.dimension}</strong>? Its{" "}
+              Permanently delete <strong>{deleteTarget.refTable}</strong>? Its{" "}
               {deleteTarget.rows.toLocaleString()} records and their mappings are deleted, and
               anything reading <code>dim_{deleteTarget.id}</code> from the warehouse will break.
               This cannot be undone.
@@ -377,14 +377,14 @@ export function TableTabStrip({ onCreateRequested }: { onCreateRequested?: () =>
           onConfirm={async () => {
             setDeleting(true);
             try {
-              await deleteDimension(deleteTarget.id);
-              const open = tabs.find((t) => t.dimId === deleteTarget.id);
+              await deleteRefTable(deleteTarget.id);
+              const open = tabs.find((t) => t.refTableId === deleteTarget.id);
               if (open) closeTab(open.id);
-              toast(`Deleted ${deleteTarget.dimension}.`);
+              toast(`Deleted ${deleteTarget.refTable}.`);
               setDeleteTarget(null);
             } catch (err) {
               toast(
-                `Couldn't delete ${deleteTarget.dimension} — ${err instanceof Error ? err.message : "please try again"}`,
+                `Couldn't delete ${deleteTarget.refTable} — ${err instanceof Error ? err.message : "please try again"}`,
                 "error",
               );
             } finally {

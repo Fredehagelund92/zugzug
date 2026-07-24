@@ -31,7 +31,7 @@ test("anyScanDue returns true when no sources are wired (lastScan is null)", asy
 });
 
 test("anyScanDue returns false when most-recent scan is within cadence window", async () => {
-  // Setup: preferences + dimension + registered source + recent scan stat
+  // Setup: preferences + refTable + registered source + recent scan stat
   await pgRun(
     `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at, tenant_id)
      VALUES (1, 'hourly', 95, 75, current_timestamp, 'default')
@@ -39,22 +39,22 @@ test("anyScanDue returns false when most-recent scan is within cadence window", 
   );
 
   const userId = "u_test";
-  const dimId = await repo.addDimension("Partner", [], { keyKind: "slug" }, userId, "default");
+  const refTableId = await repo.addRefTable("Partner", [], { keyKind: "slug" }, userId, "default");
 
   // Register a source
-  await addSource(dimId, "public.partners", "partner_id", "default");
+  await addSource(refTableId, "public.partners", "partner_id", "default");
 
   // Insert a source_stat row scanned 10 minutes ago (within hourly window)
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
   await pgRun(
     `INSERT INTO zugzug_app.source_stat
-       (dim_id, database_id, schema_name, table_name, column_name, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+       (reference_table_id, database_id, schema_name, table_name, column_name, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
      VALUES ($1, 'whd_test', 'public', 'partners', 'partner_id', true, 100, 50, 5, $2, 'default')
-     ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
+     ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
        present = EXCLUDED.present, rows = EXCLUDED.rows,
        distinct_values = EXCLUDED.distinct_values, unmapped = EXCLUDED.unmapped,
        scanned_at = EXCLUDED.scanned_at`,
-    [dimId, tenMinutesAgo],
+    [refTableId, tenMinutesAgo],
   );
 
   // anyScanDue returns false (most recent scan is 10 min ago, within hourly window)
@@ -62,7 +62,7 @@ test("anyScanDue returns false when most-recent scan is within cadence window", 
 });
 
 test("anyScanDue returns true when a newly-registered source has never been scanned (THE BUG)", async () => {
-  // Setup: preferences + one dimension with TWO sources
+  // Setup: preferences + one refTable with TWO sources
   await pgRun(
     `INSERT INTO zugzug_app.preferences (id, scan_schedule, publish_threshold, suggest_threshold, updated_at, tenant_id)
      VALUES (1, 'hourly', 95, 75, current_timestamp, 'default')
@@ -70,20 +70,20 @@ test("anyScanDue returns true when a newly-registered source has never been scan
   );
 
   const userId = "u_test";
-  const dimId = await repo.addDimension("Partner", [], { keyKind: "slug" }, userId, "default");
+  const refTableId = await repo.addRefTable("Partner", [], { keyKind: "slug" }, userId, "default");
 
   // Register TWO sources
-  await addSource(dimId, "public.partners", "partner_id", "default");
-  await addSource(dimId, "public.accounts", "account_id", "default");
+  await addSource(refTableId, "public.partners", "partner_id", "default");
+  await addSource(refTableId, "public.accounts", "account_id", "default");
 
   // Only the FIRST source has been scanned (10 min ago, within hourly window)
   // The SECOND source has never been scanned (no source_stat row)
   const tenMinutesAgo = new Date(Date.now() - 10 * 60_000);
   await pgRun(
     `INSERT INTO zugzug_app.source_stat
-       (dim_id, database_id, schema_name, table_name, column_name, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
+       (reference_table_id, database_id, schema_name, table_name, column_name, present, rows, distinct_values, unmapped, scanned_at, tenant_id)
      VALUES ($1, 'whd_test', 'public', 'partners', 'partner_id', true, 100, 50, 5, $2, 'default')`,
-    [dimId, tenMinutesAgo],
+    [refTableId, tenMinutesAgo],
   );
 
   // With the bug: anyScanDue returns false (MAX(scanned_at) is 10 min ago, within window)

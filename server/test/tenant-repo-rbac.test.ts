@@ -4,7 +4,7 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { resetDb } from "./setup.ts";
-import { makeWorkspace, makeDimension } from "./factories/index.ts";
+import { makeWorkspace, makeRefTable } from "./factories/index.ts";
 import { TenantRepo } from "../src/tenant-repo.ts";
 import { AppError } from "../src/errors.ts";
 
@@ -17,11 +17,11 @@ afterAll(resetDb);
 
 test("manage_adapter: viewer cannot addField → FORBIDDEN", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "viewer");
   let err: AppError | null = null;
   try {
-    await repo.addField(dimId, "Category", "text", undefined, {}, "u1");
+    await repo.addField(refTableId, "Category", "text", undefined, {}, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -30,11 +30,11 @@ test("manage_adapter: viewer cannot addField → FORBIDDEN", async () => {
 
 test("manage_adapter: editor cannot addField → FORBIDDEN", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "editor");
   let err: AppError | null = null;
   try {
-    await repo.addField(dimId, "Category", "text", undefined, {}, "u1");
+    await repo.addField(refTableId, "Category", "text", undefined, {}, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -43,11 +43,11 @@ test("manage_adapter: editor cannot addField → FORBIDDEN", async () => {
 
 test("manage_adapter: admin can addField (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "admin");
   let err: AppError | null = null;
   try {
-    await repo.addField(dimId, "Category", "text", undefined, {}, "u1");
+    await repo.addField(refTableId, "Category", "text", undefined, {}, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -60,11 +60,11 @@ test("manage_adapter: admin can addField (no FORBIDDEN)", async () => {
 
 test("commit: viewer cannot commit → FORBIDDEN", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "viewer");
   let err: AppError | null = null;
   try {
-    await repo.commit(dimId, "u1");
+    await repo.commit(refTableId, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -73,11 +73,11 @@ test("commit: viewer cannot commit → FORBIDDEN", async () => {
 
 test("commit: editor can commit (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "editor");
   let err: AppError | null = null;
   try {
-    await repo.commit(dimId, "u1");
+    await repo.commit(refTableId, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -86,11 +86,11 @@ test("commit: editor can commit (no FORBIDDEN)", async () => {
 
 test("commit: admin can commit (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "admin");
   let err: AppError | null = null;
   try {
-    await repo.commit(dimId, "u1");
+    await repo.commit(refTableId, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -103,11 +103,11 @@ test("commit: admin can commit (no FORBIDDEN)", async () => {
 
 test("curate: viewer cannot saveDraft → FORBIDDEN", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "viewer");
   let err: AppError | null = null;
   try {
-    await repo.saveDraft(dimId, "raw-val", "mapped", "Target", "target-key", "u1");
+    await repo.saveDraft(refTableId, "raw-val", "mapped", "Target", "target-key", "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -116,11 +116,11 @@ test("curate: viewer cannot saveDraft → FORBIDDEN", async () => {
 
 test("curate: editor can saveDraft (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "editor");
   let err: AppError | null = null;
   try {
-    await repo.saveDraft(dimId, "raw-val", "mapped", "Target", "target-key", "u1");
+    await repo.saveDraft(refTableId, "raw-val", "mapped", "Target", "target-key", "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -129,11 +129,11 @@ test("curate: editor can saveDraft (no FORBIDDEN)", async () => {
 
 test("curate: admin can saveDraft (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "admin");
   let err: AppError | null = null;
   try {
-    await repo.saveDraft(dimId, "raw-val", "mapped", "Target", "target-key", "u1");
+    await repo.saveDraft(refTableId, "raw-val", "mapped", "Target", "target-key", "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -141,25 +141,25 @@ test("curate: admin can saveDraft (no FORBIDDEN)", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// read: listDimensions + getPreferences — all roles resolve without throwing
+// read: listRefTables + getPreferences — all roles resolve without throwing
 // ---------------------------------------------------------------------------
 
-test("read: viewer can listDimensions", async () => {
+test("read: viewer can listRefTables", async () => {
   await makeWorkspace("trbac");
   const repo = new TenantRepo("trbac", "viewer");
-  await expect(repo.listDimensions()).resolves.toBeDefined();
+  await expect(repo.listRefTables()).resolves.toBeDefined();
 });
 
-test("read: editor can listDimensions", async () => {
+test("read: editor can listRefTables", async () => {
   await makeWorkspace("trbac");
   const repo = new TenantRepo("trbac", "editor");
-  await expect(repo.listDimensions()).resolves.toBeDefined();
+  await expect(repo.listRefTables()).resolves.toBeDefined();
 });
 
-test("read: admin can listDimensions", async () => {
+test("read: admin can listRefTables", async () => {
   await makeWorkspace("trbac");
   const repo = new TenantRepo("trbac", "admin");
-  await expect(repo.listDimensions()).resolves.toBeDefined();
+  await expect(repo.listRefTables()).resolves.toBeDefined();
 });
 
 test("read: viewer can getPreferences", async () => {
@@ -174,19 +174,19 @@ test("read: viewer can getPreferences", async () => {
 
 test("super-admin bypass: viewer+isSuperAdmin can addField (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
-  const dimId = await makeDimension("trbac", "Vendors");
+  const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "viewer", true);
   let err: AppError | null = null;
   try {
-    await repo.addField(dimId, "Region", "text", undefined, {}, "u1");
+    await repo.addField(refTableId, "Region", "text", undefined, {}, "u1");
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
   expect(err?.code).not.toBe("FORBIDDEN");
 });
 
-test("super-admin bypass: viewer+isSuperAdmin can listDimensions", async () => {
+test("super-admin bypass: viewer+isSuperAdmin can listRefTables", async () => {
   await makeWorkspace("trbac");
   const repo = new TenantRepo("trbac", "viewer", true);
-  await expect(repo.listDimensions()).resolves.toBeDefined();
+  await expect(repo.listRefTables()).resolves.toBeDefined();
 });

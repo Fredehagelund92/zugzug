@@ -25,13 +25,13 @@ describe("dkey", () => {
   test("is stable for the same inputs", () => {
     expect(dkey("brand", "ACME")).toBe(dkey("brand", "ACME"));
   });
-  test("differs for different dimensions", () => {
+  test("differs for different refTables", () => {
     expect(dkey("brand", "x")).not.toBe(dkey("channel", "x"));
   });
   test("differs for different raw values", () => {
     expect(dkey("brand", "a")).not.toBe(dkey("brand", "b"));
   });
-  test("format is dimId::raw", () => {
+  test("format is refTableId::raw", () => {
     expect(dkey("dim1", "val1")).toBe("dim1::val1");
   });
 });

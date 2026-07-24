@@ -17,7 +17,7 @@ interface Props {
 
 interface Dependents {
   sourceCount: number;
-  dimensions: Array<{ dimId: string; sources: string[] }>;
+  refTables: Array<{ refTableId: string; sources: string[] }>;
 }
 
 export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props): JSX.Element {
@@ -38,11 +38,11 @@ export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props):
         if (r.status === 409) {
           const body = (await r.json()) as {
             sourceCount?: number;
-            dimensions?: Dependents["dimensions"];
+            refTables?: Dependents["refTables"];
           };
           setDeps({
             sourceCount: body.sourceCount ?? 0,
-            dimensions: body.dimensions ?? [],
+            refTables: body.refTables ?? [],
           });
         } else {
           setError(`Unexpected response: ${r.status}`);
@@ -96,13 +96,13 @@ export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props):
             <>
               <div>
                 This database powers {deps.sourceCount} source
-                {deps.sourceCount === 1 ? "" : "s"} across {deps.dimensions.length} table
-                {deps.dimensions.length === 1 ? "" : "s"}:
+                {deps.sourceCount === 1 ? "" : "s"} across {deps.refTables.length} table
+                {deps.refTables.length === 1 ? "" : "s"}:
               </div>
               <ul className="ml-4 list-disc">
-                {deps.dimensions.map((d) => (
-                  <li key={d.dimId}>
-                    <span className="font-mono">{d.dimId}</span> ({d.sources.length} source
+                {deps.refTables.map((d) => (
+                  <li key={d.refTableId}>
+                    <span className="font-mono">{d.refTableId}</span> ({d.sources.length} source
                     {d.sources.length === 1 ? "" : "s"})
                     <ul className="ml-4">
                       {d.sources.map((s) => (

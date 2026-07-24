@@ -18,7 +18,7 @@ import { resolveTenantContext } from "./tenant-middleware.ts";
 import { checkRateLimit } from "./rate-limit.ts";
 import { env } from "./env.ts";
 import {
-  listDimensionsForApi,
+  listRefTablesForApi,
   getSchemaForApi,
   listRecordPage,
   getRecordRow,
@@ -140,25 +140,25 @@ async function dispatch(
 
   // /v1/tables
   if (v1[0] === "tables" && v1.length === 1 && method === "GET") {
-    return json(await listDimensionsForApi(ctx.tenantId));
+    return json(await listRefTablesForApi(ctx.tenantId));
   }
 
   // /v1/tables/:slug/fields
   if (v1[0] === "tables" && v1[2] === "fields" && v1.length === 3 && method === "GET") {
-    const dimSlug = decodeURIComponent(v1[1]!);
-    const out = await getSchemaForApi(ctx.tenantId, dimSlug);
+    const refTableSlug = decodeURIComponent(v1[1]!);
+    const out = await getSchemaForApi(ctx.tenantId, refTableSlug);
     if (!out) return jsonError(404, "table_not_found");
     return json(out);
   }
 
   // /v1/tables/:slug/records
   if (v1[0] === "tables" && v1[2] === "records" && v1.length === 3 && method === "GET") {
-    const dimSlug = decodeURIComponent(v1[1]!);
+    const refTableSlug = decodeURIComponent(v1[1]!);
     const since = url.searchParams.get("since") ?? undefined;
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "");
     try {
-      const out = await listRecordPage(ctx.tenantId, dimSlug, {
+      const out = await listRecordPage(ctx.tenantId, refTableSlug, {
         since,
         cursor,
         limit: Number.isFinite(limit) ? limit : undefined,
@@ -173,21 +173,21 @@ async function dispatch(
 
   // /v1/tables/:slug/records/:key
   if (v1[0] === "tables" && v1[2] === "records" && v1.length === 4 && method === "GET") {
-    const dimSlug = decodeURIComponent(v1[1]!);
+    const refTableSlug = decodeURIComponent(v1[1]!);
     const key = decodeURIComponent(v1[3]!);
-    const out = await getRecordRow(ctx.tenantId, dimSlug, key);
+    const out = await getRecordRow(ctx.tenantId, refTableSlug, key);
     if (!out) return jsonError(404, "not_found");
     return json(out);
   }
 
   // /v1/tables/:slug/removed
   if (v1[0] === "tables" && v1[2] === "removed" && v1.length === 3 && method === "GET") {
-    const dimSlug = decodeURIComponent(v1[1]!);
+    const refTableSlug = decodeURIComponent(v1[1]!);
     const since = url.searchParams.get("since") ?? undefined;
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "");
     try {
-      const out = await listTombstonesPage(ctx.tenantId, dimSlug, {
+      const out = await listTombstonesPage(ctx.tenantId, refTableSlug, {
         since,
         cursor,
         limit: Number.isFinite(limit) ? limit : undefined,

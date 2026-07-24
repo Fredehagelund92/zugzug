@@ -54,8 +54,8 @@ export interface ValueProvenance {
   readonly count: number;
 }
 
-export interface DimensionSpec {
-  readonly dimId: string;
+export interface RefTableSpec {
+  readonly refTableId: string;
   readonly dimTable: string;
   readonly mapTable: string;
   readonly keyCol: string;
@@ -112,8 +112,8 @@ interface BaseWarehouseAdapter {
 
 export interface WritableWarehouseAdapter extends BaseWarehouseAdapter {
   readonly capabilities: AdapterCapabilities & { readonly writable: true };
-  ensureRecordTables(dim: DimensionSpec): Promise<void>;
-  commitRecord(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult>;
+  ensureRecordTables(refTable: RefTableSpec): Promise<void>;
+  commitRecord(refTable: RefTableSpec, drafts: ApprovedDraft[]): Promise<CommitResult>;
 }
 
 export interface ReadOnlyWarehouseAdapter extends BaseWarehouseAdapter {

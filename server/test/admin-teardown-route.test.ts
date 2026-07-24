@@ -20,9 +20,9 @@ async function cleanup(): Promise<void> {
   await pgRun(`DROP TABLE IF EXISTS "${RECORD_SCHEMA}"."dim_${D}"`);
   await pgRun(`DROP TABLE IF EXISTS "${RECORD_SCHEMA}"."map_${D}"`);
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_field" WHERE tenant_id = $1`, [T]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_field" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]);
   for (const u of U_IDS) {
@@ -46,10 +46,10 @@ async function login(userId: string, isSuperAdmin: boolean): Promise<string> {
 
 test("POST /api/admin/tenants/:id/teardown drops dynamic tables + wipes scoped rows", async () => {
   await provisionTenant({ id: T, label: "Tear" });
-  await record.addDimension(D, [], { keyKind: "slug" }, "u_tear_super", T);
+  await record.addRefTable(D, [], { keyKind: "slug" }, "u_tear_super", T);
   await appendAuditAs("u_tear_super", "test_action", "detail", { tenantId: T });
 
-  // Pre-condition: dim_/map_ exist and dimension/audit rows are populated.
+  // Pre-condition: dim_/map_ exist and refTable/audit rows are populated.
   const before = await pgAll<{ table_name: string }>(
     `SELECT table_name FROM information_schema.tables
       WHERE table_schema = $1 AND table_name IN ($2, $3)`,
@@ -76,8 +76,11 @@ test("POST /api/admin/tenants/:id/teardown drops dynamic tables + wipes scoped r
   );
   expect(after.length).toBe(0);
 
-  const dims = await pgAll(`SELECT id FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]);
-  expect(dims.length).toBe(0);
+  const refTables = await pgAll(
+    `SELECT id FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`,
+    [T],
+  );
+  expect(refTables.length).toBe(0);
 
   const audit = await pgAll(`SELECT id FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
   expect(audit.length).toBe(0);

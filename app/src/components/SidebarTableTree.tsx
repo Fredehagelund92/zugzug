@@ -4,12 +4,12 @@ import { cx } from "../lib/cx";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { PALETTE, type PaletteName } from "../lib/palette";
 import { IconPlus, IconPin, IconSearch } from "./Icons";
-import { useDimensions, useDrafts } from "../store";
+import { useRefTables, useDrafts } from "../store";
 import { useOpenTabs } from "../lib/open-tabs";
 import { useCreateTableModal } from "../lib/create-table-modal";
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 
-const PINNED_KEY = "zugzug:pinned-dims";
+const PINNED_KEY = "zugzug:pinned-refTables";
 
 function usePinnedDims(): [Set<string>, (id: string, pinned: boolean) => void] {
   const [ids, setIds] = useState<Set<string>>(() => {
@@ -38,7 +38,7 @@ function usePinnedDims(): [Set<string>, (id: string, pinned: boolean) => void] {
   return [ids, toggle];
 }
 
-function DimMono({
+function RefTableMono({
   label,
   color,
   active,
@@ -71,8 +71,8 @@ function DimMono({
   );
 }
 
-interface DimRowProps {
-  dim: MappingDimension;
+interface RefTableRowProps {
+  refTable: MappingRefTable;
   active: boolean;
   dirty: boolean;
   pinned: boolean;
@@ -80,7 +80,7 @@ interface DimRowProps {
   onTogglePin: () => void;
 }
 
-function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps) {
+function RefTableRow({ refTable, active, dirty, pinned, onOpen, onTogglePin }: RefTableRowProps) {
   return (
     <li className="group relative">
       <button
@@ -93,14 +93,14 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
             : "text-ink-2 hover:bg-hover hover:text-ink",
         )}
       >
-        <DimMono label={dim.dimension} color={dim.color ?? null} active={active} />
+        <RefTableMono label={refTable.refTable} color={refTable.color ?? null} active={active} />
         <span
           className={cx(
             "min-w-0 flex-1 truncate font-display text-[13px] font-semibold",
             active ? "text-accent" : "text-ink",
           )}
         >
-          {dim.dimension}
+          {refTable.refTable}
         </span>
         {dirty && (
           <span
@@ -111,7 +111,7 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
       </button>
       <button
         type="button"
-        aria-label={pinned ? `Unpin ${dim.dimension}` : `Pin ${dim.dimension}`}
+        aria-label={pinned ? `Unpin ${refTable.refTable}` : `Pin ${refTable.refTable}`}
         onClick={onTogglePin}
         className={cx(
           "absolute right-2 top-1/2 -translate-y-1/2 grid h-5 w-5 place-items-center rounded-sm transition-opacity",
@@ -127,7 +127,7 @@ function DimRow({ dim, active, dirty, pinned, onOpen, onTogglePin }: DimRowProps
 }
 
 export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const drafts = useDrafts();
   const { activeId, openTab } = useOpenTabs();
   const create = useCreateTableModal();
@@ -135,18 +135,18 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
   const navLinks = useNavLinks();
   const [pinnedIds, togglePin] = usePinnedDims();
   const [q, setQ] = useState("");
-  const activeDimId = activeId ? activeId.slice("tables:".length) : null;
+  const activeRefTableId = activeId ? activeId.slice("tables:".length) : null;
 
-  const dirtyDimIds = useMemo(() => {
+  const dirtyRefTableIds = useMemo(() => {
     const s = new Set<string>();
-    for (const d of Object.values(drafts)) s.add(d.dimId);
+    for (const d of Object.values(drafts)) s.add(d.refTableId);
     return s;
   }, [drafts]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return dims.filter((d) => !needle || d.dimension.toLowerCase().includes(needle));
-  }, [dims, q]);
+    return refTables.filter((d) => !needle || d.refTable.toLowerCase().includes(needle));
+  }, [refTables, q]);
 
   const pinned = filtered.filter((d) => pinnedIds.has(d.id));
   const unpinned = filtered.filter((d) => !pinnedIds.has(d.id));
@@ -177,8 +177,8 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
           placeholder="filter tables…"
           className="w-full bg-transparent font-mono text-[12px] text-ink outline-none placeholder:text-ink-3"
         />
-        {dims.length > 0 && (
-          <span className="font-mono text-[10px] tabular-nums text-ink-3">{dims.length}</span>
+        {refTables.length > 0 && (
+          <span className="font-mono text-[10px] tabular-nums text-ink-3">{refTables.length}</span>
         )}
       </div>
 
@@ -189,11 +189,11 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
               Pinned
             </li>
             {pinned.map((d) => (
-              <DimRow
+              <RefTableRow
                 key={d.id}
-                dim={d}
-                active={d.id === activeDimId}
-                dirty={dirtyDimIds.has(d.id)}
+                refTable={d}
+                active={d.id === activeRefTableId}
+                dirty={dirtyRefTableIds.has(d.id)}
                 pinned
                 onOpen={() => openDim(d.id)}
                 onTogglePin={() => togglePin(d.id, false)}
@@ -203,11 +203,11 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
           </>
         )}
         {unpinned.map((d) => (
-          <DimRow
+          <RefTableRow
             key={d.id}
-            dim={d}
-            active={d.id === activeDimId}
-            dirty={dirtyDimIds.has(d.id)}
+            refTable={d}
+            active={d.id === activeRefTableId}
+            dirty={dirtyRefTableIds.has(d.id)}
             pinned={false}
             onOpen={() => openDim(d.id)}
             onTogglePin={() => togglePin(d.id, true)}

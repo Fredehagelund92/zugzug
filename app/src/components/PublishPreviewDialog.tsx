@@ -3,8 +3,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { IconArrowRight } from "./Icons";
 
 export interface PublishGroup {
-  dimId: string;
-  dimName: string;
+  refTableId: string;
+  refTableName: string;
   nextVersion: number;
   drafts: Draft[];
   changedKeys: string[];
@@ -34,7 +34,7 @@ export function PublishPreviewDialog({
   const totalEdits = groups.reduce((n, g) => n + g.changedKeys.length, 0);
   const title =
     groups.length === 1
-      ? `Publish v${groups[0].nextVersion} of ${groups[0].dimName}?`
+      ? `Publish v${groups[0].nextVersion} of ${groups[0].refTableName}?`
       : `Publish ${groups.length} tables?`;
 
   return (
@@ -48,15 +48,15 @@ export function PublishPreviewDialog({
       body={
         <div className="max-h-80 space-y-3 overflow-y-auto text-left">
           {groups.map((g) => (
-            <div key={g.dimId} className="rounded-sm border border-line bg-surface-2 p-2.5">
+            <div key={g.refTableId} className="rounded-sm border border-line bg-surface-2 p-2.5">
               <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-                {g.dimName} → v{g.nextVersion}
+                {g.refTableName} → v{g.nextVersion}
               </div>
               {g.drafts.length > 0 && (
                 <ul className="mt-1.5 space-y-0.5">
                   {g.drafts.slice(0, SAMPLE).map((d) => (
                     <li
-                      key={`${d.dimId}::${d.raw}`}
+                      key={`${d.refTableId}::${d.raw}`}
                       className="flex items-center gap-2 font-mono text-[11px] text-ink-2"
                     >
                       <span className="truncate">{d.raw}</span>

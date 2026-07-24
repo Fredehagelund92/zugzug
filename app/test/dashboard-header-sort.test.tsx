@@ -2,13 +2,13 @@ import { describe, test, expect, vi } from "vitest";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
-import type { MappingDimension } from "../src/data";
+import type { MappingRefTable } from "../src/data";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const dimAlpha: MappingDimension = {
+const refTableAlpha: MappingRefTable = {
   id: "alpha",
-  dimension: "Alpha",
+  refTable: "Alpha",
   dimTable: "zugzug.dim_alpha",
   mapTable: "zugzug.map_alpha",
   keyCol: "alpha_id",
@@ -31,9 +31,9 @@ const dimAlpha: MappingDimension = {
   },
 };
 
-const dimBravo: MappingDimension = {
+const refTableBravo: MappingRefTable = {
   id: "bravo",
-  dimension: "Bravo",
+  refTable: "Bravo",
   dimTable: "zugzug.dim_bravo",
   mapTable: "zugzug.map_bravo",
   keyCol: "bravo_id",
@@ -56,9 +56,9 @@ const dimBravo: MappingDimension = {
   },
 };
 
-const dimCharlie: MappingDimension = {
+const refTableCharlie: MappingRefTable = {
   id: "charlie",
-  dimension: "Charlie",
+  refTable: "Charlie",
   dimTable: "zugzug.dim_charlie",
   mapTable: "zugzug.map_charlie",
   keyCol: "charlie_id",
@@ -81,12 +81,12 @@ const dimCharlie: MappingDimension = {
   },
 };
 
-const dimensionsFixture: MappingDimension[] = [dimAlpha, dimBravo, dimCharlie];
+const refTablesFixture: MappingRefTable[] = [refTableAlpha, refTableBravo, refTableCharlie];
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
 vi.mock("../src/store", () => ({
-  useDimensions: () => dimensionsFixture,
+  useRefTables: () => refTablesFixture,
   useAudit: () => [],
   useDrafts: () => ({}),
   useWorkspaceInfo: () => ({ adapter: "motherduck", warehouseDb: "md:demo", writable: true }),

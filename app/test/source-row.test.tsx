@@ -7,8 +7,8 @@ import type { SourceInfo } from "../src/store";
 const base: SourceInfo = {
   table: "authco.users",
   column: "plan_type",
-  dimension: "Plan",
-  dimId: "dim-1",
+  refTable: "Plan",
+  refTableId: "refTable-1",
   present: true,
   rows: 1000,
   values: 10,
@@ -22,7 +22,7 @@ function renderRow(over: Partial<SourceInfo>, handlers = {}) {
     <MemoryRouter>
       <SourceRow
         row={{ ...base, ...over }}
-        mapValuesHref="/app/default/tables?open=dim-1&active=dim-1&mode=match"
+        mapValuesHref="/app/default/tables?open=refTable-1&active=refTable-1&mode=match"
         canEdit
         onDerive={vi.fn()}
         onRemove={vi.fn()}
@@ -60,7 +60,7 @@ describe("SourceRow", () => {
       <MemoryRouter>
         <SourceRow
           row={{ ...base }}
-          mapValuesHref="/app/default/tables?open=dim-1&active=dim-1&mode=match"
+          mapValuesHref="/app/default/tables?open=refTable-1&active=refTable-1&mode=match"
           canEdit={false}
           onDerive={vi.fn()}
           onRemove={vi.fn()}

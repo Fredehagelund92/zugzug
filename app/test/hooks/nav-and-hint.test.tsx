@@ -88,12 +88,14 @@ describe("useNavLinks", () => {
 
   test("table() generates open/active query params", () => {
     const { result } = renderHook(() => useNavLinks(), { wrapper });
-    expect(result.current.table("dim-1")).toBe("/app/acme/tables?open=dim-1&active=dim-1");
-    expect(result.current.table("dim-1", "review")).toBe(
-      "/app/acme/tables?open=dim-1&active=dim-1&mode=review",
+    expect(result.current.table("refTable-1")).toBe(
+      "/app/acme/tables?open=refTable-1&active=refTable-1",
     );
-    expect(result.current.table("dim-1", "match")).toBe(
-      "/app/acme/tables?open=dim-1&active=dim-1&mode=match",
+    expect(result.current.table("refTable-1", "review")).toBe(
+      "/app/acme/tables?open=refTable-1&active=refTable-1&mode=review",
+    );
+    expect(result.current.table("refTable-1", "match")).toBe(
+      "/app/acme/tables?open=refTable-1&active=refTable-1&mode=match",
     );
   });
 
@@ -115,7 +117,7 @@ describe("useAiHint", () => {
     const { apiFetch } = await import("../../src/api");
     const { useAiHint } = await import("../../src/lib/use-ai-hint");
 
-    const { result } = renderHook(() => useAiHint("dim-42", "US", true));
+    const { result } = renderHook(() => useAiHint("refTable-42", "US", true));
 
     await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 500 });
 
@@ -132,7 +134,7 @@ describe("useAiHint", () => {
     const { useAiHint } = await import("../../src/lib/use-ai-hint");
     vi.mocked(apiFetch).mockClear();
 
-    renderHook(() => useAiHint("dim-99", "CA", false));
+    renderHook(() => useAiHint("refTable-99", "CA", false));
 
     // Give the debounce window time to pass; no call should ever fire.
     await new Promise((r) => setTimeout(r, 200));
@@ -143,7 +145,7 @@ describe("useAiHint", () => {
   test("starts with loading false and null hint when disabled", async () => {
     const { useAiHint } = await import("../../src/lib/use-ai-hint");
 
-    const { result } = renderHook(() => useAiHint("dim-77", "FR", false));
+    const { result } = renderHook(() => useAiHint("refTable-77", "FR", false));
     expect(result.current.loading).toBe(false);
     expect(result.current.hint).toBeNull();
     expect(result.current.error).toBe(false);

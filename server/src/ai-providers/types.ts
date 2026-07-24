@@ -1,7 +1,7 @@
 // server/src/ai-providers/types.ts
 
 export interface SuggestionRequest {
-  dimensionName: string;
+  refTableName: string;
   rawValue: string;
   existingRecordValues: string[];
 }

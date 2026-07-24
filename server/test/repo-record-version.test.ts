@@ -9,7 +9,7 @@ import { pgRun, pgGet } from "../src/pg.ts";
 import { addRecordOne, renameRecord, retireRecord, mergeRecord } from "../src/repo-record.ts";
 import { AppError } from "../src/errors.ts";
 
-const DIM = "d_canon_test";
+const REF_TABLE = "d_canon_test";
 const T = "default";
 // Store unquoted identifiers — cq() will add quotes when building SQL
 const DIM_TABLE = "zugzug_app.dim_d_canon_test";
@@ -18,11 +18,11 @@ const KEY_COL = "country_id";
 
 beforeAll(async () => {
   await pgRun(
-    `INSERT INTO "zugzug_app"."dimension"
+    `INSERT INTO "zugzug_app"."reference_table"
        (id, label, dim_table, map_table, key_col, created_at, tenant_id)
      VALUES ($1, $2, $3, $4, $5, now(), $6)
      ON CONFLICT (tenant_id, id) DO UPDATE SET label = EXCLUDED.label, dim_table = EXCLUDED.dim_table, map_table = EXCLUDED.map_table, key_col = EXCLUDED.key_col`,
-    [DIM, "Canon Test", DIM_TABLE, MAP_TABLE, KEY_COL, T],
+    [REF_TABLE, "Canon Test", DIM_TABLE, MAP_TABLE, KEY_COL, T],
   );
   await pgRun(
     `CREATE TABLE IF NOT EXISTS "zugzug_app"."dim_d_canon_test" (${KEY_COL} varchar PRIMARY KEY, label varchar)`,
@@ -32,7 +32,9 @@ beforeAll(async () => {
   );
   await pgRun(`DELETE FROM "zugzug_app"."dim_d_canon_test"`);
   await pgRun(`DELETE FROM "zugzug_app"."map_d_canon_test"`);
-  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE dim_id = $1`, [DIM]);
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE reference_table_id = $1`, [
+    REF_TABLE,
+  ]);
   await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials)
      VALUES ('u_canon_actor', 'Canon Actor', 'CA')
@@ -41,19 +43,21 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Remove the dimension row so /api/dimensions doesn't return a phantom test
-  // dim against a shared dev/test DB. dim_X/map_X tables stay orphaned but
+  // Remove the refTable row so /api/refTables doesn't return a phantom test
+  // refTable against a shared dev/test DB. dim_X/map_X tables stay orphaned but
   // invisible without the registry entry.
-  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE dim_id = $1`, [DIM]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM]);
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE reference_table_id = $1`, [
+    REF_TABLE,
+  ]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE id = $1`, [REF_TABLE]);
 });
 
 test("addRecordOne seeds record_version row at version=1", async () => {
-  await addRecordOne(DIM, "Denmark", "dk", "u_canon_actor", T);
+  await addRecordOne(REF_TABLE, "Denmark", "dk", "u_canon_actor", T);
   const v = await pgGet<{ version: number; updated_by: string }>(
     `SELECT version, updated_by FROM "zugzug_app"."record_version"
-     WHERE dim_id = $1 AND key = $2`,
-    [DIM, "dk"],
+     WHERE reference_table_id = $1 AND key = $2`,
+    [REF_TABLE, "dk"],
   );
   expect(v?.version).toBe(1);
   expect(v?.updated_by).toBe("u_canon_actor");
@@ -61,11 +65,11 @@ test("addRecordOne seeds record_version row at version=1", async () => {
 
 test("renameRecord with correct expectedVersion bumps to 2", async () => {
   // 'dk' was added at version=1 by the addRecordOne test above.
-  await renameRecord(DIM, "dk", "Danmark", "u_canon_actor", 1, T);
+  await renameRecord(REF_TABLE, "dk", "Danmark", "u_canon_actor", 1, T);
   const v = await pgGet<{ version: number }>(
     `SELECT version FROM "zugzug_app"."record_version"
-     WHERE dim_id = $1 AND key = $2`,
-    [DIM, "dk"],
+     WHERE reference_table_id = $1 AND key = $2`,
+    [REF_TABLE, "dk"],
   );
   expect(v?.version).toBe(2);
   const label = await pgGet<{ label: string }>(
@@ -78,7 +82,7 @@ test("renameRecord with stale expectedVersion throws CONFLICT", async () => {
   // 'dk' is now at version=2. Try to rename with version=1.
   let thrown: AppError | null = null;
   try {
-    await renameRecord(DIM, "dk", "DenmarkAgain", "u_canon_actor", 1, T);
+    await renameRecord(REF_TABLE, "dk", "DenmarkAgain", "u_canon_actor", 1, T);
   } catch (e) {
     thrown = e as AppError;
   }
@@ -96,8 +100,8 @@ test("renameRecord with stale expectedVersion throws CONFLICT", async () => {
 });
 
 test("retireRecord with correct expectedVersion soft-retires version row", async () => {
-  await addRecordOne(DIM, "Norway", "no", "u_canon_actor", T);
-  const res = await retireRecord(DIM, "no", "u_canon_actor", 1, T);
+  await addRecordOne(REF_TABLE, "Norway", "no", "u_canon_actor", T);
+  const res = await retireRecord(REF_TABLE, "no", "u_canon_actor", 1, T);
   expect(res.ok).toBe(true);
   // Soft-delete: row persists with retired_at set; retired_into NULL (no merge target).
   const row = await pgGet<{
@@ -106,8 +110,8 @@ test("retireRecord with correct expectedVersion soft-retires version row", async
     retired_into: string | null;
   }>(
     `SELECT key, retired_at, retired_into FROM "zugzug_app"."record_version"
-     WHERE dim_id = $1 AND key = $2`,
-    [DIM, "no"],
+     WHERE reference_table_id = $1 AND key = $2`,
+    [REF_TABLE, "no"],
   );
   expect(row).not.toBeNull();
   expect(row!.retired_at).not.toBeNull();
@@ -115,12 +119,12 @@ test("retireRecord with correct expectedVersion soft-retires version row", async
 });
 
 test("retireRecord with stale expectedVersion throws CONFLICT", async () => {
-  await addRecordOne(DIM, "Sweden", "se", "u_canon_actor", T);
-  await renameRecord(DIM, "se", "Sverige", "u_canon_actor", 1, T);
+  await addRecordOne(REF_TABLE, "Sweden", "se", "u_canon_actor", T);
+  await renameRecord(REF_TABLE, "se", "Sverige", "u_canon_actor", 1, T);
   // Now version=2. Try to retire with version=1.
   let thrown: AppError | null = null;
   try {
-    await retireRecord(DIM, "se", "u_canon_actor", 1, T);
+    await retireRecord(REF_TABLE, "se", "u_canon_actor", 1, T);
   } catch (e) {
     thrown = e as AppError;
   }
@@ -132,31 +136,38 @@ test("retireRecord with stale expectedVersion throws CONFLICT", async () => {
 });
 
 test("retireRecord returns ok:false when variants still map (no version bump)", async () => {
-  await addRecordOne(DIM, "Iceland", "is", "u_canon_actor", T);
+  await addRecordOne(REF_TABLE, "Iceland", "is", "u_canon_actor", T);
   await pgRun(`INSERT INTO "zugzug_app"."map_d_canon_test" (raw, ${KEY_COL}) VALUES ('IS', 'is')`);
-  const res = await retireRecord(DIM, "is", "u_canon_actor", 1, T);
+  const res = await retireRecord(REF_TABLE, "is", "u_canon_actor", 1, T);
   expect(res.ok).toBe(false);
   expect(res.variants).toBe(1);
   const v = await pgGet<{ version: number }>(
     `SELECT version FROM "zugzug_app"."record_version"
-     WHERE dim_id = $1 AND key = $2`,
-    [DIM, "is"],
+     WHERE reference_table_id = $1 AND key = $2`,
+    [REF_TABLE, "is"],
   );
   expect(v?.version).toBe(1);
 });
 
 test("mergeRecord with correct expectedVersions merges and bumps each row", async () => {
-  await addRecordOne(DIM, "Finland", "fi", "u_canon_actor", T);
-  await addRecordOne(DIM, "FinlandAlt", "fi_alt", "u_canon_actor", T);
+  await addRecordOne(REF_TABLE, "Finland", "fi", "u_canon_actor", T);
+  await addRecordOne(REF_TABLE, "FinlandAlt", "fi_alt", "u_canon_actor", T);
   await pgRun(
     `INSERT INTO "zugzug_app"."map_d_canon_test" (raw, ${KEY_COL}) VALUES ('Finland Alt', 'fi_alt')`,
   );
-  const merged = await mergeRecord(DIM, "fi", ["fi_alt"], "u_canon_actor", { fi: 1, fi_alt: 1 }, T);
+  const merged = await mergeRecord(
+    REF_TABLE,
+    "fi",
+    ["fi_alt"],
+    "u_canon_actor",
+    { fi: 1, fi_alt: 1 },
+    T,
+  );
   expect(merged).toBe(1);
   const survivor = await pgGet<{ version: number }>(
     `SELECT version FROM "zugzug_app"."record_version"
-     WHERE dim_id = $1 AND key = 'fi'`,
-    [DIM],
+     WHERE reference_table_id = $1 AND key = 'fi'`,
+    [REF_TABLE],
   );
   expect(survivor?.version).toBe(2);
   const loserDim = await pgGet<{ key: string }>(
@@ -166,14 +177,14 @@ test("mergeRecord with correct expectedVersions merges and bumps each row", asyn
 });
 
 test("mergeRecord with one stale expectedVersion throws CONFLICT listing it", async () => {
-  await addRecordOne(DIM, "Estonia", "ee", "u_canon_actor", T);
-  await addRecordOne(DIM, "EstoniaAlt", "ee_alt", "u_canon_actor", T);
+  await addRecordOne(REF_TABLE, "Estonia", "ee", "u_canon_actor", T);
+  await addRecordOne(REF_TABLE, "EstoniaAlt", "ee_alt", "u_canon_actor", T);
   // Bump ee_alt out of band so its expectedVersion is stale.
-  await renameRecord(DIM, "ee_alt", "EstoniaAlt2", "u_canon_actor", 1, T);
+  await renameRecord(REF_TABLE, "ee_alt", "EstoniaAlt2", "u_canon_actor", 1, T);
   let thrown: AppError | null = null;
   try {
     await mergeRecord(
-      DIM,
+      REF_TABLE,
       "ee",
       ["ee_alt"],
       "u_canon_actor",

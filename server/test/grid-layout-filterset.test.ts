@@ -7,13 +7,13 @@ import { pgRun } from "../src/pg.ts";
 import { getGridLayout, setGridLayout } from "../src/repo-meta.ts";
 
 const U = "test-user-glfilterset";
-const D = "test-dim-glfilterset";
+const D = "test-refTable-glfilterset";
 
 async function cleanup(): Promise<void> {
-  await pgRun(`DELETE FROM "zugzug_app"."user_grid_layout" WHERE user_id = $1 AND dim_id = $2`, [
-    U,
-    D,
-  ]);
+  await pgRun(
+    `DELETE FROM "zugzug_app"."user_grid_layout" WHERE user_id = $1 AND reference_table_id = $2`,
+    [U, D],
+  );
 }
 beforeEach(cleanup);
 afterAll(cleanup);

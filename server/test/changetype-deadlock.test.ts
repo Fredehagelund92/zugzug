@@ -33,13 +33,13 @@ test("changeColumnType inside pgTxScoped completes (no cross-connection deadlock
   const userId = "u_test";
   const tenantId = "default";
 
-  const dimId = await repo.addDimension("Widgets", [], { keyKind: "slug" }, userId, tenantId);
-  await repo.addField(dimId, "Score", "text", undefined, {}, userId, tenantId);
+  const refTableId = await repo.addRefTable("Widgets", [], { keyKind: "slug" }, userId, tenantId);
+  await repo.addField(refTableId, "Score", "text", undefined, {}, userId, tenantId);
 
   // Seed a couple of rows with numeric-looking text values.
-  await repo.addRecordOne(dimId, "Alpha", undefined, userId, tenantId);
-  await repo.addRecordOne(dimId, "Beta", undefined, userId, tenantId);
-  const record = (await repo.getDimension(dimId, tenantId))!.record;
+  await repo.addRecordOne(refTableId, "Alpha", undefined, userId, tenantId);
+  await repo.addRecordOne(refTableId, "Beta", undefined, userId, tenantId);
+  const record = (await repo.getRefTable(refTableId, tenantId))!.record;
   await pgRun(`UPDATE zugzug.dim_widgets SET score = '1' WHERE widgets_code = $1`, [record[0].key]);
   await pgRun(`UPDATE zugzug.dim_widgets SET score = '2' WHERE widgets_code = $1`, [record[1].key]);
 
@@ -47,7 +47,7 @@ test("changeColumnType inside pgTxScoped completes (no cross-connection deadlock
   const res = await withTimeout(
     pgTxScoped(tenantId, () =>
       repo.changeColumnType(
-        dimId,
+        refTableId,
         "score",
         { newType: "number", coerceInvalidToNull: false, userId },
         tenantId,
@@ -60,7 +60,7 @@ test("changeColumnType inside pgTxScoped completes (no cross-connection deadlock
   expect(res.ok).toBe(true);
 
   // The column type actually changed.
-  const fields = await repo.listFields(dimId, tenantId);
+  const fields = await repo.listFields(refTableId, tenantId);
   expect(fields.find((x) => x.field === "score")?.type).toBe("number");
 
   // And the data survived (coerced into the new numeric column).

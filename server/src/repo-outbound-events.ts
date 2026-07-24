@@ -9,7 +9,7 @@ import { pg } from "./env.ts";
 export interface DispatchInput {
   tenantId: string;
   type: "table.published" | "table.created" | "table.fields.updated" | "record.deleted";
-  dimId?: string | null;
+  refTableId?: string | null;
   occurredAt: Date;
   payload: Record<string, unknown>;
   /** Deterministic per logical event; idem_key collisions abort the surrounding tx. */
@@ -29,13 +29,13 @@ export async function dispatchOutbound(tx: TxHelpers, input: DispatchInput): Pro
   const eventId = genEventId();
   await tx.run(
     `INSERT INTO ${pg("outbound_event")}
-       (id, tenant_id, type, dim_id, occurred_at, payload, idem_key)
+       (id, tenant_id, type, reference_table_id, occurred_at, payload, idem_key)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
     [
       eventId,
       input.tenantId,
       input.type,
-      input.dimId ?? null,
+      input.refTableId ?? null,
       input.occurredAt,
       // Pass the object — postgres.js serializes it once. Pre-stringifying
       // here double-encoded payload as a jsonb *string*, which broke

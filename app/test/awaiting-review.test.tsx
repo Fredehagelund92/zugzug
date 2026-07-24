@@ -21,7 +21,7 @@ const OTHER = { id: "u_other", name: "Max Thorn", initials: "MT" };
 const SYSTEM_USER = { id: "u_system", name: "System", initials: "SY" };
 
 const stubDraftOther = {
-  dimId: "country",
+  refTableId: "country",
   raw: "USA",
   status: "mapped" as const,
   targetLabel: "United States",
@@ -51,7 +51,7 @@ const stubDraftSystem = {
 
 const stubDraftOtherDim = {
   ...stubDraftOther,
-  dimId: "city",
+  refTableId: "city",
   raw: "NYC",
   targetLabel: "New York City",
   targetKey: "nyc",
@@ -59,7 +59,7 @@ const stubDraftOtherDim = {
 
 const stubDim = {
   id: "country",
-  dimension: "Country",
+  refTable: "Country",
   record: [],
   fields: [],
   rows: 0,
@@ -82,7 +82,7 @@ const stubDim = {
 const stubCityDim = {
   ...stubDim,
   id: "city",
-  dimension: "City",
+  refTable: "City",
   dimTable: "zugzug.dim_city",
   mapTable: "zugzug.map_city",
 };
@@ -91,19 +91,19 @@ function setupMocks({
   drafts = {} as Record<string, typeof stubDraftOther>,
   canEdit = true,
   me = ME,
-  dims = [stubDim],
+  refTables = [stubDim],
 }: {
   drafts?: Record<string, typeof stubDraftOther>;
   canEdit?: boolean;
   me?: typeof ME | null;
-  dims?: (typeof stubDim)[];
+  refTables?: (typeof stubDim)[];
 } = {}) {
   vi.doMock("../src/store", async (orig) => {
     const real = await orig<typeof import("../src/store")>();
     return {
       ...real,
       useDrafts: () => drafts,
-      useDimensions: () => dims,
+      useRefTables: () => refTables,
       useCanEdit: () => canEdit,
       useCurrentUser: () => me,
       rejectDrafts: vi.fn(async () => {}),
@@ -135,7 +135,7 @@ describe("AwaitingReview", () => {
         "country::USA": stubDraftOther,
         "country::GBR": stubDraftMine,
       },
-      dims: [stubDim],
+      refTables: [stubDim],
     });
     const { AwaitingReview } = await import("../src/components/AwaitingReview");
     render(<AwaitingReview />);
@@ -157,7 +157,7 @@ describe("AwaitingReview", () => {
       drafts: {
         "country::GBR": stubDraftMine,
       },
-      dims: [stubDim],
+      refTables: [stubDim],
     });
     const { AwaitingReview } = await import("../src/components/AwaitingReview");
     const { container } = render(<AwaitingReview />);
@@ -171,7 +171,7 @@ describe("AwaitingReview", () => {
       drafts: {
         "country::USA": stubDraftOther,
       },
-      dims: [stubDim],
+      refTables: [stubDim],
     });
     const { AwaitingReview } = await import("../src/components/AwaitingReview");
     render(<AwaitingReview />);
@@ -202,7 +202,7 @@ describe("AwaitingReview", () => {
       drafts: {
         "country::DEU": stubDraftSystem,
       },
-      dims: [stubDim],
+      refTables: [stubDim],
     });
     const { AwaitingReview } = await import("../src/components/AwaitingReview");
     render(<AwaitingReview />);
@@ -217,7 +217,7 @@ describe("AwaitingReview", () => {
       drafts: {
         "country::USA": stubDraftOther,
       },
-      dims: [stubDim],
+      refTables: [stubDim],
       canEdit: false,
     });
     const { AwaitingReview } = await import("../src/components/AwaitingReview");
@@ -242,11 +242,11 @@ describe("AwaitingReview", () => {
           "country::USA": stubDraftOther,
           "city::NYC": stubDraftOtherDim,
         }),
-        useDimensions: () => [stubDim, stubCityDim],
+        useRefTables: () => [stubDim, stubCityDim],
         useCanEdit: () => true,
         useCurrentUser: () => ME,
-        rejectDrafts: vi.fn(async (dimId: string) => {
-          if (dimId === "city") throw new Error("city table locked");
+        rejectDrafts: vi.fn(async (refTableId: string) => {
+          if (refTableId === "city") throw new Error("city table locked");
         }),
         commit: vi.fn(async () => ({ committed: 1, rowsRecovered: 0 })),
         fetchPublishState: vi.fn(async () => ({
@@ -303,10 +303,10 @@ describe("Review empty states", () => {
   });
 
   test("the settled empty state is one emoji + one directive", async () => {
-    // Dim with zero unmapped values — filter="new" → rankedDims is empty → EmptyState shown
-    const dimWithNoNew = {
+    // RefTable with zero unmapped values — filter="new" → rankedDims is empty → EmptyState shown
+    const refTableWithNoNew = {
       id: "country",
-      dimension: "Country",
+      refTable: "Country",
       record: [],
       fields: [],
       rows: 0,
@@ -335,7 +335,7 @@ describe("Review empty states", () => {
         sources: "/app/test-ws/sources",
         tables: "/app/test-ws/tables",
         settings: "/app/test-ws/settings",
-        table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+        table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
         tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
       }),
     }));
@@ -352,7 +352,7 @@ describe("Review empty states", () => {
         }),
         useStoreLoading: () => false,
         useCanEdit: () => true,
-        useDimensions: () => [dimWithNoNew],
+        useRefTables: () => [refTableWithNoNew],
         useDrafts: () => ({}),
         saveDraft: vi.fn(),
         discardDraft: vi.fn(),
@@ -364,7 +364,7 @@ describe("Review empty states", () => {
           pendingDrafts: 0,
           changedKeys: [],
         })),
-        dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+        dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
       };
     });
     vi.doMock("../src/lib/create-table-modal", () => ({

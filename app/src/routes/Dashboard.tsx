@@ -10,7 +10,7 @@ import { Mark } from "../components/Mark";
 import { PageHeader } from "../components/PageHeader";
 import { IconWand, IconPlus } from "../components/Icons";
 import { cx } from "../lib/cx";
-import { useDimensions, useAudit, useWorkspaceInfo, useStoreLoading } from "../store";
+import { useRefTables, useAudit, useWorkspaceInfo, useStoreLoading } from "../store";
 import {
   type FilterKey,
   type SortKey,
@@ -162,28 +162,28 @@ function DashboardSkeleton() {
 export function Dashboard() {
   const tenant = useTenant();
   usePageTitle(tenant.label);
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const auditLog = useAudit();
   const wsInfo = useWorkspaceInfo();
   const loading = useStoreLoading();
   const navigate = useNavigate();
   const nav = useNavLinks();
-  const totalNew = dims.reduce((n, s) => n + s.counts.newCount, 0);
+  const totalNew = refTables.reduce((n, s) => n + s.counts.newCount, 0);
 
   // Live KPI derivations — replace the static fixtures.
   // Values mapped = total raw-value entries already in the map tables.
   // Rows at risk = warehouse source rows behind currently-unmapped values.
   // Coverage = mapped rows / (mapped rows + at-risk rows).
-  const valuesMapped = dims.reduce((n, d) => n + d.rows, 0);
-  const rowsAtRisk = dims.reduce((n, d) => n + d.counts.unmappedRowsTotal, 0);
-  const rowsMapped = dims.reduce((n, d) => n + d.counts.mappedRowsTotal, 0);
+  const valuesMapped = refTables.reduce((n, d) => n + d.rows, 0);
+  const rowsAtRisk = refTables.reduce((n, d) => n + d.counts.unmappedRowsTotal, 0);
+  const rowsMapped = refTables.reduce((n, d) => n + d.counts.mappedRowsTotal, 0);
   const coverage =
     rowsMapped + rowsAtRisk > 0 ? (rowsMapped / (rowsMapped + rowsAtRisk)) * 100 : 100;
-  const tablesWithNew = dims.filter((d) => d.counts.newCount > 0).length;
-  const attentionTables = dims.filter((d) => d.counts.newCount > 0 || toPublishCount(d) > 0);
-  const cleanTables = dims.filter((d) => d.counts.newCount === 0 && toPublishCount(d) === 0);
-  const toPublishTotal = dims.reduce((n, d) => n + toPublishCount(d), 0);
-  const toPublishTables = dims.filter((d) => toPublishCount(d) > 0).length;
+  const tablesWithNew = refTables.filter((d) => d.counts.newCount > 0).length;
+  const attentionTables = refTables.filter((d) => d.counts.newCount > 0 || toPublishCount(d) > 0);
+  const cleanTables = refTables.filter((d) => d.counts.newCount === 0 && toPublishCount(d) === 0);
+  const toPublishTotal = refTables.reduce((n, d) => n + toPublishCount(d), 0);
+  const toPublishTables = refTables.filter((d) => toPublishCount(d) > 0).length;
 
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "review", dir: "desc" });
@@ -197,15 +197,18 @@ export function Dashboard() {
     );
 
   const visibleDims = useMemo(
-    () => applySort(applyFilter(dims, filter), sort.key, sort.dir),
-    [dims, filter, sort],
+    () => applySort(applyFilter(refTables, filter), sort.key, sort.dir),
+    [refTables, filter, sort],
   );
 
-  const syncStatus = useMemo(() => warehouseSyncStatusByDim(auditLog, dims), [auditLog, dims]);
+  const syncStatus = useMemo(
+    () => warehouseSyncStatusByDim(auditLog, refTables),
+    [auditLog, refTables],
+  );
 
-  const dimTint = (dim: (typeof dims)[0]) => {
-    const palette = dim.color ?? defaultTintFor(dim.id);
-    return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(dim.id)]).fg; // e.g. "var(--tint-rose)"
+  const refTableTint = (refTable: (typeof refTables)[0]) => {
+    const palette = refTable.color ?? defaultTintFor(refTable.id);
+    return (PALETTE[palette as PaletteName] ?? PALETTE[defaultTintFor(refTable.id)]).fg; // e.g. "var(--tint-rose)"
   };
 
   const kpis: Array<{
@@ -219,7 +222,7 @@ export function Dashboard() {
   }> = [
     {
       label: "Tables",
-      value: String(dims.length),
+      value: String(refTables.length),
       delta: `${attentionTables.length} active · ${cleanTables.length} clean`,
       dir: attentionTables.length > 0 ? "warn" : undefined,
     },
@@ -262,7 +265,7 @@ export function Dashboard() {
 
   if (loading) return <DashboardSkeleton />;
 
-  if (dims.length === 0) {
+  if (refTables.length === 0) {
     return (
       <div className="mx-auto w-full max-w-2xl space-y-8 p-6 md:p-12">
         <EmptyStateIllustration />
@@ -295,7 +298,7 @@ export function Dashboard() {
         meta={
           <div className="mt-3 flex flex-wrap gap-5">
             <span className="text-sm text-ink-2">
-              <span className="font-display text-base font-bold text-ink">{dims.length}</span>{" "}
+              <span className="font-display text-base font-bold text-ink">{refTables.length}</span>{" "}
               tables
             </span>
             <span className="text-sm text-ink-2">
@@ -367,7 +370,7 @@ export function Dashboard() {
         <div className="mt-3 flex flex-wrap items-center gap-2 overflow-x-auto pb-0.5 md:overflow-visible md:pb-0">
           {(
             [
-              { key: "all" as FilterKey, label: "All", count: dims.length },
+              { key: "all" as FilterKey, label: "All", count: refTables.length },
               {
                 key: "attention" as FilterKey,
                 label: "Needs attention",
@@ -400,7 +403,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Dimension health table — white surface behind the rows so the
+      {/* RefTable health table — white surface behind the rows so the
          translucent hover tint reads as gray, not the lattice showing through. */}
       <div {...rise(5)} className="overflow-x-auto rounded-lg border border-line bg-surface">
         <table className="w-full min-w-[560px] border-collapse">
@@ -443,16 +446,16 @@ export function Dashboard() {
             </tr>
           </thead>
           <tbody>
-            {visibleDims.map((dim) => {
-              const pct = coveragePct(dim);
-              const newCount = dim.counts.newCount;
-              const tint = dimTint(dim);
-              const dimId = dim.dimTable.replace(/^[^.]+\./, "");
+            {visibleDims.map((refTable) => {
+              const pct = coveragePct(refTable);
+              const newCount = refTable.counts.newCount;
+              const tint = refTableTint(refTable);
+              const refTableId = refTable.dimTable.replace(/^[^.]+\./, "");
 
               return (
                 <tr
-                  key={dim.id}
-                  onClick={() => navigate(nav.table(dim.id, "match"))}
+                  key={refTable.id}
+                  onClick={() => navigate(nav.table(refTable.id, "match"))}
                   className="group cursor-pointer"
                 >
                   {/* table name + dim_* id with 3px tint bar. Hover is applied
@@ -466,9 +469,9 @@ export function Dashboard() {
                       <div className="min-w-0 py-3">
                         <div className="flex items-center gap-1.5">
                           <span className="font-display text-[13px] font-semibold text-ink">
-                            {dim.dimension}
+                            {refTable.refTable}
                           </span>
-                          {wsInfo?.writable && syncStatus[dim.id] === "failed" && (
+                          {wsInfo?.writable && syncStatus[refTable.id] === "failed" && (
                             <span
                               title="Last warehouse scan failed — manual re-scan required"
                               className="inline-flex items-center font-mono text-[9px] text-amber-600"
@@ -477,14 +480,14 @@ export function Dashboard() {
                             </span>
                           )}
                         </div>
-                        <div className="font-mono text-[10px] text-ink-3">{dimId}</div>
+                        <div className="font-mono text-[10px] text-ink-3">{refTableId}</div>
                       </div>
                     </div>
                   </td>
 
                   {/* records */}
                   <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right font-mono text-[11px] tabular-nums text-ink-2">
-                    {dim.record.length.toLocaleString()}
+                    {refTable.record.length.toLocaleString()}
                   </td>
 
                   {/* coverage bar + pct — wide, prominent bar (demo parity) */}
@@ -516,8 +519,8 @@ export function Dashboard() {
                   {/* to publish — drafts + edited records; hover for the split */}
                   <td className="border-b border-line px-4 py-3 group-hover:bg-hover">
                     {(() => {
-                      const p = dim.publish;
-                      const total = toPublishCount(dim);
+                      const p = refTable.publish;
+                      const total = toPublishCount(refTable);
                       if (total === 0)
                         return <span className="font-mono text-[11px] text-ink-3">—</span>;
                       const drafts = p?.pendingDrafts ?? 0;
@@ -535,14 +538,16 @@ export function Dashboard() {
 
                   {/* published — per-table version + when; "Never" when unpublished */}
                   <td className="border-b border-line px-4 py-3 group-hover:bg-hover text-right">
-                    {dim.publish && dim.publish.version > 0 && dim.publish.publishedAt ? (
+                    {refTable.publish &&
+                    refTable.publish.version > 0 &&
+                    refTable.publish.publishedAt ? (
                       <div className="flex flex-col items-end gap-0.5">
                         <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-medium text-committed">
                           <span className="h-[5px] w-[5px] rounded-pill bg-committed" />v
-                          {dim.publish.version}
+                          {refTable.publish.version}
                         </span>
                         <span className="font-mono text-[10px] text-ink-3">
-                          {formatTimeAgo(dim.publish.publishedAt)}
+                          {formatTimeAgo(refTable.publish.publishedAt)}
                         </span>
                       </div>
                     ) : (

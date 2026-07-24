@@ -1,6 +1,6 @@
 export interface CommitOutcome {
-  dimId: string;
-  dimName: string;
+  refTableId: string;
+  refTableName: string;
   committed: number;
   rowsRecovered: number;
   error: string | null;
@@ -26,7 +26,7 @@ export function summarizeOutcomes(outcomes: CommitOutcome[]): {
       message: `✓ ${plural(committed, "change")} published · ${plural(rowsRecovered, "row")} recovered`,
     };
   }
-  const names = failed.map((f) => `${f.dimName} failed (${f.error})`).join("; ");
+  const names = failed.map((f) => `${f.refTableName} failed (${f.error})`).join("; ");
   return {
     ok: false,
     committed,

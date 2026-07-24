@@ -1,10 +1,10 @@
-/* repo-rollback.ts — rollback a dimension to a previously-snapshotted version.
+/* repo-rollback.ts — rollback a refTable to a previously-snapshotted version.
  *
  * Strategy:
  *  1. Fetch the target snapshot (getSnapshot).
  *  2. In a Postgres transaction: DELETE record dim_/map_ rows, reinsert from
  *     snapshot, and update record_version so changedKeysSince() sees the delta.
- *  3. Call commit(dimId, userId, tenantId, [], {kind:'rollback', restoresVersion})
+ *  3. Call commit(refTableId, userId, tenantId, [], {kind:'rollback', restoresVersion})
  *     which writes the new version row and outbound event.  Empty draftKeys means
  *     "fold no drafts, publish record state only" — the record_version touch in
  *     step 2 makes changedKeysSince report changes so the early-return is bypassed.
@@ -20,7 +20,7 @@ import { isWritable } from "./warehouse/adapter.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 
 export async function rollbackToVersion(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
   toVersion: number,
   userId: string,
@@ -30,18 +30,18 @@ export async function rollbackToVersion(
   warehouseSynced: "n/a" | "synced-additive" | "failed";
   restoredVersion: number;
 }> {
-  const snap = await getSnapshot(dimId, tenantId, toVersion);
+  const snap = await getSnapshot(refTableId, tenantId, toVersion);
   if (!snap) {
     throw new AppError("NO_SNAPSHOT", `no snapshot for version ${toVersion}`, 409);
   }
 
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   if (!meta) {
-    throw new AppError("NOT_FOUND", `dimension ${dimId} not found`, 404);
+    throw new AppError("NOT_FOUND", `refTable ${refTableId} not found`, 404);
   }
 
   // Build the set of keys present in the snapshot so we can retire ghost keys.
@@ -84,25 +84,25 @@ export async function rollbackToVersion(
     for (const key of snapKeySet) {
       await tx.run(
         `INSERT INTO "zugzug_app"."record_version"
-           (dim_id, key, version, updated_at, updated_by, tenant_id)
+           (reference_table_id, key, version, updated_at, updated_by, tenant_id)
          VALUES ($1, $2, 1, now(), $3, $4)
-         ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
+         ON CONFLICT (tenant_id, reference_table_id, key) DO UPDATE
             SET retired_at   = NULL,
                 retired_into = NULL,
                 version      = "record_version".version + 1,
                 updated_at   = now(),
                 updated_by   = EXCLUDED.updated_by`,
-        [dimId, key, userId, tenantId],
+        [refTableId, key, userId, tenantId],
       );
     }
     // Retire any keys that existed before but aren't in the snapshot.
     await tx.run(
       `UPDATE "zugzug_app"."record_version"
           SET retired_at = now(), retired_into = NULL
-        WHERE dim_id = $1 AND tenant_id = $2
+        WHERE reference_table_id = $1 AND tenant_id = $2
           AND retired_at IS NULL
           AND key <> ALL($3::text[])`,
-      [dimId, tenantId, [...snapKeySet]],
+      [refTableId, tenantId, [...snapKeySet]],
     );
   });
 
@@ -111,7 +111,7 @@ export async function rollbackToVersion(
   //    skipWarehouseSync=true prevents commit()'s warehouse block from firing
   //    (it would report "synced" on empty drafts — a false signal); rollback
   //    owns the warehouse step below.
-  const res = await commit(dimId, userId, tenantId, [], {
+  const res = await commit(refTableId, userId, tenantId, [], {
     kind: "rollback",
     restoresVersion: toVersion,
     skipWarehouseSync: true,
@@ -123,8 +123,8 @@ export async function rollbackToVersion(
   let warehouseSynced: "n/a" | "synced-additive" | "failed" = "n/a";
   const adapter = await getAdapter();
   if (isWritable(adapter)) {
-    const dimSpec = {
-      dimId,
+    const refTableSpec = {
+      refTableId,
       dimTable: meta.dimTable,
       mapTable: meta.mapTable,
       keyCol: meta.keyCol,
@@ -143,8 +143,8 @@ export async function rollbackToVersion(
       label: keyToLabel.get(m.targetKey) ?? null,
     }));
     try {
-      await adapter.ensureRecordTables(dimSpec);
-      await adapter.commitRecord(dimSpec, approvedDrafts);
+      await adapter.ensureRecordTables(refTableSpec);
+      await adapter.commitRecord(refTableSpec, approvedDrafts);
       await appendAuditAs(
         userId,
         "Warehouse rollback sync",

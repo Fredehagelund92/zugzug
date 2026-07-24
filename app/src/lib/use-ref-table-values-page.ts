@@ -9,14 +9,14 @@ export interface ScanValueRow {
   occurrences: { table: string; column: string; rows: number }[];
 }
 
-export interface UseDimValuesPageOpts {
-  dimId: string | null;
+export interface UseRefTableValuesPageOpts {
+  refTableId: string | null;
   filter: "new" | "mapped" | "all";
   q?: string;
   enabled?: boolean;
 }
 
-export interface UseDimValuesPage {
+export interface UseRefTableValuesPage {
   items: ScanValueRow[];
   hasMore: boolean;
   loading: boolean;
@@ -25,10 +25,10 @@ export interface UseDimValuesPage {
   refetch: () => void;
 }
 
-/** Lazy, cursor-paginated fetch over /api/dimensions/:id/scan-values. Resets
- *  when (dimId, filter, q) changes. No caching across opts changes. */
-export function useDimValuesPage(opts: UseDimValuesPageOpts): UseDimValuesPage {
-  const { dimId, filter, q, enabled = true } = opts;
+/** Lazy, cursor-paginated fetch over /api/refTables/:id/scan-values. Resets
+ *  when (refTableId, filter, q) changes. No caching across opts changes. */
+export function useRefTableValuesPage(opts: UseRefTableValuesPageOpts): UseRefTableValuesPage {
+  const { refTableId, filter, q, enabled = true } = opts;
   const [items, setItems] = useState<ScanValueRow[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -38,7 +38,7 @@ export function useDimValuesPage(opts: UseDimValuesPageOpts): UseDimValuesPage {
 
   const fetchPage = useCallback(
     async (after: string | null, reset: boolean) => {
-      if (!dimId || !enabled) return;
+      if (!refTableId || !enabled) return;
       const ticket = ++seq.current;
       setLoading(true);
       setError(null);
@@ -46,7 +46,9 @@ export function useDimValuesPage(opts: UseDimValuesPageOpts): UseDimValuesPage {
         const params = new URLSearchParams({ filter, limit: "100" });
         if (q) params.set("q", q);
         if (after) params.set("after", after);
-        const r = await apiFetch(`/dimensions/${encodeURIComponent(dimId)}/scan-values?${params}`);
+        const r = await apiFetch(
+          `/refTables/${encodeURIComponent(refTableId)}/scan-values?${params}`,
+        );
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         const body = (await r.json()) as {
           items: ScanValueRow[];
@@ -64,7 +66,7 @@ export function useDimValuesPage(opts: UseDimValuesPageOpts): UseDimValuesPage {
         if (ticket === seq.current) setLoading(false);
       }
     },
-    [dimId, filter, q, enabled],
+    [refTableId, filter, q, enabled],
   );
 
   useEffect(() => {

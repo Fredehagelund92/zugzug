@@ -46,7 +46,7 @@ export type ColumnConfig = (
   | { type: "rating"; ratingMax: number }
   | {
       type: "linked";
-      targetDimId: string;
+      targetRefTableId: string;
       displayFields: string[];
       candidates: { key: string; label: string }[];
     }
@@ -73,7 +73,7 @@ export interface ColumnDef<Row> {
   columnKind?: "fk" | "lookup";
   /** For lookup columns, the FK column's field name. */
   sourceField?: string;
-  /** Lookup column whose target-dim field no longer exists. */
+  /** Lookup column whose target-refTable field no longer exists. */
   linkedStale?: boolean;
   render?: (row: Row, ctx: CellCtx<Row>) => ReactNode;
   edit?: (row: Row, ctx: EditCtx<Row>) => ReactNode;
@@ -194,7 +194,7 @@ export interface DataGridProps<Row> {
       validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
     },
   ) => void;
-  /** Save a plain-text description for a column (persisted in dimension_field.description). */
+  /** Save a plain-text description for a column (persisted in reference_table_field.description). */
   onSaveColumnDescription?: (field: string, description: string | null) => void;
   /** Optional per-row activity map (rowKey → latest audit entry).
    *  When present, each row gets a left-edge pip + hover-revealed badge. */
@@ -237,7 +237,7 @@ export interface DataGridProps<Row> {
    *  When the handler is undefined the menu still renders the item disabled,
    *  matching the §7 "uniform shape, gated by handler" convention. */
   onShowLinkedFields?: (fkField: string) => void;
-  onOpenTargetDimension?: (fkField: string) => void;
+  onOpenTargetRefTable?: (fkField: string) => void;
   onChangeDisplayedField?: (lookupField: string) => void;
   onManageLinkedFields?: (lookupField: string) => void;
   onRemoveLookup?: (lookupField: string) => void;

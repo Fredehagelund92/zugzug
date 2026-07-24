@@ -61,7 +61,7 @@ function renderHistory(
   }> = {},
 ) {
   const props = {
-    dimId: "country",
+    refTableId: "country",
     onClose: vi.fn(),
     onRollbackSuccess: vi.fn(),
     flash: vi.fn(),

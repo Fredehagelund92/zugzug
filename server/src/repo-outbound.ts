@@ -17,7 +17,7 @@ const MAX_LIMIT_RECORD = 1000;
 const DEFAULT_LIMIT_TOMBSTONES = 100;
 const MAX_LIMIT_TOMBSTONES = 1000;
 
-export interface DimensionForApi {
+export interface RefTableForApi {
   slug: string;
   label: string;
   key_kind: string;
@@ -84,7 +84,7 @@ function clampLimit(n: number | undefined, def: number, max: number): number {
 }
 
 /** Split a dim_table value like "zugzug.dim_country" into { schema, table }. */
-function splitDimTable(dimTable: string): { schema: string; table: string } {
+function splitRefTableTable(dimTable: string): { schema: string; table: string } {
   const dot = dimTable.indexOf(".");
   if (dot < 0) return { schema: env.recordSchema, table: dimTable };
   return { schema: dimTable.slice(0, dot), table: dimTable.slice(dot + 1) };
@@ -92,14 +92,14 @@ function splitDimTable(dimTable: string): { schema: string; table: string } {
 
 /** Discover non-system field columns of a dim_* table for dynamic JSON projection. */
 async function discoverFieldColumns(dimTable: string, keyCol: string): Promise<string[]> {
-  const { schema, table } = splitDimTable(dimTable);
-  const dimCols = await pgAll<{ column_name: string }>(
+  const { schema, table } = splitRefTableTable(dimTable);
+  const refTableCols = await pgAll<{ column_name: string }>(
     `SELECT column_name FROM information_schema.columns
       WHERE table_schema = $1 AND table_name = $2
         AND column_name NOT IN ('label', 'position', 'tenant_id')`,
     [schema, table],
   );
-  return dimCols.map((c) => c.column_name).filter((c) => c !== keyCol);
+  return refTableCols.map((c) => c.column_name).filter((c) => c !== keyCol);
 }
 
 function buildFieldsJsonExpr(fieldColumns: string[]): string {
@@ -109,11 +109,9 @@ function buildFieldsJsonExpr(fieldColumns: string[]): string {
     .join(",")})`;
 }
 
-/* ---------- list dimensions ---------- */
+/* ---------- list refTables ---------- */
 
-export async function listDimensionsForApi(
-  tenantId: string,
-): Promise<{ tables: DimensionForApi[] }> {
+export async function listRefTablesForApi(tenantId: string): Promise<{ tables: RefTableForApi[] }> {
   const rows = await pgAll<{
     id: string;
     label: string;
@@ -125,12 +123,12 @@ export async function listDimensionsForApi(
             d.label,
             COALESCE(d.key_kind, 'slug') AS key_kind,
             COALESCE((SELECT count(*) FROM "zugzug_app"."record_version" cv
-                       WHERE cv.dim_id = d.id AND cv.tenant_id = d.tenant_id
+                       WHERE cv.reference_table_id = d.id AND cv.tenant_id = d.tenant_id
                          AND cv.retired_at IS NULL), 0)::int AS record_count,
             (SELECT max(cv.updated_at)::text FROM "zugzug_app"."record_version" cv
-              WHERE cv.dim_id = d.id AND cv.tenant_id = d.tenant_id
+              WHERE cv.reference_table_id = d.id AND cv.tenant_id = d.tenant_id
                 AND cv.retired_at IS NULL) AS last_published_at
-       FROM ${pg("dimension")} d
+       FROM ${pg("reference_table")} d
       WHERE d.tenant_id = $1
       ORDER BY d.label`,
     [tenantId],
@@ -152,15 +150,15 @@ export async function getSchemaForApi(
   tenantId: string,
   slug: string,
 ): Promise<SchemaForApi | null> {
-  const dim = await pgGet<{ id: string; label: string }>(
-    `SELECT id, label FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+  const refTable = await pgGet<{ id: string; label: string }>(
+    `SELECT id, label FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
     [slug, tenantId],
   );
-  if (!dim) return null;
+  if (!refTable) return null;
   const fields = await listFields(slug, tenantId);
   return {
-    dim_slug: dim.id,
-    label: dim.label,
+    dim_slug: refTable.id,
+    label: refTable.label,
     fields: fields.map((f) => ({
       name: f.field,
       type: f.type,
@@ -189,20 +187,20 @@ export async function listRecordPage(
     sinceKey = v.payload.k;
   }
 
-  const dim = await pgGet<{ dim_table: string; key_col: string }>(
-    `SELECT dim_table, key_col FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+  const refTable = await pgGet<{ dim_table: string; key_col: string }>(
+    `SELECT dim_table, key_col FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
     [slug, tenantId],
   );
-  if (!dim) {
+  if (!refTable) {
     return { records: [], cursor: { next: null }, meta: { dim_slug: slug, page_size: limit } };
   }
-  const keyCol = qid(dim.key_col);
+  const keyCol = qid(refTable.key_col);
 
-  const fieldColumns = await discoverFieldColumns(dim.dim_table, dim.key_col);
+  const fieldColumns = await discoverFieldColumns(refTable.dim_table, refTable.key_col);
   const fieldsJsonExpr = buildFieldsJsonExpr(fieldColumns);
 
   const params: unknown[] = [tenantId, slug];
-  let where = `d.tenant_id = $1 AND cv.tenant_id = $1 AND cv.dim_id = $2 AND cv.retired_at IS NULL`;
+  let where = `d.tenant_id = $1 AND cv.tenant_id = $1 AND cv.reference_table_id = $2 AND cv.retired_at IS NULL`;
   if (sinceTs) {
     params.push(sinceTs);
     where += ` AND cv.updated_at >= $${params.length}::text::timestamp`;
@@ -219,9 +217,9 @@ export async function listRecordPage(
            ${fieldsJsonExpr} AS fields,
            cv.updated_at::text AS updated_at,
            cv.version
-      FROM ${cq(dim.dim_table)} d
+      FROM ${cq(refTable.dim_table)} d
       JOIN "zugzug_app"."record_version" cv
-        ON cv.dim_id = $2 AND cv.tenant_id = $1 AND cv.key = d.${keyCol}
+        ON cv.reference_table_id = $2 AND cv.tenant_id = $1 AND cv.key = d.${keyCol}
      WHERE ${where}
      ORDER BY cv.updated_at ASC, d.${keyCol} ASC
      LIMIT $${params.length}
@@ -263,13 +261,13 @@ export async function getRecordRow(
   slug: string,
   key: string,
 ): Promise<RecordRow | null> {
-  const dim = await pgGet<{ dim_table: string; key_col: string }>(
-    `SELECT dim_table, key_col FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+  const refTable = await pgGet<{ dim_table: string; key_col: string }>(
+    `SELECT dim_table, key_col FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
     [slug, tenantId],
   );
-  if (!dim) return null;
-  const keyCol = qid(dim.key_col);
-  const fieldColumns = await discoverFieldColumns(dim.dim_table, dim.key_col);
+  if (!refTable) return null;
+  const keyCol = qid(refTable.key_col);
+  const fieldColumns = await discoverFieldColumns(refTable.dim_table, refTable.key_col);
   const fieldsJsonExpr = buildFieldsJsonExpr(fieldColumns);
 
   const row = await pgGet<{
@@ -284,9 +282,9 @@ export async function getRecordRow(
             ${fieldsJsonExpr} AS fields,
             cv.updated_at::text AS updated_at,
             cv.version
-       FROM ${cq(dim.dim_table)} d
+       FROM ${cq(refTable.dim_table)} d
        JOIN "zugzug_app"."record_version" cv
-         ON cv.dim_id = $1 AND cv.tenant_id = $2 AND cv.key = d.${keyCol}
+         ON cv.reference_table_id = $1 AND cv.tenant_id = $2 AND cv.key = d.${keyCol}
       WHERE d.tenant_id = $2
         AND d.${keyCol} = $3
         AND cv.retired_at IS NULL`,
@@ -321,7 +319,7 @@ export async function listTombstonesPage(
   }
 
   const params: unknown[] = [tenantId, slug];
-  let where = `tenant_id = $1 AND dim_id = $2 AND retired_at IS NOT NULL`;
+  let where = `tenant_id = $1 AND reference_table_id = $2 AND retired_at IS NOT NULL`;
   if (sinceTs) {
     params.push(sinceTs);
     where += ` AND retired_at >= $${params.length}::text::timestamp`;

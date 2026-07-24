@@ -14,32 +14,38 @@ beforeEach(async () => {
 
 test("commit folds approved drafts into record", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
+  const refTableId = await repo.addRefTable("Brand", [], { keyKind: "slug" }, userId, "default");
 
-  await repo.addRecordOne(dimId, "Acme", undefined, userId, "default");
-  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
+  await repo.addRecordOne(refTableId, "Acme", undefined, userId, "default");
+  await repo.saveDraft(refTableId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
 
-  const result = await repo.commit(dimId, userId, "default");
+  const result = await repo.commit(refTableId, userId, "default");
   expect(result.committed).toBe(1);
 
-  const drafts = await repo.listDrafts(dimId, "default");
+  const drafts = await repo.listDrafts(refTableId, "default");
   expect(drafts).toHaveLength(0);
 });
 
 test("commit writes one per-row audit entry per committed key + one rollup", async () => {
   const userId = "u_test_audit";
-  const dimId = await repo.addDimension("AuditBrand", [], { keyKind: "slug" }, userId, "default");
+  const refTableId = await repo.addRefTable(
+    "AuditBrand",
+    [],
+    { keyKind: "slug" },
+    userId,
+    "default",
+  );
 
-  await repo.addRecordOne(dimId, "Acme", undefined, userId, "default");
-  await repo.addRecordOne(dimId, "Globex", undefined, userId, "default");
-  await repo.saveDraft(dimId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
-  await repo.saveDraft(dimId, "acme inc.", "mapped", "Acme", "acme", userId, "default");
-  await repo.saveDraft(dimId, "Globex Corp", "mapped", "Globex", "globex", userId, "default");
+  await repo.addRecordOne(refTableId, "Acme", undefined, userId, "default");
+  await repo.addRecordOne(refTableId, "Globex", undefined, userId, "default");
+  await repo.saveDraft(refTableId, "ACME Inc", "mapped", "Acme", "acme", userId, "default");
+  await repo.saveDraft(refTableId, "acme inc.", "mapped", "Acme", "acme", userId, "default");
+  await repo.saveDraft(refTableId, "Globex Corp", "mapped", "Globex", "globex", userId, "default");
 
   // DB clock, not host clock — created_at is stamped by Postgres, and even a
   // few ms of host↔container skew makes a host-side `new Date()` flaky here.
   const before = (await repo.pgGet<{ t: Date }>(`SELECT now() AS t`))!.t;
-  await repo.commit(dimId, userId, "default");
+  await repo.commit(refTableId, userId, "default");
 
   const audit = await repo.pgAll<{
     action: string;
@@ -58,6 +64,6 @@ test("commit writes one per-row audit entry per committed key + one rollup", asy
   // Two distinct target_keys (acme + globex) → two per-row entries
   expect(perRow.length).toBeGreaterThanOrEqual(2);
   expect(rollup.length).toBeGreaterThanOrEqual(1);
-  // Every per-row entry should carry table_id = dimId and a non-null row_key
-  expect(perRow.every((a) => a.table_id === dimId && a.row_key !== null)).toBe(true);
+  // Every per-row entry should carry table_id = refTableId and a non-null row_key
+  expect(perRow.every((a) => a.table_id === refTableId && a.row_key !== null)).toBe(true);
 });

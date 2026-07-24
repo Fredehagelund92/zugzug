@@ -118,8 +118,8 @@ test("gate: admin can perform all operations", () => {
 // Integration: representative endpoint checks via direct handler calls
 // ---------------------------------------------------------------------------
 
-test("POST /api/dimensions — editor allowed, viewer blocked (curate)", async () => {
-  // admin must exist first so the DB has a dimension registry
+test("POST /api/refTables — editor allowed, viewer blocked (curate)", async () => {
+  // admin must exist first so the DB has a refTable registry
   await createAdminViaSignup("admin@example.com", "Admin");
   const editor = await createUserWithRole("editor@example.com", "Editor", "editor");
   const viewer = await createUserWithRole("viewer@example.com", "Viewer", "viewer");
@@ -127,7 +127,7 @@ test("POST /api/dimensions — editor allowed, viewer blocked (curate)", async (
   // Lazy-import handle to avoid top-level server startup side-effects in tests.
   // We import the function that powers the route dispatch. Since handle() isn't
   // exported from server.ts, we test via auth functions + canMutate directly.
-  // The representative test below uses addDimension through the role gate logic.
+  // The representative test below uses addRefTable through the role gate logic.
 
   // Verify role stored correctly in tenant_member
   const editorRow = await pgGet<{ role: string }>(
@@ -164,7 +164,7 @@ test("POST /api/t/:slug/members — admin allowed, editor/viewer blocked (tenant
   expect(canMutate("viewer", "manage_adapter")).toBe(false);
 });
 
-test("POST /api/dimensions/:id/commit — editor allowed, viewer blocked (commit)", async () => {
+test("POST /api/refTables/:id/commit — editor allowed, viewer blocked (commit)", async () => {
   expect(canMutate("editor", "commit")).toBe(true);
   expect(canMutate("viewer", "commit")).toBe(false);
   expect(canMutate("admin", "commit")).toBe(true);

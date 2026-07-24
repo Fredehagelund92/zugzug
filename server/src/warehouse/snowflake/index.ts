@@ -3,7 +3,7 @@ import type {
   CatalogTable,
   ColumnMeta,
   DatabaseDescriptor,
-  DimensionSpec,
+  RefTableSpec,
   ProbeResult,
   Ref,
   ValueCount,
@@ -346,17 +346,17 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       count: Number(r.N),
     }));
   }
-  async ensureRecordTables(dim: DimensionSpec): Promise<void> {
-    // dim.dimTable / dim.mapTable are stored as "SCHEMA.TABLE" (2-part). The database
+  async ensureRecordTables(refTable: RefTableSpec): Promise<void> {
+    // refTable.dimTable / refTable.mapTable are stored as "SCHEMA.TABLE" (2-part). The database
     // is the adapter's configured default. LIVE-VALIDATION: confirm Snowflake's
     // CREATE TABLE IF NOT EXISTS is idempotent and doesn't error if the table
     // already has a different shape (it silently no-ops; that's the Snowflake contract).
-    const dimRef = this.parseTwoPartRef(dim.dimTable);
-    const mapRef = this.parseTwoPartRef(dim.mapTable);
-    const key = this.quoteIdentifier(dim.keyCol);
+    const refTableRef = this.parseTwoPartRef(refTable.dimTable);
+    const mapRef = this.parseTwoPartRef(refTable.mapTable);
+    const key = this.quoteIdentifier(refTable.keyCol);
 
     await this._getConnection().execute({
-      sqlText: `CREATE TABLE IF NOT EXISTS ${this.qualifyRef(dimRef)} (
+      sqlText: `CREATE TABLE IF NOT EXISTS ${this.qualifyRef(refTableRef)} (
                 ${key} VARCHAR PRIMARY KEY,
                 LABEL VARCHAR
               )`,
@@ -369,11 +369,11 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
               )`,
     });
   }
-  async commitRecord(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+  async commitRecord(refTable: RefTableSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
     if (drafts.length === 0) return { rowsWritten: 0 };
-    const dimRef = this.parseTwoPartRef(dim.dimTable);
-    const mapRef = this.parseTwoPartRef(dim.mapTable);
-    const key = this.quoteIdentifier(dim.keyCol);
+    const refTableRef = this.parseTwoPartRef(refTable.dimTable);
+    const mapRef = this.parseTwoPartRef(refTable.mapTable);
+    const key = this.quoteIdentifier(refTable.keyCol);
 
     // Deduplicate record rows by key (last write wins on label).
     const canonByKey = new Map<string, string | null>();
@@ -385,7 +385,7 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
 
     let rowsWritten = 0;
     rowsWritten += await this.mergeChunked({
-      targetRef: dimRef,
+      targetRef: refTableRef,
       chunks: chunk(canonRows, 1000),
       sourceCols: [key, "LABEL"],
       onCol: key,

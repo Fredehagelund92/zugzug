@@ -8,21 +8,21 @@ process.env.ZUGZUG_CURSOR_KEY =
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
-import { addDimension, mergeRecord, retireRecord } from "./repo-record.ts";
+import { addRefTable, mergeRecord, retireRecord } from "./repo-record.ts";
 
 // Pull API requires both dim_* row + record_version row. The bulk `addRecord`
 // helper only writes the former, so seed both directly to keep keys verbatim
 // (addRecordOne lowercases via slug()).
 async function addRecord(
-  dimId: string,
+  refTableId: string,
   values: { key: string; label: string }[],
   tenantId: string,
 ): Promise<void> {
   const meta = await pgGet<{ dim_table: string; key_col: string }>(
-    `SELECT dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+    `SELECT dim_table, key_col FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
-  if (!meta) throw new Error(`addRecord: dim ${dimId} not found`);
+  if (!meta) throw new Error(`addRecord: refTable ${refTableId} not found`);
   const [schema, table] = meta.dim_table.split(".");
   for (const v of values) {
     await pgRun(
@@ -31,18 +31,18 @@ async function addRecord(
       [v.key, v.label],
     );
     await pgRun(
-      `INSERT INTO "zugzug_app"."record_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+      `INSERT INTO "zugzug_app"."record_version" (reference_table_id, key, version, updated_at, updated_by, tenant_id)
        VALUES ($1, $2, 1, now(), $3, $4)
-       ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
+       ON CONFLICT (tenant_id, reference_table_id, key) DO UPDATE
          SET retired_at = NULL, retired_into = NULL,
              version = "record_version".version + 1,
              updated_at = now(), updated_by = EXCLUDED.updated_by`,
-      [dimId, v.key, U, tenantId],
+      [refTableId, v.key, U, tenantId],
     );
   }
 }
 import {
-  listDimensionsForApi,
+  listRefTablesForApi,
   getSchemaForApi,
   listRecordPage,
   getRecordRow,
@@ -52,11 +52,11 @@ import {
 const T = "test_repo_outbound";
 const U = "u_test_outbound";
 
-// Track created dim ids so we can DROP their dynamic tables in afterAll.
+// Track created refTable ids so we can DROP their dynamic tables in afterAll.
 const createdDims: string[] = [];
 
 async function makeDim(name: string, keyKind: "slug" | "external_id" = "slug"): Promise<string> {
-  const id = await addDimension(name, [], { keyKind, silent: true }, U, T);
+  const id = await addRefTable(name, [], { keyKind, silent: true }, U, T);
   createdDims.push(id);
   return id;
 }
@@ -79,11 +79,13 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   for (const id of createdDims) {
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${id}"`).catch(() => {});
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${id}"`).catch(() => {});
@@ -92,13 +94,13 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
 
-describe("listDimensionsForApi", () => {
-  it("returns one entry per dim with slug, label, key_kind, record_count, last_published_at", async () => {
-    const dimId = await makeDim("OutCountry");
-    await addRecord(dimId, [{ key: "DE", label: "Germany" }], T);
+describe("listRefTablesForApi", () => {
+  it("returns one entry per refTable with slug, label, key_kind, record_count, last_published_at", async () => {
+    const refTableId = await makeDim("OutCountry");
+    await addRecord(refTableId, [{ key: "DE", label: "Germany" }], T);
 
-    const out = await listDimensionsForApi(T);
-    const country = out.tables.find((d) => d.slug === dimId);
+    const out = await listRefTablesForApi(T);
+    const country = out.tables.find((d) => d.slug === refTableId);
     expect(country).toBeDefined();
     expect(country!.label).toBe("OutCountry");
     expect(country!.key_kind).toBe("slug");
@@ -109,35 +111,35 @@ describe("listDimensionsForApi", () => {
 
 describe("getSchemaForApi", () => {
   it("returns dim_slug + fields", async () => {
-    const dimId = await makeDim("OutSchema");
-    const out = await getSchemaForApi(T, dimId);
+    const refTableId = await makeDim("OutSchema");
+    const out = await getSchemaForApi(T, refTableId);
     expect(out).not.toBeNull();
-    expect(out!.dim_slug).toBe(dimId);
+    expect(out!.dim_slug).toBe(refTableId);
     expect(out!.label).toBe("OutSchema");
     expect(Array.isArray(out!.fields)).toBe(true);
   });
 
-  it("returns null when the dim doesn't exist OR belongs to another tenant", async () => {
+  it("returns null when the refTable doesn't exist OR belongs to another tenant", async () => {
     expect(await getSchemaForApi(T, "no_such_dim")).toBeNull();
   });
 });
 
 describe("listRecordPage", () => {
   it("returns records in updated_at, key order; respects limit; emits a cursor on truncation", async () => {
-    const dimId = await makeDim("OutPage");
+    const refTableId = await makeDim("OutPage");
     await addRecord(
-      dimId,
+      refTableId,
       Array.from({ length: 5 }, (_, i) => ({ key: `k${i}`, label: `Label ${i}` })),
       T,
     );
 
-    const page1 = await listRecordPage(T, dimId, { limit: 3 });
+    const page1 = await listRecordPage(T, refTableId, { limit: 3 });
     expect(page1.records.length).toBe(3);
     expect(page1.cursor.next).not.toBeNull();
-    expect(page1.meta.dim_slug).toBe(dimId);
+    expect(page1.meta.dim_slug).toBe(refTableId);
     expect(page1.meta.page_size).toBe(3);
 
-    const page2 = await listRecordPage(T, dimId, { limit: 3, cursor: page1.cursor.next! });
+    const page2 = await listRecordPage(T, refTableId, { limit: 3, cursor: page1.cursor.next! });
     expect(page2.records.length).toBe(2);
     expect(page2.cursor.next).toBeNull();
 
@@ -146,8 +148,8 @@ describe("listRecordPage", () => {
   });
 
   it("?since= filters by record_version.updated_at (inclusive)", async () => {
-    const dimId = await makeDim("OutSince");
-    await addRecord(dimId, [{ key: "OLD", label: "Old" }], T);
+    const refTableId = await makeDim("OutSince");
+    await addRecord(refTableId, [{ key: "OLD", label: "Old" }], T);
 
     const boundary = await pgGet<{ ts: string }>(
       `SELECT to_char(
@@ -157,18 +159,18 @@ describe("listRecordPage", () => {
     );
     await new Promise((r) => setTimeout(r, 250));
 
-    await addRecord(dimId, [{ key: "NEW", label: "New" }], T);
+    await addRecord(refTableId, [{ key: "NEW", label: "New" }], T);
 
-    const res = await listRecordPage(T, dimId, { since: boundary!.ts, limit: 100 });
+    const res = await listRecordPage(T, refTableId, { since: boundary!.ts, limit: 100 });
     const keys = res.records.map((r) => r.key);
     expect(keys).toContain("NEW");
     expect(keys).not.toContain("OLD");
   });
 
   it("excludes soft-deleted rows", async () => {
-    const dimId = await makeDim("OutSoftDel");
+    const refTableId = await makeDim("OutSoftDel");
     await addRecord(
-      dimId,
+      refTableId,
       [
         { key: "A", label: "Alpha" },
         { key: "B", label: "Beta" },
@@ -177,52 +179,52 @@ describe("listRecordPage", () => {
     );
     const versions = await pgAll<{ key: string; version: number }>(
       `SELECT key, version FROM "zugzug_app"."record_version"
-       WHERE dim_id = $1 AND tenant_id = $2`,
-      [dimId, T],
+       WHERE reference_table_id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
     const v = Object.fromEntries(versions.map((r) => [r.key, r.version]));
-    await mergeRecord(dimId, "A", ["B"], U, v, T);
+    await mergeRecord(refTableId, "A", ["B"], U, v, T);
 
-    const res = await listRecordPage(T, dimId, { limit: 100 });
+    const res = await listRecordPage(T, refTableId, { limit: 100 });
     expect(res.records.map((r) => r.key)).toEqual(["A"]);
   });
 
-  it("returns 0 rows for a dim that belongs to a different tenant", async () => {
-    const dimId = await makeDim("OutTenantScope");
-    await addRecord(dimId, [{ key: "X", label: "X" }], T);
-    const res = await listRecordPage("other_tenant_id", dimId, { limit: 100 });
+  it("returns 0 rows for a refTable that belongs to a different tenant", async () => {
+    const refTableId = await makeDim("OutTenantScope");
+    await addRecord(refTableId, [{ key: "X", label: "X" }], T);
+    const res = await listRecordPage("other_tenant_id", refTableId, { limit: 100 });
     expect(res.records).toEqual([]);
   });
 });
 
 describe("getRecordRow", () => {
   it("returns the row for a live key", async () => {
-    const dimId = await makeDim("OutOne");
-    await addRecord(dimId, [{ key: "ONE", label: "One" }], T);
-    const row = await getRecordRow(T, dimId, "ONE");
+    const refTableId = await makeDim("OutOne");
+    await addRecord(refTableId, [{ key: "ONE", label: "One" }], T);
+    const row = await getRecordRow(T, refTableId, "ONE");
     expect(row).not.toBeNull();
     expect(row!.key).toBe("ONE");
     expect(row!.label).toBe("One");
   });
 
   it("returns null for a retired key", async () => {
-    const dimId = await makeDim("OutRetired");
-    await addRecord(dimId, [{ key: "GONE", label: "Gone" }], T);
+    const refTableId = await makeDim("OutRetired");
+    await addRecord(refTableId, [{ key: "GONE", label: "Gone" }], T);
     const v = await pgGet<{ version: number }>(
       `SELECT version FROM "zugzug_app"."record_version"
-       WHERE dim_id = $1 AND key = 'GONE' AND tenant_id = $2`,
-      [dimId, T],
+       WHERE reference_table_id = $1 AND key = 'GONE' AND tenant_id = $2`,
+      [refTableId, T],
     );
-    await retireRecord(dimId, "GONE", U, v!.version, T);
-    expect(await getRecordRow(T, dimId, "GONE")).toBeNull();
+    await retireRecord(refTableId, "GONE", U, v!.version, T);
+    expect(await getRecordRow(T, refTableId, "GONE")).toBeNull();
   });
 });
 
 describe("listTombstonesPage", () => {
   it("returns retired keys with retired_at + retired_into", async () => {
-    const dimId = await makeDim("OutTombs");
+    const refTableId = await makeDim("OutTombs");
     await addRecord(
-      dimId,
+      refTableId,
       [
         { key: "SURV", label: "Survivor" },
         { key: "MERGED", label: "Merged" },
@@ -232,14 +234,14 @@ describe("listTombstonesPage", () => {
     );
     const versions = await pgAll<{ key: string; version: number }>(
       `SELECT key, version FROM "zugzug_app"."record_version"
-       WHERE dim_id = $1 AND tenant_id = $2`,
-      [dimId, T],
+       WHERE reference_table_id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
     const v = Object.fromEntries(versions.map((r) => [r.key, r.version]));
-    await mergeRecord(dimId, "SURV", ["MERGED"], U, v, T);
-    await retireRecord(dimId, "RETIRED", U, v.RETIRED, T);
+    await mergeRecord(refTableId, "SURV", ["MERGED"], U, v, T);
+    await retireRecord(refTableId, "RETIRED", U, v.RETIRED, T);
 
-    const res = await listTombstonesPage(T, dimId, { limit: 100 });
+    const res = await listTombstonesPage(T, refTableId, { limit: 100 });
     const byKey = Object.fromEntries(res.removed.map((t) => [t.key, t]));
     expect(byKey.MERGED).toBeDefined();
     expect(byKey.MERGED.retired_into).toBe("SURV");

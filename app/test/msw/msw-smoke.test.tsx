@@ -7,10 +7,10 @@ afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
 describe("MSW intercepts the app API client", () => {
-  test("apiFetch('/dimensions') hits the /api/t/:slug/ handler", async () => {
+  test("apiFetch('/refTables') hits the /api/t/:slug/ handler", async () => {
     // apiFetch derives the slug from the pathname and rewrites the URL.
     window.history.pushState({}, "", "/app/acme/tables");
-    const res = await apiFetch("/dimensions");
+    const res = await apiFetch("/refTables");
     expect(res.ok).toBe(true);
     const body = (await res.json()) as { id: string }[];
     expect(body[0]?.id).toBe("d1");

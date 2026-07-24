@@ -2,7 +2,7 @@
    Postgres (and the warehouse when ATTACH_WAREHOUSE=true). Self-cleaning.
    Run: `bun run verify-eid`.
 
-   Always-on (Postgres) asserts: migration columns, external-ID dimension creation
+   Always-on (Postgres) asserts: migration columns, external-ID refTable creation
    (nullable label + key_kind), and the unresolved fallback (key shown, label = key).
    The live-resolution path is exercised only when ATTACH_WAREHOUSE=true AND a real
    master table is provided via EID_TABLE / EID_ID_COL / EID_NAME_COL — else skipped. */
@@ -30,18 +30,22 @@ const note = (name: string, detail: string) => {
 };
 
 const NAME = "Verify EID Partner";
-const DIM_ID = "verify_eid_partner"; // slug(NAME)
-const KEYCOL = `${DIM_ID}_code`;
+const REF_TABLE_ID = "verify_eid_partner"; // slug(NAME)
+const KEYCOL = `${REF_TABLE_ID}_code`;
 const canon = (t: string) => `${env.oltpCatalog}.${env.recordSchema}.${t}`;
-const DIMT = canon(`dim_${DIM_ID}`);
-const MAPT = canon(`map_${DIM_ID}`);
+const DIMT = canon(`dim_${REF_TABLE_ID}`);
+const MAPT = canon(`map_${REF_TABLE_ID}`);
 
 async function cleanup(): Promise<void> {
   await pgRun(`DROP TABLE IF EXISTS ${DIMT}`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS ${MAPT}`).catch(() => {});
-  await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id = '${DIM_ID}'`).catch(() => {});
-  await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id = '${DIM_ID}'`).catch(() => {});
-  await pgRun(`DELETE FROM ${pg("dimension")} WHERE id = '${DIM_ID}'`).catch(() => {});
+  await pgRun(
+    `DELETE FROM ${pg("reference_table_source")} WHERE reference_table_id = '${REF_TABLE_ID}'`,
+  ).catch(() => {});
+  await pgRun(
+    `DELETE FROM ${pg("reference_table_field")} WHERE reference_table_id = '${REF_TABLE_ID}'`,
+  ).catch(() => {});
+  await pgRun(`DELETE FROM ${pg("reference_table")} WHERE id = '${REF_TABLE_ID}'`).catch(() => {});
 }
 
 console.log("\nZug Zug — external-ID keys verification\n");
@@ -53,10 +57,10 @@ await getAdapter(); // warm the env-configured adapter
 await runMigrations();
 await cleanup();
 
-// 1. migration columns exist on the dimension registry
+// 1. migration columns exist on the refTable registry
 const cols = await pgAll<{ column_name: string }>(
   `SELECT column_name FROM ${env.oltpCatalog}.information_schema.columns
-   WHERE table_schema = '${env.appSchema}' AND table_name = 'dimension'`,
+   WHERE table_schema = '${env.appSchema}' AND table_name = 'reference_table'`,
 );
 const have = new Set(cols.map((c) => c.column_name));
 check(
@@ -67,21 +71,21 @@ check(
 
 const TENANT = "default";
 
-// 2. create an external-ID dimension → key_kind persisted + nullable-label dim_
-await repo.addDimension(NAME, [], { keyKind: "external_id" }, "u_verify", TENANT);
-const dims = await repo.listDimensions(TENANT);
-const d = dims.find((x) => x.id === DIM_ID);
+// 2. create an external-ID refTable → key_kind persisted + nullable-label dim_
+await repo.addRefTable(NAME, [], { keyKind: "external_id" }, "u_verify", TENANT);
+const refTables = await repo.listRefTables(TENANT);
+const d = refTables.find((x) => x.id === REF_TABLE_ID);
 check(
-  "addDimension: external-ID dimension registered with key_kind",
+  "addRefTable: external-ID refTable registered with key_kind",
   d?.keyKind === "external_id",
   d?.keyKind ?? "missing",
 );
 const labelNullable = await pgGet<{ is_nullable: string }>(
   `SELECT is_nullable FROM ${env.oltpCatalog}.information_schema.columns
-   WHERE table_schema = '${env.recordSchema}' AND table_name = 'dim_${DIM_ID}' AND column_name = 'label'`,
+   WHERE table_schema = '${env.recordSchema}' AND table_name = 'dim_${REF_TABLE_ID}' AND column_name = 'label'`,
 );
 check(
-  "addDimension: dim_ label is nullable for external-ID",
+  "addRefTable: dim_ label is nullable for external-ID",
   labelNullable?.is_nullable === "YES",
   labelNullable?.is_nullable ?? "n/a",
 );
@@ -91,29 +95,29 @@ const T = process.env.EID_TABLE?.trim(),
   IDC = process.env.EID_ID_COL?.trim(),
   NMC = process.env.EID_NAME_COL?.trim();
 if (env.attachWarehouse && T && IDC && NMC) {
-  const res = await repo.deriveRecord(DIM_ID, T, IDC, NMC, {}, "u_verify", "default");
+  const res = await repo.deriveRecord(REF_TABLE_ID, T, IDC, NMC, {}, "u_verify", "default");
   check(
     "derive: external-ID keys seeded from master table",
     res.derived > 0,
     `${res.derived} ids from ${T}.${IDC}`,
   );
   const bind = await pgGet<{ name_table: string; name_col: string }>(
-    `SELECT name_table, name_col FROM ${pg("dimension")} WHERE id = '${DIM_ID}'`,
+    `SELECT name_table, name_col FROM ${pg("reference_table")} WHERE id = '${REF_TABLE_ID}'`,
   );
   check(
     "derive: name binding persisted",
     bind?.name_table === T && bind?.name_col === NMC,
     `${bind?.name_table}.${bind?.name_col}`,
   );
-  const full = await repo.getDimension(DIM_ID, TENANT);
+  const full = await repo.getRefTable(REF_TABLE_ID, TENANT);
   const resolved = full?.record.filter((c) => !c.unresolved && c.label !== c.key) ?? [];
   check(
-    "getDimension: at least one name resolved live",
+    "getRefTable: at least one name resolved live",
     resolved.length > 0,
     `${resolved.length}/${full?.record.length ?? 0} resolved`,
   );
   check(
-    "getDimension: keys are raw IDs (not slugged)",
+    "getRefTable: keys are raw IDs (not slugged)",
     (full?.record.length ?? 0) > 0 && (full?.record.every((c) => c.key === c.key.trim()) ?? false),
   );
 } else {
@@ -123,10 +127,10 @@ if (env.attachWarehouse && T && IDC && NMC) {
   );
   // unresolved fallback IS testable without a binding: seed an ID by hand, read it back
   await pgRun(`INSERT INTO ${DIMT} (${KEYCOL}) VALUES ('P-001') ON CONFLICT DO NOTHING`);
-  const full = await repo.getDimension(DIM_ID, TENANT);
+  const full = await repo.getRefTable(REF_TABLE_ID, TENANT);
   const row = full?.record.find((c) => c.key === "P-001");
   check(
-    "getDimension: no binding → row unresolved, label falls back to key",
+    "getRefTable: no binding → row unresolved, label falls back to key",
     !!row && row.unresolved === true && row.label === "P-001",
     row ? `unresolved=${row.unresolved} label=${row.label}` : "row missing",
   );

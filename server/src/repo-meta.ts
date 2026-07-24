@@ -205,10 +205,10 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
 }
 
 /* ---- per-user grid layout (column widths / order / hidden) ---- */
-export async function getGridLayout(userId: string, dimId: string): Promise<GridLayoutConfig> {
+export async function getGridLayout(userId: string, refTableId: string): Promise<GridLayoutConfig> {
   const row = await pgGet<{ config: string | null }>(
-    `SELECT config FROM ${pg("user_grid_layout")} WHERE user_id = $1 AND dim_id = $2`,
-    [userId, dimId],
+    `SELECT config FROM ${pg("user_grid_layout")} WHERE user_id = $1 AND reference_table_id = $2`,
+    [userId, refTableId],
   );
   if (!row?.config) return {};
   try {
@@ -218,17 +218,17 @@ export async function getGridLayout(userId: string, dimId: string): Promise<Grid
   }
 }
 
-/** Upsert the full layout config for (user, dim). Caller sends a *complete*
+/** Upsert the full layout config for (user, refTable). Caller sends a *complete*
  *  config; partial merging is the client's job (it knows what changed). */
 export async function setGridLayout(
   userId: string,
-  dimId: string,
+  refTableId: string,
   config: GridLayoutConfig,
 ): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("user_grid_layout")} (user_id, dim_id, config, updated_at)
+    `INSERT INTO ${pg("user_grid_layout")} (user_id, reference_table_id, config, updated_at)
      VALUES ($1, $2, $3, now())
-     ON CONFLICT (user_id, dim_id) DO UPDATE SET config = EXCLUDED.config, updated_at = now()`,
-    [userId, dimId, JSON.stringify(config)],
+     ON CONFLICT (user_id, reference_table_id) DO UPDATE SET config = EXCLUDED.config, updated_at = now()`,
+    [userId, refTableId, JSON.stringify(config)],
   );
 }

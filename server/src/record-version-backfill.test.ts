@@ -3,12 +3,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension } from "./repo-record.ts";
+import { addRefTable } from "./repo-record.ts";
 
 const T = "test_cv_backfill";
 const USER_ID = "u_cv_backfill";
-const DIM_NAME = "CV Backfill Dim";
-const DIM_ID = "cv_backfill_dim";
+const DIM_NAME = "CV Backfill RefTable";
+const REF_TABLE_ID = "cv_backfill_reftable";
 
 beforeAll(async () => {
   // Clean any prior run.
@@ -16,12 +16,14 @@ beforeAll(async () => {
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${DIM_ID}"`).catch(() => {});
-  await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${DIM_ID}"`).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
+  await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${REF_TABLE_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${REF_TABLE_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 
@@ -44,43 +46,45 @@ afterAll(async () => {
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${DIM_ID}"`).catch(() => {});
-  await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${DIM_ID}"`).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
+  await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${REF_TABLE_ID}"`).catch(() => {});
+  await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${REF_TABLE_ID}"`).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [USER_ID]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
 
 describe("record_version backfill from audit_log", () => {
   it("populates updated_at from the latest matching audit_log row", async () => {
-    // 1. Create dimension (this creates dim_<id>/map_<id> in zugzug schema, plus
-    //    a row in zugzug_app.dimension).
-    const dimId = await addDimension(DIM_NAME, [], {}, USER_ID, T);
-    expect(dimId).toBe(DIM_ID);
+    // 1. Create refTable (this creates dim_<id>/map_<id> in zugzug schema, plus
+    //    a row in zugzug_app.reference_table).
+    const refTableId = await addRefTable(DIM_NAME, [], {}, USER_ID, T);
+    expect(refTableId).toBe(REF_TABLE_ID);
 
-    // Look up dim_table + key_col strings (the migration loops over dimension to
+    // Look up dim_table + key_col strings (the migration loops over refTable to
     // get these — we mirror that here so the inner UPSERT we run is the exact
     // SQL the migration's PL/pgSQL block will EXECUTE).
-    const dim = await pgGet<{ dim_table: string; key_col: string }>(
-      `SELECT dim_table, key_col FROM "zugzug_app"."dimension"
+    const refTable = await pgGet<{ dim_table: string; key_col: string }>(
+      `SELECT dim_table, key_col FROM "zugzug_app"."reference_table"
         WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+      [refTableId, T],
     );
-    expect(dim).not.toBeNull();
+    expect(refTable).not.toBeNull();
 
     // 2. Insert a row directly into dim_<slug> WITHOUT going through addRecord
     //    (simulating pre-versioning state — no matching record_version row).
     const legacyKey = "LEGACY";
     await pgRun(
-      `INSERT INTO "${dim!.dim_table.split(".")[0]}"."${dim!.dim_table.split(".")[1]}"
-         ("${dim!.key_col}", label, tenant_id) VALUES ($1, $2, $3)`,
+      `INSERT INTO "${refTable!.dim_table.split(".")[0]}"."${refTable!.dim_table.split(".")[1]}"
+         ("${refTable!.key_col}", label, tenant_id) VALUES ($1, $2, $3)`,
       [legacyKey, "Legacy Label", T],
     );
 
-    // 3. Insert an audit_log row with action='Added record', table_id=dim.id,
+    // 3. Insert an audit_log row with action='Added record', table_id=refTable.id,
     //    row_key='LEGACY', created_at=fixed historical ts.
     // audit_log.created_at is timestamp (no tz). Insert via a literal that
     // Postgres reads as naive-local so the round-trip through the JS Date
@@ -90,33 +94,33 @@ describe("record_version backfill from audit_log", () => {
       `INSERT INTO "zugzug_app"."audit_log"
          (id, created_at, user_id, action, detail, table_id, row_key, tenant_id)
        VALUES ($1, $2::timestamp, $3, 'Added record', $4, $5, $6, $7)`,
-      [randomUUID(), historicalLiteral, USER_ID, "Legacy Label (LEGACY)", dimId, legacyKey, T],
+      [randomUUID(), historicalLiteral, USER_ID, "Legacy Label (LEGACY)", refTableId, legacyKey, T],
     );
     // Read back the audit row's timestamp the same way the UPSERT will — both
     // go through the same Date conversion so any tz offset cancels out.
     const auditRow = await pgGet<{ created_at: Date }>(
       `SELECT created_at FROM "zugzug_app"."audit_log"
         WHERE tenant_id = $1 AND table_id = $2 AND row_key = $3`,
-      [T, dimId, legacyKey],
+      [T, refTableId, legacyKey],
     );
     expect(auditRow).not.toBeNull();
 
     // Sanity: no record_version row yet for this key.
     const before = await pgGet(
       `SELECT key FROM "zugzug_app"."record_version"
-        WHERE tenant_id = $1 AND dim_id = $2 AND key = $3`,
-      [T, dimId, legacyKey],
+        WHERE tenant_id = $1 AND reference_table_id = $2 AND key = $3`,
+      [T, refTableId, legacyKey],
     );
     expect(before).toBeNull();
 
     // 4. Run the inner UPSERT (parameterized — the PL/pgSQL wrapper is a thin
-    //    loop over every (tenant, dim) pair). We build the SQL identically to
+    //    loop over every (tenant, refTable) pair). We build the SQL identically to
     //    the migration's format() call.
-    const [schema, table] = dim!.dim_table.split(".");
-    const keyCol = dim!.key_col;
+    const [schema, table] = refTable!.dim_table.split(".");
+    const keyCol = refTable!.key_col;
     const sql = `
       INSERT INTO "zugzug_app"."record_version"
-        (tenant_id, dim_id, key, version, updated_at, updated_by)
+        (tenant_id, reference_table_id, key, version, updated_at, updated_by)
       SELECT $1::varchar, $2::varchar, "${keyCol}", 0,
              coalesce(
                (SELECT max(created_at) FROM "zugzug_app"."audit_log"
@@ -131,15 +135,15 @@ describe("record_version backfill from audit_log", () => {
              'migration:phase1'
       FROM "${schema}"."${table}"
       WHERE tenant_id = $1::varchar
-      ON CONFLICT (tenant_id, dim_id, key) DO NOTHING
+      ON CONFLICT (tenant_id, reference_table_id, key) DO NOTHING
     `;
-    await pgRun(sql, [T, dimId]);
+    await pgRun(sql, [T, refTableId]);
 
     // 5. SELECT updated_at + updated_by from record_version for ('LEGACY').
     const after = await pgGet<{ updated_at: Date; updated_by: string }>(
       `SELECT updated_at, updated_by FROM "zugzug_app"."record_version"
-        WHERE tenant_id = $1 AND dim_id = $2 AND key = $3`,
-      [T, dimId, legacyKey],
+        WHERE tenant_id = $1 AND reference_table_id = $2 AND key = $3`,
+      [T, refTableId, legacyKey],
     );
     expect(after).not.toBeNull();
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 import { useClusterMapper } from "../../lib/use-cluster-mapper";
 import { useCandidatePicker } from "../../lib/use-candidate-picker";
 import { Button } from "../Button";
@@ -10,8 +10,8 @@ import { cx } from "../../lib/cx";
    useClusterMapper controller: the current cluster, a keyboard-driven candidate
    list with the mapped-sibling suggestion pre-highlighted, coverage, and
    map/skip/undo. Styled with the app's Squared tokens. */
-export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
-  const m = useClusterMapper(dim);
+export function ClusterMapperCard({ refTable }: { refTable: MappingRefTable }) {
+  const m = useClusterMapper(refTable);
 
   // Swallow a second synchronous map/skip before the cluster advances.
   const acting = useRef(false);
@@ -54,7 +54,7 @@ export function ClusterMapperCard({ dim }: { dim: MappingDimension }) {
     return (
       <div className="bg-surface px-4 py-10 text-center">
         <div className="font-display text-[18px] font-semibold text-ink">
-          {dim.dimension} is all mapped 🎉
+          {refTable.refTable} is all mapped 🎉
         </div>
         <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">
           {m.coverage.pct}% of at-risk rows resolved · {m.staged} draft{m.staged === 1 ? "" : "s"}

@@ -7,7 +7,7 @@ process.env.ALLOWED_DOMAIN = "example.com";
 import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "../setup.ts";
 import { pgGet } from "../../src/pg.ts";
-import { makeUser, makeWorkspace, makeMember, req, makeDimension } from "./index.ts";
+import { makeUser, makeWorkspace, makeMember, req, makeRefTable } from "./index.ts";
 
 beforeEach(resetDb);
 
@@ -30,13 +30,13 @@ test("req without a cookie is unauthorized", async () => {
   expect(res.status).toBe(401);
 });
 
-test("makeDimension creates a table visible to the workspace", async () => {
+test("makeRefTable creates a table visible to the workspace", async () => {
   await makeWorkspace("w_fac");
-  const id = await makeDimension("w_fac", "Vendors");
+  const id = await makeRefTable("w_fac", "Vendors");
   expect(typeof id).toBe("string");
   const { cookie } = await makeMember("u_fac", "w_fac", "viewer");
-  const res = await req("GET", "/api/t/w_fac/dimensions", cookie);
+  const res = await req("GET", "/api/t/w_fac/refTables", cookie);
   expect(res.status).toBe(200);
-  const dims = (await res.json()) as { id: string }[];
-  expect(dims.some((d) => d.id === id)).toBe(true);
+  const refTables = (await res.json()) as { id: string }[];
+  expect(refTables.some((d) => d.id === id)).toBe(true);
 });

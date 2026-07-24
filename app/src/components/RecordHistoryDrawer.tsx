@@ -14,7 +14,7 @@ import { cx } from "../lib/cx";
 
 export interface RecordHistoryDrawerProps {
   open: boolean;
-  /** Dimension / table id the record lives in. */
+  /** RefTable / table id the record lives in. */
   tableId: string | null;
   /** Stable record key (slug) — the history anchor. */
   rowKey: string | null;
@@ -129,7 +129,7 @@ export function RecordHistoryDrawer(props: RecordHistoryDrawerProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-50" aria-hidden={!open}>
-      {/* Backdrop — dims the grid, click to dismiss. */}
+      {/* Backdrop — refTables the grid, click to dismiss. */}
       <button
         type="button"
         aria-label="Close history"

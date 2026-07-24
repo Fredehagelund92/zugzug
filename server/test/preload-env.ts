@@ -5,7 +5,7 @@
  * static imports are hoisted above those assignments — so when a single file
  * is run directly (`bun test test/foo.test.ts`), env.ts reads DATABASE_URL
  * from server/.env and the pool silently connects to the DEV database.
- * Test dimensions and users then leak into dev data (this happened).
+ * Test refTables and users then leak into dev data (this happened).
  *
  * `bun run test` (package.json) already sets these in the shell env; shell
  * env wins over .env, so this preload is a no-op there. It only changes
@@ -22,7 +22,7 @@ process.env.GOOGLE_CLIENT_SECRET ??= "test-stub";
 process.env.ZUGZUG_CURSOR_KEY ??= "lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=";
 
 // resetDb() (DROP SCHEMA + replay all migrations) takes 2–6 s per call.
-// Migration 0036 added dimension_version (table + RLS policy), pushing replay
+// Migration 0036 added reference_table_version (table + RLS policy), pushing replay
 // past the 5 s bun default, so beforeEach hooks that call resetDb() flap.
 //
 // Raising the limit is harder than it looks in bun 1.3.x:

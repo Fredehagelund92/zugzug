@@ -308,7 +308,7 @@ test("ensureRecordTables: issues CREATE TABLE IF NOT EXISTS for dim_ and map_", 
   const { conn, calls } = mockConn(() => []);
   const a = new SnowflakeAdapter(CREDS, () => conn);
   await a.ensureRecordTables({
-    dimId: "country",
+    refTableId: "country",
     dimTable: "ZUGZUG.DIM_COUNTRY",
     mapTable: "ZUGZUG.MAP_COUNTRY",
     keyCol: "COUNTRY_CODE",
@@ -328,7 +328,7 @@ test("commitRecord: empty drafts returns {rowsWritten: 0} without any SQL", asyn
   const a = new SnowflakeAdapter(CREDS, () => conn);
   const result = await a.commitRecord(
     {
-      dimId: "country",
+      refTableId: "country",
       dimTable: "ZUGZUG.DIM_COUNTRY",
       mapTable: "ZUGZUG.MAP_COUNTRY",
       keyCol: "COUNTRY_CODE",
@@ -339,12 +339,12 @@ test("commitRecord: empty drafts returns {rowsWritten: 0} without any SQL", asyn
   expect(calls).toHaveLength(0);
 });
 
-test("commitRecord: issues two MERGE statements (dim + map)", async () => {
+test("commitRecord: issues two MERGE statements (refTable + map)", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 3 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
   const result = await a.commitRecord(
     {
-      dimId: "country",
+      refTableId: "country",
       dimTable: "ZUGZUG.DIM_COUNTRY",
       mapTable: "ZUGZUG.MAP_COUNTRY",
       keyCol: "COUNTRY_CODE",
@@ -380,12 +380,12 @@ test("commitRecord: issues two MERGE statements (dim + map)", async () => {
   expect(result.rowsWritten).toBe(6);
 });
 
-test("commitRecord: dim MERGE deduplicates by key (one row per unique key, last label wins)", async () => {
+test("commitRecord: refTable MERGE deduplicates by key (one row per unique key, last label wins)", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
   await a.commitRecord(
     {
-      dimId: "country",
+      refTableId: "country",
       dimTable: "ZUGZUG.DIM_COUNTRY",
       mapTable: "ZUGZUG.MAP_COUNTRY",
       keyCol: "COUNTRY_CODE",
@@ -395,24 +395,24 @@ test("commitRecord: dim MERGE deduplicates by key (one row per unique key, last 
       { raw: "U.S.", key: "US", label: "United States of America" }, // same key, different label
     ],
   );
-  // The dim MERGE should have ONE pair of placeholders, not two
-  const dimBinds = calls[0].binds ?? [];
-  expect(dimBinds).toHaveLength(2); // [key, label]
-  expect(dimBinds[0]).toBe("US");
+  // The refTable MERGE should have ONE pair of placeholders, not two
+  const refTableBinds = calls[0].binds ?? [];
+  expect(refTableBinds).toHaveLength(2); // [key, label]
+  expect(refTableBinds[0]).toBe("US");
   // Last-write-wins on label (deterministic by input order)
-  expect(dimBinds[1]).toBe("United States of America");
+  expect(refTableBinds[1]).toBe("United States of America");
 });
 
 test("commitRecord: chunks at 1000 rows", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  // 1500 unique drafts → dim has 1500 unique keys, map has 1500 rows
+  // 1500 unique drafts → refTable has 1500 unique keys, map has 1500 rows
   const drafts = Array.from({ length: 1500 }, (_, i) => ({
     raw: `raw-${i}`,
     key: `key-${i}`,
     label: `Label ${i}`,
   }));
-  await a.commitRecord({ dimId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" }, drafts);
+  await a.commitRecord({ refTableId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" }, drafts);
   // 2 MERGEs per chunk × 2 chunks (1000 + 500) = 4 statements
   expect(calls).toHaveLength(4);
 });
@@ -420,10 +420,10 @@ test("commitRecord: chunks at 1000 rows", async () => {
 test("commitRecord: handles drafts with null label (uses NULL bind)", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  await a.commitRecord({ dimId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" }, [
+  await a.commitRecord({ refTableId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" }, [
     { raw: "raw1", key: "k1", label: null },
   ]);
-  const dimBinds = calls[0].binds ?? [];
-  expect(dimBinds[0]).toBe("k1");
-  expect(dimBinds[1]).toBeNull();
+  const refTableBinds = calls[0].binds ?? [];
+  expect(refTableBinds[0]).toBe("k1");
+  expect(refTableBinds[1]).toBeNull();
 });

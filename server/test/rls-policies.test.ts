@@ -7,15 +7,15 @@ process.env.ALLOWED_DOMAIN = "example.com";
 import { test, expect } from "bun:test";
 import { pgAll, pgTxScoped } from "../src/pg.ts";
 
-test("SELECT on dimension WITH SET LOCAL works (inside pgTxScoped)", async () => {
+test("SELECT on refTable WITH SET LOCAL works (inside pgTxScoped)", async () => {
   await pgTxScoped("default", async () => {
-    const rows = await pgAll(`SELECT id FROM "zugzug_app"."dimension" LIMIT 5`);
+    const rows = await pgAll(`SELECT id FROM "zugzug_app"."reference_table" LIMIT 5`);
     expect(Array.isArray(rows)).toBe(true);
   });
 });
 
 test("15 scoped tables have RLS enabled", async () => {
-  // dimension_version (migration 0036) is the 15th RLS table
+  // reference_table_version (migration 0036) is the 15th RLS table
   const rows = await pgAll<{ tablename: string }>(
     `SELECT tablename FROM pg_tables WHERE schemaname = 'zugzug_app' AND rowsecurity = true ORDER BY tablename`,
     [],

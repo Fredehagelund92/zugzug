@@ -38,10 +38,10 @@ async function bulkInsertChunked(
   }
 }
 
-/** Replace this dim's materialized scan values atomically. Per-source
- *  occurrences keep provenance; dim_scan_value rolls up by case-folded raw. */
-export async function materializeDimScanValues(
-  dimId: string,
+/** Replace this refTable's materialized scan values atomically. Per-source
+ *  occurrences keep provenance; source_scan_value rolls up by case-folded raw. */
+export async function materializeSourceScanValues(
+  refTableId: string,
   tenantId: string,
   opts: MaterializeOpts,
 ): Promise<void> {
@@ -58,23 +58,23 @@ export async function materializeDimScanValues(
   // the WHERE clauses below.
   await pgTxRaw(async (tx) => {
     await tx.run(
-      `DELETE FROM zugzug_app.dim_scan_occurrence WHERE tenant_id = $1 AND dim_id = $2`,
-      [tenantId, dimId],
+      `DELETE FROM zugzug_app.source_scan_occurrence WHERE tenant_id = $1 AND reference_table_id = $2`,
+      [tenantId, refTableId],
     );
     await tx.run(
-      `DELETE FROM zugzug_app.dim_scan_value      WHERE tenant_id = $1 AND dim_id = $2`,
-      [tenantId, dimId],
+      `DELETE FROM zugzug_app.source_scan_value      WHERE tenant_id = $1 AND reference_table_id = $2`,
+      [tenantId, refTableId],
     );
 
     if (byLower.size > 0) {
       const rowsParams: unknown[][] = [];
       for (const [lower, v] of byLower) {
-        rowsParams.push([tenantId, dimId, v.raw, lower, v.total, opts.scannedAt]);
+        rowsParams.push([tenantId, refTableId, v.raw, lower, v.total, opts.scannedAt]);
       }
       await bulkInsertChunked(
         tx,
-        `INSERT INTO zugzug_app.dim_scan_value
-           (tenant_id, dim_id, raw, raw_lower, total_rows, scanned_at)`,
+        `INSERT INTO zugzug_app.source_scan_value
+           (tenant_id, reference_table_id, raw, raw_lower, total_rows, scanned_at)`,
         rowsParams,
         6,
         "",
@@ -84,80 +84,80 @@ export async function materializeDimScanValues(
     if (opts.occurrences.length > 0) {
       const rowsParams: unknown[][] = [];
       for (const o of opts.occurrences) {
-        rowsParams.push([tenantId, dimId, o.raw.toLowerCase(), o.table, o.column, o.rows]);
+        rowsParams.push([tenantId, refTableId, o.raw.toLowerCase(), o.table, o.column, o.rows]);
       }
       await bulkInsertChunked(
         tx,
-        `INSERT INTO zugzug_app.dim_scan_occurrence
-           (tenant_id, dim_id, raw_lower, table_name, column_name, rows)`,
+        `INSERT INTO zugzug_app.source_scan_occurrence
+           (tenant_id, reference_table_id, raw_lower, table_name, column_name, rows)`,
         rowsParams,
         6,
-        `ON CONFLICT (tenant_id, dim_id, raw_lower, table_name, column_name)
+        `ON CONFLICT (tenant_id, reference_table_id, raw_lower, table_name, column_name)
            DO UPDATE SET rows = EXCLUDED.rows`,
       );
     }
   });
 }
 
-export interface DimScanScalars {
-  dimId: string;
+export interface SourceScanScalars {
+  refTableId: string;
   totalDistinct: number;
   mappedCount: number;
   newCount: number;
-  /** SUM(total_rows) for values without a row in map_<dim>. */
+  /** SUM(total_rows) for values without a row in map_<refTable>. */
   unmappedRowsTotal: number;
   /** SUM(total_rows) for values already mapped. */
   mappedRowsTotal: number;
   scannedAt: Date | null;
 }
 
-/** Per-dim scalar counts and last-scan timestamp. One row per dim that has
- *  been scanned at least once. Loops in JS because map_<dim> is dynamic. */
-export async function getDimScanScalars(tenantId: string): Promise<DimScanScalars[]> {
-  const dims = await pgAll<{ dimId: string; mapTable: string }>(
-    `SELECT id AS "dimId", map_table AS "mapTable"
-       FROM zugzug_app.dimension WHERE tenant_id = $1`,
+/** Per-refTable scalar counts and last-scan timestamp. One row per refTable that has
+ *  been scanned at least once. Loops in JS because map_<refTable> is dynamic. */
+export async function getSourceScanScalars(tenantId: string): Promise<SourceScanScalars[]> {
+  const refTables = await pgAll<{ refTableId: string; mapTable: string }>(
+    `SELECT id AS "refTableId", map_table AS "mapTable"
+       FROM zugzug_app.reference_table WHERE tenant_id = $1`,
     [tenantId],
   );
-  const mapByDim = new Map(dims.map((d) => [d.dimId, d.mapTable]));
+  const mapByDim = new Map(refTables.map((d) => [d.refTableId, d.mapTable]));
 
   const rows = await pgAll<{
-    dimId: string;
+    refTableId: string;
     total: number;
     rowsTotal: number;
     scannedAt: Date | null;
   }>(
-    `SELECT dim_id AS "dimId",
+    `SELECT reference_table_id AS "refTableId",
             COUNT(*)::bigint           AS total,
             COALESCE(SUM(total_rows), 0)::bigint AS "rowsTotal",
             MAX(scanned_at)            AS "scannedAt"
-       FROM zugzug_app.dim_scan_value
+       FROM zugzug_app.source_scan_value
        WHERE tenant_id = $1
-       GROUP BY dim_id`,
+       GROUP BY reference_table_id`,
     [tenantId],
   );
 
-  const out: DimScanScalars[] = [];
+  const out: SourceScanScalars[] = [];
   for (const r of rows) {
-    const mapTable = mapByDim.get(r.dimId);
+    const mapTable = mapByDim.get(r.refTableId);
     let mapped = 0;
     let mappedRows = 0;
     if (mapTable) {
       const m = await pgAll<{ n: number; rows: number }>(
         `SELECT COUNT(*)::bigint              AS n,
                 COALESCE(SUM(v.total_rows), 0)::bigint AS rows
-           FROM zugzug_app.dim_scan_value v
+           FROM zugzug_app.source_scan_value v
            JOIN ${cq(mapTable)} m
              ON m.tenant_id = v.tenant_id AND LOWER(m.raw) = v.raw_lower
-           WHERE v.tenant_id = $1 AND v.dim_id = $2`,
-        [tenantId, r.dimId],
+           WHERE v.tenant_id = $1 AND v.reference_table_id = $2`,
+        [tenantId, r.refTableId],
       );
       mapped = Number(m[0]?.n ?? 0);
       mappedRows = Number(m[0]?.rows ?? 0);
     }
     const rowsTotal = Number(r.rowsTotal);
     out.push({
-      dimId: r.dimId,
+      refTableId: r.refTableId,
       totalDistinct: Number(r.total),
       mappedCount: mapped,
       newCount: Number(r.total) - mapped,
@@ -204,25 +204,25 @@ function decodeCursor(c: string): [number, string] | null {
   }
 }
 
-/** One page of dim values, sorted by total_rows desc, raw_lower asc. Cursor
+/** One page of refTable values, sorted by total_rows desc, raw_lower asc. Cursor
  *  is the (total_rows, raw_lower) lex tuple — stable because raw_lower is
- *  PK-unique within a dim. */
-export async function getDimScanValuesPage(
+ *  PK-unique within a refTable. */
+export async function getSourceScanValuesPage(
   tenantId: string,
-  dimId: string,
+  refTableId: string,
   opts: PageOpts,
 ): Promise<ValuesPage> {
   const limit = Math.min(500, Math.max(1, opts.limit));
-  const dim = await pgAll<{ mapTable: string; dimTable: string; keyCol: string }>(
+  const refTable = await pgAll<{ mapTable: string; dimTable: string; keyCol: string }>(
     `SELECT map_table AS "mapTable", dim_table AS "dimTable", key_col AS "keyCol"
-       FROM zugzug_app.dimension WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+       FROM zugzug_app.reference_table WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
-  if (!dim.length) return { items: [], hasMore: false, nextCursor: null };
-  const { mapTable, dimTable, keyCol } = dim[0];
+  if (!refTable.length) return { items: [], hasMore: false, nextCursor: null };
+  const { mapTable, dimTable, keyCol } = refTable[0];
 
-  const params: unknown[] = [tenantId, dimId];
-  let where = `v.tenant_id = $1 AND v.dim_id = $2`;
+  const params: unknown[] = [tenantId, refTableId];
+  let where = `v.tenant_id = $1 AND v.reference_table_id = $2`;
   if (opts.q && opts.q.trim()) {
     params.push(`%${opts.q.trim().toLowerCase()}%`);
     where += ` AND v.raw_lower ILIKE $${params.length}`;
@@ -252,7 +252,7 @@ export async function getDimScanValuesPage(
     `SELECT v.raw, v.raw_lower, v.total_rows,
             m.${qid(keyCol)} AS mapped_key,
             d.label          AS mapped_label
-       FROM zugzug_app.dim_scan_value v
+       FROM zugzug_app.source_scan_value v
        LEFT JOIN ${cq(mapTable)} m
          ON m.tenant_id = v.tenant_id AND LOWER(m.raw) = v.raw_lower
        LEFT JOIN ${cq(dimTable)} d
@@ -270,9 +270,9 @@ export async function getDimScanValuesPage(
   const occs = lowers.length
     ? await pgAll<{ raw_lower: string; table_name: string; column_name: string; rows: number }>(
         `SELECT raw_lower, table_name, column_name, rows
-           FROM zugzug_app.dim_scan_occurrence
-           WHERE tenant_id = $1 AND dim_id = $2 AND raw_lower = ANY($3)`,
-        [tenantId, dimId, lowers],
+           FROM zugzug_app.source_scan_occurrence
+           WHERE tenant_id = $1 AND reference_table_id = $2 AND raw_lower = ANY($3)`,
+        [tenantId, refTableId, lowers],
       )
     : [];
   const occByLower = new Map<string, { table: string; column: string; rows: number }[]>();
@@ -305,21 +305,21 @@ export interface ClusterFeedOpts {
 }
 
 /**
- * Fetch a dimension's scan values worst-impact-first by looping the existing
- * paginated `getDimScanValuesPage` until it is exhausted or `cap` is reached.
+ * Fetch a refTable's scan values worst-impact-first by looping the existing
+ * paginated `getSourceScanValuesPage` until it is exhausted or `cap` is reached.
  * Reuses the tested query + cursor + occurrence logic — no new SQL. Returns the
  * (possibly capped) rows and whether more existed beyond the cap.
  */
-export async function getDimScanValuesAll(
+export async function getSourceScanValuesAll(
   tenantId: string,
-  dimId: string,
+  refTableId: string,
   opts: ClusterFeedOpts,
 ): Promise<{ rows: ScanValueRow[]; truncated: boolean }> {
   const cap = opts.cap ?? 5000;
   const rows: ScanValueRow[] = [];
   let after: string | null = null;
   for (;;) {
-    const page = await getDimScanValuesPage(tenantId, dimId, {
+    const page = await getSourceScanValuesPage(tenantId, refTableId, {
       filter: opts.filter,
       limit: 500,
       after,
@@ -336,26 +336,26 @@ export async function getDimScanValuesAll(
 }
 
 /** The focused mapper's payload: complete clusters worst-first, plus coverage. */
-export interface DimClusterFeed {
+export interface RefTableClusterFeed {
   clusters: ScanValueCluster[];
   coverage: { resolvedRows: number; atRiskRows: number; pct: number };
   truncated: boolean;
 }
 
 /**
- * Fetch a dimension's values (capped, worst-first), cluster the whole set so
+ * Fetch a refTable's values (capped, worst-first), cluster the whole set so
  * every family is complete, and attach coverage. Coverage comes from the
- * authoritative whole-dimension scalars (not the possibly-truncated rows), so it
+ * authoritative whole-refTable scalars (not the possibly-truncated rows), so it
  * stays correct regardless of the cap.
  */
-export async function getDimClusters(
+export async function getRefTableClusters(
   tenantId: string,
-  dimId: string,
+  refTableId: string,
   opts: ClusterFeedOpts,
-): Promise<DimClusterFeed> {
-  const { rows, truncated } = await getDimScanValuesAll(tenantId, dimId, opts);
+): Promise<RefTableClusterFeed> {
+  const { rows, truncated } = await getSourceScanValuesAll(tenantId, refTableId, opts);
   const clusters = clusterScanRows(rows);
-  const scalars = (await getDimScanScalars(tenantId)).find((s) => s.dimId === dimId);
+  const scalars = (await getSourceScanScalars(tenantId)).find((s) => s.refTableId === refTableId);
   const resolvedRows = scalars?.mappedRowsTotal ?? 0;
   const atRiskRows = scalars?.unmappedRowsTotal ?? 0;
   const denom = resolvedRows + atRiskRows;

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 import { useSources, useCanEdit, deriveRecord } from "../../store";
 import { sortByUrgency, summarizeSources, type SourceStatus } from "../../lib/source-status";
 import { useNavLinks } from "../../lib/use-tenant-navigate";
@@ -21,17 +21,20 @@ const STATUS_META: Record<SourceStatus, { label: string; pill: string; bar: stri
 /* SourcesMonitorBody — the "plumbing" view for one table. Classifies each wired
    column into four action states, orders by urgency, and hands the mapping work
    off to Map values. Scanning is automatic; per-row Re-check is the exception. */
-export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
+export function SourcesMonitorBody({ refTable }: { refTable: MappingRefTable }) {
   const sources = useSources();
   const canEdit = useCanEdit();
   const nav = useNavLinks();
-  const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
+  const wired = useMemo(
+    () => sources.filter((s) => s.refTableId === refTable.id),
+    [sources, refTable.id],
+  );
   const ranked = useMemo(() => sortByUrgency(wired), [wired]);
   const summary = useMemo(() => summarizeSources(wired), [wired]);
 
   const recheck = useAsyncAction(async (table: string, column: string) => {
     try {
-      await deriveRecord(dim.id, table, column);
+      await deriveRecord(refTable.id, table, column);
       toast(`Re-checked ${table}.${column}`);
     } catch (e) {
       toast(
@@ -55,12 +58,12 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
             Watch a column to get started.
           </div>
           <p className="mx-auto mt-2 text-[13px] leading-snug text-ink-3">
-            Point Sources at a warehouse column and Zugzug catches new {dim.dimension} values as
+            Point Sources at a warehouse column and Zugzug catches new {refTable.refTable} values as
             they appear — no manual re-checking.
           </p>
           <ol className="mx-auto mt-5 flex max-w-[40ch] flex-col gap-2 text-left">
             {[
-              { n: "1", text: <>Pick a column that holds {dim.dimension} values.</> },
+              { n: "1", text: <>Pick a column that holds {refTable.refTable} values.</> },
               {
                 n: "2",
                 text: <>Zugzug scans it automatically and flags values without a record.</>,
@@ -101,7 +104,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
       {/* wiring-health header */}
       <header className="border-b border-line bg-surface px-5 pt-5 pb-4">
         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
-          sources · {dim.dimension}
+          sources · {refTable.refTable}
         </div>
         <h2 className="mt-2 font-display text-[22px] font-semibold tracking-[-0.02em] text-ink">
           <span className="tabular-nums">{wired.length}</span>{" "}
@@ -141,7 +144,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
             across {summary.needsMapping} column{summary.needsMapping === 1 ? "" : "s"} need a
             record.
           </span>
-          <Link to={nav.table(dim.id, "match")} className="ml-auto">
+          <Link to={nav.table(refTable.id, "match")} className="ml-auto">
             <Button size="sm" icon={<IconArrowRight className="h-3.5 w-3.5" />}>
               Map them
             </Button>
@@ -173,7 +176,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
                 <div className="font-mono text-[14px] font-semibold text-ink">
                   {s.table}
                   <span className="text-ink-3">.{s.column}</span>
-                  <span className="text-ink-3"> → {dim.dimension}</span>
+                  <span className="text-ink-3"> → {refTable.refTable}</span>
                 </div>
                 <div className="mt-1 font-mono text-[11.5px] text-ink-3">
                   {st.status === "broken"
@@ -206,7 +209,7 @@ export function SourcesMonitorBody({ dim }: { dim: MappingDimension }) {
               </div>
               <div className="flex items-center gap-2">
                 {st.status === "new" && (
-                  <Link to={nav.table(dim.id, "match")}>
+                  <Link to={nav.table(refTable.id, "match")}>
                     <Button size="sm">Map these</Button>
                   </Link>
                 )}

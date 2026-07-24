@@ -28,8 +28,8 @@ const bytea = customType<{ data: Buffer; default: false }>({
   },
 });
 
-export const dimension = app.table(
-  "dimension",
+export const refTable = app.table(
+  "reference_table",
   {
     id:          varchar("id").notNull(),
     label:       varchar("label").notNull(),
@@ -50,15 +50,15 @@ export const dimension = app.table(
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.id] }),
-    index("dimension_tenant_idx").on(t.tenant_id),
-    check("dimension_ordering_mode_chk", sql`${t.ordering_mode} IN ('derived', 'manual')`),
+    index("refTable_tenant_idx").on(t.tenant_id),
+    check("refTable_ordering_mode_chk", sql`${t.ordering_mode} IN ('derived', 'manual')`),
   ],
 );
 
-export const dimensionSource = app.table(
-  "dimension_source",
+export const refTableSource = app.table(
+  "reference_table_source",
   {
-    dim_id:        varchar("dim_id").notNull(),
+    reference_table_id:        varchar("reference_table_id").notNull(),
     tenant_id:     varchar("tenant_id").notNull().references(() => tenant.id),
     source_table:  varchar("source_table"),
     source_column: varchar("source_column"),
@@ -69,25 +69,25 @@ export const dimensionSource = app.table(
   },
   (t) => [
     primaryKey({
-      columns: [t.tenant_id, t.dim_id, t.database_id, t.schema_name, t.table_name, t.column_name],
+      columns: [t.tenant_id, t.reference_table_id, t.database_id, t.schema_name, t.table_name, t.column_name],
     }),
-    index("dimension_source_dim_idx").on(t.tenant_id, t.dim_id),
-    index("dimension_source_database_idx").on(t.tenant_id, t.database_id),
+    index("reference_table_source_dim_idx").on(t.tenant_id, t.reference_table_id),
+    index("reference_table_source_database_idx").on(t.tenant_id, t.database_id),
     foreignKey({
       columns:        [t.database_id],
       foreignColumns: [warehouseDatabase.id],
-      name:           "dimension_source_database_fk",
+      name:           "reference_table_source_database_fk",
     }).onDelete("restrict"),
-    check("dimension_source_schema_name_nonempty", sql`length(${t.schema_name}) > 0`),
-    check("dimension_source_table_name_nonempty",  sql`length(${t.table_name})  > 0`),
-    check("dimension_source_column_name_nonempty", sql`length(${t.column_name}) > 0`),
+    check("reference_table_source_schema_name_nonempty", sql`length(${t.schema_name}) > 0`),
+    check("reference_table_source_table_name_nonempty",  sql`length(${t.table_name})  > 0`),
+    check("reference_table_source_column_name_nonempty", sql`length(${t.column_name}) > 0`),
   ],
 );
 
-export const dimensionField = app.table(
-  "dimension_field",
+export const refTableField = app.table(
+  "reference_table_field",
   {
-    dim_id:       varchar("dim_id").notNull(),
+    reference_table_id:       varchar("reference_table_id").notNull(),
     field:        varchar("field").notNull(),
     label:        varchar("label").notNull(),
     type:         varchar("type").notNull(),
@@ -96,13 +96,13 @@ export const dimensionField = app.table(
     description:  varchar("description"),
     tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
   },
-  (t) => [primaryKey({ columns: [t.tenant_id, t.dim_id, t.field] })],
+  (t) => [primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.field] })],
 );
 
 export const sourceStat = app.table(
   "source_stat",
   {
-    dim_id:          varchar("dim_id").notNull(),
+    reference_table_id:          varchar("reference_table_id").notNull(),
     tenant_id:       varchar("tenant_id").notNull().references(() => tenant.id),
     source_table:    varchar("source_table"),
     source_column:   varchar("source_column"),
@@ -118,7 +118,7 @@ export const sourceStat = app.table(
   },
   (t) => [
     primaryKey({
-      columns: [t.tenant_id, t.dim_id, t.database_id, t.schema_name, t.table_name, t.column_name],
+      columns: [t.tenant_id, t.reference_table_id, t.database_id, t.schema_name, t.table_name, t.column_name],
     }),
     foreignKey({
       columns:        [t.database_id],
@@ -134,7 +134,7 @@ export const sourceStat = app.table(
 export const draft = app.table(
   "draft",
   {
-    dim_id:       varchar("dim_id").notNull(),
+    reference_table_id:       varchar("reference_table_id").notNull(),
     raw:          varchar("raw").notNull(),
     status:       varchar("status").notNull(),
     target_label: varchar("target_label"),
@@ -149,7 +149,7 @@ export const draft = app.table(
     rejected_by:     text("rejected_by"),
   },
   (t) => [
-    primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw, t.user_id] }),
+    primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.raw, t.user_id] }),
     index("draft_tenant_idx").on(t.tenant_id),
     check("draft_source_chk", sql`${t.source} IN ('user', 'ai')`),
     check("draft_confidence_chk", sql`${t.confidence} IS NULL OR ${t.confidence} IN ('high', 'medium', 'low')`),
@@ -239,17 +239,17 @@ export const userGridLayout = app.table(
   "user_grid_layout",
   {
     user_id:    varchar("user_id").notNull(),
-    dim_id:     varchar("dim_id").notNull(),
+    reference_table_id:     varchar("reference_table_id").notNull(),
     config:     varchar("config").notNull(),
     updated_at: timestamp("updated_at").notNull(),
   },
-  (t) => [primaryKey({ columns: [t.user_id, t.dim_id] })],
+  (t) => [primaryKey({ columns: [t.user_id, t.reference_table_id] })],
 );
 
 export const aiHintCache = app.table(
   "ai_hint_cache",
   {
-    dim_id:     varchar("dim_id").notNull(),
+    reference_table_id:     varchar("reference_table_id").notNull(),
     raw:        varchar("raw").notNull(),
     suggestion: varchar("suggestion"),
     confidence: integer("confidence").notNull(),
@@ -260,9 +260,9 @@ export const aiHintCache = app.table(
     tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
-    primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw] }),
-    index("ai_hint_cache_dim_id_idx").on(t.dim_id),
-    index("ai_hint_cache_tenant_dim_idx").on(t.tenant_id, t.dim_id),
+    primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.raw] }),
+    index("ai_hint_cache_dim_id_idx").on(t.reference_table_id),
+    index("ai_hint_cache_tenant_dim_idx").on(t.tenant_id, t.reference_table_id),
   ],
 );
 
@@ -286,29 +286,29 @@ export const scanRuns = app.table(
   ],
 );
 
-export const dimScanValue = app.table(
-  "dim_scan_value",
+export const sourceScanValue = app.table(
+  "source_scan_value",
   {
     tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
-    dim_id:     varchar("dim_id").notNull(),
+    reference_table_id:     varchar("reference_table_id").notNull(),
     raw:        varchar("raw").notNull(),
     raw_lower:  varchar("raw_lower").notNull(),
     total_rows: bigint("total_rows", { mode: "number" }).notNull(),
     scanned_at: timestamp("scanned_at").notNull(),
   },
   (t) => [
-    primaryKey({ columns: [t.tenant_id, t.dim_id, t.raw_lower] }),
-    index("dim_scan_value_dim_rows_idx").on(t.tenant_id, t.dim_id, t.total_rows.desc(), t.raw_lower),
-    check("dim_scan_value_raw_nonempty",      sql`length(${t.raw}) > 0`),
-    check("dim_scan_value_total_rows_nonneg", sql`${t.total_rows} >= 0`),
+    primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.raw_lower] }),
+    index("source_scan_value_dim_rows_idx").on(t.tenant_id, t.reference_table_id, t.total_rows.desc(), t.raw_lower),
+    check("source_scan_value_raw_nonempty",      sql`length(${t.raw}) > 0`),
+    check("source_scan_value_total_rows_nonneg", sql`${t.total_rows} >= 0`),
   ],
 );
 
-export const dimScanOccurrence = app.table(
-  "dim_scan_occurrence",
+export const sourceScanOccurrence = app.table(
+  "source_scan_occurrence",
   {
     tenant_id:   varchar("tenant_id").notNull().references(() => tenant.id),
-    dim_id:      varchar("dim_id").notNull(),
+    reference_table_id:      varchar("reference_table_id").notNull(),
     raw_lower:   varchar("raw_lower").notNull(),
     table_name:  varchar("table_name").notNull(),
     column_name: varchar("column_name").notNull(),
@@ -316,16 +316,16 @@ export const dimScanOccurrence = app.table(
   },
   (t) => [
     primaryKey({
-      columns: [t.tenant_id, t.dim_id, t.raw_lower, t.table_name, t.column_name],
+      columns: [t.tenant_id, t.reference_table_id, t.raw_lower, t.table_name, t.column_name],
     }),
-    check("dim_scan_occurrence_rows_nonneg", sql`${t.rows} >= 0`),
+    check("source_scan_occurrence_rows_nonneg", sql`${t.rows} >= 0`),
   ],
 );
 
 export const recordVersion = app.table(
   "record_version",
   {
-    dim_id:     varchar("dim_id").notNull(),
+    reference_table_id:     varchar("reference_table_id").notNull(),
     key:        varchar("key").notNull(),
     version:    integer("version").notNull(),
     updated_at: timestamp("updated_at").notNull(),
@@ -341,16 +341,16 @@ export const recordVersion = app.table(
     tenant_id:  varchar("tenant_id").notNull().references(() => tenant.id),
   },
   (t) => [
-    primaryKey({ columns: [t.tenant_id, t.dim_id, t.key] }),
-    index("record_version_recent_idx").on(t.dim_id, t.updated_at),
-    index("record_version_tenant_dim_idx").on(t.tenant_id, t.dim_id),
+    primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.key] }),
+    index("record_version_recent_idx").on(t.reference_table_id, t.updated_at),
+    index("record_version_tenant_dim_idx").on(t.tenant_id, t.reference_table_id),
     /* Pull API live-row read path (PR2). Partial over un-retired rows. */
     index("record_version_pull_idx")
-      .on(t.tenant_id, t.dim_id, t.updated_at, t.key)
+      .on(t.tenant_id, t.reference_table_id, t.updated_at, t.key)
       .where(sql`retired_at IS NULL`),
     /* Pull API tombstone read path (PR2). */
     index("record_version_tombstone_idx")
-      .on(t.tenant_id, t.dim_id, t.retired_at)
+      .on(t.tenant_id, t.reference_table_id, t.retired_at)
       .where(sql`retired_at IS NOT NULL`),
   ],
 );
@@ -370,7 +370,7 @@ export const tenant = app.table(
   (t) => [
     // slug is the URL segment — must be globally unique to route to one tenant.
     uniqueIndex("tenant_slug_unique").on(t.slug),
-    // 21-char cap on id keeps room for dim_${tenantId}_${dimSlug} under Postgres's
+    // 21-char cap on id keeps room for dim_${tenantId}_${refTableSlug} under Postgres's
     // 63-byte identifier limit (4 + 21 + 1 + 37 = 63).
     check("tenant_id_format", sql`${t.id} ~ '^[a-z][a-z0-9_]{0,20}$'`),
     // slug is the URL segment; same constraint shape.
@@ -543,7 +543,7 @@ export const outboundEvent = app.table(
     id:           varchar("id").primaryKey(),
     tenant_id:    varchar("tenant_id").notNull().references(() => tenant.id),
     type:         varchar("type", { length: 64 }).notNull(),
-    dim_id:       varchar("dim_id"),
+    reference_table_id:       varchar("reference_table_id"),
     occurred_at:  timestamp("occurred_at").notNull(),
     payload:      jsonb("payload").notNull(),
     idem_key:     varchar("idem_key", { length: 128 }).notNull(),
@@ -670,12 +670,12 @@ export const authCredentialQuota = app.table(
 
 /* ---------- Publish lifecycle ---------- */
 
-export const dimensionVersion = app.table(
-  "dimension_version",
+export const refTableVersion = app.table(
+  "reference_table_version",
   {
     id:               text("id").primaryKey(),
     tenant_id:        text("tenant_id").notNull(),
-    dim_id:           text("dim_id").notNull(),
+    reference_table_id:           text("reference_table_id").notNull(),
     version:          integer("version").notNull(),
     kind:             text("kind").notNull().default("publish"),
                                                     // 'publish' | 'rollback'
@@ -685,7 +685,7 @@ export const dimensionVersion = app.table(
     created_at:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("dimension_version_unique").on(t.tenant_id, t.dim_id, t.version),
-    check("dimension_version_kind_chk", sql`${t.kind} IN ('publish','rollback')`),
+    uniqueIndex("reference_table_version_unique").on(t.tenant_id, t.reference_table_id, t.version),
+    check("reference_table_version_kind_chk", sql`${t.kind} IN ('publish','rollback')`),
   ],
 );

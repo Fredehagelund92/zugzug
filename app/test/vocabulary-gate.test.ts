@@ -158,7 +158,7 @@ describe("vocabulary gate", () => {
       '"pick survivor…"',
     );
 
-    // Dev counter "next position: {dim.nextPosition}" should be deleted
+    // Dev counter "next position: {refTable.nextPosition}" should be deleted
     expect(source, '"next position:" dev counter still visible in UI').not.toContain(
       "next position:",
     );
@@ -229,7 +229,7 @@ describe("vocabulary gate", () => {
       join(REPO_ROOT, "app/src/components/warehouse/RemoveDatabaseConfirm.tsx"),
       "utf8",
     );
-    expect(source, 'still says "dimension" in user copy').not.toContain("dimension\n");
+    expect(source, 'still says "reference_table" in user copy').not.toContain("refTable\n");
     expect(source, 'still says "Canonical values"').not.toContain("Canonical values");
   });
 });

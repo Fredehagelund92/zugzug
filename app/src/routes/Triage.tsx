@@ -9,9 +9,9 @@ import { IconArrowRight, IconSearch, IconX } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { toast } from "../components/Toast";
 import { GetSuggestionButton } from "../components/GetSuggestionButton";
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 import {
-  useDimensions,
+  useRefTables,
   useDrafts,
   saveDraft,
   discardDraft,
@@ -30,18 +30,18 @@ import { useCreateTableModal } from "../lib/create-table-modal";
 import { useAiHint, type AiHint } from "../lib/use-ai-hint";
 import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
 import { ComboSelect } from "../components/ComboSelect";
-import { useDimValuesPage, type ScanValueRow } from "../lib/use-dim-values-page";
+import { useRefTableValuesPage, type ScanValueRow } from "../lib/use-ref-table-values-page";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 import { PublishPreviewDialog, type PublishGroup } from "../components/PublishPreviewDialog";
 import { AwaitingReview } from "../components/AwaitingReview";
 import { EmptyState as EmptyStateCard } from "../components/EmptyState";
 import { apiFetch } from "../api";
 
-/* Triage — per-dim sectioned inbox. Each ranked dim gets a section header; only
-   the *active* section lazy-fetches its scan_value page via useDimValuesPage.
+/* Triage — per-refTable sectioned inbox. Each ranked refTable gets a section header; only
+   the *active* section lazy-fetches its scan_value page via useRefTableValuesPage.
    Switching sections re-keys the hook. Search (?q=) filters server-side; the
    ?filter= URL key roundtrips new/all/mapped. Per-section Rescan button calls
-   POST /api/dimensions/:id/scan, then refetches. */
+   POST /api/refTables/:id/scan, then refetches. */
 
 type Filter = "new" | "all" | "mapped";
 type RStatus = "mapped" | "new" | "skipped" | "rejected";
@@ -101,12 +101,12 @@ function TriageLoader() {
 
 export function Triage() {
   usePageTitle("Review");
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const loading = useStoreLoading();
   const create = useCreateTableModal();
   const canEdit = useCanEdit();
   if (loading) return <TriageLoader />;
-  if (dims.length === 0)
+  if (refTables.length === 0)
     return <NoTablesYet from="triage" onCreateRequested={canEdit ? create.open : undefined} />;
   return (
     <UndoStackProvider scopeKey="triage">
@@ -116,7 +116,7 @@ export function Triage() {
 }
 
 function TriageInner() {
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const allDrafts = useDrafts();
   const undo = useUndoStack();
   const wsInfo = useWorkspaceInfo();
@@ -162,7 +162,7 @@ function TriageInner() {
     [setSearchParams],
   );
 
-  const [cursor, setCursor] = useState<{ dimId: string; raw: string } | null>(null);
+  const [cursor, setCursor] = useState<{ refTableId: string; raw: string } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [committing, setCommitting] = useState(false);
@@ -173,30 +173,30 @@ function TriageInner() {
     );
   }, []);
 
-  const aiHint = useAiHint(cursor?.dimId ?? "", cursor?.raw ?? "", cursor !== null);
+  const aiHint = useAiHint(cursor?.refTableId ?? "", cursor?.raw ?? "", cursor !== null);
 
-  const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
+  const refTableById = useMemo(() => new Map(refTables.map((d) => [d.id, d])), [refTables]);
 
-  // Rank dims by impact using the scalar newCount × log10(rows). When filter is
-  // "new", drop dims with no unmapped values; otherwise show them all.
+  // Rank refTables by impact using the scalar newCount × log10(rows). When filter is
+  // "new", drop refTables with no unmapped values; otherwise show them all.
   const rankedDims = useMemo(
     () =>
-      [...dims]
+      [...refTables]
         .map((d) => ({ d, score: d.counts.newCount * Math.log10(Math.max(10, d.rows)) }))
         .filter((x) => (filter === "new" ? x.d.counts.newCount > 0 : true))
         .sort((a, b) => b.score - a.score),
-    [dims, filter],
+    [refTables, filter],
   );
 
-  const [activeDimIdx, setActiveDimIdx] = useState(0);
+  const [activeRefTableIdx, setActiveRefTableIdx] = useState(0);
   // Clamp active idx when ranking changes (filter switch can shorten the list).
   useEffect(() => {
-    if (activeDimIdx >= rankedDims.length) setActiveDimIdx(0);
-  }, [rankedDims.length, activeDimIdx]);
+    if (activeRefTableIdx >= rankedDims.length) setActiveRefTableIdx(0);
+  }, [rankedDims.length, activeRefTableIdx]);
 
-  const activeDim = rankedDims[activeDimIdx]?.d ?? null;
-  const valuesPage = useDimValuesPage({
-    dimId: activeDim?.id ?? null,
+  const activeDim = rankedDims[activeRefTableIdx]?.d ?? null;
+  const valuesPage = useRefTableValuesPage({
+    refTableId: activeDim?.id ?? null,
     filter,
     q: searchText || undefined,
   });
@@ -209,29 +209,29 @@ function TriageInner() {
     return () => window.removeEventListener("focus", onFocus);
   }, [valuesPage]);
 
-  // ── action handlers (per dim) ────────────────────────────────────────────
-  const keyForLabelIn = (dimId: string, label: string) => {
-    const d = dimById.get(dimId);
+  // ── action handlers (per refTable) ────────────────────────────────────────────
+  const keyForLabelIn = (refTableId: string, label: string) => {
+    const d = refTableById.get(refTableId);
     return (
       d?.record.find((c) => c.label === label)?.key ??
       label.toLowerCase().replace(/[^a-z0-9]+/g, "_")
     );
   };
-  const stageMapCross = (dimId: string, raw: string, label: string) => {
-    const prev = allDrafts[dkey(dimId, raw)];
+  const stageMapCross = (refTableId: string, raw: string, label: string) => {
+    const prev = allDrafts[dkey(refTableId, raw)];
     undo.push({
       label: `match "${raw}" → ${label}`,
       surface: "Review",
-      apply: () => saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label)),
+      apply: () => saveDraft(refTableId, raw, "mapped", label, keyForLabelIn(refTableId, label)),
       inverse: () =>
         prev && prev.status !== "rejected"
-          ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dimId, raw),
+          ? saveDraft(refTableId, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTableId, raw),
     });
-    return saveDraft(dimId, raw, "mapped", label, keyForLabelIn(dimId, label));
+    return saveDraft(refTableId, raw, "mapped", label, keyForLabelIn(refTableId, label));
   };
-  const acceptCross = (dimId: string, raw: string) => {
-    if (allDrafts[dkey(dimId, raw)]?.status === "rejected") return;
+  const acceptCross = (refTableId: string, raw: string) => {
+    if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
     // No per-row suggestion in the scan-values payload — accept relies on the
     // AI hint for the focused cursor row.
     const suggestion = aiHint.hint?.suggestion;
@@ -239,44 +239,46 @@ function TriageInner() {
       toast(`No suggestion to accept for "${raw}".`, "error");
       return;
     }
-    stageMapCross(dimId, raw, suggestion).catch((err) => reportDraftError(`accept "${raw}"`, err));
-    flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
-    advanceCrossNext(dimId, raw);
+    stageMapCross(refTableId, raw, suggestion).catch((err) =>
+      reportDraftError(`accept "${raw}"`, err),
+    );
+    flashRow(`[data-row-key="${attrEsc(`${refTableId}::${raw}`)}"]`);
+    advanceCrossNext(refTableId, raw);
   };
-  const skipCross = (dimId: string, raw: string) => {
-    if (allDrafts[dkey(dimId, raw)]?.status === "rejected") return;
-    const prev = allDrafts[dkey(dimId, raw)];
+  const skipCross = (refTableId: string, raw: string) => {
+    if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
+    const prev = allDrafts[dkey(refTableId, raw)];
     undo.push({
       label: `skip "${raw}"`,
       surface: "Review",
-      apply: () => saveDraft(dimId, raw, "skipped", null, null),
+      apply: () => saveDraft(refTableId, raw, "skipped", null, null),
       inverse: () =>
         prev && prev.status !== "rejected"
-          ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dimId, raw),
+          ? saveDraft(refTableId, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTableId, raw),
     });
-    saveDraft(dimId, raw, "skipped", null, null).catch((err) =>
+    saveDraft(refTableId, raw, "skipped", null, null).catch((err) =>
       reportDraftError(`skip "${raw}"`, err),
     );
-    flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
-    advanceCrossNext(dimId, raw);
+    flashRow(`[data-row-key="${attrEsc(`${refTableId}::${raw}`)}"]`);
+    advanceCrossNext(refTableId, raw);
   };
-  const pickCross = (dimId: string, raw: string, label: string) => {
-    if (allDrafts[dkey(dimId, raw)]?.status === "rejected") return;
-    stageMapCross(dimId, raw, label).catch((err) =>
+  const pickCross = (refTableId: string, raw: string, label: string) => {
+    if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
+    stageMapCross(refTableId, raw, label).catch((err) =>
       reportDraftError(`map "${raw}" → ${label}`, err),
     );
-    flashRow(`[data-row-key="${attrEsc(`${dimId}::${raw}`)}"]`);
-    advanceCrossNext(dimId, raw);
+    flashRow(`[data-row-key="${attrEsc(`${refTableId}::${raw}`)}"]`);
+    advanceCrossNext(refTableId, raw);
   };
   // Re-stage a rejected draft: call saveDraft which clears rejected_reason/rejected_by
   // on the server (the ON CONFLICT branch resets those columns to NULL).
-  const restageCross = (dimId: string, raw: string) => {
-    const prev = allDrafts[dkey(dimId, raw)];
+  const restageCross = (refTableId: string, raw: string) => {
+    const prev = allDrafts[dkey(refTableId, raw)];
     if (!prev || prev.status !== "rejected") return;
     void Promise.resolve(
       saveDraft(
-        dimId,
+        refTableId,
         raw,
         prev.targetLabel ? "mapped" : "skipped",
         prev.targetLabel,
@@ -284,25 +286,25 @@ function TriageInner() {
       ),
     ).catch((err) => reportDraftError(`re-stage "${raw}"`, err));
   };
-  const discardCross = (dimId: string, raw: string) => {
-    const prev = allDrafts[dkey(dimId, raw)];
+  const discardCross = (refTableId: string, raw: string) => {
+    const prev = allDrafts[dkey(refTableId, raw)];
     if (!prev) return;
     undo.push({
       label: `discard "${raw}"`,
       surface: "Review",
-      apply: () => discardDraft(dimId, raw),
+      apply: () => discardDraft(refTableId, raw),
       // Rejected drafts cannot be re-saved via saveDraft; discard is the safe fallback.
       inverse: () =>
         prev.status !== "rejected"
-          ? saveDraft(dimId, raw, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dimId, raw),
+          ? saveDraft(refTableId, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTableId, raw),
     });
-    discardDraft(dimId, raw).catch((err) => reportDraftError(`discard "${raw}"`, err));
+    discardDraft(refTableId, raw).catch((err) => reportDraftError(`discard "${raw}"`, err));
   };
   // Advance within the active section's loaded items, wrapping to the next
   // unmapped raw value.
   const advanceCrossNext = useCallback(
-    (_fromDimId: string | null, fromRaw: string | null) => {
+    (_fromRefTableId: string | null, fromRaw: string | null) => {
       const rows = valuesPage.items;
       if (rows.length === 0 || !activeDim) return;
       const idx = fromRaw ? rows.findIndex((r) => r.raw === fromRaw) : -1;
@@ -315,7 +317,7 @@ function TriageInner() {
         // actionable (Re-stage / Discard), but not a "new" item to navigate through.
         const status: RStatus = rawStatus === "rejected" ? "skipped" : rawStatus;
         if (status === "new") {
-          setCursor({ dimId: activeDim.id, raw: r.raw });
+          setCursor({ refTableId: activeDim.id, raw: r.raw });
           return;
         }
       }
@@ -323,8 +325,8 @@ function TriageInner() {
     [valuesPage.items, activeDim, allDrafts],
   );
 
-  // staged drafts across ALL dimensions — drives the commit footer
-  // Cannot inspect dim values here (they're not loaded eagerly anymore); accept
+  // staged drafts across ALL refTables — drives the commit footer
+  // Cannot inspect refTable values here (they're not loaded eagerly anymore); accept
   // any "mapped" draft as staged. The server reconciles on commit.
   const stagedAllDrafts = useMemo(
     () => Object.values(allDrafts).filter((d) => d.status === "mapped"),
@@ -339,12 +341,12 @@ function TriageInner() {
       for (const g of groups) {
         try {
           const res = await commit(
-            g.dimId,
+            g.refTableId,
             g.drafts.map((d) => d.raw),
           );
           outcomes.push({
-            dimId: g.dimId,
-            dimName: g.dimName,
+            refTableId: g.refTableId,
+            refTableName: g.refTableName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
             error: null,
@@ -354,8 +356,8 @@ function TriageInner() {
             err instanceof ApiCodeError && err.code === "SECOND_PUBLISHER_REQUIRED";
           const msg = err instanceof Error ? err.message : "unknown error";
           outcomes.push({
-            dimId: g.dimId,
-            dimName: g.dimName,
+            refTableId: g.refTableId,
+            refTableName: g.refTableName,
             committed: 0,
             rowsRecovered: 0,
             error: isSecondPublisher
@@ -378,16 +380,16 @@ function TriageInner() {
   const [preview, setPreview] = useState<PublishGroup[] | null>(null);
 
   const openPublishPreview = async () => {
-    const dimIds = [...new Set(stagedAllDrafts.map((d) => d.dimId))];
-    if (dimIds.length === 0) return;
+    const refTableIds = [...new Set(stagedAllDrafts.map((d) => d.refTableId))];
+    if (refTableIds.length === 0) return;
     try {
-      const states = await Promise.all(dimIds.map((id) => fetchPublishState(id)));
+      const states = await Promise.all(refTableIds.map((id) => fetchPublishState(id)));
       setPreview(
-        dimIds.map((id, i) => ({
-          dimId: id,
-          dimName: dims.find((d) => d.id === id)?.dimension ?? id,
+        refTableIds.map((id, i) => ({
+          refTableId: id,
+          refTableName: refTables.find((d) => d.id === id)?.refTable ?? id,
           nextVersion: states[i].version + 1,
-          drafts: stagedAllDrafts.filter((d) => d.dimId === id),
+          drafts: stagedAllDrafts.filter((d) => d.refTableId === id),
           changedKeys: states[i].changedKeys,
         })),
       );
@@ -398,8 +400,10 @@ function TriageInner() {
     }
   };
 
-  const triggerRescan = useCallback(async (dimId: string) => {
-    const r = await apiFetch(`/dimensions/${encodeURIComponent(dimId)}/scan`, { method: "POST" });
+  const triggerRescan = useCallback(async (refTableId: string) => {
+    const r = await apiFetch(`/refTables/${encodeURIComponent(refTableId)}/scan`, {
+      method: "POST",
+    });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
   }, []);
   const [rescanning, setRescanning] = useState(false);
@@ -496,12 +500,12 @@ function TriageInner() {
               </div>
             ) : (
               rankedDims.map((rd, i) => (
-                <DimSection
+                <RefTableSection
                   key={rd.d.id}
-                  dim={rd.d}
-                  isActive={i === activeDimIdx}
-                  onActivate={() => setActiveDimIdx(i)}
-                  page={i === activeDimIdx ? valuesPage : null}
+                  refTable={rd.d}
+                  isActive={i === activeRefTableIdx}
+                  onActivate={() => setActiveRefTableIdx(i)}
+                  page={i === activeRefTableIdx ? valuesPage : null}
                   drafts={allDrafts}
                   canEdit={canEdit}
                   cursor={cursor}
@@ -512,9 +516,9 @@ function TriageInner() {
                   onRestage={(raw) => restageCross(rd.d.id, raw)}
                   onCommitAll={() => void openPublishPreview()}
                   aiHint={
-                    i === activeDimIdx ? aiHint : { hint: null, loading: false, error: false }
+                    i === activeRefTableIdx ? aiHint : { hint: null, loading: false, error: false }
                   }
-                  rescanning={rescanning && i === activeDimIdx}
+                  rescanning={rescanning && i === activeRefTableIdx}
                   onRescan={async () => {
                     setRescanning(true);
                     try {
@@ -535,8 +539,8 @@ function TriageInner() {
             )}
           </div>
 
-          <CrossDimFooter
-            dimById={dimById}
+          <CrossRefTableFooter
+            refTableById={refTableById}
             stagedDrafts={stagedAllDrafts}
             discard={discardCross}
             commitAll={() => void openPublishPreview()}
@@ -557,12 +561,12 @@ function TriageInner() {
           groups={preview}
           publishing={committing}
           onDiscardDraft={(d) => {
-            void discardDraft(d.dimId, d.raw);
+            void discardDraft(d.refTableId, d.raw);
             setPreview((p) => {
               const next =
                 p
                   ?.map((g) =>
-                    g.dimId === d.dimId
+                    g.refTableId === d.refTableId
                       ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
                       : g,
                   )
@@ -610,16 +614,16 @@ function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: 
   return <EmptyStateCard glyph="📋" title="No tables yet." />;
 }
 
-// ── DimSection ───────────────────────────────────────────────────────────────
-interface DimSectionProps {
-  dim: MappingDimension;
+// ── RefTableSection ───────────────────────────────────────────────────────────────
+interface RefTableSectionProps {
+  refTable: MappingRefTable;
   isActive: boolean;
   onActivate: () => void;
-  page: ReturnType<typeof useDimValuesPage> | null;
+  page: ReturnType<typeof useRefTableValuesPage> | null;
   drafts: Record<string, Draft>;
   canEdit: boolean;
-  cursor: { dimId: string; raw: string } | null;
-  setCursor: (c: { dimId: string; raw: string } | null) => void;
+  cursor: { refTableId: string; raw: string } | null;
+  setCursor: (c: { refTableId: string; raw: string } | null) => void;
   onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
@@ -630,8 +634,8 @@ interface DimSectionProps {
   onRescan: () => void;
 }
 
-function DimSection(p: DimSectionProps) {
-  const { dim } = p;
+function RefTableSection(p: RefTableSectionProps) {
+  const { refTable } = p;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Infinite scroll — sentinel at the bottom of the loaded list calls loadMore.
@@ -659,10 +663,10 @@ function DimSection(p: DimSectionProps) {
           p.isActive ? "bg-surface-2" : "hover:bg-hover",
         )}
       >
-        <Chip label={dim.dimension} bucket="chip-3" />
+        <Chip label={refTable.refTable} bucket="chip-3" />
         <span className="font-mono text-[11px] text-ink-2 tabular-nums">
-          {dim.counts.newCount} unmapped / {dim.counts.totalDistinct} distinct ·{" "}
-          {dim.counts.unmappedRowsTotal.toLocaleString()} rows at risk
+          {refTable.counts.newCount} unmapped / {refTable.counts.totalDistinct} distinct ·{" "}
+          {refTable.counts.unmappedRowsTotal.toLocaleString()} rows at risk
         </span>
         <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
           {p.isActive ? "▾ active" : "▸ expand"}
@@ -671,10 +675,10 @@ function DimSection(p: DimSectionProps) {
 
       {p.isActive && p.page && (
         <>
-          {dim.counts.scannedAt && (
+          {refTable.counts.scannedAt && (
             <div className="flex items-center justify-between border-t border-line bg-surface-2 px-4 py-2 text-[11px] text-ink-3">
               <span className="font-mono">
-                As of {new Date(dim.counts.scannedAt).toLocaleString()}
+                As of {new Date(refTable.counts.scannedAt).toLocaleString()}
               </span>
               {p.canEdit && (
                 <Button variant="ghost" size="sm" loading={p.rescanning} onClick={p.onRescan}>
@@ -683,8 +687,8 @@ function DimSection(p: DimSectionProps) {
               )}
             </div>
           )}
-          <DimSectionBody
-            dim={dim}
+          <RefTableSectionBody
+            refTable={refTable}
             page={p.page}
             drafts={p.drafts}
             canEdit={p.canEdit}
@@ -704,13 +708,13 @@ function DimSection(p: DimSectionProps) {
   );
 }
 
-interface DimSectionBodyProps {
-  dim: MappingDimension;
-  page: ReturnType<typeof useDimValuesPage>;
+interface RefTableSectionBodyProps {
+  refTable: MappingRefTable;
+  page: ReturnType<typeof useRefTableValuesPage>;
   drafts: Record<string, Draft>;
   canEdit: boolean;
-  cursor: { dimId: string; raw: string } | null;
-  setCursor: (c: { dimId: string; raw: string } | null) => void;
+  cursor: { refTableId: string; raw: string } | null;
+  setCursor: (c: { refTableId: string; raw: string } | null) => void;
   onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
@@ -720,15 +724,15 @@ interface DimSectionBodyProps {
   sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
-function DimSectionBody(p: DimSectionBodyProps) {
-  const options = useMemo(() => p.dim.record.map((c) => c.label), [p.dim.record]);
+function RefTableSectionBody(p: RefTableSectionBodyProps) {
+  const options = useMemo(() => p.refTable.record.map((c) => c.label), [p.refTable.record]);
   const [editingRaw, setEditingRaw] = useState<string | null>(null);
   const me = useCurrentUser();
 
   const rowStatus = (
     r: ScanValueRow,
   ): { status: RStatus; target: string | null; rejectedReason: string | null } => {
-    const draft = p.drafts[dkey(p.dim.id, r.raw)];
+    const draft = p.drafts[dkey(p.refTable.id, r.raw)];
     if (draft)
       return {
         status: draft.status,
@@ -742,7 +746,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
     };
   };
 
-  const focus = (raw: string) => p.setCursor({ dimId: p.dim.id, raw });
+  const focus = (raw: string) => p.setCursor({ refTableId: p.refTable.id, raw });
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLLIElement>, raw: string) => {
     if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -755,7 +759,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
     const k = e.key.toLowerCase();
     // A/S/M keyboard actions are blocked on rejected rows — the only valid
     // actions are Re-stage (button) and Discard (button). See task-9-brief.md.
-    const isRejected = p.drafts[dkey(p.dim.id, raw)]?.status === "rejected";
+    const isRejected = p.drafts[dkey(p.refTable.id, raw)]?.status === "rejected";
     if (p.canEdit && k === "a" && !isRejected) {
       e.preventDefault();
       p.onAccept(raw);
@@ -809,13 +813,14 @@ function DimSectionBody(p: DimSectionBodyProps) {
       <ul className="divide-y divide-line">
         {p.page.items.map((r) => {
           const { status, target, rejectedReason } = rowStatus(r);
-          const isCursor = p.cursor && p.cursor.dimId === p.dim.id && p.cursor.raw === r.raw;
+          const isCursor =
+            p.cursor && p.cursor.refTableId === p.refTable.id && p.cursor.raw === r.raw;
           return (
             <li
               key={r.raw}
               tabIndex={0}
               role="row"
-              data-row-key={`${p.dim.id}::${r.raw}`}
+              data-row-key={`${p.refTable.id}::${r.raw}`}
               onFocus={() => focus(r.raw)}
               onClick={() => focus(r.raw)}
               onKeyDown={(e) => onKeyDown(e, r.raw)}
@@ -872,7 +877,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
                 </span>
                 {status === "rejected" &&
                   p.canEdit &&
-                  p.drafts[dkey(p.dim.id, r.raw)]?.user.id === me?.id && (
+                  p.drafts[dkey(p.refTable.id, r.raw)]?.user.id === me?.id && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -889,7 +894,7 @@ function DimSectionBody(p: DimSectionBodyProps) {
                 <div className="flex flex-col gap-2 pl-1 pt-1">
                   <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
                   {status === "new" && p.canEdit && (
-                    <GetSuggestionButton dimensionId={p.dim.id} rawValue={r.raw} />
+                    <GetSuggestionButton refTableId={p.refTable.id} rawValue={r.raw} />
                   )}
                 </div>
               )}
@@ -936,9 +941,9 @@ function ErrorBanner({
 }
 
 interface FooterProps {
-  dimById: Map<string, MappingDimension>;
+  refTableById: Map<string, MappingRefTable>;
   stagedDrafts: Draft[];
-  discard: (dimId: string, raw: string) => void;
+  discard: (refTableId: string, raw: string) => void;
   commitAll: () => void;
   committing: boolean;
   commitError: string | null;
@@ -950,23 +955,23 @@ interface FooterProps {
   canEdit: boolean;
 }
 
-function CrossDimFooter(p: FooterProps) {
+function CrossRefTableFooter(p: FooterProps) {
   const [review, setReview] = useState(false);
   const stagedCount = p.stagedDrafts.length;
   const grouped = useMemo(() => {
     const byDim = new Map<string, Draft[]>();
     for (const d of p.stagedDrafts) {
-      const arr = byDim.get(d.dimId) ?? [];
+      const arr = byDim.get(d.refTableId) ?? [];
       arr.push(d);
-      byDim.set(d.dimId, arr);
+      byDim.set(d.refTableId, arr);
     }
     const out: Array<{
-      dimId: string;
-      dimName: string;
+      refTableId: string;
+      refTableName: string;
       groups: Array<{ target: string; drafts: Draft[] }>;
     }> = [];
-    for (const [dimId, drafts] of byDim) {
-      const dim = p.dimById.get(dimId);
+    for (const [refTableId, drafts] of byDim) {
+      const refTable = p.refTableById.get(refTableId);
       const byTarget = new Map<string, Draft[]>();
       for (const d of drafts) {
         const t = d.targetLabel ?? "—";
@@ -975,8 +980,8 @@ function CrossDimFooter(p: FooterProps) {
         byTarget.set(t, arr);
       }
       out.push({
-        dimId,
-        dimName: dim?.dimension ?? dimId,
+        refTableId,
+        refTableName: refTable?.refTable ?? refTableId,
         groups: [...byTarget.entries()]
           .sort((a, b) => b[1].length - a[1].length)
           .map(([target, drafts]) => ({ target, drafts })),
@@ -987,7 +992,7 @@ function CrossDimFooter(p: FooterProps) {
       const bN = b.groups.reduce((n, g) => n + g.drafts.length, 0);
       return bN - aN;
     });
-  }, [p.stagedDrafts, p.dimById]);
+  }, [p.stagedDrafts, p.refTableById]);
 
   return (
     <div className="sticky bottom-0 z-10 border-t border-line bg-surface">
@@ -1006,9 +1011,9 @@ function CrossDimFooter(p: FooterProps) {
           </div>
           <div className="mt-1 max-h-72 overflow-y-auto">
             {grouped.map((g) => (
-              <div key={g.dimId} className="border-t border-line first:border-t-0">
+              <div key={g.refTableId} className="border-t border-line first:border-t-0">
                 <div className="flex items-center gap-2 px-4 py-1.5 font-mono text-[10px] uppercase tracking-wider text-ink-2">
-                  <Chip label={g.dimName} bucket="chip-3" />
+                  <Chip label={g.refTableName} bucket="chip-3" />
                   <span className="tabular-nums">
                     {g.groups.reduce((n, x) => n + x.drafts.length, 0)} drafts
                   </span>
@@ -1023,7 +1028,7 @@ function CrossDimFooter(p: FooterProps) {
                     <ul className="mt-1 divide-y divide-line">
                       {tg.drafts.map((d) => (
                         <li
-                          key={`${d.dimId}::${d.raw}`}
+                          key={`${d.refTableId}::${d.raw}`}
                           className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]"
                           style={{ animationDuration: "var(--dur-slide)" }}
                         >
@@ -1066,7 +1071,7 @@ function CrossDimFooter(p: FooterProps) {
                           {p.canEdit && (
                             <button
                               type="button"
-                              onClick={() => p.discard(d.dimId, d.raw)}
+                              onClick={() => p.discard(d.refTableId, d.raw)}
                               title="Discard this draft"
                               aria-label="Discard draft"
                               className="shrink-0 text-ink-3 transition-colors hover:text-danger"
@@ -1088,7 +1093,7 @@ function CrossDimFooter(p: FooterProps) {
         <span className="font-mono text-[11px] text-ink-2">
           {stagedCount > 0 ? (
             <>
-              {stagedCount} change{stagedCount === 1 ? "" : "s"} across {grouped.length} dim
+              {stagedCount} change{stagedCount === 1 ? "" : "s"} across {grouped.length} refTable
               {grouped.length === 1 ? "" : "s"}, ready to publish
             </>
           ) : (

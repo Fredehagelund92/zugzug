@@ -85,7 +85,7 @@ test("create service account and call pull-API with zzsa_ token", async ({ page,
   await expect(modal).not.toBeVisible();
 
   // ── Pull-API: authenticated call ────────────────────────────────────────────
-  // GET /api/t/default/v1/tables — lists dimensions for the workspace.
+  // GET /api/t/default/v1/tables — lists refTables for the workspace.
   const authedRes = await request.get("/api/t/default/v1/tables", {
     headers: { authorization: `Bearer ${token}` },
   });

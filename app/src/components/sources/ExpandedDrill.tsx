@@ -15,7 +15,7 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
     let alive = true;
     (async () => {
       try {
-        const s = await fetchUnmappedSample(row.dimId, row.table, row.column, 8);
+        const s = await fetchUnmappedSample(row.refTableId, row.table, row.column, 8);
         if (alive) setSample(s);
       } catch {
         if (alive) setSample("error");
@@ -24,7 +24,7 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
     return () => {
       alive = false;
     };
-  }, [row.dimId, row.table, row.column]);
+  }, [row.refTableId, row.table, row.column]);
 
   return (
     <div className="border-t border-line/60 bg-bg/30 px-4 py-4 md:pl-[68px]">
@@ -59,10 +59,10 @@ export function ExpandedDrill({ row }: { row: SourceInfo }) {
         </ul>
       )}
       <div className="mt-4 flex items-center gap-3 text-[11.5px] text-ink-3">
-        <Link to={nav.table(row.dimId, "match")} className="text-accent hover:underline">
+        <Link to={nav.table(row.refTableId, "match")} className="text-accent hover:underline">
           Open in Map values →
         </Link>
-        <span>→ {row.dimension}</span>
+        <span>→ {row.refTable}</span>
       </div>
     </div>
   );

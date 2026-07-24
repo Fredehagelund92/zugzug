@@ -7,8 +7,8 @@ const SOURCES: SourceInfo[] = [
   {
     table: "authco.users",
     column: "plan_type",
-    dimension: "Plan",
-    dimId: "d1",
+    refTable: "Plan",
+    refTableId: "d1",
     present: true,
     rows: 1000,
     values: 10,
@@ -19,8 +19,8 @@ const SOURCES: SourceInfo[] = [
   {
     table: "billing.invoices",
     column: "currency",
-    dimension: "Currency",
-    dimId: "d2",
+    refTable: "Currency",
+    refTableId: "d2",
     present: true,
     rows: 50,
     values: 5,
@@ -34,7 +34,7 @@ const useSources = vi.fn(() => SOURCES);
 
 vi.mock("../src/store", () => ({
   useSources,
-  useDimensions: () => [],
+  useRefTables: () => [],
   useCanEdit: () => true,
   useStoreLoading: () => false,
   scanSources: vi.fn(),

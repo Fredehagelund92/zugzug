@@ -8,7 +8,7 @@
 import type { PaletteName } from "./lib/palette";
 export type { PaletteName } from "./lib/palette";
 
-/* a master record: the human label + the key written to the dim/map tables, how
+/* a master record: the human label + the key written to the refTable/map tables, how
    many raw values resolve to it, and any enrichment attribute values */
 export interface RecordValue {
   key: string;
@@ -32,7 +32,7 @@ export type NumberFormat =
   | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 }
   | { format: "compact"; precision: 0 | 1 | 2 }
   | { format: "duration"; display: "hm" | "hms" };
-/* an enrichment attribute column on a dimension (e.g. currency, locale) */
+/* an enrichment attribute column on a refTable (e.g. currency, locale) */
 export interface FieldDef {
   field: string;
   label: string;
@@ -40,7 +40,7 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
-  referencedDimId?: string;
+  referencedRefTableId?: string;
   displayFields?: string[];
   description?: string;
   rules?: import("./components/datagrid/types").ConditionalRule[];
@@ -64,9 +64,9 @@ export interface MappingValue {
   sources: SourceOccurrence[]; // every source table.column it appears in
 }
 
-export interface MappingDimension {
+export interface MappingRefTable {
   id: string;
-  dimension: string; // human label
+  refTable: string; // human label
   dimTable: string; // DuckDB master table, e.g. zugzug.dim_country
   mapTable: string; // DuckDB lookup table, e.g. zugzug.map_country
   keyCol: string; // master key column written to both
@@ -110,10 +110,10 @@ export interface MappingDimension {
 const rowsOf = (s: SourceOccurrence[]) => s.reduce((n, o) => n + o.rows, 0);
 export const valueRows = (v: MappingValue) => rowsOf(v.sources);
 
-export const mappingSeeds: MappingDimension[] = [
+export const mappingSeeds: MappingRefTable[] = [
   {
     id: "country",
-    dimension: "Country",
+    refTable: "Country",
     dimTable: "zugzug.dim_country",
     mapTable: "zugzug.map_country",
     keyCol: "country_code",
@@ -140,7 +140,7 @@ export const mappingSeeds: MappingDimension[] = [
   },
   {
     id: "state",
-    dimension: "US State",
+    refTable: "US State",
     dimTable: "zugzug.dim_us_state",
     mapTable: "zugzug.map_us_state",
     keyCol: "state_code",
@@ -165,7 +165,7 @@ export const mappingSeeds: MappingDimension[] = [
   },
   {
     id: "post_type",
-    dimension: "Sprout post type",
+    refTable: "Sprout post type",
     dimTable: "zugzug.dim_post_type",
     mapTable: "zugzug.map_sprout_post_type",
     keyCol: "post_type",

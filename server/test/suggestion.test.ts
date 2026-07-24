@@ -200,14 +200,14 @@ test("suggestion module exports AINotEnabledError class", async () => {
 
 test("SuggestionContext interface has required fields", () => {
   const context = {
-    dimensionId: "dim-1",
-    dimensionName: "Customer Name",
+    refTableId: "refTable-1",
+    refTableName: "Customer Name",
     rawValue: "john doe",
     existingRecordValues: ["John Doe", "Jane Doe"],
   };
 
-  expect(context.dimensionId).toBe("dim-1");
-  expect(context.dimensionName).toBe("Customer Name");
+  expect(context.refTableId).toBe("refTable-1");
+  expect(context.refTableName).toBe("Customer Name");
   expect(context.rawValue).toBe("john doe");
   expect(Array.isArray(context.existingRecordValues)).toBe(true);
   expect(context.existingRecordValues.length).toBe(2);

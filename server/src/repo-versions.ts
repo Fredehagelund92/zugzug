@@ -1,4 +1,4 @@
-/* repo-versions.ts — dimension version snapshots.
+/* repo-versions.ts — refTable version snapshots.
  *
  * writeVersionSnapshot() runs INSIDE commit()'s transaction so the snapshot
  * and the version counter are atomic. listVersions() and getSnapshot() are
@@ -31,7 +31,7 @@ export async function writeVersionSnapshot(
   tx: TxHelpers,
   p: {
     tenantId: string;
-    dimId: string;
+    refTableId: string;
     version: number;
     kind: "publish" | "rollback";
     restoresVersion: number | null;
@@ -53,13 +53,13 @@ export async function writeVersionSnapshot(
     mappings,
   };
   await tx.run(
-    `INSERT INTO ${pg("dimension_version")}
-       (id, tenant_id, dim_id, version, kind, restores_version, snapshot, published_by)
+    `INSERT INTO ${pg("reference_table_version")}
+       (id, tenant_id, reference_table_id, version, kind, restores_version, snapshot, published_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)`,
     [
       `dv_${crypto.randomUUID().replace(/-/g, "")}`,
       p.tenantId,
-      p.dimId,
+      p.refTableId,
       p.version,
       p.kind,
       p.restoresVersion,
@@ -72,7 +72,7 @@ export async function writeVersionSnapshot(
   );
 }
 
-export async function listVersions(dimId: string, tenantId: string): Promise<VersionInfo[]> {
+export async function listVersions(refTableId: string, tenantId: string): Promise<VersionInfo[]> {
   const rows = await pgAll<{
     version: number;
     kind: "publish" | "rollback";
@@ -91,11 +91,11 @@ export async function listVersions(dimId: string, tenantId: string): Promise<Ver
               'mappings', jsonb_array_length(v.snapshot->'mappings')
             ) AS counts,
             true AS "hasSnapshot"
-     FROM ${pg("dimension_version")} v
+     FROM ${pg("reference_table_version")} v
      LEFT JOIN ${pg("users")} u ON u.id = v.published_by
-     WHERE v.dim_id = $1 AND v.tenant_id = $2
+     WHERE v.reference_table_id = $1 AND v.tenant_id = $2
      ORDER BY v.version DESC`,
-    [dimId, tenantId],
+    [refTableId, tenantId],
   );
   // counts may come back as a JSON string from some drivers — parse defensively.
   return rows.map((r) => ({
@@ -109,14 +109,14 @@ export async function listVersions(dimId: string, tenantId: string): Promise<Ver
 }
 
 export async function getSnapshot(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
   version: number,
 ): Promise<Snapshot | null> {
   const row = await pgGet<{ snapshot: Snapshot | string }>(
-    `SELECT snapshot FROM ${pg("dimension_version")}
-     WHERE dim_id = $1 AND tenant_id = $2 AND version = $3`,
-    [dimId, tenantId, version],
+    `SELECT snapshot FROM ${pg("reference_table_version")}
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND version = $3`,
+    [refTableId, tenantId, version],
   );
   if (!row) return null;
   const snap = row.snapshot;

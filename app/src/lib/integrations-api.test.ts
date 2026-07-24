@@ -95,14 +95,14 @@ describe("listServiceAccounts", () => {
   });
 });
 
-describe("listDimensions", () => {
-  it("unwraps the dimensions envelope", async () => {
+describe("listRefTables", () => {
+  it("unwraps the refTables envelope", async () => {
     FETCH.mockResolvedValueOnce(
       new Response(JSON.stringify({ tables: [{ id: "d1", slug: "country" }] }), {
         status: 200,
       }),
     );
-    const out = await api.listDimensions();
+    const out = await api.listRefTables();
     expect(out).toEqual([{ id: "d1", slug: "country" }]);
   });
 });

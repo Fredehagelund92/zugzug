@@ -1,12 +1,12 @@
 import type { Mode } from "./available-modes";
 
-export const TAB_MODE_KEY = (dimId: string): string => `zugzug:tab-mode:${dimId}`;
+export const TAB_MODE_KEY = (refTableId: string): string => `zugzug:tab-mode:${refTableId}`;
 
 const isMode = (s: string): s is Mode => s === "records" || s === "match" || s === "sources";
 
-export function readStoredMode(dimId: string, valid: readonly Mode[]): Mode {
+export function readStoredMode(refTableId: string, valid: readonly Mode[]): Mode {
   try {
-    const raw = localStorage.getItem(TAB_MODE_KEY(dimId));
+    const raw = localStorage.getItem(TAB_MODE_KEY(refTableId));
     if (raw && isMode(raw) && valid.includes(raw)) return raw;
   } catch {
     /* localStorage disabled */
@@ -14,9 +14,9 @@ export function readStoredMode(dimId: string, valid: readonly Mode[]): Mode {
   return "records";
 }
 
-export function writeStoredMode(dimId: string, mode: Mode): void {
+export function writeStoredMode(refTableId: string, mode: Mode): void {
   try {
-    localStorage.setItem(TAB_MODE_KEY(dimId), mode);
+    localStorage.setItem(TAB_MODE_KEY(refTableId), mode);
   } catch {
     /* quota / disabled */
   }
@@ -24,10 +24,10 @@ export function writeStoredMode(dimId: string, mode: Mode): void {
 
 export function foldUrlMode(
   searchParams: URLSearchParams,
-  dimId: string,
+  refTableId: string,
   valid: readonly Mode[],
 ): Mode {
   const fromUrl = searchParams.get("mode");
   if (fromUrl && isMode(fromUrl) && valid.includes(fromUrl)) return fromUrl;
-  return readStoredMode(dimId, valid);
+  return readStoredMode(refTableId, valid);
 }

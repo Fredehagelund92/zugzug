@@ -8,12 +8,12 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgAll } from "./pg.ts";
 import {
-  addDimension,
+  addRefTable,
   addRecordOne,
   addField,
   setFieldValue,
   listFields,
-  getDimension,
+  getRefTable,
 } from "./repo-record.ts";
 
 const T = "test_hierarchy";
@@ -33,78 +33,88 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  const dims = await pgAll<{ dim_table: string; map_table: string }>(
-    `SELECT dim_table, map_table FROM "zugzug_app"."dimension" WHERE tenant_id = $1`,
+  const refTables = await pgAll<{ dim_table: string; map_table: string }>(
+    `SELECT dim_table, map_table FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`,
     [T],
   ).catch(() => []);
-  for (const d of dims) {
+  for (const d of refTables) {
     await pgRun(`DROP TABLE IF EXISTS ${d.dim_table}`).catch(() => {});
     await pgRun(`DROP TABLE IF EXISTS ${d.map_table}`).catch(() => {});
   }
   await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
 
 describe("self-referencing linked field", () => {
   it("allows a linked field to target its own table", async () => {
-    const dimId = await addDimension("Regions", [], { keyKind: "slug" }, U, T);
+    const refTableId = await addRefTable("Regions", [], { keyKind: "slug" }, U, T);
     const added = await addField(
-      dimId,
+      refTableId,
       "Parent",
       "linked",
       undefined,
-      { referencedDimId: dimId },
+      { referencedRefTableId: refTableId },
       U,
       T,
     );
     expect(added).not.toBeNull();
-    const parent = (await listFields(dimId, T)).find((f) => f.field === "parent");
-    expect(parent?.referencedDimId).toBe(dimId);
+    const parent = (await listFields(refTableId, T)).find((f) => f.field === "parent");
+    expect(parent?.referencedRefTableId).toBe(refTableId);
   });
 
   it("builds a valid parent chain, rejects cycles and self-parenting", async () => {
-    const dimId = await addDimension("Geo", [], { keyKind: "slug" }, U, T);
-    await addRecordOne(dimId, "Europe", "europe", U, T);
-    await addRecordOne(dimId, "Nordics", "nordics", U, T);
-    await addRecordOne(dimId, "Denmark", "denmark", U, T);
-    await addRecordOne(dimId, "France", "france", U, T);
-    await addField(dimId, "Parent", "linked", undefined, { referencedDimId: dimId }, U, T);
+    const refTableId = await addRefTable("Geo", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Europe", "europe", U, T);
+    await addRecordOne(refTableId, "Nordics", "nordics", U, T);
+    await addRecordOne(refTableId, "Denmark", "denmark", U, T);
+    await addRecordOne(refTableId, "France", "france", U, T);
+    await addField(
+      refTableId,
+      "Parent",
+      "linked",
+      undefined,
+      { referencedRefTableId: refTableId },
+      U,
+      T,
+    );
 
     // Valid chain: Denmark -> Nordics -> Europe
-    await setFieldValue(dimId, "nordics", "parent", "europe", U, T);
-    await setFieldValue(dimId, "denmark", "parent", "nordics", U, T);
-    const chain = await getDimension(dimId, T);
+    await setFieldValue(refTableId, "nordics", "parent", "europe", U, T);
+    await setFieldValue(refTableId, "denmark", "parent", "nordics", U, T);
+    const chain = await getRefTable(refTableId, T);
     expect(chain!.record.find((c) => c.key === "denmark")!.fields?.parent).toBe("nordics");
 
     // Cycle: Europe's parent = Denmark would close the loop
-    await expect(setFieldValue(dimId, "europe", "parent", "denmark", U, T)).rejects.toThrow(
+    await expect(setFieldValue(refTableId, "europe", "parent", "denmark", U, T)).rejects.toThrow(
       /loop/i,
     );
 
     // Self-parent is rejected
-    await expect(setFieldValue(dimId, "europe", "parent", "europe", U, T)).rejects.toThrow(
+    await expect(setFieldValue(refTableId, "europe", "parent", "europe", U, T)).rejects.toThrow(
       /own parent/i,
     );
 
     // Acyclic re-parent still works: France Europe -> Nordics
-    await setFieldValue(dimId, "france", "parent", "europe", U, T);
-    await setFieldValue(dimId, "france", "parent", "nordics", U, T);
-    const after = await getDimension(dimId, T);
+    await setFieldValue(refTableId, "france", "parent", "europe", U, T);
+    await setFieldValue(refTableId, "france", "parent", "nordics", U, T);
+    const after = await getRefTable(refTableId, T);
     expect(after!.record.find((c) => c.key === "france")!.fields?.parent).toBe("nordics");
   });
 
   it("a cross-table linked field still coerces an unknown key to null", async () => {
-    const a = await addDimension("Alpha", [], { keyKind: "slug" }, U, T);
-    const b = await addDimension("Beta", [], { keyKind: "slug" }, U, T);
+    const a = await addRefTable("Alpha", [], { keyKind: "slug" }, U, T);
+    const b = await addRefTable("Beta", [], { keyKind: "slug" }, U, T);
     await addRecordOne(a, "One", "one", U, T);
-    await addField(a, "BetaLink", "linked", undefined, { referencedDimId: b }, U, T);
+    await addField(a, "BetaLink", "linked", undefined, { referencedRefTableId: b }, U, T);
     // Unknown FK on a NON-self link: no throw, coerced to null.
     await setFieldValue(a, "one", "betalink", "does_not_exist", U, T);
-    const dim = await getDimension(a, T);
-    expect(dim!.record.find((c) => c.key === "one")!.fields?.betalink ?? null).toBeNull();
+    const refTable = await getRefTable(a, T);
+    expect(refTable!.record.find((c) => c.key === "one")!.fields?.betalink ?? null).toBeNull();
   });
 });

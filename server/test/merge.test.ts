@@ -8,7 +8,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "./setup.ts";
 import * as repo from "../src/repo.ts";
 
-// MappingDimension.record shape: RecordValue[]
+// MappingRefTable.record shape: RecordValue[]
 // Each entry: { key: string, label: string, variants: number, fields: Record<string,string|null>, unresolved: boolean }
 
 beforeEach(async () => {
@@ -17,12 +17,12 @@ beforeEach(async () => {
 
 test("mergeRecord re-points crosswalk rows and deletes losers", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
-  await repo.addRecordOne(dimId, "Acme", undefined, userId, "default");
-  await repo.addRecordOne(dimId, "Acme Corp", undefined, userId, "default");
+  const refTableId = await repo.addRefTable("Brand", [], { keyKind: "slug" }, userId, "default");
+  await repo.addRecordOne(refTableId, "Acme", undefined, userId, "default");
+  await repo.addRecordOne(refTableId, "Acme Corp", undefined, userId, "default");
 
   await repo.saveDraft(
-    dimId,
+    refTableId,
     "acme corp variant",
     "mapped",
     "Acme Corp",
@@ -30,10 +30,10 @@ test("mergeRecord re-points crosswalk rows and deletes losers", async () => {
     userId,
     "default",
   );
-  await repo.commit(dimId, userId, "default");
+  await repo.commit(refTableId, userId, "default");
 
   const merged = await repo.mergeRecord(
-    dimId,
+    refTableId,
     "acme",
     ["acme_corp"],
     userId,
@@ -42,22 +42,22 @@ test("mergeRecord re-points crosswalk rows and deletes losers", async () => {
   );
   expect(merged).toBe(1);
 
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.record.map((c) => c.key).sort()).toEqual(["acme"]);
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable?.record.map((c) => c.key).sort()).toEqual(["acme"]);
 });
 
 test("mergeRecord with empty losers is a no-op", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
-  const n = await repo.mergeRecord(dimId, "acme", [], userId, {}, "default");
+  const refTableId = await repo.addRefTable("Brand", [], { keyKind: "slug" }, userId, "default");
+  const n = await repo.mergeRecord(refTableId, "acme", [], userId, {}, "default");
   expect(n).toBe(0);
 });
 
 test("mergeRecord filters out survivor from losers list", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
-  await repo.addRecordOne(dimId, "Acme", undefined, userId, "default");
+  const refTableId = await repo.addRefTable("Brand", [], { keyKind: "slug" }, userId, "default");
+  await repo.addRecordOne(refTableId, "Acme", undefined, userId, "default");
   // Survivor appearing in losers should be filtered out (no-op for that entry).
-  const n = await repo.mergeRecord(dimId, "acme", ["acme"], userId, { acme: 1 }, "default");
+  const n = await repo.mergeRecord(refTableId, "acme", ["acme"], userId, { acme: 1 }, "default");
   expect(n).toBe(0);
 });

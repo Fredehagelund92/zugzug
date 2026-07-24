@@ -1,6 +1,6 @@
 // test/dashboard-helpers.test.ts
 import { test, expect, describe } from "vitest";
-import type { MappingDimension } from "../src/data";
+import type { MappingRefTable } from "../src/data";
 import type { AuditEntry } from "../src/store";
 import {
   coveragePct,
@@ -14,9 +14,9 @@ import {
 
 // ── minimal fixtures ──────────────────────────────────────────────────────────
 
-const cleanDim: MappingDimension = {
+const cleanDim: MappingRefTable = {
   id: "post_type",
-  dimension: "Post Type",
+  refTable: "Post Type",
   dimTable: "zugzug.dim_post_type",
   mapTable: "zugzug.map_post_type",
   keyCol: "post_type",
@@ -32,9 +32,9 @@ const cleanDim: MappingDimension = {
   },
 };
 
-const dirtyDim: MappingDimension = {
+const dirtyDim: MappingRefTable = {
   id: "country",
-  dimension: "Country",
+  refTable: "Country",
   dimTable: "zugzug.dim_country",
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
@@ -50,9 +50,9 @@ const dirtyDim: MappingDimension = {
   },
 };
 
-const emptyDim: MappingDimension = {
+const emptyDim: MappingRefTable = {
   id: "empty",
-  dimension: "Empty",
+  refTable: "Empty",
   dimTable: "zugzug.dim_empty",
   mapTable: "zugzug.map_empty",
   keyCol: "id",
@@ -114,21 +114,21 @@ describe("coveragePct", () => {
 // ── urgencyScore ──────────────────────────────────────────────────────────────
 
 describe("urgencyScore", () => {
-  test("clean dim has urgencyScore 0", () => {
+  test("clean refTable has urgencyScore 0", () => {
     expect(urgencyScore(cleanDim)).toBe(0);
   });
-  test("dim with new values scores higher than clean dim", () => {
+  test("refTable with new values scores higher than clean refTable", () => {
     expect(urgencyScore(dirtyDim)).toBeGreaterThan(urgencyScore(cleanDim));
   });
   test("more new values = higher score", () => {
-    const oneNew: MappingDimension = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
+    const oneNew: MappingRefTable = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
     expect(urgencyScore(dirtyDim)).toBeGreaterThan(urgencyScore(oneNew));
   });
-  test("staged clean dim scores above clean unstaged dim", () => {
+  test("staged clean refTable scores above clean unstaged refTable", () => {
     expect(urgencyScore(cleanDim, true)).toBeGreaterThan(urgencyScore(cleanDim, false));
   });
-  test("any dim with one new value outranks a staged-only dim", () => {
-    const oneNew: MappingDimension = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
+  test("any refTable with one new value outranks a staged-only refTable", () => {
+    const oneNew: MappingRefTable = { ...dirtyDim, counts: { ...dirtyDim.counts, newCount: 1 } };
     expect(urgencyScore(oneNew, false)).toBeGreaterThan(urgencyScore(cleanDim, true));
   });
 });
@@ -136,11 +136,11 @@ describe("urgencyScore", () => {
 // ── lastAuditForDim ───────────────────────────────────────────────────────────
 
 describe("lastAuditForDim", () => {
-  test("finds entry whose detail contains the dimension name", () => {
+  test("finds entry whose detail contains the refTable name", () => {
     const entry = lastAuditForDim("country", "Country", auditLog);
     expect(entry?.id).toBe("1");
   });
-  test("finds entry whose detail contains the dim id (fallback)", () => {
+  test("finds entry whose detail contains the refTable id (fallback)", () => {
     const entry = lastAuditForDim("post_type", "Sprout Post Type", auditLog);
     expect(entry?.id).toBe("2");
   });
@@ -155,14 +155,14 @@ describe("lastAuditForDim", () => {
 // ── applyFilter ───────────────────────────────────────────────────────────────
 
 describe("applyFilter", () => {
-  test("'all' returns all dims", () => {
+  test("'all' returns all refTables", () => {
     expect(applyFilter([cleanDim, dirtyDim], "all")).toHaveLength(2);
   });
-  test("'attention' returns dims with new values", () => {
+  test("'attention' returns refTables with new values", () => {
     const result = applyFilter([cleanDim, dirtyDim], "attention");
     expect(result.map((d) => d.id)).toEqual(["country"]);
   });
-  test("'attention' includes dims with pending publish (toPublishCount > 0)", () => {
+  test("'attention' includes refTables with pending publish (toPublishCount > 0)", () => {
     const withPublish = {
       ...cleanDim,
       publish: {
@@ -176,11 +176,11 @@ describe("applyFilter", () => {
     const result = applyFilter([withPublish, dirtyDim], "attention");
     expect(result.map((d) => d.id)).toContain("post_type");
   });
-  test("'clean' excludes dims with new values", () => {
+  test("'clean' excludes refTables with new values", () => {
     const result = applyFilter([cleanDim, dirtyDim], "clean");
     expect(result.map((d) => d.id)).toEqual(["post_type"]);
   });
-  test("'clean' excludes dims with pending publish", () => {
+  test("'clean' excludes refTables with pending publish", () => {
     const withPublish = {
       ...cleanDim,
       publish: {
@@ -194,7 +194,7 @@ describe("applyFilter", () => {
     const result = applyFilter([withPublish, dirtyDim], "clean");
     expect(result).toHaveLength(0);
   });
-  test("'clean' includes truly clean dims", () => {
+  test("'clean' includes truly clean refTables", () => {
     const result = applyFilter([cleanDim, dirtyDim], "clean");
     expect(result.map((d) => d.id)).toEqual(["post_type"]);
   });
@@ -203,7 +203,7 @@ describe("applyFilter", () => {
 // ── applySort ─────────────────────────────────────────────────────────────────
 
 describe("applySort", () => {
-  test("'review' desc puts dim with most in-review first", () => {
+  test("'review' desc puts refTable with most in-review first", () => {
     const result = applySort([cleanDim, dirtyDim], "review", "desc");
     expect(result[0].id).toBe("country");
   });
@@ -228,7 +228,7 @@ describe("applySort", () => {
 });
 
 describe("warehouseSyncStatusByDim", () => {
-  test("latest event per dim wins", () => {
+  test("latest event per refTable wins", () => {
     const audits: AuditEntry[] = [
       // newest first
       {
@@ -253,19 +253,19 @@ describe("warehouseSyncStatusByDim", () => {
         detail: "3 → zugzug.map_country",
       },
     ];
-    const dims = [
+    const refTables = [
       { id: "country", mapTable: "zugzug.map_country" },
       { id: "partner", mapTable: "zugzug.map_partner" },
       { id: "channel", mapTable: "zugzug.map_channel" }, // no events
     ];
-    expect(warehouseSyncStatusByDim(audits, dims)).toEqual({
+    expect(warehouseSyncStatusByDim(audits, refTables)).toEqual({
       country: "failed",
       partner: "synced",
       channel: "unknown",
     });
   });
 
-  test("no warehouse events leaves all dims unknown", () => {
+  test("no warehouse events leaves all refTables unknown", () => {
     const audits: AuditEntry[] = [
       {
         id: "1",
@@ -275,8 +275,8 @@ describe("warehouseSyncStatusByDim", () => {
         detail: "1 value → zugzug.map_country",
       },
     ];
-    const dims = [{ id: "country", mapTable: "zugzug.map_country" }];
-    expect(warehouseSyncStatusByDim(audits, dims)).toEqual({
+    const refTables = [{ id: "country", mapTable: "zugzug.map_country" }];
+    expect(warehouseSyncStatusByDim(audits, refTables)).toEqual({
       country: "unknown",
     });
   });

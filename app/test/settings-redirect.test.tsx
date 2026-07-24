@@ -9,7 +9,7 @@ vi.mock("../src/store", async (orig) => {
   return {
     ...a,
     useWorkspaceInfo: () => ({ adapter: "duckdb", writable: false }),
-    useDimensions: () => [],
+    useRefTables: () => [],
     useAudit: () => [],
     useConnectionHealth: () => undefined,
     usePreferences: () => ({ publishThreshold: 95, suggestThreshold: 80, scanSchedule: null }),

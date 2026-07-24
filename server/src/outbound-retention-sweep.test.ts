@@ -24,7 +24,7 @@ async function seedEvent(tenantId: string, daysAgo: number, suffix: string): Pro
   const id = `evt_${tenantId}_${suffix}`;
   await pgRun(
     `INSERT INTO "zugzug_app"."outbound_event"
-       (id, tenant_id, type, dim_id, occurred_at, payload, idem_key)
+       (id, tenant_id, type, reference_table_id, occurred_at, payload, idem_key)
      VALUES ($1, $2, 'table.published', 'd_x',
              now() - ($3 || ' days')::interval,
              '{}'::jsonb, $4)`,

@@ -7,19 +7,19 @@ import { IconSearch } from "./Icons";
    label/secondary/keywords, lets the user keyboard through results with
    ArrowUp/Down/Enter/Esc. Click-outside or Esc closes.
 
-   App-specific data (dims, routes, record records) lives in the caller;
+   App-specific data (refTables, routes, record records) lives in the caller;
    this component knows nothing about the domain. */
 
 export interface Command {
   id: string; // stable across re-renders so highlight survives
   group: string; // section header in the result list
   label: string; // primary display text
-  secondary?: string; // dim caption (path, count, type)
+  secondary?: string; // refTable caption (path, count, type)
   icon?: ReactNode; // leading 14×14 icon
-  keywords?: string; // extra match text (e.g. dim id, slug, key)
+  keywords?: string; // extra match text (e.g. refTable id, slug, key)
   /** Show on initial open (empty search). Non-priority items appear only after
    *  the user starts typing — keeps the resting palette short instead of
-   *  dumping every dim + record record at once. */
+   *  dumping every refTable + record record at once. */
   priority?: boolean;
   action: () => void; // executed on selection; close happens before
 }
@@ -84,7 +84,7 @@ export function CommandPalette({
     });
   }, [commands, q, recents]);
 
-  // Counts for the empty-state hint — "type to search 12 dimensions, 87 records"
+  // Counts for the empty-state hint — "type to search 12 refTables, 87 records"
   const hiddenSummary = useMemo(() => {
     const norm = q.trim();
     if (norm) return null;

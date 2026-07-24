@@ -13,7 +13,7 @@
  *
  * Module breakdown:
  *   - repo-scan.ts      (warehouse scanning + sources registry)
- *   - repo-record.ts (dimensions + record CRUD + fields)
+ *   - repo-record.ts (refTables + record CRUD + fields)
  *   - repo-drafts.ts    (drafts + commit)
  *   - repo-meta.ts      (users, audit, preferences, grid layout)
  *   - repo-shared.ts    (cross-domain types and helpers)

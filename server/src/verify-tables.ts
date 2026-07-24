@@ -32,17 +32,21 @@ function assert(cond: unknown, msg: string): asserts cond {
 
 async function cleanup(): Promise<void> {
   try {
-    await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("reference_table_field")} WHERE reference_table_id LIKE $1`, [
+      `${SCOPE}%`,
+    ]);
   } catch {
     /* best-effort cleanup */
   }
   try {
-    await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("reference_table_source")} WHERE reference_table_id LIKE $1`, [
+      `${SCOPE}%`,
+    ]);
   } catch {
     /* best-effort cleanup */
   }
   try {
-    await pgRun(`DELETE FROM ${pg("dimension")} WHERE id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("reference_table")} WHERE id LIKE $1`, [`${SCOPE}%`]);
   } catch {
     /* best-effort cleanup */
   }
@@ -76,11 +80,11 @@ async function cleanup(): Promise<void> {
       "u_verify",
     ),
   );
-  assert(blankId.startsWith(SCOPE), `dimId should start with scope; got ${blankId}`);
+  assert(blankId.startsWith(SCOPE), `refTableId should start with scope; got ${blankId}`);
 
-  await step("blank dim has description + color", async () => {
+  await step("blank refTable has description + color", async () => {
     const row = await pgGet<{ description: string | null; color: string | null }>(
-      `SELECT description, color FROM ${pg("dimension")} WHERE id = $1`,
+      `SELECT description, color FROM ${pg("reference_table")} WHERE id = $1`,
       [blankId],
     );
     assert(
@@ -90,7 +94,7 @@ async function cleanup(): Promise<void> {
     assert(row?.color === "rose", `color mismatch: ${row?.color}`);
   });
 
-  await step("blank dim has 2 fields with the new option shape", async () => {
+  await step("blank refTable has 2 fields with the new option shape", async () => {
     const fields = await repo.listFields(blankId, T);
     assert(fields.length === 2, `expected 2 fields, got ${fields.length}`);
     const sev = fields.find((f) => f.field === "severity");

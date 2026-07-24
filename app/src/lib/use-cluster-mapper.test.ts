@@ -1,26 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import type { DimClusterFeed } from "./use-dim-clusters";
+import type { RefTableClusterFeed } from "./use-ref-table-clusters";
 
-type FeedState = DimClusterFeed & { loading: boolean; error: string | null; refetch: () => void };
+type FeedState = RefTableClusterFeed & {
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+};
 
 // The hook reads the feed and the store; mock both. `vi.hoisted` lets the
 // hoisted mock factory safely reference this shared ref.
 const { feedRef } = vi.hoisted(() => ({ feedRef: { current: null as unknown as FeedState } }));
-vi.mock("./use-dim-clusters", () => ({ useDimClusters: () => feedRef.current }));
+vi.mock("./use-ref-table-clusters", () => ({ useRefTableClusters: () => feedRef.current }));
 vi.mock("../store", () => ({ saveDraft: vi.fn(), discardDraft: vi.fn() }));
 
 import { saveDraft, discardDraft } from "../store";
 import { useClusterMapper } from "./use-cluster-mapper";
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 
 const saveMock = saveDraft as unknown as ReturnType<typeof vi.fn>;
 const discardMock = discardDraft as unknown as ReturnType<typeof vi.fn>;
 
-function makeFeedState(feed: DimClusterFeed): FeedState {
+function makeFeedState(feed: RefTableClusterFeed): FeedState {
   return { ...feed, loading: false, error: null, refetch: vi.fn() };
 }
-function loadedFeed(): DimClusterFeed {
+function loadedFeed(): RefTableClusterFeed {
   return {
     clusters: [
       // pending: one unmapped + one mapped sibling (United States)
@@ -56,13 +60,13 @@ function loadedFeed(): DimClusterFeed {
   };
 }
 
-const DIM = {
+const REF_TABLE = {
   id: "d1",
   record: [
     { key: "us", label: "United States" },
     { key: "de", label: "Germany" },
   ],
-} as unknown as MappingDimension;
+} as unknown as MappingRefTable;
 
 beforeEach(() => {
   saveMock.mockReset();
@@ -72,7 +76,7 @@ beforeEach(() => {
 
 describe("useClusterMapper", () => {
   it("exposes the first pending cluster, its coverage, and the mapped-sibling suggestion", async () => {
-    const { result } = renderHook(() => useClusterMapper(DIM));
+    const { result } = renderHook(() => useClusterMapper(REF_TABLE));
     await waitFor(() => expect(result.current.current?.key).toBe("usa"));
     expect(result.current.position).toEqual({ index: 0, total: 1 }); // only "usa" is pending
     expect(result.current.coverage.pct).toBe(44);
@@ -81,7 +85,7 @@ describe("useClusterMapper", () => {
   });
 
   it("mapCluster stages a draft for every member and advances to done", async () => {
-    const { result } = renderHook(() => useClusterMapper(DIM));
+    const { result } = renderHook(() => useClusterMapper(REF_TABLE));
     await waitFor(() => expect(result.current.current?.key).toBe("usa"));
 
     act(() => result.current.mapCluster("us", "United States"));
@@ -95,7 +99,7 @@ describe("useClusterMapper", () => {
   });
 
   it("skipCluster stages a skipped draft for every member", async () => {
-    const { result } = renderHook(() => useClusterMapper(DIM));
+    const { result } = renderHook(() => useClusterMapper(REF_TABLE));
     await waitFor(() => expect(result.current.current?.key).toBe("usa"));
 
     act(() => result.current.skipCluster());
@@ -106,7 +110,7 @@ describe("useClusterMapper", () => {
   });
 
   it("undo discards the drafts of the last decided cluster's members", async () => {
-    const { result } = renderHook(() => useClusterMapper(DIM));
+    const { result } = renderHook(() => useClusterMapper(REF_TABLE));
     await waitFor(() => expect(result.current.current?.key).toBe("usa"));
 
     act(() => result.current.mapCluster("us", "United States"));
@@ -141,7 +145,7 @@ describe("useClusterMapper", () => {
       coverage: { resolvedRows: 0, atRiskRows: 110, pct: 0 },
       truncated: false,
     });
-    const { result } = renderHook(() => useClusterMapper(DIM));
+    const { result } = renderHook(() => useClusterMapper(REF_TABLE));
     await waitFor(() => expect(result.current.position.total).toBe(2));
 
     act(() => result.current.mapCluster("us", "United States"));

@@ -4,9 +4,9 @@ import { useTenant } from "../../lib/tenant-context";
 import { Panel } from "../../components/Panel";
 import { SkeletonList } from "../../components/Skeleton";
 import {
-  listDimensions,
+  listRefTables,
   IntegrationsApiError,
-  type DimensionSummary,
+  type RefTableSummary,
 } from "../../lib/integrations-api";
 import { DeveloperDetails } from "../../components/integrations/DeveloperDetails";
 import { CopyButton } from "../../components/CopyButton";
@@ -44,7 +44,7 @@ function MiniCopy({ text, label }: { text: string; label: string }) {
 
 export function PullApi() {
   const tenant = useTenant();
-  const [dims, setDims] = useState<DimensionSummary[]>([]);
+  const [refTables, setDims] = useState<RefTableSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +52,7 @@ export function PullApi() {
     let cancelled = false;
     (async () => {
       try {
-        const list = await listDimensions();
+        const list = await listRefTables();
         if (!cancelled) setDims(list);
       } catch (e) {
         if (!cancelled) setError(e instanceof IntegrationsApiError ? e.code : "load_failed");
@@ -66,7 +66,7 @@ export function PullApi() {
   }, []);
 
   const baseUrl = `${typeof window === "undefined" ? BASE_URL_PLACEHOLDER : window.location.origin}/api/t/${tenant.slug}/v1`;
-  const firstSlug = dims[0]?.slug ?? "country";
+  const firstSlug = refTables[0]?.slug ?? "country";
 
   return (
     <div className="space-y-6">
@@ -116,7 +116,7 @@ export function PullApi() {
           <SkeletonList rows={3} columns={[120, 1, 70, 90, 180]} />
         ) : error ? (
           <p className="text-[13px] text-danger">Could not load tables: {error}</p>
-        ) : dims.length === 0 ? (
+        ) : refTables.length === 0 ? (
           <p className="text-[13px] text-ink-2">
             No tables yet. Create one in{" "}
             <Link to="../../tables" className="text-accent underline-offset-2 hover:underline">
@@ -136,9 +136,9 @@ export function PullApi() {
               </tr>
             </thead>
             <tbody>
-              {dims.map((d) => {
+              {refTables.map((d) => {
                 const curlFor = (path: string) =>
-                  `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/dimensions/${d.slug}/${path}`;
+                  `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}/refTables/${d.slug}/${path}`;
                 return (
                   <tr
                     key={d.slug}

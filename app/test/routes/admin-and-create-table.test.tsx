@@ -39,7 +39,7 @@ vi.mock("../../src/store", async (orig) => {
     ...a,
     initStore: vi.fn(),
     useSources: () => mockUseSources(),
-    useDimensions: () => [],
+    useRefTables: () => [],
     createTable: mockCreateTable,
     subscribeInvalidate: (...args: unknown[]) => mockSubscribeInvalidate(...args),
     invalidate: {

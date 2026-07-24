@@ -57,7 +57,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
       await dispatchOutbound(tx, {
         tenantId: T,
         type: "table.published",
-        dimId: "dim_t1",
+        refTableId: "dim_t1",
         occurredAt: new Date(),
         payload: { dim_slug: "country", version: 1 },
         idemKey,
@@ -66,16 +66,16 @@ describe("dispatchOutbound — writes outbound_event row", () => {
 
     const row = await pgGet<{
       type: string;
-      dim_id: string | null;
+      reference_table_id: string | null;
       payload: string | Record<string, unknown>;
     }>(
-      `SELECT type, dim_id, payload FROM "zugzug_app"."outbound_event"
+      `SELECT type, reference_table_id, payload FROM "zugzug_app"."outbound_event"
         WHERE tenant_id = $1 AND idem_key = $2`,
       [T, idemKey],
     );
     expect(row).not.toBeNull();
     expect(row!.type).toBe("table.published");
-    expect(row!.dim_id).toBe("dim_t1");
+    expect(row!.reference_table_id).toBe("dim_t1");
     const payload = typeof row!.payload === "string" ? JSON.parse(row!.payload) : row!.payload;
     expect((payload as { dim_slug: string }).dim_slug).toBe("country");
   });
@@ -86,7 +86,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
       await dispatchOutbound(tx, {
         tenantId: T,
         type: "table.published",
-        dimId: "dim_t2",
+        refTableId: "dim_t2",
         occurredAt: new Date(),
         payload: {},
         idemKey,
@@ -99,7 +99,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
         await dispatchOutbound(tx, {
           tenantId: T,
           type: "table.published",
-          dimId: "dim_t2",
+          refTableId: "dim_t2",
           occurredAt: new Date(),
           payload: {},
           idemKey, // same key
@@ -122,7 +122,7 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
       await dispatchOutbound(tx, {
         tenantId: T,
         type: "table.published",
-        dimId: "dim_t3",
+        refTableId: "dim_t3",
         occurredAt: new Date(),
         payload: { dim_slug: "country" },
         idemKey: `table.published:dim_t3:5`,
@@ -149,7 +149,7 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
       await dispatchOutbound(tx, {
         tenantId: T,
         type: "table.published",
-        dimId: "dim_t4",
+        refTableId: "dim_t4",
         occurredAt: new Date(),
         payload: {},
         idemKey: `table.published:dim_t4:1`,

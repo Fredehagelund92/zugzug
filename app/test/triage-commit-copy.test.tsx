@@ -15,7 +15,7 @@ const stubTenant = {
 
 const stubDim = {
   id: "country",
-  dimension: "Country",
+  refTable: "Country",
   record: [],
   fields: [],
   rows: 0,
@@ -36,7 +36,7 @@ const stubDim = {
 };
 
 const stubDraft = {
-  dimId: "country",
+  refTableId: "country",
   raw: "USA",
   status: "mapped" as const,
   targetLabel: "United States",
@@ -55,7 +55,7 @@ function setupMocks(writable: boolean) {
       sources: "/app/test-ws/sources",
       tables: "/app/test-ws/tables",
       settings: "/app/test-ws/settings",
-      table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+      table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
       tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
     }),
   }));
@@ -72,7 +72,7 @@ function setupMocks(writable: boolean) {
       }),
       useStoreLoading: () => false,
       useCanEdit: () => true,
-      useDimensions: () => [stubDim],
+      useRefTables: () => [stubDim],
       useDrafts: () => ({ "country::USA": stubDraft }),
       saveDraft: vi.fn(),
       discardDraft: vi.fn(),
@@ -81,7 +81,7 @@ function setupMocks(writable: boolean) {
         rowsRecovered: 0,
         warehouseSynced: "n/a" as const,
       })),
-      dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+      dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
     };
   });
   vi.doMock("../src/lib/create-table-modal", () => ({

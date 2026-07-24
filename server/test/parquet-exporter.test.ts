@@ -42,7 +42,7 @@ test("exportRecordToParquet: empty map table emits valid empty Parquet", async (
   );
 
   const buf = await exportRecordToParquet({
-    dimId: "empty_test",
+    refTableId: "empty_test",
     dimTable: "zugzug.dim_empty_test",
     mapTable: "zugzug.map_empty_test",
     keyCol: "country_code",
@@ -67,7 +67,7 @@ test("exportRecordToParquet: populated map table round-trips through DuckDB", as
   );
 
   const buf = await exportRecordToParquet({
-    dimId: "country",
+    refTableId: "country",
     dimTable: "zugzug.dim_country",
     mapTable: "zugzug.map_country",
     keyCol: "country_code",
@@ -93,7 +93,7 @@ test("exportRecordToParquet: populated map table round-trips through DuckDB", as
   }
 });
 
-test("exportRecordToParquet: respects keyCol naming (column name reflects dim key)", async () => {
+test("exportRecordToParquet: respects keyCol naming (column name reflects refTable key)", async () => {
   const { pgRun } = await import("../src/pg.ts");
   await pgRun(`CREATE SCHEMA IF NOT EXISTS zugzug`);
   await pgRun(
@@ -105,7 +105,7 @@ test("exportRecordToParquet: respects keyCol naming (column name reflects dim ke
   ]);
 
   const buf = await exportRecordToParquet({
-    dimId: "partner",
+    refTableId: "partner",
     dimTable: "zugzug.dim_partner",
     mapTable: "zugzug.map_partner",
     keyCol: "partner_id",

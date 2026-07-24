@@ -13,8 +13,8 @@ const D = "trm_thing";
 const DB_ID = "wdb_trm";
 
 async function cleanup(): Promise<void> {
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1`, [T]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]);
@@ -25,7 +25,7 @@ afterAll(cleanup);
 
 test("removeSource deletes exactly the one wired column row", async () => {
   await provisionTenant({ id: T, label: "A" });
-  await record.addDimension(D, [], { keyKind: "slug" }, "u_test", T);
+  await record.addRefTable(D, [], { keyKind: "slug" }, "u_test", T);
 
   // register a warehouse database + two wired columns
   await pgRun(
@@ -35,8 +35,8 @@ test("removeSource deletes exactly the one wired column row", async () => {
   );
   const wire = (schema: string, table: string, col: string) =>
     pgRun(
-      `INSERT INTO "zugzug_app"."dimension_source"
-         (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+      `INSERT INTO "zugzug_app"."reference_table_source"
+         (reference_table_id, tenant_id, database_id, schema_name, table_name, column_name)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [D, T, DB_ID, schema, table, col],
     );
@@ -50,7 +50,7 @@ test("removeSource deletes exactly the one wired column row", async () => {
   );
 
   const rows = await pgAll<{ column_name: string }>(
-    `SELECT column_name FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1 AND dim_id = $2`,
+    `SELECT column_name FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1 AND reference_table_id = $2`,
     [T, D],
   );
   expect(rows.map((r) => r.column_name).sort()).toEqual(["country"]);
