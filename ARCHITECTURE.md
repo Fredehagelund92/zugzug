@@ -18,17 +18,17 @@ access pattern.
 | Store | Technology | Owner / durability | Holds |
 |---|---|---|---|
 | **1. Warehouse** | Your warehouse (MotherDuck/DuckDB today; Snowflake shipped) | Yours — **read-only** to Zugzug | The registered columns Zugzug scans for distinct **source values**. Never modified unless you explicitly configure a writable adapter. |
-| **2. Master store** | Postgres (default) or MotherDuck (`MOTHERDUCK_WRITABLE=true`) | Zugzug | The published `dim_<x>` / `map_<x>` tables — the approved **records** and **mappings**, versioned. |
+| **2. Record store** | Postgres (default) or MotherDuck (`MOTHERDUCK_WRITABLE=true`) | Zugzug | The published `dim_<x>` / `map_<x>` tables — the approved **records** and **mappings**, versioned. |
 | **3. App state** | Postgres (`zugzug_app` schema) | Zugzug — **the store to back up** | Everything operational: drafts, audit log, users, sessions, presence, preferences, table versions, and the outbound-event queue. |
 
 - The **warehouse** is attached only when `ATTACH_WAREHOUSE=true` (with a warehouse adapter + token). With it off, the record-and-publish workflow still works fully against Postgres — this is the default demo mode.
-- The **master store** location depends on `MOTHERDUCK_WRITABLE`: `false` (default) keeps published records in Postgres, downloadable as Parquet on demand; `true` writes each publish directly into a MotherDuck database your dbt project already reads.
+- The **record store** location depends on `MOTHERDUCK_WRITABLE`, and publishing is **pull-first** ([ADR-0007](./docs/adr/0007-publish-is-pull-first.md)). The recommended path is `false` (the default): published records stay in Postgres, and the warehouse team ingests them through their **own** pipeline — a dbt source, the Pull API (`?since=` cursors), or an on-demand Parquet snapshot — so publishes flow through the existing dev→prod, CI, and review path they already trust. `true` is an **opt-in convenience** that instead `MERGE`s each publish directly into a MotherDuck database your dbt reads; simpler for a solo setup, but it writes into your warehouse out-of-band — no environment promotion, tables mutated in place.
 - **App state** in Postgres is the crown jewels — drafts and audit history live nowhere else. See [operations](./docs/operations.md) for backup/restore.
 
 ### How the stores connect (server side)
 
 A single local DuckDB engine (`DUCK_PATH`, default `:memory:`) `ATTACH`es the
-two remote MotherDuck databases (warehouse + master), so the server can query
+two remote MotherDuck databases (warehouse + record store), so the server can query
 across them. All durable state lives in Postgres + MotherDuck, never in the
 local engine — so `:memory:` is fine. The browser never touches DuckDB or
 Postgres directly; it only calls the Bun API.
@@ -41,8 +41,8 @@ Browser (React SPA)
    ▼
 nginx (prod)  ── proxies /api + /ws ──►  Bun API server (:8787)
    │  serves the static SPA                 │
-   │                                        ├─► Postgres  (app state + master store in default mode)
-   │                                        └─► DuckDB engine ─ATTACH─► MotherDuck (warehouse read-only + master store)
+   │                                        ├─► Postgres  (app state + record store in default mode)
+   │                                        └─► DuckDB engine ─ATTACH─► MotherDuck (warehouse read-only + record store)
 ```
 
 - **Frontend** (`app/`): React + TypeScript + Vite, Tailwind v4, React Router. Built to static assets, served by nginx in production; `bun run dev` with a Vite proxy in development. All API calls are relative (`/api`, `/ws`) via `apiFetch`, so the app is origin-agnostic.
@@ -54,7 +54,7 @@ nginx (prod)  ── proxies /api + /ws ──►  Bun API server (:8787)
 - **Stores & env**: `env.ts` validates the three-store credentials and fails fast with a banner listing every missing var. `pg.ts` is the Postgres layer (`pgTx` transactions, tenant-scoped helpers).
 - **Auth** (`auth.ts`, `auth-password.ts`, `auth-oidc.ts`): two modes, one active per deployment. **Password** (default) — local email+password, first real signup becomes admin. **OIDC** — set `OIDC_ISSUER_URL` for any compliant provider. Session cookies are `HttpOnly; SameSite=Lax`, `Secure` only when `ORIGIN` is https. Per-workspace API tokens (`zzsa_*`) via `auth-api-tokens.ts` for dbt CI/scripts. The first-admin election is shared across both paths (`countRealLoginUsers`) so seeded placeholder users don't lock anyone out.
 - **Warehouse adapters** (`server/src/warehouse/`): `adapter.ts` is the `WarehouseAdapter` interface; each technology implements read (distinct-value scan) and optional write. DuckDB/MotherDuck and Snowflake ship; the Snowflake adapter is the reference implementation for new ones.
-- **Repos** (`repo-*.ts`): the data layer per concern — `repo-canonical` (records), `repo-drafts` (mappings awaiting publish), `repo-versions` (numbered table versions), `repo-scan`/`repo-dim-scan` (source-value discovery), `repo-outbound*` (webhook/pull-API event bus), `repo-rollback` (revert support), `repo-activity` (audit feed).
+- **Repos** (`repo-*.ts`): the data layer per concern — `repo-record` (records), `repo-drafts` (mappings awaiting publish), `repo-versions` (numbered table versions), `repo-scan`/`repo-source-scan` (source-value discovery), `repo-outbound*` (webhook/pull-API event bus), `repo-rollback` (revert support), `repo-activity` (audit feed).
 - **Multi-tenancy**: workspaces are switchable tenants (like Linear teams), row-scoped in Postgres. `withTenantTx` scopes queries; routes live under `/api/t/:slug/*`. Self-hosters typically run one workspace; the model supports many.
 
 ## Publish model (ADR-0002)

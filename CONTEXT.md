@@ -1,6 +1,6 @@
 # Zugzug
 
-Curation layer between a data warehouse and dbt: teams turn messy raw values into canonical dimensions and maintain governed reference tables, exported as `dim_<x>` / `map_<x>` tables dbt joins directly.
+Curation layer between a data warehouse and dbt: teams turn messy raw values into approved records and maintain governed reference tables, exported as `dim_<x>` / `map_<x>` tables dbt joins directly.
 
 ## Language
 
@@ -10,7 +10,8 @@ speakers — must understand every label without a glossary.
 **Table**:
 A curated list (country, channel, partner) with an approved set of records.
 Materialized as a `dim_<x>` table for dbt. ("Dimension" survives only in the
-dbt-facing `dim_`/`map_` names and in code identifiers.)
+dbt-facing `dim_`/`map_` output-table names — code and schema use
+`reference_table`/`refTable`, per [ADR-0006](./docs/adr/0006-internal-names-match-the-interface.md).)
 _Avoid_: dimension (user-facing), entity, master table
 
 **Record**:

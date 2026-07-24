@@ -61,7 +61,7 @@ Dark is the lead look. Light is a genuine paper theme for stakeholder PDFs and u
 
 | Token | Hex | When to use |
 |---|---|---|
-| `--accent` | `#d6336c` | The one brand accent. CTAs, focus rings, the live "flow" travelling toward the canonical node, link color. **One accent per view.** |
+| `--accent` | `#d6336c` | The one brand accent. CTAs, focus rings, the live "flow" travelling toward the record node, link color. **One accent per view.** |
 | `--accent-2` | `#f0a323` | Source-lamp secondary. Source-side decorations, "in-flight" highlights, things being scanned. Never used as a CTA. |
 | `--accent-soft`, `--accent-2-soft` | color-mix 18% | Backgrounds, washes, hover halos |
 
@@ -86,7 +86,7 @@ Reference-table work has two states with no generic analogue. Don't reuse `ok`/`
 
 ### Per-table tints
 
-Master tables get an identifying color from a fixed seven-tint palette so users can recognize tables at a glance in tabs, breadcrumbs, and KPI cards. Tints are assigned by `app/src/lib/palette.ts`.
+Reference tables get an identifying color from a fixed seven-tint palette so users can recognize tables at a glance in tabs, breadcrumbs, and KPI cards. Tints are assigned by `app/src/lib/palette.ts`.
 
 `--tint-rose · --tint-amber · --tint-mint · --tint-teal · --tint-indigo · --tint-violet · --tint-slate`
 
@@ -118,7 +118,7 @@ Body default is `md` (15px). Tables and dense UI run at `sm` (13px). Mono labels
 
 ### The `[bracket]` cased label
 
-Cased mono labels carry `[bracket]` ornament across the brand. The brackets are in `--accent`. Use sparingly — section kickers, schema names, dimension IDs in headers. Not on buttons.
+Cased mono labels carry `[bracket]` ornament across the brand. The brackets are in `--accent`. Use sparingly — section kickers, schema names, table IDs in headers. Not on buttons.
 
 ```css
 .kick { font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em;
@@ -169,7 +169,7 @@ Document width is **split** (ADR-0004), both caps applied via `PageContainer` (�
   content: the admin console (Users/Workspaces), the Activity log.
   Marketing/brand pages also use `--wide`.
 
-Grid pages (Sources, Review, Master tables) are full-bleed and bypass
+Grid pages (Sources, Review, Reference tables) are full-bleed and bypass
 `PageContainer` entirely (ADR-0003). `--maxw` (1180) is retired — nothing uses
 it. The topbar is a hard 60px and never changes.
 
@@ -237,7 +237,7 @@ A container is never gray because of what it *means* (help, disabled,
 secondary) — only because of where it *sits*. **Shadow signals "floating above
 the page"** and appears on overlays only, never on an in-page `Panel`.
 
-**Exempt:** the grid pages — Sources, Review, Master tables — are bespoke
+**Exempt:** the grid pages — Sources, Review, Reference tables — are bespoke
 full-width, full-height grid experiences and deliberately do **not** use
 `PageContainer` or route their grid frame through `Panel`. Leave them alone.
 

@@ -90,6 +90,7 @@ Decisions taking items off the table, listed so they don't re-litigate in issues
 | Relicense (Apache-2.0 + CLA, or BSL) | One-way door taken at launch with MIT + DCO. A relicense would require every contributor to re-sign. | Effectively closed. |
 | Pre-1.0 rebrand | "Zugzug" is unconventional but distinctive; defer until traction warrants it. | Cease-and-desist, USPTO opposition, or clear evidence the name is friction. |
 | Branching / "what-if" sandbox | UX implications outweighed the value for the cases seen so far. | A steward who needs "preview my remap before publishing" with concrete examples. |
+| Environment promotion (dev→prod), physically versioned tables, schema-change staging | Publish is pull-first ([ADR-0007](./docs/adr/0007-publish-is-pull-first.md)) — the warehouse team's own pipeline (dbt source / Parquet / Pull API) already provides dev→prod, CI, and review. Rebuilding that inside Zugzug would duplicate dbt's job. | The direct-write path becomes the dominant deployment *and* users need in-tool promotion — unlikely while pull-first holds. |
 
 ---
 
