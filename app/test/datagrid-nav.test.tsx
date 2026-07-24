@@ -37,12 +37,7 @@ const columns: ColumnDef<Row>[] = [
 function renderGrid() {
   return render(
     <UndoStackProvider>
-      <DataGrid
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.id}
-        onCommit={async () => {}}
-      />
+      <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} />
     </UndoStackProvider>,
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { pendingClusters, siblingSuggestion } from "./cluster-selection";
-import type { Cluster, ClusterMember } from "./use-dim-clusters";
+import type { Cluster, ClusterMember } from "./use-ref-table-clusters";
 import type { CandidateRecord } from "./cluster-candidates";
 
 const RECORDS: CandidateRecord[] = [

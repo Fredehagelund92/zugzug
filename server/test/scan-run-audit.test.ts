@@ -32,7 +32,10 @@ async function listScanRuns(): Promise<ScanRunRow[]> {
   );
 }
 
-function makeJob(name: string, run: () => Promise<{ rowsScanned?: number }> = async () => ({})): SchedulerJob {
+function makeJob(
+  name: string,
+  run: () => Promise<{ rowsScanned?: number }> = async () => ({}),
+): SchedulerJob {
   return { name, run };
 }
 
@@ -62,7 +65,11 @@ test("scan_run — failing job writes one error row with error_message", async (
   const scheduler = createScheduler({
     tickIntervalMs: 999_999,
     ...SINGLE_TENANT,
-    jobs: [makeJob("test-fail", async () => { throw new Error("boom"); })],
+    jobs: [
+      makeJob("test-fail", async () => {
+        throw new Error("boom");
+      }),
+    ],
   });
   await scheduler._tick();
   const rows = await listScanRuns();
@@ -87,11 +94,7 @@ test("scan_run — multiple jobs per tick produce one row each in order", async 
   await scheduler._tick();
   const rows = await listScanRuns();
   expect(rows).toHaveLength(3);
-  expect(rows.map((r) => r.source_id)).toEqual([
-    `${T_ID}:alpha`,
-    `${T_ID}:beta`,
-    `${T_ID}:gamma`,
-  ]);
+  expect(rows.map((r) => r.source_id)).toEqual([`${T_ID}:alpha`, `${T_ID}:beta`, `${T_ID}:gamma`]);
   expect(rows.every((r) => r.status === "ok")).toBe(true);
 });
 

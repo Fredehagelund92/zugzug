@@ -1,5 +1,5 @@
 /* verify-datagrid.ts — exercises the new DataGrid-backing endpoints end-to-end
-   against the REAL Postgres. Self-cleaning: drops a throwaway dimension at the
+   against the REAL Postgres. Self-cleaning: drops a throwaway refTable at the
    end so re-runs are idempotent.
 
    Run: `bun run verify-datagrid`. */
@@ -33,17 +33,21 @@ function assert(cond: unknown, msg: string): asserts cond {
 async function cleanup() {
   // remove anything we created (best-effort)
   try {
-    await pgRun(`DELETE FROM ${pg("dimension_field")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("reference_table_field")} WHERE reference_table_id LIKE $1`, [
+      `${SCOPE}%`,
+    ]);
   } catch {
     /* best-effort cleanup */
   }
   try {
-    await pgRun(`DELETE FROM ${pg("dimension_source")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("reference_table_source")} WHERE reference_table_id LIKE $1`, [
+      `${SCOPE}%`,
+    ]);
   } catch {
     /* best-effort cleanup */
   }
   try {
-    await pgRun(`DELETE FROM ${pg("dimension")} WHERE id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("reference_table")} WHERE id LIKE $1`, [`${SCOPE}%`]);
   } catch {
     /* best-effort cleanup */
   }
@@ -54,19 +58,19 @@ async function cleanup() {
 
   await step("clean prior scope rows", cleanup);
 
-  const dimId = await step("create test dimension", async () => {
-    return await repo.addDimension(`${SCOPE} country`, [], {}, "u_verify", T);
+  const refTableId = await step("create test refTable", async () => {
+    return await repo.addRefTable(`${SCOPE} country`, [], {}, "u_verify", T);
   });
-  assert(dimId.startsWith(SCOPE), "dimId should start with scope");
+  assert(refTableId.startsWith(SCOPE), "refTableId should start with scope");
 
   await step("addField(text)", async () => {
-    const r = await repo.addField(dimId, "Capital", "text", undefined, {}, "u_verify", T);
+    const r = await repo.addField(refTableId, "Capital", "text", undefined, {}, "u_verify", T);
     assert(r?.field === "capital", `expected field 'capital', got ${r?.field}`);
   });
 
   await step("addField(select, options=[EMEA,AMER])", async () => {
     const r = await repo.addField(
-      dimId,
+      refTableId,
       "Region",
       "select",
       [
@@ -78,7 +82,7 @@ async function cleanup() {
       T,
     );
     assert(r?.field === "region", `expected field 'region', got ${r?.field}`);
-    const fields = await repo.listFields(dimId, T);
+    const fields = await repo.listFields(refTableId, T);
     const region = fields.find((f) => f.field === "region");
     assert(region?.type === "select", "region type is select");
     const labels = region?.options?.map((o) => o.label);
@@ -89,7 +93,7 @@ async function cleanup() {
   });
 
   await step("addColumnOption appends a new option", async () => {
-    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify", T);
+    const r = await repo.addColumnOption(refTableId, "region", "APAC", null, {}, "u_verify", T);
     const labels = r?.options?.map((o) => o.label);
     assert(
       JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]),
@@ -98,7 +102,7 @@ async function cleanup() {
   });
 
   await step("addColumnOption is idempotent on duplicate label", async () => {
-    const r = await repo.addColumnOption(dimId, "region", "APAC", null, {}, "u_verify", T);
+    const r = await repo.addColumnOption(refTableId, "region", "APAC", null, {}, "u_verify", T);
     const labels = r?.options?.map((o) => o.label);
     assert(
       JSON.stringify(labels) === JSON.stringify(["EMEA", "AMER", "APAC"]),
@@ -107,7 +111,7 @@ async function cleanup() {
   });
 
   await step("addColumnOption refuses non-select column", async () => {
-    const r = await repo.addColumnOption(dimId, "capital", "Berlin", null, {}, "u_verify", T);
+    const r = await repo.addColumnOption(refTableId, "capital", "Berlin", null, {}, "u_verify", T);
     assert(r === null, `expected null for non-select column, got: ${JSON.stringify(r)}`);
   });
 
@@ -116,12 +120,12 @@ async function cleanup() {
   const USER = "u_ada";
 
   await step("setGridLayout writes config", async () => {
-    await repo.setGridLayout(USER, dimId, {
+    await repo.setGridLayout(USER, refTableId, {
       widths: { region: 120 },
       order: ["region", "capital"],
       hidden: [],
     });
-    const r = await repo.getGridLayout(USER, dimId);
+    const r = await repo.getGridLayout(USER, refTableId);
     assert(r.widths?.region === 120, `widths.region: ${r.widths?.region}`);
     assert(
       JSON.stringify(r.order) === JSON.stringify(["region", "capital"]),
@@ -130,20 +134,20 @@ async function cleanup() {
   });
 
   await step("renameColumn updates the label", async () => {
-    await repo.renameColumn(dimId, "capital", "Capital city", "u_verify", T);
-    const fields = await repo.listFields(dimId, T);
+    await repo.renameColumn(refTableId, "capital", "Capital city", "u_verify", T);
+    const fields = await repo.listFields(refTableId, T);
     const cap = fields.find((f) => f.field === "capital");
     assert(cap?.label === "Capital city", `label: ${cap?.label}`);
   });
 
   await step("changeColumnType text → select seeds options from distinct values", async () => {
-    // first, add a couple of canonical rows and set capital values
-    await repo.addCanonicalOne(dimId, "Denmark", "denmark", "u_verify", T);
-    await repo.addCanonicalOne(dimId, "Germany", "germany", "u_verify", T);
-    await repo.setFieldValue(dimId, "denmark", "capital", "Copenhagen", "u_verify", T);
-    await repo.setFieldValue(dimId, "germany", "capital", "Berlin", "u_verify", T);
+    // first, add a couple of record rows and set capital values
+    await repo.addRecordOne(refTableId, "Denmark", "denmark", "u_verify", T);
+    await repo.addRecordOne(refTableId, "Germany", "germany", "u_verify", T);
+    await repo.setFieldValue(refTableId, "denmark", "capital", "Copenhagen", "u_verify", T);
+    await repo.setFieldValue(refTableId, "germany", "capital", "Berlin", "u_verify", T);
     const res = await repo.changeColumnType(
-      dimId,
+      refTableId,
       "capital",
       {
         newType: "select",
@@ -153,7 +157,7 @@ async function cleanup() {
       T,
     );
     assert(res.ok, `changeColumnType failed: ${JSON.stringify(res)}`);
-    const fields = await repo.listFields(dimId, T);
+    const fields = await repo.listFields(refTableId, T);
     const cap = fields.find((f) => f.field === "capital");
     assert(cap?.type === "select", `type after change: ${cap?.type}`);
     const capLabels = cap?.options?.map((o) => o.label);
@@ -164,9 +168,9 @@ async function cleanup() {
   });
 
   await step("deleteColumn drops dim_field + cell values", async () => {
-    const r = await repo.deleteColumn(dimId, "capital", "u_verify", T);
+    const r = await repo.deleteColumn(refTableId, "capital", "u_verify", T);
     assert(r.ok, "deleteColumn ok");
-    const fields = await repo.listFields(dimId, T);
+    const fields = await repo.listFields(refTableId, T);
     assert(
       !fields.some((f) => f.field === "capital"),
       `capital still present: ${JSON.stringify(fields)}`,
@@ -177,7 +181,7 @@ async function cleanup() {
 
   const ratingFieldId = await step("addField(rating)", async () => {
     const result = await repo.addField(
-      dimId,
+      refTableId,
       "Quality",
       "rating",
       undefined,
@@ -190,7 +194,7 @@ async function cleanup() {
   });
 
   await step("listFields returns ratingMax", async () => {
-    const fields = await repo.listFields(dimId, T);
+    const fields = await repo.listFields(refTableId, T);
     const f = fields.find((x) => x.field === ratingFieldId);
     assert(f != null, "rating field not found");
     assert(f.type === "rating", `expected type=rating, got ${f.type}`);
@@ -198,10 +202,18 @@ async function cleanup() {
   });
 
   await step("changeColumnType text → url (lossless relabel)", async () => {
-    const textField = await repo.addField(dimId, "Website", "text", undefined, {}, "u_verify", T);
+    const textField = await repo.addField(
+      refTableId,
+      "Website",
+      "text",
+      undefined,
+      {},
+      "u_verify",
+      T,
+    );
     assert(textField != null, "addField(text) returned null");
     const res = await repo.changeColumnType(
-      dimId,
+      refTableId,
       textField.field,
       {
         newType: "url",
@@ -211,12 +223,14 @@ async function cleanup() {
       T,
     );
     assert(res.ok, "changeColumnType to url failed");
-    const fields = await repo.listFields(dimId, T);
+    const fields = await repo.listFields(refTableId, T);
     assert(fields.find((x) => x.field === textField.field)?.type === "url", "type should be url");
   });
 
   await step("cleanup grid layout rows", async () => {
-    await pgRun(`DELETE FROM ${pg("user_grid_layout")} WHERE dim_id LIKE $1`, [`${SCOPE}%`]);
+    await pgRun(`DELETE FROM ${pg("user_grid_layout")} WHERE reference_table_id LIKE $1`, [
+      `${SCOPE}%`,
+    ]);
   });
 
   await step("cleanup", cleanup);

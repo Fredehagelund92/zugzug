@@ -1,13 +1,13 @@
 // server/src/ai-providers/types.ts
 
 export interface SuggestionRequest {
-  dimensionName: string;
+  refTableName: string;
   rawValue: string;
-  existingCanonicalValues: string[];
+  existingRecordValues: string[];
 }
 
 export interface SuggestionResponse {
-  canonical: string;
+  record: string;
   confidence: "high" | "medium" | "low";
   reasoning?: string;
 }

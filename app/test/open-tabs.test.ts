@@ -1,16 +1,18 @@
 import { describe, test, expect, beforeEach } from "vitest";
-import { dimIdFromTabId, makeTabId } from "../src/lib/open-tabs";
+import { refTableIdFromTabId, makeTabId } from "../src/lib/open-tabs";
 
 beforeEach(() => {
   localStorage.clear();
 });
 
-describe("dimIdFromTabId", () => {
+describe("refTableIdFromTabId", () => {
   test("round-trips with makeTabId", () => {
-    expect(dimIdFromTabId(makeTabId("country"))).toBe("country");
+    expect(refTableIdFromTabId(makeTabId("country"))).toBe("country");
   });
   test("throws on a malformed id (missing prefix)", () => {
-    expect(() => dimIdFromTabId("country" as unknown as ReturnType<typeof makeTabId>)).toThrow();
+    expect(() =>
+      refTableIdFromTabId("country" as unknown as ReturnType<typeof makeTabId>),
+    ).toThrow();
   });
 });
 
@@ -20,8 +22,8 @@ describe("OpenTabsProvider readStored (via storage roundtrip)", () => {
       "zugzug:open-tabs",
       JSON.stringify({
         tabs: [
-          { id: "tables:country", dimId: "country", pinned: false, openedAt: 1 },
-          { id: "old:partner", dimId: "partner", pinned: false, openedAt: 2 },
+          { id: "tables:country", refTableId: "country", pinned: false, openedAt: 1 },
+          { id: "old:partner", refTableId: "partner", pinned: false, openedAt: 2 },
         ],
         activeId: "old:partner",
       }),

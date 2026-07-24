@@ -17,8 +17,8 @@ interface AddFieldPopoverProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   onSubmit: (input: AddFieldInput) => Promise<void>;
-  allDims?: { id: string; dimension: string }[];
-  currentDimId?: string;
+  allDims?: { id: string; refTable: string }[];
+  currentRefTableId?: string;
 }
 
 type FieldType = ColumnConfig["type"];
@@ -46,7 +46,7 @@ export function AddFieldPopover({
   onClose,
   onSubmit,
   allDims,
-  currentDimId,
+  currentRefTableId,
 }: AddFieldPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -65,7 +65,7 @@ export function AddFieldPopover({
   const [ratingMax, setRatingMax] = useState<number>(5);
   const [ratingMaxCustom, setRatingMaxCustom] = useState("");
   const [durationDisplay, setDurationDisplay] = useState<"hm" | "hms">("hm");
-  const [linkedTargetDimId, setLinkedTargetDimId] = useState<string>("");
+  const [linkedTargetRefTableId, setLinkedTargetRefTableId] = useState<string>("");
   const [required, setRequired] = useState(false);
   const [unique, setUnique] = useState(false);
   const [min, setMin] = useState("");
@@ -155,7 +155,7 @@ export function AddFieldPopover({
     currPosition,
     ratingMax,
     durationDisplay,
-    linkedTargetDimId,
+    linkedTargetRefTableId,
   ]);
 
   // Focus trap
@@ -207,7 +207,7 @@ export function AddFieldPopover({
     setRatingMax(5);
     setRatingMaxCustom("");
     setDurationDisplay("hm");
-    setLinkedTargetDimId("");
+    setLinkedTargetRefTableId("");
     setRequired(false);
     setUnique(false);
     setMin("");
@@ -219,7 +219,7 @@ export function AddFieldPopover({
   const handleSubmit = () => {
     const trimmed = label.trim();
     if (!trimmed) return;
-    if (type === "linked" && !linkedTargetDimId) {
+    if (type === "linked" && !linkedTargetRefTableId) {
       setError("Pick the table this field links to.");
       return;
     }
@@ -254,7 +254,7 @@ export function AddFieldPopover({
     } else if (type === "linked") {
       config = {
         type: "linked",
-        targetDimId: linkedTargetDimId,
+        targetRefTableId: linkedTargetRefTableId,
         displayFields: ["label"],
         candidates: [],
       };
@@ -598,14 +598,14 @@ export function AddFieldPopover({
                 Link to table
               </div>
               <select
-                value={linkedTargetDimId}
-                onChange={(e) => setLinkedTargetDimId(e.target.value)}
+                value={linkedTargetRefTableId}
+                onChange={(e) => setLinkedTargetRefTableId(e.target.value)}
                 className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] text-ink outline-none focus:border-accent"
               >
                 <option value="">— pick a table —</option>
                 {(allDims ?? []).map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.id === currentDimId ? `${d.dimension} (this table)` : d.dimension}
+                    {d.id === currentRefTableId ? `${d.refTable} (this table)` : d.refTable}
                   </option>
                 ))}
               </select>

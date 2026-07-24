@@ -11,22 +11,20 @@ export interface AiHintResult extends AiHint {
   cached: boolean;
 }
 
-interface DimContext {
+interface RefTableContext {
   label: string;
 }
 
 // ── validation ────────────────────────────────────────────────────────────────
 
-export function validateClaudeResponse(raw: unknown, canonicalLabels: string[]): AiHint {
+export function validateClaudeResponse(raw: unknown, recordLabels: string[]): AiHint {
   if (typeof raw !== "object" || raw === null) {
     return { suggestion: null, confidence: 0, reasoning: "Invalid response from AI." };
   }
   const r = raw as Record<string, unknown>;
 
   const suggestion =
-    typeof r.suggestion === "string" && canonicalLabels.includes(r.suggestion)
-      ? r.suggestion
-      : null;
+    typeof r.suggestion === "string" && recordLabels.includes(r.suggestion) ? r.suggestion : null;
 
   const confidence =
     suggestion !== null && typeof r.confidence === "number"
@@ -35,46 +33,46 @@ export function validateClaudeResponse(raw: unknown, canonicalLabels: string[]):
 
   const reasoning =
     suggestion === null
-      ? "No match in canonical set."
+      ? "No match in record set."
       : typeof r.reasoning === "string" && r.reasoning.length > 0
         ? r.reasoning.slice(0, 300)
-        : "Matched to canonical record.";
+        : "Matched to record record.";
 
   return { suggestion, confidence, reasoning };
 }
 
 // ── Claude API call ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a data mapping assistant for a Master Data Management tool. Match a raw source value to the best canonical record in a controlled vocabulary.
+const SYSTEM_PROMPT = `You are a data mapping assistant for a Master Data Management tool. Match a raw source value to the best record record in a controlled vocabulary.
 
 Respond ONLY with a JSON object:
 {"suggestion": string | null, "confidence": number, "reasoning": string}
 
 Rules:
-- suggestion: exact string from the canonical list or null if no match
+- suggestion: exact string from the record list or null if no match
 - confidence: 0-100. >90 = unambiguous (abbreviation, translation, alternate spelling). 60-89 = plausible. <60 = guessing. 0 only when suggestion is null.
 - reasoning: 1-2 sentences, terse and concrete, max 200 chars. Show pattern evidence (e.g. "ISO 3166-1 alpha-2 code. DE→Germany, FR→France.")
-- Never invent a suggestion not in the canonical list
+- Never invent a suggestion not in the record list
 - Never set confidence above 95`;
 
 export async function callClaude(
   raw: string,
-  canonicalLabels: string[],
-  dim: DimContext,
+  recordLabels: string[],
+  refTable: RefTableContext,
 ): Promise<AiHint> {
   if (!env.anthropicApiKey) {
     throw new Error("ANTHROPIC_API_KEY not configured");
   }
 
-  const canonicalBlock =
-    canonicalLabels.length > 0
-      ? canonicalLabels.map((l, i) => `${i + 1}. ${l}`).join("\n")
-      : "(empty — no canonical records exist yet)";
+  const recordBlock =
+    recordLabels.length > 0
+      ? recordLabels.map((l, i) => `${i + 1}. ${l}`).join("\n")
+      : "(empty — no record records exist yet)";
 
-  const userMessage = `Dimension: ${dim.label}
+  const userMessage = `RefTable: ${refTable.label}
 
-Canonical options:
-${canonicalBlock}
+Record options:
+${recordBlock}
 
 Raw source value to match: "${raw}"`;
 
@@ -116,7 +114,7 @@ Raw source value to match: "${raw}"`;
     throw new Error(`Claude returned non-JSON: ${text.slice(0, 100)}`);
   }
 
-  return validateClaudeResponse(parsed, canonicalLabels);
+  return validateClaudeResponse(parsed, recordLabels);
 }
 
 // ── cache + orchestration ─────────────────────────────────────────────────────
@@ -128,34 +126,34 @@ interface CacheRow {
 }
 
 export async function getAiHint(
-  dimId: string,
+  refTableId: string,
   raw: string,
-  canonicalLabels: string[],
-  dim: DimContext,
+  recordLabels: string[],
+  refTable: RefTableContext,
   tenantId: string,
 ): Promise<AiHintResult> {
   // 1. Postgres cache hit
   const cached = await pgGet<CacheRow>(
     `SELECT suggestion, confidence, reasoning
      FROM ${pg("ai_hint_cache")}
-     WHERE dim_id = $1 AND raw = $2 AND tenant_id = $3`,
-    [dimId, raw, tenantId],
+     WHERE reference_table_id = $1 AND raw = $2 AND tenant_id = $3`,
+    [refTableId, raw, tenantId],
   );
   if (cached) {
     void pgRun(
       `UPDATE ${pg("ai_hint_cache")} SET hits = hits + 1
-       WHERE dim_id = $1 AND raw = $2 AND tenant_id = $3`,
-      [dimId, raw, tenantId],
+       WHERE reference_table_id = $1 AND raw = $2 AND tenant_id = $3`,
+      [refTableId, raw, tenantId],
     );
     return { ...cached, cached: true };
   }
 
-  // 2. Empty canonical set — skip Claude
-  if (canonicalLabels.length === 0) {
+  // 2. Empty record set — skip Claude
+  if (recordLabels.length === 0) {
     return {
       suggestion: null,
       confidence: 0,
-      reasoning: "No canonical records exist yet.",
+      reasoning: "No record records exist yet.",
       cached: false,
     };
   }
@@ -166,21 +164,21 @@ export async function getAiHint(
   }
 
   // 4. Claude call
-  const result = await callClaude(raw, canonicalLabels, dim);
+  const result = await callClaude(raw, recordLabels, refTable);
 
   // 5. Store in cache
   await pgRun(
     `INSERT INTO ${pg("ai_hint_cache")}
-       (dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits, tenant_id)
+       (reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits, tenant_id)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, 0, $7)
-     ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE
+     ON CONFLICT (tenant_id, reference_table_id, raw) DO UPDATE
        SET suggestion  = EXCLUDED.suggestion,
            confidence  = EXCLUDED.confidence,
            reasoning   = EXCLUDED.reasoning,
            model       = EXCLUDED.model,
            created_at  = EXCLUDED.created_at`,
     [
-      dimId,
+      refTableId,
       raw,
       result.suggestion,
       result.confidence,

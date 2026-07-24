@@ -53,10 +53,10 @@ export function SourceRow({
         <span className="text-ink-3">.{row.column}</span>
       </div>
 
-      {/* Target dimension */}
+      {/* Target refTable */}
       <div className="whitespace-nowrap text-[12.5px]">
         <span className="mr-1.5 text-ink-3">→</span>
-        <span className="font-display font-semibold text-ink">{row.dimension}</span>
+        <span className="font-display font-semibold text-ink">{row.refTable}</span>
       </div>
 
       {/* Connection state */}

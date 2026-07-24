@@ -19,8 +19,8 @@ const stubTenant = {
 
 const stubDim = {
   id: "country",
-  dimension: "Country",
-  canonical: [],
+  refTable: "Country",
+  record: [],
   fields: [],
   rows: 1000,
   color: null,
@@ -40,7 +40,7 @@ const stubDim = {
 };
 
 const stubRejectedDraft = {
-  dimId: "country",
+  refTableId: "country",
   raw: "USA",
   status: "rejected" as const,
   targetLabel: "United States",
@@ -72,7 +72,7 @@ function setupMocks() {
       sources: "/app/test-ws/sources",
       tables: "/app/test-ws/tables",
       settings: "/app/test-ws/settings",
-      table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+      table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
       tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
     }),
   }));
@@ -83,28 +83,37 @@ function setupMocks() {
       useWorkspaceInfo: () => ({
         adapter: "duckdb",
         writable: false,
-        canonicalMode: "postgres-export",
+        recordMode: "postgres-export",
         warehouseDb: null,
         allowedDomain: null,
       }),
       useStoreLoading: () => false,
       useCanEdit: () => true,
       // Return current user matching the rejected-draft author so Re-stage button renders.
-      useCurrentUser: () => ({ id: "u_reviewer", name: "Reviewer", email: "r@example.com", role: "admin" as const }),
-      useDimensions: () => [stubDim],
+      useCurrentUser: () => ({
+        id: "u_reviewer",
+        name: "Reviewer",
+        email: "r@example.com",
+        role: "admin" as const,
+      }),
+      useRefTables: () => [stubDim],
       useDrafts: () => ({ "country::USA": stubRejectedDraft }),
       saveDraft: vi.fn().mockResolvedValue(undefined),
       discardDraft: vi.fn().mockResolvedValue(undefined),
-      commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" as const })),
-      dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+      commit: vi.fn(async () => ({
+        committed: 0,
+        rowsRecovered: 0,
+        warehouseSynced: "n/a" as const,
+      })),
+      dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
     };
   });
   vi.doMock("../src/lib/create-table-modal", () => ({
     useCreateTableModal: () => ({ open: vi.fn() }),
     CreateTableModalProvider: ({ children }: { children: React.ReactNode }) => children,
   }));
-  vi.doMock("../src/lib/use-dim-values-page", () => ({
-    useDimValuesPage: () => ({
+  vi.doMock("../src/lib/use-ref-table-values-page", () => ({
+    useRefTableValuesPage: () => ({
       items: [stubScanValueRow],
       hasMore: false,
       loading: false,
@@ -156,7 +165,9 @@ describe("Triage — rejected draft presentation", () => {
     );
     await waitFor(() => {
       const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
-      expect(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i })).toBeInTheDocument();
+      expect(
+        within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -179,13 +190,7 @@ describe("Triage — rejected draft presentation", () => {
     fireEvent.click(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }));
     // saveDraft should be called to re-stage the draft (clearing rejection on server)
     await waitFor(() => {
-      expect(saveDraftMock).toHaveBeenCalledWith(
-        "country",
-        "USA",
-        "mapped",
-        "United States",
-        "us",
-      );
+      expect(saveDraftMock).toHaveBeenCalledWith("country", "USA", "mapped", "United States", "us");
     });
   });
 
@@ -198,20 +203,29 @@ describe("Triage — rejected draft presentation", () => {
         useWorkspaceInfo: () => ({
           adapter: "duckdb",
           writable: false,
-          canonicalMode: "postgres-export",
+          recordMode: "postgres-export",
           warehouseDb: null,
           allowedDomain: null,
         }),
         useStoreLoading: () => false,
         useCanEdit: () => true,
         // Different user — not the draft author
-        useCurrentUser: () => ({ id: "u_other", name: "Other", email: "o@example.com", role: "admin" as const }),
-        useDimensions: () => [stubDim],
+        useCurrentUser: () => ({
+          id: "u_other",
+          name: "Other",
+          email: "o@example.com",
+          role: "admin" as const,
+        }),
+        useRefTables: () => [stubDim],
         useDrafts: () => ({ "country::USA": stubRejectedDraft }),
         saveDraft: vi.fn().mockResolvedValue(undefined),
         discardDraft: vi.fn().mockResolvedValue(undefined),
-        commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" as const })),
-        dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+        commit: vi.fn(async () => ({
+          committed: 0,
+          rowsRecovered: 0,
+          warehouseSynced: "n/a" as const,
+        })),
+        dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
       };
     });
     vi.doMock("../src/lib/use-tenant-navigate", () => ({
@@ -223,7 +237,7 @@ describe("Triage — rejected draft presentation", () => {
         sources: "/app/test-ws/sources",
         tables: "/app/test-ws/tables",
         settings: "/app/test-ws/settings",
-        table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+        table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
         tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
       }),
     }));
@@ -231,8 +245,8 @@ describe("Triage — rejected draft presentation", () => {
       useCreateTableModal: () => ({ open: vi.fn() }),
       CreateTableModalProvider: ({ children }: { children: React.ReactNode }) => children,
     }));
-    vi.doMock("../src/lib/use-dim-values-page", () => ({
-      useDimValuesPage: () => ({
+    vi.doMock("../src/lib/use-ref-table-values-page", () => ({
+      useRefTableValuesPage: () => ({
         items: [stubScanValueRow],
         hasMore: false,
         loading: false,
@@ -290,7 +304,7 @@ describe("Match mode — rejected draft guard", () => {
     render(
       <MemoryRouter>
         <UndoStackProvider>
-          <MatchModeBody dim={stubDim as never} isActive />
+          <MatchModeBody refTable={stubDim as never} isActive />
         </UndoStackProvider>
       </MemoryRouter>,
     );

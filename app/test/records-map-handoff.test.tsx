@@ -87,12 +87,7 @@ describe("Map values to this record — context menu handoff", () => {
   test("item is absent when onMapValuesToRecord is not provided", () => {
     const { container } = render(
       <UndoStackProvider>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          rowKey={(r) => r.id}
-          showRowNumbers
-        />
+        <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} showRowNumbers />
       </UndoStackProvider>,
     );
 

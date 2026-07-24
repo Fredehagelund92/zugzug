@@ -9,7 +9,7 @@ process.env.ZUGZUG_CURSOR_KEY =
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet } from "./pg.ts";
 import { handleV1Route } from "./v1-routes.ts";
-import { addDimension } from "./repo-canonical.ts";
+import { addRefTable } from "./repo-record.ts";
 import { createServiceAccount } from "./repo-service-accounts.ts";
 import { recordSlugAlias } from "./slug-alias.ts";
 import { createWebhook } from "./repo-webhooks.ts";
@@ -21,19 +21,19 @@ const T = "test_v1_routes";
 const SLUG = "v1routes";
 const ADMIN = "u_v1_admin";
 
-// Pull API requires both a dim_* row AND a canonical_version row, with the
+// Pull API requires both a dim_* row AND a record_version row, with the
 // exact key (no slug() lowercasing). Mirrors repo-outbound.test.ts helper.
-async function seedCanonical(
-  dimId: string,
+async function seedRecord(
+  refTableId: string,
   values: { key: string; label: string }[],
   tenantId: string,
   updatedBy: string,
 ): Promise<void> {
   const meta = await pgGet<{ dim_table: string; key_col: string }>(
-    `SELECT dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+    `SELECT dim_table, key_col FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
-  if (!meta) throw new Error(`seedCanonical: dim ${dimId} not found`);
+  if (!meta) throw new Error(`seedRecord: refTable ${refTableId} not found`);
   const [schema, table] = meta.dim_table.split(".");
   for (const v of values) {
     await pgRun(
@@ -42,18 +42,18 @@ async function seedCanonical(
       [v.key, v.label],
     );
     await pgRun(
-      `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+      `INSERT INTO "zugzug_app"."record_version" (reference_table_id, key, version, updated_at, updated_by, tenant_id)
        VALUES ($1, $2, 1, now(), $3, $4)
-       ON CONFLICT (tenant_id, dim_id, key) DO UPDATE
+       ON CONFLICT (tenant_id, reference_table_id, key) DO UPDATE
          SET retired_at = NULL, retired_into = NULL,
-             version = "canonical_version".version + 1,
+             version = "record_version".version + 1,
              updated_at = now(), updated_by = EXCLUDED.updated_by`,
-      [dimId, v.key, updatedBy, tenantId],
+      [refTableId, v.key, updatedBy, tenantId],
     );
   }
 }
 
-let dimId: string;
+let refTableId: string;
 let saToken: string;
 let adminSessionId: string;
 
@@ -75,9 +75,9 @@ beforeAll(async () => {
     [T, ADMIN],
   );
 
-  dimId = await addDimension("V1Country", [], { keyKind: "slug", silent: true }, ADMIN, T);
-  await seedCanonical(
-    dimId,
+  refTableId = await addRefTable("V1Country", [], { keyKind: "slug", silent: true }, ADMIN, T);
+  await seedRecord(
+    refTableId,
     [
       { key: "DE", label: "Germany" },
       { key: "US", label: "United States" },
@@ -105,17 +105,19 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
-  if (dimId) {
-    await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${dimId}"`).catch(() => {});
-    await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${dimId}"`).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
+  if (refTableId) {
+    await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${refTableId}"`).catch(() => {});
+    await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${refTableId}"`).catch(() => {});
   }
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [ADMIN]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
@@ -142,19 +144,21 @@ function adminReq(path: string, init: RequestInit = {}): Request {
 }
 
 describe("GET /api/t/:slug/v1/tables", () => {
-  it("returns the workspace's dimensions in API wire shape", async () => {
+  it("returns the workspace's refTables in API wire shape", async () => {
     const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as {
       tables: Array<{ slug: string; label: string; record_count: number }>;
     };
-    expect(body.tables.find((d) => d.slug === dimId)?.label).toBe("V1Country");
+    expect(body.tables.find((d) => d.slug === refTableId)?.label).toBe("V1Country");
   });
 });
 
 describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
   it("returns 200 with paginated records", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records?limit=1`));
+    const res = await handleV1Route(
+      authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records?limit=1`),
+    );
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as {
       records: unknown[];
@@ -163,15 +167,17 @@ describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
     };
     expect(body.records.length).toBe(1);
     expect(body.cursor.next).not.toBeNull();
-    expect(body.meta.dim_slug).toBe(dimId);
+    expect(body.meta.dim_slug).toBe(refTableId);
   });
 
   it("cursor round-trip returns the next page without duplicates", async () => {
-    const r1 = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records?limit=1`));
+    const r1 = await handleV1Route(
+      authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records?limit=1`),
+    );
     const b1 = (await r1!.json()) as { records: { key: string }[]; cursor: { next: string } };
     const r2 = await handleV1Route(
       authedReq(
-        `/api/t/${SLUG}/v1/tables/${dimId}/records?limit=1&cursor=${encodeURIComponent(b1.cursor.next)}`,
+        `/api/t/${SLUG}/v1/tables/${refTableId}/records?limit=1&cursor=${encodeURIComponent(b1.cursor.next)}`,
       ),
     );
     const b2 = (await r2!.json()) as {
@@ -184,7 +190,7 @@ describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
 
   it("returns 400 cursor_invalid for a tampered cursor", async () => {
     const res = await handleV1Route(
-      authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records?cursor=garbage.xx`),
+      authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records?cursor=garbage.xx`),
     );
     expect(res!.status).toBe(400);
     const body = (await res!.json()) as { error: string };
@@ -194,7 +200,7 @@ describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
 
 describe("GET /api/t/:slug/v1/tables/:slug/records/:key", () => {
   it("returns the row", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records/DE`));
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records/DE`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { key: string; label: string };
     expect(body.key).toBe("DE");
@@ -202,23 +208,25 @@ describe("GET /api/t/:slug/v1/tables/:slug/records/:key", () => {
   });
 
   it("returns 404 for an unknown key", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/records/NOPE`));
+    const res = await handleV1Route(
+      authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records/NOPE`),
+    );
     expect(res!.status).toBe(404);
   });
 });
 
 describe("GET /api/t/:slug/v1/tables/:slug/fields", () => {
   it("returns dim_slug + fields", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/fields`));
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/fields`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { dim_slug: string; label: string; fields: unknown[] };
-    expect(body.dim_slug).toBe(dimId);
+    expect(body.dim_slug).toBe(refTableId);
   });
 });
 
 describe("GET /api/t/:slug/v1/tables/:slug/removed", () => {
   it("returns 200 with an array (possibly empty)", async () => {
-    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${dimId}/removed`));
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/removed`));
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { removed: unknown[] };
     expect(Array.isArray(body.removed)).toBe(true);

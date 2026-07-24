@@ -14,7 +14,7 @@ import { cx } from "../lib/cx";
 
 export interface RecordHistoryDrawerProps {
   open: boolean;
-  /** Dimension / table id the record lives in. */
+  /** RefTable / table id the record lives in. */
   tableId: string | null;
   /** Stable record key (slug) — the history anchor. */
   rowKey: string | null;
@@ -43,7 +43,7 @@ interface Diff {
 }
 
 /** A "before → after" edit carries these keys in its audit metadata (see
- *  setFieldValue / renameCanonical). Older entries logged before enrichment
+ *  setFieldValue / renameRecord). Older entries logged before enrichment
  *  won't have them and fall back to the plain event line. */
 function extractDiff(metadata: AuditEntry["metadata"]): Diff | null {
   if (!metadata || typeof metadata !== "object") return null;
@@ -129,7 +129,7 @@ export function RecordHistoryDrawer(props: RecordHistoryDrawerProps) {
 
   return createPortal(
     <div className="fixed inset-0 z-50" aria-hidden={!open}>
-      {/* Backdrop — dims the grid, click to dismiss. */}
+      {/* Backdrop — refTables the grid, click to dismiss. */}
       <button
         type="button"
         aria-label="Close history"

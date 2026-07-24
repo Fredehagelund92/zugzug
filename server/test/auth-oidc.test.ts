@@ -20,10 +20,21 @@ import { pg } from "../src/env.ts";
 
 // Fake Configuration — openid-client v6 functional API doesn't introspect
 // the Configuration internals in tests, so a plain object is fine here.
-const fakeConfig = {} as Parameters<typeof import("../src/auth-oidc.ts").setOidcConfigFactory>[0] extends () => Promise<infer C> ? C : never;
+const fakeConfig = {} as Parameters<
+  typeof import("../src/auth-oidc.ts").setOidcConfigFactory
+>[0] extends () => Promise<infer C>
+  ? C
+  : never;
 
-let mockTokenResult: { claims: () => { sub: string; email?: string; name?: string; given_name?: string; family_name?: string } } | null =
-  null;
+let mockTokenResult: {
+  claims: () => {
+    sub: string;
+    email?: string;
+    name?: string;
+    given_name?: string;
+    family_name?: string;
+  };
+} | null = null;
 let mockShouldThrow: Error | null = null;
 
 // Fake openid-client implementation — no network, fully deterministic.
@@ -85,10 +96,9 @@ test("oidc callback — valid token, first user becomes admin, session cookie se
       family_name: "Lovelace",
     }),
   };
-  const req = new Request(
-    "http://localhost/api/auth/oidc/callback?code=abc&state=test-state",
-    { headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" } },
-  );
+  const req = new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+    headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+  });
   const res = await handleOidcCallback(req);
   expect(res.status).toBe(302);
   expect(res.headers.get("Location")).toBe("/app");
@@ -121,10 +131,9 @@ test("oidc callback — missing state cookie redirects with error=state", async 
 
 test("oidc callback — token-exchange failure redirects with error=token", async () => {
   mockShouldThrow = new Error("simulated token exchange failure");
-  const req = new Request(
-    "http://localhost/api/auth/oidc/callback?code=bad&state=test-state",
-    { headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" } },
-  );
+  const req = new Request("http://localhost/api/auth/oidc/callback?code=bad&state=test-state", {
+    headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+  });
   const res = await handleOidcCallback(req);
   expect(res.status).toBe(302);
   expect(res.headers.get("Location")).toContain("error=token");

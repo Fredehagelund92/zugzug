@@ -15,8 +15,8 @@ const stubTenant = {
 
 const stubDim = {
   id: "country",
-  dimension: "Country",
-  canonical: [],
+  refTable: "Country",
+  record: [],
   fields: [],
   rows: 0,
   color: null,
@@ -25,11 +25,18 @@ const stubDim = {
   mapTable: "zugzug.map_country",
   keyCol: "country_code",
   keyKind: "slug",
-  counts: { newCount: 1, mappedCount: 0, totalDistinct: 1, unmappedRowsTotal: 100, mappedRowsTotal: 0, scannedAt: null },
+  counts: {
+    newCount: 1,
+    mappedCount: 0,
+    totalDistinct: 1,
+    unmappedRowsTotal: 100,
+    mappedRowsTotal: 0,
+    scannedAt: null,
+  },
 };
 
 const stubDraft = {
-  dimId: "country",
+  refTableId: "country",
   raw: "USA",
   status: "mapped" as const,
   targetLabel: "United States",
@@ -48,7 +55,7 @@ function setupMocks(writable: boolean) {
       sources: "/app/test-ws/sources",
       tables: "/app/test-ws/tables",
       settings: "/app/test-ws/settings",
-      table: (dimId: string) => `/app/test-ws/tables?open=${dimId}`,
+      table: (refTableId: string) => `/app/test-ws/tables?open=${refTableId}`,
       tablesFocus: (key: string) => `/app/test-ws/tables?focus=${key}`,
     }),
   }));
@@ -59,18 +66,22 @@ function setupMocks(writable: boolean) {
       useWorkspaceInfo: () => ({
         adapter: writable ? "snowflake" : "duckdb",
         writable,
-        canonicalMode: writable ? "warehouse" : "postgres-export",
+        recordMode: writable ? "warehouse" : "postgres-export",
         warehouseDb: "analytics",
         allowedDomain: null,
       }),
       useStoreLoading: () => false,
       useCanEdit: () => true,
-      useDimensions: () => [stubDim],
+      useRefTables: () => [stubDim],
       useDrafts: () => ({ "country::USA": stubDraft }),
       saveDraft: vi.fn(),
       discardDraft: vi.fn(),
-      commit: vi.fn(async () => ({ committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" as const })),
-      dkey: (dimId: string, raw: string) => `${dimId}::${raw}`,
+      commit: vi.fn(async () => ({
+        committed: 0,
+        rowsRecovered: 0,
+        warehouseSynced: "n/a" as const,
+      })),
+      dkey: (refTableId: string, raw: string) => `${refTableId}::${raw}`,
     };
   });
   vi.doMock("../src/lib/create-table-modal", () => ({

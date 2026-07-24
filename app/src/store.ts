@@ -1,11 +1,5 @@
 import { useSyncExternalStore, useState, useEffect } from "react";
-import type {
-  CanonicalValue,
-  MappingDimension,
-  OptionDef,
-  PaletteName,
-  NumberFormat,
-} from "./data";
+import type { RecordValue, MappingRefTable, OptionDef, PaletteName, NumberFormat } from "./data";
 import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
@@ -41,13 +35,13 @@ export class ConflictError extends Error {
 
 /* ============================================================================
    Store — now backed by the real backend (server/) over /api (Vite proxies it).
-   The three stores from ARCHITECTURE.md live behind this seam: canonical dim_/map_
+   The three stores from ARCHITECTURE.md live behind this seam: record dim_/map_
    + drafts + audit + users in Postgres; the warehouse scan in MotherDuck (when
    ATTACH_WAREHOUSE=true). The hook shapes are unchanged, so components consume
    them exactly as before — only the source of truth moved from memory to HTTP.
 
    Data is preloaded once via initStore() (awaited in main.tsx before first
-   render, so useDimensions() is populated synchronously); mutations POST/PUT/
+   render, so useRefTables() is populated synchronously); mutations POST/PUT/
    DELETE then refetch the affected slice and notify subscribers.
    ============================================================================ */
 
@@ -79,7 +73,7 @@ function isCurrentUser(x: unknown): x is CurrentUser {
   );
 }
 export interface Draft {
-  dimId: string;
+  refTableId: string;
   raw: string;
   status: "mapped" | "skipped" | "rejected";
   targetLabel: string | null;
@@ -100,13 +94,13 @@ export interface AuditEntry {
   detail: string;
   metadata?: Record<string, unknown> | null;
 }
-/** A registered warehouse source column for a dimension (from the source registry,
+/** A registered warehouse source column for a refTable (from the source registry,
  *  not the scan) — so the UI shows the tables even with zero warehouse rows. */
 export interface SourceInfo {
   table: string;
   column: string;
-  dimension: string;
-  dimId: string;
+  refTable: string;
+  refTableId: string;
   present: boolean;
   rows: number;
   values: number;
@@ -120,8 +114,8 @@ export const slug = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
-/** flat key for a per-(dimension,value) draft — matches the workbench overlay. */
-export const dkey = (dimId: string, raw: string) => `${dimId}::${raw}`;
+/** flat key for a per-(refTable,value) draft — matches the workbench overlay. */
+export const dkey = (refTableId: string, raw: string) => `${refTableId}::${raw}`;
 
 /* ---- session identity (populated by initStore before first render) ---- */
 export let currentUser: User = { id: "u_ada", name: "Ada Berg", initials: "AB" };
@@ -139,7 +133,7 @@ export interface Preferences {
 export interface WorkspaceInfo {
   adapter: "duckdb" | "snowflake";
   writable: boolean;
-  canonicalMode: "warehouse" | "postgres-export";
+  recordMode: "warehouse" | "postgres-export";
 }
 
 let _workspaceInfoCache: WorkspaceInfo | null = null;
@@ -151,7 +145,7 @@ function isWorkspaceInfo(x: unknown): x is WorkspaceInfo {
   return (
     (o.adapter === "duckdb" || o.adapter === "snowflake") &&
     typeof o.writable === "boolean" &&
-    (o.canonicalMode === "warehouse" || o.canonicalMode === "postgres-export")
+    (o.recordMode === "warehouse" || o.recordMode === "postgres-export")
   );
 }
 
@@ -177,7 +171,7 @@ export function onTenantSwitch(): void {
 }
 
 function resetStore(): void {
-  dims = [];
+  refTables = [];
   sources = [];
   draftsFlat = {};
   audit = [];
@@ -265,7 +259,7 @@ export function useWorkspaceInfo(): WorkspaceInfo | null {
 }
 
 /* ---- in-memory cache of server state ---- */
-let dims: MappingDimension[] = [];
+let refTables: MappingRefTable[] = [];
 let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
@@ -391,52 +385,50 @@ async function apiInner<T>(path: string, opts?: RequestInit): Promise<T> {
 }
 
 async function refreshDims(): Promise<void> {
-  // Single HTTP request returns every dim's full shape — the old code did 1
-  // list call + N detail fetches (N+1) on every mutation that refreshed dims.
-  dims = await api<MappingDimension[]>("/dimensions?full=true");
+  // Single HTTP request returns every refTable's full shape — the old code did 1
+  // list call + N detail fetches (N+1) on every mutation that refreshed refTables.
+  refTables = await api<MappingRefTable[]>("/tables?full=true");
 }
-async function refreshDim(dimId: string): Promise<void> {
-  const dim = await api<MappingDimension>(`/dimensions/${encodeURIComponent(dimId)}`);
-  dims = dims.map((d) => (d.id === dim.id ? dim : d));
+async function refreshDim(refTableId: string): Promise<void> {
+  const refTable = await api<MappingRefTable>(`/tables/${encodeURIComponent(refTableId)}`);
+  refTables = refTables.map((d) => (d.id === refTable.id ? refTable : d));
 }
-/** Live read of one canonical record from the cache. Undo/redo closures use
+/** Live read of one record record from the cache. Undo/redo closures use
  *  this instead of a render-captured list — the captured snapshot's version
  *  is always stale after the very mutation being undone. */
-export function getCanonical(dimId: string, key: string): CanonicalValue | undefined {
-  return dims.find((d) => d.id === dimId)?.canonical.find((c) => c.key === key);
+export function getRecord(refTableId: string, key: string): RecordValue | undefined {
+  return refTables.find((d) => d.id === refTableId)?.record.find((c) => c.key === key);
 }
 
-/** Immutably patch one canonical record in the cache (optimistic updates). */
-function patchCanonical(
-  dimId: string,
+/** Immutably patch one record record in the cache (optimistic updates). */
+function patchRecord(
+  refTableId: string,
   key: string,
-  patch: (c: CanonicalValue) => CanonicalValue,
+  patch: (c: RecordValue) => RecordValue,
 ): void {
-  dims = dims.map((d) =>
-    d.id !== dimId
-      ? d
-      : { ...d, canonical: d.canonical.map((c) => (c.key === key ? patch(c) : c)) },
+  refTables = refTables.map((d) =>
+    d.id !== refTableId ? d : { ...d, record: d.record.map((c) => (c.key === key ? patch(c) : c)) },
   );
 }
-/** Re-fetch a single dimension from the server and notify subscribers.
+/** Re-fetch a single refTable from the server and notify subscribers.
  *  Used by ConflictBanner's "Refresh row" button to pull the latest version
  *  after a 409 conflict without reloading the whole workspace. */
-export async function refreshDimAndNotify(dimId: string): Promise<void> {
-  await refreshDim(dimId);
+export async function refreshRefTableAndNotify(refTableId: string): Promise<void> {
+  await refreshDim(refTableId);
   emit();
 }
-async function refreshDrafts(dimId?: string): Promise<void> {
-  if (dimId) {
-    const list = await api<Draft[]>(`/dimensions/${encodeURIComponent(dimId)}/drafts`);
+async function refreshDrafts(refTableId?: string): Promise<void> {
+  if (refTableId) {
+    const list = await api<Draft[]>(`/tables/${encodeURIComponent(refTableId)}/drafts`);
     const next: Record<string, Draft> = {};
-    for (const [k, d] of Object.entries(draftsFlat)) if (d.dimId !== dimId) next[k] = d;
-    for (const d of list) next[dkey(d.dimId, d.raw)] = d;
+    for (const [k, d] of Object.entries(draftsFlat)) if (d.refTableId !== refTableId) next[k] = d;
+    for (const d of list) next[dkey(d.refTableId, d.raw)] = d;
     draftsFlat = next;
     return;
   }
   const list = await api<Draft[]>("/drafts");
   const flat: Record<string, Draft> = {};
-  for (const d of list) flat[dkey(d.dimId, d.raw)] = d;
+  for (const d of list) flat[dkey(d.refTableId, d.raw)] = d;
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {
@@ -452,7 +444,7 @@ async function refreshPreferences(): Promise<void> {
 
 /** Preload everything once. Awaited in main.tsx so the first render has data.
  *  Independent slices run in parallel; refreshDrafts runs after them (it fetches
- *  every dim's drafts in one batch request, independent of the dim list). Cold
+ *  every refTable's drafts in one batch request, independent of the refTable list). Cold
  *  boot drops from 6 sequential RTTs to 3 (users → 4-in-parallel → drafts). */
 export async function initStore(): Promise<void> {
   const [u, meRaw] = await Promise.all([
@@ -477,11 +469,11 @@ export async function initStore(): Promise<void> {
 }
 
 /* ---- hooks (sync reads of the cache) ---- */
-export function useDimensions(): MappingDimension[] {
+export function useRefTables(): MappingRefTable[] {
   return useSyncExternalStore(
     subscribe,
-    () => dims,
-    () => dims,
+    () => refTables,
+    () => refTables,
   );
 }
 export function useDrafts(): Record<string, Draft> {
@@ -546,11 +538,8 @@ export async function setPreferences(p: Preferences): Promise<void> {
 }
 
 /* ---- mutations (write through the API, then refetch the affected slice) ---- */
-export async function addDimension(
-  name: string,
-  keyKind?: "slug" | "external_id",
-): Promise<string> {
-  const { id } = await api<{ id: string }>("/dimensions", {
+export async function addRefTable(name: string, keyKind?: "slug" | "external_id"): Promise<string> {
+  const { id } = await api<{ id: string }>("/tables", {
     method: "POST",
     body: JSON.stringify({ name, keyKind }),
   });
@@ -562,20 +551,20 @@ export async function addDimension(
 }
 
 /** Permanently removes a table and everything it owns. The server keeps
- *  history (activity log); the local cache drops the dim immediately. */
-export async function deleteDimension(dimId: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}`, { method: "DELETE" });
-  dims = dims.filter((d) => d.id !== dimId);
+ *  history (activity log); the local cache drops the refTable immediately. */
+export async function deleteRefTable(refTableId: string): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}`, { method: "DELETE" });
+  refTables = refTables.filter((d) => d.id !== refTableId);
   await Promise.all([refreshAudit(), refreshSources()]);
-  // Prune drafts for the deleted dim without hitting the server for a gone endpoint
+  // Prune drafts for the deleted refTable without hitting the server for a gone endpoint
   const next: Record<string, Draft> = {};
-  for (const [k, d] of Object.entries(draftsFlat)) if (d.dimId !== dimId) next[k] = d;
+  for (const [k, d] of Object.entries(draftsFlat)) if (d.refTableId !== refTableId) next[k] = d;
   draftsFlat = next;
   emit();
 }
 
-export async function patchDimension(
-  dimId: string,
+export async function patchRefTable(
+  refTableId: string,
   patch: {
     orderingMode?: "derived" | "manual";
     description?: string | null;
@@ -583,49 +572,49 @@ export async function patchDimension(
     ownerUserId?: string | null;
   },
 ): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
-export async function insertCanonicalAt(
-  dimId: string,
+export async function insertRecordAt(
+  refTableId: string,
   label: string,
   anchor: string,
   direction: "above" | "below",
   key?: string,
 ): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/canonical`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/record`, {
     method: "POST",
     body: JSON.stringify({ label, key, insertAt: { anchor, direction } }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
-export async function reorderCanonical(
-  dimId: string,
+export async function reorderRecord(
+  refTableId: string,
   rowKey: string,
   opts: { before?: string | null; after?: string | null },
 ): Promise<{ position: string }> {
   const result = await api<{ ok: boolean; position: string }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(rowKey)}/position`,
+    `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(rowKey)}/position`,
     {
       method: "PUT",
       body: JSON.stringify(opts),
     },
   );
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
   return { position: result.position };
 }
 
-export async function rebalancePositions(dimId: string): Promise<{ rebalanced: number }> {
+export async function rebalancePositions(refTableId: string): Promise<{ rebalanced: number }> {
   return api<{ ok: boolean; rebalanced: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/positions/rebalance`,
+    `/tables/${encodeURIComponent(refTableId)}/positions/rebalance`,
     { method: "POST" },
   );
 }
@@ -659,7 +648,7 @@ export interface CreateTableError {
   code: "NAME_TAKEN" | "WAREHOUSE_OFFLINE" | "MISSING_PICKER" | "INVALID";
 }
 
-/** Create a table via the orchestrator. Returns the new dim id on success.
+/** Create a table via the orchestrator. Returns the new refTable id on success.
  *  Throws an Error with .message set to the server's `error` string and a
  *  numeric `.code` attached for the modal to render an inline banner. */
 export async function createTable(input: CreateTableInput): Promise<string> {
@@ -687,18 +676,18 @@ export async function createTable(input: CreateTableInput): Promise<string> {
 /** Stage a draft. Optimistic: the row flips in the same frame; the server echo
  *  (authoritative `at`/`user`) reconciles via a background drafts refresh. */
 export async function saveDraft(
-  dimId: string,
+  refTableId: string,
   raw: string,
   status: "mapped" | "skipped",
   targetLabel: string | null,
   targetKey: string | null,
 ): Promise<void> {
-  const k = dkey(dimId, raw);
+  const k = dkey(refTableId, raw);
   const prev = draftsFlat[k];
   draftsFlat = {
     ...draftsFlat,
     [k]: {
-      dimId,
+      refTableId,
       raw,
       status,
       targetLabel,
@@ -715,7 +704,7 @@ export async function saveDraft(
   };
   emit();
   try {
-    await api(`/dimensions/${encodeURIComponent(dimId)}/drafts`, {
+    await api(`/tables/${encodeURIComponent(refTableId)}/drafts`, {
       method: "PUT",
       body: JSON.stringify({ raw, status, targetLabel, targetKey }),
     });
@@ -727,11 +716,11 @@ export async function saveDraft(
     emit();
     throw e;
   }
-  void refreshDrafts(dimId).then(emit);
+  void refreshDrafts(refTableId).then(emit);
 }
 
-export async function discardDraft(dimId: string, raw: string): Promise<void> {
-  const k = dkey(dimId, raw);
+export async function discardDraft(refTableId: string, raw: string): Promise<void> {
+  const k = dkey(refTableId, raw);
   const prev = draftsFlat[k];
   if (prev) {
     const next = { ...draftsFlat };
@@ -740,7 +729,7 @@ export async function discardDraft(dimId: string, raw: string): Promise<void> {
     emit();
   }
   try {
-    await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/${encodeURIComponent(raw)}`, {
+    await api(`/tables/${encodeURIComponent(refTableId)}/drafts/${encodeURIComponent(raw)}`, {
       method: "DELETE",
     });
   } catch (e) {
@@ -750,28 +739,28 @@ export async function discardDraft(dimId: string, raw: string): Promise<void> {
     }
     throw e;
   }
-  void refreshDrafts(dimId).then(emit);
+  void refreshDrafts(refTableId).then(emit);
 }
 
-/** All staged edits for a dimension (sync read of the cache). */
-export function listDrafts(dimId: string): Draft[] {
-  return Object.values(draftsFlat).filter((d) => d.dimId === dimId);
+/** All staged edits for a refTable (sync read of the cache). */
+export function listDrafts(refTableId: string): Draft[] {
+  return Object.values(draftsFlat).filter((d) => d.refTableId === refTableId);
 }
 
 /**
  * Generate AI mapping suggestion for an unmapped raw value.
- * POST /api/dimensions/:dimensionId/suggest
+ * POST /api/tables/:refTableId/suggest
  * Returns a draft created with source='ai' and confidence metadata.
  */
 export async function generateSuggestion(
-  dimensionId: string,
+  refTableId: string,
   rawValue: string,
   options?: { forceRefresh?: boolean },
 ): Promise<{
   draft_id: string;
   draft: {
     id: string;
-    dim_id: string;
+    reference_table_id: string;
     raw: string;
     target_label: string;
     target_key: string | null;
@@ -783,7 +772,7 @@ export async function generateSuggestion(
   };
   cached?: boolean;
 }> {
-  const response = await apiFetch(`/dimensions/${encodeURIComponent(dimensionId)}/suggest`, {
+  const response = await apiFetch(`/tables/${encodeURIComponent(refTableId)}/suggest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -804,7 +793,7 @@ export async function generateSuggestion(
     draft_id: string;
     draft: {
       id: string;
-      dim_id: string;
+      reference_table_id: string;
       raw: string;
       target_label: string;
       target_key: string | null;
@@ -818,8 +807,8 @@ export async function generateSuggestion(
   }>;
 }
 
-/** Per-dimension publish state (ADR-0002): last published version + what's
- *  waiting — staged drafts and canonical rows touched since that publish. */
+/** Per-refTable publish state (ADR-0002): last published version + what's
+ *  waiting — staged drafts and record rows touched since that publish. */
 export interface PublishState {
   version: number;
   publishedAt: string | null;
@@ -829,26 +818,26 @@ export interface PublishState {
   canRevert: boolean;
 }
 
-export async function fetchPublishState(dimId: string): Promise<PublishState> {
-  return api<PublishState>(`/dimensions/${encodeURIComponent(dimId)}/publish-state`);
+export async function fetchPublishState(refTableId: string): Promise<PublishState> {
+  return api<PublishState>(`/tables/${encodeURIComponent(refTableId)}/publish-state`);
 }
 
-/** Approve & commit the dimension's mapped drafts (server folds them into the
- *  canonical tables in one batch). When `draftKeys` is provided, only those
+/** Approve & commit the refTable's mapped drafts (server folds them into the
+ *  record tables in one batch). When `draftKeys` is provided, only those
  *  raws are folded (scoped commit). Returns the count + warehouse rows recovered. */
 export async function commit(
-  dimId: string,
+  refTableId: string,
   draftKeys?: string[],
 ): Promise<{ committed: number; rowsRecovered: number }> {
   const res = await api<{ committed: number; rowsRecovered: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/commit`,
+    `/tables/${encodeURIComponent(refTableId)}/commit`,
     {
       method: "POST",
       ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
     },
   );
-  await refreshDim(dimId);
-  await refreshDrafts(dimId);
+  await refreshDim(refTableId);
+  await refreshDrafts(refTableId);
   await refreshSources();
   await refreshAudit();
   emit();
@@ -856,17 +845,17 @@ export async function commit(
 }
 
 /** Restore every changed record to the last published version. */
-export async function revertChanges(dimId: string): Promise<{ reverted: number }> {
-  const res = await api<{ reverted: number }>(`/dimensions/${encodeURIComponent(dimId)}/revert`, {
+export async function revertChanges(refTableId: string): Promise<{ reverted: number }> {
+  const res = await api<{ reverted: number }>(`/tables/${encodeURIComponent(refTableId)}/revert`, {
     method: "POST",
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   await refreshAudit();
   emit();
   return res;
 }
 
-/** One entry in a dimension's version history. */
+/** One entry in a refTable's version history. */
 export interface VersionInfo {
   version: number;
   kind: "publish" | "rollback";
@@ -878,32 +867,36 @@ export interface VersionInfo {
   hasSnapshot: boolean;
 }
 
-/** Fetch the full version history for a dimension. */
-export async function fetchVersions(dimId: string): Promise<VersionInfo[]> {
-  return api<VersionInfo[]>(`/dimensions/${encodeURIComponent(dimId)}/versions`);
+/** Fetch the full version history for a refTable. */
+export async function fetchVersions(refTableId: string): Promise<VersionInfo[]> {
+  return api<VersionInfo[]>(`/tables/${encodeURIComponent(refTableId)}/versions`);
 }
 
-/** Roll a dimension back to a prior snapshot version. Refreshes dim, drafts,
+/** Roll a refTable back to a prior snapshot version. Refreshes refTable, drafts,
  *  and audit — mirrors the commit() refresh/emit pattern. */
-export async function rollbackDim(dimId: string, toVersion: number): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/rollback`, {
+export async function rollbackDim(refTableId: string, toVersion: number): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/rollback`, {
     method: "POST",
     body: JSON.stringify({ toVersion }),
   });
-  await refreshDim(dimId);
-  await refreshDrafts(dimId);
+  await refreshDim(refTableId);
+  await refreshDrafts(refTableId);
   await refreshSources();
   await refreshAudit();
   emit();
 }
 
 /** Reject a set of raw draft values with a reason. Refreshes drafts and emits. */
-export async function rejectDrafts(dimId: string, raws: string[], reason: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/drafts/reject`, {
+export async function rejectDrafts(
+  refTableId: string,
+  raws: string[],
+  reason: string,
+): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/drafts/reject`, {
     method: "POST",
     body: JSON.stringify({ raws, reason }),
   });
-  await refreshDrafts(dimId);
+  await refreshDrafts(refTableId);
   emit();
 }
 
@@ -923,9 +916,9 @@ export async function scanSources(): Promise<number> {
   return scanned;
 }
 
-/** Wire a warehouse column to a dimension, then refresh the sources list. */
-export async function addSource(dimId: string, table: string, column: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/sources`, {
+/** Wire a warehouse column to a refTable, then refresh the sources list. */
+export async function addSource(refTableId: string, table: string, column: string): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/sources`, {
     method: "POST",
     body: JSON.stringify({ table, column }),
   });
@@ -933,9 +926,13 @@ export async function addSource(dimId: string, table: string, column: string): P
   emit();
 }
 
-/** Unwire a warehouse column from a dimension, then refresh the sources list. */
-export async function removeSource(dimId: string, table: string, column: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/sources`, {
+/** Unwire a warehouse column from a refTable, then refresh the sources list. */
+export async function removeSource(
+  refTableId: string,
+  table: string,
+  column: string,
+): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/sources`, {
     method: "DELETE",
     body: JSON.stringify({ table, column }),
   });
@@ -950,21 +947,21 @@ export interface UnmappedSample {
   rows: number;
 }
 export async function fetchUnmappedSample(
-  dimId: string,
+  refTableId: string,
   table: string,
   column: string,
   limit = 5,
 ): Promise<UnmappedSample[]> {
-  const qs = new URLSearchParams({ dimId, table, column, limit: String(limit) });
+  const qs = new URLSearchParams({ refTableId, table, column, limit: String(limit) });
   return api<UnmappedSample[]>(`/sources/unmapped?${qs.toString()}`);
 }
 
-/** Wire a source column to a dimension. If the dim is empty, the distinct values
- *  seed the canonical table 1:1 (mode "seed"). If the dim already has records,
+/** Wire a source column to a refTable. If the refTable is empty, the distinct values
+ *  seed the record table 1:1 (mode "seed"). If the refTable already has records,
  *  only the source is registered — values land in Match Values for triage
  *  (mode "connect"). Pass `force` to seed regardless (bootstrap-from-many). */
-export async function deriveCanonical(
-  dimId: string,
+export async function deriveRecord(
+  refTableId: string,
   table: string,
   column: string,
   nameColumn?: string,
@@ -975,152 +972,156 @@ export async function deriveCanonical(
     mode: "seed" | "connect";
     matched: number;
     unmatched: number;
-  }>(`/dimensions/${encodeURIComponent(dimId)}/derive`, {
+  }>(`/tables/${encodeURIComponent(refTableId)}/derive`, {
     method: "POST",
     body: JSON.stringify({ table, column, nameColumn, force: opts.force }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   await refreshSources();
   await refreshAudit();
   emit();
   return res;
 }
 
-/* ---- canonical record management (governed, persisted) ---- */
-export async function addCanonical(dimId: string, label: string, key?: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/canonical`, {
+/* ---- record record management (governed, persisted) ---- */
+export async function addRecord(refTableId: string, label: string, key?: string): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/record`, {
     method: "POST",
     body: JSON.stringify({ label, key }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   await refreshAudit();
   emit();
 }
-export async function renameCanonical(
-  dimId: string,
+export async function renameRecord(
+  refTableId: string,
   key: string,
   label: string,
   expectedVersion: number,
 ): Promise<number> {
-  patchCanonical(dimId, key, (c) => ({ ...c, label }));
+  patchRecord(refTableId, key, (c) => ({ ...c, label }));
   emit();
   let version: number;
   try {
     ({ version } = await api<{ version: number }>(
-      `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}`,
+      `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}`,
       {
         method: "PUT",
         body: JSON.stringify({ label, expectedVersion }),
       },
     ));
   } catch (e) {
-    await refreshDim(dimId);
+    await refreshDim(refTableId);
     emit();
     throw e;
   }
-  patchCanonical(dimId, key, (c) => ({ ...c, version }));
+  patchRecord(refTableId, key, (c) => ({ ...c, version }));
   emit();
   // values[].current mirrors the label for mapped raws — reconcile off the critical path
-  void refreshDim(dimId).then(emit);
+  void refreshDim(refTableId).then(emit);
   void refreshAudit().then(emit);
   return version;
 }
-export async function mergeCanonical(
-  dimId: string,
+export async function mergeRecord(
+  refTableId: string,
   survivor: string,
   losers: string[],
   expectedVersions: Record<string, number>,
 ): Promise<number> {
   const { merged } = await api<{ merged: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/merge?confirm=true`,
+    `/tables/${encodeURIComponent(refTableId)}/record/merge?confirm=true`,
     {
       method: "POST",
       body: JSON.stringify({ survivor, losers, expectedVersions }),
     },
   );
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   await refreshSources();
   await refreshAudit();
   emit();
   return merged;
 }
-/** Retire a canonical — returns {ok:false, variants} if still mapped (governed). */
-export async function retireCanonical(
-  dimId: string,
+/** Retire a record — returns {ok:false, variants} if still mapped (governed). */
+export async function retireRecord(
+  refTableId: string,
   key: string,
   expectedVersion: number,
 ): Promise<{ ok: boolean; variants: number }> {
   const res = await api<{ ok: boolean; variants: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
+    `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}?expectedVersion=${expectedVersion}`,
     { method: "DELETE" },
   );
   if (res.ok) {
-    await refreshDim(dimId);
+    await refreshDim(refTableId);
     await refreshAudit();
     emit();
   }
   return res;
 }
-/** The raw variants resolving to a canonical key (lineage). */
-export async function fetchVariants(dimId: string, key: string): Promise<string[]> {
+/** The raw variants resolving to a record key (lineage). */
+export async function fetchVariants(refTableId: string, key: string): Promise<string[]> {
   return api<string[]>(
-    `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/variants`,
+    `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}/variants`,
   );
 }
 
-/** Add an enrichment attribute column to a dimension (text|number|boolean|date|select|linked).
- *  For `select`, `options` seeds the allowed list; for `linked`, pass `referencedDimId` and optionally `displayFields`; otherwise omit extras. */
+/** Add an enrichment attribute column to a refTable (text|number|boolean|date|select|linked).
+ *  For `select`, `options` seeds the allowed list; for `linked`, pass `referencedRefTableId` and optionally `displayFields`; otherwise omit extras. */
 export async function addField(
-  dimId: string,
+  refTableId: string,
   label: string,
   type = "text",
   options?: OptionDef[],
   extras?: {
     numberFormat?: NumberFormat;
     ratingMax?: number;
-    referencedDimId?: string;
+    referencedRefTableId?: string;
     displayFields?: string[];
     required?: boolean;
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   },
 ): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/fields`, {
+  await api(`/tables/${encodeURIComponent(refTableId)}/fields`, {
     method: "POST",
     body: JSON.stringify({ label, type, options, ...extras }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   await refreshAudit();
   emit();
 }
 
 /** Append a new option to a select column's allowed list. Refetches the
- *  dimension so subsequent picks see the new option. Returns the new list. */
+ *  refTable so subsequent picks see the new option. Returns the new list. */
 export async function addColumnOption(
-  dimId: string,
+  refTableId: string,
   field: string,
   label: string,
   color: PaletteName | null = null,
 ): Promise<OptionDef[]> {
   const res = await api<{ options: OptionDef[] }>(
-    `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}/options`,
+    `/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}/options`,
     { method: "POST", body: JSON.stringify({ label, color }) },
   );
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
   return res.options;
 }
 
-export async function renameColumn(dimId: string, field: string, newLabel: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+export async function renameColumn(
+  refTableId: string,
+  field: string,
+  newLabel: string,
+): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "PUT",
     body: JSON.stringify({ label: newLabel }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
 export async function changeColumnType(
-  dimId: string,
+  refTableId: string,
   field: string,
   newType: string,
   options?: OptionDef[],
@@ -1129,7 +1130,7 @@ export async function changeColumnType(
   ratingMax?: number,
 ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
   const res = await api<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }>(
-    `/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`,
+    `/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`,
     {
       method: "PUT",
       body: JSON.stringify({
@@ -1142,17 +1143,17 @@ export async function changeColumnType(
     },
   );
   if (res.ok) {
-    await refreshDim(dimId);
+    await refreshDim(refTableId);
     emit();
   }
   return res;
 }
 
-export async function deleteColumn(dimId: string, field: string): Promise<void> {
-  await api(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+export async function deleteColumn(refTableId: string, field: string): Promise<void> {
+  await api(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "DELETE",
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
@@ -1160,32 +1161,32 @@ export async function deleteColumn(dimId: string, field: string): Promise<void> 
  *  incoming field_config patch with the existing stored config, so sending only
  *  { rules } is safe and will not wipe options / numberFormat / ratingMax. */
 export async function updateFieldRules(
-  dimId: string,
+  refTableId: string,
   field: string,
   rules: ConditionalRule[],
 ): Promise<void> {
-  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
     body: JSON.stringify({ field_config: JSON.stringify({ rules }) }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
 /** Persist the ordered list of display fields for an FK column. The server
  *  validates that every entry references an existing string field on the
- *  target dim and merges the patch into the field's stored config (so
+ *  target refTable and merges the patch into the field's stored config (so
  *  rules / numberFormat / etc. survive). */
 export async function updateFieldDisplayFields(
-  dimId: string,
+  refTableId: string,
   field: string,
   displayFields: string[],
 ): Promise<void> {
-  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
     body: JSON.stringify({ field_config: JSON.stringify({ displayFields }) }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
@@ -1195,17 +1196,17 @@ export async function updateFieldDisplayFields(
  *  Applies optimistically so badges / enforcement reflect the new value
  *  immediately without waiting for the server round-trip. */
 export async function updateFieldValidation(
-  dimId: string,
+  refTableId: string,
   field: string,
   next: {
     required?: boolean;
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   },
 ): Promise<void> {
-  // Optimistic local write — mutate the cached dim so subscribers re-render
+  // Optimistic local write — mutate the cached refTable so subscribers re-render
   // immediately with the new required / validation values.
-  dims = dims.map((d) => {
-    if (d.id !== dimId) return d;
+  refTables = refTables.map((d) => {
+    if (d.id !== refTableId) return d;
     return {
       ...d,
       fields: (d.fields ?? []).map((f) => {
@@ -1228,25 +1229,25 @@ export async function updateFieldValidation(
     };
   });
   emit();
-  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
     body: JSON.stringify({ field_config: JSON.stringify(next) }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
 /** Persist a plain-text description for a field. Pass null to clear it. */
 export async function updateFieldDescription(
-  dimId: string,
+  refTableId: string,
   field: string,
   description: string | null,
 ): Promise<void> {
-  await api<void>(`/dimensions/${encodeURIComponent(dimId)}/fields/${encodeURIComponent(field)}`, {
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
     method: "PATCH",
     body: JSON.stringify({ description }),
   });
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   emit();
 }
 
@@ -1262,43 +1263,43 @@ export interface GridLayoutConfig {
 // immediately instead of a zero-width flash while the GET round-trips.
 const layoutCache = new Map<string, GridLayoutConfig>();
 
-export function getCachedGridLayout(dimId: string): GridLayoutConfig | undefined {
-  return layoutCache.get(dimId);
+export function getCachedGridLayout(refTableId: string): GridLayoutConfig | undefined {
+  return layoutCache.get(refTableId);
 }
 
 const layoutInflight = new Map<string, Promise<GridLayoutConfig>>();
 
-export function getGridLayout(dimId: string): Promise<GridLayoutConfig> {
-  const inflight = layoutInflight.get(dimId);
+export function getGridLayout(refTableId: string): Promise<GridLayoutConfig> {
+  const inflight = layoutInflight.get(refTableId);
   if (inflight) return inflight;
-  const p = api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(dimId)}`)
+  const p = api<GridLayoutConfig>(`/grid-layout/${encodeURIComponent(refTableId)}`)
     .then((layout) => {
-      layoutCache.set(dimId, layout);
+      layoutCache.set(refTableId, layout);
       return layout;
     })
-    .finally(() => layoutInflight.delete(dimId));
-  layoutInflight.set(dimId, p);
+    .finally(() => layoutInflight.delete(refTableId));
+  layoutInflight.set(refTableId, p);
   return p;
 }
 
-// debounce key per dimension so concurrent edits to different dims don't
+// debounce key per refTable so concurrent edits to different refTables don't
 // collide on a single timer
 const layoutTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const pendingLayouts = new Map<string, GridLayoutConfig>();
 
-export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
-  layoutCache.set(dimId, { ...(layoutCache.get(dimId) ?? {}), ...partial });
-  const merged = { ...(pendingLayouts.get(dimId) ?? {}), ...partial };
-  pendingLayouts.set(dimId, merged);
-  const t = layoutTimers.get(dimId);
+export function setGridLayout(refTableId: string, partial: GridLayoutConfig): void {
+  layoutCache.set(refTableId, { ...(layoutCache.get(refTableId) ?? {}), ...partial });
+  const merged = { ...(pendingLayouts.get(refTableId) ?? {}), ...partial };
+  pendingLayouts.set(refTableId, merged);
+  const t = layoutTimers.get(refTableId);
   if (t) clearTimeout(t);
   layoutTimers.set(
-    dimId,
+    refTableId,
     setTimeout(() => {
-      const body = pendingLayouts.get(dimId) ?? {};
-      pendingLayouts.delete(dimId);
-      layoutTimers.delete(dimId);
-      void api(`/grid-layout/${encodeURIComponent(dimId)}`, {
+      const body = pendingLayouts.get(refTableId) ?? {};
+      pendingLayouts.delete(refTableId);
+      layoutTimers.delete(refTableId);
+      void api(`/grid-layout/${encodeURIComponent(refTableId)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
         keepalive: true,
@@ -1311,45 +1312,47 @@ export function setGridLayout(dimId: string, partial: GridLayoutConfig): void {
 /** Bulk CSV import: creates new records, updates field values on existing
  *  keys (never renames labels). Returns server counts. */
 export async function importRows(
-  dimId: string,
+  refTableId: string,
   rows: Array<{ key?: string; label?: string; fields?: Record<string, string | null> }>,
 ): Promise<{ created: number; updated: number; skipped: number }> {
   const res = await api<{ created: number; updated: number; skipped: number }>(
-    `/dimensions/${encodeURIComponent(dimId)}/import`,
+    `/tables/${encodeURIComponent(refTableId)}/import`,
     { method: "POST", body: JSON.stringify({ rows }) },
   );
-  await refreshDim(dimId);
+  await refreshDim(refTableId);
   await refreshAudit();
   emit();
   return res;
 }
 
-/** Set an enrichment field value on a canonical record. Applies optimistically
+/** Set an enrichment field value on a record record. Applies optimistically
  *  (the cell flips in the same frame), then PUTs. The server normalises some
  *  types (number parsing, date casts, linked-key validation), so those types
  *  reconcile with a background re-fetch; text/select are stored verbatim. */
 export async function setFieldValue(
-  dimId: string,
+  refTableId: string,
   key: string,
   field: string,
   value: string | null,
 ): Promise<void> {
   const norm = value == null || value.trim() === "" ? null : value;
-  patchCanonical(dimId, key, (c) => ({ ...c, fields: { ...c.fields, [field]: norm } }));
+  patchRecord(refTableId, key, (c) => ({ ...c, fields: { ...c.fields, [field]: norm } }));
   emit();
   try {
     await api(
-      `/dimensions/${encodeURIComponent(dimId)}/canonical/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
+      `/tables/${encodeURIComponent(refTableId)}/record/${encodeURIComponent(key)}/field/${encodeURIComponent(field)}`,
       { method: "PUT", body: JSON.stringify({ value }) },
     );
   } catch (e) {
-    await refreshDim(dimId);
+    await refreshDim(refTableId);
     emit();
     throw e;
   }
-  const type = dims.find((d) => d.id === dimId)?.fields?.find((f) => f.field === field)?.type;
+  const type = refTables
+    .find((d) => d.id === refTableId)
+    ?.fields?.find((f) => f.field === field)?.type;
   if (type === "number" || type === "date" || type === "linked") {
-    void refreshDim(dimId).then(emit);
+    void refreshDim(refTableId).then(emit);
   }
 }
 

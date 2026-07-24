@@ -8,7 +8,7 @@ import { pgRun, pgGet } from "./pg.ts";
 import { _setMasterKeyForTest } from "./webhook-secrets.ts";
 import { encryptSecret, generateMasterKeyB64 } from "./crypto-secret.ts";
 import { parseSignatureHeader } from "./webhook-signing.ts";
-import { addDimension, addCanonicalOne } from "./repo-canonical.ts";
+import { addRefTable, addRecordOne } from "./repo-record.ts";
 import { saveDraft, commit } from "./repo-drafts.ts";
 import { webhookDispatcherJob } from "./webhook-dispatcher.ts";
 import type { JobContext } from "./scheduler.ts";
@@ -92,11 +92,13 @@ afterAll(async () => {
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."webhook" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U]).catch(() => {});
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T]).catch(() => {});
 });
@@ -105,10 +107,10 @@ describe("Webhook E2E — commit → dispatchOutbound → dispatcher → POST �
   it("delivers signed payload to subscriber", async () => {
     receivedRequests = [];
 
-    const dimId = await addDimension("E2EDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Alpha", undefined, U, T);
-    await saveDraft(dimId, "alpha v", "mapped", "Alpha", "alpha", U, T);
-    const result = await commit(dimId, U, T);
+    const refTableId = await addRefTable("E2EDim", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", undefined, U, T);
+    await saveDraft(refTableId, "alpha v", "mapped", "Alpha", "alpha", U, T);
+    const result = await commit(refTableId, U, T);
     expect(result.committed).toBeGreaterThan(0);
 
     await webhookDispatcherJob.run({ tenantId: "*" } as JobContext);

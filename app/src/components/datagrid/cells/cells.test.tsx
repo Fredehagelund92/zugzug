@@ -53,7 +53,7 @@ function linkedColumn(): ColumnDef<Record<string, unknown>> {
     label: "Owner",
     config: {
       type: "linked",
-      targetDimId: "dim_person",
+      targetRefTableId: "dim_person",
       displayFields: ["name"],
       candidates: [
         { key: "k1", label: "Alice" },

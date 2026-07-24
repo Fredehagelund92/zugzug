@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { MappingDimension } from "../data";
-import { useDimClusters, type Cluster } from "./use-dim-clusters";
+import type { MappingRefTable } from "../data";
+import { useRefTableClusters, type Cluster } from "./use-ref-table-clusters";
 import { buildCandidates, type Candidate, type CandidateRecord } from "./cluster-candidates";
 import { pendingClusters, siblingSuggestion } from "./cluster-selection";
 import { clusterMapperReducer, initMapperState, stagedCount } from "./cluster-mapper-reducer";
@@ -28,12 +28,12 @@ export interface UseClusterMapper {
   refetch: () => void;
 }
 
-export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
-  const feed = useDimClusters({ dimId: dim.id, filter: "all" });
+export function useClusterMapper(refTable: MappingRefTable): UseClusterMapper {
+  const feed = useRefTableClusters({ refTableId: refTable.id, filter: "all" });
   const pending = useMemo(() => pendingClusters(feed.clusters), [feed.clusters]);
   const records = useMemo<CandidateRecord[]>(
-    () => dim.canonical.map((c) => ({ key: c.key, label: c.label })),
-    [dim.canonical],
+    () => refTable.record.map((c) => ({ key: c.key, label: c.label })),
+    [refTable.record],
   );
 
   const [state, dispatch] = useReducer(clusterMapperReducer, [] as string[], initMapperState);
@@ -67,32 +67,32 @@ export function useClusterMapper(dim: MappingDimension): UseClusterMapper {
     (recordKey: string, recordLabel: string) => {
       if (!current) return;
       for (const m of current.members) {
-        void saveDraft(dim.id, m.raw, "mapped", recordLabel, recordKey);
+        void saveDraft(refTable.id, m.raw, "mapped", recordLabel, recordKey);
       }
       dispatch({ type: "map", clusterKey: current.key, recordKey, recordLabel });
       setQuery("");
     },
-    [current, dim.id],
+    [current, refTable.id],
   );
 
   const skipCluster = useCallback(() => {
     if (!current) return;
     for (const m of current.members) {
-      void saveDraft(dim.id, m.raw, "skipped", null, null);
+      void saveDraft(refTable.id, m.raw, "skipped", null, null);
     }
     dispatch({ type: "skip", clusterKey: current.key });
     setQuery("");
-  }, [current, dim.id]);
+  }, [current, refTable.id]);
 
   const undo = useCallback(() => {
     const lastKey = state.undo[state.undo.length - 1];
     if (!lastKey) return;
     const cluster = pending.find((c) => c.key === lastKey);
     if (cluster) {
-      for (const m of cluster.members) void discardDraft(dim.id, m.raw);
+      for (const m of cluster.members) void discardDraft(refTable.id, m.raw);
     }
     dispatch({ type: "undo" });
-  }, [state.undo, pending, dim.id]);
+  }, [state.undo, pending, refTable.id]);
 
   const jumpTo = useCallback((index: number) => dispatch({ type: "jumpTo", index }), []);
 

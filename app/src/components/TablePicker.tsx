@@ -2,17 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
 import { IconPlus, IconCheck, IconChevron, IconSearch } from "./Icons";
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 import type { PaletteName } from "../data";
 import { PALETTE } from "../lib/palette";
 
 /* TablePicker — a searchable switcher for the master-data table you're
    working in (+ create a new dim_* / map_* pair). Compact + type-to-find, so it
-   scales from 3 to 300 dimensions without wrapping or blind scrolling. */
+   scales from 3 to 300 refTables without wrapping or blind scrolling. */
 
 const DROPDOWN_W = 320;
 
-function stats(d: MappingDimension) {
+function stats(d: MappingRefTable) {
   const { newCount: fresh, mappedCount: mapped, totalDistinct: total } = d.counts;
   return { total, fresh, pct: total ? Math.round((mapped / total) * 100) : 0 };
 }
@@ -48,12 +48,12 @@ function Mono({
 }
 
 export function TablePicker({
-  dims,
+  refTables,
   activeId,
   onSelect,
   onCreateRequested,
 }: {
-  dims: MappingDimension[];
+  refTables: MappingRefTable[];
   activeId: string;
   onSelect: (id: string) => void;
   onCreateRequested: () => void;
@@ -125,8 +125,8 @@ export function TablePicker({
     setOpen(false);
     setQ("");
   };
-  const active = dims.find((d) => d.id === activeId) ?? dims[0];
-  const list = dims.filter((d) => d.dimension.toLowerCase().includes(q.toLowerCase().trim()));
+  const active = refTables.find((d) => d.id === activeId) ?? refTables[0];
+  const list = refTables.filter((d) => d.refTable.toLowerCase().includes(q.toLowerCase().trim()));
   const choose = (id: string) => {
     onSelect(id);
     close();
@@ -146,11 +146,11 @@ export function TablePicker({
           open ? "border-accent" : "border-line-2 hover:border-accent",
         )}
       >
-        <Mono label={active.dimension} active color={active.color} />
+        <Mono label={active.refTable} active color={active.color} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-display text-[14px] font-semibold text-ink">
-              {active.dimension}
+              {active.refTable}
             </span>
             {aStats.fresh > 0 && (
               <span className="shrink-0 rounded-pill bg-warn-soft px-1.5 font-mono text-[10px] text-warn">
@@ -200,7 +200,7 @@ export function TablePicker({
                         on ? "bg-accent-wash" : "hover:bg-hover",
                       )}
                     >
-                      <Mono label={d.dimension} active={on} color={d.color} />
+                      <Mono label={d.refTable} active={on} color={d.color} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span
@@ -209,7 +209,7 @@ export function TablePicker({
                               on ? "text-accent" : "text-ink",
                             )}
                           >
-                            {d.dimension}
+                            {d.refTable}
                           </span>
                           {s.fresh > 0 && (
                             <span className="shrink-0 rounded-pill bg-warn-soft px-1.5 font-mono text-[10px] text-warn">

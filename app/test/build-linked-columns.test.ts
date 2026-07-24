@@ -6,7 +6,7 @@ const fkField: FieldDef = {
   field: "country",
   label: "Country",
   type: "linked",
-  referencedDimId: "dim_country",
+  referencedRefTableId: "dim_country",
   displayFields: ["label", "iso_code", "region"],
 };
 
@@ -61,7 +61,7 @@ test("FK candidates flow into config.candidates", () => {
   const [fkCol] = buildLinkedColumns(fkField, targetMeta);
   if (fkCol.config.type === "linked") {
     expect(fkCol.config.candidates).toEqual([{ key: "DE", label: "Germany" }]);
-    expect(fkCol.config.targetDimId).toBe("dim_country");
+    expect(fkCol.config.targetRefTableId).toBe("dim_country");
     expect(fkCol.config.displayFields).toEqual(["label", "iso_code", "region"]);
   } else {
     throw new Error("FK col should be linked");

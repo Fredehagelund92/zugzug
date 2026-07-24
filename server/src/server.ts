@@ -5,10 +5,10 @@
 import { env } from "./env.ts";
 import { initSentry, captureError, flushSentry } from "./observability.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
-import type { ImportRow } from "./repo-canonical.ts";
-import { rebalanceDimPositions } from "./repo-canonical.ts";
+import type { ImportRow } from "./repo-record.ts";
+import { rebalanceRefTablePositions } from "./repo-record.ts";
 import { publishSummaryFor } from "./repo-drafts.ts";
-import { dimMeta } from "./repo-shared.ts";
+import { refTableMeta } from "./repo-shared.ts";
 import {
   getSessionUser,
   handleMe,
@@ -104,7 +104,7 @@ function gateOrJson(
 export async function handle(req: Request, setUid: (uid: string) => void): Promise<Response> {
   const url = new URL(req.url);
   const { pathname } = url;
-  const seg = pathname.split("/").filter(Boolean); // ["api","dimensions",":id",...]
+  const seg = pathname.split("/").filter(Boolean); // ["api","tables",":id",...]
   const method = req.method;
 
   if (method === "OPTIONS")
@@ -146,7 +146,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     seg.splice(1, 2); // remove "t" and the slug
   }
 
-  if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/dimensions", { status: 404 });
+  if (seg[0] !== "api") return new Response("Zug Zug API. Try /api/tables", { status: 404 });
 
   // Auth routes — no session required for signup/login/logout/config/oidc/dev
   if (seg[1] === "auth") {
@@ -548,7 +548,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
       if (!out.ok) {
         return json(
-          { kind: "DATABASE_IN_USE", sourceCount: out.sourceCount, dimensions: out.dimensions },
+          { kind: "DATABASE_IN_USE", sourceCount: out.sourceCount, refTables: out.refTables },
           409,
         );
       }
@@ -895,16 +895,16 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }
 
       if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
-        const dimId = url.searchParams.get("dimId") ?? "";
+        const refTableId = url.searchParams.get("refTableId") ?? "";
         const raw = url.searchParams.get("raw") ?? "";
-        if (!dimId || !raw) return err("dimId and raw required", 400);
-        const dim = await reqRepo.getDimension(dimId);
-        if (!dim) return json({ error: "not found" }, 404);
+        if (!refTableId || !raw) return err("refTableId and raw required", 400);
+        const refTable = await reqRepo.getRefTable(refTableId);
+        if (!refTable) return json({ error: "not found" }, 404);
         if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
         try {
-          const canonicalLabels = dim.canonical.map((c) => c.label);
-          const hint = await reqRepo.getAiHint(dimId, raw, canonicalLabels, {
-            label: dim.dimension,
+          const recordLabels = refTable.record.map((c) => c.label);
+          const hint = await reqRepo.getAiHint(refTableId, raw, recordLabels, {
+            label: refTable.refTable,
           });
           return json(hint);
         } catch (e) {
@@ -932,7 +932,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json({
           adapter: adapterInstance.capabilities.id,
           writable: adapterInstance.capabilities.writable,
-          canonicalMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
+          recordMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
         });
       }
 
@@ -955,14 +955,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (denied) return denied;
           return json({ scanned: await reqRepo.scanSources() });
         }
-        // GET /api/sources/unmapped?dimId=&table=&column=&limit=
+        // GET /api/sources/unmapped?refTableId=&table=&column=&limit=
         if (seg[2] === "unmapped" && seg.length === 3 && method === "GET") {
-          const dimId = url.searchParams.get("dimId") ?? "";
+          const refTableId = url.searchParams.get("refTableId") ?? "";
           const table = url.searchParams.get("table") ?? "";
           const column = url.searchParams.get("column") ?? "";
           const limit = Number(url.searchParams.get("limit") ?? 5);
-          if (!dimId || !table || !column) return err("dimId, table, column required", 400);
-          return json(await reqRepo.topUnmapped(dimId, table, column, limit));
+          if (!refTableId || !table || !column)
+            return err("refTableId, table, column required", 400);
+          return json(await reqRepo.topUnmapped(refTableId, table, column, limit));
         }
       }
 
@@ -996,13 +997,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
       }
 
-      // GET / PATCH /api/grid-layout/:dimId — per-user-per-dim layout (widths/order/hidden)
+      // GET / PATCH /api/grid-layout/:refTableId — per-user-per-refTable layout (widths/order/hidden)
       if (seg[1] === "grid-layout" && seg.length === 3) {
-        const dimId = decodeURIComponent(seg[2]!);
-        if (method === "GET") return json(await reqRepo.getGridLayout(me, dimId));
+        const refTableId = decodeURIComponent(seg[2]!);
+        if (method === "GET") return json(await reqRepo.getGridLayout(me, refTableId));
         if (method === "PATCH") {
           const body = (await req.json()) as GridLayoutConfig;
-          await reqRepo.setGridLayout(me, dimId, body);
+          await reqRepo.setGridLayout(me, refTableId, body);
           return noContent();
         }
       }
@@ -1050,47 +1051,39 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const page = await reqRepo.listRecordHistory(tableId, rowKey, { before, limit });
           return json(page);
         }
-        return json({ error: "not found" }, 404);
+        // Fall through to the shared table routes below (list/CRUD/sub-resources).
       }
 
-      if (seg[1] === "dimensions") {
-        // GET /api/dimensions[?full=true] ; POST /api/dimensions {name}
-        // ?full=true returns the full MappingDimension shapes (canonical rows,
+      if (seg[1] === "tables") {
+        // GET /api/tables[?full=true] ; POST /api/tables {name}
+        // ?full=true returns the full MappingRefTable shapes (record rows,
         // values, fields, …) in one response — kills the N+1 the client used to
         // make at boot (1 list + N detail fetches).
         if (seg.length === 2) {
           if (method === "GET") {
             if (url.searchParams.get("full") === "true") {
-              const metas = await reqRepo.listDimensions();
-              const scalars = await reqRepo.getDimScanScalars();
+              const metas = await reqRepo.listRefTables();
+              const scalars = await reqRepo.getSourceScanScalars();
               const fulls = await Promise.all(
                 metas.map(async (m) => {
-                  const full = await reqRepo.getDimension(m.id, { scalars });
+                  const full = await reqRepo.getRefTable(m.id, { scalars });
                   if (!full) return null;
                   return { ...full, publish: await publishSummaryFor(m.id, tenantCtx.tenantId) };
                 }),
               );
               return json(fulls.filter((d): d is NonNullable<typeof d> => d != null));
             }
-            return json(await reqRepo.listDimensions());
+            return json(await reqRepo.listRefTables());
           }
-          if (method === "POST") {
-            const denied = gateOrJson(tenantCtx, "manage_adapter");
-            if (denied) return denied;
-            const { name, keyKind } = (await req.json()) as {
-              name: string;
-              keyKind?: "slug" | "external_id";
-            };
-            return json({ id: await reqRepo.addDimension(name, [], { keyKind }, me) }, 201);
-          }
+          // POST /api/tables (create) is handled by the orchestrator route above.
         }
         const id = seg[2] ? decodeURIComponent(seg[2]) : "";
-        // GET /api/dimensions/:id
+        // GET /api/tables/:id
         if (seg.length === 3 && id && method === "GET") {
-          const dim = await reqRepo.getDimension(id);
-          return dim ? json(dim) : json({ error: "not found" }, 404);
+          const refTable = await reqRepo.getRefTable(id);
+          return refTable ? json(refTable) : json({ error: "not found" }, 404);
         }
-        // GET /api/dimensions/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
+        // GET /api/tables/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
         if (seg[3] === "scan-values" && seg.length === 4 && id && method === "GET") {
           const filter = url.searchParams.get("filter") ?? "new";
           if (filter !== "new" && filter !== "mapped" && filter !== "all") {
@@ -1099,33 +1092,33 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const q = url.searchParams.get("q");
           const after = url.searchParams.get("after");
           const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") ?? 100)));
-          return json(await reqRepo.getDimScanValuesPage(id, { filter, q, after, limit }));
+          return json(await reqRepo.getSourceScanValuesPage(id, { filter, q, after, limit }));
         }
-        // GET /api/dimensions/:id/clusters?filter=new|mapped|all
+        // GET /api/tables/:id/clusters?filter=new|mapped|all
         if (seg[3] === "clusters" && seg.length === 4 && id && method === "GET") {
           const filter = url.searchParams.get("filter") ?? "new";
           if (filter !== "new" && filter !== "mapped" && filter !== "all") {
             return json({ error: "invalid_filter" }, 400);
           }
-          return json(await reqRepo.getDimClusters(id, { filter }));
+          return json(await reqRepo.getRefTableClusters(id, { filter }));
         }
-        // POST /api/dimensions/:id/scan — rescan this dim's wired sources and
-        // re-materialize its dim_scan_value rows. Faster than POST /api/sources/scan.
+        // POST /api/tables/:id/scan — rescan this refTable's wired sources and
+        // re-materialize its source_scan_value rows. Faster than POST /api/sources/scan.
         if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
           await reqRepo.scanOneDim(id);
           return json({ ok: true });
         }
-        // GET /api/dimensions/:id/publish-state — version, last publish, pending work
+        // GET /api/tables/:id/publish-state — version, last publish, pending work
         if (seg[3] === "publish-state" && seg.length === 4 && id && method === "GET") {
           return json(await reqRepo.getPublishState(id));
         }
-        // GET /api/dimensions/:id/versions — published version history
+        // GET /api/tables/:id/versions — published version history
         if (seg[3] === "versions" && seg.length === 4 && id && method === "GET") {
           return json(await reqRepo.listVersions(id));
         }
-        // POST /api/dimensions/:id/rollback — restore a snapshotted version (admin only)
+        // POST /api/tables/:id/rollback — restore a snapshotted version (admin only)
         if (seg[3] === "rollback" && seg.length === 4 && id && method === "POST") {
           const gate = requireAdmin(tenantCtx);
           if (!gate.ok) return json({ error: "forbidden" }, 403);
@@ -1137,24 +1130,23 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const { rollbackToVersion } = await import("./repo-rollback.ts");
           return json(await rollbackToVersion(id, tenantCtx.tenantId, toVersion, me));
         }
-        // PATCH /api/dimensions/:id — update orderingMode / description / color / ownerUserId
+        // PATCH /api/tables/:id — update orderingMode / description / color / ownerUserId
         if (seg.length === 3 && id && method === "PATCH") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const patch =
-            (await req.json()) as import("./repo-canonical.ts").UpdateDimensionMetaInput;
-          const dim = await reqRepo.updateDimensionMeta(id, patch, me);
-          return json({ ok: true, dim });
+          const patch = (await req.json()) as import("./repo-record.ts").UpdateRefTableMetaInput;
+          const refTable = await reqRepo.updateRefTableMeta(id, patch, me);
+          return json({ ok: true, refTable });
         }
-        // DELETE /api/dimensions/:id — permanently remove a table
+        // DELETE /api/tables/:id — permanently remove a table
         if (seg.length === 3 && id && method === "DELETE") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const ok = await reqRepo.deleteDimension(id, me);
+          const ok = await reqRepo.deleteRefTable(id, me);
           return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
         }
         if (seg[3] === "drafts") {
-          // GET /api/dimensions/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
+          // GET /api/tables/:id/drafts ; PUT (upsert) ; DELETE /.../:raw
           if (seg.length === 4 && method === "GET") return json(await reqRepo.listDrafts(id));
           if (seg.length === 4 && method === "PUT") {
             const denied = gateOrJson(tenantCtx, "curate");
@@ -1181,7 +1173,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
             return noContent();
           }
-          // POST /api/dimensions/:id/drafts/reject
+          // POST /api/tables/:id/drafts/reject
           if (seg.length === 5 && seg[4] === "reject" && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1192,7 +1184,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(result);
           }
         }
-        // POST /api/dimensions/:id/sources — wire a warehouse column to a dim.
+        // POST /api/tables/:id/sources — wire a warehouse column to a refTable.
         //   Qualified: { source: { databaseId, schemaName, tableName, columnName } }
         //   Bare:      { source: { table: "schema.table", column } }
         //              or { table: "schema.table", column }   (top-level bare)
@@ -1203,9 +1195,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
           const raw = (await req.json()) as {
-            source?:
-              | import("./repo-canonical.ts").QualifiedSource
-              | { table: string; column: string };
+            source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
             table?: string;
             column?: string;
           };
@@ -1214,7 +1204,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
           if (!input) return err("source required", 400);
 
-          let qualified: import("./repo-canonical.ts").QualifiedSource;
+          let qualified: import("./repo-record.ts").QualifiedSource;
           if ("databaseId" in input) {
             if (!input.databaseId || !input.schemaName || !input.tableName || !input.columnName) {
               return err("source requires databaseId + schemaName + tableName + columnName", 400);
@@ -1225,7 +1215,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             if (parts.length !== 2 || !parts[0] || !parts[1]) {
               return err(`expected "schema.table", got: ${input.table}`, 400);
             }
-            const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+            const { resolveDefaultDatabase } = await import("./repo-record.ts");
             qualified = {
               databaseId: await resolveDefaultDatabase(tenantCtx.tenantId),
               schemaName: parts[0],
@@ -1234,9 +1224,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             };
           }
           await pgRun(
-            `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+            `INSERT INTO ${pg("reference_table_source")} (reference_table_id, tenant_id, database_id, schema_name, table_name, column_name)
              VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+             ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
             [
               id,
               tenantCtx.tenantId,
@@ -1255,16 +1245,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           );
           return new Response(null, { status: 204, headers: corsHeaders });
         }
-        // DELETE /api/dimensions/:id/sources — unwire a column. Same input
+        // DELETE /api/tables/:id/sources — unwire a column. Same input
         // shapes as the POST above (bare "schema.table"+column resolves to the
         // default database; qualified passes databaseId explicitly).
         if (seg[3] === "sources" && seg.length === 4 && method === "DELETE") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
           const raw = (await req.json()) as {
-            source?:
-              | import("./repo-canonical.ts").QualifiedSource
-              | { table: string; column: string };
+            source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
             table?: string;
             column?: string;
           };
@@ -1273,8 +1261,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             (raw.table && raw.column ? { table: raw.table, column: raw.column } : null);
           if (!input) return err("source required", 400);
 
-          const { resolveDefaultDatabase, removeSource } = await import("./repo-canonical.ts");
-          let qualified: import("./repo-canonical.ts").QualifiedSource;
+          const { resolveDefaultDatabase, removeSource } = await import("./repo-record.ts");
+          let qualified: import("./repo-record.ts").QualifiedSource;
           if ("databaseId" in input) {
             if (!input.databaseId || !input.schemaName || !input.tableName || !input.columnName) {
               return err("source requires databaseId + schemaName + tableName + columnName", 400);
@@ -1295,7 +1283,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           await removeSource(id, qualified, tenantCtx.tenantId);
           return new Response(null, { status: 204, headers: corsHeaders });
         }
-        // POST /api/dimensions/:id/derive {table, column, nameColumn?} — seed canonical
+        // POST /api/tables/:id/derive {table, column, nameColumn?} — seed record
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1305,9 +1293,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             nameColumn?: string;
             force?: boolean;
           };
-          return json(await reqRepo.deriveCanonical(id, table, column, nameColumn, { force }, me));
+          return json(await reqRepo.deriveRecord(id, table, column, nameColumn, { force }, me));
         }
-        // POST /api/dimensions/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
+        // POST /api/tables/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1318,9 +1306,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (rows.length > 10_000) {
             throw new AppError("VALIDATION_FAILED", "too many rows (max 10000)", 400);
           }
-          return json(await reqRepo.importCanonical(id, rows, me));
+          return json(await reqRepo.importRecord(id, rows, me));
         }
-        // POST /api/dimensions/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedDimId?, displayFields?} — add an attribute column
+        // POST /api/tables/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedRefTableId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "manage_adapter");
           if (denied) return denied;
@@ -1330,7 +1318,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             options,
             numberFormat,
             ratingMax,
-            referencedDimId,
+            referencedRefTableId,
             displayFields,
             required,
             validation,
@@ -1340,7 +1328,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             options?: { label: string; color: string | null }[];
             numberFormat?: NumberFormat;
             ratingMax?: number;
-            referencedDimId?: string;
+            referencedRefTableId?: string;
             displayFields?: string[];
             required?: boolean;
             validation?: {
@@ -1355,12 +1343,19 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               label,
               type,
               options as OptionDef[] | undefined,
-              { numberFormat, ratingMax, referencedDimId, displayFields, required, validation },
+              {
+                numberFormat,
+                ratingMax,
+                referencedRefTableId,
+                displayFields,
+                required,
+                validation,
+              },
               me,
             ),
           );
         }
-        // POST /api/dimensions/:id/fields/:field/options {label} — append a select option
+        // POST /api/tables/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1376,7 +1371,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           );
           return res ? json(res) : json({ error: "not a select column" }, 400);
         }
-        // PUT/PATCH/DELETE /api/dimensions/:id/fields/:field — rename / change type / update meta / delete
+        // PUT/PATCH/DELETE /api/tables/:id/fields/:field — rename / change type / update meta / delete
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
@@ -1427,8 +1422,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(await reqRepo.deleteColumn(id, field, me));
           }
         }
-        // canonical record management
-        if (seg[3] === "canonical") {
+        // record record management
+        if (seg[3] === "record") {
           if (seg.length === 4 && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1438,9 +1433,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               insertAt?: { anchor: string; direction: "above" | "below" };
             };
             if (insertAt) {
-              await reqRepo.addCanonicalOneAt(id, label, key, insertAt, me);
+              await reqRepo.addRecordOneAt(id, label, key, insertAt, me);
             } else {
-              await reqRepo.addCanonicalOne(id, label, key, me);
+              await reqRepo.addRecordOne(id, label, key, me);
             }
             return noContent();
           }
@@ -1459,13 +1454,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               throw new AppError("VALIDATION_FAILED", "expectedVersions required", 400);
             }
             return json({
-              merged: await reqRepo.mergeCanonical(id, survivor, losers, me, expectedVersions),
+              merged: await reqRepo.mergeRecord(id, survivor, losers, me, expectedVersions),
             });
           }
           const ck = seg[4] ? decodeURIComponent(seg[4]) : "";
           if (seg[5] === "variants" && seg.length === 6 && method === "GET")
             return json(await reqRepo.listVariants(id, ck));
-          // PUT /api/dimensions/:id/canonical/:key/field/:field {value}
+          // PUT /api/tables/:id/record/:key/field/:field {value}
           if (seg[5] === "field" && seg.length === 7 && method === "PUT") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1473,7 +1468,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             await reqRepo.setFieldValue(id, ck, decodeURIComponent(seg[6]!), value ?? null, me);
             return noContent();
           }
-          // PUT /api/dimensions/:id/canonical/:key/position
+          // PUT /api/tables/:id/record/:key/position
           if (seg[5] === "position" && seg.length === 6 && method === "PUT" && ck) {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
@@ -1482,13 +1477,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               after?: string | null;
             };
             try {
-              const result = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
+              const result = await reqRepo.reorderRecordRow(id, ck, before, after, me);
               return json({ ok: true, position: result.position });
             } catch (e) {
               if (e instanceof AppError && e.message.includes("positions too tight")) {
-                const dm = await dimMeta(id, tenantCtx.tenantId);
-                if (dm) await rebalanceDimPositions(id, dm, me, tenantCtx.tenantId, "collision");
-                const result2 = await reqRepo.reorderCanonicalRow(id, ck, before, after, me);
+                const dm = await refTableMeta(id, tenantCtx.tenantId);
+                if (dm)
+                  await rebalanceRefTablePositions(id, dm, me, tenantCtx.tenantId, "collision");
+                const result2 = await reqRepo.reorderRecordRow(id, ck, before, after, me);
                 return json({ ok: true, position: result2.position, rebalanced: true });
               }
               throw e;
@@ -1505,7 +1501,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               if (typeof expectedVersion !== "number") {
                 throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
               }
-              const result = await reqRepo.renameCanonical(id, ck, label, me, expectedVersion);
+              const result = await reqRepo.renameRecord(id, ck, label, me, expectedVersion);
               return json(result);
             }
             if (method === "DELETE") {
@@ -1516,11 +1512,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               if (!Number.isFinite(expectedVersion)) {
                 throw new AppError("VALIDATION_FAILED", "expectedVersion required", 400);
               }
-              return json(await reqRepo.retireCanonical(id, ck, me, expectedVersion));
+              return json(await reqRepo.retireRecord(id, ck, me, expectedVersion));
             }
           }
         }
-        // POST /api/dimensions/:id/commit
+        // POST /api/tables/:id/commit
         if (seg[3] === "commit" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "commit");
           if (denied) return denied;
@@ -1532,13 +1528,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             : undefined;
           return json(await reqRepo.commit(id, me, draftKeys));
         }
-        // POST /api/dimensions/:id/revert — restore all changed records to the last published version
+        // POST /api/tables/:id/revert — restore all changed records to the last published version
         if (seg[3] === "revert" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
           return json(await reqRepo.revertToPublished(id, me));
         }
-        // POST /api/dimensions/:id/positions/rebalance
+        // POST /api/tables/:id/positions/rebalance
         if (
           seg[3] === "positions" &&
           seg[4] === "rebalance" &&
@@ -1550,7 +1546,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
           // Atomic rate-limit check-and-set: only proceeds if last rebalance was >60s ago
           const gateResult = await pgGet<{ last_rebalanced_at: string | null }>(
-            `UPDATE ${pg("dimension")}
+            `UPDATE ${pg("reference_table")}
                 SET last_rebalanced_at = now()
               WHERE id = $1 AND tenant_id = $2
                 AND (last_rebalanced_at IS NULL OR last_rebalanced_at < now() - interval '60 seconds')
@@ -1560,7 +1556,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
           if (!gateResult) {
             const existing = await pgGet<{ last_rebalanced_at: string }>(
-              `SELECT last_rebalanced_at FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
+              `SELECT last_rebalanced_at FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
               [id, tenantCtx.tenantId],
             );
             const lastMs = existing?.last_rebalanced_at
@@ -1577,12 +1573,18 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             );
           }
 
-          const dm = await dimMeta(id, tenantCtx.tenantId);
+          const dm = await refTableMeta(id, tenantCtx.tenantId);
           if (!dm) return json({ error: "not found" }, 404);
-          const rebalanced = await rebalanceDimPositions(id, dm, me, tenantCtx.tenantId, "manual");
+          const rebalanced = await rebalanceRefTablePositions(
+            id,
+            dm,
+            me,
+            tenantCtx.tenantId,
+            "manual",
+          );
           return json({ ok: true, rebalanced, rebalancedAt: gateResult.last_rebalanced_at });
         }
-        // POST /api/dimensions/:id/suggest {raw_value, force_refresh?} — AI suggestion
+        // POST /api/tables/:id/suggest {raw_value, force_refresh?} — AI suggestion
         if (seg[3] === "suggest" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
@@ -1602,32 +1604,32 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             );
           }
           try {
-            const dimension = await reqRepo.getDimensionBasic(id);
-            if (!dimension) {
+            const refTable = await reqRepo.getRefTableBasic(id);
+            if (!refTable) {
               return json(
                 {
                   error: "DIMENSION_NOT_FOUND",
-                  detail: `Dimension ${id} not found in workspace`,
+                  detail: `RefTable ${id} not found in workspace`,
                 },
                 404,
               );
             }
-            const canonicals = await reqRepo.getCanonicalValues(id, { limit: 30 });
+            const records = await reqRepo.getRecordValues(id, { limit: 30 });
             const suggestion = await generateSuggestion(
               tenantCtx.tenantId,
               {
-                dimensionId: id,
-                dimensionName: dimension.label,
+                refTableId: id,
+                refTableName: refTable.label,
                 rawValue,
-                existingCanonicalValues: canonicals,
+                existingRecordValues: records,
               },
               { forceRefresh },
             );
             const draft = await reqRepo.createDraft(
               {
-                dim_id: id,
+                reference_table_id: id,
                 raw: rawValue,
-                target_label: suggestion.canonical,
+                target_label: suggestion.record,
                 source: "ai",
                 confidence: suggestion.confidence,
                 reasoning: suggestion.reasoning ?? null,
@@ -1636,9 +1638,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             );
             return json(
               {
-                draft_id: `${draft.dimId}:${draft.raw}`,
+                draft_id: `${draft.refTableId}:${draft.raw}`,
                 draft: {
-                  dim_id: draft.dimId,
+                  reference_table_id: draft.refTableId,
                   raw: draft.raw,
                   status: draft.status,
                   target_label: draft.targetLabel,
@@ -1704,33 +1706,33 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             throw e;
           }
         }
-        // GET /api/dimensions/:id/snapshot.parquet — Parquet export of the dim's map table
+        // GET /api/tables/:id/snapshot.parquet — Parquet export of the refTable's map table
         if (seg[3] === "snapshot.parquet" && seg.length === 4 && method === "GET") {
-          const dimId = seg[2]!;
-          const dim = await reqRepo.getDimension(dimId);
-          if (!dim) return json({ error: "not found" }, 404);
-          const { exportCanonicalToParquet } = await import("./warehouse/parquet-exporter.ts");
-          const buf = await exportCanonicalToParquet({
-            dimId: dim.id,
-            dimTable: dim.dimTable,
-            mapTable: dim.mapTable,
-            keyCol: dim.keyCol,
+          const refTableId = seg[2]!;
+          const refTable = await reqRepo.getRefTable(refTableId);
+          if (!refTable) return json({ error: "not found" }, 404);
+          const { exportRecordToParquet } = await import("./warehouse/parquet-exporter.ts");
+          const buf = await exportRecordToParquet({
+            refTableId: refTable.id,
+            dimTable: refTable.dimTable,
+            mapTable: refTable.mapTable,
+            keyCol: refTable.keyCol,
           });
           return new Response(buf, {
             status: 200,
             headers: {
               ...corsHeaders,
               "content-type": "application/octet-stream",
-              "content-disposition": `attachment; filename="${dimId}-map.parquet"`,
+              "content-disposition": `attachment; filename="${refTableId}-map.parquet"`,
               "cache-control": "no-store",
             },
           });
         }
       }
 
-      // POST /api/e2e/seed-scan-values — E2E test helper: materialize dim_scan_value
+      // POST /api/e2e/seed-scan-values — E2E test helper: materialize source_scan_value
       // rows so the Review page has unmapped values without a live warehouse.
-      // Workspace-admin gated. Body: { dimId, occurrences: [{raw,table,column,rows}] }
+      // Workspace-admin gated. Body: { refTableId, occurrences: [{raw,table,column,rows}] }
       // Only available when ZUGZUG_E2E_TEST_ROUTES=1; absent in production.
       if (
         env.e2eTestRoutes &&
@@ -1740,12 +1742,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       ) {
         const denied = gateOrJson(tenantCtx, "manage_adapter");
         if (denied) return denied;
-        const { materializeDimScanValues } = await import("./repo-dim-scan.ts");
+        const { materializeSourceScanValues } = await import("./repo-source-scan.ts");
         const body = (await req.json()) as {
-          dimId: string;
+          refTableId: string;
           occurrences: Array<{ raw: string; table: string; column: string; rows: number }>;
         };
-        await materializeDimScanValues(body.dimId, tenantCtx.tenantId, {
+        await materializeSourceScanValues(body.refTableId, tenantCtx.tenantId, {
           occurrences: body.occurrences,
           scannedAt: new Date(),
         });

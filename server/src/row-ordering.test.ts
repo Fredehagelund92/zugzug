@@ -1,8 +1,8 @@
 import { describe, it, expect } from "bun:test";
-import { computeInsertPosition } from "./repo-canonical.ts";
+import { computeInsertPosition } from "./repo-record.ts";
 
 describe("computeInsertPosition", () => {
-  it("empty dim: returns 1024", () => {
+  it("empty refTable: returns 1024", () => {
     expect(computeInsertPosition(null, null)).toBe(1024n);
   });
   it("insert above first row: pBelow - 1024", () => {
@@ -26,7 +26,7 @@ describe("computeInsertPosition", () => {
 });
 
 describe("position arithmetic", () => {
-  it("first row in manual dim gets position 1024", () => {
+  it("first row in manual refTable gets position 1024", () => {
     const max = 0n;
     expect(max + 1024n).toBe(1024n);
   });

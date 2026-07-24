@@ -1567,7 +1567,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onChangeColumnType={props.onChangeColumnType}
           onDeleteColumn={props.onDeleteColumn}
           onShowLinkedFields={props.onShowLinkedFields}
-          onOpenTargetDimension={props.onOpenTargetDimension}
+          onOpenTargetRefTable={props.onOpenTargetRefTable}
           onChangeDisplayedField={props.onChangeDisplayedField}
           onManageLinkedFields={props.onManageLinkedFields}
           onJumpToSourceColumn={props.onJumpToSourceColumn}

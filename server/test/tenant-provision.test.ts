@@ -58,7 +58,13 @@ test("provisionTenant with a duplicate id rejects with a clear error", async () 
 });
 
 test("provisionTenant rejects invalid id formats", async () => {
-  for (const bad of ["TPROV", "with-dash", "with space", "1starts-with-digit", "way_too_long_for_a_tenant_id_limit"]) {
+  for (const bad of [
+    "TPROV",
+    "with-dash",
+    "with space",
+    "1starts-with-digit",
+    "way_too_long_for_a_tenant_id_limit",
+  ]) {
     let thrown: Error | null = null;
     try {
       await provisionTenant({ id: bad, label: "x" });

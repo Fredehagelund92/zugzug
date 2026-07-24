@@ -10,22 +10,16 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { pgAll, parseFieldConfig } from "./repo-shared.ts";
-import {
-  addDimension,
-  addCanonicalOne,
-  addField,
-  deleteDimension,
-  listFields,
-} from "./repo-canonical.ts";
+import { addRefTable, addRecordOne, addField, deleteRefTable, listFields } from "./repo-record.ts";
 import { commit, saveDraft } from "./repo-drafts.ts";
 
 async function dropDims(tenants: string[]): Promise<void> {
   for (const tenant of tenants) {
-    const dims = await pgAll<{ id: string }>(
-      `SELECT id FROM "zugzug_app"."dimension" WHERE tenant_id = $1`,
+    const refTables = await pgAll<{ id: string }>(
+      `SELECT id FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`,
       [tenant],
     ).catch(() => [] as { id: string }[]);
-    for (const d of dims) await deleteDimension(d.id, "test-teardown", tenant).catch(() => {});
+    for (const d of refTables) await deleteRefTable(d.id, "test-teardown", tenant).catch(() => {});
   }
 }
 
@@ -51,7 +45,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -61,29 +55,29 @@ afterAll(async () => {
 
 describe("publish gate — validation", () => {
   it("blocks publish when a value is out of range", async () => {
-    // Arrange: dimension with a numeric "population" field, min 0
-    const dimId = await addDimension("RangeDim", [], { keyKind: "slug" }, U, T);
+    // Arrange: refTable with a numeric "population" field, min 0
+    const refTableId = await addRefTable("RangeDim", [], { keyKind: "slug" }, U, T);
 
-    // Add two canonical rows directly
-    await addCanonicalOne(dimId, "Country A", "country_a", U, T);
-    await addCanonicalOne(dimId, "Country B", "country_b", U, T);
+    // Add two record rows directly
+    await addRecordOne(refTableId, "Country A", "country_a", U, T);
+    await addRecordOne(refTableId, "Country B", "country_b", U, T);
 
     // Add a number field
-    const added = await addField(dimId, "Population", "number", undefined, {}, U, T);
+    const added = await addField(refTableId, "Population", "number", undefined, {}, U, T);
     expect(added?.field).toBe("population");
 
     // Inject validation: min 0 into field_config via SQL (addField doesn't expose validation yet)
     await pgRun(
-      `UPDATE "zugzug_app"."dimension_field"
+      `UPDATE "zugzug_app"."reference_table_field"
        SET field_config = $1
-       WHERE dim_id = $2 AND tenant_id = $3 AND field = 'population'`,
-      [JSON.stringify({ validation: { min: 0 } }), dimId, T],
+       WHERE reference_table_id = $2 AND tenant_id = $3 AND field = 'population'`,
+      [JSON.stringify({ validation: { min: 0 } }), refTableId, T],
     );
 
-    // Get the dim table name to insert values directly
+    // Get the refTable table name to insert values directly
     const meta = await pgGet<{ dimTable: string; keyCol: string }>(
-      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
 
     // Set population: country_a = 100 (valid), country_b = -5 (out of range)
@@ -97,33 +91,33 @@ describe("publish gate — validation", () => {
     );
 
     // Act + Assert: commit should throw VALIDATION_FAILED
-    await expect(commit(dimId, U, T)).rejects.toMatchObject({
+    await expect(commit(refTableId, U, T)).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
       status: 422,
     });
   });
 
   it("blocks publish when a date value is before the min bound", async () => {
-    // Arrange: dimension with a date "start_date" field, min bound "2024-01-01"
-    const dimId = await addDimension("DateRangeDim", [], { keyKind: "slug" }, U, T);
+    // Arrange: refTable with a date "start_date" field, min bound "2024-01-01"
+    const refTableId = await addRefTable("DateRangeDim", [], { keyKind: "slug" }, U, T);
 
-    await addCanonicalOne(dimId, "Event A", "event_a", U, T);
-    await addCanonicalOne(dimId, "Event B", "event_b", U, T);
+    await addRecordOne(refTableId, "Event A", "event_a", U, T);
+    await addRecordOne(refTableId, "Event B", "event_b", U, T);
 
-    const added = await addField(dimId, "Start Date", "date", undefined, {}, U, T);
+    const added = await addField(refTableId, "Start Date", "date", undefined, {}, U, T);
     expect(added?.field).toBe("start_date");
 
     // Inject validation: min "2024-01-01"
     await pgRun(
-      `UPDATE "zugzug_app"."dimension_field"
+      `UPDATE "zugzug_app"."reference_table_field"
        SET field_config = $1
-       WHERE dim_id = $2 AND tenant_id = $3 AND field = 'start_date'`,
-      [JSON.stringify({ validation: { min: "2024-01-01" } }), dimId, T],
+       WHERE reference_table_id = $2 AND tenant_id = $3 AND field = 'start_date'`,
+      [JSON.stringify({ validation: { min: "2024-01-01" } }), refTableId, T],
     );
 
     const meta = await pgGet<{ dimTable: string; keyCol: string }>(
-      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
 
     const schema = meta!.dimTable.split(".")[0];
@@ -140,33 +134,33 @@ describe("publish gate — validation", () => {
     ]);
 
     // Act + Assert: commit should throw VALIDATION_FAILED
-    await expect(commit(dimId, U, T)).rejects.toMatchObject({
+    await expect(commit(refTableId, U, T)).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
       status: 422,
     });
   });
 
   it("blocks publish on a duplicate in a unique column", async () => {
-    // Arrange: dimension with a text "ticker" field that must be unique
-    const dimId = await addDimension("UniqueDim", [], { keyKind: "slug" }, U, T);
+    // Arrange: refTable with a text "ticker" field that must be unique
+    const refTableId = await addRefTable("UniqueDim", [], { keyKind: "slug" }, U, T);
 
-    await addCanonicalOne(dimId, "Asia Pacific", "apac1", U, T);
-    await addCanonicalOne(dimId, "Asia Pacific 2", "apac2", U, T);
+    await addRecordOne(refTableId, "Asia Pacific", "apac1", U, T);
+    await addRecordOne(refTableId, "Asia Pacific 2", "apac2", U, T);
 
-    const added = await addField(dimId, "Ticker", "text", undefined, {}, U, T);
+    const added = await addField(refTableId, "Ticker", "text", undefined, {}, U, T);
     expect(added?.field).toBe("ticker");
 
     // Set validation: unique
     await pgRun(
-      `UPDATE "zugzug_app"."dimension_field"
+      `UPDATE "zugzug_app"."reference_table_field"
        SET field_config = $1
-       WHERE dim_id = $2 AND tenant_id = $3 AND field = 'ticker'`,
-      [JSON.stringify({ validation: { unique: true } }), dimId, T],
+       WHERE reference_table_id = $2 AND tenant_id = $3 AND field = 'ticker'`,
+      [JSON.stringify({ validation: { unique: true } }), refTableId, T],
     );
 
     const meta = await pgGet<{ dimTable: string; keyCol: string }>(
-      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
 
     const schema = meta!.dimTable.split(".")[0];
@@ -182,7 +176,7 @@ describe("publish gate — validation", () => {
       "apac2",
     ]);
 
-    await expect(commit(dimId, U, T)).rejects.toMatchObject({
+    await expect(commit(refTableId, U, T)).rejects.toMatchObject({
       code: "VALIDATION_FAILED",
       status: 422,
     });
@@ -190,24 +184,24 @@ describe("publish gate — validation", () => {
 
   it("still blocks on an empty required field with REQUIRED_FIELDS_EMPTY code", async () => {
     // Parity with today's REQUIRED_FIELDS_EMPTY behavior (only required violations present)
-    const dimId = await addDimension("ReqOnlyDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", "usa", U, T);
-    const added = await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
+    const refTableId = await addRefTable("ReqOnlyDim", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "United States", "usa", U, T);
+    const added = await addField(refTableId, "Region", "text", undefined, { required: true }, U, T);
     expect(added?.field).toBe("region");
 
     // No value set for the required field — should block
-    await expect(commit(dimId, U, T)).rejects.toMatchObject({
+    await expect(commit(refTableId, U, T)).rejects.toMatchObject({
       code: "REQUIRED_FIELDS_EMPTY",
       status: 422,
     });
   });
 
   it("round-trips validation through addField into field_config", async () => {
-    // Arrange: new dimension with a number field written via addField
-    const dimId = await addDimension("ValidationRoundTripDim", [], { keyKind: "slug" }, U, T);
+    // Arrange: new refTable with a number field written via addField
+    const refTableId = await addRefTable("ValidationRoundTripDim", [], { keyKind: "slug" }, U, T);
 
     const added = await addField(
-      dimId,
+      refTableId,
       "Score",
       "number",
       undefined,
@@ -219,8 +213,8 @@ describe("publish gate — validation", () => {
 
     // Act: read field_config back from DB and parse it
     const raw = await pgGet<{ field_config: string | null }>(
-      `SELECT field_config FROM "zugzug_app"."dimension_field" WHERE dim_id = $1 AND tenant_id = $2 AND field = 'score'`,
-      [dimId, T],
+      `SELECT field_config FROM "zugzug_app"."reference_table_field" WHERE reference_table_id = $1 AND tenant_id = $2 AND field = 'score'`,
+      [refTableId, T],
     );
     expect(raw).not.toBeNull();
     const parsed = parseFieldConfig("number", raw!.field_config);
@@ -230,30 +224,30 @@ describe("publish gate — validation", () => {
     expect(parsed.validation).toEqual({ unique: true, min: 0 });
 
     // Also verify listFields surfaces the same values (full stack)
-    const fields = await listFields(dimId, T);
+    const fields = await listFields(refTableId, T);
     const scoreField = fields.find((f) => f.field === "score");
     expect(scoreField?.required).toBe(true);
     expect(scoreField?.validation).toEqual({ unique: true, min: 0 });
   });
 
   it("publishes cleanly when all rules pass", async () => {
-    const dimId = await addDimension("CleanDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Denmark", "dk", U, T);
+    const refTableId = await addRefTable("CleanDim", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Denmark", "dk", U, T);
 
-    const added = await addField(dimId, "Score", "number", undefined, {}, U, T);
+    const added = await addField(refTableId, "Score", "number", undefined, {}, U, T);
     expect(added?.field).toBe("score");
 
     // Set validation: min 0, max 100
     await pgRun(
-      `UPDATE "zugzug_app"."dimension_field"
+      `UPDATE "zugzug_app"."reference_table_field"
        SET field_config = $1
-       WHERE dim_id = $2 AND tenant_id = $3 AND field = 'score'`,
-      [JSON.stringify({ validation: { min: 0, max: 100 } }), dimId, T],
+       WHERE reference_table_id = $2 AND tenant_id = $3 AND field = 'score'`,
+      [JSON.stringify({ validation: { min: 0, max: 100 } }), refTableId, T],
     );
 
     const meta = await pgGet<{ dimTable: string; keyCol: string }>(
-      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+      `SELECT dim_table AS "dimTable", key_col AS "keyCol" FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
 
     const schema = meta!.dimTable.split(".")[0];
@@ -266,9 +260,9 @@ describe("publish gate — validation", () => {
     ]);
 
     // Add a draft so the publish has at least one mapping to fold
-    await saveDraft(dimId, "Danmark", "mapped", "Denmark", "dk", U, T);
+    await saveDraft(refTableId, "Danmark", "mapped", "Denmark", "dk", U, T);
 
-    const res = await commit(dimId, U, T);
+    const res = await commit(refTableId, U, T);
     expect(res.committed).toBeGreaterThan(0);
   });
 });

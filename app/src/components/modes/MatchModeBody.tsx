@@ -8,7 +8,7 @@ import { ComboSelect } from "../ComboSelect";
 import { DataGrid, useUndoStack } from "../datagrid";
 import { IconArrowRight, IconCheck, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
-import type { MappingDimension, MappingValue, SourceOccurrence } from "../../data";
+import type { MappingRefTable, MappingValue, SourceOccurrence } from "../../data";
 import { matchColumns } from "./match-columns";
 import {
   commit,
@@ -22,11 +22,11 @@ import {
 } from "../../store";
 import { GetSuggestionButton } from "../GetSuggestionButton";
 import { toast } from "../Toast";
-import { useDimValuesPage, type ScanValueRow } from "../../lib/use-dim-values-page";
+import { useRefTableValuesPage, type ScanValueRow } from "../../lib/use-ref-table-values-page";
 import { useAiHint } from "../../lib/use-ai-hint";
 
-/* MatchModeBody — per-tab single-dim Match workbench. Lazy-fetches a paginated
-   page of scan_value rows via useDimValuesPage; the eager `dim.values` array
+/* MatchModeBody — per-tab single-refTable Match workbench. Lazy-fetches a paginated
+   page of scan_value rows via useRefTableValuesPage; the eager `refTable.values` array
    is gone now. AI suggestions are fetched per focused cursor row (`useAiHint`);
    the bulk-row "automap" affordance is dropped because it required eager
    per-row suggestions that aren't in the paged payload. */
@@ -73,8 +73,8 @@ function useSessionState<T extends string>(key: string, fallback: T): [T, (v: T)
 }
 
 interface MatchModeBodyProps {
-  /** Fully resolved dimension. Parent guarantees non-null. */
-  dim: MappingDimension;
+  /** Fully resolved refTable. Parent guarantees non-null. */
+  refTable: MappingRefTable;
   /** Whether this pane is currently the active tab. Only the active pane
    *  consumes the ?value= deep link at mount. */
   isActive: boolean;
@@ -99,7 +99,7 @@ function adaptRow(r: ScanValueRow): MappingValue {
   };
 }
 
-export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
+export function MatchModeBody({ refTable, isActive }: MatchModeBodyProps) {
   const allDrafts = useDrafts();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
@@ -115,9 +115,9 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const [commitError, setCommitError] = useState<string | null>(null);
   const [cursorRaw, setCursorRaw] = useState<string | null>(null);
 
-  // Paged fetch — re-keys on (dim.id, filter, q).
-  const valuesPage = useDimValuesPage({
-    dimId: dim.id,
+  // Paged fetch — re-keys on (refTable.id, filter, q).
+  const valuesPage = useRefTableValuesPage({
+    refTableId: refTable.id,
     filter,
     q: searchText || undefined,
   });
@@ -132,7 +132,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
 
   // AI hint for the cursor row only — mirrors Triage. Powers the `A` shortcut
   // (accept suggestion) when no per-row suggestion is available eagerly.
-  const aiHint = useAiHint(dim.id, cursorRaw ?? "", cursorRaw !== null);
+  const aiHint = useAiHint(refTable.id, cursorRaw ?? "", cursorRaw !== null);
 
   // Per-page lookup. Returns null when the row isn't in the loaded window —
   // callers must handle that (e.g. accept on a not-loaded row is a no-op).
@@ -140,10 +140,10 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     valuesPage.items.find((r) => r.raw === v) ?? null;
 
   const keyFor = (label: string) =>
-    dim.canonical.find((c) => c.label === label)?.key ??
+    refTable.record.find((c) => c.label === label)?.key ??
     label.toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  const options = useMemo(() => dim.canonical.map((c) => c.label), [dim.canonical]);
-  const external = dim.keyKind === "external_id";
+  const options = useMemo(() => refTable.record.map((c) => c.label), [refTable.record]);
+  const external = refTable.keyKind === "external_id";
 
   // Committed truth (from the loaded page) overlaid with each value's pending
   // draft. Only covers the loaded window — that's all the grid renders anyway.
@@ -151,7 +151,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     () =>
       Object.fromEntries(
         valuesPage.items.map((v) => {
-          const d = allDrafts[dkey(dim.id, v.raw)];
+          const d = allDrafts[dkey(refTable.id, v.raw)];
           return [
             v.raw,
             d
@@ -160,32 +160,32 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
           ];
         }),
       ),
-    [valuesPage.items, allDrafts, dim.id],
+    [valuesPage.items, allDrafts, refTable.id],
   );
 
-  // Counts come from the server-side scalars (queue size for the whole dim,
+  // Counts come from the server-side scalars (queue size for the whole refTable,
   // independent of the loaded page or active search). With search active,
-  // chip counts still reflect the underlying dim — they're the queue size,
+  // chip counts still reflect the underlying refTable — they're the queue size,
   // not the search view.
   const counts = {
-    all: dim.counts.totalDistinct,
-    new: dim.counts.newCount,
-    mapped: dim.counts.mappedCount,
+    all: refTable.counts.totalDistinct,
+    new: refTable.counts.newCount,
+    mapped: refTable.counts.mappedCount,
   };
 
   const stageMap = (v: string, label: string) => {
     if (state[v]?.status === "rejected") return;
-    const prev = allDrafts[dkey(dim.id, v)];
+    const prev = allDrafts[dkey(refTable.id, v)];
     undo.push({
       label: `match "${v}" → ${label}`,
       surface: "Match",
-      apply: () => saveDraft(dim.id, v, "mapped", label, keyFor(label)),
+      apply: () => saveDraft(refTable.id, v, "mapped", label, keyFor(label)),
       inverse: () =>
         prev && prev.status !== "rejected"
-          ? saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dim.id, v),
+          ? saveDraft(refTable.id, v, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTable.id, v),
     });
-    return saveDraft(dim.id, v, "mapped", label, keyFor(label));
+    return saveDraft(refTable.id, v, "mapped", label, keyFor(label));
   };
   // Accept relies on the per-cursor AI hint — same pattern as Triage's
   // acceptCross. No per-row suggestion in the paged payload, so accepting a
@@ -207,36 +207,36 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   // doesn't fire N flash animations.
   const skipPersist = (v: string) => {
     if (state[v]?.status === "rejected") return;
-    const prev = allDrafts[dkey(dim.id, v)];
+    const prev = allDrafts[dkey(refTable.id, v)];
     undo.push({
       label: `skip "${v}"`,
       surface: "Match",
-      apply: () => saveDraft(dim.id, v, "skipped", null, null),
+      apply: () => saveDraft(refTable.id, v, "skipped", null, null),
       inverse: () =>
         prev && prev.status !== "rejected"
-          ? saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dim.id, v),
+          ? saveDraft(refTable.id, v, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTable.id, v),
     });
-    return saveDraft(dim.id, v, "skipped", null, null);
+    return saveDraft(refTable.id, v, "skipped", null, null);
   };
   const skip = (v: string) => {
     void skipPersist(v);
     flashRow(`[data-row="${attrEsc(v)}"]`);
   };
   const reset = (v: string) => {
-    const prev = allDrafts[dkey(dim.id, v)];
+    const prev = allDrafts[dkey(refTable.id, v)];
     if (!prev) return;
     undo.push({
       label: `reset "${v}"`,
       surface: "Match",
-      apply: () => discardDraft(dim.id, v),
+      apply: () => discardDraft(refTable.id, v),
       // Rejected drafts cannot be re-saved via saveDraft; discard is the safe fallback.
       inverse: () =>
         prev.status !== "rejected"
-          ? saveDraft(dim.id, v, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dim.id, v),
+          ? saveDraft(refTable.id, v, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTable.id, v),
     });
-    return discardDraft(dim.id, v);
+    return discardDraft(refTable.id, v);
   };
   const bulkApply = async (label: string, fn: (v: string) => unknown) => {
     if (sel.length === 0) return;
@@ -252,19 +252,19 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
 
   // Drop a single staged draft from the review panel. Undo-able.
   const discardStaged = (raw: string) => {
-    const prev = allDrafts[dkey(dim.id, raw)];
+    const prev = allDrafts[dkey(refTable.id, raw)];
     if (!prev) return;
     undo.push({
       label: `discard "${raw}"`,
       surface: "Match",
-      apply: () => discardDraft(dim.id, raw),
+      apply: () => discardDraft(refTable.id, raw),
       // Rejected drafts cannot be re-saved via saveDraft; discard is the safe fallback.
       inverse: () =>
         prev.status !== "rejected"
-          ? saveDraft(dim.id, raw, prev.status, prev.targetLabel, prev.targetKey)
-          : discardDraft(dim.id, raw),
+          ? saveDraft(refTable.id, raw, prev.status, prev.targetLabel, prev.targetKey)
+          : discardDraft(refTable.id, raw),
     });
-    void discardDraft(dim.id, raw);
+    void discardDraft(refTable.id, raw);
   };
 
   // Visible rows — adapted from the paged ScanValueRow into the shape
@@ -280,7 +280,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
   const columns = useMemo(
     () =>
       matchColumns({
-        dimensionLabel: dim.dimension,
+        refTableLabel: refTable.refTable,
         options,
         state,
         external,
@@ -288,12 +288,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
         onToggleDrill: (v) => setOpen((cur) => (cur === v ? null : v)),
         openDrill: open,
       }),
-    [dim.dimension, options, state, external, canEdit, open],
+    [refTable.refTable, options, state, external, canEdit, open],
   );
 
   // ── Default mapping target (?target=) ────────────────────────────────────
   // A deep link may supply ?target=<recordKey> (e.g. from Task 5's URL writer).
-  // On mount, resolve the key to its canonical record, show an affordance, and
+  // On mount, resolve the key to its record record, show an affordance, and
   // default the filter to "new". Consumed once (active pane only); stale keys
   // are silently ignored.
   const initialTargetRef = useRef<string | null>(isActive ? searchParams.get("target") : null);
@@ -302,12 +302,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     const key = initialTargetRef.current;
     if (!key) return;
     initialTargetRef.current = null;
-    const rec = dim.canonical.find((c) => c.key === key);
+    const rec = refTable.record.find((c) => c.key === key);
     if (!rec) return; // stale key → ignore, no crash
     setDefaultTarget({ key: rec.key, label: rec.label });
     setFilter("new");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dim.id, dim.canonical, setFilter]);
+  }, [refTable.id, refTable.record, setFilter]);
 
   // ── Deep-linking ─────────────────────────────────────────────────────────
   // URL ?value=… points at a specific row. Without an eager values list we
@@ -337,15 +337,15 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     });
     flashRow(`[data-row="${attrEsc(pinned)}"]`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dim.id, valuesPage.items, valuesPage.loading, filter]);
+  }, [refTable.id, valuesPage.items, valuesPage.loading, filter]);
 
   // staged drafts awaiting commit — the review set. Without eager values we
   // can't filter against current warehouse state (that drop-no-op semantics
   // landed in Triage too); the server reconciles on commit.
   const stagedDrafts = useMemo(
-    () => listDrafts(dim.id).filter((d) => d.status === "mapped"),
+    () => listDrafts(refTable.id).filter((d) => d.status === "mapped"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [dim.id, allDrafts],
+    [refTable.id, allDrafts],
   );
   const staged = stagedDrafts.map((d) => ({ raw: d.raw, label: d.targetLabel! }));
 
@@ -355,7 +355,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
     setFlash({ n: staged.length });
     setReview(false);
     try {
-      const res = await commit(dim.id);
+      const res = await commit(refTable.id);
       if (!res.committed) {
         setFlash(null);
         return;
@@ -585,7 +585,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   {row?.target ? (
                     <>
                       → will resolve to <span className="text-accent">{row.target}</span> in{" "}
-                      {dim.dimension}
+                      {refTable.refTable}
                     </>
                   ) : (
                     <>
@@ -595,7 +595,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   )}
                 </div>
                 {(() => {
-                  const d = allDrafts[dkey(dim.id, r.value)];
+                  const d = allDrafts[dkey(refTable.id, r.value)];
                   if (!d) return null;
                   if (d.status === "rejected") {
                     const reason = d.rejectedReason ?? null;
@@ -624,7 +624,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                 })()}
                 {state[r.value]?.status === "new" && canEdit && (
                   <div className="mt-2">
-                    <GetSuggestionButton dimensionId={dim.id} rawValue={r.value} />
+                    <GetSuggestionButton refTableId={refTable.id} rawValue={r.value} />
                   </div>
                 )}
               </div>
@@ -648,7 +648,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
             ) : filter === "new" ? (
               <div className="px-4 py-10 text-center">
                 <div className="font-display text-[18px] font-semibold text-ink">
-                  {dim.dimension} is fully matched 🎉
+                  {refTable.refTable} is fully matched 🎉
                 </div>
                 <div className="mt-1.5 font-mono text-[11.5px] text-ink-3">
                   See what else needs attention across all tables.
@@ -697,12 +697,12 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
                   style={{ animationDuration: "var(--dur-slide)" }}
                 >
                   ✓ {flash.n} change
-                  {flash.n === 1 ? "" : "s"} published to {dim.dimension}
+                  {flash.n === 1 ? "" : "s"} published to {refTable.refTable}
                 </span>
               ) : staged.length > 0 ? (
                 <>
                   {staged.length} change{staged.length === 1 ? "" : "s"} ready to publish to{" "}
-                  <span className="text-ink-2">{dim.dimension}</span>
+                  <span className="text-ink-2">{refTable.refTable}</span>
                 </>
               ) : (
                 <>nothing to publish yet — accept or merge values above to stage them</>
@@ -842,7 +842,7 @@ export function MatchModeBody({ dim, isActive }: MatchModeBodyProps) {
 
 /* Infinite-scroll sentinel — observes a 1px div under the grid; when it
    intersects the viewport, advance the pager. Same shape as Triage's. */
-function ScrollSentinel({ page }: { page: ReturnType<typeof useDimValuesPage> }) {
+function ScrollSentinel({ page }: { page: ReturnType<typeof useRefTableValuesPage> }) {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = ref.current;

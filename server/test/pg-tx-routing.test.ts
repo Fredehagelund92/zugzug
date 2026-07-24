@@ -22,10 +22,7 @@ afterAll(cleanup);
 test("pgTxScoped sets app.tenant_id and pgGet inside reads it via current_setting", async () => {
   await provisionTenant({ id: "t_txroute_e2e", slug: "t_txroute", label: "TxRoute" });
   await pgTxScoped("t_txroute_e2e", async () => {
-    const row = await pgGet<{ v: string }>(
-      `SELECT current_setting('app.tenant_id') AS v`,
-      [],
-    );
+    const row = await pgGet<{ v: string }>(`SELECT current_setting('app.tenant_id') AS v`, []);
     expect(row?.v).toBe("t_txroute_e2e");
   });
 });

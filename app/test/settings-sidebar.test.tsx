@@ -49,9 +49,10 @@ const getNavLinks = () => {
   const nav = screen.getByRole("navigation");
   return Array.from(nav.querySelectorAll("a")).map((link) => {
     const spans = link.querySelectorAll("span.font-body");
-    const text = spans.length > 0
-      ? (spans[spans.length - 1].textContent?.trim() || "")
-      : (link.textContent?.trim() || "");
+    const text =
+      spans.length > 0
+        ? spans[spans.length - 1].textContent?.trim() || ""
+        : link.textContent?.trim() || "";
     return {
       text,
       ariaCurrent: link.getAttribute("aria-current"),

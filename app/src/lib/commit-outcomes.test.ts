@@ -1,16 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { summarizeOutcomes, type CommitOutcome } from "./commit-outcomes";
 
-const ok = (dim: string, n: number): CommitOutcome => ({
-  dimId: dim,
-  dimName: dim,
+const ok = (refTable: string, n: number): CommitOutcome => ({
+  refTableId: refTable,
+  refTableName: refTable,
   committed: n,
   rowsRecovered: n * 10,
   error: null,
 });
-const bad = (dim: string, err: string): CommitOutcome => ({
-  dimId: dim,
-  dimName: dim,
+const bad = (refTable: string, err: string): CommitOutcome => ({
+  refTableId: refTable,
+  refTableName: refTable,
   committed: 0,
   rowsRecovered: 0,
   error: err,

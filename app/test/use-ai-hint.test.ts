@@ -6,33 +6,31 @@ import { describe, test, expect } from "vitest";
 
 function validateHint(
   raw: unknown,
-  canonicalLabels: string[],
+  recordLabels: string[],
 ): { suggestion: string | null; confidence: number; reasoning: string } {
   if (typeof raw !== "object" || raw === null) {
     return { suggestion: null, confidence: 0, reasoning: "Invalid response from AI." };
   }
   const r = raw as Record<string, unknown>;
   const suggestion =
-    typeof r.suggestion === "string" && canonicalLabels.includes(r.suggestion)
-      ? r.suggestion
-      : null;
+    typeof r.suggestion === "string" && recordLabels.includes(r.suggestion) ? r.suggestion : null;
   const confidence =
     suggestion !== null && typeof r.confidence === "number"
       ? Math.max(0, Math.min(95, Math.round(r.confidence)))
       : 0;
   const reasoning =
     suggestion === null
-      ? "No match in canonical set."
+      ? "No match in record set."
       : typeof r.reasoning === "string" && r.reasoning.length > 0
         ? r.reasoning.slice(0, 300)
-        : "Matched to canonical record.";
+        : "Matched to record record.";
   return { suggestion, confidence, reasoning };
 }
 
 const LABELS = ["United States", "United Kingdom", "Germany", "France"];
 
 describe("validateHint", () => {
-  test("returns valid suggestion when label is in canonical list", () => {
+  test("returns valid suggestion when label is in record list", () => {
     const r = validateHint(
       { suggestion: "United Kingdom", confidence: 88, reasoning: "ISO 3166-1 alpha-2 code." },
       LABELS,
@@ -42,7 +40,7 @@ describe("validateHint", () => {
     expect(r.reasoning).toBe("ISO 3166-1 alpha-2 code.");
   });
 
-  test("rejects hallucinated suggestion not in canonical list", () => {
+  test("rejects hallucinated suggestion not in record list", () => {
     const r = validateHint(
       { suggestion: "England", confidence: 70, reasoning: "Common name." },
       LABELS,
@@ -63,12 +61,12 @@ describe("validateHint", () => {
 
   test("falls back reasoning when field is missing", () => {
     const r = validateHint({ suggestion: "France", confidence: 72 }, LABELS);
-    expect(r.reasoning).toBe("Matched to canonical record.");
+    expect(r.reasoning).toBe("Matched to record record.");
   });
 
   test("falls back reasoning for no-match", () => {
     const r = validateHint({ suggestion: null, confidence: 0 }, LABELS);
-    expect(r.reasoning).toBe("No match in canonical set.");
+    expect(r.reasoning).toBe("No match in record set.");
   });
 
   test("handles non-object response", () => {
@@ -79,7 +77,10 @@ describe("validateHint", () => {
 
   test("truncates reasoning to 300 chars", () => {
     const long = "x".repeat(400);
-    const r = validateHint({ suggestion: "United States", confidence: 90, reasoning: long }, LABELS);
+    const r = validateHint(
+      { suggestion: "United States", confidence: 90, reasoning: long },
+      LABELS,
+    );
     expect(r.reasoning.length).toBe(300);
   });
 
@@ -90,6 +91,6 @@ describe("validateHint", () => {
       { suggestion: "England", confidence: 70, reasoning: "This is why England matches" },
       LABELS,
     );
-    expect(r.reasoning).toBe("No match in canonical set.");
+    expect(r.reasoning).toBe("No match in record set.");
   });
 });

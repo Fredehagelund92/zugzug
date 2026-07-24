@@ -27,7 +27,11 @@ describe("scanStatus auto-publish fields", () => {
 
   test("returns the most recent entry when multiple u_system Committed rows exist", async () => {
     await appendAuditAs("u_system", "Committed", "1 values → zugzug.map_first · 5 rows recovered");
-    await appendAuditAs("u_system", "Committed", "3 values → zugzug.map_second · 20 rows recovered");
+    await appendAuditAs(
+      "u_system",
+      "Committed",
+      "3 values → zugzug.map_second · 20 rows recovered",
+    );
     const s = await scanStatus();
     expect(s.lastAutoPublishDetail).toContain("map_second");
   });

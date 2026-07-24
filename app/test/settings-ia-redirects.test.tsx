@@ -10,7 +10,7 @@ vi.mock("../src/store", async (orig) => {
   return {
     ...a,
     useWorkspaceInfo: () => ({ adapter: "duckdb", writable: false }),
-    useDimensions: () => [],
+    useRefTables: () => [],
     useAudit: () => [],
     useConnectionHealth: () => undefined,
     usePreferences: () => ({ publishThreshold: 95, suggestThreshold: 80, scanSchedule: null }),
@@ -18,7 +18,7 @@ vi.mock("../src/store", async (orig) => {
 });
 
 vi.mock("../src/lib/integrations-api", () => ({
-  listDimensions: vi.fn().mockResolvedValue([]),
+  listRefTables: vi.fn().mockResolvedValue([]),
   listWebhooks: vi.fn().mockResolvedValue([]),
   listServiceAccounts: vi.fn().mockResolvedValue([]),
   getWebhook: vi.fn().mockResolvedValue({

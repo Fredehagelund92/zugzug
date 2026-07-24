@@ -14,7 +14,11 @@ describe("AuthLayout", () => {
   });
 
   it("shows the brand thesis headline", () => {
-    render(<AuthLayout><span>x</span></AuthLayout>);
+    render(
+      <AuthLayout>
+        <span>x</span>
+      </AuthLayout>,
+    );
     expect(screen.getByText(/One table/i)).toBeInTheDocument();
   });
 });

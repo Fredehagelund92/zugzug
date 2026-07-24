@@ -1,9 +1,9 @@
-/* seed.ts — provision demo dimensions so the app runs end-to-end on a fresh
-   install. Generic e-commerce examples: replace with your own dimensions
+/* seed.ts — provision demo refTables so the app runs end-to-end on a fresh
+   install. Generic e-commerce examples: replace with your own refTables
    after exploring the demo. Idempotent (safe to re-run). */
 
 import { pgGet } from "./pg.ts";
-import { addDimension, addCanonicalOne, addSource } from "./repo.ts";
+import { addRefTable, addRecordOne, addSource } from "./repo.ts";
 
 const COUNTRY_SOURCES = [
   { table: "raw.orders", column: "shipping_country" },
@@ -11,7 +11,7 @@ const COUNTRY_SOURCES = [
   { table: "raw.customers", column: "billing_country" },
 ];
 
-const COUNTRY_CANONICAL = [
+const COUNTRY_RECORD = [
   { key: "US", label: "United States" },
   { key: "GB", label: "United Kingdom" },
   { key: "DE", label: "Germany" },
@@ -36,7 +36,7 @@ const PRODUCT_CATEGORY_SOURCES = [
   { table: "raw.products", column: "category" },
 ];
 
-const PRODUCT_CATEGORY_CANONICAL = [
+const PRODUCT_CATEGORY_RECORD = [
   { key: "electronics", label: "Electronics" },
   { key: "clothing", label: "Clothing" },
   { key: "home", label: "Home & Garden" },
@@ -52,7 +52,7 @@ const CUSTOMER_SEGMENT_SOURCES = [
   { table: "raw.opportunities", column: "account_segment" },
 ];
 
-const CUSTOMER_SEGMENT_CANONICAL = [
+const CUSTOMER_SEGMENT_RECORD = [
   { key: "b2c", label: "B2C" },
   { key: "smb", label: "SMB" },
   { key: "enterprise", label: "Enterprise" },
@@ -60,24 +60,24 @@ const CUSTOMER_SEGMENT_CANONICAL = [
 
 const T = "default";
 
-async function seedDimension(
+async function seedRefTable(
   name: string,
-  dimKey: string,
+  refTableKey: string,
   sources: Array<{ table: string; column: string }>,
-  canonical: Array<{ key: string; label: string }>,
+  record: Array<{ key: string; label: string }>,
   hasWarehouse: boolean,
 ): Promise<void> {
-  await addDimension(name, [], {}, "u_verify", T);
+  await addRefTable(name, [], {}, "u_verify", T);
   if (hasWarehouse) {
     for (const s of sources) {
-      await addSource(dimKey, s.table, s.column, T);
+      await addSource(refTableKey, s.table, s.column, T);
     }
   }
-  // Use addCanonicalOne per record (not the bulk addCanonical) so each seeded
-  // record gets a canonical_version row — without it, rename/merge/retire 404
-  // ("canonical not found") because bumpVersionOrThrow finds no version row.
-  for (const c of canonical) {
-    await addCanonicalOne(dimKey, c.label, c.key, "u_verify", T);
+  // Use addRecordOne per record (not the bulk addRecord) so each seeded
+  // record gets a record_version row — without it, rename/merge/retire 404
+  // ("record not found") because bumpVersionOrThrow finds no version row.
+  for (const c of record) {
+    await addRecordOne(refTableKey, c.label, c.key, "u_verify", T);
   }
 }
 
@@ -87,19 +87,19 @@ export async function seedDemo(): Promise<void> {
   const hasWarehouse =
     (await pgGet<{ id: string }>(`SELECT id FROM "zugzug_app"."warehouse_database" LIMIT 1`)) !=
     null;
-  await seedDimension("Country", "country", COUNTRY_SOURCES, COUNTRY_CANONICAL, hasWarehouse);
-  await seedDimension(
+  await seedRefTable("Country", "country", COUNTRY_SOURCES, COUNTRY_RECORD, hasWarehouse);
+  await seedRefTable(
     "Product Category",
     "product_category",
     PRODUCT_CATEGORY_SOURCES,
-    PRODUCT_CATEGORY_CANONICAL,
+    PRODUCT_CATEGORY_RECORD,
     hasWarehouse,
   );
-  await seedDimension(
+  await seedRefTable(
     "Customer Segment",
     "customer_segment",
     CUSTOMER_SEGMENT_SOURCES,
-    CUSTOMER_SEGMENT_CANONICAL,
+    CUSTOMER_SEGMENT_RECORD,
     hasWarehouse,
   );
 }

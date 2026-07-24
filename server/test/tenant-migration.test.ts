@@ -12,9 +12,9 @@ const SEED_USER_ID = "u_mig_seed";
 
 beforeAll(async () => {
   // Reset to a pristine, freshly-migrated schema first. This test asserts on the
-  // migration's global outcome (e.g. no dimension rows with a non-'default'
+  // migration's global outcome (e.g. no refTable rows with a non-'default'
   // tenant_id), so it must run against a clean DB — otherwise data left behind by
-  // earlier test files (e.g. factories creating a workspace-scoped dimension) leaks
+  // earlier test files (e.g. factories creating a workspace-scoped refTable) leaks
   // in and fails the assertion. Every other data-mutating suite isolates the same way.
   await resetDb();
   // users.role was dropped in PR5 migration 0016; role now lives on tenant_member.
@@ -88,21 +88,21 @@ test("Deploy 1 added is_super_admin to users with default false", async () => {
   expect(col?.is_nullable).toBe("NO");
 });
 
-test("Deploy 5 hardened tenant_id on dimension: NOT NULL, no DEFAULT", async () => {
+test("Deploy 5 hardened tenant_id on refTable: NOT NULL, no DEFAULT", async () => {
   const col = await pgGet<{ column_default: string | null; is_nullable: string }>(
     `SELECT column_default, is_nullable
        FROM information_schema.columns
       WHERE table_schema = 'zugzug_app'
-        AND table_name = 'dimension'
+        AND table_name = 'reference_table'
         AND column_name = 'tenant_id'`,
   );
   expect(col?.column_default).toBeNull();
   expect(col?.is_nullable).toBe("NO");
 });
 
-test("Existing dimension rows have tenant_id = 'default' after the migration", async () => {
+test("Existing refTable rows have tenant_id = 'default' after the migration", async () => {
   const orphans = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM "zugzug_app"."dimension"
+    `SELECT count(*)::int AS n FROM "zugzug_app"."reference_table"
       WHERE tenant_id IS NULL OR tenant_id != 'default'`,
   );
   expect(orphans?.n).toBe(0);

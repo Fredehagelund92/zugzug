@@ -2,7 +2,7 @@ import type {
   AdapterCapabilities,
   ApprovedDraft,
   CommitResult,
-  DimensionSpec,
+  RefTableSpec,
   Ref,
   WritableWarehouseAdapter,
 } from "../adapter.ts";
@@ -14,7 +14,7 @@ function chunk<T>(arr: T[], n: number): T[][] {
   return out;
 }
 
-/** DuckDB adapter that writes canonical dim_/map_ records back to the
+/** DuckDB adapter that writes record dim_/map_ records back to the
  *  warehouse (MotherDuck or local). Enabled when MOTHERDUCK_WRITABLE=true
  *  (or for a local DuckDB file with `writable: true`). */
 export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehouseAdapter {
@@ -29,14 +29,14 @@ export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehou
     maxIdentifierLength: 255,
   };
 
-  async ensureCanonicalTables(dim: DimensionSpec): Promise<void> {
-    const dimRef = this.parseTwoPartRef(dim.dimTable);
-    const mapRef = this.parseTwoPartRef(dim.mapTable);
-    const key = this.quoteIdentifier(dim.keyCol);
+  async ensureRecordTables(refTable: RefTableSpec): Promise<void> {
+    const refTableRef = this.parseTwoPartRef(refTable.dimTable);
+    const mapRef = this.parseTwoPartRef(refTable.mapTable);
+    const key = this.quoteIdentifier(refTable.keyCol);
 
     // CREATE TABLE IF NOT EXISTS is idempotent; safe to call on every commit.
     await this.run(
-      `CREATE TABLE IF NOT EXISTS ${this.qualifyRef(dimRef)} (
+      `CREATE TABLE IF NOT EXISTS ${this.qualifyRef(refTableRef)} (
          ${key} VARCHAR PRIMARY KEY,
          label VARCHAR
        )`,
@@ -58,13 +58,13 @@ export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehou
     return { schema: this.creds.database ?? "main", table: stored };
   }
 
-  async commitCanonical(dim: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+  async commitRecord(refTable: RefTableSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
     if (drafts.length === 0) return { rowsWritten: 0 };
-    const dimRef = this.parseTwoPartRef(dim.dimTable);
-    const mapRef = this.parseTwoPartRef(dim.mapTable);
-    const key = this.quoteIdentifier(dim.keyCol);
+    const refTableRef = this.parseTwoPartRef(refTable.dimTable);
+    const mapRef = this.parseTwoPartRef(refTable.mapTable);
+    const key = this.quoteIdentifier(refTable.keyCol);
 
-    // Deduplicate canonical rows by key (last-write-wins on label, matches
+    // Deduplicate record rows by key (last-write-wins on label, matches
     // SnowflakeAdapter behavior).
     const canonByKey = new Map<string, string | null>();
     for (const d of drafts) canonByKey.set(d.key, d.label);
@@ -73,7 +73,7 @@ export class DuckDbWritableAdapter extends DuckDbBase implements WritableWarehou
 
     let rowsWritten = 0;
     rowsWritten += await this.mergeChunked({
-      targetRef: dimRef,
+      targetRef: refTableRef,
       chunks: chunk(canonRows, 1000),
       sourceCols: [key, "label"],
       onCol: key,

@@ -4,14 +4,22 @@ import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../src/components/datagrid/types";
 
-interface Row { id: string; country: string }
+interface Row {
+  id: string;
+  country: string;
+}
 const rows: Row[] = [{ id: "1", country: "DE" }];
 
 function fkColumn(): ColumnDef<Row> {
   return {
     field: "country",
     label: "Country",
-    config: { type: "linked", targetDimId: "dim_country", displayFields: ["label", "iso_code"], candidates: [{ key: "DE", label: "Germany" }] },
+    config: {
+      type: "linked",
+      targetRefTableId: "dim_country",
+      displayFields: ["label", "iso_code"],
+      candidates: [{ key: "DE", label: "Germany" }],
+    },
     columnKind: "fk",
   };
 }
@@ -33,23 +41,31 @@ function normalColumn(): ColumnDef<Row> {
 // (a portal rendered as div.zz-pop-in), not the shared ContextMenu.
 function openHeaderMenu(field: string, container: HTMLElement) {
   const h = container.querySelector(`[data-header="${field}"] span`) as HTMLElement;
-  act(() => { fireEvent.contextMenu(h, { clientX: 50, clientY: 50, bubbles: true }); });
+  act(() => {
+    fireEvent.contextMenu(h, { clientX: 50, clientY: 50, bubbles: true });
+  });
   return document.querySelector("div.zz-pop-in")!;
 }
 
 describe("right-click on FK column", () => {
-  test("shows 'Show linked fields…' and 'Open target dimension →'", () => {
+  test("shows 'Show linked fields…' and 'Open target refTable →'", () => {
     const onShow = vi.fn();
     const onOpen = vi.fn();
     const { container } = render(
       <UndoStackProvider>
-        <DataGrid rows={rows} columns={[normalColumn(), fkColumn()]} rowKey={(r) => r.id} onCommit={async () => {}}
-          onShowLinkedFields={onShow} onOpenTargetDimension={onOpen} />
+        <DataGrid
+          rows={rows}
+          columns={[normalColumn(), fkColumn()]}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+          onShowLinkedFields={onShow}
+          onOpenTargetRefTable={onOpen}
+        />
       </UndoStackProvider>,
     );
     const menu = openHeaderMenu("country", container);
     expect(menu.textContent).toContain("Show linked fields");
-    expect(menu.textContent).toContain("Open target dimension");
+    expect(menu.textContent).toContain("Open target refTable");
     expect(menu.textContent).not.toContain("Change displayed field");
   });
 });
@@ -62,8 +78,16 @@ describe("right-click on lookup column", () => {
     const onManage = vi.fn();
     const { container } = render(
       <UndoStackProvider>
-        <DataGrid rows={rows} columns={[normalColumn(), fkColumn(), lookupColumn()]} rowKey={(r) => r.id} onCommit={async () => {}}
-          onChangeDisplayedField={onChange} onRemoveLookup={onRemove} onJumpToSourceColumn={onJump} onManageLinkedFields={onManage} />
+        <DataGrid
+          rows={rows}
+          columns={[normalColumn(), fkColumn(), lookupColumn()]}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+          onChangeDisplayedField={onChange}
+          onRemoveLookup={onRemove}
+          onJumpToSourceColumn={onJump}
+          onManageLinkedFields={onManage}
+        />
       </UndoStackProvider>,
     );
     const menu = openHeaderMenu("country__iso_code", container);
@@ -78,20 +102,34 @@ describe("right-click on lookup column", () => {
   test("right-click and the ⋯ button open the same menu with the same lookup actions", () => {
     const cols = [normalColumn(), fkColumn(), lookupColumn()];
     const props = {
-      rows, rowKey: (r: Row) => r.id, onCommit: async () => {},
-      onChangeDisplayedField: vi.fn(), onRemoveLookup: vi.fn(),
-      onJumpToSourceColumn: vi.fn(), onManageLinkedFields: vi.fn(),
+      rows,
+      rowKey: (r: Row) => r.id,
+      onCommit: async () => {},
+      onChangeDisplayedField: vi.fn(),
+      onRemoveLookup: vi.fn(),
+      onJumpToSourceColumn: vi.fn(),
+      onManageLinkedFields: vi.fn(),
     };
     // Right-click menu (fresh render).
-    const rc = render(<UndoStackProvider><DataGrid columns={cols} {...props} /></UndoStackProvider>);
+    const rc = render(
+      <UndoStackProvider>
+        <DataGrid columns={cols} {...props} />
+      </UndoStackProvider>,
+    );
     const rightClickMenu = openHeaderMenu("country__iso_code", rc.container).textContent;
     cleanup();
 
     // ⋯ button menu for the same column (fresh render). The lookup column is the
     // 3rd visible column → 3rd ⋯ button.
-    const dots = render(<UndoStackProvider><DataGrid columns={cols} {...props} /></UndoStackProvider>);
+    const dots = render(
+      <UndoStackProvider>
+        <DataGrid columns={cols} {...props} />
+      </UndoStackProvider>,
+    );
     const btns = Array.from(dots.container.querySelectorAll('button[aria-label="Column menu"]'));
-    act(() => { fireEvent.click(btns[2]); });
+    act(() => {
+      fireEvent.click(btns[2]);
+    });
     const dotsMenu = dots.baseElement.querySelector("div.zz-pop-in")!.textContent;
 
     expect(dotsMenu).toEqual(rightClickMenu);
@@ -104,7 +142,12 @@ describe("right-click on normal column", () => {
   test("does NOT include linked-field items", () => {
     const { container } = render(
       <UndoStackProvider>
-        <DataGrid rows={rows} columns={[normalColumn(), fkColumn()]} rowKey={(r) => r.id} onCommit={async () => {}} />
+        <DataGrid
+          rows={rows}
+          columns={[normalColumn(), fkColumn()]}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+        />
       </UndoStackProvider>,
     );
     const menu = openHeaderMenu("id", container);

@@ -3,16 +3,16 @@ import { ComboSelect } from "../ComboSelect";
 import { IconCheck, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
 import {
-  deriveCanonical,
+  deriveRecord,
   fetchColumnValues,
   fetchColumns,
   useCanEdit,
   type CatalogColumn,
 } from "../../store";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 
 type WireState = {
-  dim: string;
+  refTable: string;
   n: number | null;
   mode?: "seed" | "connect";
   matched?: number;
@@ -24,12 +24,12 @@ export function TableDetail({
   database,
   tablePath,
   connectionLabel,
-  dims,
+  refTables,
 }: {
   database: string;
   tablePath: string;
   connectionLabel: string;
-  dims: MappingDimension[];
+  refTables: MappingRefTable[];
 }) {
   const canEdit = useCanEdit();
   const [cols, setCols] = useState<CatalogColumn[] | null>(null);
@@ -60,25 +60,25 @@ export function TableDetail({
     setValues((s) => ({ ...s, [col]: v }));
   };
 
-  const wire = async (column: string, dimLabel: string) => {
-    const dim = dims.find((d) => d.dimension === dimLabel);
-    if (!dim) return;
-    setWired((w) => ({ ...w, [column]: { dim: dimLabel, n: null } }));
+  const wire = async (column: string, refTableLabel: string) => {
+    const refTable = refTables.find((d) => d.refTable === refTableLabel);
+    if (!refTable) return;
+    setWired((w) => ({ ...w, [column]: { refTable: refTableLabel, n: null } }));
     try {
-      const { derived, mode, matched, unmatched } = await deriveCanonical(
-        dim.id,
+      const { derived, mode, matched, unmatched } = await deriveRecord(
+        refTable.id,
         tablePath,
         column,
       );
       setWired((w) => ({
         ...w,
-        [column]: { dim: dimLabel, n: derived, mode, matched, unmatched },
+        [column]: { refTable: refTableLabel, n: derived, mode, matched, unmatched },
       }));
     } catch (err) {
       setWired((w) => ({
         ...w,
         [column]: {
-          dim: dimLabel,
+          refTable: refTableLabel,
           n: null,
           error: err instanceof Error ? err.message : "wire failed",
         },
@@ -86,7 +86,7 @@ export function TableDetail({
     }
   };
 
-  const dimOptions = dims.map((d) => d.dimension);
+  const refTableOptions = refTables.map((d) => d.refTable);
   const mappedCount = cols?.filter((c) => wired[c.name] && !wired[c.name].error).length ?? 0;
   const schema = tablePath.split(".")[0];
   const table = tablePath.split(".").slice(1).join(".");
@@ -188,7 +188,7 @@ export function TableDetail({
                 {w?.error ? (
                   <button
                     type="button"
-                    onClick={() => wire(c.name, w.dim)}
+                    onClick={() => wire(c.name, w.refTable)}
                     className="rounded-sm border border-danger/40 px-2 py-1 font-mono text-[11px] text-danger hover:bg-danger-soft"
                   >
                     Retry
@@ -196,7 +196,7 @@ export function TableDetail({
                 ) : w ? (
                   <span className="flex items-center gap-2 rounded-sm bg-accent/15 px-2.5 py-1 text-[11.5px] text-ink">
                     {w.n !== null && <IconCheck className="h-3 w-3 text-accent" />}
-                    {w.n === null ? `Connecting ${w.dim}…` : w.dim}
+                    {w.n === null ? `Connecting ${w.refTable}…` : w.refTable}
                     {w.n !== null && (
                       <button
                         type="button"
@@ -216,7 +216,7 @@ export function TableDetail({
                   </span>
                 ) : (
                   <ComboSelect
-                    options={dimOptions}
+                    options={refTableOptions}
                     value={null}
                     placeholder="connect…"
                     onPick={canEdit ? (d) => wire(c.name, d) : undefined}

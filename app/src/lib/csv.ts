@@ -90,12 +90,12 @@ export interface CsvMapping {
   ignored: string[];
 }
 
-/** Auto-map CSV headers (case-insensitive) onto a dimension's shape:
- *  "key"/keyCol → key, "label"/"record"/dimension name → label, field
+/** Auto-map CSV headers (case-insensitive) onto a refTable's shape:
+ *  "key"/keyCol → key, "label"/"record"/refTable name → label, field
  *  labels or ids → that field. Round-trips this app's own CSV export. */
 export function mapCsvHeaders(
   headers: string[],
-  opts: { keyCol: string; dimension: string; fields: FieldDef[] },
+  opts: { keyCol: string; refTable: string; fields: FieldDef[] },
 ): CsvMapping {
   const norm = (s: string) => s.trim().toLowerCase();
   const byField = new Map<string, string>();
@@ -110,7 +110,7 @@ export function mapCsvHeaders(
       mapping.keyIdx = i;
     } else if (
       mapping.labelIdx === -1 &&
-      (n === "label" || n === "record" || n === "name" || n === norm(opts.dimension))
+      (n === "label" || n === "record" || n === "name" || n === norm(opts.refTable))
     ) {
       mapping.labelIdx = i;
     } else if (byField.has(n) && !(byField.get(n)! in mapping.fieldIdx)) {
@@ -207,11 +207,11 @@ export interface ParsedImport {
   summary: string[];
 }
 
-/** Parse + map a CSV file's text against a dimension. Throws Error with a
+/** Parse + map a CSV file's text against a refTable. Throws Error with a
  *  user-facing message when the file can't be imported. */
 export function prepareImport(
   text: string,
-  opts: { keyCol: string; dimension: string; fields: FieldDef[] },
+  opts: { keyCol: string; refTable: string; fields: FieldDef[] },
 ): ParsedImport {
   const grid = parseCsv(text);
   if (grid.length < 2) throw new Error("CSV needs a header row and at least one data row.");

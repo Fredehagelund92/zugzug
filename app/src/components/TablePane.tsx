@@ -10,17 +10,17 @@ import { IconPlus, IconX, IconFilter } from "./Icons";
 import {
   slug,
   useSources,
-  useDimensions,
+  useRefTables,
   useDrafts,
   discardDraft,
-  addCanonical,
-  renameCanonical,
-  getCanonical,
+  addRecord,
+  renameRecord,
+  getRecord,
   importRows,
-  mergeCanonical,
-  retireCanonical,
+  mergeRecord,
+  retireRecord,
   fetchVariants,
-  deriveCanonical,
+  deriveRecord,
   addField,
   setFieldValue,
   addColumnOption,
@@ -34,15 +34,15 @@ import {
   getGridLayout,
   getCachedGridLayout,
   setGridLayout,
-  insertCanonicalAt,
-  reorderCanonical,
-  patchDimension,
+  insertRecordAt,
+  reorderRecord,
+  patchRefTable,
   rebalancePositions,
   useCanEdit,
   useCurrentUser,
   ConflictError,
   ApiCodeError,
-  refreshDimAndNotify,
+  refreshRefTableAndNotify,
   commit,
   fetchPublishState,
   revertChanges,
@@ -61,7 +61,7 @@ import { useRowActivity } from "../lib/use-row-activity";
 import { DataGrid, UndoStackProvider, useUndoStack } from "./datagrid";
 import type { ColumnDef, ColumnConfig } from "./datagrid";
 import { pruneValidationForType, valueShapeError } from "./datagrid/validation";
-import type { CanonicalValue, MappingDimension, FieldDef } from "../data";
+import type { RecordValue, MappingRefTable, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MapValuesBody } from "./modes/MapValuesBody";
@@ -109,13 +109,13 @@ function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
 }
 
 interface TablePaneProps {
-  dim: MappingDimension;
+  refTable: MappingRefTable;
   isActive: boolean;
   /** Currently-selected mode for this pane. Optional — defaults to "records"
    *  so callers that haven't wired URL-folded mode yet still compile. Task 3.4
    *  threads the real value through from MasterTables. */
   mode?: Mode;
-  /** Modes available for this dim (records always present; match + sources
+  /** Modes available for this refTable (records always present; match + sources
    *  conditional on wiring). Optional + defaults to ["records"] — when ≤ 1
    *  the ModeStrip self-hides anyway, so no chrome appears. */
   modes?: readonly Mode[];
@@ -124,11 +124,11 @@ interface TablePaneProps {
   onModeChange?: (m: Mode) => void;
 }
 
-export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
+export function TablePane({ refTable, isActive, mode, modes, onModeChange }: TablePaneProps) {
   return (
-    <UndoStackProvider scopeKey={dim.id}>
+    <UndoStackProvider scopeKey={refTable.id}>
       <TablePaneInner
-        dim={dim}
+        refTable={refTable}
         isActive={isActive}
         mode={mode}
         modes={modes}
@@ -138,15 +138,18 @@ export function TablePane({ dim, isActive, mode, modes, onModeChange }: TablePan
   );
 }
 
-/** Records mode has only the "new" status for canonical values right now —
+/** Records mode has only the "new" status for record values right now —
  *  treat any value whose status is missing as "mapped" for the badge count. */
-function countNewForDim(dim: MappingDimension): number {
-  return dim.counts.newCount;
+function countNewForDim(refTable: MappingRefTable): number {
+  return refTable.counts.newCount;
 }
 
-function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneProps) {
+function TablePaneInner({ refTable, isActive, mode, modes, onModeChange }: TablePaneProps) {
   const sources = useSources();
-  const wired = useMemo(() => sources.filter((s) => s.dimId === dim.id), [sources, dim.id]);
+  const wired = useMemo(
+    () => sources.filter((s) => s.refTableId === refTable.id),
+    [sources, refTable.id],
+  );
   const activeModes: readonly Mode[] = modes ?? ["records"];
   const activeMode: Mode = mode ?? "records";
 
@@ -184,7 +187,7 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
             active={activeMode}
             onSelect={onModeChange ?? (() => {})}
             badges={{
-              match: { count: countNewForDim(dim) },
+              match: { count: countNewForDim(refTable) },
               sources: { warn: wired.some((s) => s.unmapped > 0) },
             }}
           />
@@ -192,30 +195,30 @@ function TablePaneInner({ dim, isActive, mode, modes, onModeChange }: TablePaneP
       )}
       <div className="flex flex-1 flex-col min-h-0">
         {activeMode === "records" && (
-          <RecordsBody dim={dim} isActive={isActive} onModeChange={onModeChange} />
+          <RecordsBody refTable={refTable} isActive={isActive} onModeChange={onModeChange} />
         )}
-        {activeMode === "match" && <MapValuesBody dim={dim} isActive={isActive} />}
-        {activeMode === "sources" && <SourcesMonitorBody dim={dim} />}
+        {activeMode === "match" && <MapValuesBody refTable={refTable} isActive={isActive} />}
+        {activeMode === "sources" && <SourcesMonitorBody refTable={refTable} />}
       </div>
     </div>
   );
 }
 
-function exportToCSV(dim: MappingDimension): void {
-  const fields = dim.fields ?? [];
+function exportToCSV(refTable: MappingRefTable): void {
+  const fields = refTable.fields ?? [];
   const headers = ["key", "label", ...fields.map((f) => f.label)];
   const escape = (v: string) => {
     if (/[,"\n]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
     return v;
   };
-  const rows = dim.canonical.map((c) =>
+  const rows = refTable.record.map((c) =>
     [c.key, c.label, ...fields.map((f) => String(c.fields?.[f.field] ?? ""))].map(escape).join(","),
   );
   const csv = [headers.map(escape).join(","), ...rows].join("\r\n");
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${slug(dim.dimension)}.csv`;
+  a.download = `${slug(refTable.refTable)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -224,20 +227,20 @@ function exportToCSV(dim: MappingDimension): void {
  *  can switch between this and other mode bodies (Match, Sources) under one
  *  shared UndoStackProvider. The body owns its own grid layout state, popovers, etc. */
 function RecordsBody({
-  dim,
+  refTable,
   isActive,
   onModeChange,
 }: {
-  dim: MappingDimension;
+  refTable: MappingRefTable;
   isActive: boolean;
   onModeChange?: (m: Mode) => void;
 }) {
   const sources = useSources();
-  const allDims = useDimensions();
+  const allDims = useRefTables();
   const drafts = useDrafts();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
-  const activeId = dim.id;
+  const activeId = refTable.id;
   // Presence pushes a `row_touched` hint when a peer writes a row; bump this
   // nonce to trigger useRowActivity's debounced refetch (replaces the 5s poll).
   const [activityNonce, setActivityNonce] = useState(0);
@@ -344,7 +347,10 @@ function RecordsBody({
     });
   }, []);
 
-  const wired = useMemo(() => sources.filter((s) => s.dimId === activeId), [sources, activeId]);
+  const wired = useMemo(
+    () => sources.filter((s) => s.refTableId === activeId),
+    [sources, activeId],
+  );
   const [layout, setLayout] = useState<GridLayoutConfig>(() => getCachedGridLayout(activeId) ?? {});
   useEffect(() => {
     const cached = getCachedGridLayout(activeId);
@@ -366,7 +372,11 @@ function RecordsBody({
       const grid = parseCsv(text);
       const headers = grid[0] ?? [];
       const rawRows = grid.slice(1);
-      const parsed = prepareImport(text, { keyCol: dim.keyCol, dimension: dim.dimension, fields });
+      const parsed = prepareImport(text, {
+        keyCol: refTable.keyCol,
+        refTable: refTable.refTable,
+        fields,
+      });
       setPendingImport({ ...parsed, headers, rawRows });
     } catch (err) {
       toast(err instanceof Error ? err.message : "Couldn't parse that CSV.", "error");
@@ -390,15 +400,15 @@ function RecordsBody({
     });
   }, []);
 
-  const list = dim.canonical;
-  const fields = useMemo(() => dim.fields ?? [], [dim.fields]);
+  const list = refTable.record;
+  const fields = useMemo(() => refTable.fields ?? [], [refTable.fields]);
   const linkedTargets = useLinkedCandidates(fields, allDims);
-  const external = dim.keyKind === "external_id";
+  const external = refTable.keyKind === "external_id";
   const totalVariants = list.reduce((n, c) => n + (c.variants ?? 0), 0);
   const sourceOpts = wired.map((s) => `${s.table}.${s.column}`);
 
-  const columns = useMemo<ColumnDef<CanonicalValue>[]>(() => {
-    const cols: ColumnDef<CanonicalValue>[] = [
+  const columns = useMemo<ColumnDef<RecordValue>[]>(() => {
+    const cols: ColumnDef<RecordValue>[] = [
       {
         field: "label",
         label: "Record",
@@ -443,9 +453,11 @@ function RecordsBody({
           </span>
         ),
       },
-      ...fields.flatMap<ColumnDef<CanonicalValue>>((f) => {
+      ...fields.flatMap<ColumnDef<RecordValue>>((f) => {
         if (f.type === "linked") {
-          const target = f.referencedDimId ? linkedTargets.get(f.referencedDimId) : undefined;
+          const target = f.referencedRefTableId
+            ? linkedTargets.get(f.referencedRefTableId)
+            : undefined;
           const fieldLabels = target?.fieldLabels ?? new Map<string, string>();
           const [fkCol, ...lookupCols] = buildLinkedColumns(f, {
             fieldLabels,
@@ -499,7 +511,7 @@ function RecordsBody({
 
   const rowsForGrid = useMemo(() => {
     const src = changedOnly ? list.filter((c) => changedKeySet.has(c.key)) : list;
-    const all = src.map((c): CanonicalValue & Record<string, unknown> => ({
+    const all = src.map((c): RecordValue & Record<string, unknown> => ({
       ...c,
       ...(c.fields ?? {}),
     }));
@@ -542,9 +554,9 @@ function RecordsBody({
     return () => {
       alive = false;
     };
-    // `dim` identity changes on every store refresh — exactly when the
+    // `refTable` identity changes on every store refresh — exactly when the
     // pending-work counts may have moved.
-  }, [activeId, dim]);
+  }, [activeId, refTable]);
 
   useEffect(() => setChangedOnly(false), [activeId]);
 
@@ -628,15 +640,15 @@ function RecordsBody({
 
   const addQueue = useAddQueue(
     async (label) => {
-      await addCanonical(activeId, label);
+      await addRecord(activeId, label);
       undo.push({
         label: `add "${label}"`,
         surface: "Records",
-        apply: () => addCanonical(activeId, label),
+        apply: () => addRecord(activeId, label),
         inverse: () => {
           const addedKey = slug(label);
-          const v = getCanonical(activeId, addedKey)?.version ?? 1;
-          return retireCanonical(activeId, addedKey, v).then(() => undefined);
+          const v = getRecord(activeId, addedKey)?.version ?? 1;
+          return retireRecord(activeId, addedKey, v).then(() => undefined);
         },
       });
     },
@@ -670,7 +682,7 @@ function RecordsBody({
     setBusy(true);
     let n: number;
     try {
-      n = await mergeCanonical(activeId, survivor, losers, expectedVersions);
+      n = await mergeRecord(activeId, survivor, losers, expectedVersions);
     } catch (e) {
       setBusy(false);
       const anchor =
@@ -684,16 +696,16 @@ function RecordsBody({
       apply: () => {
         const currentExpectedVersions = Object.fromEntries(
           [survivor, ...losers]
-            .map((k) => getCanonical(activeId, k))
-            .filter((r): r is CanonicalValue => r !== undefined)
+            .map((k) => getRecord(activeId, k))
+            .filter((r): r is RecordValue => r !== undefined)
             .map((r) => [r.key, r.version]),
         );
-        return mergeCanonical(activeId, survivor, losers, currentExpectedVersions).then(
+        return mergeRecord(activeId, survivor, losers, currentExpectedVersions).then(
           () => undefined,
         );
       },
       inverse: async () => {
-        for (const s of snapshot) await addCanonical(activeId, s.label);
+        for (const s of snapshot) await addRecord(activeId, s.label);
       },
     });
     setBusy(false);
@@ -709,7 +721,7 @@ function RecordsBody({
     const version = row?.version ?? 1;
     setBusy(true);
     try {
-      const r = await retireCanonical(activeId, key, version);
+      const r = await retireRecord(activeId, key, version);
       if (!r.ok) {
         flash(
           `Can't remove "${label}" — ${r.variants} source value${r.variants === 1 ? "" : "s"} still map here. Merge or remap them first.`,
@@ -721,10 +733,10 @@ function RecordsBody({
         label: `remove "${label}"`,
         surface: "Records",
         apply: () => {
-          const v = getCanonical(activeId, key)?.version ?? 1;
-          return retireCanonical(activeId, key, v).then(() => undefined);
+          const v = getRecord(activeId, key)?.version ?? 1;
+          return retireRecord(activeId, key, v).then(() => undefined);
         },
-        inverse: () => addCanonical(activeId, label),
+        inverse: () => addRecord(activeId, label),
       });
     } catch (err) {
       if (!surfaceConflict(key, err)) {
@@ -765,7 +777,7 @@ function RecordsBody({
     const s = wired.find((w) => `${w.table}.${w.column}` === opt);
     if (!s || busy) return;
     setBusy(true);
-    const result = await deriveCanonical(activeId, s.table, s.column);
+    const result = await deriveRecord(activeId, s.table, s.column);
     setBusy(false);
     flash(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)} · drafts untouched`);
   };
@@ -775,7 +787,7 @@ function RecordsBody({
     const nameCol = nameColOpt.split(".").slice(1).join(".");
     if (!s || !nameCol || busy) return;
     setBusy(true);
-    const result = await deriveCanonical(activeId, s.table, s.column, nameCol);
+    const result = await deriveRecord(activeId, s.table, s.column, nameCol);
     setBusy(false);
     flash(
       `Re-scanned ${s.table}.${s.column} (names ← ${nameCol}) · ${outcomeText(result)} · drafts untouched`,
@@ -796,12 +808,12 @@ function RecordsBody({
     setLinkPicker({ fkField, anchorRect: rect });
   };
 
-  /** Right-click "Open target dimension →" on an FK column header. Opens the
-   *  target dim in a new tab and navigates to /tables; MasterTables's
+  /** Right-click "Open target refTable →" on an FK column header. Opens the
+   *  target refTable in a new tab and navigates to /tables; MasterTables's
    *  searchParams effect picks up the active-tab change and updates the URL. */
-  const handleOpenTargetDimension = (fkField: string): void => {
+  const handleOpenTargetRefTable = (fkField: string): void => {
     const f = fields.find((x) => x.field === fkField);
-    const target = f?.referencedDimId;
+    const target = f?.referencedRefTableId;
     if (!target) return;
     openTab(target);
     navigate(navLinks.tables);
@@ -893,7 +905,7 @@ function RecordsBody({
     }
   };
 
-  const palette = PALETTE[dim.color ?? defaultTintFor(dim.id)];
+  const palette = PALETTE[refTable.color ?? defaultTintFor(refTable.id)];
   const publishedTitle = pubState
     ? `Version ${pubState.version}${
         pubState.publishedAt != null
@@ -933,10 +945,10 @@ function RecordsBody({
       const prev = currentRow?.label;
       if (typeof value !== "string" || !value.trim() || value === prev) return;
       try {
-        await renameCanonical(activeId, rowKey, value, currentRow?.version ?? 1);
+        await renameRecord(activeId, rowKey, value, currentRow?.version ?? 1);
         dismissConflict(rowKey);
       } catch (e) {
-        const serverRow = getCanonical(activeId, rowKey);
+        const serverRow = getRecord(activeId, rowKey);
         const labelDiff: FieldDiff[] = [];
         if (serverRow && serverRow.label !== value) {
           labelDiff.push({ field: "label", theirs: serverRow.label, yours: value });
@@ -954,12 +966,12 @@ function RecordsBody({
           label: `rename "${prev}" → "${value}"`,
           surface: "Records",
           apply: () => {
-            const v = getCanonical(activeId, rowKey)?.version ?? 1;
-            return renameCanonical(activeId, rowKey, value, v).then(() => undefined);
+            const v = getRecord(activeId, rowKey)?.version ?? 1;
+            return renameRecord(activeId, rowKey, value, v).then(() => undefined);
           },
           inverse: () => {
-            const v = getCanonical(activeId, rowKey)?.version ?? 1;
-            return renameCanonical(activeId, rowKey, prev, v).then(() => undefined);
+            const v = getRecord(activeId, rowKey)?.version ?? 1;
+            return renameRecord(activeId, rowKey, prev, v).then(() => undefined);
           },
         });
         void fetchVariants(activeId, rowKey).then((vs) => {
@@ -1022,17 +1034,17 @@ function RecordsBody({
             style={{ background: palette.bg, boxShadow: `0 0 0 3px ${palette.wash}` }}
           />
           <span className="max-w-[22ch] truncate font-display text-[14px] font-semibold tracking-tight text-ink">
-            {dim.dimension}
+            {refTable.refTable}
           </span>
           <div className="hidden shrink-0 items-center border-l border-line pl-2.5 font-mono text-ink-2 @5xl:flex">
             {gauge(list.length, list.length === 1 ? "record" : "records")}
             {gauge(fields.length, fields.length === 1 ? "field" : "fields")}
             {gauge(totalVariants.toLocaleString(), "source values")}
           </div>
-          {dim.ownerName && (
+          {refTable.ownerName && (
             <span className="hidden shrink-0 items-center gap-1.5 rounded-pill border border-line bg-surface-2 py-0.5 pl-0.5 pr-2.5 text-[12px] text-ink-2 @6xl:inline-flex">
-              <Avatar name={dim.ownerName} color={palette.bg} size={18} />
-              {dim.ownerName}
+              <Avatar name={refTable.ownerName} color={palette.bg} size={18} />
+              {refTable.ownerName}
             </span>
           )}
         </div>
@@ -1173,7 +1185,7 @@ function RecordsBody({
                     glyph="↓"
                     title="Export records (CSV)"
                     desc="Key, label and fields as a spreadsheet"
-                    onClick={() => exportToCSV(dim)}
+                    onClick={() => exportToCSV(refTable)}
                   />
                 )}
                 <MenuSep />
@@ -1184,7 +1196,7 @@ function RecordsBody({
               <MenuItem
                 glyph="⍟"
                 title="Assign owner"
-                desc={dim.ownerName ? `Currently: ${dim.ownerName}` : "Unassigned"}
+                desc={refTable.ownerName ? `Currently: ${refTable.ownerName}` : "Unassigned"}
                 onClick={() => void openOwnerPanel()}
               />
             )}
@@ -1214,11 +1226,11 @@ function RecordsBody({
                   pubState
                     ? [
                         {
-                          dimId: activeId,
-                          dimName: dim.dimension,
+                          refTableId: activeId,
+                          refTableName: refTable.refTable,
                           nextVersion: pubState.version + 1,
                           drafts: Object.values(drafts).filter(
-                            (d) => d.dimId === activeId && d.status === "mapped",
+                            (d) => d.refTableId === activeId && d.status === "mapped",
                           ),
                           changedKeys: pubState.changedKeys,
                         },
@@ -1262,9 +1274,9 @@ function RecordsBody({
                 type="radio"
                 name={`ordering-${activeId}`}
                 value="derived"
-                checked={dim.orderingMode !== "manual"}
+                checked={refTable.orderingMode !== "manual"}
                 onChange={() => {
-                  if (dim.orderingMode === "manual") setOrderingConfirm("derived");
+                  if (refTable.orderingMode === "manual") setOrderingConfirm("derived");
                 }}
                 className="mt-0.5"
               />
@@ -1280,9 +1292,9 @@ function RecordsBody({
                 type="radio"
                 name={`ordering-${activeId}`}
                 value="manual"
-                checked={dim.orderingMode === "manual"}
+                checked={refTable.orderingMode === "manual"}
                 onChange={() => {
-                  if (dim.orderingMode !== "manual") setOrderingConfirm("manual");
+                  if (refTable.orderingMode !== "manual") setOrderingConfirm("manual");
                 }}
                 className="mt-0.5"
               />
@@ -1290,7 +1302,7 @@ function RecordsBody({
                 <div className="font-medium">Manual</div>
                 <div className="text-[12px] text-ink-3">
                   Persisted drag-orderable order. Best for workflow stages.
-                  {dim.orderingMode === "manual" && (
+                  {refTable.orderingMode === "manual" && (
                     <>
                       {" "}
                       Currently {list.length} row{list.length === 1 ? "" : "s"} positioned.
@@ -1299,7 +1311,7 @@ function RecordsBody({
                 </div>
               </div>
             </label>
-            {dim.orderingMode === "manual" && canEdit && (
+            {refTable.orderingMode === "manual" && canEdit && (
               <button
                 className="mt-1 self-start text-[12px] text-ink-3 underline hover:text-ink"
                 onClick={() => setRebalanceConfirm(true)}
@@ -1330,9 +1342,9 @@ function RecordsBody({
           ) : (
             <OwnerPicker
               members={members}
-              currentId={dim.ownerUserId ?? null}
+              currentId={refTable.ownerUserId ?? null}
               onPick={async (id) => {
-                if (dim.ownerUserId !== id) await patchDimension(activeId, { ownerUserId: id });
+                if (refTable.ownerUserId !== id) await patchRefTable(activeId, { ownerUserId: id });
                 setOwnerOpen(false);
               }}
             />
@@ -1396,7 +1408,7 @@ function RecordsBody({
 
       {historyOpen && (
         <VersionHistory
-          dimId={activeId}
+          refTableId={activeId}
           onClose={() => setHistoryOpen(false)}
           onRollbackSuccess={() => setHistoryOpen(false)}
           flash={flash}
@@ -1444,7 +1456,7 @@ function RecordsBody({
                 conflictedKeys={c.conflictedKeys}
                 diff={c.diff}
                 onRefresh={async () => {
-                  await refreshDimAndNotify(activeId);
+                  await refreshRefTableAndNotify(activeId);
                   dismissConflict(rowKey);
                 }}
                 onKeepEditing={() => dismissConflict(rowKey)}
@@ -1453,34 +1465,36 @@ function RecordsBody({
           </div>
         )}
 
-        {dim.orderingMode === "manual" && !!layout.sort && !dismissedSortBanner.has(activeId) && (
-          <div className="flex h-8 shrink-0 items-center gap-2 border-b border-rule bg-surface-2 px-3 text-[12px] text-ink-2">
-            <span className="flex-1 truncate">
-              ⇅ Sorted by {layout.sort.column} {layout.sort.direction === "asc" ? "↑" : "↓"} —
-              manual order is hidden
-            </span>
-            <button
-              className="shrink-0 text-accent hover:underline"
-              onClick={() => {
-                setLayout((cur) => {
-                  const next = { ...cur, sort: null };
-                  setGridLayout(activeId, next);
-                  return next;
-                });
-              }}
-            >
-              Restore
-            </button>
-            <button
-              className="shrink-0 text-ink-3 hover:text-ink"
-              onClick={() => setDismissedSortBanner((s) => new Set([...s, activeId]))}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
+        {refTable.orderingMode === "manual" &&
+          !!layout.sort &&
+          !dismissedSortBanner.has(activeId) && (
+            <div className="flex h-8 shrink-0 items-center gap-2 border-b border-rule bg-surface-2 px-3 text-[12px] text-ink-2">
+              <span className="flex-1 truncate">
+                ⇅ Sorted by {layout.sort.column} {layout.sort.direction === "asc" ? "↑" : "↓"} —
+                manual order is hidden
+              </span>
+              <button
+                className="shrink-0 text-accent hover:underline"
+                onClick={() => {
+                  setLayout((cur) => {
+                    const next = { ...cur, sort: null };
+                    setGridLayout(activeId, next);
+                    return next;
+                  });
+                }}
+              >
+                Restore
+              </button>
+              <button
+                className="shrink-0 text-ink-3 hover:text-ink"
+                onClick={() => setDismissedSortBanner((s) => new Set([...s, activeId]))}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
-        <DataGrid<CanonicalValue>
+        <DataGrid<RecordValue>
           rows={rowsForGrid}
           rowKey={(c) => c.key}
           columns={columns}
@@ -1583,7 +1597,7 @@ function RecordsBody({
               : undefined
           }
           onShowLinkedFields={canEdit ? handleShowLinkedFields : undefined}
-          onOpenTargetDimension={handleOpenTargetDimension}
+          onOpenTargetRefTable={handleOpenTargetRefTable}
           onChangeDisplayedField={canEdit ? handleChangeDisplayedField : undefined}
           onManageLinkedFields={canEdit ? handleManageLinkedFields : undefined}
           onRemoveLookup={canEdit ? handleRemoveLookup : undefined}
@@ -1629,8 +1643,8 @@ function RecordsBody({
             external || !canEdit
               ? undefined
               : (key, where) => {
-                  if (dim.orderingMode === "manual") {
-                    void insertCanonicalAt(activeId, "(new)", key, where);
+                  if (refTable.orderingMode === "manual") {
+                    void insertRecordAt(activeId, "(new)", key, where);
                   } else {
                     addInputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                     addInputRef.current?.focus();
@@ -1647,14 +1661,14 @@ function RecordsBody({
                 }
           }
           onReorderRow={
-            dim.orderingMode === "manual" && canEdit
+            refTable.orderingMode === "manual" && canEdit
               ? (rowKey, before, after) => {
-                  void reorderCanonical(activeId, rowKey, { before, after });
+                  void reorderRecord(activeId, rowKey, { before, after });
                 }
               : undefined
           }
           onCellKeyDown={
-            dim.orderingMode === "manual" && canEdit
+            refTable.orderingMode === "manual" && canEdit
               ? (e, ctx) => {
                   const isMac = navigator.platform.toUpperCase().includes("MAC");
                   const mod = isMac ? e.metaKey : e.ctrlKey;
@@ -1667,19 +1681,19 @@ function RecordsBody({
                     e.preventDefault();
                     const before = idx > 1 ? (list[idx - 2]?.key ?? null) : null;
                     const after = idx > 0 ? (list[idx - 1]?.key ?? null) : null;
-                    void reorderCanonical(activeId, focused, { before, after });
+                    void reorderRecord(activeId, focused, { before, after });
                     return;
                   }
                   if (e.key === "ArrowDown") {
                     e.preventDefault();
                     const before = idx < list.length - 1 ? (list[idx + 1]?.key ?? null) : null;
                     const after = idx < list.length - 2 ? (list[idx + 2]?.key ?? null) : null;
-                    void reorderCanonical(activeId, focused, { before, after });
+                    void reorderRecord(activeId, focused, { before, after });
                     return;
                   }
                   if (e.key === "Home") {
                     e.preventDefault();
-                    void reorderCanonical(activeId, focused, {
+                    void reorderRecord(activeId, focused, {
                       before: null,
                       after: list[0]?.key ?? null,
                     });
@@ -1687,7 +1701,7 @@ function RecordsBody({
                   }
                   if (e.key === "End") {
                     e.preventDefault();
-                    void reorderCanonical(activeId, focused, {
+                    void reorderRecord(activeId, focused, {
                       before: list[list.length - 1]?.key ?? null,
                       after: null,
                     });
@@ -1733,7 +1747,7 @@ function RecordsBody({
             navigate(`?${next.toString()}`);
             // Switch perTabMode directly — writing ?mode= to the URL is NOT
             // sufficient for already-open tabs because foldUrlMode is gated by
-            // foldedDimsRef and only runs once per dim per session.
+            // foldedDimsRef and only runs once per refTable per session.
             onModeChange?.("match");
           }}
         />
@@ -1742,14 +1756,14 @@ function RecordsBody({
           <AddFieldPopover
             anchorRef={addFieldRef as React.RefObject<HTMLElement | null>}
             onClose={() => setAddOpen(false)}
-            allDims={allDims.map((d) => ({ id: d.id, dimension: d.dimension }))}
-            currentDimId={activeId}
+            allDims={allDims.map((d) => ({ id: d.id, refTable: d.refTable }))}
+            currentRefTableId={activeId}
             onSubmit={async ({ label, config }) => {
               const required = config.required;
               const validation = config.validation;
               if (config.type === "linked") {
                 await addField(activeId, label, "linked", undefined, {
-                  referencedDimId: config.targetDimId,
+                  referencedRefTableId: config.targetRefTableId,
                   displayFields: config.displayFields,
                   required,
                 });
@@ -1776,11 +1790,11 @@ function RecordsBody({
         {linkPicker &&
           (() => {
             const fkField = fields.find((f) => f.field === linkPicker.fkField);
-            // Derive target dim from allDims (the same source useLinkedCandidates
+            // Derive target refTable from allDims (the same source useLinkedCandidates
             // walks). We need the full field list — `field`, `label`, `type` —
             // so the picker can render checkboxes + disable nested links.
-            const targetDim = fkField?.referencedDimId
-              ? allDims.find((d) => d.id === fkField.referencedDimId)
+            const targetDim = fkField?.referencedRefTableId
+              ? allDims.find((d) => d.id === fkField.referencedRefTableId)
               : undefined;
             if (!fkField || !targetDim) return null;
             const targetFields = (targetDim.fields ?? []).map((f) => ({
@@ -1789,7 +1803,7 @@ function RecordsBody({
               type: f.type,
             }));
             // The target's `label` column isn't in `fields` (it's a built-in
-            // canonical column), so prepend it — the picker always pins label
+            // record column), so prepend it — the picker always pins label
             // first and uses it for the FK cell display.
             const fieldsWithLabel = [
               { field: "label", label: "Record", type: "text" },
@@ -1826,7 +1840,7 @@ function RecordsBody({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder={`new ${dim.dimension.toLowerCase()} record…`}
+              placeholder={`new ${refTable.refTable.toLowerCase()} record…`}
               className="w-full max-w-xs rounded-sm border border-line-2 bg-bg px-3 py-1.5 font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 focus:border-accent"
             />
             <Button
@@ -1872,7 +1886,7 @@ function RecordsBody({
                     const survivorKey = list.find((c) => c.label === survivorLabel)?.key;
                     if (!survivorKey) return;
                     const loserKeys = sel.filter((k) => k !== survivorKey);
-                    const loserRows = dim.canonical.filter((c) => loserKeys.includes(c.key));
+                    const loserRows = refTable.record.filter((c) => loserKeys.includes(c.key));
                     const allUndefined = loserRows.every((c) => c.variants === undefined);
                     const loserVariantSum = allUndefined
                       ? null
@@ -1887,7 +1901,7 @@ function RecordsBody({
               variant="secondary"
               icon={<IconX className="h-3.5 w-3.5" />}
               onClick={() => {
-                const selRows = dim.canonical.filter((c) => sel.includes(c.key));
+                const selRows = refTable.record.filter((c) => sel.includes(c.key));
                 const allUndefined = selRows.every((c) => c.variants === undefined);
                 const variantSum = allUndefined
                   ? null
@@ -1909,7 +1923,7 @@ function RecordsBody({
         mapping={pendingImport?.mapping ?? { labelIdx: -1, keyIdx: -1, fieldIdx: {}, ignored: [] }}
         fields={fields}
         importing={importing}
-        tableName={dim.dimension}
+        tableName={refTable.refTable}
         onConfirm={async (mapped) => {
           setPendingImport(null);
           setImporting(true);
@@ -2074,7 +2088,7 @@ function RecordsBody({
         body={`This will assign positions to all ${list.length} rows in their current display order. You can drag rows to reorder them afterwards.`}
         confirmLabel="Switch to manual"
         onConfirm={async () => {
-          await patchDimension(activeId, { orderingMode: "manual" });
+          await patchRefTable(activeId, { orderingMode: "manual" });
           setOrderingConfirm(null);
         }}
         onCancel={() => setOrderingConfirm(null)}
@@ -2091,7 +2105,7 @@ function RecordsBody({
             </div>
             <button
               type="button"
-              onClick={() => exportToCSV(dim)}
+              onClick={() => exportToCSV(refTable)}
               className="mt-2 text-[12px] text-accent hover:underline"
             >
               Export the current order to CSV first
@@ -2101,7 +2115,7 @@ function RecordsBody({
         confirmLabel="Switch to derived"
         danger
         onConfirm={async () => {
-          await patchDimension(activeId, { orderingMode: "derived" });
+          await patchRefTable(activeId, { orderingMode: "derived" });
           setOrderingConfirm(null);
         }}
         onCancel={() => setOrderingConfirm(null)}
@@ -2124,11 +2138,13 @@ function RecordsBody({
         publishing={publishing}
         groups={publishGroups}
         onDiscardDraft={(d) => {
-          void discardDraft(d.dimId, d.raw);
+          void discardDraft(d.refTableId, d.raw);
           setPublishGroups((gs) =>
             gs
               .map((g) =>
-                g.dimId === d.dimId ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) } : g,
+                g.refTableId === d.refTableId
+                  ? { ...g, drafts: g.drafts.filter((x) => x.raw !== d.raw) }
+                  : g,
               )
               .filter((g) => g.drafts.length > 0 || g.changedKeys.length > 0),
           );
@@ -2145,7 +2161,7 @@ function RecordsBody({
         tableId={activeId}
         rowKey={recordHistory?.rowKey ?? null}
         recordLabel={recordHistory?.label ?? null}
-        tableName={dim.dimension}
+        tableName={refTable.refTable}
         field={recordHistory?.field ?? null}
         canRestore={canEdit}
         onRestore={

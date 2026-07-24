@@ -65,7 +65,7 @@ const VERB_PLAIN: Record<string, string> = {
   replayed: "resent",
 };
 const NOUN_PLAIN: Record<string, string> = {
-  canonical: "record",
+  record: "record",
 };
 function plain(p: Phrase): Phrase {
   return {
@@ -79,7 +79,7 @@ export function humanize(row: AuditEntry): Phrase {
   const a = row.action;
   const d = row.detail || "";
 
-  // Sentence-case actions: "Added canonical", "Renamed column", …
+  // Sentence-case actions: "Added record", "Renamed column", …
   const m = a.match(/^([A-Z][a-z-]+)\s+(.+)$/);
   if (m) {
     const verb = m[1]!.toLowerCase();

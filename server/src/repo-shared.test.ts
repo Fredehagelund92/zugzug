@@ -143,14 +143,14 @@ test("parseFieldConfig type=rating uses explicit ratingMax when provided", () =>
 });
 
 test("parseFieldConfig type=linked defaults displayFields to ['label'] when absent", () => {
-  const raw = JSON.stringify({ targetDimId: "dim-abc" });
+  const raw = JSON.stringify({ targetRefTableId: "refTable-abc" });
   const result = parseFieldConfig("linked", raw);
-  expect(result.referencedDimId).toBe("dim-abc");
+  expect(result.referencedRefTableId).toBe("refTable-abc");
   expect(result.displayFields).toEqual(["label"]);
 });
 
 test("parseFieldConfig type=linked uses provided displayFields", () => {
-  const raw = JSON.stringify({ targetDimId: "dim-xyz", displayFields: ["name", "code"] });
+  const raw = JSON.stringify({ targetRefTableId: "refTable-xyz", displayFields: ["name", "code"] });
   const result = parseFieldConfig("linked", raw);
   expect(result.displayFields).toEqual(["name", "code"]);
 });

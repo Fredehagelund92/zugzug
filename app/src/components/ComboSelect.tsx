@@ -13,7 +13,7 @@ import { cx } from "../lib/cx";
 import { IconSearch, IconChevron, IconPlus } from "./Icons";
 
 /* ComboSelect — generic searchable popover over string options, with optional
-   "create new value". Used to map a distinct source value to a canonical value
+   "create new value". Used to map a distinct source value to a record value
    (or coin a new one). Squared, token-driven, no hex.
 
    Imperative handle: parents can open the picker programmatically via

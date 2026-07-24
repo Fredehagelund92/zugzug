@@ -21,7 +21,7 @@ interface LedgerRowProps {
   /** Keyboard cursor is on this row — paint the focus ring + accent wash. */
   focused?: boolean;
   /** Stable key used by the cursor scroll-into-view query (`data-row-key`).
-   *  Format: `${dimId}::${table}::${column}`. */
+   *  Format: `${refTableId}::${table}::${column}`. */
   rowKey?: string;
   /** When false, the import-records (wand) button is disabled. */
   canEdit?: boolean;
@@ -56,7 +56,7 @@ export function LedgerRow({
           : stale
             ? "stale"
             : "clean";
-  // Canonical status scale (shared with DataGrid Chip + Match-mode status pills):
+  // Record status scale (shared with DataGrid Chip + Match-mode status pills):
   //   clean → text-ok ; warn states → text-warn ; meta/unscanned → text-ink-3
   const standingTone =
     standing === "clean"
@@ -102,7 +102,7 @@ export function LedgerRow({
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10.5px] text-ink-3">
             <span>
-              → <span className="text-ink-2">{row.dimension}</span>
+              → <span className="text-ink-2">{row.refTable}</span>
             </span>
             {row.scannedAt && <span>· {ago(row.scannedAt)} ago</span>}
           </div>
@@ -164,7 +164,7 @@ export function LedgerRow({
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-ink-3">
               <span>
-                → <span className="text-ink-2">{row.dimension}</span>
+                → <span className="text-ink-2">{row.refTable}</span>
               </span>
               <span className={cx("font-medium", standingTone)}>{standing}</span>
               <span className="tabular-nums">{Math.round(coverage)}% mapped</span>

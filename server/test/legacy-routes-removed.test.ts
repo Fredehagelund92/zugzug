@@ -70,9 +70,6 @@ test("legacy /ws/presence route block is absent from server.ts source", () => {
 
 test("GET /ws/presence/<id> returns 404 via handle (no accidental API routing)", async () => {
   const { handle } = await import("../src/server.ts");
-  const res = await handle(
-    new Request("http://localhost/ws/presence/tbl_abc123"),
-    () => {},
-  );
+  const res = await handle(new Request("http://localhost/ws/presence/tbl_abc123"), () => {});
   expect(res.status).toBe(404);
 });

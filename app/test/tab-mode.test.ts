@@ -1,10 +1,5 @@
 import { describe, test, expect, beforeEach } from "vitest";
-import {
-  readStoredMode,
-  writeStoredMode,
-  foldUrlMode,
-  TAB_MODE_KEY,
-} from "../src/lib/tab-mode";
+import { readStoredMode, writeStoredMode, foldUrlMode, TAB_MODE_KEY } from "../src/lib/tab-mode";
 
 beforeEach(() => {
   localStorage.clear();

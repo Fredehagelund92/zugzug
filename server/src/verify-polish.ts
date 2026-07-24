@@ -1,6 +1,6 @@
 /* verify-polish.ts — prove the workspace-global preferences + the u_system
    user land cleanly on the real Postgres. autoStageExactMatches needs a real
-   warehouse + a seeded dimension to exercise meaningfully and is skipped
+   warehouse + a seeded refTable to exercise meaningfully and is skipped
    unless POLISH_AUTOSTAGE=1 is set (in which case the caller is expected to
    have seeded a fixture). Run: `bun run verify-polish`. */
 
@@ -85,18 +85,18 @@ check(
   "expected one row, got " + sys.length,
 );
 
-// 3. autoStageExactMatches — only meaningful with a real warehouse + a seeded dim
+// 3. autoStageExactMatches — only meaningful with a real warehouse + a seeded refTable
 if (process.env.POLISH_AUTOSTAGE === "1") {
-  const dimId = process.env.POLISH_DIM_ID;
-  if (!dimId) {
+  const refTableId = process.env.POLISH_DIM_ID;
+  if (!refTableId) {
     note(
       "autoStageExactMatches",
-      "POLISH_AUTOSTAGE=1 set but POLISH_DIM_ID missing — set it to the dim to exercise",
+      "POLISH_AUTOSTAGE=1 set but POLISH_DIM_ID missing — set it to the refTable to exercise",
     );
   } else {
-    const { matched, unmatched } = await repo.autoStageExactMatches(dimId, "default");
+    const { matched, unmatched } = await repo.autoStageExactMatches(refTableId, "default");
     check(
-      `autoStageExactMatches('${dimId}') returns counts`,
+      `autoStageExactMatches('${refTableId}') returns counts`,
       Number.isFinite(matched) && Number.isFinite(unmatched),
       `matched ${matched}, unmatched ${unmatched}`,
     );
@@ -104,7 +104,7 @@ if (process.env.POLISH_AUTOSTAGE === "1") {
 } else {
   note(
     "autoStageExactMatches",
-    "POLISH_AUTOSTAGE=1 not set — needs a real warehouse + seeded dim; skipping",
+    "POLISH_AUTOSTAGE=1 not set — needs a real warehouse + seeded refTable; skipping",
   );
 }
 

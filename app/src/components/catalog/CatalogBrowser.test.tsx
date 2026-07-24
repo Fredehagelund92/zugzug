@@ -30,7 +30,7 @@ vi.mock("../../api", () => ({
 vi.mock("../../store", async (orig) => ({
   ...(await orig<typeof import("../../store")>()),
   listSchemas: () => Promise.resolve([{ schema: "authco", tables: 1 }]),
-  useDimensions: () => [{ id: "country", dimension: "Country" }],
+  useRefTables: () => [{ id: "country", refTable: "Country" }],
   searchCatalog: vi.fn(() =>
     Promise.resolve({
       rows: [{ schema: "authco", table: "authco.users", columns: ["id", "email"] }],

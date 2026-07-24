@@ -11,7 +11,7 @@ test("create an empty table and see it in the tab strip", async ({ page }) => {
   const tableName = `E2E Vendors ${uniqueSuffix()}`;
 
   await page.goto("/app/default/tables");
-  // Wait for the table view to boot (tab strip renders once dims are loaded).
+  // Wait for the table view to boot (tab strip renders once refTables are loaded).
   await expect(page.getByRole("button", { name: "Open table" })).toBeVisible();
 
   // Click the + button in the tab strip to open the "add tab" popover.

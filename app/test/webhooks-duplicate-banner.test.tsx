@@ -74,9 +74,7 @@ describe("Webhooks duplicate-URL banner", () => {
 
     // Banner must appear before the table
     const table = screen.getByRole("table");
-    expect(
-      banner.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(banner.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("renders no banner when all URLs are unique", async () => {

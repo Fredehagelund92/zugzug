@@ -16,45 +16,43 @@ import { OpenTabsProvider } from "../src/lib/open-tabs";
  */
 
 const mockState = vi.hoisted(() => ({
-  dims: [] as Array<{ id: string; dimension: string }>,
+  refTables: [] as Array<{ id: string; refTable: string }>,
   listeners: new Set<() => void>(),
 }));
 
 // Capture onModeChange from the active TablePane so tests can trigger mode switches.
-const paneCallbacks = vi.hoisted(
-  () => ({ onModeChange: null as ((m: string) => void) | null }),
-);
+const paneCallbacks = vi.hoisted(() => ({ onModeChange: null as ((m: string) => void) | null }));
 
 vi.mock("../src/store", () => ({
-  useDimensions: () => {
+  useRefTables: () => {
     const { useSyncExternalStore } = require("react");
     return useSyncExternalStore(
       (cb: () => void) => {
         mockState.listeners.add(cb);
         return () => mockState.listeners.delete(cb);
       },
-      () => mockState.dims,
+      () => mockState.refTables,
     );
   },
-  // Provide a source wired to dim "brand" so availableModes returns ["records","match","sources"]
-  useSources: () => [{ dimId: "brand", table: "t", column: "c" }],
+  // Provide a source wired to refTable "brand" so availableModes returns ["records","match","sources"]
+  useSources: () => [{ refTableId: "brand", table: "t", column: "c" }],
   useCanEdit: () => true,
-  // Loading proxy: "loading" until dims arrive. Gates tab-prune in OpenTabsProvider.
-  useStoreLoading: () => mockState.dims.length === 0,
+  // Loading proxy: "loading" until refTables arrive. Gates tab-prune in OpenTabsProvider.
+  useStoreLoading: () => mockState.refTables.length === 0,
 }));
 
 vi.mock("../src/components/TablePane", () => ({
   TablePane: ({
-    dim,
+    refTable,
     isActive,
     onModeChange,
   }: {
-    dim: { id: string };
+    refTable: { id: string };
     isActive: boolean;
     onModeChange: (m: string) => void;
   }) => {
     if (isActive) paneCallbacks.onModeChange = onModeChange;
-    return <div data-testid={`pane-${dim.id}`} data-active={isActive} />;
+    return <div data-testid={`pane-${refTable.id}`} data-active={isActive} />;
   },
 }));
 
@@ -71,12 +69,12 @@ vi.mock("../src/lib/create-table-modal", () => ({
 }));
 
 const DIMS = [
-  { id: "a", dimension: "A" },
-  { id: "brand", dimension: "Brand" },
+  { id: "a", refTable: "A" },
+  { id: "brand", refTable: "Brand" },
 ];
 
-function setDims(dims: typeof DIMS) {
-  mockState.dims = dims;
+function setDims(refTables: typeof DIMS) {
+  mockState.refTables = refTables;
   for (const cb of mockState.listeners) cb();
 }
 
@@ -119,7 +117,7 @@ async function renderRoute(initialUrl: string) {
 const originalLocation = window.location;
 
 beforeEach(() => {
-  mockState.dims = [];
+  mockState.refTables = [];
   mockState.listeners.clear();
   localStorage.clear();
   paneCallbacks.onModeChange = null;
@@ -172,7 +170,7 @@ describe("Already-open-tab handoff (fold-gate regression)", () => {
   /**
    * Regression: when a tab is ALREADY open in records mode, writing ?mode=match
    * to the URL does NOT switch the pane — foldUrlMode is gated by foldedDimsRef
-   * and only runs once per dim per session. The fix calls onModeChange("match")
+   * and only runs once per refTable per session. The fix calls onModeChange("match")
    * directly (the same mechanism the ModeStrip uses), which bypasses the fold gate.
    *
    * This test reproduces the exact seam: open a tab in records mode, verify the

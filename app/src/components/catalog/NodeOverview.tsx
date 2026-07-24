@@ -28,7 +28,7 @@ const LEAD: Record<TreeNode["kind"], string> = {
   connection:
     "Expand this connection to browse its databases, or filter to jump straight to a table.",
   database: "A database groups schemas. Open one to see its tables.",
-  schema: "Open a table to view its columns and map source values to dimensions.",
+  schema: "Open a table to view its columns and map source values to records.",
   table: "",
 };
 

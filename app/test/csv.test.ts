@@ -6,7 +6,7 @@ const FIELDS: FieldDef[] = [
   { field: "region", label: "Region", type: "select" },
   { field: "tier", label: "Tier", type: "number" },
 ];
-const OPTS = { keyCol: "country_code", dimension: "Country", fields: FIELDS };
+const OPTS = { keyCol: "country_code", refTable: "Country", fields: FIELDS };
 
 describe("parseCsv", () => {
   test("plain cells, CRLF", () => {
@@ -39,7 +39,7 @@ describe("mapCsvHeaders", () => {
     expect(m.ignored).toEqual([]);
   });
 
-  test("matches keyCol name, dimension name, field ids, case-insensitive", () => {
+  test("matches keyCol name, refTable name, field ids, case-insensitive", () => {
     const m = mapCsvHeaders(["COUNTRY_CODE", "country", "region"], OPTS);
     expect(m.keyIdx).toBe(0);
     expect(m.labelIdx).toBe(1);
@@ -54,7 +54,10 @@ describe("mapCsvHeaders", () => {
 
 describe("prepareImport", () => {
   test("builds rows with trimmed values, empty cells become null fields", () => {
-    const { rows } = prepareImport('key,label,Region\nUS,United States, EMEA \nDK,Denmark,\n', OPTS);
+    const { rows } = prepareImport(
+      "key,label,Region\nUS,United States, EMEA \nDK,Denmark,\n",
+      OPTS,
+    );
     expect(rows).toEqual([
       { key: "US", label: "United States", fields: { region: "EMEA" } },
       { key: "DK", label: "Denmark", fields: { region: null } },

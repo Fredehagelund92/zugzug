@@ -10,14 +10,14 @@ import { pg as pgTable } from "./env.ts";
 import { getAIProvider, InvalidAPIKeyError, type AIProviderType } from "./ai-providers/index.ts";
 
 export interface SuggestionContext {
-  dimensionId: string;
-  dimensionName: string;
+  refTableId: string;
+  refTableName: string;
   rawValue: string;
-  existingCanonicalValues: string[];
+  existingRecordValues: string[];
 }
 
 export interface Suggestion {
-  canonical: string;
+  record: string;
   confidence: "high" | "medium" | "low";
   reasoning?: string;
   cached: boolean;
@@ -30,7 +30,7 @@ interface TenantAIConfig {
 }
 
 /**
- * Generate an AI suggestion mapping a raw value to a canonical value.
+ * Generate an AI suggestion mapping a raw value to a record value.
  *
  * 1. Check cache; return on hit (unless `forceRefresh` is true).
  * 2. Fetch tenant AI config from `preferences`.
@@ -43,10 +43,10 @@ export async function generateSuggestion(
   context: SuggestionContext,
   options?: { forceRefresh?: boolean },
 ): Promise<Suggestion> {
-  const { dimensionId, rawValue } = context;
+  const { refTableId, rawValue } = context;
 
   if (!options?.forceRefresh) {
-    const cached = await getCachedSuggestion(tenantId, dimensionId, rawValue);
+    const cached = await getCachedSuggestion(tenantId, refTableId, rawValue);
     if (cached) return cached;
   }
 
@@ -61,23 +61,23 @@ export async function generateSuggestion(
 
   const provider = getAIProvider(config.ai_provider, config.ai_api_key);
   const aiResponse = await provider.suggestMapping({
-    dimensionName: context.dimensionName,
+    refTableName: context.refTableName,
     rawValue: context.rawValue,
-    existingCanonicalValues: context.existingCanonicalValues,
+    existingRecordValues: context.existingRecordValues,
   });
 
   const confidenceScore = confidenceToScore(aiResponse.confidence);
   const model = modelForProvider(config.ai_provider);
 
-  await cacheSuggestion(tenantId, dimensionId, rawValue, {
-    suggestion: aiResponse.canonical,
+  await cacheSuggestion(tenantId, refTableId, rawValue, {
+    suggestion: aiResponse.record,
     confidence: confidenceScore,
     reasoning: aiResponse.reasoning ?? "",
     model,
   });
 
   return {
-    canonical: aiResponse.canonical,
+    record: aiResponse.record,
     confidence: aiResponse.confidence,
     reasoning: aiResponse.reasoning,
     cached: false,
@@ -92,27 +92,27 @@ interface CacheRow {
 
 async function getCachedSuggestion(
   tenantId: string,
-  dimensionId: string,
+  refTableId: string,
   rawValue: string,
 ): Promise<Suggestion | null> {
   const row = await pgGet<CacheRow>(
     `SELECT suggestion, confidence, reasoning
        FROM ${pgTable("ai_hint_cache")}
-      WHERE tenant_id = $1 AND dim_id = $2 AND raw = $3
+      WHERE tenant_id = $1 AND reference_table_id = $2 AND raw = $3
       LIMIT 1`,
-    [tenantId, dimensionId, rawValue],
+    [tenantId, refTableId, rawValue],
   );
   if (!row || row.suggestion === null) return null;
 
   // Bump hit counter (fire and forget — caching is best-effort).
   void pgRun(
     `UPDATE ${pgTable("ai_hint_cache")} SET hits = hits + 1
-      WHERE tenant_id = $1 AND dim_id = $2 AND raw = $3`,
-    [tenantId, dimensionId, rawValue],
+      WHERE tenant_id = $1 AND reference_table_id = $2 AND raw = $3`,
+    [tenantId, refTableId, rawValue],
   );
 
   return {
-    canonical: row.suggestion,
+    record: row.suggestion,
     confidence: scoreToConfidence(row.confidence),
     reasoning: row.reasoning,
     cached: true,
@@ -121,7 +121,7 @@ async function getCachedSuggestion(
 
 async function cacheSuggestion(
   tenantId: string,
-  dimensionId: string,
+  refTableId: string,
   rawValue: string,
   suggestion: {
     suggestion: string;
@@ -132,9 +132,9 @@ async function cacheSuggestion(
 ): Promise<void> {
   await pgRun(
     `INSERT INTO ${pgTable("ai_hint_cache")}
-       (tenant_id, dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+       (tenant_id, reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
      VALUES ($1, $2, $3, $4, $5, $6, $7, current_timestamp, 0)
-     ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE SET
+     ON CONFLICT (tenant_id, reference_table_id, raw) DO UPDATE SET
        suggestion = EXCLUDED.suggestion,
        confidence = EXCLUDED.confidence,
        reasoning  = EXCLUDED.reasoning,
@@ -142,7 +142,7 @@ async function cacheSuggestion(
        created_at = EXCLUDED.created_at`,
     [
       tenantId,
-      dimensionId,
+      refTableId,
       rawValue,
       suggestion.suggestion,
       suggestion.confidence,

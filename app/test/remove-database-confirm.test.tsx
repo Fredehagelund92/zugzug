@@ -51,7 +51,9 @@ test("409 surfaces dependency list and unlocks force button via ack", async () =
         JSON.stringify({
           kind: "DATABASE_IN_USE",
           sourceCount: 3,
-          dimensions: [{ dimId: "country", sources: ["public.users.country", "public.orders.country"] }],
+          refTables: [
+            { refTableId: "country", sources: ["public.users.country", "public.orders.country"] },
+          ],
         }),
         { status: 409 },
       ),
@@ -75,14 +77,14 @@ test("409 surfaces dependency list and unlocks force button via ack", async () =
   expect(force.disabled).toBe(false);
 });
 
-test("409 dependency body uses plain-language copy (tables/records, not dimensions/canonical)", async () => {
+test("409 dependency body uses plain-language copy (tables/records, not refTables/record)", async () => {
   responses.push(
     () =>
       new Response(
         JSON.stringify({
           kind: "DATABASE_IN_USE",
           sourceCount: 2,
-          dimensions: [{ dimId: "region", sources: ["public.orders.region"] }],
+          refTables: [{ refTableId: "region", sources: ["public.orders.region"] }],
         }),
         { status: 409 },
       ),
@@ -93,8 +95,8 @@ test("409 dependency body uses plain-language copy (tables/records, not dimensio
   const body = document.body.textContent ?? "";
   expect(body).toContain("tables");
   expect(body).toContain("records");
-  expect(body).not.toContain("dimensions");
-  expect(body).not.toContain("Canonical");
+  expect(body).not.toContain("refTables");
+  expect(body).not.toContain("Record");
 });
 
 test("force delete posts ?force=true and resolves on 204", async () => {
@@ -105,7 +107,7 @@ test("force delete posts ?force=true and resolves on 204", async () => {
         JSON.stringify({
           kind: "DATABASE_IN_USE",
           sourceCount: 1,
-          dimensions: [{ dimId: "country", sources: ["x"] }],
+          refTables: [{ refTableId: "country", sources: ["x"] }],
         }),
         { status: 409 },
       ),

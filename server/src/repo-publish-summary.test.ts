@@ -8,20 +8,20 @@ process.env.ZUGZUG_CURSOR_KEY =
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension } from "./repo-canonical.ts";
+import { addRefTable } from "./repo-record.ts";
 import { publishSummaryFor } from "./repo-drafts.ts";
 
 const T = "test_publish_summary";
 const U = "u_test_publish_summary";
 const createdDims: string[] = [];
 
-// Seed a canonical record + its canonical_version row (never-published dim).
-async function seedRecord(dimId: string, key: string, label: string): Promise<void> {
+// Seed a record record + its record_version row (never-published refTable).
+async function seedRecord(refTableId: string, key: string, label: string): Promise<void> {
   const meta = await pgGet<{ dim_table: string; key_col: string }>(
-    `SELECT dim_table, key_col FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-    [dimId, T],
+    `SELECT dim_table, key_col FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, T],
   );
-  if (!meta) throw new Error(`seedRecord: dim ${dimId} not found`);
+  if (!meta) throw new Error(`seedRecord: refTable ${refTableId} not found`);
   const [schema, table] = meta.dim_table.split(".");
   await pgRun(
     `INSERT INTO "${schema}"."${table}" ("${meta.key_col}", label) VALUES ($1, $2)
@@ -29,10 +29,10 @@ async function seedRecord(dimId: string, key: string, label: string): Promise<vo
     [key, label],
   );
   await pgRun(
-    `INSERT INTO "zugzug_app"."canonical_version" (dim_id, key, version, updated_at, updated_by, tenant_id)
+    `INSERT INTO "zugzug_app"."record_version" (reference_table_id, key, version, updated_at, updated_by, tenant_id)
      VALUES ($1, $2, 1, now(), $3, $4)
-     ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
-    [dimId, key, U, T],
+     ON CONFLICT (tenant_id, reference_table_id, key) DO NOTHING`,
+    [refTableId, key, U, T],
   );
 }
 
@@ -50,10 +50,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE tenant_id = $1`, [T]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`, [T]).catch(
+    () => {},
+  );
   for (const id of createdDims) {
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${id}"`).catch(() => {});
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${id}"`).catch(() => {});
@@ -63,13 +65,13 @@ afterAll(async () => {
 });
 
 describe("publishSummaryFor", () => {
-  it("never-published dim: version 0, changedRecords = every record", async () => {
-    const dimId = await addDimension("PubSumCountry", [], { silent: true }, U, T);
-    createdDims.push(dimId);
-    await seedRecord(dimId, "DE", "Germany");
-    await seedRecord(dimId, "FR", "France");
+  it("never-published refTable: version 0, changedRecords = every record", async () => {
+    const refTableId = await addRefTable("PubSumCountry", [], { silent: true }, U, T);
+    createdDims.push(refTableId);
+    await seedRecord(refTableId, "DE", "Germany");
+    await seedRecord(refTableId, "FR", "France");
 
-    const summary = await publishSummaryFor(dimId, T);
+    const summary = await publishSummaryFor(refTableId, T);
 
     expect(summary.version).toBe(0);
     expect(summary.publishedAt).toBeNull();

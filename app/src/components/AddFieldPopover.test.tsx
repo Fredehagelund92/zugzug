@@ -19,15 +19,15 @@ describe("AddFieldPopover link target", () => {
         onClose={() => {}}
         onSubmit={async () => {}}
         allDims={[
-          { id: "regions", dimension: "Regions" },
-          { id: "countries", dimension: "Countries" },
+          { id: "regions", refTable: "Regions" },
+          { id: "countries", refTable: "Countries" },
         ]}
-        currentDimId="regions"
+        currentRefTableId="regions"
       />,
     );
     // Switch the new field's type to the linked type to reveal the picker.
     fireEvent.click(screen.getByText("Linked"));
-    // The self option carries the current dim id; others carry their own.
+    // The self option carries the current refTable id; others carry their own.
     expect(screen.getByRole("option", { name: "Regions (this table)" }).getAttribute("value")).toBe(
       "regions",
     );

@@ -10,16 +10,16 @@ export const handlers = [
   http.get("/api/auth/me", () =>
     HttpResponse.json({ id: "u1", name: "Me", email: "me@example.com", initials: "M" }),
   ),
-  http.get("/api/t/:slug/dimensions", () =>
+  http.get("/api/t/:slug/tables", () =>
     HttpResponse.json([
       {
         id: "d1",
-        dimension: "Vendors",
+        refTable: "Vendors",
         dimTable: "dim_vendors",
         mapTable: "map_vendors",
         keyCol: "vendor_key",
         rows: 0,
-        canonical: [],
+        record: [],
         counts: {
           newCount: 0,
           mappedCount: 0,

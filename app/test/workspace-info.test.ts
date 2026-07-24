@@ -11,7 +11,7 @@ describe("useWorkspaceInfo", () => {
     const mockInfo = {
       adapter: "duckdb",
       writable: false,
-      canonicalMode: "postgres-export" as const,
+      recordMode: "postgres-export" as const,
       warehouseDb: "analytics",
     };
     global.fetch = vi.fn(async () => ({

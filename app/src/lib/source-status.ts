@@ -63,7 +63,7 @@ export interface SourcesSummary {
   newValuesTotal: number;
 }
 
-/** Dimension-level wiring health: counts per action state + total unmapped values. */
+/** RefTable-level wiring health: counts per action state + total unmapped values. */
 export function summarizeSources(
   sources: SourceInfo[],
   nowMs: number = Date.now(),

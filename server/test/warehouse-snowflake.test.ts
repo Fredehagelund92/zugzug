@@ -200,11 +200,7 @@ test("listColumns: returns name + type from INFORMATION_SCHEMA.COLUMNS", async (
 });
 
 test("distinctValues: SELECT DISTINCT CAST(... AS VARCHAR) ORDER BY 1 LIMIT n", async () => {
-  const { conn, calls } = mockConn(() => [
-    { V: "EU" },
-    { V: "US" },
-    { V: "us" },
-  ]);
+  const { conn, calls } = mockConn(() => [{ V: "EU" }, { V: "US" }, { V: "us" }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
   const vals = await a.distinctValues({ schema: "RAW", table: "PARTNERS" }, "REGION", 100);
   expect(vals).toEqual(["EU", "US", "us"]);
@@ -308,11 +304,11 @@ test("distinctValuesWithProvenance: UNION ALL across sources, tags sourceIndex l
   expect(sql).toContain('"CODE"');
 });
 
-test("ensureCanonicalTables: issues CREATE TABLE IF NOT EXISTS for dim_ and map_", async () => {
+test("ensureRecordTables: issues CREATE TABLE IF NOT EXISTS for dim_ and map_", async () => {
   const { conn, calls } = mockConn(() => []);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  await a.ensureCanonicalTables({
-    dimId: "country",
+  await a.ensureRecordTables({
+    refTableId: "country",
     dimTable: "ZUGZUG.DIM_COUNTRY",
     mapTable: "ZUGZUG.MAP_COUNTRY",
     keyCol: "COUNTRY_CODE",
@@ -321,28 +317,38 @@ test("ensureCanonicalTables: issues CREATE TABLE IF NOT EXISTS for dim_ and map_
   const sqls = calls.map((c) => c.sqlText).join("\n---\n");
   expect(sqls).toContain('CREATE TABLE IF NOT EXISTS "ANALYTICS"."ZUGZUG"."DIM_COUNTRY"');
   expect(sqls).toContain('"COUNTRY_CODE" VARCHAR PRIMARY KEY');
-  expect(sqls).toContain('LABEL VARCHAR');
+  expect(sqls).toContain("LABEL VARCHAR");
   expect(sqls).toContain('CREATE TABLE IF NOT EXISTS "ANALYTICS"."ZUGZUG"."MAP_COUNTRY"');
   expect(sqls).toContain('"RAW" VARCHAR PRIMARY KEY');
   expect(sqls).toContain('"COUNTRY_CODE" VARCHAR NOT NULL');
 });
 
-test("commitCanonical: empty drafts returns {rowsWritten: 0} without any SQL", async () => {
+test("commitRecord: empty drafts returns {rowsWritten: 0} without any SQL", async () => {
   const { conn, calls } = mockConn(() => []);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  const result = await a.commitCanonical(
-    { dimId: "country", dimTable: "ZUGZUG.DIM_COUNTRY", mapTable: "ZUGZUG.MAP_COUNTRY", keyCol: "COUNTRY_CODE" },
+  const result = await a.commitRecord(
+    {
+      refTableId: "country",
+      dimTable: "ZUGZUG.DIM_COUNTRY",
+      mapTable: "ZUGZUG.MAP_COUNTRY",
+      keyCol: "COUNTRY_CODE",
+    },
     [],
   );
   expect(result.rowsWritten).toBe(0);
   expect(calls).toHaveLength(0);
 });
 
-test("commitCanonical: issues two MERGE statements (dim + map)", async () => {
+test("commitRecord: issues two MERGE statements (refTable + map)", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 3 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  const result = await a.commitCanonical(
-    { dimId: "country", dimTable: "ZUGZUG.DIM_COUNTRY", mapTable: "ZUGZUG.MAP_COUNTRY", keyCol: "COUNTRY_CODE" },
+  const result = await a.commitRecord(
+    {
+      refTableId: "country",
+      dimTable: "ZUGZUG.DIM_COUNTRY",
+      mapTable: "ZUGZUG.MAP_COUNTRY",
+      keyCol: "COUNTRY_CODE",
+    },
     [
       { raw: "USA", key: "US", label: "United States" },
       { raw: "U.S.", key: "US", label: "United States" },
@@ -374,49 +380,50 @@ test("commitCanonical: issues two MERGE statements (dim + map)", async () => {
   expect(result.rowsWritten).toBe(6);
 });
 
-test("commitCanonical: dim MERGE deduplicates by key (one row per unique key, last label wins)", async () => {
+test("commitRecord: refTable MERGE deduplicates by key (one row per unique key, last label wins)", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  await a.commitCanonical(
-    { dimId: "country", dimTable: "ZUGZUG.DIM_COUNTRY", mapTable: "ZUGZUG.MAP_COUNTRY", keyCol: "COUNTRY_CODE" },
+  await a.commitRecord(
+    {
+      refTableId: "country",
+      dimTable: "ZUGZUG.DIM_COUNTRY",
+      mapTable: "ZUGZUG.MAP_COUNTRY",
+      keyCol: "COUNTRY_CODE",
+    },
     [
       { raw: "USA", key: "US", label: "United States" },
       { raw: "U.S.", key: "US", label: "United States of America" }, // same key, different label
     ],
   );
-  // The dim MERGE should have ONE pair of placeholders, not two
-  const dimBinds = calls[0].binds ?? [];
-  expect(dimBinds).toHaveLength(2); // [key, label]
-  expect(dimBinds[0]).toBe("US");
+  // The refTable MERGE should have ONE pair of placeholders, not two
+  const refTableBinds = calls[0].binds ?? [];
+  expect(refTableBinds).toHaveLength(2); // [key, label]
+  expect(refTableBinds[0]).toBe("US");
   // Last-write-wins on label (deterministic by input order)
-  expect(dimBinds[1]).toBe("United States of America");
+  expect(refTableBinds[1]).toBe("United States of America");
 });
 
-test("commitCanonical: chunks at 1000 rows", async () => {
+test("commitRecord: chunks at 1000 rows", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  // 1500 unique drafts → dim has 1500 unique keys, map has 1500 rows
+  // 1500 unique drafts → refTable has 1500 unique keys, map has 1500 rows
   const drafts = Array.from({ length: 1500 }, (_, i) => ({
     raw: `raw-${i}`,
     key: `key-${i}`,
     label: `Label ${i}`,
   }));
-  await a.commitCanonical(
-    { dimId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" },
-    drafts,
-  );
+  await a.commitRecord({ refTableId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" }, drafts);
   // 2 MERGEs per chunk × 2 chunks (1000 + 500) = 4 statements
   expect(calls).toHaveLength(4);
 });
 
-test("commitCanonical: handles drafts with null label (uses NULL bind)", async () => {
+test("commitRecord: handles drafts with null label (uses NULL bind)", async () => {
   const { conn, calls } = mockConn(() => [{ _affected: 1 }]);
   const a = new SnowflakeAdapter(CREDS, () => conn);
-  await a.commitCanonical(
-    { dimId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" },
-    [{ raw: "raw1", key: "k1", label: null }],
-  );
-  const dimBinds = calls[0].binds ?? [];
-  expect(dimBinds[0]).toBe("k1");
-  expect(dimBinds[1]).toBeNull();
+  await a.commitRecord({ refTableId: "x", dimTable: "S.D", mapTable: "S.M", keyCol: "K" }, [
+    { raw: "raw1", key: "k1", label: null },
+  ]);
+  const refTableBinds = calls[0].binds ?? [];
+  expect(refTableBinds[0]).toBe("k1");
+  expect(refTableBinds[1]).toBeNull();
 });

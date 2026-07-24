@@ -16,8 +16,14 @@ Element.prototype.getBoundingClientRect = function () {
   const r = ORIG_RECT.call(this);
   if (r.width === 0 && r.height === 0) {
     return {
-      x: 0, y: 0, top: 0, left: 0, right: 800, bottom: 600,
-      width: 800, height: 600,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 600,
+      width: 800,
+      height: 600,
       toJSON: () => ({}),
     } as DOMRect;
   }
@@ -31,7 +37,9 @@ Element.prototype.getBoundingClientRect = function () {
 if (typeof globalThis.ResizeObserver === "undefined") {
   class TestResizeObserver {
     private cb: ResizeObserverCallback;
-    constructor(cb: ResizeObserverCallback) { this.cb = cb; }
+    constructor(cb: ResizeObserverCallback) {
+      this.cb = cb;
+    }
     observe(target: Element) {
       const rect = target.getBoundingClientRect();
       // Fire synchronously: tests render synchronously and query the DOM
@@ -55,7 +63,9 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   }
   Object.defineProperty(globalThis, "ResizeObserver", {
-    value: TestResizeObserver, configurable: true, writable: true,
+    value: TestResizeObserver,
+    configurable: true,
+    writable: true,
   });
 }
 
@@ -68,7 +78,9 @@ if (typeof globalThis.IntersectionObserver === "undefined") {
     disconnect() {}
   }
   Object.defineProperty(globalThis, "IntersectionObserver", {
-    value: TestIntersectionObserver, configurable: true, writable: true,
+    value: TestIntersectionObserver,
+    configurable: true,
+    writable: true,
   });
 }
 

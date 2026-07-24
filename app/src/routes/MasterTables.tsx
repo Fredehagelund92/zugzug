@@ -4,8 +4,8 @@ import { useSearchParams } from "react-router-dom";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { TableTabStrip } from "../components/TableTabStrip";
 import { TablePane } from "../components/TablePane";
-import { useDimensions, useSources, useCanEdit, useStoreLoading } from "../store";
-import { useOpenTabs, dimIdFromTabId } from "../lib/open-tabs";
+import { useRefTables, useSources, useCanEdit, useStoreLoading } from "../store";
+import { useOpenTabs, refTableIdFromTabId } from "../lib/open-tabs";
 import { useCreateTableModal } from "../lib/create-table-modal";
 import { availableModes, type Mode } from "../lib/available-modes";
 import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
@@ -18,7 +18,7 @@ import { foldUrlMode, readStoredMode, writeStoredMode } from "../lib/tab-mode";
 
 export function MasterTables() {
   usePageTitle("Tables");
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const loading = useStoreLoading();
   const [searchParams, setSearchParams] = useSearchParams();
   const { tabs, activeId: activeTabId, openTab } = useOpenTabs();
@@ -27,7 +27,7 @@ export function MasterTables() {
 
   // URL → state fold, run once — but only after the store has delivered the
   // table list. initStore() is fire-and-forget (TenantLayout), so on a cold
-  // profile this route mounts with dims=[] and a mount-only fold would drop
+  // profile this route mounts with refTables=[] and a mount-only fold would drop
   // every deep-linked tab; the URL writer below stays gated until the fold
   // lands, so ?open/?active survive the wait.
   // A workspace with no tables never folds — there is nothing to open, and
@@ -35,40 +35,40 @@ export function MasterTables() {
   const didInitFromUrl = useRef(false);
   // Whether the URL fold opened any tab. The blank-page fallback below runs in
   // the same commit with a stale (pre-fold) `tabs` capture, so without this
-  // gate it would open dims[0] AFTER the fold and steal active from a deep link.
+  // gate it would open refTables[0] AFTER the fold and steal active from a deep link.
   const urlOpenedTab = useRef(false);
   useEffect(() => {
     if (didInitFromUrl.current) return;
-    if (dims.length === 0) return;
+    if (refTables.length === 0) return;
     didInitFromUrl.current = true;
     const openParam = searchParams.get("open");
     const activeParam = searchParams.get("active");
     if (openParam) {
       for (const did of openParam.split(",").filter(Boolean)) {
-        if (dims.some((d) => d.id === did)) {
+        if (refTables.some((d) => d.id === did)) {
           openTab(did);
           urlOpenedTab.current = true;
         }
       }
     }
-    if (activeParam && dims.some((d) => d.id === activeParam)) {
+    if (activeParam && refTables.some((d) => d.id === activeParam)) {
       openTab(activeParam);
       urlOpenedTab.current = true;
     }
-  }, [dims, searchParams, openTab]);
+  }, [refTables, searchParams, openTab]);
 
   // Fallback so the page is never blank when the user has tables but no
   // session-restored tabs (first visit on a clean profile).
   useEffect(() => {
     if (!didInitFromUrl.current || urlOpenedTab.current) return;
-    if (tabs.length === 0 && dims.length > 0) {
-      openTab(dims[0].id);
+    if (tabs.length === 0 && refTables.length > 0) {
+      openTab(refTables[0].id);
     }
-  }, [tabs.length, dims, openTab]);
+  }, [tabs.length, refTables, openTab]);
 
-  const dimById = useMemo(() => new Map(dims.map((d) => [d.id, d])), [dims]);
+  const refTableById = useMemo(() => new Map(refTables.map((d) => [d.id, d])), [refTables]);
 
-  // Per-tab mode state. Keyed by dimId so tab switches don't clobber a pane's
+  // Per-tab mode state. Keyed by refTableId so tab switches don't clobber a pane's
   // chosen mode. Mount fold reads ?mode= for the active tab once; thereafter,
   // user-driven mode changes flow through onModeChange (state + localStorage),
   // and the tab-switch effect mirrors the active tab's mode back into the URL.
@@ -78,19 +78,19 @@ export function MasterTables() {
   const foldedDimsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!activeTabId) return;
-    const dimId = dimIdFromTabId(activeTabId);
-    if (foldedDimsRef.current.has(dimId)) return;
-    const dim = dimById.get(dimId);
-    if (!dim) return;
-    const modes = availableModes(dim, sources);
-    const folded = foldUrlMode(searchParams, dimId, modes);
-    setPerTabMode((cur) => ({ ...cur, [dimId]: folded }));
-    foldedDimsRef.current.add(dimId);
-  }, [activeTabId, dimById, sources, searchParams]);
+    const refTableId = refTableIdFromTabId(activeTabId);
+    if (foldedDimsRef.current.has(refTableId)) return;
+    const refTable = refTableById.get(refTableId);
+    if (!refTable) return;
+    const modes = availableModes(refTable, sources);
+    const folded = foldUrlMode(searchParams, refTableId, modes);
+    setPerTabMode((cur) => ({ ...cur, [refTableId]: folded }));
+    foldedDimsRef.current.add(refTableId);
+  }, [activeTabId, refTableById, sources, searchParams]);
 
-  const onModeChange = useCallback((dimId: string, m: Mode) => {
-    setPerTabMode((cur) => ({ ...cur, [dimId]: m }));
-    writeStoredMode(dimId, m);
+  const onModeChange = useCallback((refTableId: string, m: Mode) => {
+    setPerTabMode((cur) => ({ ...cur, [refTableId]: m }));
+    writeStoredMode(refTableId, m);
   }, []);
 
   // Single URL writer for every param this route manages (open/active/mode/
@@ -107,19 +107,19 @@ export function MasterTables() {
     // by a more recent run of this same effect.
     const next = new URLSearchParams(window.location.search);
     if (tabs.length > 0) {
-      next.set("open", tabs.map((t) => t.dimId).join(","));
+      next.set("open", tabs.map((t) => t.refTableId).join(","));
     } else {
       next.delete("open");
     }
     if (activeTabId) {
-      const dimId = dimIdFromTabId(activeTabId);
-      next.set("active", dimId);
-      const dim = dimById.get(dimId);
+      const refTableId = refTableIdFromTabId(activeTabId);
+      next.set("active", refTableId);
+      const refTable = refTableById.get(refTableId);
       // Only manage ?mode/?value once the fold has landed in perTabMode —
       // the fold's ref flips one commit before its setState applies, and
       // falling back to readStoredMode in that gap wrote a stale mode.
-      const mode = perTabMode[dimId];
-      if (dim && mode !== undefined) {
+      const mode = perTabMode[refTableId];
+      if (refTable && mode !== undefined) {
         if (mode !== "records") next.set("mode", mode);
         else next.delete("mode");
         if (mode !== "match") next.delete("value");
@@ -131,7 +131,7 @@ export function MasterTables() {
     if (next.toString() !== window.location.search.replace(/^\?/, "")) {
       setSearchParams(next, { replace: true });
     }
-  }, [tabs, activeTabId, perTabMode, dimById, setSearchParams]);
+  }, [tabs, activeTabId, perTabMode, refTableById, setSearchParams]);
 
   if (loading) {
     return (
@@ -146,7 +146,7 @@ export function MasterTables() {
     );
   }
 
-  if (dims.length === 0) {
+  if (refTables.length === 0) {
     return (
       <div className="mx-auto w-full max-w-[var(--wide)] p-4 md:p-8">
         <NoTablesYet from="tables" onCreateRequested={canEdit ? create.open : undefined} />
@@ -160,19 +160,19 @@ export function MasterTables() {
 
       <div className="relative flex-1 min-h-0">
         {tabs.map((tab) => {
-          const dim = dimById.get(tab.dimId);
-          if (!dim) return null;
+          const refTable = refTableById.get(tab.refTableId);
+          if (!refTable) return null;
           const isActive = tab.id === activeTabId;
-          const modes = availableModes(dim, sources);
-          const mode: Mode = perTabMode[tab.dimId] ?? readStoredMode(tab.dimId, modes);
+          const modes = availableModes(refTable, sources);
+          const mode: Mode = perTabMode[tab.refTableId] ?? readStoredMode(tab.refTableId, modes);
           return (
             <div key={tab.id} hidden={!isActive} className="absolute inset-0 flex flex-col min-h-0">
               <TablePane
-                dim={dim}
+                refTable={refTable}
                 isActive={isActive}
                 mode={mode}
                 modes={modes}
-                onModeChange={(m) => onModeChange(tab.dimId, m)}
+                onModeChange={(m) => onModeChange(tab.refTableId, m)}
               />
             </div>
           );

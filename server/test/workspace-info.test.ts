@@ -16,14 +16,14 @@ test("workspace/info response shape includes all required fields", () => {
   const body = {
     adapter: "duckdb" as const,
     writable: false,
-    canonicalMode: "postgres-export" as const,
+    recordMode: "postgres-export" as const,
     warehouseDb: env.warehouseDb || null,
   };
 
   expect(body).toMatchObject({
     adapter: expect.any(String),
     writable: expect.any(Boolean),
-    canonicalMode: expect.any(String),
+    recordMode: expect.any(String),
   });
   // warehouseDb is a nullable string
   expect(body.warehouseDb === null || typeof body.warehouseDb === "string").toBe(true);

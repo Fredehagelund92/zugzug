@@ -22,17 +22,10 @@ const columns: ColumnDef<Row>[] = [
 ];
 
 function setup() {
-  const rows: Row[] = [
-    { id: "1", text: LONG_TEXT, email: LONG_EMAIL, url: LONG_URL },
-  ];
+  const rows: Row[] = [{ id: "1", text: LONG_TEXT, email: LONG_EMAIL, url: LONG_URL }];
   return render(
     <UndoStackProvider>
-      <DataGrid
-        rows={rows}
-        columns={columns}
-        rowKey={(r) => r.id}
-        onCommit={async () => {}}
-      />
+      <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} />
     </UndoStackProvider>,
   );
 }
@@ -40,27 +33,21 @@ function setup() {
 describe("truncated cell hover reveal (title attribute)", () => {
   test("TextCell Renderer span carries title equal to the full value", () => {
     const { container } = setup();
-    const span = container.querySelector<HTMLElement>(
-      `span.truncate[title="${LONG_TEXT}"]`,
-    );
+    const span = container.querySelector<HTMLElement>(`span.truncate[title="${LONG_TEXT}"]`);
     expect(span).not.toBeNull();
     expect(span!.title).toBe(LONG_TEXT);
   });
 
   test("EmailCell Renderer span carries title equal to the full email", () => {
     const { container } = setup();
-    const span = container.querySelector<HTMLElement>(
-      `span.truncate[title="${LONG_EMAIL}"]`,
-    );
+    const span = container.querySelector<HTMLElement>(`span.truncate[title="${LONG_EMAIL}"]`);
     expect(span).not.toBeNull();
     expect(span!.title).toBe(LONG_EMAIL);
   });
 
   test("UrlCell Renderer span carries title equal to the full URL", () => {
     const { container } = setup();
-    const span = container.querySelector<HTMLElement>(
-      `span.truncate[title="${LONG_URL}"]`,
-    );
+    const span = container.querySelector<HTMLElement>(`span.truncate[title="${LONG_URL}"]`);
     expect(span).not.toBeNull();
     expect(span!.title).toBe(LONG_URL);
   });

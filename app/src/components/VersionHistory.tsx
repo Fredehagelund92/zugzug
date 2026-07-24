@@ -16,13 +16,18 @@ function relativeTime(iso: string): string {
 }
 
 interface VersionHistoryProps {
-  dimId: string;
+  refTableId: string;
   onClose: () => void;
   onRollbackSuccess: () => void;
   flash: (msg: string, tone?: "info" | "danger") => void;
 }
 
-export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: VersionHistoryProps) {
+export function VersionHistory({
+  refTableId,
+  onClose,
+  onRollbackSuccess,
+  flash,
+}: VersionHistoryProps) {
   const tenant = useTenant();
   const isAdmin = can(tenant, "table.rollback");
 
@@ -31,7 +36,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
   const [rolling, setRolling] = useState(false);
 
   const load = () => {
-    fetchVersions(dimId)
+    fetchVersions(refTableId)
       .then(setVersions)
       .catch(() => setVersions([]));
   };
@@ -39,7 +44,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dimId]);
+  }, [refTableId]);
 
   const latestVersion = versions && versions.length > 0 ? versions[0]!.version : null;
 
@@ -47,7 +52,7 @@ export function VersionHistory({ dimId, onClose, onRollbackSuccess, flash }: Ver
     if (!rollbackTarget) return;
     setRolling(true);
     try {
-      await rollbackDim(dimId, rollbackTarget.version);
+      await rollbackDim(refTableId, rollbackTarget.version);
       setRollbackTarget(null);
       load();
       onRollbackSuccess();

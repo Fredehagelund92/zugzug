@@ -92,7 +92,7 @@ describe("v1 session-cookie fallback", () => {
     expect(res!.status).toBe(401);
   });
 
-  it("bearer SA traffic still works (dimensions list)", async () => {
+  it("bearer SA traffic still works (refTables list)", async () => {
     const res = await handleV1Route(bearerReq(`/api/t/${SLUG}/v1/tables`, saToken));
     expect(res!.status).toBe(200);
   });

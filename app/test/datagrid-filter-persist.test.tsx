@@ -22,9 +22,7 @@ const rows: Row[] = [
   { id: "3", region: "EU" },
 ];
 
-const columns: ColumnDef<Row>[] = [
-  { field: "region", label: "Region", config: { type: "text" } },
-];
+const columns: ColumnDef<Row>[] = [{ field: "region", label: "Region", config: { type: "text" } }];
 
 function cellByText(container: HTMLElement, text: string): HTMLElement {
   const cells = Array.from(container.querySelectorAll<HTMLElement>('[role="gridcell"]'));
@@ -49,9 +47,7 @@ describe("initialFilterSet + onFilterSetChange", () => {
     const onFilterSetChange = vi.fn();
     const initialFilterSet: FilterSet = {
       conjunction: "and",
-      conditions: [
-        { id: "c1", field: "region", operator: "equals", value: "EU" },
-      ],
+      conditions: [{ id: "c1", field: "region", operator: "equals", value: "EU" }],
     };
 
     const { container } = render(

@@ -28,7 +28,7 @@ function ago(iso: string): string {
   return `${Math.floor(s / 3600)}h ago`;
 }
 
-/** Per-row inline conflict banner shown above a canonical row in TablePane when
+/** Per-row inline conflict banner shown above a record row in TablePane when
  *  a save was rejected because another user beat the current user to the row. */
 export function ConflictBanner({
   conflict,

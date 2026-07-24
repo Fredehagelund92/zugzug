@@ -31,8 +31,8 @@ export function useNavLinks() {
       integrationsPullApi: `/app/${slug}/settings/pull-api`,
       integrationsWebhooks: `/app/${slug}/settings/webhooks`,
       integrationsServiceAccounts: `/app/${slug}/settings/service-accounts`,
-      table: (dimId: string, mode?: "match" | "review") =>
-        `/app/${slug}/tables?open=${dimId}&active=${dimId}${mode ? `&mode=${mode}` : ""}`,
+      table: (refTableId: string, mode?: "match" | "review") =>
+        `/app/${slug}/tables?open=${refTableId}&active=${refTableId}${mode ? `&mode=${mode}` : ""}`,
       tablesFocus: (key: string) => `/app/${slug}/tables?focus=${encodeURIComponent(key)}`,
     }),
     [slug],

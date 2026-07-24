@@ -1,0 +1,18 @@
+# Publish is pull-first; direct warehouse write is opt-in
+
+Publish folds drafts and record edits into a new version (`vN`) and materializes the `dim_<x>` / `map_<x>` tables. There are two delivery modes. In the default (`MOTHERDUCK_WRITABLE=false`), those tables live in Zugzug's own Postgres master store and consumers **pull** them — the cursor-paginated Pull API, an on-demand Parquet snapshot, or ingesting straight from Postgres. In the writable mode (`MOTHERDUCK_WRITABLE=true`), each publish **`MERGE`s directly** into a MotherDuck database the user's dbt project reads. The go-live question is not which exists — both do — but which we *recommend* for production.
+
+We recommend pull. The direct-write path is convenient but bypasses the warehouse team's control plane. A data team's discipline is version control → CI → dev/stage → prod, reviewed and tested; direct write mutates prod tables out-of-band. It offers no environment promotion (one target, no "publish to dev, validate, promote"), the physical tables are mutated in place (`vN` is a logical Postgres counter, not an immutable warehouse artifact you can diff or time-travel), and a field change issues a live `ALTER` / `DROP COLUMN` against a table dbt models depend on, with no staging. That is exactly the out-of-band mutation platform teams distrust.
+
+So publish is **pull-first**: the recommended production integration is that Zugzug publishes to its own store and the warehouse team ingests through *their own* pipeline — a dbt source, a dlt job, or a scheduled Flight reading the Pull API or a Parquet snapshot. Their existing pipeline then provides dev→prod promotion, CI, and review for free. Direct warehouse write stays **supported as an opt-in convenience** for solo and small-team setups and the demo; it is documented with its tradeoffs and is not removed.
+
+A corollary is kept explicitly out of scope: we do **not** build environment promotion, physically versioned tables, or schema-change staging into Zugzug. Those are the downstream pipeline's job, and pull-first means the team already has them — building them into Zugzug would re-implement dbt's role, badly.
+
+Three alternatives were rejected. **Making direct write the default** is the friendliest demo but the least trustworthy posture toward the buyer we care about — the platform team — because it is the tool reaching into prod. **Removing direct write entirely** discards a real convenience for small setups and the "publish straight into MotherDuck" story, with no upside once it is simply de-emphasized. **Building dev/prod and versioned tables into Zugzug** is a large surface that duplicates the downstream pipeline and is unnecessary under pull-first.
+
+## Consequences
+
+- **README and ARCHITECTURE reframe pull as the recommended production path.** The writable adapter is presented as opt-in, with an explicit note that it writes into prod out-of-band — no environment promotion, in-place mutation. Today's neutral wording ("writes directly into a MotherDuck database your dbt project already reads") is updated to state the tradeoff.
+- **ROADMAP "Out of scope" gains** environment promotion / dev→prod / physically versioned tables, owned by the downstream pipeline, so it does not re-litigate in issues.
+- **No code is removed.** `MOTHERDUCK_WRITABLE` and the writable adapter stay exactly as they are; this decision is positioning and documentation. (A startup log line noting that writable mode bypasses the downstream pipeline is a possible follow-up, not part of this decision.)
+- The `dim_<x>` / `map_<x>` shape is unchanged and remains the contract regardless of channel — consistent with [ADR-0006](./0006-internal-names-match-the-interface.md) keeping those names.

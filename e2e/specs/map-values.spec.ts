@@ -2,7 +2,7 @@
  * Journey #4 — seed source values → map in Review → publish.
  *
  * Path B: the demo stack runs with ATTACH_WAREHOUSE=false, so a real warehouse
- * scan is not available. Instead, this spec seeds `dim_scan_value` rows via
+ * scan is not available. Instead, this spec seeds `source_scan_value` rows via
  * POST /api/e2e/seed-scan-values (workspace-admin gated) to simulate the output
  * of a scan, then exercises the high-value map→publish flow end-to-end.
  *
@@ -12,7 +12,7 @@
  */
 import { test, expect, uniqueSuffix } from "../fixtures";
 
-/** The demo stack seeds a "Country" dimension with canonical records already in
+/** The demo stack seeds a "Country" refTable with record records already in
  *  place. We plant a raw value not yet in map_country so the Review page shows
  *  it as "New". */
 const SEED_DIM_ID = "country";
@@ -23,15 +23,15 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   const suffix = uniqueSuffix();
   // Use a raw value that is definitely not in map_country yet (unique per run).
   const rawValue = `E2E Country ${suffix}`;
-  // We'll map it to "Australia" (a stable canonical label from the demo seed).
+  // We'll map it to "Australia" (a stable record label from the demo seed).
   const targetLabel = "Australia";
 
-  // ── 1. Seed dim_scan_value rows via the E2E helper endpoint ───────────────
+  // ── 1. Seed source_scan_value rows via the E2E helper endpoint ───────────────
   // This simulates what a warehouse scan would produce. The endpoint is
   // workspace-admin gated; the E2E admin session satisfies that requirement.
   const seedResp = await request.post("/api/e2e/seed-scan-values", {
     data: {
-      dimId: SEED_DIM_ID,
+      refTableId: SEED_DIM_ID,
       occurrences: [
         {
           raw: rawValue,
@@ -90,7 +90,7 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   const comboInput = page.locator('[role="combobox"]');
   await expect(comboInput).toBeVisible({ timeout: 5_000 });
 
-  // ── 6. Search for and pick the target canonical label ─────────────────────
+  // ── 6. Search for and pick the target record label ─────────────────────
   await comboInput.fill(targetLabel);
   const option = page.locator('[role="option"]', { hasText: targetLabel }).first();
   await expect(option).toBeVisible();

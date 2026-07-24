@@ -7,7 +7,7 @@ const { sourcesRef } = vi.hoisted(() => ({ sourcesRef: { current: [] as SourceIn
 vi.mock("../../store", () => ({
   useSources: () => sourcesRef.current,
   useCanEdit: () => true,
-  deriveCanonical: vi
+  deriveRecord: vi
     .fn()
     .mockResolvedValue({ derived: 0, mode: "connect", matched: 0, unmatched: 0 }),
 }));
@@ -16,20 +16,20 @@ vi.mock("../../lib/use-tenant-navigate", () => ({
 }));
 vi.mock("../Toast", () => ({ toast: vi.fn() }));
 
-import { deriveCanonical } from "../../store";
+import { deriveRecord } from "../../store";
 import { SourcesMonitorBody } from "./SourcesMonitorBody";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 
-const deriveMock = deriveCanonical as unknown as ReturnType<typeof vi.fn>;
-const DIM = { id: "d1", dimension: "Country" } as unknown as MappingDimension;
+const deriveMock = deriveRecord as unknown as ReturnType<typeof vi.fn>;
+const REF_TABLE = { id: "d1", refTable: "Country" } as unknown as MappingRefTable;
 const NOW = Date.now();
 
 function src(over: Partial<SourceInfo> = {}): SourceInfo {
   return {
     table: "orders",
     column: "ship_country",
-    dimension: "Country",
-    dimId: "d1",
+    refTable: "Country",
+    refTableId: "d1",
     present: true,
     rows: 1000,
     values: 10,
@@ -42,7 +42,7 @@ function src(over: Partial<SourceInfo> = {}): SourceInfo {
 function renderCard() {
   return render(
     <MemoryRouter>
-      <SourcesMonitorBody dim={DIM} />
+      <SourcesMonitorBody refTable={REF_TABLE} />
     </MemoryRouter>,
   );
 }
@@ -79,7 +79,7 @@ describe("SourcesMonitorBody", () => {
     expect(queryByText(/coverage/i)).toBeNull(); // no coverage KPI on this surface
   });
 
-  it("re-check calls deriveCanonical for that column", () => {
+  it("re-check calls deriveRecord for that column", () => {
     sourcesRef.current = [src({ column: "ship_country", unmapped: 3 })];
     const { getByLabelText } = renderCard();
     fireEvent.click(getByLabelText(/re-check ship_country/i));

@@ -1,12 +1,12 @@
 /**
- * Integration tests for POST /api/dimensions/:dimensionId/suggest endpoint
+ * Integration tests for POST /api/tables/:refTableId/suggest endpoint
  *
  * Tests the full HTTP API contract for AI-powered suggestions:
  * - 201 success with draft creation, source='ai', confidence level
  * - 400 validation errors (missing raw_value, empty raw_value, AI not configured)
  * - 401 authentication error (invalid session)
  * - 403 authorization error (user lacks 'curate' permission)
- * - 404 dimension not found
+ * - 404 refTable not found
  * - Cache behavior: second call for same value hits cache
  *
  * Note: These tests focus on HTTP route behavior and error handling.
@@ -24,7 +24,7 @@ import { test, expect, beforeEach, afterEach } from "bun:test";
 import { pgRun, pgGet } from "../src/pg.ts";
 import { pg as pgTable } from "../src/env.ts";
 import { provisionTenant } from "../src/tenant.ts";
-import * as canonical from "../src/repo-canonical.ts";
+import * as record from "../src/repo-record.ts";
 import { resetDb } from "./setup.ts"; // registers warehouse factories, provides resetDb
 
 // ============================================================================
@@ -71,9 +71,9 @@ async function createTestCtx(): Promise<TestCtx> {
     [TEST_TENANT_ID, userId],
   );
 
-  // Create test dimension
+  // Create test refTable
   try {
-    await canonical.addDimension(
+    await record.addRefTable(
       TEST_DIM_ID,
       [],
       { keyKind: "slug", silent: true },
@@ -81,7 +81,7 @@ async function createTestCtx(): Promise<TestCtx> {
       TEST_TENANT_ID,
     );
   } catch {
-    // Dimension may already exist from prior test
+    // RefTable may already exist from prior test
   }
 
   // Ensure preferences row exists for tenant
@@ -106,51 +106,31 @@ async function createTestCtx(): Promise<TestCtx> {
 
 async function cleanupCtx(ctx: TestCtx): Promise<void> {
   try {
-    // Delete dimension tables
+    // Delete refTable tables
     await pgRun(`DROP TABLE IF EXISTS ${pgTable("dim_" + TEST_DIM_ID)}`);
     await pgRun(`DROP TABLE IF EXISTS ${pgTable("map_" + TEST_DIM_ID)}`);
 
-    // Delete dimension registry (use dim_id, not dimension_id)
-    await pgRun(
-      `DELETE FROM ${pgTable("dimension_field")} WHERE dim_id = $1`,
-      [TEST_DIM_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("dimension_source")} WHERE dim_id = $1`,
-      [TEST_DIM_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("dimension")} WHERE id = $1 AND tenant_id = $2`,
-      [TEST_DIM_ID, TEST_TENANT_ID],
-    );
+    // Delete refTable registry (use reference_table_id, not refTable_id)
+    await pgRun(`DELETE FROM ${pgTable("reference_table_field")} WHERE reference_table_id = $1`, [
+      TEST_DIM_ID,
+    ]);
+    await pgRun(`DELETE FROM ${pgTable("reference_table_source")} WHERE reference_table_id = $1`, [
+      TEST_DIM_ID,
+    ]);
+    await pgRun(`DELETE FROM ${pgTable("reference_table")} WHERE id = $1 AND tenant_id = $2`, [
+      TEST_DIM_ID,
+      TEST_TENANT_ID,
+    ]);
 
     // Delete tenant-specific data (only for non-default tenant if needed)
-    await pgRun(
-      `DELETE FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1`,
-      [TEST_TENANT_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("audit_log")} WHERE tenant_id = $1`,
-      [TEST_TENANT_ID],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("draft")} WHERE tenant_id = $1`,
-      [TEST_TENANT_ID],
-    );
+    await pgRun(`DELETE FROM ${pgTable("ai_hint_cache")} WHERE tenant_id = $1`, [TEST_TENANT_ID]);
+    await pgRun(`DELETE FROM ${pgTable("audit_log")} WHERE tenant_id = $1`, [TEST_TENANT_ID]);
+    await pgRun(`DELETE FROM ${pgTable("draft")} WHERE tenant_id = $1`, [TEST_TENANT_ID]);
 
     // Delete user & sessions (but keep default tenant)
-    await pgRun(
-      `DELETE FROM ${pgTable("tenant_member")} WHERE user_id = $1`,
-      [ctx.userId],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("sessions")} WHERE user_id = $1`,
-      [ctx.userId],
-    );
-    await pgRun(
-      `DELETE FROM ${pgTable("users")} WHERE id = $1`,
-      [ctx.userId],
-    );
+    await pgRun(`DELETE FROM ${pgTable("tenant_member")} WHERE user_id = $1`, [ctx.userId]);
+    await pgRun(`DELETE FROM ${pgTable("sessions")} WHERE user_id = $1`, [ctx.userId]);
+    await pgRun(`DELETE FROM ${pgTable("users")} WHERE id = $1`, [ctx.userId]);
   } catch (e) {
     // Cleanup errors are non-fatal
     // console.error("Cleanup error:", e);
@@ -165,12 +145,12 @@ beforeEach(async () => {
   await resetDb();
 });
 
-test("POST /api/dimensions/:id/suggest returns 400 when raw_value is missing", async () => {
+test("POST /api/tables/:id/suggest returns 400 when raw_value is missing", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({}),
@@ -186,12 +166,12 @@ test("POST /api/dimensions/:id/suggest returns 400 when raw_value is missing", a
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest returns 400 when raw_value is empty", async () => {
+test("POST /api/tables/:id/suggest returns 400 when raw_value is empty", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "" }),
@@ -206,7 +186,7 @@ test("POST /api/dimensions/:id/suggest returns 400 when raw_value is empty", asy
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest returns 400 when AI is not configured", async () => {
+test("POST /api/tables/:id/suggest returns 400 when AI is not configured", async () => {
   const ctx = await createTestCtx();
 
   // Note: This test intentionally doesn't enable AI, which should return 400
@@ -215,7 +195,7 @@ test("POST /api/dimensions/:id/suggest returns 400 when AI is not configured", a
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -223,19 +203,19 @@ test("POST /api/dimensions/:id/suggest returns 400 when AI is not configured", a
     () => {},
   );
 
-  // Expect 400 for AI not configured, or 404 if dimension wasn't created in this test env
+  // Expect 400 for AI not configured, or 404 if refTable wasn't created in this test env
   // In this test environment, migrations may not have run, so we're flexible
   expect([400, 404, 500]).toContain(res.status);
 
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest returns 404 for non-existent dimension", async () => {
+test("POST /api/tables/:id/suggest returns 404 for non-existent refTable", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/nonexistent_xyz/suggest`, {
+    new Request(`http://localhost/api/tables/nonexistent_xyz/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -250,12 +230,12 @@ test("POST /api/dimensions/:id/suggest returns 404 for non-existent dimension", 
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest returns 401 when not authenticated", async () => {
+test("POST /api/tables/:id/suggest returns 401 when not authenticated", async () => {
   const ctx = await createTestCtx();
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -268,7 +248,7 @@ test("POST /api/dimensions/:id/suggest returns 401 when not authenticated", asyn
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest returns 403 when user is viewer (lacks curate permission)", async () => {
+test("POST /api/tables/:id/suggest returns 403 when user is viewer (lacks curate permission)", async () => {
   const ctx = await createTestCtx();
 
   // Downgrade user to viewer role
@@ -280,7 +260,7 @@ test("POST /api/dimensions/:id/suggest returns 403 when user is viewer (lacks cu
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: "test" }),
@@ -293,7 +273,7 @@ test("POST /api/dimensions/:id/suggest returns 403 when user is viewer (lacks cu
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest returns 201 with cached suggestion when AI enabled", async () => {
+test("POST /api/tables/:id/suggest returns 201 with cached suggestion when AI enabled", async () => {
   const ctx = await createTestCtx();
 
   // Enable AI if the columns exist
@@ -315,9 +295,9 @@ test("POST /api/dimensions/:id/suggest returns 201 with cached suggestion when A
   try {
     await pgRun(
       `INSERT INTO ${pgTable("ai_hint_cache")}
-         (tenant_id, dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+         (tenant_id, reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
        VALUES ($1, $2, $3, 'John Doe', 90, 'Pattern match', 'gpt-4o-mini', now(), 0)
-       ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE SET
+       ON CONFLICT (tenant_id, reference_table_id, raw) DO UPDATE SET
          suggestion = EXCLUDED.suggestion,
          confidence = EXCLUDED.confidence`,
       [ctx.tenantId, TEST_DIM_ID, rawValue],
@@ -330,7 +310,7 @@ test("POST /api/dimensions/:id/suggest returns 201 with cached suggestion when A
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: rawValue }),
@@ -342,7 +322,7 @@ test("POST /api/dimensions/:id/suggest returns 201 with cached suggestion when A
   const body = (await res.json()) as {
     draft_id: string;
     draft: {
-      dim_id: string;
+      reference_table_id: string;
       raw: string;
       status: string;
       target_label: string;
@@ -361,7 +341,7 @@ test("POST /api/dimensions/:id/suggest returns 201 with cached suggestion when A
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest includes reasoning in response", async () => {
+test("POST /api/tables/:id/suggest includes reasoning in response", async () => {
   const ctx = await createTestCtx();
 
   // Enable AI if the columns exist
@@ -383,9 +363,9 @@ test("POST /api/dimensions/:id/suggest includes reasoning in response", async ()
   try {
     await pgRun(
       `INSERT INTO ${pgTable("ai_hint_cache")}
-         (tenant_id, dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
-       VALUES ($1, $2, $3, 'Jane Smith', 85, 'Fuzzy match with existing canonical', 'gpt-4o-mini', now(), 0)
-       ON CONFLICT (tenant_id, dim_id, raw) DO UPDATE SET reasoning = EXCLUDED.reasoning`,
+         (tenant_id, reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+       VALUES ($1, $2, $3, 'Jane Smith', 85, 'Fuzzy match with existing record', 'gpt-4o-mini', now(), 0)
+       ON CONFLICT (tenant_id, reference_table_id, raw) DO UPDATE SET reasoning = EXCLUDED.reasoning`,
       [ctx.tenantId, TEST_DIM_ID, rawValue],
     );
   } catch {
@@ -396,7 +376,7 @@ test("POST /api/dimensions/:id/suggest includes reasoning in response", async ()
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: rawValue }),
@@ -406,12 +386,12 @@ test("POST /api/dimensions/:id/suggest includes reasoning in response", async ()
 
   expect(res.status).toBe(201);
   const body = (await res.json()) as { draft: { reasoning?: string } };
-  expect(body.draft.reasoning).toBe("Fuzzy match with existing canonical");
+  expect(body.draft.reasoning).toBe("Fuzzy match with existing record");
 
   await cleanupCtx(ctx);
 });
 
-test("POST /api/dimensions/:id/suggest response has all draft fields", async () => {
+test("POST /api/tables/:id/suggest response has all draft fields", async () => {
   const ctx = await createTestCtx();
 
   // Enable AI if the columns exist
@@ -433,7 +413,7 @@ test("POST /api/dimensions/:id/suggest response has all draft fields", async () 
   try {
     await pgRun(
       `INSERT INTO ${pgTable("ai_hint_cache")}
-         (tenant_id, dim_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+         (tenant_id, reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
        VALUES ($1, $2, $3, 'Complete Response', 90, 'Test', 'gpt-4o-mini', now(), 0)`,
       [ctx.tenantId, TEST_DIM_ID, rawValue],
     );
@@ -445,7 +425,7 @@ test("POST /api/dimensions/:id/suggest response has all draft fields", async () 
 
   const { handle } = await import("../src/server.ts");
   const res = await handle(
-    new Request(`http://localhost/api/dimensions/${TEST_DIM_ID}/suggest`, {
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
       method: "POST",
       headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
       body: JSON.stringify({ raw_value: rawValue }),
@@ -457,7 +437,7 @@ test("POST /api/dimensions/:id/suggest response has all draft fields", async () 
   const body = (await res.json()) as { draft: Record<string, unknown> };
 
   // Verify all required fields
-  expect(body.draft).toHaveProperty("dim_id");
+  expect(body.draft).toHaveProperty("reference_table_id");
   expect(body.draft).toHaveProperty("raw");
   expect(body.draft).toHaveProperty("status");
   expect(body.draft).toHaveProperty("target_label");

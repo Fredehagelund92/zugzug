@@ -6,7 +6,7 @@ import { TableDetail } from "./TableDetail";
 import { NodeOverview } from "./NodeOverview";
 import { useCatalogTree } from "./useCatalogTree";
 import { nodeById } from "./catalog-tree";
-import { searchCatalog, useDimensions } from "../../store";
+import { searchCatalog, useRefTables } from "../../store";
 import { CatalogSearchResults, type SearchResultRow } from "./CatalogSearchResults";
 import { useNavLinks } from "../../lib/use-tenant-navigate";
 
@@ -18,7 +18,7 @@ const TREE_WIDTH_STEP = 16;
 
 export function CatalogBrowser(): JSX.Element {
   const { roots, open, loadingIds, toggle } = useCatalogTree();
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const nav = useNavLinks();
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -213,14 +213,14 @@ export function CatalogBrowser(): JSX.Element {
             database={searchSelected.dbId}
             tablePath={searchSelected.tablePath}
             connectionLabel={connectionLabel}
-            dims={dims}
+            refTables={refTables}
           />
         ) : selected?.kind === "table" && dbId ? (
           <TableDetail
             database={dbId}
             tablePath={selected.id.split("/").slice(3).join("/")}
             connectionLabel={connectionLabel}
-            dims={dims}
+            refTables={refTables}
           />
         ) : selected ? (
           <NodeOverview node={selected} />

@@ -170,8 +170,8 @@ export function WebhookVerificationReference() {
               <dd className="text-ink-2">
                 <code>table.published</code>
               </dd>
-              <dt className="font-mono uppercase tracking-wider text-ink-3">dimension</dt>
-              <dd className="text-ink-2">Dimension ID</dd>
+              <dt className="font-mono uppercase tracking-wider text-ink-3">refTable</dt>
+              <dd className="text-ink-2">RefTable ID</dd>
               <dt className="font-mono uppercase tracking-wider text-ink-3">kind</dt>
               <dd className="text-ink-2">
                 <code>publish</code> or <code>rollback</code>

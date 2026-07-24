@@ -154,7 +154,7 @@ export interface ServiceAccount {
   expires_at: string | null;
 }
 
-export interface DimensionSummary {
+export interface RefTableSummary {
   slug: string;
   label: string;
   key_kind: string;
@@ -232,7 +232,7 @@ export const revokeServiceAccount = (id: string) =>
 
 /* ---------- pull-api shapes for the docs page ---------- */
 
-export async function listDimensions(): Promise<DimensionSummary[]> {
-  const { tables } = await get<{ tables: DimensionSummary[] }>("/v1/tables");
+export async function listRefTables(): Promise<RefTableSummary[]> {
+  const { tables } = await get<{ tables: RefTableSummary[] }>("/v1/tables");
   return tables;
 }

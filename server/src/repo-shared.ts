@@ -1,5 +1,5 @@
 /* repo-shared.ts — cross-domain types, constants, and low-level helpers used by
- * two or more domain files (repo-scan, repo-canonical, repo-drafts, repo-meta).
+ * two or more domain files (repo-scan, repo-record, repo-drafts, repo-meta).
  *
  * Nothing in here imports from any other repo-*.ts module. */
 
@@ -117,7 +117,7 @@ export function parseFieldConfig(
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
-  referencedDimId?: string;
+  referencedRefTableId?: string;
   displayFields?: string[];
   rules?: ConditionalRule[];
   required?: boolean;
@@ -139,7 +139,7 @@ export function parseFieldConfig(
     options?: OptionDef[];
     numberFormat?: NumberFormat;
     ratingMax?: number;
-    referencedDimId?: string;
+    referencedRefTableId?: string;
     displayFields?: string[];
   } = {};
 
@@ -151,12 +151,13 @@ export function parseFieldConfig(
     const max = parsedJson?.ratingMax;
     typeSpecific = { ratingMax: typeof max === "number" && max >= 1 ? max : 5 };
   } else if (type === "linked") {
-    const cfg = parsedJson as { targetDimId?: unknown; displayFields?: unknown } | null;
-    const referencedDimId = typeof cfg?.targetDimId === "string" ? cfg.targetDimId : undefined;
+    const cfg = parsedJson as { targetRefTableId?: unknown; displayFields?: unknown } | null;
+    const referencedRefTableId =
+      typeof cfg?.targetRefTableId === "string" ? cfg.targetRefTableId : undefined;
     const displayFields = Array.isArray(cfg?.displayFields)
       ? (cfg.displayFields as unknown[]).filter((s): s is string => typeof s === "string")
       : ["label"];
-    typeSpecific = { referencedDimId, displayFields };
+    typeSpecific = { referencedRefTableId, displayFields };
   }
 
   // Extract rules (allowed alongside any type-specific config)
@@ -208,8 +209,8 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
-  referencedDimId?: string; // only when type === "linked"
-  displayFields?: string[]; // fields from target dim to surface as lookup cols
+  referencedRefTableId?: string; // only when type === "linked"
+  displayFields?: string[]; // fields from target refTable to surface as lookup cols
   description?: string;
   rules?: ConditionalRule[];
   required?: boolean; // empty values block publish
@@ -217,7 +218,7 @@ export interface FieldDef {
 }
 
 export type { ConditionalRule } from "./conditional-format-types.ts";
-export interface CanonicalValue {
+export interface RecordValue {
   key: string;
   label: string;
   variants?: number;
@@ -238,9 +239,9 @@ export interface MappingValue {
   confidence: number;
   sources: SourceOccurrence[];
 }
-export interface DimensionMeta {
+export interface RefTableMeta {
   id: string;
-  dimension: string;
+  refTable: string;
   dimTable: string;
   mapTable: string;
   keyCol: string;
@@ -248,15 +249,15 @@ export interface DimensionMeta {
   keyKind: "slug" | "external_id";
   orderingMode: "derived" | "manual";
 }
-/** A registered warehouse source column for a dimension, with best-effort counts.
+/** A registered warehouse source column for a refTable, with best-effort counts.
  *  `present` = the table is reachable in the warehouse (false when missing or the
  *  warehouse isn't attached); counts are 0 when empty/unreachable. Always returned
  *  so the UI can show the wiring even before any data lands. */
 export interface SourceInfo {
   table: string;
   column: string;
-  dimension: string;
-  dimId: string;
+  refTable: string;
+  refTableId: string;
   present: boolean;
   rows: number;
   values: number;
@@ -276,7 +277,7 @@ export interface CatalogTable {
   table: string;
   columns: string[];
 }
-/** Compact per-table publish state for the dimension list (ADR-0005). The
+/** Compact per-table publish state for the refTable list (ADR-0005). The
  *  count-only sibling of PublishState — the dashboard needs the size of the
  *  delta, not the keys. changedRecords = PublishState.changedKeys.length. */
 export interface PublishSummary {
@@ -286,13 +287,13 @@ export interface PublishSummary {
   pendingDrafts: number;
   changedRecords: number;
 }
-export interface MappingDimension extends DimensionMeta {
+export interface MappingRefTable extends RefTableMeta {
   description: string | null;
   color: PaletteName | null;
   ownerUserId: string | null;
   ownerName: string | null;
   nextPosition: string | null;
-  canonical: CanonicalValue[];
+  record: RecordValue[];
   counts: {
     newCount: number;
     mappedCount: number;
@@ -306,7 +307,7 @@ export interface MappingDimension extends DimensionMeta {
   publish?: PublishSummary;
 }
 export interface Draft {
-  dimId: string;
+  refTableId: string;
   raw: string;
   status: "mapped" | "skipped" | "rejected";
   targetLabel: string | null;
@@ -375,7 +376,7 @@ export const slug = (s: string) =>
 
 export const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
-/** canonical table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
+/** record table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
 export const cq = (display: string) => display.split(".").map(qid).join(".");
 
 export const rel = (secs: number): string => {
@@ -407,11 +408,11 @@ export function refOf(s: { databaseName: string; schemaName: string; tableName: 
 }
 
 /** Resolve an adapter Ref for a bare 'schema.table' string by looking up the
- *  warehouse catalog from any dimension_source row that already registered
- *  this (dim, schema, table). Used for nameTable / topUnmapped / similar where
+ *  warehouse catalog from any reference_table_source row that already registered
+ *  this (refTable, schema, table). Used for nameTable / topUnmapped / similar where
  *  the caller has a stored string but no databaseId in hand. */
 export async function refForRegisteredTable(
-  dimId: string,
+  refTableId: string,
   stored: string,
   tenantId: string,
 ): Promise<Ref | null> {
@@ -419,24 +420,24 @@ export async function refForRegisteredTable(
   if (parts.length !== 2) return null;
   const row = await pgGet<{ catalog: string }>(
     `SELECT wd.database_name AS "catalog"
-       FROM ${pg("dimension_source")} s
+       FROM ${pg("reference_table_source")} s
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
-      WHERE s.tenant_id = $1 AND s.dim_id = $2
+      WHERE s.tenant_id = $1 AND s.reference_table_id = $2
         AND s.schema_name = $3 AND s.table_name = $4
       LIMIT 1`,
-    [tenantId, dimId, parts[0], parts[1]],
+    [tenantId, refTableId, parts[0], parts[1]],
   );
   return row ? { catalog: row.catalog, schema: parts[0], table: parts[1] } : null;
 }
 
-export interface DimMeta {
+export interface RefTableBasics {
   dimTable: string;
   mapTable: string;
   keyCol: string;
   orderingMode: "derived" | "manual";
 }
 
-export async function sourcesOf(dimId: string, tenantId: string): Promise<SourceDef[]> {
+export async function sourcesOf(refTableId: string, tenantId: string): Promise<SourceDef[]> {
   const rows = await pgAll<{
     databaseName: string;
     schemaName: string;
@@ -447,11 +448,11 @@ export async function sourcesOf(dimId: string, tenantId: string): Promise<Source
             s.schema_name    AS "schemaName",
             s.table_name     AS "tableName",
             s.column_name    AS "columnName"
-       FROM ${pg("dimension_source")} s
+       FROM ${pg("reference_table_source")} s
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
-      WHERE s.dim_id = $1 AND s.tenant_id = $2
+      WHERE s.reference_table_id = $1 AND s.tenant_id = $2
       ORDER BY 1, 2, 3, 4`,
-    [dimId, tenantId],
+    [refTableId, tenantId],
   );
   return rows.map((r) => ({
     table: `${r.schemaName}.${r.tableName}`,
@@ -462,10 +463,10 @@ export async function sourcesOf(dimId: string, tenantId: string): Promise<Source
   }));
 }
 
-/** Keep only sources whose warehouse table actually resolves — a dimension
+/** Keep only sources whose warehouse table actually resolves — a refTable
  *  registered against tables absent in the relevant warehouse_database still
  *  scans the rest instead of throwing. */
-export async function liveSources(dimId: string, tenantId: string): Promise<SourceDef[]> {
+export async function liveSources(refTableId: string, tenantId: string): Promise<SourceDef[]> {
   const { getAdapter } = await import("./warehouse/registry.ts");
   const adapter = await getAdapter();
   const rows = await pgAll<{
@@ -478,11 +479,11 @@ export async function liveSources(dimId: string, tenantId: string): Promise<Sour
             s.schema_name    AS "schemaName",
             s.table_name     AS "tableName",
             s.column_name    AS "columnName"
-       FROM ${pg("dimension_source")} s
+       FROM ${pg("reference_table_source")} s
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
-      WHERE s.tenant_id = $1 AND s.dim_id = $2
+      WHERE s.tenant_id = $1 AND s.reference_table_id = $2
       ORDER BY 1, 2, 3, 4`,
-    [tenantId, dimId],
+    [tenantId, refTableId],
   );
   const out: SourceDef[] = [];
   for (const r of rows) {
@@ -507,12 +508,15 @@ export async function liveSources(dimId: string, tenantId: string): Promise<Sour
   return out;
 }
 
-export async function dimMeta(dimId: string, tenantId: string): Promise<DimMeta | null> {
-  return pgGet<DimMeta>(
+export async function refTableMeta(
+  refTableId: string,
+  tenantId: string,
+): Promise<RefTableBasics | null> {
+  return pgGet<RefTableBasics>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
             COALESCE(ordering_mode, 'derived') AS "orderingMode"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
 }
 

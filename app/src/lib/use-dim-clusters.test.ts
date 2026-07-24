@@ -3,11 +3,11 @@ import { renderHook, waitFor } from "@testing-library/react";
 
 vi.mock("../api", () => ({ apiFetch: vi.fn() }));
 import { apiFetch } from "../api";
-import { useDimClusters, type DimClusterFeed } from "./use-dim-clusters";
+import { useRefTableClusters, type RefTableClusterFeed } from "./use-ref-table-clusters";
 
 const mockFetch = apiFetch as unknown as ReturnType<typeof vi.fn>;
 
-const FEED: DimClusterFeed = {
+const FEED: RefTableClusterFeed = {
   clusters: [
     {
       key: "usa",
@@ -30,10 +30,10 @@ function okResponse(body: unknown): Response {
 
 beforeEach(() => mockFetch.mockReset());
 
-describe("useDimClusters", () => {
+describe("useRefTableClusters", () => {
   it("loads the cluster feed and calls the clusters endpoint", async () => {
     mockFetch.mockResolvedValue(okResponse(FEED));
-    const { result } = renderHook(() => useDimClusters({ dimId: "d1", filter: "new" }));
+    const { result } = renderHook(() => useRefTableClusters({ refTableId: "d1", filter: "new" }));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.clusters).toHaveLength(1);
@@ -43,7 +43,7 @@ describe("useDimClusters", () => {
     expect(result.current.error).toBeNull();
 
     const calledPath = mockFetch.mock.calls[0][0] as string;
-    expect(calledPath).toContain("/dimensions/d1/clusters");
+    expect(calledPath).toContain("/tables/d1/clusters");
     expect(calledPath).toContain("filter=new");
   });
 
@@ -53,14 +53,14 @@ describe("useDimClusters", () => {
       status: 500,
       json: async () => ({}),
     } as unknown as Response);
-    const { result } = renderHook(() => useDimClusters({ dimId: "d1", filter: "new" }));
+    const { result } = renderHook(() => useRefTableClusters({ refTableId: "d1", filter: "new" }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe("HTTP 500");
     expect(result.current.clusters).toEqual([]);
   });
 
-  it("does not fetch when dimId is null", async () => {
-    const { result } = renderHook(() => useDimClusters({ dimId: null, filter: "new" }));
+  it("does not fetch when refTableId is null", async () => {
+    const { result } = renderHook(() => useRefTableClusters({ refTableId: null, filter: "new" }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(mockFetch).not.toHaveBeenCalled();
     expect(result.current.coverage.pct).toBe(0);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { TableDetail } from "./TableDetail";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 
 const LONG_VALUE =
   "this-is-a-very-long-varchar-sample-value-that-exceeds-eighty-characters-in-total-length";
@@ -18,15 +18,15 @@ vi.mock("../../store", async (orig) => ({
 }));
 afterEach(cleanup);
 
-const dims: MappingDimension[] = [
+const refTables: MappingRefTable[] = [
   {
     id: "country",
-    dimension: "Country",
+    refTable: "Country",
     dimTable: "zugzug.dim_country",
     mapTable: "zugzug.map_country",
     keyCol: "country_key",
     rows: 0,
-    canonical: [],
+    record: [],
     counts: {
       newCount: 0,
       mappedCount: 0,
@@ -45,7 +45,7 @@ describe("TableDetail", () => {
         database="db-1"
         tablePath="authco.users"
         connectionLabel="🦆 MotherDuck"
-        dims={dims}
+        refTables={refTables}
       />,
     );
     await waitFor(() => screen.getByText("country"));
@@ -59,7 +59,7 @@ describe("TableDetail", () => {
         database="db-1"
         tablePath="authco.users"
         connectionLabel="🦆 MotherDuck"
-        dims={dims}
+        refTables={refTables}
       />,
     );
     await waitFor(() => screen.getAllByText("peek values"));
@@ -74,7 +74,7 @@ describe("TableDetail", () => {
         database="db-1"
         tablePath="authco.users"
         connectionLabel="🦆 MotherDuck"
-        dims={dims}
+        refTables={refTables}
       />,
     );
     // Wait for columns to load
@@ -96,7 +96,7 @@ describe("TableDetail", () => {
         database="db-1"
         tablePath="authco.users"
         connectionLabel="🦆 MotherDuck"
-        dims={dims}
+        refTables={refTables}
       />,
     );
     await waitFor(() => screen.getAllByText("peek values"));

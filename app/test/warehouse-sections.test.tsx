@@ -6,7 +6,7 @@ import { Warehouse } from "../src/routes/settings/Warehouse";
 
 vi.mock("../src/store", () => ({
   useWorkspaceInfo: () => ({ adapter: "motherduck", warehouseDb: "md:demo", writable: true }),
-  useDimensions: () => [],
+  useRefTables: () => [],
   useAudit: () => [],
   useConnectionHealth: () => ({
     warehouse: { status: "ok", lastCheckedAt: new Date().toISOString() },

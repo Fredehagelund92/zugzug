@@ -36,7 +36,7 @@ vi.mock("../src/store", async (importOriginal) => {
     ...actual,
     createTable: createTableMock,
     useSources: () => [],
-    useDimensions: () => [],
+    useRefTables: () => [],
   };
 });
 
@@ -92,7 +92,7 @@ describe("CreateTableModal — optimistic close", () => {
 
     // Clean up the dangling promise
     await act(async () => {
-      d.resolve("dim-abc");
+      d.resolve("refTable-abc");
     });
   });
 
@@ -125,10 +125,10 @@ describe("CreateTableModal — optimistic close", () => {
 
     // Resolve the background promise
     await act(async () => {
-      d.resolve("dim-abc");
+      d.resolve("refTable-abc");
     });
 
-    expect(onCreated).toHaveBeenCalledWith("dim-abc");
+    expect(onCreated).toHaveBeenCalledWith("refTable-abc");
   });
 
   test("failure surfaces an error toast with the error message", async () => {
@@ -207,8 +207,8 @@ describe("CreateTableModal — optimistic close", () => {
 
     // The second call succeeds
     await act(async () => {
-      d2.resolve("dim-xyz");
+      d2.resolve("refTable-xyz");
     });
-    expect(onCreated).toHaveBeenCalledWith("dim-xyz");
+    expect(onCreated).toHaveBeenCalledWith("refTable-xyz");
   });
 });

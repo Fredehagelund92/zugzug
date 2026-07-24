@@ -3,7 +3,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 /**
  * Verifies that the boot path of refreshDrafts() (no-arg) fetches all drafts
  * in a single batch request to /drafts rather than fanning out one request per
- * dimension via /dimensions/:id/drafts.
+ * refTable via /tables/:id/drafts.
  *
  * Mocks global.fetch (the underlying transport used by apiFetch) so there are
  * no hoisting issues, and tracks full tenant-prefixed URLs so we can assert
@@ -18,17 +18,17 @@ function setPathname(p: string) {
   });
 }
 
-// Two fake dimensions
-const DIM_A = "dim-alpha";
-const DIM_B = "dim-beta";
+// Two fake refTables
+const DIM_A = "refTable-alpha";
+const DIM_B = "refTable-beta";
 
 const FAKE_DIMS = [
   {
     id: DIM_A,
     name: "Alpha",
     position: 0,
-    canonicalMode: "warehouse",
-    canonicalTable: null,
+    recordMode: "warehouse",
+    recordTable: null,
     keyColumn: null,
     labelColumn: null,
     fields: [],
@@ -38,8 +38,8 @@ const FAKE_DIMS = [
     id: DIM_B,
     name: "Beta",
     position: 1,
-    canonicalMode: "warehouse",
-    canonicalTable: null,
+    recordMode: "warehouse",
+    recordTable: null,
     keyColumn: null,
     labelColumn: null,
     fields: [],
@@ -49,7 +49,7 @@ const FAKE_DIMS = [
 
 const FAKE_DRAFTS = [
   {
-    dimId: DIM_A,
+    refTableId: DIM_A,
     raw: "foo",
     status: "mapped",
     targetLabel: "Foo",
@@ -61,7 +61,7 @@ const FAKE_DRAFTS = [
     reasoning: null,
   },
   {
-    dimId: DIM_B,
+    refTableId: DIM_B,
     raw: "bar",
     status: "skipped",
     targetLabel: null,
@@ -87,14 +87,14 @@ describe("refreshDrafts() boot path — single batch request", () => {
     setPathname("/app/acme/tables");
   });
 
-  test("issues exactly one request to /drafts and zero /dimensions/:id/drafts calls", async () => {
+  test("issues exactly one request to /drafts and zero /tables/:id/drafts calls", async () => {
     const urls: string[] = [];
 
     global.fetch = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input);
       urls.push(url);
 
-      if (url.endsWith("/drafts") && !url.includes("/dimensions/")) {
+      if (url.endsWith("/drafts") && !url.includes("/tables/")) {
         return jsonOk(FAKE_DRAFTS);
       }
       if (url.includes("/users")) {
@@ -103,7 +103,7 @@ describe("refreshDrafts() boot path — single batch request", () => {
           collaborators: [],
         });
       }
-      if (url.includes("/dimensions")) {
+      if (url.includes("/tables")) {
         return jsonOk(FAKE_DIMS);
       }
       if (url.includes("/warehouse/health")) {
@@ -122,15 +122,15 @@ describe("refreshDrafts() boot path — single batch request", () => {
 
     // Exactly one request to /drafts (the batch endpoint)
     expect(urls.filter((u) => u.endsWith("/drafts")).length).toBe(1);
-    // Zero per-dimension draft requests
-    expect(urls.some((u) => /\/dimensions\/.+\/drafts/.test(u))).toBe(false);
+    // Zero per-refTable draft requests
+    expect(urls.some((u) => /\/tables\/.+\/drafts/.test(u))).toBe(false);
 
-    // draftsFlat is populated for both dims via listDrafts (keyed by dkey(dimId, raw))
+    // draftsFlat is populated for both refTables via listDrafts (keyed by dkey(refTableId, raw))
     const draftsA = listDrafts(DIM_A);
     const draftsB = listDrafts(DIM_B);
     expect(draftsA.find((d) => d.raw === "foo")?.status).toBe("mapped");
     expect(draftsB.find((d) => d.raw === "bar")?.status).toBe("skipped");
-    // Verify both dims are present — same as checking dkey(dimId, raw) in draftsFlat
+    // Verify both refTables are present — same as checking dkey(refTableId, raw) in draftsFlat
     expect(draftsA).toHaveLength(1);
     expect(draftsB).toHaveLength(1);
   });

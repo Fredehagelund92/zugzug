@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   useDrafts,
-  useDimensions,
+  useRefTables,
   useCanEdit,
   useCurrentUser,
   rejectDrafts,
@@ -51,19 +51,19 @@ interface AuthorGroup {
 }
 
 interface TableGroup {
-  dimId: string;
-  dimName: string;
+  refTableId: string;
+  refTableName: string;
   authorGroups: AuthorGroup[];
   totalDrafts: number;
 }
 
 export function AwaitingReview() {
   const allDrafts = useDrafts();
-  const dims = useDimensions();
+  const refTables = useRefTables();
   const canEdit = useCanEdit();
   const me = useCurrentUser();
 
-  // selection: Set of "dimId::raw" keys
+  // selection: Set of "refTableId::raw" keys
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // reject UI state
   const [rejecting, setRejecting] = useState(false);
@@ -85,15 +85,15 @@ export function AwaitingReview() {
 
   // Group by table → author
   const tableGroups = useMemo((): TableGroup[] => {
-    const dimMap = new Map(dims.map((d) => [d.id, d.dimension]));
+    const refTableMap = new Map(refTables.map((d) => [d.id, d.refTable]));
     const byDim = new Map<string, Draft[]>();
     for (const d of othersMappedDrafts) {
-      const arr = byDim.get(d.dimId) ?? [];
+      const arr = byDim.get(d.refTableId) ?? [];
       arr.push(d);
-      byDim.set(d.dimId, arr);
+      byDim.set(d.refTableId, arr);
     }
     const groups: TableGroup[] = [];
-    for (const [dimId, drafts] of byDim) {
+    for (const [refTableId, drafts] of byDim) {
       const byAuthor = new Map<string, { name: string; drafts: Draft[] }>();
       for (const d of drafts) {
         const entry = byAuthor.get(d.user.id) ?? { name: d.user.name, drafts: [] };
@@ -108,14 +108,14 @@ export function AwaitingReview() {
         }),
       );
       groups.push({
-        dimId,
-        dimName: dimMap.get(dimId) ?? dimId,
+        refTableId,
+        refTableName: refTableMap.get(refTableId) ?? refTableId,
         authorGroups,
         totalDrafts: drafts.length,
       });
     }
     return groups.sort((a, b) => b.totalDrafts - a.totalDrafts);
-  }, [othersMappedDrafts, dims]);
+  }, [othersMappedDrafts, refTables]);
 
   if (!myId) return null;
   if (tableGroups.length === 0) return null;
@@ -123,7 +123,7 @@ export function AwaitingReview() {
   const totalCount = othersMappedDrafts.length;
 
   // Selection helpers
-  const selKey = (d: Draft) => `${d.dimId}::${d.raw}`;
+  const selKey = (d: Draft) => `${d.refTableId}::${d.raw}`;
   const tableKeys = (tg: TableGroup) => tg.authorGroups.flatMap((ag) => ag.drafts.map(selKey));
 
   const tableSelState = (tg: TableGroup): "on" | "off" | "mixed" => {
@@ -160,15 +160,15 @@ export function AwaitingReview() {
   // Publish selected
   const handlePublishSelected = async () => {
     if (selectedDrafts.length === 0) return;
-    const dimIds = [...new Set(selectedDrafts.map((d) => d.dimId))];
+    const refTableIds = [...new Set(selectedDrafts.map((d) => d.refTableId))];
     try {
-      const states = await Promise.all(dimIds.map((id) => fetchPublishState(id)));
+      const states = await Promise.all(refTableIds.map((id) => fetchPublishState(id)));
       setPreview(
-        dimIds.map((id, i) => ({
-          dimId: id,
-          dimName: dims.find((d) => d.id === id)?.dimension ?? id,
+        refTableIds.map((id, i) => ({
+          refTableId: id,
+          refTableName: refTables.find((d) => d.id === id)?.refTable ?? id,
           nextVersion: states[i].version + 1,
-          drafts: selectedDrafts.filter((d) => d.dimId === id),
+          drafts: selectedDrafts.filter((d) => d.refTableId === id),
           changedKeys: states[i].changedKeys,
         })),
       );
@@ -188,12 +188,12 @@ export function AwaitingReview() {
       for (const g of preview) {
         try {
           const res = await commit(
-            g.dimId,
+            g.refTableId,
             g.drafts.map((d) => d.raw),
           );
           outcomes.push({
-            dimId: g.dimId,
-            dimName: g.dimName,
+            refTableId: g.refTableId,
+            refTableName: g.refTableName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
             error: null,
@@ -204,8 +204,8 @@ export function AwaitingReview() {
           const isRequiredEmpty =
             err instanceof ApiCodeError && err.code === "REQUIRED_FIELDS_EMPTY";
           outcomes.push({
-            dimId: g.dimId,
-            dimName: g.dimName,
+            refTableId: g.refTableId,
+            refTableName: g.refTableName,
             committed: 0,
             rowsRecovered: 0,
             error: isRequiredEmpty
@@ -235,23 +235,24 @@ export function AwaitingReview() {
   const handleRejectSelected = async () => {
     if (selectedDrafts.length === 0 || !rejectReason.trim()) return;
     setRejectLoading(true);
-    const byDim = new Map<string, { dimName: string; raws: string[] }>();
+    const byDim = new Map<string, { refTableName: string; raws: string[] }>();
     for (const d of selectedDrafts) {
-      const entry = byDim.get(d.dimId) ?? {
-        dimName: tableGroups.find((tg) => tg.dimId === d.dimId)?.dimName ?? d.dimId,
+      const entry = byDim.get(d.refTableId) ?? {
+        refTableName:
+          tableGroups.find((tg) => tg.refTableId === d.refTableId)?.refTableName ?? d.refTableId,
         raws: [],
       };
       entry.raws.push(d.raw);
-      byDim.set(d.dimId, entry);
+      byDim.set(d.refTableId, entry);
     }
-    const outcomes: Array<{ dimName: string; rejected: boolean; error: string | null }> = [];
-    for (const [dimId, { dimName, raws }] of byDim) {
+    const outcomes: Array<{ refTableName: string; rejected: boolean; error: string | null }> = [];
+    for (const [refTableId, { refTableName, raws }] of byDim) {
       try {
-        await rejectDrafts(dimId, raws, rejectReason.trim());
-        outcomes.push({ dimName, rejected: true, error: null });
+        await rejectDrafts(refTableId, raws, rejectReason.trim());
+        outcomes.push({ refTableName, rejected: true, error: null });
       } catch (err) {
         outcomes.push({
-          dimName,
+          refTableName,
           rejected: false,
           error: err instanceof Error ? err.message : "unknown error",
         });
@@ -269,21 +270,21 @@ export function AwaitingReview() {
       toast(`${total} draft${total === 1 ? "" : "s"} rejected`);
     } else {
       // Partial failure: keep failed tables' rows selected, keep reason input open
-      const failedDimIds = new Set(
+      const failedRefTableIds = new Set(
         [...byDim.entries()]
-          .filter(([, { dimName }]) => failed.some((f) => f.dimName === dimName))
-          .map(([dimId]) => dimId),
+          .filter(([, { refTableName }]) => failed.some((f) => f.refTableName === refTableName))
+          .map(([refTableId]) => refTableId),
       );
       setSelected((prev) => {
         const next = new Set<string>();
         for (const k of prev) {
-          const dimId = k.split("::")[0];
-          if (failedDimIds.has(dimId)) next.add(k);
+          const refTableId = k.split("::")[0];
+          if (failedRefTableIds.has(refTableId)) next.add(k);
         }
         return next;
       });
       // Keep rejecting open so reason input remains visible
-      const names = failed.map((f) => `${f.dimName} failed (${f.error})`).join("; ");
+      const names = failed.map((f) => `${f.refTableName} failed (${f.error})`).join("; ");
       toast(
         succeededCount > 0
           ? `Rejected ${succeededCount} table${succeededCount === 1 ? "" : "s"}, but ${names}`
@@ -293,13 +294,13 @@ export function AwaitingReview() {
     }
   };
 
-  const isCollapsed = (dimId: string, total: number) => {
-    if (dimId in collapsed) return collapsed[dimId];
+  const isCollapsed = (refTableId: string, total: number) => {
+    if (refTableId in collapsed) return collapsed[refTableId];
     return total > COLLAPSE_THRESHOLD;
   };
 
-  const toggleCollapse = (dimId: string, total: number) => {
-    setCollapsed((prev) => ({ ...prev, [dimId]: !isCollapsed(dimId, total) }));
+  const toggleCollapse = (refTableId: string, total: number) => {
+    setCollapsed((prev) => ({ ...prev, [refTableId]: !isCollapsed(refTableId, total) }));
   };
 
   return (
@@ -357,7 +358,7 @@ export function AwaitingReview() {
       {/* Table groups */}
       <div className="divide-y divide-line">
         {tableGroups.map((tg) => {
-          const collapsed_ = isCollapsed(tg.dimId, tg.totalDrafts);
+          const collapsed_ = isCollapsed(tg.refTableId, tg.totalDrafts);
           const allDraftsInTable = tg.authorGroups.flatMap((ag) => ag.drafts);
           const visibleDrafts = collapsed_
             ? allDraftsInTable.slice(0, COLLAPSE_THRESHOLD)
@@ -365,18 +366,18 @@ export function AwaitingReview() {
           const hiddenCount = tg.totalDrafts - COLLAPSE_THRESHOLD;
 
           return (
-            <div key={tg.dimId}>
+            <div key={tg.refTableId}>
               {/* Table header row */}
               <div className="flex items-center gap-3 bg-surface-2 px-4 py-2">
                 {canEdit && (
                   <Checkbox
                     state={tableSelState(tg)}
                     onClick={() => toggleTable(tg)}
-                    aria-label={`Select all in ${tg.dimName}`}
+                    aria-label={`Select all in ${tg.refTableName}`}
                   />
                 )}
                 <span className="flex-1 font-mono text-[11px] font-semibold text-ink-2">
-                  {tg.dimName}
+                  {tg.refTableName}
                   <span className="ml-2 font-normal text-ink-3">
                     · {tg.totalDrafts} record{tg.totalDrafts === 1 ? "" : "s"}
                   </span>
@@ -384,7 +385,7 @@ export function AwaitingReview() {
                 {tg.totalDrafts > COLLAPSE_THRESHOLD && (
                   <button
                     type="button"
-                    onClick={() => toggleCollapse(tg.dimId, tg.totalDrafts)}
+                    onClick={() => toggleCollapse(tg.refTableId, tg.totalDrafts)}
                     className="font-mono text-[10px] text-ink-3 hover:text-ink-2"
                   >
                     {collapsed_ ? `show all ${tg.totalDrafts}` : "collapse"}
@@ -449,7 +450,7 @@ export function AwaitingReview() {
               {collapsed_ && hiddenCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => toggleCollapse(tg.dimId, tg.totalDrafts)}
+                  onClick={() => toggleCollapse(tg.refTableId, tg.totalDrafts)}
                   className="w-full px-4 py-2 text-left font-mono text-[11px] text-ink-3 hover:text-ink-2"
                 >
                   and {hiddenCount} more…

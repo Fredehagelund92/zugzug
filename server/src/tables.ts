@@ -1,5 +1,5 @@
 /* tables.ts — POST /api/tables orchestrator. Composes the existing repo
-   primitives (addDimension, addField, addColumnOption, addSource, deriveCanonical)
+   primitives (addRefTable, addField, addColumnOption, addSource, deriveRecord)
    inside a single Postgres transaction with one consolidated audit entry. The
    per-primitive audit emissions are suppressed via `silent: true`; the wrapper
    emits one summary entry at the end. */
@@ -7,7 +7,7 @@
 import * as repo from "./repo.ts";
 import type { OptionDef, PaletteName, NumberFormat } from "./repo-shared.ts";
 import { PALETTE_NAMES } from "./repo-shared.ts";
-import type { QualifiedSource, ImportRow } from "./repo-canonical.ts";
+import type { QualifiedSource, ImportRow } from "./repo-record.ts";
 import { pgGet, pgTx } from "./pg.ts";
 import { pg, env } from "./env.ts";
 import { slug } from "./repo.ts"; // exported util
@@ -132,15 +132,15 @@ export async function createTable(
   const id = slug(name);
 
   // Pre-flight existence check (also enforced by PK)
-  const existing = await pgGet(`SELECT id FROM ${pg("dimension")} WHERE id = $1`, [id]);
+  const existing = await pgGet(`SELECT id FROM ${pg("reference_table")} WHERE id = $1`, [id]);
   if (existing) throw new AppError("NAME_TAKEN", `a table called "${name}" already exists`, 409);
 
-  // Step 1 (addDimension) issues its own DDL — keep it outside the transaction
+  // Step 1 (addRefTable) issues its own DDL — keep it outside the transaction
   // since postgres.js wraps `pool.begin` in a single connection and the
   // primitive uses pgRun freely. We still drive every subsequent write through
   // pgTx for atomicity of the description/source/field/audit fold.
   const keyKind = input.mode === "external_id" ? "external_id" : "slug";
-  await repo.addDimension(name, [], { keyKind, silent: true }, userId, tenantId);
+  await repo.addRefTable(name, [], { keyKind, silent: true }, userId, tenantId);
 
   let fieldCount = 0;
   let derivedCount = 0;
@@ -155,7 +155,7 @@ export async function createTable(
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
         throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${s.table}`, 422);
       }
-      const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+      const { resolveDefaultDatabase } = await import("./repo-record.ts");
       normalizedSource = {
         databaseId: await resolveDefaultDatabase(tenantId),
         schemaName: parts[0],
@@ -167,7 +167,7 @@ export async function createTable(
 
   await pgTx(async ({ run }) => {
     // 2. Identity extras (description, color)
-    await run(`UPDATE ${pg("dimension")} SET description = $1, color = $2 WHERE id = $3`, [
+    await run(`UPDATE ${pg("reference_table")} SET description = $1, color = $2 WHERE id = $3`, [
       input.description?.trim() || null,
       input.color ?? null,
       id,
@@ -176,9 +176,9 @@ export async function createTable(
     // 3. Source binding(s) — write directly so we stay in the pgTx connection
     if (input.mode === "source" && normalizedSource) {
       await run(
-        `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+        `INSERT INTO ${pg("reference_table_source")} (reference_table_id, tenant_id, database_id, schema_name, table_name, column_name)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+         ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
         [
           id,
           tenantId,
@@ -203,20 +203,20 @@ export async function createTable(
         if (parts.length !== 2 || !parts[0] || !parts[1]) {
           throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${e.table}`, 422);
         }
-        const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+        const { resolveDefaultDatabase } = await import("./repo-record.ts");
         databaseId = await resolveDefaultDatabase(tenantId);
         schemaName = parts[0];
         tableName = parts[1];
       }
       await run(
-        `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+        `INSERT INTO ${pg("reference_table_source")} (reference_table_id, tenant_id, database_id, schema_name, table_name, column_name)
          VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+         ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
         [id, tenantId, databaseId, schemaName, tableName, e.idColumn],
       );
-      // External-ID also needs the name binding; this lives on the dimension row
+      // External-ID also needs the name binding; this lives on the refTable row
       await run(
-        `UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
+        `UPDATE ${pg("reference_table")} SET name_table = $1, name_id_col = $2, name_col = $3 WHERE id = $4`,
         [`${schemaName}.${tableName}`, e.idColumn, e.nameColumn, id],
       );
     }
@@ -266,17 +266,17 @@ export async function createTable(
       }
       return { label: r.label, fields };
     });
-    const res = await repo.importCanonical(id, rows, userId, tenantId, { silent: true });
+    const res = await repo.importRecord(id, rows, userId, tenantId, { silent: true });
     derivedCount = res.created;
   }
 
   // 5. Seeding (source / external_id modes)
-  //    deriveCanonical still takes the legacy "schema.table" string; we
+  //    deriveRecord still takes the legacy "schema.table" string; we
   //    reconstruct it from the normalized parts so external clients can keep
   //    using either input shape.
   if (input.mode === "source" && normalizedSource) {
     const sourceTable = `${normalizedSource.schemaName}.${normalizedSource.tableName}`;
-    const r = await repo.deriveCanonical(
+    const r = await repo.deriveRecord(
       id,
       sourceTable,
       normalizedSource.columnName,
@@ -290,7 +290,7 @@ export async function createTable(
   if (input.mode === "external_id" && input.external) {
     const e = input.external;
     const externalTable = "databaseId" in e ? `${e.schemaName}.${e.tableName}` : e.table;
-    const r = await repo.deriveCanonical(
+    const r = await repo.deriveRecord(
       id,
       externalTable,
       e.idColumn,

@@ -5,6 +5,7 @@ hand-validate against a real Snowflake account before declaring Phase 2
 production-ready. Each block can be pasted into a Snowflake Worksheet.
 
 **Test fixture creds used below:**
+
 - account: abc123.eu-west-1
 - database: ANALYTICS
 - schema: PUBLIC
@@ -178,7 +179,7 @@ Expected: 5 rows — 3 from PARTNERS (EU=2, US=1, us=1), 2 from COUNTRIES (US=1,
 
 ---
 
-## ensureCanonicalTables
+## ensureRecordTables
 
 ```sql
 CREATE TABLE IF NOT EXISTS "ANALYTICS"."ZUGZUG"."DIM_COUNTRY" (
@@ -198,7 +199,7 @@ Expected: both tables exist after running.
 
 ---
 
-## commitCanonical — small batch (3 drafts)
+## commitRecord — small batch (3 drafts)
 
 Task 9 chose the simpler form `USING (VALUES (?, ?), ...) AS S(colA, colB)`.
 
@@ -210,6 +211,7 @@ USING (VALUES (?, ?), (?, ?)) AS S("COUNTRY_CODE", LABEL)
 ON T."COUNTRY_CODE" = S."COUNTRY_CODE"
 WHEN NOT MATCHED THEN INSERT ("COUNTRY_CODE", LABEL) VALUES (S."COUNTRY_CODE", S.LABEL);
 ```
+
 Binds: `['US', 'United States', 'GB', 'United Kingdom']`
 
 map_country MERGE:
@@ -220,6 +222,7 @@ USING (VALUES (?, ?), (?, ?), (?, ?)) AS S("RAW", "COUNTRY_CODE")
 ON T."RAW" = S."RAW"
 WHEN NOT MATCHED THEN INSERT ("RAW", "COUNTRY_CODE") VALUES (S."RAW", S."COUNTRY_CODE");
 ```
+
 Binds: `['USA', 'US', 'U.S.', 'US', 'United Kingdom', 'GB']`
 
 Expected: dim_country gets 2 rows (US, GB); map_country gets 3 rows.

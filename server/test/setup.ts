@@ -23,7 +23,7 @@ export const TEST_DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzu
    used to require a super-admin user too; that's been relaxed to skip when
    no users exist, so this walker no longer seeds one. */
 
-/** Drop all app/canonical schemas, then re-apply migrations in order with a
+/** Drop all app/record schemas, then re-apply migrations in order with a
  *  test super-admin seeded between 0020 and 0021. Each test that needs a
  *  clean slate calls this in beforeEach. */
 export async function resetDb(): Promise<void> {
@@ -64,7 +64,6 @@ export async function resetDb(): Promise<void> {
         VALUES (${file.replace(/\.sql$/, "")}, ${Date.now()})
       `;
     }
-
   } finally {
     await sql.end({ timeout: 5 });
   }

@@ -92,9 +92,7 @@ function getRenderedRowKeys(container: HTMLElement): string[] {
 
 describe("records search", () => {
   test("search box placeholder is 'Search records…'", () => {
-    const { getByPlaceholderText } = render(
-      <RecordsSearchWrapper rows={ROWS} columns={COLUMNS} />,
-    );
+    const { getByPlaceholderText } = render(<RecordsSearchWrapper rows={ROWS} columns={COLUMNS} />);
     expect(getByPlaceholderText("Search records…")).toBeInTheDocument();
   });
 

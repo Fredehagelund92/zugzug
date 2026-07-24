@@ -3,19 +3,19 @@ import { render, screen, fireEvent, act, waitFor } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom";
 import { OpenTabsProvider } from "../src/lib/open-tabs";
 
-const deleteDimension = vi.hoisted(() => vi.fn(async () => {}));
+const deleteRefTable = vi.hoisted(() => vi.fn(async () => {}));
 const canEditFlag = vi.hoisted(() => ({ value: true }));
 
 vi.mock("../src/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/store")>();
   return {
     ...actual,
-    useDimensions: () => [
-      { id: "brand", dimension: "Brand", rows: 5295, color: null },
-      { id: "a", dimension: "A", rows: 2, color: null },
+    useRefTables: () => [
+      { id: "brand", refTable: "Brand", rows: 5295, color: null },
+      { id: "a", refTable: "A", rows: 2, color: null },
     ],
     useCanEdit: () => canEditFlag.value,
-    deleteDimension,
+    deleteRefTable,
   };
 });
 
@@ -44,7 +44,7 @@ async function renderStrip() {
 
 beforeEach(() => {
   localStorage.clear();
-  deleteDimension.mockClear();
+  deleteRefTable.mockClear();
   canEditFlag.value = true;
 });
 
@@ -73,7 +73,7 @@ describe("delete table from the tab strip", () => {
     await act(async () => {
       fireEvent.click(confirm);
     });
-    await waitFor(() => expect(deleteDimension).toHaveBeenCalledWith("brand"));
+    await waitFor(() => expect(deleteRefTable).toHaveBeenCalledWith("brand"));
     // The tab is gone once the delete resolves.
     await waitFor(() => expect(screen.queryByRole("tab", { name: /brand/i })).toBeNull());
   });

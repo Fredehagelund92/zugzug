@@ -4,19 +4,41 @@ import { MemoryRouter } from "react-router-dom";
 import type { SourceInfo } from "../src/store";
 
 const SOURCES: SourceInfo[] = [
-  { table: "authco.users", column: "plan_type", dimension: "Plan", dimId: "d1", present: true, rows: 1000, values: 10, unmapped: 8, scanned: true, scannedAt: "2026-07-17T10:00:00Z" },
-  { table: "billing.invoices", column: "currency", dimension: "Currency", dimId: "d2", present: true, rows: 50, values: 5, unmapped: 0, scanned: true, scannedAt: "2026-07-16T10:00:00Z" },
+  {
+    table: "authco.users",
+    column: "plan_type",
+    refTable: "Plan",
+    refTableId: "d1",
+    present: true,
+    rows: 1000,
+    values: 10,
+    unmapped: 8,
+    scanned: true,
+    scannedAt: "2026-07-17T10:00:00Z",
+  },
+  {
+    table: "billing.invoices",
+    column: "currency",
+    refTable: "Currency",
+    refTableId: "d2",
+    present: true,
+    rows: 50,
+    values: 5,
+    unmapped: 0,
+    scanned: true,
+    scannedAt: "2026-07-16T10:00:00Z",
+  },
 ];
 const removeSource = vi.fn().mockResolvedValue(undefined);
 const useSources = vi.fn(() => SOURCES);
 
 vi.mock("../src/store", () => ({
   useSources,
-  useDimensions: () => [],
+  useRefTables: () => [],
   useCanEdit: () => true,
   useStoreLoading: () => false,
   scanSources: vi.fn(),
-  deriveCanonical: vi.fn(),
+  deriveRecord: vi.fn(),
   removeSource,
 }));
 
@@ -33,7 +55,11 @@ vi.mock("../src/lib/use-tenant-navigate", () => ({
 
 async function renderPage() {
   const { Sources } = await import("../src/routes/Sources");
-  return render(<MemoryRouter><Sources /></MemoryRouter>);
+  return render(
+    <MemoryRouter>
+      <Sources />
+    </MemoryRouter>,
+  );
 }
 
 describe("Sources route", () => {

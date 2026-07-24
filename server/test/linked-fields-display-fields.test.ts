@@ -17,10 +17,10 @@ let SETUP_COUNTER = 0;
 
 async function setupLink(): Promise<{ srcDim: string; tgtDim: string; fkField: string }> {
   const tag = `${++SETUP_COUNTER}_${process.pid}`;
-  const tgtDim = await repo.addDimension(`Country_${tag}`, [], {}, userId, tenantId);
+  const tgtDim = await repo.addRefTable(`Country_${tag}`, [], {}, userId, tenantId);
   await repo.addField(tgtDim, "ISO Code", "text", undefined, { silent: true }, userId, tenantId);
   await repo.addField(tgtDim, "Region", "text", undefined, { silent: true }, userId, tenantId);
-  const srcDim = await repo.addDimension(`Partner_${tag}`, [], {}, userId, tenantId);
+  const srcDim = await repo.addRefTable(`Partner_${tag}`, [], {}, userId, tenantId);
   await repo.addField(
     srcDim,
     "Country",
@@ -28,7 +28,7 @@ async function setupLink(): Promise<{ srcDim: string; tgtDim: string; fkField: s
     undefined,
     {
       silent: true,
-      referencedDimId: tgtDim,
+      referencedRefTableId: tgtDim,
       displayFields: ["label"],
     },
     userId,
@@ -37,7 +37,9 @@ async function setupLink(): Promise<{ srcDim: string; tgtDim: string; fkField: s
   return { srcDim, tgtDim, fkField: "country" };
 }
 
-beforeEach(async () => { await resetDb(); });
+beforeEach(async () => {
+  await resetDb();
+});
 
 test("displayFields update accepts label + valid target fields", async () => {
   const { srcDim, fkField } = await setupLink();
@@ -48,8 +50,8 @@ test("displayFields update accepts label + valid target fields", async () => {
     userId,
     tenantId,
   );
-  const dim = await repo.getDimension(srcDim, tenantId);
-  const cfg = dim?.fields.find((f) => f.field === fkField);
+  const refTable = await repo.getRefTable(srcDim, tenantId);
+  const cfg = refTable?.fields.find((f) => f.field === fkField);
   expect(cfg?.displayFields).toEqual(["label", "iso_code"]);
 });
 
@@ -79,7 +81,7 @@ test("displayFields update rejects duplicates", async () => {
   ).rejects.toThrow(/duplicate/i);
 });
 
-test("displayFields update rejects field not on target dim", async () => {
+test("displayFields update rejects field not on target refTable", async () => {
   const { srcDim, fkField } = await setupLink();
   await expect(
     repo.updateField(
@@ -101,11 +103,11 @@ test("displayFields update tolerates stale entries that were already stored (rec
     userId,
     tenantId,
   );
-  // Simulate target-dim field deletion (the real "stale" scenario):
+  // Simulate target-refTable field deletion (the real "stale" scenario):
   // ISO Code is removed from Country; the stored displayFields still references it.
-  // No repo.deleteField exists, so do a raw DELETE — uniquely-tagged dims ensure no cruft.
+  // No repo.deleteField exists, so do a raw DELETE — uniquely-tagged refTables ensure no cruft.
   await pgAll(
-    `DELETE FROM ${pg("dimension_field")} WHERE dim_id = $1 AND field = $2 AND tenant_id = $3`,
+    `DELETE FROM ${pg("reference_table_field")} WHERE reference_table_id = $1 AND field = $2 AND tenant_id = $3`,
     [tgtDim, "iso_code", tenantId],
   );
   // The user keeps iso_code in displayFields AND adds region — must succeed (recovery path).
@@ -116,23 +118,23 @@ test("displayFields update tolerates stale entries that were already stored (rec
     userId,
     tenantId,
   );
-  const dim = await repo.getDimension(srcDim, tenantId);
-  const cfg = dim?.fields.find((f) => f.field === fkField);
+  const refTable = await repo.getRefTable(srcDim, tenantId);
+  const cfg = refTable?.fields.find((f) => f.field === fkField);
   expect(cfg?.displayFields).toEqual(["label", "iso_code", "region"]);
 });
 
-test("targetDimId is immutable", async () => {
+test("targetRefTableId is immutable", async () => {
   const { srcDim, fkField } = await setupLink();
-  const otherDim = await repo.addDimension("Channel", [], {}, userId, tenantId);
+  const otherDim = await repo.addRefTable("Channel", [], {}, userId, tenantId);
   await expect(
     repo.updateField(
       srcDim,
       fkField,
-      { fieldConfig: JSON.stringify({ targetDimId: otherDim }) },
+      { fieldConfig: JSON.stringify({ targetRefTableId: otherDim }) },
       userId,
       tenantId,
     ),
-  ).rejects.toThrow(/targetDimId.*immutable/i);
+  ).rejects.toThrow(/targetRefTableId.*immutable/i);
 });
 
 test("displayFields update appends audit entry with before/after", async () => {
@@ -144,7 +146,12 @@ test("displayFields update appends audit entry with before/after", async () => {
     userId,
     tenantId,
   );
-  const rows = await pgAll<{ action: string; metadata: string | null; detail: string; table_id: string | null }>(
+  const rows = await pgAll<{
+    action: string;
+    metadata: string | null;
+    detail: string;
+    table_id: string | null;
+  }>(
     `SELECT action, metadata, detail, table_id FROM ${pg("audit_log")}
      WHERE tenant_id = $1 AND action = $2 AND table_id = $3 AND detail = $4
      ORDER BY created_at DESC

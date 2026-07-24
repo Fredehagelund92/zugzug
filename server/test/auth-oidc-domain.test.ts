@@ -58,10 +58,9 @@ test("oidc callback — domain mismatch redirects with error=domain", async () =
       name: "Outsider",
     }),
   };
-  const req = new Request(
-    "http://localhost/api/auth/oidc/callback?code=abc&state=test-state",
-    { headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" } },
-  );
+  const req = new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+    headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+  });
   const res = await handleOidcCallback(req);
   expect(res.status).toBe(302);
   expect(res.headers.get("Location")).toContain("error=domain");

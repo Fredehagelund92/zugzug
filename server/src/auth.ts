@@ -48,7 +48,7 @@ export type Role = "admin" | "editor" | "viewer";
 
 export type Operation =
   | "curate" // create/update drafts
-  | "commit" // commit drafts to canonical
+  | "commit" // commit drafts to record
   | "manage_adapter"; // configure warehouse credentials
 
 /** Static permission matrix. Returns true if the given role may perform op. */

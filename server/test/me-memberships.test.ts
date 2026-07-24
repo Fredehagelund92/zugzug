@@ -87,10 +87,7 @@ describe("GET /api/me/memberships", () => {
 
   test("401 when not signed in", async () => {
     const { handle } = await import("../src/server.ts");
-    const res = await handle(
-      new Request("http://localhost/api/me/memberships"),
-      () => {},
-    );
+    const res = await handle(new Request("http://localhost/api/me/memberships"), () => {});
     expect(res.status).toBe(401);
   });
 });

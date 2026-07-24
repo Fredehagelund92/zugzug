@@ -79,7 +79,12 @@ test("setPreferences as viewer → 403 FORBIDDEN", async () => {
 test("super-admin bypasses the role check even with role='viewer'", async () => {
   await provisionTenant({ id: "tpref_a", label: "A" });
   const sa = new TenantRepo("tpref_a", "viewer", true);
-  await sa.setPreferences({ publishThreshold: 50, suggestThreshold: 50, scanSchedule: null, requireSecondPublisher: false });
+  await sa.setPreferences({
+    publishThreshold: 50,
+    suggestThreshold: 50,
+    scanSchedule: null,
+    requireSecondPublisher: false,
+  });
   expect((await sa.getPreferences()).publishThreshold).toBe(50);
 });
 

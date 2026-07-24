@@ -6,11 +6,11 @@ vi.mock("./ClusterMapperCard", () => ({ ClusterMapperCard: () => <div>FOCUSED CA
 vi.mock("./MatchModeBody", () => ({ MatchModeBody: () => <div>GRID BODY</div> }));
 
 const { draftsRef } = vi.hoisted(() => ({
-  draftsRef: { current: [] as { dimId: string; status: string }[] },
+  draftsRef: { current: [] as { refTableId: string; status: string }[] },
 }));
 vi.mock("../../store", () => ({
   useDrafts: () => draftsRef.current,
-  listDrafts: (dimId: string) => draftsRef.current.filter((d) => d.dimId === dimId),
+  listDrafts: (refTableId: string) => draftsRef.current.filter((d) => d.refTableId === refTableId),
   commit: vi.fn().mockResolvedValue({ committed: 2, rowsRecovered: 0 }),
   useCanEdit: () => true,
 }));
@@ -18,10 +18,10 @@ vi.mock("../Toast", () => ({ toast: vi.fn() }));
 
 import { commit } from "../../store";
 import { MapValuesBody } from "./MapValuesBody";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 
 const commitMock = commit as unknown as ReturnType<typeof vi.fn>;
-const DIM = { id: "d1", dimension: "Country" } as unknown as MappingDimension;
+const REF_TABLE = { id: "d1", refTable: "Country" } as unknown as MappingRefTable;
 
 beforeEach(() => {
   commitMock.mockClear();
@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("MapValuesBody", () => {
   it("defaults to the Focused card and can toggle to the Grid power view", () => {
-    const { getByText, queryByText } = render(<MapValuesBody dim={DIM} isActive />);
+    const { getByText, queryByText } = render(<MapValuesBody refTable={REF_TABLE} isActive />);
     expect(getByText("FOCUSED CARD")).toBeTruthy();
     expect(queryByText("GRID BODY")).toBeNull();
 
@@ -41,19 +41,19 @@ describe("MapValuesBody", () => {
 
   it("shows the staged count and publishes via commit", () => {
     draftsRef.current = [
-      { dimId: "d1", status: "mapped" },
-      { dimId: "d1", status: "mapped" },
-      { dimId: "d1", status: "skipped" }, // not counted
-      { dimId: "other", status: "mapped" }, // other dim, not counted
+      { refTableId: "d1", status: "mapped" },
+      { refTableId: "d1", status: "mapped" },
+      { refTableId: "d1", status: "skipped" }, // not counted
+      { refTableId: "other", status: "mapped" }, // other refTable, not counted
     ];
-    const { getByText } = render(<MapValuesBody dim={DIM} isActive />);
+    const { getByText } = render(<MapValuesBody refTable={REF_TABLE} isActive />);
     expect(getByText(/2 drafts/i)).toBeTruthy();
     fireEvent.click(getByText(/Publish 2 changes/i));
     expect(commitMock).toHaveBeenCalledWith("d1");
   });
 
   it("disables publish when nothing is staged", () => {
-    const { getByText } = render(<MapValuesBody dim={DIM} isActive />);
+    const { getByText } = render(<MapValuesBody refTable={REF_TABLE} isActive />);
     expect((getByText(/Publish 0 changes/i).closest("button") as HTMLButtonElement).disabled).toBe(
       true,
     );

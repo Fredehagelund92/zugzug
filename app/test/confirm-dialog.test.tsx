@@ -47,42 +47,21 @@ describe("ConfirmDialog", () => {
 
   test("clicking cancel fires onCancel", async () => {
     const onCancel = vi.fn();
-    render(
-      <ConfirmDialog
-        open
-        title="Delete?"
-        onConfirm={() => undefined}
-        onCancel={onCancel}
-      />,
-    );
+    render(<ConfirmDialog open title="Delete?" onConfirm={() => undefined} onCancel={onCancel} />);
     await userEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   test("Escape key fires onCancel", async () => {
     const onCancel = vi.fn();
-    render(
-      <ConfirmDialog
-        open
-        title="Delete?"
-        onConfirm={() => undefined}
-        onCancel={onCancel}
-      />,
-    );
+    render(<ConfirmDialog open title="Delete?" onConfirm={() => undefined} onCancel={onCancel} />);
     await userEvent.keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
   test("backdrop click fires onCancel", async () => {
     const onCancel = vi.fn();
-    render(
-      <ConfirmDialog
-        open
-        title="Delete?"
-        onConfirm={() => undefined}
-        onCancel={onCancel}
-      />,
-    );
+    render(<ConfirmDialog open title="Delete?" onConfirm={() => undefined} onCancel={onCancel} />);
     const backdrop = screen.getByTestId("confirm-dialog-backdrop");
     await userEvent.click(backdrop);
     expect(onCancel).toHaveBeenCalledOnce();
@@ -105,12 +84,7 @@ describe("ConfirmDialog", () => {
 
   test("autofocus lands on cancel button (so Enter doesn't accidentally confirm)", async () => {
     render(
-      <ConfirmDialog
-        open
-        title="Delete?"
-        onConfirm={() => undefined}
-        onCancel={() => undefined}
-      />,
+      <ConfirmDialog open title="Delete?" onConfirm={() => undefined} onCancel={() => undefined} />,
     );
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole("button", { name: /cancel/i })),

@@ -1,4 +1,4 @@
-import type { Cluster } from "./use-dim-clusters";
+import type { Cluster } from "./use-ref-table-clusters";
 import { foldLabel, type CandidateRecord } from "./cluster-candidates";
 
 /** The mapper's work queue: clusters with at least one still-unmapped member.

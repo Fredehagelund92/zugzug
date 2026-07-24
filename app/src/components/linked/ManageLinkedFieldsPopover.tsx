@@ -17,7 +17,7 @@ interface Props {
 }
 
 /**
- * Pure-UI picker for which target dimension fields to surface as lookup
+ * Pure-UI picker for which target refTable fields to surface as lookup
  * columns alongside an FK. The parent owns visibility (conditionally render),
  * positioning (passes `anchorRect`), and persistence (wires `onApply` to the
  * store action `updateFieldDisplayFields`). No store access here.

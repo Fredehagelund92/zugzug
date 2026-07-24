@@ -56,7 +56,7 @@ function TargetEditor({
 }
 
 export function matchColumns(opts: {
-  dimensionLabel: string;
+  refTableLabel: string;
   options: string[];
   state: Record<string, MatchRowState>;
   external: boolean;
@@ -64,7 +64,7 @@ export function matchColumns(opts: {
   onToggleDrill: (value: string) => void;
   openDrill: string | null;
 }): ColumnDef<MappingValue>[] {
-  const { dimensionLabel, options, state, external, canEdit, onToggleDrill, openDrill } = opts;
+  const { refTableLabel, options, state, external, canEdit, onToggleDrill, openDrill } = opts;
   return [
     {
       field: "value",
@@ -100,7 +100,7 @@ export function matchColumns(opts: {
     },
     {
       field: "target",
-      label: `${dimensionLabel.toLowerCase()} record`,
+      label: `${refTableLabel.toLowerCase()} record`,
       config: { type: "text" },
       editable: canEdit,
       render: (r) => {

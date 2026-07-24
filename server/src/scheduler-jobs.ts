@@ -25,9 +25,9 @@ export const autoStageJob: SchedulerJob = {
   name: "auto-stage-exact-matches",
   async run(ctx: JobContext): Promise<JobResult> {
     if (!env.attachWarehouse) return {};
-    const dimIds = await ctx.repo.dimensionsWithWiredSources();
+    const refTableIds = await ctx.repo.refTablesWithWiredSources();
     let totalStaged = 0;
-    for (const id of dimIds) {
+    for (const id of refTableIds) {
       const { matched } = await ctx.repo.autoStageExactMatches(id);
       totalStaged += matched;
     }
@@ -41,9 +41,9 @@ export const autoCommitJob: SchedulerJob = {
     if (!env.attachWarehouse) return {};
     const prefs = await ctx.repo.getPreferences();
     if (prefs.publishThreshold > 100) return {}; // threshold disables auto-commit
-    const dimIds = await ctx.repo.dimensionsWithWiredSources();
+    const refTableIds = await ctx.repo.refTablesWithWiredSources();
     let totalCommitted = 0;
-    for (const id of dimIds) {
+    for (const id of refTableIds) {
       const result = await ctx.repo.commit(id, "u_system");
       totalCommitted += result.committed;
     }

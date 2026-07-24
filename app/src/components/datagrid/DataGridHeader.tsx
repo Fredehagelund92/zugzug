@@ -155,7 +155,7 @@ interface DataGridHeaderProps<Row> {
   onDeleteColumn?: (field: string) => void;
   // Linked-column (fk / lookup) actions surfaced in ColumnHeaderMenu.
   onShowLinkedFields?: (fkField: string) => void;
-  onOpenTargetDimension?: (fkField: string) => void;
+  onOpenTargetRefTable?: (fkField: string) => void;
   onChangeDisplayedField?: (lookupField: string) => void;
   onManageLinkedFields?: (lookupField: string) => void;
   onJumpToSourceColumn?: (fkField: string) => void;
@@ -205,7 +205,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
     onChangeColumnType,
     onDeleteColumn,
     onShowLinkedFields,
-    onOpenTargetDimension,
+    onOpenTargetRefTable,
     onChangeDisplayedField,
     onManageLinkedFields,
     onJumpToSourceColumn,
@@ -526,8 +526,8 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                   onShowLinkedFields={
                     onShowLinkedFields ? () => onShowLinkedFields(c.field) : undefined
                   }
-                  onOpenTargetDimension={
-                    onOpenTargetDimension ? () => onOpenTargetDimension(c.field) : undefined
+                  onOpenTargetRefTable={
+                    onOpenTargetRefTable ? () => onOpenTargetRefTable(c.field) : undefined
                   }
                   onChangeDisplayedField={
                     onChangeDisplayedField ? () => onChangeDisplayedField(c.field) : undefined

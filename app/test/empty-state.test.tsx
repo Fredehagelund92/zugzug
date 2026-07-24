@@ -18,7 +18,11 @@ describe("EmptyState", () => {
 
   it("renders secondary link below action", () => {
     render(
-      <EmptyState title="X" action={<button>A</button>} secondary={<a href="/docs">Learn more</a>} />,
+      <EmptyState
+        title="X"
+        action={<button>A</button>}
+        secondary={<a href="/docs">Learn more</a>}
+      />,
     );
     expect(screen.getByRole("link", { name: "Learn more" })).toBeInTheDocument();
   });

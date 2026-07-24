@@ -4,7 +4,7 @@
    or aliasing here — that is an opt-in layer built above this module. Pure: no
    I/O, no DB, no env, no React. */
 
-import type { ScanValueRow } from "./repo-dim-scan.ts";
+import type { ScanValueRow } from "./repo-source-scan.ts";
 
 /**
  * Fold a raw value to its conservative cluster key: NFKD-normalize, strip
@@ -23,7 +23,7 @@ export function normalizeKey(raw: string): string {
 }
 
 /**
- * Group raw values for SEEDING a dimension the same way review clusters them:
+ * Group raw values for SEEDING a refTable the same way review clusters them:
  * members folding to one `normalizeKey` become one cluster (case, punctuation
  * and diacritics all fold — "U.S.A." and "usa" merge; "US" stays separate).
  * The first-seen raw is the representative; the caller derives a readable key

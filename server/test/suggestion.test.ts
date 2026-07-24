@@ -127,9 +127,7 @@ test("confidenceToScore: 'low' → 30", () => {
 // ============================================================================
 
 test("AINotEnabledError is properly exported and throws", async () => {
-  const { AINotEnabledError: ImportedError } = await import(
-    "../src/suggestion.ts"
-  );
+  const { AINotEnabledError: ImportedError } = await import("../src/suggestion.ts");
   const err = new ImportedError("AI is not enabled for this workspace");
   expect(err.name).toBe("AINotEnabledError");
   expect(err.message).toBe("AI is not enabled for this workspace");
@@ -149,9 +147,7 @@ test("AINotEnabledError can be thrown and caught", () => {
 });
 
 test("InvalidAPIKeyError is properly exported and throws", async () => {
-  const { InvalidAPIKeyError: ImportedError } = await import(
-    "../src/ai-providers/index.ts"
-  );
+  const { InvalidAPIKeyError: ImportedError } = await import("../src/ai-providers/index.ts");
   const err = new ImportedError("API key is invalid");
   expect(err.name).toBe("InvalidAPIKeyError");
   expect(err.message).toBe("API key is invalid");
@@ -192,9 +188,7 @@ test("suggestion module exports Suggestion interface", async () => {
 });
 
 test("suggestion module exports AINotEnabledError class", async () => {
-  const { AINotEnabledError: ExportedClass } = await import(
-    "../src/suggestion.ts"
-  );
+  const { AINotEnabledError: ExportedClass } = await import("../src/suggestion.ts");
   expect(typeof ExportedClass).toBe("function");
   const instance = new ExportedClass("test");
   expect(instance instanceof Error).toBe(true);
@@ -206,28 +200,28 @@ test("suggestion module exports AINotEnabledError class", async () => {
 
 test("SuggestionContext interface has required fields", () => {
   const context = {
-    dimensionId: "dim-1",
-    dimensionName: "Customer Name",
+    refTableId: "refTable-1",
+    refTableName: "Customer Name",
     rawValue: "john doe",
-    existingCanonicalValues: ["John Doe", "Jane Doe"],
+    existingRecordValues: ["John Doe", "Jane Doe"],
   };
 
-  expect(context.dimensionId).toBe("dim-1");
-  expect(context.dimensionName).toBe("Customer Name");
+  expect(context.refTableId).toBe("refTable-1");
+  expect(context.refTableName).toBe("Customer Name");
   expect(context.rawValue).toBe("john doe");
-  expect(Array.isArray(context.existingCanonicalValues)).toBe(true);
-  expect(context.existingCanonicalValues.length).toBe(2);
+  expect(Array.isArray(context.existingRecordValues)).toBe(true);
+  expect(context.existingRecordValues.length).toBe(2);
 });
 
 test("Suggestion response has all fields when provided", () => {
   const suggestion = {
-    canonical: "John Doe",
+    record: "John Doe",
     confidence: "high" as const,
     reasoning: "Exact match",
     cached: true,
   };
 
-  expect(suggestion.canonical).toBe("John Doe");
+  expect(suggestion.record).toBe("John Doe");
   expect(suggestion.confidence).toBe("high");
   expect(suggestion.reasoning).toBe("Exact match");
   expect(suggestion.cached).toBe(true);
@@ -235,26 +229,22 @@ test("Suggestion response has all fields when provided", () => {
 
 test("Suggestion response works with optional reasoning field", () => {
   const suggestion = {
-    canonical: "John Doe",
+    record: "John Doe",
     confidence: "medium" as const,
     cached: false,
   };
 
-  expect(suggestion.canonical).toBe("John Doe");
+  expect(suggestion.record).toBe("John Doe");
   expect(suggestion.confidence).toBe("medium");
   expect(suggestion.cached).toBe(false);
   expect(suggestion.reasoning).toBeUndefined();
 });
 
 test("Suggestion confidence field only accepts valid strings", () => {
-  const validConfidences: Array<"high" | "medium" | "low"> = [
-    "high",
-    "medium",
-    "low",
-  ];
+  const validConfidences: Array<"high" | "medium" | "low"> = ["high", "medium", "low"];
   validConfidences.forEach((conf) => {
     const suggestion = {
-      canonical: "test",
+      record: "test",
       confidence: conf,
       cached: false,
     };

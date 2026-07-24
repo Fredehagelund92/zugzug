@@ -13,7 +13,7 @@ import { cx } from "../lib/cx";
 import {
   useSources,
   scanSources,
-  deriveCanonical,
+  deriveRecord,
   removeSource,
   useCanEdit,
   useStoreLoading,
@@ -112,7 +112,7 @@ export function Sources() {
 
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {
     try {
-      const result = await deriveCanonical(s.dimId, s.table, s.column);
+      const result = await deriveRecord(s.refTableId, s.table, s.column);
       toast(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(
@@ -128,12 +128,12 @@ export function Sources() {
   const removeAction = useAsyncAction(async (s: SourceInfo) => {
     if (
       !window.confirm(
-        `Remove ${s.table}.${s.column} from ${s.dimension}? This unwires the column; it won't delete any records.`,
+        `Remove ${s.table}.${s.column} from ${s.refTable}? This unwires the column; it won't delete any records.`,
       )
     )
       return;
     try {
-      await removeSource(s.dimId, s.table, s.column);
+      await removeSource(s.refTableId, s.table, s.column);
       toast(`Removed ${s.table}.${s.column}.`);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't remove source.", "error");
@@ -274,7 +274,7 @@ export function Sources() {
                   <span className="zz-live h-1.5 w-1.5 shrink-0 rounded-pill bg-accent" />
                   {agg.unmapped.toLocaleString()} values await a decision —{" "}
                   <Link
-                    to={nav.table(agg.worst.dimId, "match")}
+                    to={nav.table(agg.worst.refTableId, "match")}
                     className="font-semibold text-accent hover:underline"
                   >
                     Review
@@ -290,7 +290,7 @@ export function Sources() {
                   onToggle={() => toggleSchema(g.schema)}
                   canEdit={canEdit}
                   busy={deriveAction.isPending}
-                  mapHref={(r) => nav.table(r.dimId, "match")}
+                  mapHref={(r) => nav.table(r.refTableId, "match")}
                   onDerive={(r) => void deriveAction.run(r)}
                   onRemove={(r) => void removeAction.run(r)}
                 />
@@ -368,7 +368,7 @@ function SchemaSection({
         <div>
           {group.columns.map((r) => (
             <SourceRow
-              key={`${r.dimId}::${r.table}::${r.column}`}
+              key={`${r.refTableId}::${r.table}::${r.column}`}
               row={r}
               mapValuesHref={mapHref(r)}
               canEdit={canEdit}

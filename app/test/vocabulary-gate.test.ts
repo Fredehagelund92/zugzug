@@ -36,7 +36,17 @@ const FILES = [
   "app/src/routes/settings/Matching.tsx",
 ];
 
-const BANNED = ["canonical", "raw", "triage", "master", "golden", "commit", "sync", "tenant", "matching"];
+const BANNED = [
+  "canonical",
+  "raw",
+  "triage",
+  "master",
+  "golden",
+  "commit",
+  "sync",
+  "tenant",
+  "matching",
+];
 
 /**
  * Extract candidate user-facing strings from source text.
@@ -115,7 +125,9 @@ describe("vocabulary gate", () => {
         for (const banned of BANNED) {
           const wordBoundaryRegex = new RegExp(`\\b${banned}\\b`, "i");
           if (wordBoundaryRegex.test(text)) {
-            violations.push(`${relPath}:${lineNo} — banned word "${banned}" in: ${JSON.stringify(text)}`);
+            violations.push(
+              `${relPath}:${lineNo} — banned word "${banned}" in: ${JSON.stringify(text)}`,
+            );
           }
         }
       }
@@ -133,7 +145,7 @@ describe("vocabulary gate", () => {
 
     // "{n} raw" stat label → should now say "source values"
     expect(source, 'JSX stat label still says "raw" — expected "source values"').not.toContain(
-      "} raw</span>"
+      "} raw</span>",
     );
 
     // Flash message after merge used "raw values re-pointed" — guard both plural and
@@ -143,12 +155,12 @@ describe("vocabulary gate", () => {
 
     // ComboSelect placeholder used "pick survivor…"
     expect(source, 'ComboSelect placeholder still says "pick survivor…"').not.toContain(
-      '"pick survivor…"'
+      '"pick survivor…"',
     );
 
-    // Dev counter "next position: {dim.nextPosition}" should be deleted
+    // Dev counter "next position: {refTable.nextPosition}" should be deleted
     expect(source, '"next position:" dev counter still visible in UI').not.toContain(
-      "next position:"
+      "next position:",
     );
   });
 
@@ -157,7 +169,9 @@ describe("vocabulary gate", () => {
     const source = readFileSync(absPath, "utf8");
 
     // "master records live where…"
-    expect(source, 'Warehouse hint still contains "master records"').not.toContain("master records");
+    expect(source, 'Warehouse hint still contains "master records"').not.toContain(
+      "master records",
+    );
 
     // "new values that need a master record"
     expect(source, 'Warehouse copy still contains "master record"').not.toContain("master record");
@@ -175,15 +189,15 @@ describe("vocabulary gate", () => {
 
     // "pick master record" shortcut label → should now say "choose the record to keep"
     expect(source, 'ShortcutsOverlay still contains "pick master record"').not.toContain(
-      "pick master record"
+      "pick master record",
     );
 
     // "edit / commit + down" and "commit + edit →/←" shortcut labels → reworded to "confirm"
     expect(source, 'ShortcutsOverlay shortcut still says "commit + down"').not.toContain(
-      "commit + down"
+      "commit + down",
     );
     expect(source, 'ShortcutsOverlay shortcut still says "commit + edit"').not.toContain(
-      "commit + edit"
+      "commit + edit",
     );
   });
 
@@ -198,7 +212,7 @@ describe("vocabulary gate", () => {
 
     // "each becomes one canonical record" → should now say "each becomes one record"
     expect(source, 'CreateTableModal still contains "canonical record"').not.toContain(
-      "canonical record"
+      "canonical record",
     );
 
     // "after first sync" → should now say "after the first scan"
@@ -206,14 +220,16 @@ describe("vocabulary gate", () => {
     // and may appear in function/variable identifiers — this assertion targets only the
     // user-facing helper string.
     expect(source, 'CreateTableModal helper text still says "after first sync"').not.toContain(
-      "after first sync"
+      "after first sync",
     );
   });
 
   test("Remove-database dialog avoids banned vocabulary", () => {
     const source = readFileSync(
-      join(REPO_ROOT, "app/src/components/warehouse/RemoveDatabaseConfirm.tsx"), "utf8");
-    expect(source, 'still says "dimension" in user copy').not.toContain("dimension\n");
+      join(REPO_ROOT, "app/src/components/warehouse/RemoveDatabaseConfirm.tsx"),
+      "utf8",
+    );
+    expect(source, 'still says "reference_table" in user copy').not.toContain("refTable\n");
     expect(source, 'still says "Canonical values"').not.toContain("Canonical values");
   });
 });

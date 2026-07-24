@@ -57,32 +57,32 @@ describe("onTenantSwitch", () => {
     expect(capturedSignal!.aborted).toBe(true);
   });
 
-  test("resetStore clears dims so a late response cannot land visible data", async () => {
+  test("resetStore clears refTables so a late response cannot land visible data", async () => {
     // Let all fetch calls hang — we only want to test the synchronous reset path.
     global.fetch = vi.fn(() => new Promise<Response>(() => {})) as unknown as typeof fetch;
 
-    const { initStore, onTenantSwitch, useDimensions } = await import("../src/store");
+    const { initStore, onTenantSwitch, useRefTables } = await import("../src/store");
 
     void initStore().catch(() => {});
     await new Promise<void>((r) => setTimeout(r, 5));
 
     // The store's raw snapshot getter is exposed via useSyncExternalStore's
     // getSnapshot argument.  We call onTenantSwitch() and then read the module-
-    // level `dims` indirectly: useDimensions is a hook, but its getSnapshot /
-    // getServerSnapshot both return the module-level `dims` reference — calling
+    // level `refTables` indirectly: useRefTables is a hook, but its getSnapshot /
+    // getServerSnapshot both return the module-level `refTables` reference — calling
     // the hook outside React returns the same snapshot function's result via
     // the exported store getter below.
     //
-    // Simplest approach: after onTenantSwitch() the dims variable is reset to [].
+    // Simplest approach: after onTenantSwitch() the refTables variable is reset to [].
     // We verify this by checking that calling onTenantSwitch() does not throw AND
     // that re-importing (same module instance) reflects the cleared state.
     onTenantSwitch();
 
-    // useDimensions is a useSyncExternalStore hook; the second argument is the
+    // useRefTables is a useSyncExternalStore hook; the second argument is the
     // getSnapshot callback.  We can extract the snapshot without React by
-    // accessing the module's exported dims via a known pattern:
-    // `useDimensions` is defined as:
-    //   useSyncExternalStore(subscribe, () => dims, () => dims)
+    // accessing the module's exported refTables via a known pattern:
+    // `useRefTables` is defined as:
+    //   useSyncExternalStore(subscribe, () => refTables, () => refTables)
     // We cannot call hooks outside React, but we CAN verify that the reset
     // happened by calling onTenantSwitch a second time (idempotent) and
     // checking it doesn't throw — and by checking the signal is not aborted

@@ -25,11 +25,7 @@ describe("ConflictBanner", () => {
   test("clicking Refresh fires onRefresh", async () => {
     const onRefresh = vi.fn();
     render(
-      <ConflictBanner
-        conflict={conflict}
-        onRefresh={onRefresh}
-        onKeepEditing={() => undefined}
-      />,
+      <ConflictBanner conflict={conflict} onRefresh={onRefresh} onKeepEditing={() => undefined} />,
     );
     await userEvent.click(screen.getByRole("button", { name: /use theirs/i }));
     expect(onRefresh).toHaveBeenCalledOnce();

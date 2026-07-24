@@ -68,12 +68,12 @@ export async function req(
 }
 
 /** Create a table in a workspace via the repo layer (as admin). Returns its id. */
-export async function makeDimension(
+export async function makeRefTable(
   tenantId: string,
   name: string,
   opts: { userId?: string } = {},
 ): Promise<string> {
   const repo = new TenantRepo(tenantId, "admin");
-  const id = await repo.addDimension(name, [], {}, opts.userId ?? "factory");
+  const id = await repo.addRefTable(name, [], {}, opts.userId ?? "factory");
   return id;
 }

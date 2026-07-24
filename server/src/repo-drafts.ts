@@ -1,7 +1,7 @@
 /* repo-drafts.ts — drafts + the commit fold.
  *
  * Drafts are Postgres-only staging rows; commit() folds them into the
- * canonical dim_/map_ tables atomically. The rowsForUnmappedDrafts helper
+ * record dim_/map_ tables atomically. The rowsForUnmappedDrafts helper
  * is a cross-store read (warehouse occurrences + Postgres drafts) used only
  * inside commit(). */
 
@@ -26,9 +26,9 @@ import { getAdapter } from "./warehouse/registry.ts";
 import { isWritable } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
-export async function listDrafts(dimId: string, tenantId: string): Promise<Draft[]> {
+export async function listDrafts(refTableId: string, tenantId: string): Promise<Draft[]> {
   const rows = await pgAll<{
-    dimId: string;
+    refTableId: string;
     raw: string;
     status: "mapped" | "skipped" | "rejected";
     targetLabel: string | null;
@@ -41,14 +41,14 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
     rejectedReason: string | null;
     rejectedBy: string | null;
   }>(
-    `SELECT dim_id AS "dimId", raw, status,
+    `SELECT reference_table_id AS "refTableId", raw, status,
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
-     FROM ${pg("draft")} WHERE dim_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
-    [dimId, tenantId],
+     FROM ${pg("draft")} WHERE reference_table_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
+    [refTableId, tenantId],
   );
   if (rows.length === 0) return [];
 
@@ -61,7 +61,7 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
   const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
 
   return rows.map((r) => ({
-    dimId: r.dimId,
+    refTableId: r.refTableId,
     raw: r.raw,
     status: r.status,
     targetLabel: r.targetLabel,
@@ -78,7 +78,7 @@ export async function listDrafts(dimId: string, tenantId: string): Promise<Draft
 
 export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
   const rows = await pgAll<{
-    dimId: string;
+    refTableId: string;
     raw: string;
     status: "mapped" | "skipped" | "rejected";
     targetLabel: string | null;
@@ -91,13 +91,13 @@ export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
     rejectedReason: string | null;
     rejectedBy: string | null;
   }>(
-    `SELECT dim_id AS "dimId", raw, status,
+    `SELECT reference_table_id AS "refTableId", raw, status,
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
-     FROM ${pg("draft")} WHERE tenant_id = $1 ORDER BY dim_id, created_at DESC`,
+     FROM ${pg("draft")} WHERE tenant_id = $1 ORDER BY reference_table_id, created_at DESC`,
     [tenantId],
   );
   if (rows.length === 0) return [];
@@ -111,7 +111,7 @@ export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
   const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
 
   return rows.map((r) => ({
-    dimId: r.dimId,
+    refTableId: r.refTableId,
     raw: r.raw,
     status: r.status,
     targetLabel: r.targetLabel,
@@ -127,7 +127,7 @@ export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
 }
 
 export async function saveDraft(
-  dimId: string,
+  refTableId: string,
   raw: string,
   status: "mapped" | "skipped",
   targetLabel: string | null,
@@ -136,13 +136,13 @@ export async function saveDraft(
   tenantId: string,
 ): Promise<void> {
   await pgRun(
-    `INSERT INTO ${pg("draft")} (dim_id, raw, status, target_label, target_key, user_id, created_at, tenant_id)
+    `INSERT INTO ${pg("draft")} (reference_table_id, raw, status, target_label, target_key, user_id, created_at, tenant_id)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7)
-     ON CONFLICT (tenant_id, dim_id, raw, user_id) DO UPDATE
+     ON CONFLICT (tenant_id, reference_table_id, raw, user_id) DO UPDATE
        SET status = EXCLUDED.status, target_label = EXCLUDED.target_label,
            target_key = EXCLUDED.target_key, created_at = EXCLUDED.created_at,
            rejected_reason = NULL, rejected_by = NULL`,
-    [dimId, raw, status, targetLabel, targetKey, userId, tenantId],
+    [refTableId, raw, status, targetLabel, targetKey, userId, tenantId],
   );
 }
 
@@ -150,7 +150,7 @@ export async function saveDraft(
  *  Unlike `saveDraft`, this carries provenance metadata (`source`, `confidence`,
  *  `reasoning`) so AI-generated proposals are distinguishable from user edits. */
 export interface CreateDraftInput {
-  dim_id: string;
+  reference_table_id: string;
   raw: string;
   target_label?: string | null;
   target_key?: string | null;
@@ -174,7 +174,7 @@ export async function createDraft(
   }
 > {
   const {
-    dim_id,
+    reference_table_id,
     raw,
     target_label = null,
     target_key = null,
@@ -186,10 +186,10 @@ export async function createDraft(
 
   await pgRun(
     `INSERT INTO ${pg("draft")}
-       (dim_id, raw, status, target_label, target_key, user_id, created_at, tenant_id,
+       (reference_table_id, raw, status, target_label, target_key, user_id, created_at, tenant_id,
         source, confidence, reasoning)
      VALUES ($1, $2, $3, $4, $5, $6, current_timestamp, $7, $8, $9, $10)
-     ON CONFLICT (tenant_id, dim_id, raw, user_id) DO UPDATE SET
+     ON CONFLICT (tenant_id, reference_table_id, raw, user_id) DO UPDATE SET
        status          = EXCLUDED.status,
        target_label    = EXCLUDED.target_label,
        target_key      = EXCLUDED.target_key,
@@ -200,7 +200,7 @@ export async function createDraft(
        rejected_reason = NULL,
        rejected_by     = NULL`,
     [
-      dim_id,
+      reference_table_id,
       raw,
       status,
       target_label,
@@ -214,7 +214,7 @@ export async function createDraft(
   );
 
   const row = await pgGet<{
-    dimId: string;
+    refTableId: string;
     raw: string;
     status: "mapped" | "skipped";
     targetLabel: string | null;
@@ -225,18 +225,18 @@ export async function createDraft(
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
   }>(
-    `SELECT dim_id AS "dimId", raw, status,
+    `SELECT reference_table_id AS "refTableId", raw, status,
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
             source, confidence, reasoning
        FROM ${pg("draft")}
-      WHERE tenant_id = $1 AND dim_id = $2 AND raw = $3 AND user_id = $4
+      WHERE tenant_id = $1 AND reference_table_id = $2 AND raw = $3 AND user_id = $4
       LIMIT 1`,
-    [tenantId, dim_id, raw, userId],
+    [tenantId, reference_table_id, raw, userId],
   );
   if (!row) {
-    throw new Error(`createDraft: failed to read back inserted draft ${dim_id}/${raw}`);
+    throw new Error(`createDraft: failed to read back inserted draft ${reference_table_id}/${raw}`);
   }
 
   const user = await pgGet<User>(`SELECT id, name, initials FROM ${pg("users")} WHERE id = $1`, [
@@ -244,7 +244,7 @@ export async function createDraft(
   ]);
 
   return {
-    dimId: row.dimId,
+    refTableId: row.refTableId,
     raw: row.raw,
     status: row.status,
     targetLabel: row.targetLabel,
@@ -260,20 +260,20 @@ export async function createDraft(
 }
 
 export async function discardDraft(
-  dimId: string,
+  refTableId: string,
   raw: string,
   userId: string,
   tenantId: string,
 ): Promise<void> {
   await pgRun(
-    `DELETE FROM ${pg("draft")} WHERE dim_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4`,
-    [dimId, raw, userId, tenantId],
+    `DELETE FROM ${pg("draft")} WHERE reference_table_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4`,
+    [refTableId, raw, userId, tenantId],
   );
-  await appendAuditAs(userId, "discard_draft", `${dimId}: ${raw}`, { tenantId });
+  await appendAuditAs(userId, "discard_draft", `${refTableId}: ${raw}`, { tenantId });
 }
 
 export async function rejectDrafts(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
   raws: string[],
   reason: string,
@@ -285,14 +285,14 @@ export async function rejectDrafts(
   const res = await pgAll<{ raw: string }>(
     `UPDATE ${pg("draft")}
         SET status = 'rejected', rejected_reason = $4, rejected_by = $5
-      WHERE dim_id = $1 AND tenant_id = $2 AND raw = ANY($3) AND status = 'mapped'
+      WHERE reference_table_id = $1 AND tenant_id = $2 AND raw = ANY($3) AND status = 'mapped'
       RETURNING raw`,
-    [dimId, tenantId, raws, trimmed, reviewerId],
+    [refTableId, tenantId, raws, trimmed, reviewerId],
   );
   const n = res.length;
-  await appendAuditAs(reviewerId, "Rejected drafts", `${n} in ${dimId}: ${trimmed}`, {
+  await appendAuditAs(reviewerId, "Rejected drafts", `${n} in ${refTableId}: ${trimmed}`, {
     tenantId,
-    tableId: dimId,
+    tableId: refTableId,
   });
   return { rejected: n };
 }
@@ -304,8 +304,8 @@ export interface PublishState {
   publishedByName: string | null;
   /** Staged mapping drafts awaiting publish. */
   pendingDrafts: number;
-  /** Canonical keys edited, added, or retired since the last publish (ADR-0002:
-   *  derived from canonical_version, not a staging queue). Keys created by
+  /** Record keys edited, added, or retired since the last publish (ADR-0002:
+   *  derived from record_version, not a staging queue). Keys created by
    *  draft folding don't appear here — they go out in the same publish. */
   changedKeys: string[];
   /** True when a published snapshot exists to revert the working copy to. */
@@ -314,12 +314,12 @@ export interface PublishState {
 
 /** Latest version with a usable record snapshot (legacy double-encoded
  *  snapshots are skipped — reverting against those would drop rows). */
-async function latestSnapshotVersion(dimId: string, tenantId: string): Promise<number | null> {
+async function latestSnapshotVersion(refTableId: string, tenantId: string): Promise<number | null> {
   const row = await pgGet<{ version: number }>(
-    `SELECT version FROM ${pg("dimension_version")}
-     WHERE dim_id = $1 AND tenant_id = $2 AND jsonb_typeof(snapshot->'records') = 'array'
+    `SELECT version FROM ${pg("reference_table_version")}
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND jsonb_typeof(snapshot->'records') = 'array'
      ORDER BY version DESC LIMIT 1`,
-    [dimId, tenantId],
+    [refTableId, tenantId],
   );
   return row ? Number(row.version) : null;
 }
@@ -336,10 +336,10 @@ function canonRow(row: unknown): string {
 
 /** Record keys with unpublished changes. Never published → every record (the
  *  first publish ships the whole table). Otherwise: keys stamped in
- *  canonical_version since the last publish, minus records whose values are
+ *  record_version since the last publish, minus records whose values are
  *  back to identical with the last snapshot — so reverting an edit clears it. */
 async function changedKeysSince(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
   since: Date | null,
   meta: { dimTable: string; keyCol: string },
@@ -351,11 +351,11 @@ async function changedKeysSince(
     return rows.map((r) => r.key);
   }
   const stamped = await pgAll<{ key: string }>(
-    `SELECT key FROM ${pg("canonical_version")}
-     WHERE dim_id = $1 AND tenant_id = $2
+    `SELECT key FROM ${pg("record_version")}
+     WHERE reference_table_id = $1 AND tenant_id = $2
        AND (updated_at > $3 OR retired_at > $3)
      ORDER BY key`,
-    [dimId, tenantId, since],
+    [refTableId, tenantId, since],
   );
   if (stamped.length === 0) return [];
   const keys = stamped.map((r) => r.key);
@@ -364,13 +364,13 @@ async function changedKeysSince(
   // counts as changed, which degrades to the pre-diff behaviour.
   const snapRows = await pgAll<{ key: string; row: unknown }>(
     `SELECT e.rec->>$4 AS key, e.rec AS row
-       FROM ${pg("dimension_version")} v
+       FROM ${pg("reference_table_version")} v
        CROSS JOIN LATERAL jsonb_array_elements(v.snapshot->'records') AS e(rec)
-      WHERE v.dim_id = $1 AND v.tenant_id = $2
-        AND v.version = (SELECT max(version) FROM ${pg("dimension_version")}
-                          WHERE dim_id = $1 AND tenant_id = $2)
+      WHERE v.reference_table_id = $1 AND v.tenant_id = $2
+        AND v.version = (SELECT max(version) FROM ${pg("reference_table_version")}
+                          WHERE reference_table_id = $1 AND tenant_id = $2)
         AND e.rec->>$4 = ANY($3)`,
-    [dimId, tenantId, keys, meta.keyCol],
+    [refTableId, tenantId, keys, meta.keyCol],
   );
   const curRows = await pgAll<{ key: string; row: unknown }>(
     `SELECT ${qid(meta.keyCol)}::text AS key, to_jsonb(t) AS row
@@ -388,17 +388,17 @@ async function changedKeysSince(
   });
 }
 
-export async function getPublishState(dimId: string, tenantId: string): Promise<PublishState> {
-  const dimMeta = await pgGet<{ dimTable: string; keyCol: string }>(
+export async function getPublishState(refTableId: string, tenantId: string): Promise<PublishState> {
+  const refTableMeta = await pgGet<{ dimTable: string; keyCol: string }>(
     `SELECT dim_table AS "dimTable", key_col AS "keyCol"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   const last = await pgGet<{ v: number; at: Date | null }>(
     `SELECT count(*)::int AS v, max(occurred_at) AS at
      FROM ${pg("outbound_event")}
-     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
-    [tenantId, dimId],
+     WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'`,
+    [tenantId, refTableId],
   );
   const version = Number(last?.v ?? 0);
   const publishedAt = last?.at ?? null;
@@ -411,34 +411,36 @@ export async function getPublishState(dimId: string, tenantId: string): Promise<
                    THEN (payload #>> '{}')::jsonb->'committed_by'->>'name'
                    ELSE payload->'committed_by'->>'name' END AS by
        FROM ${pg("outbound_event")}
-       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'
+       WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'
        ORDER BY occurred_at DESC LIMIT 1`,
-      [tenantId, dimId],
+      [tenantId, refTableId],
     );
     publishedByName = latest?.by ?? null;
   }
   const pending = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${pg("draft")}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
-    [dimId, tenantId],
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
+    [refTableId, tenantId],
   );
   return {
     version,
     publishedAt: publishedAt ? publishedAt.toISOString() : null,
     publishedByName,
     pendingDrafts: Number(pending?.n ?? 0),
-    changedKeys: dimMeta ? await changedKeysSince(dimId, tenantId, publishedAt, dimMeta) : [],
-    canRevert: version > 0 && (await latestSnapshotVersion(dimId, tenantId)) !== null,
+    changedKeys: refTableMeta
+      ? await changedKeysSince(refTableId, tenantId, publishedAt, refTableMeta)
+      : [],
+    canRevert: version > 0 && (await latestSnapshotVersion(refTableId, tenantId)) !== null,
   };
 }
 
-/** Count-only publish summary for the dimension list (ADR-0005). Reuses
+/** Count-only publish summary for the refTable list (ADR-0005). Reuses
  *  getPublishState so "what's waiting" stays defined in exactly one place. */
 export async function publishSummaryFor(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
 ): Promise<import("./repo-shared.ts").PublishSummary> {
-  const s = await getPublishState(dimId, tenantId);
+  const s = await getPublishState(refTableId, tenantId);
   return {
     version: s.version,
     publishedAt: s.publishedAt,
@@ -452,26 +454,26 @@ export async function publishSummaryFor(
  *  snapshot: edited records get their published values, records added since
  *  are removed, records removed since come back. Mapping drafts are untouched. */
 export async function revertToPublished(
-  dimId: string,
+  refTableId: string,
   userId: string,
   tenantId: string,
 ): Promise<{ reverted: number }> {
   const meta = await pgGet<{ dimTable: string; keyCol: string }>(
     `SELECT dim_table AS "dimTable", key_col AS "keyCol"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
-  if (!meta) throw new AppError("NOT_FOUND", `table ${dimId} not found`, 404);
+  if (!meta) throw new AppError("NOT_FOUND", `table ${refTableId} not found`, 404);
   const last = await pgGet<{ at: Date | null }>(
     `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
-     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
-    [tenantId, dimId],
+     WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'`,
+    [tenantId, refTableId],
   );
-  const snapVersion = await latestSnapshotVersion(dimId, tenantId);
+  const snapVersion = await latestSnapshotVersion(refTableId, tenantId);
   if (!last?.at || snapVersion === null) {
     throw new AppError("VALIDATION_FAILED", "publish a version first — nothing to revert to", 422);
   }
-  const changed = await changedKeysSince(dimId, tenantId, last.at, meta);
+  const changed = await changedKeysSince(refTableId, tenantId, last.at, meta);
   if (changed.length === 0) return { reverted: 0 };
 
   const DIMT = cq(meta.dimTable);
@@ -480,46 +482,46 @@ export async function revertToPublished(
     await tx.run(`DELETE FROM ${DIMT} WHERE ${keyc}::text = ANY($1)`, [changed]);
     await tx.run(
       `INSERT INTO ${DIMT}
-       SELECT rec.* FROM ${pg("dimension_version")} v
+       SELECT rec.* FROM ${pg("reference_table_version")} v
        CROSS JOIN LATERAL jsonb_array_elements(v.snapshot->'records') AS e(obj)
        CROSS JOIN LATERAL jsonb_populate_record(NULL::${DIMT}, e.obj) AS rec
-       WHERE v.dim_id = $1 AND v.tenant_id = $2 AND v.version = $3
+       WHERE v.reference_table_id = $1 AND v.tenant_id = $2 AND v.version = $3
          AND e.obj->>$4 = ANY($5)`,
-      [dimId, tenantId, snapVersion, meta.keyCol, changed],
+      [refTableId, tenantId, snapVersion, meta.keyCol, changed],
     );
     // Stamp the touched records so concurrent editors conflict cleanly; values
     // now equal the snapshot, so they no longer count as changed.
     await tx.run(
-      `UPDATE ${pg("canonical_version")}
+      `UPDATE ${pg("record_version")}
           SET version = version + 1, updated_at = now(), updated_by = $4
-        WHERE dim_id = $1 AND tenant_id = $2 AND key = ANY($3)`,
-      [dimId, tenantId, changed, userId],
+        WHERE reference_table_id = $1 AND tenant_id = $2 AND key = ANY($3)`,
+      [refTableId, tenantId, changed, userId],
     );
     // Records restored from the snapshot are live again — clear retire flags.
     await tx.run(
-      `UPDATE ${pg("canonical_version")} cv
+      `UPDATE ${pg("record_version")} cv
           SET retired_at = NULL, retired_into = NULL
-        WHERE cv.dim_id = $1 AND cv.tenant_id = $2 AND cv.key = ANY($3)
+        WHERE cv.reference_table_id = $1 AND cv.tenant_id = $2 AND cv.key = ANY($3)
           AND EXISTS (SELECT 1 FROM ${DIMT} d WHERE d.${keyc}::text = cv.key)`,
-      [dimId, tenantId, changed],
+      [refTableId, tenantId, changed],
     );
   });
   await appendAuditAs(
     userId,
     "Reverted changes",
     `${changed.length} record${changed.length === 1 ? "" : "s"} → Version ${snapVersion}`,
-    { tableId: dimId, tenantId },
+    { tableId: refTableId, tenantId },
   );
   return { reverted: changed.length };
 }
 
-/** Approve & commit: fold the dimension's `mapped` drafts into Postgres dim_/map_
+/** Approve & commit: fold the refTable's `mapped` drafts into Postgres dim_/map_
  *  in one atomic transaction, then clear them + audit. */
 /** Collect all validation violations across required, unique, and range rules.
  *  Returns one entry per offending record+field pair. Rollbacks skip this gate
  *  (they restore a past version verbatim). */
 async function validationViolations(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
   meta: { dimTable: string; keyCol: string },
 ): Promise<
@@ -531,9 +533,9 @@ async function validationViolations(
     type: string;
     field_config: string | null;
   }>(
-    `SELECT field, label, type, field_config FROM ${pg("dimension_field")}
-     WHERE dim_id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+    `SELECT field, label, type, field_config FROM ${pg("reference_table_field")}
+     WHERE reference_table_id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   const DIMT = cq(meta.dimTable);
   const keyCol = qid(meta.keyCol);
@@ -624,7 +626,7 @@ async function validationViolations(
 }
 
 export async function commit(
-  dimId: string,
+  refTableId: string,
   userId: string,
   tenantId: string,
   draftKeys?: string[],
@@ -643,8 +645,8 @@ export async function commit(
   }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", label,
             COALESCE(ordering_mode, 'derived') AS "orderingMode"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   if (!meta) return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
   const key = qid(meta.keyCol);
@@ -653,14 +655,14 @@ export async function commit(
   const MAPT = cq(meta.mapTable);
 
   // When draftKeys is provided, validate that all requested keys exist as
-  // mapped drafts for this (dim, tenant) before touching anything.
+  // mapped drafts for this (refTable, tenant) before touching anything.
   const scoped = draftKeys !== undefined;
   if (scoped && draftKeys!.length > 0) {
     const found = await pgAll<{ raw: string }>(
       `SELECT raw FROM ${DRAFT}
-       WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL
          AND raw = ANY($3)`,
-      [dimId, tenantId, draftKeys],
+      [refTableId, tenantId, draftKeys],
     );
     const foundSet = new Set(found.map((r) => r.raw));
     const missing = draftKeys!.filter((k) => !foundSet.has(k));
@@ -678,33 +680,33 @@ export async function commit(
   const scopeClause = scoped ? ` AND raw = ANY($3)` : "";
   const scopeClauseD = scoped ? ` AND d.raw = ANY($3)` : "";
   const baseParams = (extra: unknown[] = []) =>
-    scoped ? [dimId, tenantId, draftKeys, ...extra] : [dimId, tenantId, ...extra];
+    scoped ? [refTableId, tenantId, draftKeys, ...extra] : [refTableId, tenantId, ...extra];
   const baseParamsD = baseParams; // alias for aliased-draft statements
 
   const approved = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${DRAFT}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
     baseParams(),
   );
   const committed = Number(approved?.n ?? 0);
 
-  // ADR-0002: canonical edits are instant in the working copy; publish stamps
+  // ADR-0002: record edits are instant in the working copy; publish stamps
   // them into a version too. A commit with zero drafts still proceeds when
-  // canonical rows changed since the last publish — the draft-driven SQL
+  // record rows changed since the last publish — the draft-driven SQL
   // below all no-ops safely.
   // NOTE: scoped empty-array (draftKeys=[]) is valid — it means "fold no drafts,
   // publish record-state only". The early return must not short-circuit in that
-  // case when canonicalChanged.length > 0. Unscoped (undefined) keeps existing behaviour.
+  // case when recordChanged.length > 0. Unscoped (undefined) keeps existing behaviour.
   const lastPublish = await pgGet<{ at: Date | null }>(
     `SELECT max(occurred_at) AS at FROM ${pg("outbound_event")}
-     WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
-    [tenantId, dimId],
+     WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'`,
+    [tenantId, refTableId],
   );
-  const canonicalChanged = await changedKeysSince(dimId, tenantId, lastPublish?.at ?? null, {
+  const recordChanged = await changedKeysSince(refTableId, tenantId, lastPublish?.at ?? null, {
     dimTable: meta.dimTable,
     keyCol: meta.keyCol,
   });
-  if (!committed && canonicalChanged.length === 0)
+  if (!committed && recordChanged.length === 0)
     return { committed: 0, rowsRecovered: 0, warehouseSynced: "n/a" };
 
   // Validation gate: blocks publish on required, unique, or range violations.
@@ -712,7 +714,7 @@ export async function commit(
   // Error code: REQUIRED_FIELDS_EMPTY when every violation is "needs a value"
   // (preserves existing frontend behavior); VALIDATION_FAILED otherwise.
   if (opts?.kind !== "rollback") {
-    const violations = await validationViolations(dimId, tenantId, {
+    const violations = await validationViolations(refTableId, tenantId, {
       dimTable: meta.dimTable,
       keyCol: meta.keyCol,
     });
@@ -735,9 +737,9 @@ export async function commit(
   if (prefs.requireSecondPublisher) {
     const ownDrafts = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM ${DRAFT}
-       WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'
          AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${scoped ? ` AND raw = ANY($4)` : ""}`,
-      scoped ? [dimId, tenantId, userId, draftKeys] : [dimId, tenantId, userId],
+      scoped ? [refTableId, tenantId, userId, draftKeys] : [refTableId, tenantId, userId],
     );
     const own = Number(ownDrafts?.n ?? 0);
     if (own > 0) {
@@ -749,13 +751,13 @@ export async function commit(
     }
   }
 
-  const rowsRecovered = await rowsForUnmappedDrafts(dimId, tenantId, meta.mapTable);
+  const rowsRecovered = await rowsForUnmappedDrafts(refTableId, tenantId, meta.mapTable);
 
   // Capture distinct target_keys BEFORE the tx so they're available after
   // the draft rows are deleted inside the transaction.
   const committedRows = await pgAll<{ target_key: string }>(
     `SELECT DISTINCT target_key FROM ${DRAFT}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
     baseParams(),
   );
 
@@ -763,7 +765,7 @@ export async function commit(
   // warehouse adapter after the Postgres commit succeeds.
   const approvedDrafts = await pgAll<{ raw: string; key: string; label: string | null }>(
     `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
-     WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
     baseParams(),
   );
 
@@ -773,14 +775,14 @@ export async function commit(
     `SELECT d.raw, m.${key} AS from_key, d.target_key AS to_key
      FROM ${DRAFT} d
      JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
-     WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
+     WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
        AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}`,
     baseParamsD(),
   );
 
   // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
-  // stays per-tenant-implicit (dim ids are globally unique → effectively
-  // per-tenant via the dimension registry's WHERE tenant_id = $N gate above).
+  // stays per-tenant-implicit (refTable ids are globally unique → effectively
+  // per-tenant via the refTable registry's WHERE tenant_id = $N gate above).
   await pgTx(async (tx) => {
     // Update existing map rows whose target has changed (remaps).
     if (remappedDrafts.length > 0) {
@@ -789,7 +791,7 @@ export async function commit(
          SET ${key} = d.target_key
          FROM ${DRAFT} d
          WHERE lower(m.raw) = lower(d.raw)
-           AND d.dim_id = $1 AND d.tenant_id = $2
+           AND d.reference_table_id = $1 AND d.tenant_id = $2
            AND d.status = 'mapped' AND d.target_key IS NOT NULL
            AND m.${key} <> d.target_key${scopeClauseD}`,
         baseParamsD(),
@@ -806,7 +808,7 @@ export async function commit(
              target_label AS lbl,
              MIN(created_at) AS first_seen
            FROM ${DRAFT} d
-           WHERE d.dim_id = $1 AND d.tenant_id = $2
+           WHERE d.reference_table_id = $1 AND d.tenant_id = $2
              AND d.status = 'mapped' AND d.target_key IS NOT NULL
              AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}
            GROUP BY target_key, target_label
@@ -822,7 +824,7 @@ export async function commit(
       await tx.run(
         `INSERT INTO ${DIMT} (${key}, label)
          SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
-         WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+         WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}`,
         baseParamsD(),
       );
@@ -830,37 +832,37 @@ export async function commit(
     await tx.run(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT d.raw, d.target_key FROM ${DRAFT} d
-       WHERE d.dim_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
+       WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}`,
       baseParamsD(),
     );
     // DELETE: scoped → only delete the requested draft raws; unscoped → delete all mapped.
     if (scoped) {
       await tx.run(
-        `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped' AND raw = ANY($3)`,
-        [dimId, tenantId, draftKeys],
+        `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND raw = ANY($3)`,
+        [refTableId, tenantId, draftKeys],
       );
     } else {
       await tx.run(
-        `DELETE FROM ${DRAFT} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
-        [dimId, tenantId],
+        `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
+        [refTableId, tenantId],
       );
     }
 
     // Outbound event for downstream subscribers (PR3). Uses a count-based
-    // per-(tenant, dim, type) monotonic counter — simpler than extracting
+    // per-(tenant, refTable, type) monotonic counter — simpler than extracting
     // payload->>'version' from a jsonb column and equally correct since we
     // only insert one table.published event per commit() inside this tx.
     const versionRow = await tx.get<{ v: number }>(
       `SELECT count(*)::int + 1 AS v
          FROM ${pg("outbound_event")}
-        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
-      [tenantId, dimId],
+        WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'`,
+      [tenantId, refTableId],
     );
     const v = versionRow?.v ?? 1;
     await writeVersionSnapshot(tx, {
       tenantId,
-      dimId,
+      refTableId,
       version: v,
       kind: opts?.kind ?? "publish",
       restoresVersion: opts?.restoresVersion ?? null,
@@ -874,7 +876,7 @@ export async function commit(
       [userId],
     );
     // Stamp with the DB clock: publish-state comparisons ("changed since last
-    // publish") run against canonical_version.updated_at, which is DB now().
+    // publish") run against record_version.updated_at, which is DB now().
     // A host/DB clock skew would otherwise resurrect just-published changes.
     const dbNow = await tx.get<{ now: Date }>(`SELECT now() AS now`);
     const remappedRaws = new Set(remappedDrafts.map((r) => r.raw.toLowerCase()));
@@ -889,10 +891,10 @@ export async function commit(
     await dispatchOutbound(tx, {
       tenantId,
       type: "table.published",
-      dimId,
+      refTableId,
       occurredAt: dbNow?.now ?? new Date(),
       payload: {
-        dim_slug: dimId,
+        dim_slug: refTableId,
         dim_label: meta.label,
         version: v,
         previous_version: v - 1,
@@ -907,7 +909,7 @@ export async function commit(
         summary: {
           added: addedKeys.length,
           remapped: remappedKeys.length,
-          updated: canonicalChanged.length,
+          updated: recordChanged.length,
           merged: 0,
           retired: 0,
         },
@@ -915,15 +917,15 @@ export async function commit(
         kind: opts?.kind ?? "publish",
         ...(opts?.restoresVersion != null ? { restores_version: opts.restoresVersion } : {}),
       },
-      idemKey: `table.published:${dimId}:${v}`,
+      idemKey: `table.published:${refTableId}:${v}`,
     });
   });
 
-  // Per-row audit: one entry per distinct target_key so each canonical row
+  // Per-row audit: one entry per distinct target_key so each record row
   // gets a "Mia · 3m ago" badge in the activity feed.
   for (const row of committedRows) {
     await appendAuditAs(userId, "Committed mapping", `→ ${row.target_key}`, {
-      tableId: dimId,
+      tableId: refTableId,
       rowKey: row.target_key,
       tenantId,
     });
@@ -940,7 +942,7 @@ export async function commit(
     await appendAuditAs(
       userId,
       "Published",
-      `${canonicalChanged.length} record change${canonicalChanged.length === 1 ? "" : "s"} → ${meta.dimTable}`,
+      `${recordChanged.length} record change${recordChanged.length === 1 ? "" : "s"} → ${meta.dimTable}`,
       { tenantId },
     );
   }
@@ -952,15 +954,15 @@ export async function commit(
   let warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed" = "n/a";
   const adapter = await getAdapter();
   if (!opts?.skipWarehouseSync && isWritable(adapter)) {
-    const dimSpec = {
-      dimId,
+    const refTableSpec = {
+      refTableId,
       dimTable: meta.dimTable,
       mapTable: meta.mapTable,
       keyCol: meta.keyCol,
     };
     try {
-      await adapter.ensureCanonicalTables(dimSpec);
-      await adapter.commitCanonical(dimSpec, approvedDrafts);
+      await adapter.ensureRecordTables(refTableSpec);
+      await adapter.commitRecord(refTableSpec, approvedDrafts);
       await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`, {
         tenantId,
       });
@@ -978,7 +980,7 @@ export async function commit(
   }
 
   // Prune ai_hint_cache entries whose suggestion no longer matches a valid
-  // canonical label (e.g. after a canonical record was deleted).
+  // record label (e.g. after a record record was deleted).
   const currentLabels = await pgAll<{ label: string }>(
     `SELECT label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
   ).catch(() => [] as { label: string }[]);
@@ -986,8 +988,8 @@ export async function commit(
     const labelArr = currentLabels.map((r) => r.label);
     await pgRun(
       `DELETE FROM ${pg("ai_hint_cache")}
-       WHERE dim_id = $1 AND suggestion IS NOT NULL AND NOT (suggestion = ANY($2::text[]))`,
-      [dimId, labelArr],
+       WHERE reference_table_id = $1 AND suggestion IS NOT NULL AND NOT (suggestion = ANY($2::text[]))`,
+      [refTableId, labelArr],
     ).catch(() => {
       /* table may not exist in older deploys */
     });
@@ -997,9 +999,9 @@ export async function commit(
 }
 
 /** Warehouse rows for raws that have a mapped draft but aren't yet in the map.
- *  Reads materialized dim_scan_occurrence rather than re-querying the warehouse. */
+ *  Reads materialized source_scan_occurrence rather than re-querying the warehouse. */
 async function rowsForUnmappedDrafts(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
   mapTable: string,
 ): Promise<number> {
@@ -1010,18 +1012,18 @@ async function rowsForUnmappedDrafts(
     rows: number;
   }>(
     `SELECT v.raw, o.table_name, o.column_name, o.rows
-       FROM zugzug_app.dim_scan_value v
-       JOIN zugzug_app.dim_scan_occurrence o
-         ON o.tenant_id = v.tenant_id AND o.dim_id = v.dim_id AND o.raw_lower = v.raw_lower
-       WHERE v.tenant_id = $1 AND v.dim_id = $2`,
-    [tenantId, dimId],
+       FROM zugzug_app.source_scan_value v
+       JOIN zugzug_app.source_scan_occurrence o
+         ON o.tenant_id = v.tenant_id AND o.reference_table_id = v.reference_table_id AND o.raw_lower = v.raw_lower
+       WHERE v.tenant_id = $1 AND v.reference_table_id = $2`,
+    [tenantId, refTableId],
   );
   if (!occRows.length) return 0;
 
-  // Postgres: draft raws for this dimension with status=mapped
+  // Postgres: draft raws for this refTable with status=mapped
   const draftRows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM ${pg("draft")} WHERE dim_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
-    [dimId, tenantId],
+    `SELECT raw FROM ${pg("draft")} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
+    [refTableId, tenantId],
   );
   const draftSet = new Set(draftRows.map((r) => r.raw.toLowerCase()));
 

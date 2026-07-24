@@ -18,7 +18,11 @@ vi.mock("../src/store", async (orig) => {
 
 function harness(role: "viewer" | "editor" | "admin") {
   const value: TenantContextValue = {
-    id: "t1", slug: "acme", label: "Acme", role, isSuperAdmin: false,
+    id: "t1",
+    slug: "acme",
+    label: "Acme",
+    role,
+    isSuperAdmin: false,
   };
   return render(
     <MemoryRouter initialEntries={["/app/acme/settings/danger"]}>
@@ -39,7 +43,11 @@ function harness(role: "viewer" | "editor" | "admin") {
 
 describe("DangerZone component", () => {
   test("wraps children in a danger-toned panel", () => {
-    const { container } = render(<DangerZone><span>x</span></DangerZone>);
+    const { container } = render(
+      <DangerZone>
+        <span>x</span>
+      </DangerZone>,
+    );
     expect((container.firstChild as HTMLElement).className).toMatch(/danger/);
   });
 });

@@ -12,24 +12,24 @@ beforeEach(async () => {
   await resetDb();
 });
 
-// KNOWN BUG: addDimension is currently silently idempotent — when a dimension
+// KNOWN BUG: addRefTable is currently silently idempotent — when a refTable
 // with the same slug already exists it returns the existing id without throwing.
 // The API layer should detect this and surface a 409, but the repo function
 // itself does not enforce uniqueness at the call site.
 // This test is marked as failing to document the current behaviour; it should
-// be converted to a plain `test(...)` once addDimension throws on collision.
-test.failing("addDimension rejects duplicate names", async () => {
+// be converted to a plain `test(...)` once addRefTable throws on collision.
+test.failing("addRefTable rejects duplicate names", async () => {
   const userId = "u_test";
-  await repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default");
+  await repo.addRefTable("Brand", [], { keyKind: "slug" }, userId, "default");
   await expect(
-    repo.addDimension("Brand", [], { keyKind: "slug" }, userId, "default"),
+    repo.addRefTable("Brand", [], { keyKind: "slug" }, userId, "default"),
   ).rejects.toThrow(/exists|duplicate|unique|taken/i);
 });
 
-test("addDimension creates registry row that getDimension can read", async () => {
+test("addRefTable creates registry row that getRefTable can read", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("Channel", [], { keyKind: "slug" }, userId, "default");
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim).not.toBeNull();
-  expect(dim?.dimension).toBe("Channel");
+  const refTableId = await repo.addRefTable("Channel", [], { keyKind: "slug" }, userId, "default");
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable).not.toBeNull();
+  expect(refTable?.refTable).toBe("Channel");
 });

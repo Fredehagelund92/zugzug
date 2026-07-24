@@ -2,52 +2,91 @@ import { describe, test, expect, vi } from "vitest";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
-import type { MappingDimension } from "../src/data";
+import type { MappingRefTable } from "../src/data";
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
-const dimAlpha: MappingDimension = {
+const refTableAlpha: MappingRefTable = {
   id: "alpha",
-  dimension: "Alpha",
+  refTable: "Alpha",
   dimTable: "zugzug.dim_alpha",
   mapTable: "zugzug.map_alpha",
   keyCol: "alpha_id",
   rows: 100,
-  canonical: [],
-  counts: { newCount: 5, mappedCount: 2, totalDistinct: 7, unmappedRowsTotal: 100, mappedRowsTotal: 200, scannedAt: null },
-  publish: { version: 3, publishedAt: "2026-07-21T12:00:00Z", publishedByName: "Alice", pendingDrafts: 1, changedRecords: 2 },
+  record: [],
+  counts: {
+    newCount: 5,
+    mappedCount: 2,
+    totalDistinct: 7,
+    unmappedRowsTotal: 100,
+    mappedRowsTotal: 200,
+    scannedAt: null,
+  },
+  publish: {
+    version: 3,
+    publishedAt: "2026-07-21T12:00:00Z",
+    publishedByName: "Alice",
+    pendingDrafts: 1,
+    changedRecords: 2,
+  },
 };
 
-const dimBravo: MappingDimension = {
+const refTableBravo: MappingRefTable = {
   id: "bravo",
-  dimension: "Bravo",
+  refTable: "Bravo",
   dimTable: "zugzug.dim_bravo",
   mapTable: "zugzug.map_bravo",
   keyCol: "bravo_id",
   rows: 50,
-  canonical: [],
-  counts: { newCount: 0, mappedCount: 3, totalDistinct: 3, unmappedRowsTotal: 0, mappedRowsTotal: 50, scannedAt: null },
-  publish: { version: 2, publishedAt: "2026-07-20T10:00:00Z", publishedByName: "Bob", pendingDrafts: 0, changedRecords: 0 },
+  record: [],
+  counts: {
+    newCount: 0,
+    mappedCount: 3,
+    totalDistinct: 3,
+    unmappedRowsTotal: 0,
+    mappedRowsTotal: 50,
+    scannedAt: null,
+  },
+  publish: {
+    version: 2,
+    publishedAt: "2026-07-20T10:00:00Z",
+    publishedByName: "Bob",
+    pendingDrafts: 0,
+    changedRecords: 0,
+  },
 };
 
-const dimCharlie: MappingDimension = {
+const refTableCharlie: MappingRefTable = {
   id: "charlie",
-  dimension: "Charlie",
+  refTable: "Charlie",
   dimTable: "zugzug.dim_charlie",
   mapTable: "zugzug.map_charlie",
   keyCol: "charlie_id",
   rows: 75,
-  canonical: [],
-  counts: { newCount: 2, mappedCount: 1, totalDistinct: 3, unmappedRowsTotal: 50, mappedRowsTotal: 75, scannedAt: null },
-  publish: { version: 0, publishedAt: null, publishedByName: null, pendingDrafts: 0, changedRecords: 2 },
+  record: [],
+  counts: {
+    newCount: 2,
+    mappedCount: 1,
+    totalDistinct: 3,
+    unmappedRowsTotal: 50,
+    mappedRowsTotal: 75,
+    scannedAt: null,
+  },
+  publish: {
+    version: 0,
+    publishedAt: null,
+    publishedByName: null,
+    pendingDrafts: 0,
+    changedRecords: 2,
+  },
 };
 
-const dimensionsFixture: MappingDimension[] = [dimAlpha, dimBravo, dimCharlie];
+const refTablesFixture: MappingRefTable[] = [refTableAlpha, refTableBravo, refTableCharlie];
 
 // ── mocks ─────────────────────────────────────────────────────────────────────
 
 vi.mock("../src/store", () => ({
-  useDimensions: () => dimensionsFixture,
+  useRefTables: () => refTablesFixture,
   useAudit: () => [],
   useDrafts: () => ({}),
   useWorkspaceInfo: () => ({ adapter: "motherduck", warehouseDb: "md:demo", writable: true }),
@@ -106,7 +145,10 @@ describe("Dashboard header sorting", () => {
     renderDashboard();
 
     const bodyRows = () =>
-      screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].textContent);
+      screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((r) => within(r).getAllByRole("cell")[0].textContent);
 
     // Default: In review desc → Alpha (5), Charlie (2), Bravo (0)
     expect(bodyRows()[0]).toMatch(/Alpha/);

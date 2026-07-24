@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { MappingDimension } from "../../data";
+import type { MappingRefTable } from "../../data";
 import { ClusterMapperCard } from "./ClusterMapperCard";
 import { MatchModeBody } from "./MatchModeBody";
 import { useDrafts, listDrafts, commit, useCanEdit } from "../../store";
@@ -14,23 +14,29 @@ type View = "focused" | "grid";
    (ClusterMapperCard) with a publish bar; the Grid toggle drops to the existing
    MatchModeBody power view (bulk / paste). Both stage into the
    same drafts, so the publish bar works from either. */
-export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActive: boolean }) {
+export function MapValuesBody({
+  refTable,
+  isActive,
+}: {
+  refTable: MappingRefTable;
+  isActive: boolean;
+}) {
   const [view, setView] = useState<View>("focused");
   const drafts = useDrafts();
   const canEdit = useCanEdit();
 
   const staged = useMemo(
-    () => listDrafts(dim.id).filter((d) => d.status === "mapped").length,
+    () => listDrafts(refTable.id).filter((d) => d.status === "mapped").length,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [drafts, dim.id],
+    [drafts, refTable.id],
   );
 
   const publish = useAsyncAction(async () => {
     if (staged === 0) return;
     try {
-      const res = await commit(dim.id);
+      const res = await commit(refTable.id);
       toast(
-        `Published ${res.committed} change${res.committed === 1 ? "" : "s"} to ${dim.dimension}`,
+        `Published ${res.committed} change${res.committed === 1 ? "" : "s"} to ${refTable.refTable}`,
       );
     } catch (e) {
       toast(e instanceof Error ? `Publish failed — ${e.message}` : "Publish failed.", "error");
@@ -43,7 +49,7 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
       {/* mapper-head: kicker + view toggle */}
       <div className="flex items-center gap-3 border-b border-line bg-surface px-4 pt-3 pb-2.5">
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
-          map values · {dim.dimension}
+          map values · {refTable.refTable}
         </span>
         <div className="rounded-sm ml-auto inline-flex border border-line">
           {(["focused", "grid"] as const).map((v) => (
@@ -78,7 +84,7 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
 
       {view === "focused" ? (
         <>
-          <ClusterMapperCard dim={dim} />
+          <ClusterMapperCard refTable={refTable} />
           <div className="sticky bottom-0 z-10 flex items-center gap-3 border-t border-line bg-surface px-4 py-3">
             <span className="font-mono text-[11px] text-ink-2">
               {staged > 0 ? (
@@ -86,7 +92,7 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
                   <span className="font-semibold text-ink">
                     {staged} draft{staged === 1 ? "" : "s"}
                   </span>{" "}
-                  ready to publish to {dim.dimension}
+                  ready to publish to {refTable.refTable}
                 </>
               ) : (
                 <>no drafts yet — map values above</>
@@ -103,7 +109,7 @@ export function MapValuesBody({ dim, isActive }: { dim: MappingDimension; isActi
           </div>
         </>
       ) : (
-        <MatchModeBody dim={dim} isActive={isActive} />
+        <MatchModeBody refTable={refTable} isActive={isActive} />
       )}
     </div>
   );

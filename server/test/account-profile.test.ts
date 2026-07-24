@@ -41,10 +41,9 @@ test("PATCH /api/auth/me updates name", async () => {
     () => {},
   );
   expect(res.status).toBe(204);
-  const row = await pgGet<{ name: string }>(
-    `SELECT name FROM "zugzug_app"."users" WHERE id = $1`,
-    ["u_profile_e2e"],
-  );
+  const row = await pgGet<{ name: string }>(`SELECT name FROM "zugzug_app"."users" WHERE id = $1`, [
+    "u_profile_e2e",
+  ]);
   expect(row?.name).toBe("New Name");
 });
 

@@ -17,13 +17,13 @@ interface State {
 // Module-level session cache — survives remounts, makes re-focuses instant.
 const sessionCache = new Map<string, AiHint>();
 
-function cacheKey(dimId: string, raw: string): string {
-  return `${dimId}::${raw}`;
+function cacheKey(refTableId: string, raw: string): string {
+  return `${refTableId}::${raw}`;
 }
 
-export function useAiHint(dimId: string, raw: string, enabled: boolean): State {
+export function useAiHint(refTableId: string, raw: string, enabled: boolean): State {
   const [state, setState] = useState<State>(() => {
-    const cached = enabled ? sessionCache.get(cacheKey(dimId, raw)) : undefined;
+    const cached = enabled ? sessionCache.get(cacheKey(refTableId, raw)) : undefined;
     return { hint: cached ?? null, loading: false, error: false };
   });
 
@@ -31,9 +31,9 @@ export function useAiHint(dimId: string, raw: string, enabled: boolean): State {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (!enabled || !dimId || !raw) return;
+    if (!enabled || !refTableId || !raw) return;
 
-    const key = cacheKey(dimId, raw);
+    const key = cacheKey(refTableId, raw);
     const cached = sessionCache.get(key);
     if (cached) {
       setState({ hint: cached, loading: false, error: false });
@@ -49,7 +49,7 @@ export function useAiHint(dimId: string, raw: string, enabled: boolean): State {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const qs = new URLSearchParams({ dimId, raw });
+      const qs = new URLSearchParams({ refTableId, raw });
       apiFetch(`/triage/ai-hint?${qs.toString()}`, { signal: controller.signal })
         .then(async (res) => {
           if (!res.ok) throw new Error(`${res.status}`);
@@ -69,7 +69,7 @@ export function useAiHint(dimId: string, raw: string, enabled: boolean): State {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (abortRef.current) abortRef.current.abort();
     };
-  }, [dimId, raw, enabled]);
+  }, [refTableId, raw, enabled]);
 
   return state;
 }

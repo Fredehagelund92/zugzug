@@ -4,8 +4,14 @@ import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../src/components/datagrid/types";
 
-interface Row { id: string; name: string }
-const rows: Row[] = [{ id: "1", name: "Acme" }, { id: "2", name: "Bravo" }];
+interface Row {
+  id: string;
+  name: string;
+}
+const rows: Row[] = [
+  { id: "1", name: "Acme" },
+  { id: "2", name: "Bravo" },
+];
 const columns: ColumnDef<Row>[] = [
   { field: "id", label: "ID", config: { type: "text" }, editable: false },
   { field: "name", label: "Name", config: { type: "text" } },
@@ -50,11 +56,19 @@ describe("right-click context menu", () => {
   test("row-number context menu has no Duplicate item", () => {
     const { container } = render(
       <UndoStackProvider>
-        <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id} onCommit={async () => {}} showRowNumbers />
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          rowKey={(r) => r.id}
+          onCommit={async () => {}}
+          showRowNumbers
+        />
       </UndoStackProvider>,
     );
     const rownum = container.querySelector('[data-row-num="1"]') as HTMLElement;
-    act(() => { fireEvent.contextMenu(rownum, { clientX: 30, clientY: 30, bubbles: true }); });
+    act(() => {
+      fireEvent.contextMenu(rownum, { clientX: 30, clientY: 30, bubbles: true });
+    });
     expect(document.querySelector('[role="menu"]')?.textContent).not.toContain("Duplicate");
   });
 
@@ -65,9 +79,13 @@ describe("right-click context menu", () => {
       </UndoStackProvider>,
     );
     const cell = container.querySelector('[data-cell="1::name"]') as HTMLElement;
-    act(() => { fireEvent.contextMenu(cell, { clientX: 50, clientY: 50, bubbles: true }); });
+    act(() => {
+      fireEvent.contextMenu(cell, { clientX: 50, clientY: 50, bubbles: true });
+    });
     expect(document.querySelector('[role="menu"]')).not.toBeNull();
-    act(() => { fireEvent.keyDown(document, { key: "Escape" }); });
+    act(() => {
+      fireEvent.keyDown(document, { key: "Escape" });
+    });
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 });

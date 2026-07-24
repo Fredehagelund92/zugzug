@@ -1,6 +1,6 @@
 /* repo-scan.ts — warehouse scanning (DuckDB-backed) + the sources registry.
  *
- * Manages the dimension_source / source_stat tables in Postgres and drives
+ * Manages the reference_table_source / source_stat tables in Postgres and drives
  * the DuckDB queries that count distinct values in MotherDuck. */
 
 import {
@@ -24,7 +24,7 @@ import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { saveDraft } from "./repo-drafts.ts";
-import { materializeDimScanValues } from "./repo-dim-scan.ts";
+import { materializeSourceScanValues } from "./repo-source-scan.ts";
 import { clusterForSeed } from "./cluster-values.ts";
 import { AppError } from "./errors.ts";
 
@@ -59,8 +59,8 @@ export async function listSources(opts: {
   else if (opts.status === "missing") where.push(`st.scanned_at IS NOT NULL AND NOT st.present`);
 
   const rows = await pgAll<{
-    dimId: string;
-    dimension: string;
+    refTableId: string;
+    refTable: string;
     table: string;
     column: string;
     present: boolean;
@@ -70,7 +70,7 @@ export async function listSources(opts: {
     scanned: boolean;
     scannedAt: string | null;
   }>(
-    `SELECT s.dim_id AS "dimId", d.label AS dimension,
+    `SELECT s.reference_table_id AS "refTableId", d.label AS "refTable",
             (s.schema_name || '.' || s.table_name) AS "table",
             s.column_name AS column,
             COALESCE(st.present, false) AS present,
@@ -79,10 +79,10 @@ export async function listSources(opts: {
             COALESCE(st.unmapped, 0)::int AS unmapped,
             (st.scanned_at IS NOT NULL) AS scanned,
             st.scanned_at::text AS "scannedAt"
-     FROM ${pg("dimension_source")} s
-     JOIN ${pg("dimension")} d ON d.id = s.dim_id AND d.tenant_id = s.tenant_id
+     FROM ${pg("reference_table_source")} s
+     JOIN ${pg("reference_table")} d ON d.id = s.reference_table_id AND d.tenant_id = s.tenant_id
      LEFT JOIN ${pg("source_stat")} st
-       ON st.dim_id = s.dim_id
+       ON st.reference_table_id = s.reference_table_id
       AND st.database_id = s.database_id
       AND st.schema_name = s.schema_name
       AND st.table_name  = s.table_name
@@ -96,8 +96,8 @@ export async function listSources(opts: {
   return rows.map((r) => ({
     table: r.table,
     column: r.column,
-    dimension: r.dimension,
-    dimId: r.dimId,
+    refTable: r.refTable,
+    refTableId: r.refTableId,
     present: !!r.present,
     rows: Number(r.rows),
     values: Number(r.values),
@@ -114,9 +114,9 @@ export async function sourceFacets(tenantId: string): Promise<SchemaFacet[]> {
             count(*)::int AS columns,
             COALESCE(sum(st.unmapped), 0)::int AS unmapped,
             count(*) FILTER (WHERE st.scanned_at IS NOT NULL AND NOT st.present)::int AS missing
-     FROM ${pg("dimension_source")} s
+     FROM ${pg("reference_table_source")} s
      LEFT JOIN ${pg("source_stat")} st
-       ON st.dim_id      = s.dim_id
+       ON st.reference_table_id      = s.reference_table_id
       AND st.tenant_id   = s.tenant_id
       AND st.database_id = s.database_id
       AND st.schema_name = s.schema_name
@@ -138,7 +138,7 @@ export async function sourceFacets(tenantId: string): Promise<SchemaFacet[]> {
  *  run explicitly). Returns how many sources were scanned. */
 export async function scanSources(tenantId: string): Promise<number> {
   const regs = await pgAll<{
-    dimId: string;
+    refTableId: string;
     databaseId: string;
     catalog: string;
     schema: string;
@@ -146,15 +146,15 @@ export async function scanSources(tenantId: string): Promise<number> {
     column: string;
     mapTable: string;
   }>(
-    `SELECT s.dim_id        AS "dimId",
+    `SELECT s.reference_table_id        AS "refTableId",
             s.database_id   AS "databaseId",
             wd.database_name AS "catalog",
             s.schema_name   AS "schema",
             s.table_name    AS "table",
             s.column_name   AS "column",
             d.map_table     AS "mapTable"
-       FROM ${pg("dimension_source")} s
-       JOIN ${pg("dimension")}          d  ON d.id  = s.dim_id      AND d.tenant_id  = s.tenant_id
+       FROM ${pg("reference_table_source")} s
+       JOIN ${pg("reference_table")}          d  ON d.id  = s.reference_table_id      AND d.tenant_id  = s.tenant_id
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
       WHERE s.tenant_id = $1`,
     [tenantId],
@@ -164,13 +164,13 @@ export async function scanSources(tenantId: string): Promise<number> {
     await scanOneSource(r, adapter, tenantId);
   }
 
-  const dimIds = [...new Set(regs.map((r) => r.dimId))];
-  for (const dimId of dimIds) {
-    await materializeOneDim(dimId, adapter, tenantId).catch((e) => {
+  const refTableIds = [...new Set(regs.map((r) => r.refTableId))];
+  for (const refTableId of refTableIds) {
+    await materializeOneDim(refTableId, adapter, tenantId).catch((e) => {
       log({
         level: "error",
-        msg: "materialize-dim",
-        dimId,
+        msg: "materialize-refTable",
+        refTableId,
         err: e instanceof Error ? e.message : String(e),
       });
     });
@@ -179,49 +179,49 @@ export async function scanSources(tenantId: string): Promise<number> {
   return regs.length;
 }
 
-/** Rescan a single dim — rescans its registered sources, then re-materializes
- *  its dim_scan_value/dim_scan_occurrence rows. Faster than scanSources when
+/** Rescan a single refTable — rescans its registered sources, then re-materializes
+ *  its source_scan_value/source_scan_occurrence rows. Faster than scanSources when
  *  the user only wants to refresh one table. */
-export async function scanOneDim(dimId: string, tenantId: string): Promise<void> {
+export async function scanOneDim(refTableId: string, tenantId: string): Promise<void> {
   const regs = await pgAll<ScanReg>(
-    `SELECT s.dim_id        AS "dimId",
+    `SELECT s.reference_table_id        AS "refTableId",
             s.database_id   AS "databaseId",
             wd.database_name AS "catalog",
             s.schema_name   AS "schema",
             s.table_name    AS "table",
             s.column_name   AS "column",
             d.map_table     AS "mapTable"
-       FROM ${pg("dimension_source")} s
-       JOIN ${pg("dimension")}          d  ON d.id  = s.dim_id      AND d.tenant_id  = s.tenant_id
+       FROM ${pg("reference_table_source")} s
+       JOIN ${pg("reference_table")}          d  ON d.id  = s.reference_table_id      AND d.tenant_id  = s.tenant_id
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
-      WHERE s.tenant_id = $1 AND s.dim_id = $2`,
-    [tenantId, dimId],
+      WHERE s.tenant_id = $1 AND s.reference_table_id = $2`,
+    [tenantId, refTableId],
   );
   const adapter = await getAdapter();
   for (const r of regs) {
     await scanOneSource(r, adapter, tenantId);
   }
-  await materializeOneDim(dimId, adapter, tenantId);
+  await materializeOneDim(refTableId, adapter, tenantId);
 }
 
-/** Run the warehouse provenance query for one dim and write the result into
- *  dim_scan_value + dim_scan_occurrence. Idempotent — replaces prior rows. */
+/** Run the warehouse provenance query for one refTable and write the result into
+ *  source_scan_value + source_scan_occurrence. Idempotent — replaces prior rows. */
 async function materializeOneDim(
-  dimId: string,
+  refTableId: string,
   adapter: Awaited<ReturnType<typeof getAdapter>>,
   tenantId: string,
 ): Promise<void> {
   const t0 = performance.now();
-  const sources = await liveSources(dimId, tenantId);
+  const sources = await liveSources(refTableId, tenantId);
   if (!sources.length) {
-    await materializeDimScanValues(dimId, tenantId, {
+    await materializeSourceScanValues(refTableId, tenantId, {
       occurrences: [],
       scannedAt: new Date(),
     });
     log({
       level: "info",
-      msg: "materialize-dim",
-      dimId,
+      msg: "materialize-refTable",
+      refTableId,
       distinct: 0,
       ms: Math.round(performance.now() - t0),
     });
@@ -236,11 +236,11 @@ async function materializeOneDim(
       return { raw: r.value, table: src.table, column: src.column, rows: r.count };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
-  await materializeDimScanValues(dimId, tenantId, { occurrences, scannedAt: new Date() });
+  await materializeSourceScanValues(refTableId, tenantId, { occurrences, scannedAt: new Date() });
   log({
     level: "info",
-    msg: "materialize-dim",
-    dimId,
+    msg: "materialize-refTable",
+    refTableId,
     distinct: new Set(occurrences.map((o) => o.raw.toLowerCase())).size,
     occurrences: occurrences.length,
     ms: Math.round(performance.now() - t0),
@@ -248,7 +248,7 @@ async function materializeOneDim(
 }
 
 type ScanReg = {
-  dimId: string;
+  refTableId: string;
   databaseId: string;
   catalog: string;
   schema: string;
@@ -258,7 +258,7 @@ type ScanReg = {
 };
 
 /** Scan a single registered source and upsert its row in source_stat. Shared
- *  by scanSources (bulk) and the auto-scan path in deriveCanonical (per-wire). */
+ *  by scanSources (bulk) and the auto-scan path in deriveRecord (per-wire). */
 async function scanOneSource(
   r: ScanReg,
   adapter: Awaited<ReturnType<typeof getAdapter>>,
@@ -319,10 +319,10 @@ async function scanOneSource(
   }
   await pgRun(
     `INSERT INTO ${pg("source_stat")}
-       (tenant_id, dim_id, database_id, schema_name, table_name, column_name,
+       (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name,
         present, rows, distinct_values, unmapped, scanned_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, current_timestamp)
-     ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
+     ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
        present         = EXCLUDED.present,
        rows            = EXCLUDED.rows,
        distinct_values = EXCLUDED.distinct_values,
@@ -330,7 +330,7 @@ async function scanOneSource(
        scanned_at      = EXCLUDED.scanned_at`,
     [
       tenantId,
-      r.dimId,
+      r.refTableId,
       r.databaseId,
       r.schema,
       r.table,
@@ -343,46 +343,46 @@ async function scanOneSource(
   );
 }
 
-/** List dimension IDs that have at least one wired source. Used by the
- *  auto-stage scheduler job to know which dimensions to process per tick. */
-export async function dimensionsWithWiredSources(tenantId: string): Promise<string[]> {
-  const rows = await pgAll<{ dimId: string }>(
-    `SELECT DISTINCT dim_id AS "dimId" FROM ${pg("dimension_source")} WHERE tenant_id = $1`,
+/** List refTable IDs that have at least one wired source. Used by the
+ *  auto-stage scheduler job to know which refTables to process per tick. */
+export async function refTablesWithWiredSources(tenantId: string): Promise<string[]> {
+  const rows = await pgAll<{ refTableId: string }>(
+    `SELECT DISTINCT reference_table_id AS "refTableId" FROM ${pg("reference_table_source")} WHERE tenant_id = $1`,
     [tenantId],
   );
-  return rows.map((r) => r.dimId);
+  return rows.map((r) => r.refTableId);
 }
 
 /** Auto-stage a draft (owned by u_system) for every warehouse raw value that
- *  case-insensitively matches an existing canonical label and is not yet in
- *  the dimension's lookup table. The match is deterministic — no AI, no fuzzy
+ *  case-insensitively matches an existing record label and is not yet in
+ *  the refTable's lookup table. The match is deterministic — no AI, no fuzzy
  *  — so it always lands above any reasonable publish threshold. */
 export async function autoStageExactMatches(
-  dimId: string,
+  refTableId: string,
   tenantId: string,
 ): Promise<{ matched: number; unmatched: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol",
             COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   if (!meta) return { matched: 0, unmatched: 0 };
   if (meta.keyKind === "external_id") return { matched: 0, unmatched: 0 };
 
-  const sources = await liveSources(dimId, tenantId);
+  const sources = await liveSources(refTableId, tenantId);
   if (!sources.length) return { matched: 0, unmatched: 0 };
 
-  // Materialized: distinct raw values from dim_scan_value
+  // Materialized: distinct raw values from source_scan_value
   const rows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM zugzug_app.dim_scan_value
-       WHERE tenant_id = $1 AND dim_id = $2`,
-    [tenantId, dimId],
+    `SELECT raw FROM zugzug_app.source_scan_value
+       WHERE tenant_id = $1 AND reference_table_id = $2`,
+    [tenantId, refTableId],
   );
   if (!rows.length) return { matched: 0, unmatched: 0 };
   const warehouseRaws = rows.map((r) => r.raw);
 
-  // Postgres: canonical labels
+  // Postgres: record labels
   const canonRows = await pgAll<{ key: string; label: string }>(
     `SELECT ${qid(meta.keyCol)} AS key, label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
   ).catch(() => [] as { key: string; label: string }[]);
@@ -408,26 +408,26 @@ export async function autoStageExactMatches(
 
   if (!matches.length) return { matched: 0, unmatched };
   for (const m of matches) {
-    await saveDraft(dimId, m.raw, "mapped", m.label, m.key, "u_system", tenantId);
+    await saveDraft(refTableId, m.raw, "mapped", m.label, m.key, "u_system", tenantId);
   }
   await appendAuditAs(
     "u_system",
     "Auto-matched",
-    `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${dimId} (exact label match)`,
+    `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${refTableId} (exact label match)`,
     { tenantId },
   );
   return { matched: matches.length, unmatched };
 }
 
-/** Register a warehouse column as a source for a dimension (idempotent).
+/** Register a warehouse column as a source for a refTable (idempotent).
  *
  *  Takes the convenience `"schema.table"` + column shape (used by seed and
- *  deriveCanonical). Resolves the warehouse database via
+ *  deriveRecord). Resolves the warehouse database via
  *  resolveDefaultDatabase() — the first registered warehouse_database for
  *  the deployment. Callers that already hold a databaseId should write the
  *  INSERT directly with that ID. */
 export async function addSource(
-  dimId: string,
+  refTableId: string,
   table: string,
   column: string,
   tenantId: string,
@@ -438,13 +438,13 @@ export async function addSource(
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${table}`, 422);
   }
-  const { resolveDefaultDatabase } = await import("./repo-canonical.ts");
+  const { resolveDefaultDatabase } = await import("./repo-record.ts");
   const databaseId = await resolveDefaultDatabase(tenantId);
   await pgRun(
-    `INSERT INTO ${pg("dimension_source")} (dim_id, tenant_id, database_id, schema_name, table_name, column_name)
+    `INSERT INTO ${pg("reference_table_source")} (reference_table_id, tenant_id, database_id, schema_name, table_name, column_name)
      VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (tenant_id, dim_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
-    [dimId, tenantId, databaseId, parts[0], parts[1], column],
+     ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
+    [refTableId, tenantId, databaseId, parts[0], parts[1], column],
   );
 }
 
@@ -452,19 +452,19 @@ export async function addSource(
  *  row count of each. Powers the per-row "what's actually broken here" reveal
  *  on the Sources page — drill into a column without leaving the list. */
 export async function topUnmapped(
-  dimId: string,
+  refTableId: string,
   table: string,
   column: string,
   limit = 5,
   tenantId: string,
 ): Promise<UnmappedSample[]> {
   const meta = await pgGet<{ mapTable: string }>(
-    `SELECT map_table AS "mapTable" FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+    `SELECT map_table AS "mapTable" FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
-  const ref = await refForRegisteredTable(dimId, table, tenantId);
+  const ref = await refForRegisteredTable(refTableId, table, tenantId);
   if (!ref) return [];
   const adapter = await getAdapter();
   const n = Math.max(1, Math.min(50, Math.round(limit)));
@@ -507,11 +507,11 @@ export async function anyScanDue(
            WHERE p.scan_schedule IS NOT NULL
              AND (
                EXISTS (
-                 SELECT 1 FROM ${pg("dimension_source")} ds
+                 SELECT 1 FROM ${pg("reference_table_source")} ds
                  WHERE ds.tenant_id = p.tenant_id
                    AND NOT EXISTS (
                      SELECT 1 FROM ${pg("source_stat")} st
-                     WHERE st.dim_id = ds.dim_id
+                     WHERE st.reference_table_id = ds.reference_table_id
                        AND st.database_id = ds.database_id
                        AND st.schema_name = ds.schema_name
                        AND st.table_name  = ds.table_name
@@ -560,11 +560,11 @@ export async function anyScanDue(
               (SELECT max(st.scanned_at)::text
                FROM ${pg("source_stat")} st
                WHERE st.tenant_id = $1) AS last_scan,
-              (SELECT count(*)::int FROM ${pg("dimension_source")} ds
+              (SELECT count(*)::int FROM ${pg("reference_table_source")} ds
                WHERE ds.tenant_id = $1
                  AND NOT EXISTS (
                  SELECT 1 FROM ${pg("source_stat")} st2
-                 WHERE st2.dim_id = ds.dim_id
+                 WHERE st2.reference_table_id = ds.reference_table_id
                    AND st2.database_id = ds.database_id
                    AND st2.schema_name = ds.schema_name
                    AND st2.table_name  = ds.table_name
@@ -609,9 +609,9 @@ export async function scanStatus(tenantId: string = "default"): Promise<ScanStat
       `SELECT max(st.scanned_at)::text                   AS last_scan,
               count(s.*)::int                            AS sources,
               COALESCE(sum(st.unmapped), 0)::int         AS unmapped
-       FROM ${pg("dimension_source")} s
+       FROM ${pg("reference_table_source")} s
        LEFT JOIN ${pg("source_stat")} st
-         ON  st.dim_id = s.dim_id
+         ON  st.reference_table_id = s.reference_table_id
          AND st.database_id = s.database_id
          AND st.schema_name = s.schema_name
          AND st.table_name  = s.table_name
@@ -680,14 +680,14 @@ export async function searchCatalog(opts: {
   return { rows, total: tables.length, schemas };
 }
 
-/* ---- canonical bootstrap from warehouse ---- */
+/* ---- record bootstrap from warehouse ---- */
 
-/** Seed a canonical_version row (version 1) for each derived key so the record
+/** Seed a record_version row (version 1) for each derived key so the record
  *  can be renamed/retired/merged later. Without this, rename/merge/retire 404
- *  ("canonical not found") because bumpVersionOrThrow finds no version row.
+ *  ("record not found") because bumpVersionOrThrow finds no version row.
  *  Idempotent — existing version rows are left untouched. */
 async function seedVersionRows(
-  dimId: string,
+  refTableId: string,
   keys: string[],
   userId: string,
   tenantId: string,
@@ -697,11 +697,11 @@ async function seedVersionRows(
     const chunk = keys.slice(i, i + CHUNK);
     const placeholders = chunk.map((_, j) => `($1, $${j + 4}, 1, now(), $2, $3)`).join(", ");
     await pgRun(
-      `INSERT INTO "zugzug_app"."canonical_version"
-            (dim_id, key, version, updated_at, updated_by, tenant_id)
+      `INSERT INTO "zugzug_app"."record_version"
+            (reference_table_id, key, version, updated_at, updated_by, tenant_id)
        VALUES ${placeholders}
-       ON CONFLICT (tenant_id, dim_id, key) DO NOTHING`,
-      [dimId, userId, tenantId, ...chunk],
+       ON CONFLICT (tenant_id, reference_table_id, key) DO NOTHING`,
+      [refTableId, userId, tenantId, ...chunk],
     );
   }
 }
@@ -730,22 +730,22 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
   }
 }
 
-/** Derive (bootstrap) or connect a source column to a dimension.
+/** Derive (bootstrap) or connect a source column to a refTable.
  *
- *  Mode is auto-detected from the target dim:
- *   - **seed** (dim is empty): each distinct value populates the canonical table
- *     and is auto-mapped 1:1 in the map table. Slug dims collapse US/us;
- *     external_id dims also persist the name-column binding.
- *   - **connect** (dim already has records): only register the source and refresh
+ *  Mode is auto-detected from the target refTable:
+ *   - **seed** (refTable is empty): each distinct value populates the record table
+ *     and is auto-mapped 1:1 in the map table. Slug refTables collapse US/us;
+ *     external_id refTables also persist the name-column binding.
+ *   - **connect** (refTable already has records): only register the source and refresh
  *     stats. Values land in Triage / Match Values, where exact-label hits get
  *     auto-staged and the rest are mapped by the operator. This is what you want
  *     for every source after the first — otherwise wiring source #2 would create
- *     duplicate canonical records, defeating the whole point of dedup.
+ *     duplicate record records, defeating the whole point of dedup.
  *
- *  Pass `opts.force: true` to seed even when the dim already has records — only
- *  use when bootstrapping a dim from multiple equally-trusted sources. */
-export async function deriveCanonical(
-  dimId: string,
+ *  Pass `opts.force: true` to seed even when the refTable already has records — only
+ *  use when bootstrapping a refTable from multiple equally-trusted sources. */
+export async function deriveRecord(
+  refTableId: string,
   table: string,
   column: string,
   nameColumn: string | undefined,
@@ -755,13 +755,13 @@ export async function deriveCanonical(
 ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
   const meta = await pgGet<{ dimTable: string; mapTable: string; keyCol: string; keyKind: string }>(
     `SELECT dim_table AS "dimTable", map_table AS "mapTable", key_col AS "keyCol", COALESCE(key_kind, 'slug') AS "keyKind"
-     FROM ${pg("dimension")} WHERE id = $1 AND tenant_id = $2`,
-    [dimId, tenantId],
+     FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
+    [refTableId, tenantId],
   );
   if (!meta) return { derived: 0, mode: "seed", matched: 0, unmatched: 0 };
-  await addSource(dimId, table, column, tenantId);
+  await addSource(refTableId, table, column, tenantId);
   const external = meta.keyKind === "external_id";
-  if (external && nameColumn) await addSource(dimId, table, nameColumn, tenantId);
+  if (external && nameColumn) await addSource(refTableId, table, nameColumn, tenantId);
 
   const seeded = await pgGet<{ n: number }>(`SELECT 1 AS n FROM ${cq(meta.dimTable)} LIMIT 1`);
   const mode: "seed" | "connect" = seeded && !opts.force ? "connect" : "seed";
@@ -771,15 +771,15 @@ export async function deriveCanonical(
       // Persist the name binding even in connect mode — the new source may be the
       // first one carrying names. Won't clobber if already set.
       await pgRun(
-        `UPDATE ${pg("dimension")} SET name_table = COALESCE(name_table, $1),
+        `UPDATE ${pg("reference_table")} SET name_table = COALESCE(name_table, $1),
                                        name_id_col = COALESCE(name_id_col, $2),
                                        name_col = COALESCE(name_col, $3)
          WHERE id = $4 AND tenant_id = $5`,
-        [table, column, nameColumn, dimId, tenantId],
+        [table, column, nameColumn, refTableId, tenantId],
       );
     }
     const cols = external && nameColumn ? [column, nameColumn] : [column];
-    await scanWiredSources(dimId, table, cols, tenantId);
+    await scanWiredSources(refTableId, table, cols, tenantId);
     // Inline the auto-stage so the caller gets real outcome counts immediately,
     // instead of waiting for the scheduler tick. The source is already
     // registered above; if auto-stage fails (warehouse blip, draft conflict),
@@ -788,12 +788,12 @@ export async function deriveCanonical(
     let matched = 0;
     let unmatched = 0;
     try {
-      ({ matched, unmatched } = await autoStageExactMatches(dimId, tenantId));
+      ({ matched, unmatched } = await autoStageExactMatches(refTableId, tenantId));
     } catch (err) {
       log({
         level: "warn",
-        msg: "derive-canonical: inline auto-stage failed",
-        dimId,
+        msg: "derive-record: inline auto-stage failed",
+        refTableId,
         table,
         column,
         err: err instanceof Error ? err.message : String(err),
@@ -811,7 +811,7 @@ export async function deriveCanonical(
 
   // Resolve the warehouse catalog from the just-registered source. Throws if
   // the source isn't registered (shouldn't happen post-addSource).
-  const ref = await refForRegisteredTable(dimId, table, tenantId);
+  const ref = await refForRegisteredTable(refTableId, table, tenantId);
   if (!ref) {
     throw new AppError(
       "VALIDATION_FAILED",
@@ -828,14 +828,14 @@ export async function deriveCanonical(
   if (!vals.length) {
     log({
       level: "warn",
-      msg: "derive-canonical: distinctValues returned 0",
-      dimId,
+      msg: "derive-record: distinctValues returned 0",
+      refTableId,
       table,
       column,
       hint: "column may be all NULL/empty, or warehouse not attached",
     });
     await scanWiredSources(
-      dimId,
+      refTableId,
       table,
       [column, ...(external && nameColumn ? [nameColumn] : [])],
       tenantId,
@@ -857,22 +857,27 @@ export async function deriveCanonical(
       ids.map((v) => [v, v] as [string, string]),
       `ON CONFLICT (raw) DO NOTHING`,
     );
-    await seedVersionRows(dimId, ids, userId, tenantId);
+    await seedVersionRows(refTableId, ids, userId, tenantId);
     if (nameColumn) {
       await pgRun(
-        `UPDATE ${pg("dimension")} SET name_table = $1, name_id_col = $2, name_col = $3
+        `UPDATE ${pg("reference_table")} SET name_table = $1, name_id_col = $2, name_col = $3
          WHERE id = $4 AND tenant_id = $5`,
-        [table, column, nameColumn, dimId, tenantId],
+        [table, column, nameColumn, refTableId, tenantId],
       );
     }
     if (!opts.silent)
       await appendAuditAs(
         userId,
-        "Derived canonical",
+        "Derived record",
         `${ids.length} external-ID key${ids.length === 1 ? "" : "s"} from ${table}.${column} (names ← ${table}.${nameColumn ?? "?"})`,
         { tenantId },
       );
-    await scanWiredSources(dimId, table, [column, ...(nameColumn ? [nameColumn] : [])], tenantId);
+    await scanWiredSources(
+      refTableId,
+      table,
+      [column, ...(nameColumn ? [nameColumn] : [])],
+      tenantId,
+    );
     return { derived: ids.length, mode, matched: 0, unmatched: 0 };
   }
 
@@ -880,16 +885,16 @@ export async function deriveCanonical(
   // case, punctuation and diacritics), so "U.S.A." and "usa" seed as one record
   // instead of two. The stored key stays a readable slug of the cluster's rep;
   // distinct normalized keys yield distinct slugs, so records never collide.
-  const dimByKey = new Map<string, string>(); // key → label (cluster rep)
+  const refTableByKey = new Map<string, string>(); // key → label (cluster rep)
   const mapPairs: [string, string][] = []; // raw → key
   for (const c of clusterForSeed(vals)) {
     const k = slug(c.rep) || c.rep.toLowerCase().slice(0, 60) || "_";
-    dimByKey.set(k, c.rep);
+    refTableByKey.set(k, c.rep);
     for (const raw of c.raws) mapPairs.push([raw, k]);
   }
   await bulkInsert(
     `INSERT INTO ${cq(meta.dimTable)} (${key}, label)`,
-    [...dimByKey.entries()],
+    [...refTableByKey.entries()],
     `ON CONFLICT (${key}) DO NOTHING`,
   );
   await bulkInsert(
@@ -897,16 +902,16 @@ export async function deriveCanonical(
     mapPairs,
     `ON CONFLICT (raw) DO NOTHING`,
   );
-  await seedVersionRows(dimId, [...dimByKey.keys()], userId, tenantId);
+  await seedVersionRows(refTableId, [...refTableByKey.keys()], userId, tenantId);
   if (!opts.silent)
     await appendAuditAs(
       userId,
-      "Derived canonical",
-      `${dimByKey.size} value${dimByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
+      "Derived record",
+      `${refTableByKey.size} value${refTableByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
       { tenantId },
     );
-  await scanWiredSources(dimId, table, [column], tenantId);
-  return { derived: dimByKey.size, mode, matched: 0, unmatched: 0 };
+  await scanWiredSources(refTableId, table, [column], tenantId);
+  return { derived: refTableByKey.size, mode, matched: 0, unmatched: 0 };
 }
 
 /** Populate source_stat for the just-wired columns so the Sources ledger
@@ -914,7 +919,7 @@ export async function deriveCanonical(
  *  operator to click "Scan all". Errors are logged but never thrown — the
  *  derive itself already succeeded. */
 async function scanWiredSources(
-  dimId: string,
+  refTableId: string,
   table: string,
   columns: string[],
   tenantId: string,
@@ -923,32 +928,32 @@ async function scanWiredSources(
   const parts = table.split(".");
   if (parts.length !== 2) return;
   const regs = await pgAll<ScanReg>(
-    `SELECT s.dim_id         AS "dimId",
+    `SELECT s.reference_table_id         AS "refTableId",
             s.database_id    AS "databaseId",
             wd.database_name AS "catalog",
             s.schema_name    AS "schema",
             s.table_name     AS "table",
             s.column_name    AS "column",
             d.map_table      AS "mapTable"
-       FROM ${pg("dimension_source")} s
-       JOIN ${pg("dimension")}          d  ON d.id  = s.dim_id      AND d.tenant_id  = s.tenant_id
+       FROM ${pg("reference_table_source")} s
+       JOIN ${pg("reference_table")}          d  ON d.id  = s.reference_table_id      AND d.tenant_id  = s.tenant_id
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
       WHERE s.tenant_id   = $1
-        AND s.dim_id      = $2
+        AND s.reference_table_id      = $2
         AND s.schema_name = $3
         AND s.table_name  = $4
         AND s.column_name = ANY($5::text[])`,
-    [tenantId, dimId, parts[0], parts[1], columns],
+    [tenantId, refTableId, parts[0], parts[1], columns],
   );
   if (!regs.length) return;
   try {
     const adapter = await getAdapter();
     for (const r of regs) await scanOneSource(r, adapter, tenantId);
-    await materializeOneDim(dimId, adapter, tenantId).catch((e) => {
+    await materializeOneDim(refTableId, adapter, tenantId).catch((e) => {
       log({
         level: "error",
-        msg: "materialize-dim-on-derive",
-        dimId,
+        msg: "materialize-refTable-on-derive",
+        refTableId,
         err: e instanceof Error ? e.message : String(e),
       });
     });
@@ -956,7 +961,7 @@ async function scanWiredSources(
     log({
       level: "warn",
       msg: "auto-scan-after-derive failed",
-      dimId,
+      refTableId,
       table,
       err: e instanceof Error ? e.message : String(e),
     });

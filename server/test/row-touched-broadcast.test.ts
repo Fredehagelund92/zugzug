@@ -9,24 +9,30 @@ import "./setup.ts";
 import { pgRun } from "../src/pg.ts";
 import { presence, type RowTouchedHint } from "../src/realtime/presence-room.ts";
 import { provisionTenant } from "../src/tenant.ts";
-import * as repo from "../src/repo-canonical.ts";
+import * as repo from "../src/repo-record.ts";
 
 const T1 = "rt_bc_t1";
-const dimId = "rt_bc_dim";
+const refTableId = "rt_bc_dim";
 const rowKey = "rt_row_1";
 const U1 = "u_rt_actor";
 
 async function cleanup(): Promise<void> {
   // Drop dynamic dim_/map_ tables (IF EXISTS handles missing tables).
-  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${dimId}"`);
-  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${dimId}"`);
-  await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${dimId}"`);
-  await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${dimId}"`);
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE dim_id = $1`, [dimId]);
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."dim_${refTableId}"`);
+  await pgRun(`DROP TABLE IF EXISTS "zugzug_app"."map_${refTableId}"`);
+  await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_${refTableId}"`);
+  await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_${refTableId}"`);
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE reference_table_id = $1`, [
+    refTableId,
+  ]);
   await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [T1]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_field" WHERE dim_id = $1`, [dimId]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension_source" WHERE dim_id = $1`, [dimId]);
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [dimId]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_field" WHERE reference_table_id = $1`, [
+    refTableId,
+  ]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table_source" WHERE reference_table_id = $1`, [
+    refTableId,
+  ]);
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE id = $1`, [refTableId]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant_member" WHERE tenant_id = $1`, [T1]);
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T1]);
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U1]);
@@ -41,28 +47,28 @@ beforeAll(async () => {
     [U1, "RT Actor", "RA"],
   );
 
-  // Use addDimension so the dim_/map_ tables and registry entry are created by
+  // Use addRefTable so the dim_/map_ tables and registry entry are created by
   // the same code as production — avoids schema-name guessing in the test.
-  await repo.addDimension(dimId, [], { keyKind: "slug", silent: true }, U1, T1);
+  await repo.addRefTable(refTableId, [], { keyKind: "slug", silent: true }, U1, T1);
 
-  // Seed one canonical row so renameCanonical has something to act on.
-  await repo.addCanonicalOne(dimId, "Row One", rowKey, U1, T1);
+  // Seed one record row so renameRecord has something to act on.
+  await repo.addRecordOne(refTableId, "Row One", rowKey, U1, T1);
 });
 
 afterAll(cleanup);
 
 test("a row-scoped write broadcasts exactly one row_touched to the tenant room", async () => {
   const seen: Array<{ tableId: string; hint: RowTouchedHint; tenantId: string }> = [];
-  spyOn(presence, "broadcastRowTouched").mockImplementation((tableId, hint, tenantId) =>
-    void seen.push({ tableId, hint, tenantId }),
+  spyOn(presence, "broadcastRowTouched").mockImplementation(
+    (tableId, hint, tenantId) => void seen.push({ tableId, hint, tenantId }),
   );
 
-  // renameCanonical calls appendAuditAs with tableId + rowKey — triggers the broadcast.
-  await repo.renameCanonical(dimId, rowKey, "Row One Renamed", U1, 1, T1);
+  // renameRecord calls appendAuditAs with tableId + rowKey — triggers the broadcast.
+  await repo.renameRecord(refTableId, rowKey, "Row One Renamed", U1, 1, T1);
 
   expect(seen).toHaveLength(1);
   expect(seen[0]).toMatchObject({
-    tableId: dimId,
+    tableId: refTableId,
     tenantId: T1,
     hint: { type: "row_touched", rowKey, userId: U1 },
   });
@@ -74,8 +80,8 @@ test("a presence-transport throw does not fail the write", async () => {
   });
 
   // The rename should still resolve (write succeeds) even if broadcastRowTouched throws.
-  // canonical_version is at 2 after the previous test's rename.
+  // record_version is at 2 after the previous test's rename.
   await expect(
-    repo.renameCanonical(dimId, rowKey, "Row One Again", U1, 2, T1),
+    repo.renameRecord(refTableId, rowKey, "Row One Again", U1, 2, T1),
   ).resolves.toBeDefined();
 });

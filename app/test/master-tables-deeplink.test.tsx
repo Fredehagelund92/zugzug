@@ -7,40 +7,40 @@ import { OpenTabsProvider } from "../src/lib/open-tabs";
  * Deep-link contract: ?open=a,brand&active=brand must open those tabs with
  * brand active even when the store loads AFTER the route mounts (initStore is
  * fire-and-forget — TenantLayout.tsx). Regression: the mount-only fold ran
- * against an empty dims list, dropped every requested tab, and the fallback
- * opened dims[0] instead.
+ * against an empty refTables list, dropped every requested tab, and the fallback
+ * opened refTables[0] instead.
  *
- * The store is mocked with a mutable dims list so the test controls when
+ * The store is mocked with a mutable refTables list so the test controls when
  * "loading" finishes. Heavy children (TablePane, TableTabStrip) are stubbed;
  * open-tabs state and the URL writer run for real.
  */
 
 const mockState = vi.hoisted(() => ({
-  dims: [] as Array<{ id: string; dimension: string }>,
+  refTables: [] as Array<{ id: string; refTable: string }>,
   listeners: new Set<() => void>(),
 }));
 
 vi.mock("../src/store", () => ({
-  useDimensions: () => {
+  useRefTables: () => {
     const { useSyncExternalStore } = require("react");
     return useSyncExternalStore(
       (cb: () => void) => {
         mockState.listeners.add(cb);
         return () => mockState.listeners.delete(cb);
       },
-      () => mockState.dims,
+      () => mockState.refTables,
     );
   },
   useSources: () => [],
   useCanEdit: () => true,
-  // Loading proxy: the store is "loading" until dims arrive. Gates tab-prune
+  // Loading proxy: the store is "loading" until refTables arrive. Gates tab-prune
   // in OpenTabsProvider so deep-linked tabs survive a cold load.
-  useStoreLoading: () => mockState.dims.length === 0,
+  useStoreLoading: () => mockState.refTables.length === 0,
 }));
 
 vi.mock("../src/components/TablePane", () => ({
-  TablePane: ({ dim, isActive }: { dim: { id: string }; isActive: boolean }) => (
-    <div data-testid={`pane-${dim.id}`} data-active={isActive} />
+  TablePane: ({ refTable, isActive }: { refTable: { id: string }; isActive: boolean }) => (
+    <div data-testid={`pane-${refTable.id}`} data-active={isActive} />
   ),
 }));
 
@@ -57,12 +57,12 @@ vi.mock("../src/lib/create-table-modal", () => ({
 }));
 
 const DIMS = [
-  { id: "a", dimension: "A" },
-  { id: "brand", dimension: "Brand" },
+  { id: "a", refTable: "A" },
+  { id: "brand", refTable: "Brand" },
 ];
 
-function setDims(dims: typeof DIMS) {
-  mockState.dims = dims;
+function setDims(refTables: typeof DIMS) {
+  mockState.refTables = refTables;
   for (const cb of mockState.listeners) cb();
 }
 
@@ -93,13 +93,13 @@ async function renderRoute(initialUrl: string) {
 }
 
 beforeEach(() => {
-  mockState.dims = [];
+  mockState.refTables = [];
   mockState.listeners.clear();
   localStorage.clear();
 });
 
 describe("Tables deep links", () => {
-  test("?open=a,brand&active=brand survives a cold load (dims arrive after mount)", async () => {
+  test("?open=a,brand&active=brand survives a cold load (refTables arrive after mount)", async () => {
     await renderRoute("/app/default/tables?open=a,brand&active=brand");
 
     // Store finishes loading after the route mounted (the cold-profile case).
@@ -112,11 +112,11 @@ describe("Tables deep links", () => {
     expect(search).toContain("active=brand");
   });
 
-  test("legacy ?dimId= is ignored — does NOT open the tab", async () => {
-    await renderRoute("/app/default/tables?dimId=brand");
+  test("legacy ?refTableId= is ignored — does NOT open the tab", async () => {
+    await renderRoute("/app/default/tables?refTableId=brand");
     act(() => setDims(DIMS));
     // The legacy fold is removed: pane-brand should NOT be mounted.
-    // Fallback opens dims[0] ("a") because no ?open= was supplied.
+    // Fallback opens refTables[0] ("a") because no ?open= was supplied.
     expect(await screen.findByTestId("pane-a")).toHaveAttribute("data-active", "true");
     expect(screen.queryByTestId("pane-brand")).toBeNull();
   });
@@ -127,13 +127,13 @@ describe("Tables deep links", () => {
     expect(await screen.findByTestId("pane-brand")).toHaveAttribute("data-active", "true");
   });
 
-  test("dims already loaded at mount still folds the URL (warm path)", async () => {
-    mockState.dims = DIMS;
+  test("refTables already loaded at mount still folds the URL (warm path)", async () => {
+    mockState.refTables = DIMS;
     await renderRoute("/app/default/tables?open=brand&active=brand");
     expect(await screen.findByTestId("pane-brand")).toHaveAttribute("data-active", "true");
   });
 
-  test("no URL params + loaded dims falls back to first table", async () => {
+  test("no URL params + loaded refTables falls back to first table", async () => {
     await renderRoute("/app/default/tables");
     act(() => setDims(DIMS));
     expect(await screen.findByTestId("pane-a")).toHaveAttribute("data-active", "true");

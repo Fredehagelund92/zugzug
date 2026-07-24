@@ -9,25 +9,25 @@ import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
 import { pgAll } from "./repo-shared.ts";
 import {
-  addDimension,
-  addCanonicalOne,
+  addRefTable,
+  addRecordOne,
   addField,
   setFieldValue,
-  deleteDimension,
-} from "./repo-canonical.ts";
+  deleteRefTable,
+} from "./repo-record.ts";
 import { saveDraft, commit, listDrafts, rejectDrafts, listAllDrafts } from "./repo-drafts.ts";
 import { getPreferences, setPreferences } from "./repo-meta.ts";
 
-// Drop each tenant's dimensions through deleteDimension so the physical
-// dim_/map_ Postgres tables go too — a plain `DELETE FROM dimension` leaves them
+// Drop each tenant's refTables through deleteRefTable so the physical
+// dim_/map_ Postgres tables go too — a plain `DELETE FROM refTable` leaves them
 // orphaned, and the next run's CREATE TABLE IF NOT EXISTS reuses stale data.
 async function dropDims(tenants: string[]): Promise<void> {
   for (const tenant of tenants) {
-    const dims = await pgAll<{ id: string }>(
-      `SELECT id FROM "zugzug_app"."dimension" WHERE tenant_id = $1`,
+    const refTables = await pgAll<{ id: string }>(
+      `SELECT id FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`,
       [tenant],
     ).catch(() => [] as { id: string }[]);
-    for (const d of dims) await deleteDimension(d.id, "test-teardown", tenant).catch(() => {});
+    for (const d of refTables) await deleteRefTable(d.id, "test-teardown", tenant).catch(() => {});
   }
 }
 
@@ -60,7 +60,7 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."outbound_event" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
-  await pgRun(`DELETE FROM "zugzug_app"."canonical_version" WHERE tenant_id = $1`, [T]).catch(
+  await pgRun(`DELETE FROM "zugzug_app"."record_version" WHERE tenant_id = $1`, [T]).catch(
     () => {},
   );
   await pgRun(`DELETE FROM "zugzug_app"."preferences" WHERE tenant_id = $1`, [T]).catch(() => {});
@@ -74,16 +74,16 @@ describe("commit() second-publisher gate", () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: true }, T);
 
-    const dimId = await addDimension("GateDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
+    const refTableId = await addRefTable("GateDim", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "United States", undefined, U, T);
     // Alice (U) authors the draft
-    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
+    await saveDraft(refTableId, "usa", "mapped", "United States", "united_states", U, T);
 
     // Alice cannot publish her own draft
-    await expect(commit(dimId, U, T)).rejects.toThrow(/another editor must publish/i);
+    await expect(commit(refTableId, U, T)).rejects.toThrow(/another editor must publish/i);
 
     // Bob (U2) can publish Alice's draft
-    const res = await commit(dimId, U2, T);
+    const res = await commit(refTableId, U2, T);
     expect(res.committed).toBe(1);
 
     // Reset the preference so other tests are unaffected
@@ -93,26 +93,28 @@ describe("commit() second-publisher gate", () => {
 
 describe("commit() required-field gate", () => {
   it("blocks publish when a required field is empty, allows it once filled", async () => {
-    const dimId = await addDimension("ReqFieldDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", "usa", U, T);
-    const added = await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
+    const refTableId = await addRefTable("ReqFieldDim", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "United States", "usa", U, T);
+    const added = await addField(refTableId, "Region", "text", undefined, { required: true }, U, T);
     expect(added?.field).toBe("region");
 
     // The record has no region yet — publish is blocked and names the gap.
-    await expect(commit(dimId, U, T)).rejects.toThrow(/required value before you can publish/i);
+    await expect(commit(refTableId, U, T)).rejects.toThrow(
+      /required value before you can publish/i,
+    );
 
     // Fill the required value; the same publish now goes through.
-    await setFieldValue(dimId, "usa", "region", "Americas", U, T);
-    await expect(commit(dimId, U, T)).resolves.toBeDefined();
+    await setFieldValue(refTableId, "usa", "region", "Americas", U, T);
+    await expect(commit(refTableId, U, T)).resolves.toBeDefined();
   });
 
   it("does not block when the required field has a value on every record", async () => {
-    const dimId = await addDimension("ReqFieldDim2", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Canada", "canada", U, T);
-    await addField(dimId, "Region", "text", undefined, { required: true }, U, T);
-    await setFieldValue(dimId, "canada", "region", "Americas", U, T);
+    const refTableId = await addRefTable("ReqFieldDim2", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Canada", "canada", U, T);
+    await addField(refTableId, "Region", "text", undefined, { required: true }, U, T);
+    await setFieldValue(refTableId, "canada", "region", "Americas", U, T);
 
-    await expect(commit(dimId, U, T)).resolves.toBeDefined();
+    await expect(commit(refTableId, U, T)).resolves.toBeDefined();
   });
 });
 
@@ -138,21 +140,21 @@ beforeAll(async () => {
     [U_ALL],
   );
 
-  // T1: dim A (2 drafts) + dim B (1 draft)
-  const dimA = await addDimension("ListAllDimA", [], { keyKind: "slug" }, U_ALL, T1);
-  const dimB = await addDimension("ListAllDimB", [], { keyKind: "slug" }, U_ALL, T1);
-  await saveDraft(dimA, "alpha", "mapped", "Alpha", "alpha", U_ALL, T1);
-  await saveDraft(dimA, "beta", "skipped", null, null, U_ALL, T1);
-  await saveDraft(dimB, "gamma", "mapped", "Gamma", "gamma", U_ALL, T1);
+  // T1: refTable A (2 drafts) + refTable B (1 draft)
+  const refTableA = await addRefTable("ListAllRefTableA", [], { keyKind: "slug" }, U_ALL, T1);
+  const refTableB = await addRefTable("ListAllRefTableB", [], { keyKind: "slug" }, U_ALL, T1);
+  await saveDraft(refTableA, "alpha", "mapped", "Alpha", "alpha", U_ALL, T1);
+  await saveDraft(refTableA, "beta", "skipped", null, null, U_ALL, T1);
+  await saveDraft(refTableB, "gamma", "mapped", "Gamma", "gamma", U_ALL, T1);
 
-  // T2: dim A (1 draft) — must not bleed into T1 results
-  const dimA_t2 = await addDimension("ListAllDimA_T2", [], { keyKind: "slug" }, U_ALL, T2);
-  await saveDraft(dimA_t2, "delta", "mapped", "Delta", "delta", U_ALL, T2);
+  // T2: refTable A (1 draft) — must not bleed into T1 results
+  const refTableA_t2 = await addRefTable("ListAllRefTableA_T2", [], { keyKind: "slug" }, U_ALL, T2);
+  await saveDraft(refTableA_t2, "delta", "mapped", "Delta", "delta", U_ALL, T2);
 
-  // Store dim IDs so tests can reference them
-  (globalThis as Record<string, unknown>).__listAllDimA = dimA;
-  (globalThis as Record<string, unknown>).__listAllDimB = dimB;
-  (globalThis as Record<string, unknown>).__listAllDimA_t2 = dimA_t2;
+  // Store refTable IDs so tests can reference them
+  (globalThis as Record<string, unknown>).__listAllRefTableA = refTableA;
+  (globalThis as Record<string, unknown>).__listAllRefTableB = refTableB;
+  (globalThis as Record<string, unknown>).__listAllRefTableA_t2 = refTableA_t2;
 });
 
 afterAll(async () => {
@@ -164,17 +166,17 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U_ALL]).catch(() => {});
 });
 
-test("listAllDrafts returns every dim's drafts for the tenant in one call", async () => {
-  const dimA = (globalThis as Record<string, unknown>).__listAllDimA as string;
-  const dimB = (globalThis as Record<string, unknown>).__listAllDimB as string;
+test("listAllDrafts returns every refTable's drafts for the tenant in one call", async () => {
+  const refTableA = (globalThis as Record<string, unknown>).__listAllRefTableA as string;
+  const refTableB = (globalThis as Record<string, unknown>).__listAllRefTableB as string;
   const all = await listAllDrafts(T1);
-  expect(all.map((d) => d.dimId).sort()).toEqual([dimA, dimA, dimB].sort());
+  expect(all.map((d) => d.refTableId).sort()).toEqual([refTableA, refTableA, refTableB].sort());
 });
 
 test("listAllDrafts is tenant-scoped — a second tenant's drafts never appear", async () => {
-  const dimA_t2 = (globalThis as Record<string, unknown>).__listAllDimA_t2 as string;
+  const refTableA_t2 = (globalThis as Record<string, unknown>).__listAllRefTableA_t2 as string;
   const all = await listAllDrafts(T1);
-  expect(all.every((d) => d.dimId !== dimA_t2)).toBe(true);
+  expect(all.every((d) => d.refTableId !== refTableA_t2)).toBe(true);
 });
 
 test("listAllDrafts returns [] for an empty workspace", async () => {
@@ -185,17 +187,17 @@ test("listAllDrafts returns [] for an empty workspace", async () => {
 
 describe("commit() fires table.published event", () => {
   it("writes an outbound_event row with the right shape", async () => {
-    const dimId = await addDimension("CommitDim", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Alpha", undefined, U, T);
-    await saveDraft(dimId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
-    const result = await commit(dimId, U, T);
+    const refTableId = await addRefTable("CommitDim", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", undefined, U, T);
+    await saveDraft(refTableId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
+    const result = await commit(refTableId, U, T);
     expect(result.committed).toBeGreaterThan(0);
 
     const evt = await pgGet<{ type: string; payload: unknown }>(
       `SELECT type, payload FROM "zugzug_app"."outbound_event"
-        WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'
+        WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'
         ORDER BY occurred_at DESC LIMIT 1`,
-      [T, dimId],
+      [T, refTableId],
     );
     expect(evt).not.toBeNull();
     expect(evt!.type).toBe("table.published");
@@ -203,23 +205,23 @@ describe("commit() fires table.published event", () => {
       typeof evt!.payload === "string"
         ? (JSON.parse(evt!.payload) as Record<string, unknown>)
         : (evt!.payload as Record<string, unknown>);
-    expect(payload.dim_slug).toBe(dimId);
+    expect(payload.dim_slug).toBe(refTableId);
     const committedBy = payload.committed_by as { id: string } | undefined;
     expect(committedBy?.id).toBe(U);
   });
 
   it("does NOT fire when commit() short-circuits (no approved drafts)", async () => {
-    const dimId = await addDimension("EmptyCommit", [], { keyKind: "slug" }, U, T);
+    const refTableId = await addRefTable("EmptyCommit", [], { keyKind: "slug" }, U, T);
     const before = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-        WHERE tenant_id = $1 AND dim_id = $2`,
-      [T, dimId],
+        WHERE tenant_id = $1 AND reference_table_id = $2`,
+      [T, refTableId],
     );
-    await commit(dimId, U, T); // no drafts → committed=0
+    await commit(refTableId, U, T); // no drafts → committed=0
     const after = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-        WHERE tenant_id = $1 AND dim_id = $2`,
-      [T, dimId],
+        WHERE tenant_id = $1 AND reference_table_id = $2`,
+      [T, refTableId],
     );
     expect(after!.n).toBe(before!.n);
   });
@@ -231,74 +233,74 @@ describe("commit() draft-scoped folding", () => {
   it("commit with draftKeys folds only those drafts", async () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
-    const dimId = await addDimension(`ScopedFold_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
-    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
-    await saveDraft(dimId, "u.s.", "mapped", "United States", "united_states", U, T);
-    const res = await commit(dimId, U, T, ["usa"]);
+    const refTableId = await addRefTable(`ScopedFold_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "United States", undefined, U, T);
+    await saveDraft(refTableId, "usa", "mapped", "United States", "united_states", U, T);
+    await saveDraft(refTableId, "u.s.", "mapped", "United States", "united_states", U, T);
+    const res = await commit(refTableId, U, T, ["usa"]);
     expect(res.committed).toBe(1);
-    const remaining = await listDrafts(dimId, T);
+    const remaining = await listDrafts(refTableId, T);
     expect(remaining.map((d) => d.raw)).toEqual(["u.s."]);
   });
 
   it("commit with an unknown draft key folds nothing and throws", async () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
-    const dimId = await addDimension(`UnknownKey_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "United States", undefined, U, T);
-    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
-    await expect(commit(dimId, U, T, ["usa", "ghost"])).rejects.toThrow(/ghost/);
-    expect((await listDrafts(dimId, T)).length).toBe(1);
+    const refTableId = await addRefTable(`UnknownKey_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "United States", undefined, U, T);
+    await saveDraft(refTableId, "usa", "mapped", "United States", "united_states", U, T);
+    await expect(commit(refTableId, U, T, ["usa", "ghost"])).rejects.toThrow(/ghost/);
+    expect((await listDrafts(refTableId, T)).length).toBe(1);
   });
 
   it("four-eyes gate checks only the folded set", async () => {
     await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: true }, T);
-    const dimId = await addDimension(`FourEyesScoped_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "A", undefined, U, T);
-    await addCanonicalOne(dimId, "B", undefined, U, T);
-    await saveDraft(dimId, "aaa", "mapped", "A", "a", U, T); // U's draft
-    await saveDraft(dimId, "bbb", "mapped", "B", "b", U2, T); // U2's draft
-    await expect(commit(dimId, U, T, ["bbb"])).resolves.toMatchObject({ committed: 1 }); // U publishes U2's — fine
-    await expect(commit(dimId, U, T, ["aaa"])).rejects.toThrow(/another editor must publish/i); // U can't publish own
+    const refTableId = await addRefTable(`FourEyesScoped_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "A", undefined, U, T);
+    await addRecordOne(refTableId, "B", undefined, U, T);
+    await saveDraft(refTableId, "aaa", "mapped", "A", "a", U, T); // U's draft
+    await saveDraft(refTableId, "bbb", "mapped", "B", "b", U2, T); // U2's draft
+    await expect(commit(refTableId, U, T, ["bbb"])).resolves.toMatchObject({ committed: 1 }); // U publishes U2's — fine
+    await expect(commit(refTableId, U, T, ["aaa"])).rejects.toThrow(/another editor must publish/i); // U can't publish own
     await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
   });
 
-  it("empty draftKeys folds nothing but publishes when canonical changed", async () => {
+  it("empty draftKeys folds nothing but publishes when record changed", async () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
-    const dimId = await addDimension(`EmptyArrayScope_${run}`, [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(dimId, "Alpha", undefined, U, T);
+    const refTableId = await addRefTable(`EmptyArrayScope_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", undefined, U, T);
 
     // Stage a draft and commit it (v1)
-    await saveDraft(dimId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
-    await commit(dimId, U, T);
+    await saveDraft(refTableId, "alpha variant", "mapped", "Alpha", "alpha", U, T);
+    await commit(refTableId, U, T);
 
-    // Make a canonical change since last publish
-    await addCanonicalOne(dimId, "Beta", undefined, U, T);
+    // Make a record change since last publish
+    await addRecordOne(refTableId, "Beta", undefined, U, T);
 
     // Stage another draft
-    await saveDraft(dimId, "beta variant", "mapped", "Beta", "beta", U, T);
+    await saveDraft(refTableId, "beta variant", "mapped", "Beta", "beta", U, T);
 
     // Count versions before
     const versionsBefore = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
-      [T, dimId],
+       WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'`,
+      [T, refTableId],
     );
 
-    // Commit with empty array — folds no drafts but publishes (canonical changed)
-    const res = await commit(dimId, U, T, []);
+    // Commit with empty array — folds no drafts but publishes (record changed)
+    const res = await commit(refTableId, U, T, []);
     expect(res.committed).toBe(0);
 
     // New draft must still be staged
-    const remaining = await listDrafts(dimId, T);
+    const remaining = await listDrafts(refTableId, T);
     expect(remaining.map((d) => d.raw)).toContain("beta variant");
 
     // A new version must have been created
     const versionsAfter = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM "zugzug_app"."outbound_event"
-       WHERE tenant_id = $1 AND dim_id = $2 AND type = 'table.published'`,
-      [T, dimId],
+       WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'`,
+      [T, refTableId],
     );
     expect(versionsAfter!.n).toBe(versionsBefore!.n + 1);
   });
@@ -307,35 +309,35 @@ describe("commit() draft-scoped folding", () => {
 describe("commit() manual ordering mode", () => {
   const run = Date.now();
 
-  it("scoped commit inserts dim row with position for the folded draft only", async () => {
+  it("scoped commit inserts refTable row with position for the folded draft only", async () => {
     const prefs = await getPreferences(T);
     await setPreferences({ ...prefs, requireSecondPublisher: false }, T);
-    const dimId = await addDimension(`ManualOrdering_${run}`, [], { keyKind: "slug" }, U, T);
+    const refTableId = await addRefTable(`ManualOrdering_${run}`, [], { keyKind: "slug" }, U, T);
 
     // Switch to manual ordering mode via SQL UPDATE
     await pgRun(
-      `UPDATE "zugzug_app"."dimension" SET ordering_mode = 'manual' WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+      `UPDATE "zugzug_app"."reference_table" SET ordering_mode = 'manual' WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
 
-    // Stage two drafts with new target keys (not yet in the dim table)
-    await saveDraft(dimId, "foo raw", "mapped", "Foo", "foo", U, T);
-    await saveDraft(dimId, "bar raw", "mapped", "Bar", "bar", U, T);
+    // Stage two drafts with new target keys (not yet in the refTable table)
+    await saveDraft(refTableId, "foo raw", "mapped", "Foo", "foo", U, T);
+    await saveDraft(refTableId, "bar raw", "mapped", "Bar", "bar", U, T);
 
     // Commit scoped to only "foo raw"
-    const res = await commit(dimId, U, T, ["foo raw"]);
+    const res = await commit(refTableId, U, T, ["foo raw"]);
     expect(res.committed).toBe(1);
 
-    // Look up the dim table name and key column from the dimension registry
-    const dimMeta = await pgGet<{ dimTable: string; keyCol: string }>(
+    // Look up the refTable table name and key column from the refTable registry
+    const refTableMeta = await pgGet<{ dimTable: string; keyCol: string }>(
       `SELECT dim_table AS "dimTable", key_col AS "keyCol"
-       FROM "zugzug_app"."dimension" WHERE id = $1 AND tenant_id = $2`,
-      [dimId, T],
+       FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
     );
 
-    // "foo" should be in the dim table with a non-null position
+    // "foo" should be in the refTable table with a non-null position
     const fooRow = await pgGet<{ position: number | null }>(
-      `SELECT position FROM ${dimMeta!.dimTable} WHERE ${dimMeta!.keyCol} = $1`,
+      `SELECT position FROM ${refTableMeta!.dimTable} WHERE ${refTableMeta!.keyCol} = $1`,
       ["foo"],
     );
     expect(fooRow).not.toBeNull();
@@ -343,33 +345,33 @@ describe("commit() manual ordering mode", () => {
     expect(Number(fooRow!.position)).toBeGreaterThan(0);
 
     // "bar raw" draft must still be staged
-    const remaining = await listDrafts(dimId, T);
+    const remaining = await listDrafts(refTableId, T);
     expect(remaining.map((d) => d.raw)).toContain("bar raw");
   });
 });
 
 describe("rejectDrafts()", () => {
   it("reject sets status, reason, reviewer; re-staging clears them", async () => {
-    const dimId = await addDimension("RejectDim", [], { keyKind: "slug" }, U, T);
-    await saveDraft(dimId, "usa", "mapped", "United States", "united_states", U, T);
+    const refTableId = await addRefTable("RejectDim", [], { keyKind: "slug" }, U, T);
+    await saveDraft(refTableId, "usa", "mapped", "United States", "united_states", U, T);
     const r = await rejectDrafts(
-      dimId,
+      refTableId,
       T,
       ["usa"],
       "wrong target — USA is a country not a partner",
       U2,
     );
     expect(r.rejected).toBe(1);
-    const [d] = await listDrafts(dimId, T);
+    const [d] = await listDrafts(refTableId, T);
     expect(d.status).toBe("rejected");
     expect(d.rejectedReason).toMatch(/wrong target/);
-    await saveDraft(dimId, "usa", "mapped", "United States of America", "united_states", U, T); // re-stage
-    const [d2] = await listDrafts(dimId, T);
+    await saveDraft(refTableId, "usa", "mapped", "United States of America", "united_states", U, T); // re-stage
+    const [d2] = await listDrafts(refTableId, T);
     expect(d2.status).toBe("mapped");
     expect(d2.rejectedReason).toBeNull();
   });
   it("reject with empty reason 400s", async () => {
-    const dimId = await addDimension("RejectEmptyReason", [], { keyKind: "slug" }, U, T);
-    await expect(rejectDrafts(dimId, T, ["usa"], "  ", U2)).rejects.toThrow(/reason/i);
+    const refTableId = await addRefTable("RejectEmptyReason", [], { keyKind: "slug" }, U, T);
+    await expect(rejectDrafts(refTableId, T, ["usa"], "  ", U2)).rejects.toThrow(/reason/i);
   });
 });

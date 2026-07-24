@@ -28,7 +28,7 @@ vi.mock("../../src/api", () => ({
 
 vi.mock("../../src/store", () => ({
   useAuthConfig: () => ({ mode: "password", allowedDomain: null }),
-  useDimensions: () => [],
+  useRefTables: () => [],
   useAudit: () => [],
   useWorkspaceInfo: () => ({ writable: true }),
   useStoreLoading: () => false,

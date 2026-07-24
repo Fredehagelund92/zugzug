@@ -1,7 +1,7 @@
 /* bootstrap.ts — provision the stores.
    • runs Drizzle migrations to ensure the Postgres app-state schema
    • seeds system data (u_system user)
-   • `--seed` also registers the demo Country/Channel dimensions */
+   • `--seed` also registers the demo Country/Channel refTables */
 
 import { runMigrations } from "../drizzle/migrate.ts";
 import { seedDemo } from "./seed.ts";
@@ -70,7 +70,7 @@ if (seed) {
   // Warehouse adapter warm-up removed: the registry now lazy-loads per-tenant
   // on first request. Bootstrap doesn't need a representative tenant id.
   await seedDemo();
-  console.log("· demo dimensions seeded (Country, Channel)");
+  console.log("· demo refTables seeded (Country, Channel)");
 }
 
 console.log("\nDone.\n");

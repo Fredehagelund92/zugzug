@@ -20,10 +20,7 @@ test("concurrent setPreferences for the same tenant does not 23505", async () =>
   await provisionTenant({ id: T, label: "race" });
 
   const writes = Array.from({ length: 10 }, (_, i) =>
-    setPreferences(
-      { publishThreshold: 50 + i, suggestThreshold: 40, scanSchedule: null },
-      T,
-    ),
+    setPreferences({ publishThreshold: 50 + i, suggestThreshold: 40, scanSchedule: null }, T),
   );
   const settled = await Promise.allSettled(writes);
   const rejected = settled.filter((s) => s.status === "rejected");

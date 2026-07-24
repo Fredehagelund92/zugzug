@@ -32,7 +32,7 @@ vi.mock("../../src/api", () => ({
 vi.mock("../../src/store", async (orig) => ({
   ...(await orig<typeof import("../../src/store")>()),
   listSchemas: () => Promise.resolve([{ schema: "authco", tables: 1 }]),
-  useDimensions: () => [{ id: "country", dimension: "Country" }],
+  useRefTables: () => [{ id: "country", refTable: "Country" }],
 }));
 
 afterEach(cleanup);

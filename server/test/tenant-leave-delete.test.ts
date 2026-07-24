@@ -29,11 +29,7 @@ async function cleanup(): Promise<void> {
 beforeEach(cleanup);
 afterAll(cleanup);
 
-async function login(
-  userId: string,
-  role: "admin" | "editor",
-  tenantId: string,
-): Promise<string> {
+async function login(userId: string, role: "admin" | "editor", tenantId: string): Promise<string> {
   await pgRun(
     `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
      VALUES ($1, $1, 'XX', $2, false)

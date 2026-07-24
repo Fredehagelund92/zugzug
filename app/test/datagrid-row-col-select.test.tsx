@@ -4,9 +4,13 @@ import { DataGrid } from "../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../src/components/datagrid/types";
 
-interface Row { id: string; name: string; tag: string }
+interface Row {
+  id: string;
+  name: string;
+  tag: string;
+}
 const rows: Row[] = [
-  { id: "1", name: "Acme",  tag: "x" },
+  { id: "1", name: "Acme", tag: "x" },
   { id: "2", name: "Bravo", tag: "y" },
 ];
 const columns: ColumnDef<Row>[] = [
@@ -18,8 +22,13 @@ const columns: ColumnDef<Row>[] = [
 function renderGrid() {
   return render(
     <UndoStackProvider>
-      <DataGrid rows={rows} columns={columns} rowKey={(r) => r.id}
-                onCommit={async () => {}} showRowNumbers />
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        rowKey={(r) => r.id}
+        onCommit={async () => {}}
+        showRowNumbers
+      />
     </UndoStackProvider>,
   );
 }
@@ -27,8 +36,9 @@ function renderGrid() {
 describe("row# / column-header click selection", () => {
   test("click row-number cell selects whole row", () => {
     const { container } = renderGrid();
-    const rowNumCell = Array.from(container.querySelectorAll<HTMLElement>('[data-row-num]'))
-      .find((el) => el.dataset.rowNum === "1")!;
+    const rowNumCell = Array.from(container.querySelectorAll<HTMLElement>("[data-row-num]")).find(
+      (el) => el.dataset.rowNum === "1",
+    )!;
     act(() => {
       fireEvent.pointerDown(rowNumCell, { button: 0, bubbles: true });
       fireEvent.pointerUp(rowNumCell, { button: 0, bubbles: true });
@@ -41,7 +51,7 @@ describe("row# / column-header click selection", () => {
 
   test("click column header label selects whole column", () => {
     const { container } = renderGrid();
-    const headers = container.querySelectorAll<HTMLElement>('[data-header]');
+    const headers = container.querySelectorAll<HTMLElement>("[data-header]");
     const nameHeader = Array.from(headers).find((h) => h.dataset.header === "name")!;
     const label = nameHeader.querySelector("span") as HTMLElement;
     act(() => {

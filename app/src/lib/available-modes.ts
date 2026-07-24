@@ -1,9 +1,9 @@
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 import type { SourceInfo } from "../store";
 
 export type Mode = "records" | "match" | "sources";
 
-export function availableModes(dim: MappingDimension, sources: SourceInfo[]): Mode[] {
-  const hasSourceWiring = sources.some((s) => s.dimId === dim.id);
+export function availableModes(refTable: MappingRefTable, sources: SourceInfo[]): Mode[] {
+  const hasSourceWiring = sources.some((s) => s.refTableId === refTable.id);
   return hasSourceWiring ? ["records", "match", "sources"] : ["records"];
 }

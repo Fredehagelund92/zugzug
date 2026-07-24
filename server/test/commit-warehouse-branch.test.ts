@@ -13,7 +13,7 @@ import type {
   WritableWarehouseAdapter,
   AdapterCapabilities,
   ApprovedDraft,
-  DimensionSpec,
+  RefTableSpec,
   CommitResult,
 } from "../src/warehouse/adapter.ts";
 
@@ -24,8 +24,8 @@ beforeEach(async () => {
 
 // A minimal in-test WritableWarehouseAdapter that captures commit calls.
 function makeWritableMock(opts: { failCommit?: boolean } = {}) {
-  const ensured: DimensionSpec[] = [];
-  const committed: { dim: DimensionSpec; drafts: ApprovedDraft[] }[] = [];
+  const ensured: RefTableSpec[] = [];
+  const committed: { refTable: RefTableSpec; drafts: ApprovedDraft[] }[] = [];
   const adapter: Partial<WritableWarehouseAdapter> = {
     capabilities: {
       id: "snowflake",
@@ -37,12 +37,12 @@ function makeWritableMock(opts: { failCommit?: boolean } = {}) {
     async ping() {
       return true;
     },
-    async ensureCanonicalTables(d: DimensionSpec) {
+    async ensureRecordTables(d: RefTableSpec) {
       ensured.push(d);
     },
-    async commitCanonical(d: DimensionSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
+    async commitRecord(d: RefTableSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
       if (opts.failCommit) throw new Error("simulated warehouse failure");
-      committed.push({ dim: d, drafts });
+      committed.push({ refTable: d, drafts });
       return { rowsWritten: drafts.length };
     },
   };
@@ -50,9 +50,15 @@ function makeWritableMock(opts: { failCommit?: boolean } = {}) {
 }
 
 test("commit in postgres-export mode (DuckDB read-only): warehouseSynced=n/a; no adapter writes", async () => {
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
-  const result = await repo.commit(dimId, "u_test", "default");
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
+  await repo.saveDraft(refTableId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const result = await repo.commit(refTableId, "u_test", "default");
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("n/a");
 });
@@ -65,9 +71,15 @@ test("commit in writable mode (success): warehouseSynced=synced; audit event emi
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
-  const result = await repo.commit(dimId, "u_test", "default");
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
+  await repo.saveDraft(refTableId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const result = await repo.commit(refTableId, "u_test", "default");
 
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("synced");
@@ -91,19 +103,25 @@ test("commit in writable mode (warehouse fails): Postgres committed; warehouseSy
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
-  const result = await repo.commit(dimId, "u_test", "default");
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
+  await repo.saveDraft(refTableId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const result = await repo.commit(refTableId, "u_test", "default");
 
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("failed");
 
-  // Postgres canonical SHOULD reflect the commit (drafts cleared, dim/map rows present, "default").
-  const drafts = await repo.listDrafts(dimId, "default");
+  // Postgres record SHOULD reflect the commit (drafts cleared, refTable/map rows present, "default").
+  const drafts = await repo.listDrafts(refTableId, "default");
   expect(drafts).toHaveLength(0);
 
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.canonical.some((c) => c.key === "us")).toBe(true);
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable?.record.some((c) => c.key === "us")).toBe(true);
 
   const audits = await repo.listAudit(10);
   const failAudit = audits.find((a) => a.action === "Warehouse sync failed");
@@ -119,9 +137,15 @@ test("commit with no approved drafts: returns early; no warehouse call attempted
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
   // No drafts saved.
-  const result = await repo.commit(dimId, "u_test", "default");
+  const result = await repo.commit(refTableId, "u_test", "default");
   expect(result.committed).toBe(0);
   expect(result.warehouseSynced).toBe("n/a"); // nothing to sync
   expect(ensured).toHaveLength(0);
@@ -129,7 +153,7 @@ test("commit with no approved drafts: returns early; no warehouse call attempted
 });
 
 test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-end", async () => {
-  // A real DuckDbWritableAdapter against :memory:. The Postgres canonical mirror
+  // A real DuckDbWritableAdapter against :memory:. The Postgres record mirror
   // also exists (via the normal pgTx path) — we're verifying both sides happen.
   const writableDuckDb = new DuckDbWritableAdapter({
     type: "duckdb",
@@ -139,7 +163,7 @@ test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-en
     writable: true,
   });
 
-  // Pre-create the schema so ensureCanonicalTables can target it
+  // Pre-create the schema so ensureRecordTables can target it
   // @ts-expect-error — protected connect()
   const c = await writableDuckDb["connect"]();
   await c.run(`CREATE SCHEMA IF NOT EXISTS zugzug`);
@@ -151,18 +175,24 @@ test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-en
   });
   _resetAdapterCache();
 
-  const dimId = await repo.addDimension("Country", [], { keyKind: "slug" }, "u_test", "default");
-  await repo.saveDraft(dimId, "USA", "mapped", "United States", "us", "u_test", "default");
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
+  await repo.saveDraft(refTableId, "USA", "mapped", "United States", "us", "u_test", "default");
 
-  const result = await repo.commit(dimId, "u_test", "default");
+  const result = await repo.commit(refTableId, "u_test", "default");
 
   expect(result.committed).toBe(1);
   expect(result.warehouseSynced).toBe("synced");
 
   // Verify the writable DuckDB actually has the rows in its dim_/map_ tables.
-  // Note: addDimension creates the dim under the env.canonicalSchema ("zugzug").
-  const dimRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country ORDER BY 1`);
-  expect(dimRows.getRowObjects()).toEqual([{ country_code: "us", label: "United States" }]);
+  // Note: addRefTable creates the refTable under the env.recordSchema ("zugzug").
+  const refTableRows = await c.runAndReadAll(`SELECT * FROM zugzug.dim_country ORDER BY 1`);
+  expect(refTableRows.getRowObjects()).toEqual([{ country_code: "us", label: "United States" }]);
   const mapRows = await c.runAndReadAll(`SELECT * FROM zugzug.map_country ORDER BY raw`);
   expect(mapRows.getRowObjects()).toEqual([{ raw: "USA", country_code: "us" }]);
 

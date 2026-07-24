@@ -18,7 +18,7 @@ import type { ColumnDef } from "../src/components/datagrid/types";
  * Note (palette duplicate key): the spec's Bug 2 ("duplicate Review key") was
  * in ShortcutsOverlay.tsx and is already resolved upstream — group titles are
  * unique. The speculative dedup guard in AppShell.tsx commands useMemo was
- * removed as YAGNI; command ids (nav:*, dim:${id}, rec:${id}:${key}) cannot
+ * removed as YAGNI; command ids (nav:*, refTable:${id}, rec:${id}:${key}) cannot
  * collide by construction.
  */
 
@@ -94,7 +94,9 @@ describe("column resize", () => {
 
     // After pointer-up the host's onLayoutChange should have been called with widths
     expect(layoutChanges.length).toBeGreaterThan(0);
-    const lastChange = layoutChanges[layoutChanges.length - 1] as { widths?: Record<string, number> };
+    const lastChange = layoutChanges[layoutChanges.length - 1] as {
+      widths?: Record<string, number>;
+    };
     expect(lastChange.widths).toBeDefined();
 
     // The critical assertion: no setState-in-render (or any other) console.error
@@ -118,9 +120,7 @@ describe("column reorder", () => {
     const { container } = renderGrid((change) => layoutChanges.push(change));
 
     // Find the draggable label span on the "Name" column header
-    const headers = Array.from(
-      container.querySelectorAll<HTMLElement>('[role="columnheader"]'),
-    );
+    const headers = Array.from(container.querySelectorAll<HTMLElement>('[role="columnheader"]'));
     const nameHeader = headers.find((h) => h.textContent?.includes("Name"));
     expect(nameHeader).not.toBeNull();
 
@@ -166,4 +166,3 @@ describe("column reorder", () => {
     expect(errorMessages).not.toMatch(/Warning: Cannot update/);
   });
 });
-

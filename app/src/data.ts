@@ -8,9 +8,9 @@
 import type { PaletteName } from "./lib/palette";
 export type { PaletteName } from "./lib/palette";
 
-/* a master record: the human label + the key written to the dim/map tables, how
+/* a master record: the human label + the key written to the refTable/map tables, how
    many raw values resolve to it, and any enrichment attribute values */
-export interface CanonicalValue {
+export interface RecordValue {
   key: string;
   label: string;
   version: number; // server-managed; client passes it back on mutations
@@ -32,7 +32,7 @@ export type NumberFormat =
   | { format: "currency"; symbol: string; position: "prefix" | "suffix"; precision: 0 | 1 | 2 }
   | { format: "compact"; precision: 0 | 1 | 2 }
   | { format: "duration"; display: "hm" | "hms" };
-/* an enrichment attribute column on a dimension (e.g. currency, locale) */
+/* an enrichment attribute column on a refTable (e.g. currency, locale) */
 export interface FieldDef {
   field: string;
   label: string;
@@ -40,7 +40,7 @@ export interface FieldDef {
   options?: OptionDef[];
   numberFormat?: NumberFormat;
   ratingMax?: number;
-  referencedDimId?: string;
+  referencedRefTableId?: string;
   displayFields?: string[];
   description?: string;
   rules?: import("./components/datagrid/types").ConditionalRule[];
@@ -64,9 +64,9 @@ export interface MappingValue {
   sources: SourceOccurrence[]; // every source table.column it appears in
 }
 
-export interface MappingDimension {
+export interface MappingRefTable {
   id: string;
-  dimension: string; // human label
+  refTable: string; // human label
   dimTable: string; // DuckDB master table, e.g. zugzug.dim_country
   mapTable: string; // DuckDB lookup table, e.g. zugzug.map_country
   keyCol: string; // master key column written to both
@@ -79,7 +79,7 @@ export interface MappingDimension {
   ownerUserId?: string | null;
   ownerName?: string | null;
   rows: number; // rows already in the map table
-  canonical: CanonicalValue[];
+  record: RecordValue[];
   counts: {
     /** distinct raw values seen in scan that aren't in the map table */
     newCount: number;
@@ -110,10 +110,10 @@ export interface MappingDimension {
 const rowsOf = (s: SourceOccurrence[]) => s.reduce((n, o) => n + o.rows, 0);
 export const valueRows = (v: MappingValue) => rowsOf(v.sources);
 
-export const mappingSeeds: MappingDimension[] = [
+export const mappingSeeds: MappingRefTable[] = [
   {
     id: "country",
-    dimension: "Country",
+    refTable: "Country",
     dimTable: "zugzug.dim_country",
     mapTable: "zugzug.map_country",
     keyCol: "country_code",
@@ -126,7 +126,7 @@ export const mappingSeeds: MappingDimension[] = [
       mappedRowsTotal: 182600,
       scannedAt: null,
     },
-    canonical: [
+    record: [
       { key: "US", label: "United States", version: 1 },
       { key: "GB", label: "United Kingdom", version: 1 },
       { key: "NO", label: "Norway", version: 1 },
@@ -140,7 +140,7 @@ export const mappingSeeds: MappingDimension[] = [
   },
   {
     id: "state",
-    dimension: "US State",
+    refTable: "US State",
     dimTable: "zugzug.dim_us_state",
     mapTable: "zugzug.map_us_state",
     keyCol: "state_code",
@@ -153,7 +153,7 @@ export const mappingSeeds: MappingDimension[] = [
       mappedRowsTotal: 10210,
       scannedAt: null,
     },
-    canonical: [
+    record: [
       { key: "CA", label: "California", version: 1 },
       { key: "AK", label: "Alaska", version: 1 },
       { key: "AZ", label: "Arizona", version: 1 },
@@ -165,7 +165,7 @@ export const mappingSeeds: MappingDimension[] = [
   },
   {
     id: "post_type",
-    dimension: "Sprout post type",
+    refTable: "Sprout post type",
     dimTable: "zugzug.dim_post_type",
     mapTable: "zugzug.map_sprout_post_type",
     keyCol: "post_type",
@@ -178,7 +178,7 @@ export const mappingSeeds: MappingDimension[] = [
       mappedRowsTotal: 60000,
       scannedAt: null,
     },
-    canonical: [
+    record: [
       { key: "tweet", label: "Tweet", version: 1 },
       { key: "retweet", label: "Retweet", version: 1 },
       { key: "twitter_mention", label: "Twitter Mention", version: 1 },

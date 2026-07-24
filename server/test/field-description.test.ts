@@ -14,30 +14,30 @@ beforeEach(async () => {
 
 test("field description round-trip", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("DescTest", [], {}, userId, "default");
+  const refTableId = await repo.addRefTable("DescTest", [], {}, userId, "default");
 
-  await repo.addField(dimId, "X", "text", undefined, { silent: true }, userId, "default");
+  await repo.addField(refTableId, "X", "text", undefined, { silent: true }, userId, "default");
 
   // Set a description
-  await repo.updateField(dimId, "x", { description: "an explanation" }, userId, "default");
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.fields.find((f) => f.field === "x")?.description).toBe("an explanation");
+  await repo.updateField(refTableId, "x", { description: "an explanation" }, userId, "default");
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable?.fields.find((f) => f.field === "x")?.description).toBe("an explanation");
 
   // Clear the description
-  await repo.updateField(dimId, "x", { description: null }, userId, "default");
-  const dim2 = await repo.getDimension(dimId, "default");
+  await repo.updateField(refTableId, "x", { description: null }, userId, "default");
+  const dim2 = await repo.getRefTable(refTableId, "default");
   expect(dim2?.fields.find((f) => f.field === "x")?.description).toBeUndefined();
 });
 
 test("updateField with undefined description is a no-op", async () => {
   const userId = "u_test";
-  const dimId = await repo.addDimension("DescNoOp", [], {}, userId, "default");
+  const refTableId = await repo.addRefTable("DescNoOp", [], {}, userId, "default");
 
-  await repo.addField(dimId, "Y", "text", undefined, { silent: true }, userId, "default");
-  await repo.updateField(dimId, "y", { description: "original" }, userId, "default");
+  await repo.addField(refTableId, "Y", "text", undefined, { silent: true }, userId, "default");
+  await repo.updateField(refTableId, "y", { description: "original" }, userId, "default");
 
   // Passing undefined should leave description unchanged
-  await repo.updateField(dimId, "y", {}, userId, "default");
-  const dim = await repo.getDimension(dimId, "default");
-  expect(dim?.fields.find((f) => f.field === "y")?.description).toBe("original");
+  await repo.updateField(refTableId, "y", {}, userId, "default");
+  const refTable = await repo.getRefTable(refTableId, "default");
+  expect(refTable?.fields.find((f) => f.field === "y")?.description).toBe("original");
 });

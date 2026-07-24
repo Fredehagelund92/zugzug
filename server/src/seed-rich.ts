@@ -1,5 +1,5 @@
 /* one-shot enrichment seed — add attribute columns + values to the demo
-   dimensions so the Master-lists grid shows off select chips, number/boolean
+   refTables so the Master-lists grid shows off select chips, number/boolean
    cells, etc. Idempotent: tries to add columns, ignores conflicts. */
 
 import { addField, addColumnOption, setFieldValue } from "./repo.ts";
@@ -7,19 +7,19 @@ import type { OptionDef } from "./repo.ts";
 
 const T = "default";
 
-async function ensureField(dimId: string, label: string, type: string, options?: string[]) {
+async function ensureField(refTableId: string, label: string, type: string, options?: string[]) {
   try {
     const opts: OptionDef[] | undefined = options?.map((label) => ({ label, color: null }));
-    const r = await addField(dimId, label, type, opts, {}, "u_verify", T);
+    const r = await addField(refTableId, label, type, opts, {}, "u_verify", T);
     return r?.field ?? label.toLowerCase().replace(/\s+/g, "_");
   } catch {
     return label.toLowerCase().replace(/\s+/g, "_");
   }
 }
 
-async function ensureOption(dimId: string, field: string, label: string) {
+async function ensureOption(refTableId: string, field: string, label: string) {
   try {
-    await addColumnOption(dimId, field, label, null, {}, "u_verify", T);
+    await addColumnOption(refTableId, field, label, null, {}, "u_verify", T);
   } catch {
     /* exists */
   }
@@ -121,7 +121,7 @@ const CHANNEL_FUNNEL: Record<string, string> = {
   direct: "Bottom",
 };
 
-console.log("· enriching demo dimensions with attribute columns + values\n");
+console.log("· enriching demo refTables with attribute columns + values\n");
 
 // Country
 const regionField = await ensureField("country", "Region", "select", ["EMEA", "Americas", "APAC"]);

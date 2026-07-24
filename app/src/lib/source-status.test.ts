@@ -9,8 +9,8 @@ function src(over: Partial<SourceInfo> = {}): SourceInfo {
   return {
     table: "orders",
     column: "ship_country",
-    dimension: "Country",
-    dimId: "d1",
+    refTable: "Country",
+    refTableId: "d1",
     present: true,
     rows: 1000,
     values: 10,

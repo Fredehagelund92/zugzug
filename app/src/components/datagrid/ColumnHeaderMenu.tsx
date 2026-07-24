@@ -45,7 +45,7 @@ interface Props<Row> {
   // Linked-column (fk / lookup) actions. Present the kind-appropriate subset
   // depending on `column.columnKind`.
   onShowLinkedFields?: () => void;
-  onOpenTargetDimension?: () => void;
+  onOpenTargetRefTable?: () => void;
   onChangeDisplayedField?: () => void;
   onManageLinkedFields?: () => void;
   onJumpToSourceColumn?: () => void;
@@ -73,7 +73,7 @@ export function ColumnHeaderMenu<Row>({
   onSaveValidation,
   onEditDescription,
   onShowLinkedFields,
-  onOpenTargetDimension,
+  onOpenTargetRefTable,
   onChangeDisplayedField,
   onManageLinkedFields,
   onJumpToSourceColumn,
@@ -380,7 +380,7 @@ export function ColumnHeaderMenu<Row>({
               <IconX className={iconCls} /> Clear sort
             </button>
           )}
-          {isFk && (onShowLinkedFields || onOpenTargetDimension) && (
+          {isFk && (onShowLinkedFields || onOpenTargetRefTable) && (
             <>
               <div className="my-1 h-px bg-line" />
               {onShowLinkedFields && (
@@ -395,16 +395,16 @@ export function ColumnHeaderMenu<Row>({
                   <IconEdit className={iconCls} /> Show linked fields…
                 </button>
               )}
-              {onOpenTargetDimension && (
+              {onOpenTargetRefTable && (
                 <button
                   type="button"
                   className={item}
                   onClick={() => {
-                    onOpenTargetDimension();
+                    onOpenTargetRefTable();
                     onClose();
                   }}
                 >
-                  <IconArrowRight className={iconCls} /> Open target dimension →
+                  <IconArrowRight className={iconCls} /> Open target refTable →
                 </button>
               )}
             </>

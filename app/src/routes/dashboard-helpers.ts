@@ -1,5 +1,5 @@
 // src/routes/dashboard-helpers.ts
-import type { MappingDimension } from "../data";
+import type { MappingRefTable } from "../data";
 import type { AuditEntry } from "../store";
 
 export type FilterKey = "all" | "attention" | "clean";
@@ -26,18 +26,18 @@ export function formatTimeAgo(at: string): string {
 /**
  * Percentage of values already mapped (count-based, not row-weighted).
  * Note: the global "coverage" KPI in Dashboard.tsx is row-weighted via `v.current`.
- * This function counts mapping entries — use it only for per-dim health display.
+ * This function counts mapping entries — use it only for per-refTable health display.
  */
-export function coveragePct(dim: MappingDimension): number {
-  const total = dim.counts.totalDistinct;
+export function coveragePct(refTable: MappingRefTable): number {
+  const total = refTable.counts.totalDistinct;
   if (total === 0) return 100;
-  return Math.round((dim.counts.mappedCount / total) * 100);
+  return Math.round((refTable.counts.mappedCount / total) * 100);
 }
 
 /** Unpublished changes = drafts awaiting publish + records edited since the
- *  last publish (CONTEXT.md "Unpublished changes"). 0 when the dim is level. */
-export function toPublishCount(dim: MappingDimension): number {
-  const p = dim.publish;
+ *  last publish (CONTEXT.md "Unpublished changes"). 0 when the refTable is level. */
+export function toPublishCount(refTable: MappingRefTable): number {
+  const p = refTable.publish;
   return p ? p.pendingDrafts + p.changedRecords : 0;
 }
 
@@ -46,35 +46,35 @@ export function toPublishCount(dim: MappingDimension): number {
  * Formula: newCount * 1000 + (100 - coveragePct) so tables with new values always
  * outrank clean ones, and within those, worse coverage floats higher.
  *
- * `isStaged` signals that the dim has at least one staged draft (e.g. a remap of
- * a previously-mapped value) but no unmapped values. Such dims would otherwise
+ * `isStaged` signals that the refTable has at least one staged draft (e.g. a remap of
+ * a previously-mapped value) but no unmapped values. Such refTables would otherwise
  * score 0 and sink to the bottom of the Urgency sort, even though the dashboard
  * tags them as "needs attention". We add a mid-tier boost of 500 that's bigger
  * than the worst-coverage spread (0–100) but smaller than newCount=1's
- * contribution (1000), so staged-only dims rank above all clean dims and below
- * any dim with even one new value.
+ * contribution (1000), so staged-only refTables rank above all clean refTables and below
+ * any refTable with even one new value.
  */
-export function urgencyScore(dim: MappingDimension, isStaged: boolean = false): number {
-  const newCount = dim.counts.newCount;
-  const baseUrgency = newCount * 1000 + (100 - coveragePct(dim));
+export function urgencyScore(refTable: MappingRefTable, isStaged: boolean = false): number {
+  const newCount = refTable.counts.newCount;
+  const baseUrgency = newCount * 1000 + (100 - coveragePct(refTable));
   const stagedBoost = isStaged && newCount === 0 ? 500 : 0;
   return baseUrgency + stagedBoost;
 }
 
 /**
- * Returns the most recent audit entry whose detail mentions this dim.
- * AuditEntry has no dimId field, so we do a case-insensitive string match
- * on both the dimension display name and the dimId. Falls back to null.
+ * Returns the most recent audit entry whose detail mentions this refTable.
+ * AuditEntry has no refTableId field, so we do a case-insensitive string match
+ * on both the refTable display name and the refTableId. Falls back to null.
  *
  * Assumes `auditLog` is ordered newest-first (as returned by the server).
  */
 export function lastAuditForDim(
-  dimId: string,
-  dimension: string,
+  refTableId: string,
+  refTable: string,
   auditLog: AuditEntry[],
 ): AuditEntry | null {
-  const idLower = dimId.toLowerCase();
-  const nameLower = dimension.toLowerCase();
+  const idLower = refTableId.toLowerCase();
+  const nameLower = refTable.toLowerCase();
   return (
     auditLog.find((e) => {
       const d = e.detail.toLowerCase();
@@ -83,30 +83,30 @@ export function lastAuditForDim(
   );
 }
 
-export function applyFilter(dims: MappingDimension[], filter: FilterKey): MappingDimension[] {
-  if (filter === "all") return dims;
+export function applyFilter(refTables: MappingRefTable[], filter: FilterKey): MappingRefTable[] {
+  if (filter === "all") return refTables;
   if (filter === "attention") {
-    return dims.filter((d) => d.counts.newCount > 0 || toPublishCount(d) > 0);
+    return refTables.filter((d) => d.counts.newCount > 0 || toPublishCount(d) > 0);
   }
   // "clean"
-  return dims.filter((d) => d.counts.newCount === 0 && toPublishCount(d) === 0);
+  return refTables.filter((d) => d.counts.newCount === 0 && toPublishCount(d) === 0);
 }
 
-/** Sort dims by a column. Returns a new array — never mutates the input.
+/** Sort refTables by a column. Returns a new array — never mutates the input.
  *  Never-published rows (no publishedAt) always sort last on the published
  *  column, in both directions. */
 export function applySort(
-  dims: MappingDimension[],
+  refTables: MappingRefTable[],
   sort: SortKey,
   dir: SortDir,
-): MappingDimension[] {
+): MappingRefTable[] {
   const flip = dir === "asc" ? 1 : -1;
-  const copy = [...dims];
+  const copy = [...refTables];
   switch (sort) {
     case "name":
-      return copy.sort((a, b) => a.dimension.localeCompare(b.dimension) * flip);
+      return copy.sort((a, b) => a.refTable.localeCompare(b.refTable) * flip);
     case "records":
-      return copy.sort((a, b) => (a.canonical.length - b.canonical.length) * flip);
+      return copy.sort((a, b) => (a.record.length - b.record.length) * flip);
     case "coverage":
       return copy.sort((a, b) => (coveragePct(a) - coveragePct(b)) * flip);
     case "review":
@@ -125,25 +125,25 @@ export function applySort(
   }
 }
 
-/** Per-dimension warehouse-sync status derived from the audit log.
- *  - "synced": latest warehouse sync event for the dim is "Warehouse synced"
- *  - "failed": latest warehouse sync event for the dim is "Warehouse sync failed"
- *  - "unknown": no warehouse sync events yet for the dim (or read-only mode)
- *  The dim is identified by the dim's mapTable name appearing in the audit detail.
+/** Per-refTable warehouse-sync status derived from the audit log.
+ *  - "synced": latest warehouse sync event for the refTable is "Warehouse synced"
+ *  - "failed": latest warehouse sync event for the refTable is "Warehouse sync failed"
+ *  - "unknown": no warehouse sync events yet for the refTable (or read-only mode)
+ *  The refTable is identified by the refTable's mapTable name appearing in the audit detail.
  *
  *  Assumes `audits` is ordered newest-first (as returned by the server).
  */
 export function warehouseSyncStatusByDim(
   audits: AuditEntry[],
-  dims: Array<{ id: string; mapTable: string }>,
+  refTables: Array<{ id: string; mapTable: string }>,
 ): Record<string, "synced" | "failed" | "unknown"> {
   const status: Record<string, "synced" | "failed" | "unknown"> = {};
-  for (const d of dims) status[d.id] = "unknown";
+  for (const d of refTables) status[d.id] = "unknown";
 
-  // Audits are returned newest-first by listAudit; iterate and first match per dim wins.
+  // Audits are returned newest-first by listAudit; iterate and first match per refTable wins.
   for (const a of audits) {
     if (a.action !== "Warehouse synced" && a.action !== "Warehouse sync failed") continue;
-    for (const d of dims) {
+    for (const d of refTables) {
       if (status[d.id] !== "unknown") continue;
       if (a.detail.includes(d.mapTable)) {
         status[d.id] = a.action === "Warehouse synced" ? "synced" : "failed";

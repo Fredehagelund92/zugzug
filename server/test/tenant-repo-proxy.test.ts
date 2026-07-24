@@ -33,7 +33,7 @@ test("pgAll inside a TenantRepo forwarder does NOT throw (withClearCtx restores)
   await provisionTenant({ id: T, label: "X" });
   const repo = new TenantRepo(T, "admin");
   await pgContext.run({ insideTenantRepo: true }, async () => {
-    await repo.listDimensions(); // calls pgAll internally via repo-canonical
+    await repo.listRefTables(); // calls pgAll internally via repo-record
   });
 });
 

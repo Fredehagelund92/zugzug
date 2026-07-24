@@ -7,11 +7,11 @@ process.env.GOOGLE_CLIENT_SECRET = "test-stub";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import "../test/setup.ts";
 import { pgRun, pgGet } from "./pg.ts";
-import { addDimension, addCanonicalOne, deleteDimension } from "./repo-canonical.ts";
+import { addRefTable, addRecordOne, deleteRefTable } from "./repo-record.ts";
 
 const T = "test_del_dim";
 const U = "u_test_del";
-const DIM = "deltest";
+const REF_TABLE = "deltest";
 
 // Second tenant for cross-tenant isolation test
 const T2 = "test_del_dim2";
@@ -46,7 +46,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_deltest"`).catch(() => {});
   await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_deltest"`).catch(() => {});
-  await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE id = $1`, [REF_TABLE]).catch(
+    () => {},
+  );
   await pgRun(`DELETE FROM "zugzug_app"."user_grid_layout" WHERE user_id IN ($1, $2)`, [
     U,
     U2,
@@ -59,14 +61,14 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id IN ($1, $2)`, [T, T2]).catch(() => {});
 });
 
-describe("deleteDimension", () => {
+describe("deleteRefTable", () => {
   it("returns false for an unknown table", async () => {
-    expect(await deleteDimension("no_such_dim", U, T)).toBe(false);
+    expect(await deleteRefTable("no_such_dim", U, T)).toBe(false);
   });
 
-  it("deletes the dimension row, metadata rows, and drops dim_/map_ tables; keeps audit", async () => {
-    await addDimension("Deltest", [], { keyKind: "slug" }, U, T);
-    await addCanonicalOne(DIM, "Alpha", undefined, U, T);
+  it("deletes the refTable row, metadata rows, and drops dim_/map_ tables; keeps audit", async () => {
+    await addRefTable("Deltest", [], { keyKind: "slug" }, U, T);
+    await addRecordOne(REF_TABLE, "Alpha", undefined, U, T);
     // Enroll U in tenant T so the layout sweep can target it
     await pgRun(
       `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
@@ -81,36 +83,38 @@ describe("deleteDimension", () => {
     );
     // Seed layout row for U (tenant A's member)
     await pgRun(
-      `INSERT INTO "zugzug_app"."user_grid_layout" (user_id, dim_id, config, updated_at)
+      `INSERT INTO "zugzug_app"."user_grid_layout" (user_id, reference_table_id, config, updated_at)
        VALUES ($1, $2, '{}', now()) ON CONFLICT DO NOTHING`,
-      [U, DIM],
+      [U, REF_TABLE],
     );
-    // Seed layout row for U2 (tenant B's member) — simulates tenant B having a same-named dim layout
+    // Seed layout row for U2 (tenant B's member) — simulates tenant B having a same-named refTable layout
     await pgRun(
-      `INSERT INTO "zugzug_app"."user_grid_layout" (user_id, dim_id, config, updated_at)
+      `INSERT INTO "zugzug_app"."user_grid_layout" (user_id, reference_table_id, config, updated_at)
        VALUES ($1, $2, '{"cross":"tenant"}', now()) ON CONFLICT DO NOTHING`,
-      [U2, DIM],
+      [U2, REF_TABLE],
     );
 
-    expect(await deleteDimension(DIM, U, T)).toBe(true);
+    expect(await deleteRefTable(REF_TABLE, U, T)).toBe(true);
 
     // Tenant A's member layout row must be gone
     expect(
       await pgGet(
-        `SELECT dim_id FROM "zugzug_app"."user_grid_layout" WHERE dim_id = $1 AND user_id = $2`,
-        [DIM, U],
+        `SELECT reference_table_id FROM "zugzug_app"."user_grid_layout" WHERE reference_table_id = $1 AND user_id = $2`,
+        [REF_TABLE, U],
       ),
     ).toBeNull();
 
     // Tenant B's member layout row must SURVIVE
     expect(
       await pgGet(
-        `SELECT dim_id FROM "zugzug_app"."user_grid_layout" WHERE dim_id = $1 AND user_id = $2`,
-        [DIM, U2],
+        `SELECT reference_table_id FROM "zugzug_app"."user_grid_layout" WHERE reference_table_id = $1 AND user_id = $2`,
+        [REF_TABLE, U2],
       ),
     ).not.toBeNull();
 
-    expect(await pgGet(`SELECT id FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM])).toBeNull();
+    expect(
+      await pgGet(`SELECT id FROM "zugzug_app"."reference_table" WHERE id = $1`, [REF_TABLE]),
+    ).toBeNull();
     const dimTable = await pgGet(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema = 'zugzug' AND table_name = 'dim_deltest'`,
@@ -125,8 +129,8 @@ describe("deleteDimension", () => {
     expect(audit!.tenant_id).toBe(T);
   });
 
-  it("succeeds with 0 records in the audit when the physical dim table is dropped beforehand", async () => {
-    // Set up a fresh tenant/user/dimension for this isolated test
+  it("succeeds with 0 records in the audit when the physical refTable table is dropped beforehand", async () => {
+    // Set up a fresh tenant/user/refTable for this isolated test
     const DIM3 = "deltest3";
     const T3 = "test_del_dim3";
     const U3 = "u_test_del3";
@@ -142,17 +146,19 @@ describe("deleteDimension", () => {
        ON CONFLICT DO NOTHING`,
       [U3],
     );
-    await addDimension("Deltest3", [], { keyKind: "slug" }, U3, T3);
+    await addRefTable("Deltest3", [], { keyKind: "slug" }, U3, T3);
 
-    // Drop the physical dim table before calling deleteDimension
+    // Drop the physical refTable table before calling deleteRefTable
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."dim_deltest3"`);
 
-    // deleteDimension must still succeed (no error from the missing table)
-    const result = await deleteDimension(DIM3, U3, T3);
+    // deleteRefTable must still succeed (no error from the missing table)
+    const result = await deleteRefTable(DIM3, U3, T3);
     expect(result).toBe(true);
 
-    // Dimension row must be gone
-    expect(await pgGet(`SELECT id FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM3])).toBeNull();
+    // RefTable row must be gone
+    expect(
+      await pgGet(`SELECT id FROM "zugzug_app"."reference_table" WHERE id = $1`, [DIM3]),
+    ).toBeNull();
 
     // Audit detail must report 0 records
     const audit = await pgGet<{ detail: string }>(
@@ -166,7 +172,7 @@ describe("deleteDimension", () => {
 
     // Cleanup
     await pgRun(`DROP TABLE IF EXISTS "zugzug"."map_deltest3"`).catch(() => {});
-    await pgRun(`DELETE FROM "zugzug_app"."dimension" WHERE id = $1`, [DIM3]).catch(() => {});
+    await pgRun(`DELETE FROM "zugzug_app"."reference_table" WHERE id = $1`, [DIM3]).catch(() => {});
     await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U3]).catch(() => {});
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [T3]).catch(() => {});
   });

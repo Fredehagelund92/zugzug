@@ -5,7 +5,7 @@ import { useNavLinks } from "../lib/use-tenant-navigate";
 
 /* NoTablesYet — shared empty-state for the value-mapping + master-list
    routes when the workspace has zero tables. Replaces a crash that
-   used to happen because Mapping/MasterTables indexed dims[0] directly. */
+   used to happen because Mapping/MasterTables indexed refTables[0] directly. */
 export function NoTablesYet({
   from,
   onCreateRequested,
