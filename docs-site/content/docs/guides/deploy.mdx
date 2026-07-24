@@ -1,0 +1,63 @@
+---
+title: Deploy to production
+description: Turnkey HTTPS with Caddy and a bundled Postgres — plus escape hatches for your own ingress or a managed database.
+---
+
+Caddy gets you an automatic Let's Encrypt certificate, and a bundled Postgres
+runs out of the box. Two escape hatches cover existing ingress and managed
+databases.
+
+## Prerequisites
+
+- A host with [Docker](https://docs.docker.com/get-docker/) and ports **80 + 443**
+  open to the internet and free on the host (if another web server already binds
+  them, Caddy can't, and ACME will fail).
+- A DNS **A**/**AAAA** record for your domain pointing at the host.
+
+## 1. Configure
+
+```bash
+git clone https://github.com/Fredehagelund92/zugzug.git
+cd zugzug
+cp .env.prod.example .env
+```
+
+Edit `.env`:
+
+- `DOMAIN` — your domain (e.g. `zugzug.acme.com`).
+- `ACME_EMAIL` — your email (Let's Encrypt expiry notices).
+- `ORIGIN` — `https://<DOMAIN>` (must match; this makes cookies `Secure`).
+- Generate secrets:
+  ```bash
+  openssl rand -hex 32     # -> POSTGRES_PASSWORD
+  openssl rand -base64 32  # -> ZUGZUG_CURSOR_KEY
+  ```
+
+## 2. Launch
+
+```bash
+docker compose -f compose.prod.yml up -d --build
+```
+
+Caddy provisions the certificate on first request (DNS must be live and 80/443
+reachable). Open `https://<DOMAIN>` and **create the first account — it becomes
+the admin.** Do it immediately; to restrict further signups set `ALLOWED_DOMAIN`
+(or configure OIDC) and `up -d` again.
+
+## Escape hatches
+
+**Behind existing ingress / your own TLS** — remove the `caddy` service from
+`compose.prod.yml`, publish `app` on a host port (e.g. `ports: ["8080:80"]`),
+terminate TLS upstream, and keep `ORIGIN=https://<domain>`.
+
+**Managed / external Postgres** — remove the `postgres` service, set
+`DATABASE_URL` to your managed instance, and remove the `depends_on: postgres`
+block from the `server` service. Recommended at scale for managed backups.
+
+## Operate
+
+- **Back up Postgres** — see [backup & restore](/docs/guides/backup-restore).
+- **Warehouse (optional):** set `ATTACH_WAREHOUSE=true` + `MOTHERDUCK_TOKEN`.
+  If you enable direct write, validate against a staging warehouse first.
+- **Updates:** `git pull && docker compose -f compose.prod.yml up -d --build`.
+  Migrations run automatically on server boot.

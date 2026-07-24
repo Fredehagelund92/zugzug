@@ -1,0 +1,31 @@
+---
+title: Architecture
+description: The three stores, the request path, and where state lives.
+---
+
+Zug Zug reads and writes three separate stores. Keeping them separate is the
+central design decision — each has a different owner and durability need.
+
+## The three stores
+
+| Store | Technology | Owner | Holds |
+|---|---|---|---|
+| **Warehouse** | Yours (MotherDuck/DuckDB, Snowflake) | Yours — **read-only** to Zug Zug | The columns Zug Zug scans for distinct **source values**. |
+| **Record store** | Postgres (default) or MotherDuck | Zug Zug | The published `dim_<x>` / `map_<x>` tables — approved **records** and **mappings**, versioned. |
+| **App state** | Postgres (`zugzug_app` schema) | Zug Zug — **back this up** | Drafts, audit log, users, sessions, table versions, the outbound-event queue. |
+
+## Request path
+
+The browser only talks to the Bun API (`/api`, `/ws`). The API talks to Postgres
+and — when attached — a local DuckDB engine that `ATTACH`es your warehouse and
+the record store, so it can query across them.
+
+- **Frontend** (`app/`): React + Vite + Tailwind, static assets served by nginx.
+- **Backend** (`server/`): a Bun HTTP server, path-routed under `/api`. Background
+  work (scans, webhook dispatch, retention sweeps) runs on an in-process scheduler.
+
+## Publish model
+
+Editing is instant on the working copy; **publish** folds drafts and record edits
+into a numbered version and materializes `dim_<x>` / `map_<x>`. See
+[Publishing](/docs/guides/publishing).
