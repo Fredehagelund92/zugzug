@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Reset the PUBLIC DEMO to a clean, freshly-seeded state.
+# Reset the PUBLIC DEMO to a clean, freshly-seeded state — in place.
 #
-# Wipes the Postgres volume (all workspace data) and reboots the stack; the demo
-# seed re-runs on first boot (needs SEED_DEMO=true in .env). Deliberately keeps
-# the Caddy TLS cert volume — wiping it would re-request certs nightly and hit
-# Let's Encrypt rate limits.
+# Runs the DB-level reset inside the running server container: it empties all
+# workspace data and reseeds the fictional demo. No restart, no downtime; the
+# bundled local warehouse and the Caddy TLS cert are left untouched.
 #
 # DESTRUCTIVE. Only ever run against a throwaway demo host. Guarded by an env var
 # so it can't fire by accident; the nightly cron sets it:
@@ -18,10 +17,8 @@ if [ "${DEMO_RESET_CONFIRM:-}" != "yes" ]; then
 fi
 
 cd "$(dirname "$0")/.."
-PROJECT="zugzug-prod"   # compose.prod.yml `name:`
 
-echo "[demo-reset] $(date -u +%FT%TZ) wiping demo database…"
-docker compose -f compose.prod.yml stop
-docker volume rm "${PROJECT}_pgdata" 2>/dev/null || true
-docker compose -f compose.prod.yml up -d
-echo "[demo-reset] done — the demo reseeds on boot."
+echo "[demo-reset] $(date -u +%FT%TZ) resetting demo…"
+docker compose -f compose.prod.yml exec -T \
+  -e DEMO_RESET_CONFIRM=yes server bun run demo-reset
+echo "[demo-reset] done."

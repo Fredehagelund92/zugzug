@@ -11,6 +11,7 @@
     "verify-datagrid": "bun run src/verify-datagrid.ts",
     "verify-tables": "bun run src/verify-tables.ts",
     "bootstrap": "bun run src/bootstrap.ts",
+    "demo-reset": "bun run src/demo-reset.ts",
     "quickstart": "bun run scripts/quickstart.ts",
     "reset-password": "bun run scripts/reset-password.ts",
     "admin": "bun run scripts/admin.ts",

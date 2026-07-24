@@ -58,21 +58,45 @@ Point DNS at the VM, wait for Caddy to provision the certificate, and open
 `https://demo.zugzug.dev`. The **first signup becomes the admin** — do it once
 yourself so the demo has an owner.
 
-## Keep it clean (nightly reset)
+## Keep it clean (daily reset)
 
-The demo will accumulate visitor signups and edits. Reset it on a schedule with
-the bundled script — it wipes the database and reseeds on boot, **preserving the
-TLS cert** (so you don't hit Let's Encrypt rate limits):
+The demo will accumulate visitor signups and edits. Reset it on a schedule.
+
+The reset is a single in-place command — `bun run demo-reset` — that empties all
+workspace data and reseeds the fictional demo. It's DB-level, so there's no
+restart or downtime, and it never touches the bundled warehouse or the TLS cert
+(no Let's Encrypt rate-limit risk). It's guarded by `DEMO_RESET_CONFIRM=yes` so
+it can never fire by accident. **Never point it at a real instance** — it
+destroys all data.
+
+**On a VM (compose)** — a nightly cron running the bundled wrapper, which execs
+the reset inside the running server container:
 
 ```bash
 # crontab -e  (as the user that owns the repo)
 0 4 * * *  cd /home/USER/zugzug && DEMO_RESET_CONFIRM=yes ./scripts/demo-reset.sh >> /var/log/zugzug-demo-reset.log 2>&1
 ```
 
-The reset guard (`DEMO_RESET_CONFIRM=yes`) exists so it can never fire by
-accident. **Never point this at a real instance** — it destroys all data.
+**On Fly.io** — a scheduled Machine runs the same command once a day, then
+stops. Create it once in your app; it reuses the app image and inherits the
+app's Fly secrets (`DATABASE_URL` etc.), so you only pass the warehouse env and
+the confirm flag. Get the current image ref from `fly image show -a <app>`:
+
+```bash
+fly machine run registry.fly.io/<app>:<tag> \
+  --app <app> \
+  --schedule daily \
+  --env DEMO_RESET_CONFIRM=yes \
+  --env WAREHOUSE_ADAPTER=duckdb \
+  --env DUCK_WAREHOUSE_PATH=/data/warehouse.duckdb \
+  bun run demo-reset
+```
+
+The scheduled Machine regenerates its own copy of the sample warehouse (the
+generator is deterministic), so the scan produces identical values regardless of
+which Machine runs it — no shared volume needed.
 
 ## Link it from the site
 
-Once it's live, add a *"Try the live demo →"* button on the landing page
+Once it's live, add a _"Try the live demo →"_ button on the landing page
 pointing at your demo URL.
