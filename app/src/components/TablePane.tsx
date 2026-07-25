@@ -5,6 +5,7 @@ import { Badge } from "./Badge";
 import { Checkbox } from "./Checkbox";
 import { ComboSelect } from "./ComboSelect";
 import { AddFieldPopover } from "./AddFieldPopover";
+import { EditFormulaPopover } from "./EditFormulaPopover";
 import { RenameConfirmation } from "./RenameConfirmation";
 import { IconPlus, IconX, IconFilter } from "./Icons";
 import {
@@ -23,6 +24,8 @@ import {
   deriveRecord,
   addField,
   setFieldValue,
+  validateFormula,
+  updateFieldFormula,
   addColumnOption,
   renameColumn,
   changeColumnType,
@@ -99,6 +102,13 @@ function fieldDefToColumnConfig(f: FieldDef): ColumnConfig {
         return { type: "email" };
       case "rating":
         return { type: "rating", ratingMax: f.ratingMax ?? 5 };
+      case "formula": {
+        // A formula column renders as its declared result type (read-only).
+        const rt = f.formula?.resultType ?? "text";
+        if (rt === "number") return { type: "number", numberFormat: f.formula?.numberFormat };
+        if (rt === "boolean") return { type: "boolean" };
+        return { type: "text" };
+      }
       default:
         return { type: "text" };
     }
@@ -272,6 +282,8 @@ function RecordsBody({
   const [idOpt, setIdOpt] = useState<string | null>(null);
   const [nameOpt, setNameOpt] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  // Field id of the computed column whose formula is being edited (null = closed).
+  const [formulaEditor, setFormulaEditor] = useState<string | null>(null);
   const addFieldRef = useRef<HTMLButtonElement | null>(null);
 
   const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState<{
@@ -467,6 +479,32 @@ function RecordsBody({
             candidates: target?.candidates ?? [],
           });
           return [{ ...fkCol, editable: canEdit }, ...lookupCols];
+        }
+        if (f.type === "formula") {
+          return [
+            {
+              field: f.field,
+              label: f.label,
+              config: fieldDefToColumnConfig(f),
+              editable: false,
+              columnKind: "computed" as const,
+              description: f.description,
+              render: (row: RecordValue) => {
+                const err = row.formulaErrors?.[f.field];
+                const v = row.fields?.[f.field];
+                const content = err ? (
+                  <span title={err} className="font-mono text-[12px] text-danger">
+                    ⚠
+                  </span>
+                ) : v == null || v === "" ? (
+                  <span className="text-ink-3">—</span>
+                ) : (
+                  <span>{v}</span>
+                );
+                return content;
+              },
+            },
+          ];
         }
         return [
           {
@@ -1598,6 +1636,7 @@ function RecordsBody({
                 }
               : undefined
           }
+          onEditColumnFormula={canEdit ? (field) => setFormulaEditor(field) : undefined}
           onShowLinkedFields={canEdit ? handleShowLinkedFields : undefined}
           onOpenTargetRefTable={handleOpenTargetRefTable}
           onChangeDisplayedField={canEdit ? handleChangeDisplayedField : undefined}
@@ -1760,10 +1799,16 @@ function RecordsBody({
             onClose={() => setAddOpen(false)}
             allDims={allDims.map((d) => ({ id: d.id, refTable: d.refTable }))}
             currentRefTableId={activeId}
-            onSubmit={async ({ label, config }) => {
+            availableFields={fields
+              .filter((f) => f.type !== "formula")
+              .map((f) => ({ field: f.field, label: f.label }))}
+            onValidateFormula={(expr) => validateFormula(activeId, expr)}
+            onSubmit={async ({ label, config, formula }) => {
               const required = config.required;
               const validation = config.validation;
-              if (config.type === "linked") {
+              if (formula) {
+                await addField(activeId, label, "formula", undefined, { formula });
+              } else if (config.type === "linked") {
                 await addField(activeId, label, "linked", undefined, {
                   referencedRefTableId: config.targetRefTableId,
                   displayFields: config.displayFields,
@@ -1788,6 +1833,31 @@ function RecordsBody({
             }}
           />
         )}
+
+        {formulaEditor &&
+          (() => {
+            const f = fields.find((x) => x.field === formulaEditor);
+            if (!f?.formula) return null;
+            return (
+              <EditFormulaPopover
+                fieldLabel={f.label}
+                initialExpr={f.formula.expr}
+                initialResultType={f.formula.resultType}
+                availableFields={fields
+                  .filter((x) => x.type !== "formula")
+                  .map((x) => ({ field: x.field, label: x.label }))}
+                onValidate={(expr) => validateFormula(activeId, expr)}
+                onSave={async ({ expr, resultType }) => {
+                  await updateFieldFormula(activeId, formulaEditor, {
+                    expr,
+                    resultType,
+                    numberFormat: f.formula?.numberFormat,
+                  });
+                }}
+                onClose={() => setFormulaEditor(null)}
+              />
+            );
+          })()}
 
         {linkPicker &&
           (() => {

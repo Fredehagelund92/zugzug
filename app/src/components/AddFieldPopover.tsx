@@ -7,10 +7,22 @@ import { toast } from "./Toast";
 import type { NumberFormat, OptionDef } from "../data";
 import type { ColumnConfig } from "./datagrid/types";
 import { ValidationFields } from "./datagrid/ValidationFields";
+import { FormulaEditor, type FormulaCheck } from "./FormulaEditor";
+
+export type { FormulaCheck };
+
+/** A computed field: the expression + declared output type. Emitted alongside
+ *  `config` (set to the output type) so the host can render it read-only. */
+export interface FormulaInput {
+  expr: string;
+  resultType: "text" | "number" | "boolean";
+  numberFormat?: NumberFormat;
+}
 
 export interface AddFieldInput {
   label: string;
   config: ColumnConfig;
+  formula?: FormulaInput;
 }
 
 interface AddFieldPopoverProps {
@@ -19,9 +31,15 @@ interface AddFieldPopoverProps {
   onSubmit: (input: AddFieldInput) => Promise<void>;
   allDims?: { id: string; refTable: string }[];
   currentRefTableId?: string;
+  /** Existing field labels a formula may reference (click-to-insert). */
+  availableFields?: { field: string; label: string }[];
+  /** Dry-run a formula against a sample record for live feedback. */
+  onValidateFormula?: (expr: string) => Promise<FormulaCheck>;
 }
 
-type FieldType = ColumnConfig["type"];
+// "formula" isn't a ColumnConfig type (it renders as its result type); it's a
+// synthetic tile that reveals the expression editor.
+type FieldType = ColumnConfig["type"] | "formula";
 
 interface TypeTile {
   type: FieldType;
@@ -39,6 +57,7 @@ const TYPE_TILES: TypeTile[] = [
   { type: "email", icon: "@", label: "Email" },
   { type: "rating", icon: "★", label: "Rating" },
   { type: "linked", icon: "⇢", label: "Linked" },
+  { type: "formula", icon: "ƒ", label: "Formula" },
 ];
 
 export function AddFieldPopover({
@@ -47,6 +66,8 @@ export function AddFieldPopover({
   onSubmit,
   allDims,
   currentRefTableId,
+  availableFields,
+  onValidateFormula,
 }: AddFieldPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -70,6 +91,9 @@ export function AddFieldPopover({
   const [unique, setUnique] = useState(false);
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
+  const [formulaExpr, setFormulaExpr] = useState("");
+  const [formulaResultType, setFormulaResultType] = useState<"text" | "number" | "boolean">("text");
+  const [formulaCheck, setFormulaCheck] = useState<FormulaCheck | null>(null);
   // Airtable-style positioning: the popover's RIGHT edge aligns with the
   // "+ field" button's right edge, so the popover drops below the button and
   // extends LEFTWARD into the grid (where there's room — the button sits at
@@ -199,6 +223,9 @@ export function AddFieldPopover({
   const resetForm = () => {
     setLabel("");
     setType("text");
+    setFormulaExpr("");
+    setFormulaResultType("text");
+    setFormulaCheck(null);
     setOptions([]);
     setNumFmt("integer");
     setNumPrecision(2);
@@ -222,6 +249,16 @@ export function AddFieldPopover({
     if (type === "linked" && !linkedTargetRefTableId) {
       setError("Pick the table this field links to.");
       return;
+    }
+    if (type === "formula") {
+      if (!formulaExpr.trim()) {
+        setError("Enter a formula.");
+        return;
+      }
+      if (formulaCheck && !formulaCheck.ok) {
+        setError(formulaCheck.error ?? "This formula isn't valid.");
+        return;
+      }
     }
     setError(null);
 
@@ -258,25 +295,37 @@ export function AddFieldPopover({
         displayFields: ["label"],
         candidates: [],
       };
+    } else if (type === "formula") {
+      config =
+        formulaResultType === "number"
+          ? { type: "number" }
+          : formulaResultType === "boolean"
+            ? { type: "boolean" }
+            : { type: "text" };
     } else {
       config = { type } as ColumnConfig;
     }
-    config.required = required;
 
-    const num = (s: string) => {
-      if (s.trim() === "") return undefined;
-      if (type === "date") return s.trim();
-      const n = Number(s);
-      if (type === "text") return Math.max(0, Math.floor(n));
-      return n;
-    };
-    const validationObj: NonNullable<typeof config.validation> = {};
-    if (unique) validationObj.unique = true;
-    if (num(min) !== undefined) validationObj.min = num(min)!;
-    if (num(max) !== undefined) validationObj.max = num(max)!;
-    if (Object.keys(validationObj).length > 0) config.validation = validationObj;
+    let formula: FormulaInput | undefined;
+    if (type === "formula") {
+      formula = { expr: formulaExpr.trim(), resultType: formulaResultType };
+    } else {
+      config.required = required;
+      const num = (s: string) => {
+        if (s.trim() === "") return undefined;
+        if (type === "date") return s.trim();
+        const n = Number(s);
+        if (type === "text") return Math.max(0, Math.floor(n));
+        return n;
+      };
+      const validationObj: NonNullable<typeof config.validation> = {};
+      if (unique) validationObj.unique = true;
+      if (num(min) !== undefined) validationObj.min = num(min)!;
+      if (num(max) !== undefined) validationObj.max = num(max)!;
+      if (Object.keys(validationObj).length > 0) config.validation = validationObj;
+    }
 
-    const input: AddFieldInput = { label: trimmed, config };
+    const input: AddFieldInput = { label: trimmed, config, formula };
 
     // Close/reset immediately — provision in the background.
     if (createAnother) {
@@ -302,7 +351,8 @@ export function AddFieldPopover({
     run(input);
   };
 
-  const canSubmit = label.trim().length > 0;
+  const canSubmit =
+    label.trim().length > 0 && (type !== "formula" || formulaExpr.trim().length > 0);
 
   return createPortal(
     <div
@@ -613,6 +663,22 @@ export function AddFieldPopover({
           </>
         )}
 
+        {/* Formula editor */}
+        {type === "formula" && (
+          <>
+            <div className="border-t border-line" />
+            <FormulaEditor
+              expr={formulaExpr}
+              onExprChange={setFormulaExpr}
+              resultType={formulaResultType}
+              onResultTypeChange={setFormulaResultType}
+              availableFields={availableFields}
+              onValidate={onValidateFormula}
+              onCheckChange={setFormulaCheck}
+            />
+          </>
+        )}
+
         {/* Error banner */}
         {error && (
           <div className="rounded-sm border border-danger/40 bg-danger/10 px-3 py-2 font-mono text-[11px] text-danger">
@@ -620,17 +686,19 @@ export function AddFieldPopover({
           </div>
         )}
 
-        <ValidationFields
-          type={type}
-          required={required}
-          onRequiredChange={setRequired}
-          unique={unique}
-          onUniqueChange={setUnique}
-          min={min}
-          onMinChange={setMin}
-          max={max}
-          onMaxChange={setMax}
-        />
+        {type !== "formula" && (
+          <ValidationFields
+            type={type}
+            required={required}
+            onRequiredChange={setRequired}
+            unique={unique}
+            onUniqueChange={setUnique}
+            min={min}
+            onMinChange={setMin}
+            max={max}
+            onMaxChange={setMax}
+          />
+        )}
 
         {/* Footer */}
         <div className="flex items-center gap-2 pt-1">

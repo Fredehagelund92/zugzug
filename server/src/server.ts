@@ -1326,6 +1326,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             displayFields,
             required,
             validation,
+            formula,
           } = (await req.json()) as {
             label: string;
             type?: string;
@@ -1339,6 +1340,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               unique?: boolean;
               min?: number | string | null;
               max?: number | string | null;
+            };
+            formula?: {
+              expr: string;
+              resultType: "text" | "number" | "boolean";
+              numberFormat?: NumberFormat;
             };
           };
           return json(
@@ -1354,10 +1360,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
                 displayFields,
                 required,
                 validation,
+                formula,
               },
               me,
             ),
           );
+        }
+        // POST /api/tables/:id/formula/validate {expr, resultType} — parse + dry-run
+        // a formula against one sample record so the field editor can show live
+        // errors without shipping the evaluator to the browser.
+        if (
+          seg[3] === "formula" &&
+          seg[4] === "validate" &&
+          seg.length === 5 &&
+          method === "POST"
+        ) {
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          if (denied) return denied;
+          const { expr } = (await req.json()) as { expr?: string };
+          return json(await reqRepo.validateTableFormula(id, expr ?? "", me));
         }
         // POST /api/tables/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {

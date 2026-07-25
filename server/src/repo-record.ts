@@ -13,6 +13,7 @@ import {
   type OptionDef,
   type PaletteName,
   type NumberFormat,
+  type FormulaConfig,
   PALETTE_NAMES,
   refForRegisteredTable,
   slug,
@@ -29,6 +30,12 @@ import {
   pg,
 } from "./repo-shared.ts";
 import { getSourceScanScalars, type SourceScanScalars } from "./repo-source-scan.ts";
+import {
+  runFormula,
+  coerceToResultType,
+  isFormulaError,
+  validateFormula,
+} from "./formula/index.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { AppError } from "./errors.ts";
@@ -341,8 +348,11 @@ export async function getRefTable(
 
   const k = qid(meta.keyCol);
   const fields = await listFields(id, tenantId);
-  const scalarFields = fields.filter((f) => f.type !== "linked");
+  // Formula fields have no physical column — they must stay out of the SQL and
+  // are computed per row below.
+  const scalarFields = fields.filter((f) => f.type !== "linked" && f.type !== "formula");
   const linkedFields = fields.filter((f) => f.type === "linked");
+  const formulaFields = fields.filter((f) => f.type === "formula");
 
   // Pre-fetch target refTable metadata for each linked field (needed for JOIN)
   const linkedMetas = new Map<string, { keyCol: string; dimTable: string }>();
@@ -442,17 +452,48 @@ export async function getRefTable(
   );
   const versions = new Map(versionRows.map((r) => [r.key, Number(r.version)]));
 
-  const record = canonRows.map((r) => ({
-    key: String(r.key),
-    label: r.label == null ? String(r.key) : String(r.label),
-    version: versions.get(String(r.key)) ?? 1,
-    unresolved: !!r.unresolved,
-    variants: Number(r.variants),
-    position: r.position == null ? null : String(r.position as string | bigint),
-    fields: Object.fromEntries(
+  const record = canonRows.map((r) => {
+    const fieldsMap: Record<string, string | null> = Object.fromEntries(
       allFieldKeys.map((fk) => [fk, r[fk] == null ? null : String(r[fk])]),
-    ),
-  }));
+    );
+    const base = {
+      key: String(r.key),
+      label: r.label == null ? String(r.key) : String(r.label),
+      version: versions.get(String(r.key)) ?? 1,
+      unresolved: !!r.unresolved,
+      variants: Number(r.variants),
+      position: r.position == null ? null : String(r.position as string | bigint),
+      fields: fieldsMap,
+    };
+    if (formulaFields.length === 0) return base;
+    // Evaluate formulas per row against a label-keyed view of this record's
+    // stored fields (plus the built-ins key/label/variants). Formula columns
+    // may only reference stored fields, so they are not in scope here.
+    const evalRow: Record<string, unknown> = {
+      key: base.key,
+      label: base.label,
+      variants: base.variants,
+    };
+    for (const sf of scalarFields) evalRow[sf.label] = fieldsMap[sf.field];
+    const errors: Record<string, string> = {};
+    for (const ff of formulaFields) {
+      if (!ff.formula) {
+        fieldsMap[ff.field] = null;
+        continue;
+      }
+      const result = coerceToResultType(
+        runFormula(ff.formula.expr, evalRow),
+        ff.formula.resultType,
+      );
+      if (isFormulaError(result)) {
+        fieldsMap[ff.field] = null;
+        errors[ff.field] = result.message;
+      } else {
+        fieldsMap[ff.field] = result === null ? null : String(result);
+      }
+    }
+    return Object.keys(errors).length > 0 ? { ...base, formulaErrors: errors } : base;
+  });
 
   const rowsRow = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${cq(meta.mapTable)}`,
@@ -1106,6 +1147,23 @@ export async function updateField(
       }
     }
 
+    // Re-validate an edited formula (syntax, known functions, existing field refs)
+    // before it is merged in — a broken expression must never reach getRefTable.
+    if (existing?.type === "formula" && "expr" in incomingParsed) {
+      const expr = typeof incomingParsed.expr === "string" ? incomingParsed.expr : "";
+      if (expr.trim() === "") throw new Error("A formula can't be empty.");
+      const knownLabels = new Set<string>([
+        "key",
+        "label",
+        "variants",
+        ...(await listFields(refTableId, tenantId))
+          .filter((e) => e.type !== "formula")
+          .map((e) => e.label),
+      ]);
+      const v = validateFormula(expr, knownLabels);
+      if (!v.ok) throw new Error(v.error ?? "Invalid formula.");
+    }
+
     let beforeDisplayFields: string[] | null = null;
     let afterDisplayFields: string[] | null = null;
     if ("displayFields" in incomingParsed) {
@@ -1196,6 +1254,7 @@ export async function addField(
     displayFields?: string[];
     required?: boolean;
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+    formula?: FormulaConfig;
   } = {},
   userId: string,
   tenantId: string,
@@ -1212,6 +1271,7 @@ export async function addField(
     "email",
     "rating",
     "linked",
+    "formula",
   ]);
   const t = KNOWN.has(type) ? type : "text";
 
@@ -1229,18 +1289,39 @@ export async function addField(
 
   const field = slug(label);
   if (!field || field === "label" || field === slug(m.keyCol)) return null;
-  const sqlType = SQL_TYPE[t] ?? "VARCHAR";
-  await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
   const cfg: Record<string, unknown> = {};
-  if (t === "select") cfg.options = options ?? [];
-  else if (t === "number" && opts.numberFormat != null) cfg.numberFormat = opts.numberFormat;
-  else if (t === "rating") cfg.ratingMax = opts.ratingMax ?? 5;
-  else if (t === "linked") {
-    cfg.targetRefTableId = opts.referencedRefTableId;
-    cfg.displayFields = opts.displayFields ?? ["label"];
+  if (t === "formula") {
+    // Computed column: validate the expression, then store it — but add NO
+    // physical column (the value is computed on read, never stored).
+    const f = opts.formula;
+    if (!f || typeof f.expr !== "string" || f.expr.trim() === "") return null;
+    const knownLabels = new Set<string>([
+      "key",
+      "label",
+      "variants",
+      ...(await listFields(refTableId, tenantId))
+        .filter((e) => e.type !== "formula")
+        .map((e) => e.label),
+    ]);
+    if (!validateFormula(f.expr, knownLabels).ok) return null;
+    cfg.expr = f.expr.trim();
+    cfg.resultType =
+      f.resultType === "number" || f.resultType === "boolean" ? f.resultType : "text";
+    if (cfg.resultType === "number" && f.numberFormat) cfg.numberFormat = f.numberFormat;
+  } else {
+    const sqlType = SQL_TYPE[t] ?? "VARCHAR";
+    await pgRun(`ALTER TABLE ${cq(m.dimTable)} ADD COLUMN IF NOT EXISTS ${qid(field)} ${sqlType}`);
+    if (t === "select") cfg.options = options ?? [];
+    else if (t === "number" && opts.numberFormat != null) cfg.numberFormat = opts.numberFormat;
+    else if (t === "rating") cfg.ratingMax = opts.ratingMax ?? 5;
+    else if (t === "linked") {
+      cfg.targetRefTableId = opts.referencedRefTableId;
+      cfg.displayFields = opts.displayFields ?? ["label"];
+    }
+    if (opts.required) cfg.required = true;
+    if (opts.validation && Object.keys(opts.validation).length > 0)
+      cfg.validation = opts.validation;
   }
-  if (opts.required) cfg.required = true;
-  if (opts.validation && Object.keys(opts.validation).length > 0) cfg.validation = opts.validation;
   const optsJson = Object.keys(cfg).length > 0 ? JSON.stringify(cfg) : null;
   await pgRun(
     `INSERT INTO ${pg("reference_table_field")} (reference_table_id, field, label, type, field_config, created_at, tenant_id)
@@ -1253,6 +1334,41 @@ export async function addField(
     });
   }
   return { field };
+}
+
+/** Dry-run a candidate formula for the field editor: check syntax + that every
+ *  referenced field exists, then evaluate it against the table's first record so
+ *  the author sees a real sample value. A row that errors (e.g. divide-by-zero)
+ *  is a non-blocking `warning`, not an `error` — the formula itself is valid. */
+export async function validateTableFormula(
+  refTableId: string,
+  expr: string,
+  tenantId: string,
+): Promise<{ ok: boolean; error?: string; warning?: string; sample?: string | null }> {
+  const fields = await listFields(refTableId, tenantId);
+  const knownLabels = new Set<string>([
+    "key",
+    "label",
+    "variants",
+    ...fields.filter((f) => f.type !== "formula").map((f) => f.label),
+  ]);
+  const v = validateFormula(expr, knownLabels);
+  if (!v.ok) return { ok: false, error: v.error };
+
+  const table = await getRefTable(refTableId, tenantId);
+  const first = table?.record[0];
+  if (!first) return { ok: true };
+  const evalRow: Record<string, unknown> = {
+    key: first.key,
+    label: first.label,
+    variants: first.variants ?? 0,
+  };
+  for (const sf of fields.filter((f) => f.type !== "linked" && f.type !== "formula")) {
+    evalRow[sf.label] = first.fields?.[sf.field] ?? null;
+  }
+  const result = runFormula(expr, evalRow);
+  if (isFormulaError(result)) return { ok: true, warning: result.message };
+  return { ok: true, sample: result === null ? null : String(result) };
 }
 
 /** Rename a column's display label. The `field` (stable id / DB column name)
@@ -1552,6 +1668,7 @@ export async function setFieldValue(
   if (!m) return;
   const f = (await listFields(refTableId, tenantId)).find((x) => x.field === field);
   if (!f) return;
+  if (f.type === "formula") return; // computed columns are read-only (no stored value)
   const col = qid(field);
   const keyc = qid(m.keyCol);
   const empty = value == null || value.trim() === "";

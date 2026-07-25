@@ -4,9 +4,10 @@
  * and the version counter are atomic. listVersions() and getSnapshot() are
  * plain read helpers used by the route and Task 5 (rollback). */
 
-import { pg, cq, qid } from "./repo-shared.ts";
+import { pg, cq, qid, parseFieldConfig } from "./repo-shared.ts";
 import { pgAll, pgGet } from "./pg.ts";
 import type { TxHelpers } from "./pg.ts";
+import { runFormula, coerceToResultType, isFormulaError } from "./formula/index.ts";
 
 export interface VersionInfo {
   version: number;
@@ -48,8 +49,10 @@ export async function writeVersionSnapshot(
   const mappings = await tx.all<{ raw: string; targetKey: string }>(
     `SELECT raw, ${qid(p.keyCol)} AS "targetKey" FROM ${cq(p.mapTable)}`,
   );
+  const records = recordRows.map((r) => r.row);
+  await injectComputedColumns(tx, p, records);
   const snapshot: Snapshot = {
-    records: recordRows.map((r) => r.row),
+    records,
     mappings,
   };
   await tx.run(
@@ -70,6 +73,51 @@ export async function writeVersionSnapshot(
       p.publishedBy,
     ],
   );
+}
+
+/** Formula columns are virtual (no dim_ column), so to_jsonb misses them. Evaluate
+ *  each formula per snapshot row and write the typed result in, so the Pull API /
+ *  dbt source sees exactly what the grid shows. `variants` is recomputed from the
+ *  map table here for the same reason (it is a count, not a stored column). */
+async function injectComputedColumns(
+  tx: TxHelpers,
+  p: { tenantId: string; refTableId: string; dimTable: string; mapTable: string; keyCol: string },
+  records: Array<Record<string, unknown>>,
+): Promise<void> {
+  const formulaRows = await tx.all<{ field: string; field_config: string | null }>(
+    `SELECT field, field_config FROM ${pg("reference_table_field")}
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND type = 'formula'`,
+    [p.refTableId, p.tenantId],
+  );
+  if (formulaRows.length === 0) return;
+
+  const scalarRows = await tx.all<{ field: string; label: string }>(
+    `SELECT field, label FROM ${pg("reference_table_field")}
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND type NOT IN ('formula', 'linked')`,
+    [p.refTableId, p.tenantId],
+  );
+  const variantRows = await tx.all<{ gk: string; n: number }>(
+    `SELECT ${qid(p.keyCol)} AS gk, count(*)::int AS n FROM ${cq(p.mapTable)} GROUP BY 1`,
+  );
+  const variantsByKey = new Map(variantRows.map((r) => [String(r.gk), Number(r.n)]));
+
+  const compiled = formulaRows
+    .map((fr) => ({ field: fr.field, cfg: parseFieldConfig("formula", fr.field_config).formula }))
+    .filter((c): c is { field: string; cfg: NonNullable<typeof c.cfg> } => c.cfg != null);
+
+  for (const row of records) {
+    const key = String(row[p.keyCol]);
+    const evalRow: Record<string, unknown> = {
+      key,
+      label: row.label ?? null,
+      variants: variantsByKey.get(key) ?? 0,
+    };
+    for (const sf of scalarRows) evalRow[sf.label] = row[sf.field] ?? null;
+    for (const { field, cfg } of compiled) {
+      const result = coerceToResultType(runFormula(cfg.expr, evalRow), cfg.resultType);
+      row[field] = isFormulaError(result) ? null : result;
+    }
+  }
 }
 
 export async function listVersions(refTableId: string, tenantId: string): Promise<VersionInfo[]> {

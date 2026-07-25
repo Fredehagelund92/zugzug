@@ -110,6 +110,15 @@ export interface FieldValidation {
   max?: number | string | null;
 }
 
+/** A computed ("Formula") field: a read-only column whose value is the
+ *  expression evaluated per row. `resultType` is the declared output shape and
+ *  drives rendering + the dim_ output type. The formula stores no value. */
+export interface FormulaConfig {
+  expr: string;
+  resultType: "text" | "number" | "boolean";
+  numberFormat?: NumberFormat; // only meaningful when resultType === "number"
+}
+
 export function parseFieldConfig(
   type: string,
   raw: unknown,
@@ -122,6 +131,7 @@ export function parseFieldConfig(
   rules?: ConditionalRule[];
   required?: boolean;
   validation?: FieldValidation;
+  formula?: FormulaConfig;
 } {
   // Parse the raw JSON once for rules extraction (type-specific parsers re-parse as needed)
   let parsedJson: Record<string, unknown> | null = null;
@@ -194,11 +204,25 @@ export function parseFieldConfig(
     validation = out;
   }
 
+  // Formula config — only on computed fields; stores the expression + declared
+  // output type. Values are never stored, so there is no type-specific column.
+  let formula: FormulaConfig | undefined;
+  if (type === "formula" && parsedJson) {
+    const expr = parsedJson.expr;
+    if (typeof expr === "string" && expr.trim() !== "") {
+      const rt = parsedJson.resultType;
+      const resultType = rt === "number" || rt === "boolean" ? rt : "text";
+      const numberFormat = resultType === "number" ? parseNumberFormat(parsedJson) : undefined;
+      formula = { expr, resultType, ...(numberFormat ? { numberFormat } : {}) };
+    }
+  }
+
   return {
     ...typeSpecific,
     ...(rules !== undefined ? { rules } : {}),
     ...(required ? { required: true } : {}),
     ...(validation !== undefined ? { validation } : {}),
+    ...(formula !== undefined ? { formula } : {}),
   };
 }
 
@@ -215,6 +239,7 @@ export interface FieldDef {
   rules?: ConditionalRule[];
   required?: boolean; // empty values block publish
   validation?: FieldValidation;
+  formula?: FormulaConfig; // only when type === "formula" (read-only computed column)
 }
 
 export type { ConditionalRule } from "./conditional-format-types.ts";
@@ -225,6 +250,9 @@ export interface RecordValue {
   fields?: Record<string, string | null>;
   unresolved?: boolean;
   position?: string | null; // JSON-safe bigint string; null in derived mode
+  /** Per-field message when a Formula column can't be computed for this record
+   *  (keyed by field id). Absent when every formula computed cleanly. */
+  formulaErrors?: Record<string, string>;
 }
 export interface SourceOccurrence {
   table: string;

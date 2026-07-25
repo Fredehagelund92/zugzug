@@ -147,6 +147,7 @@ interface DataGridHeaderProps<Row> {
     },
   ) => void;
   onSaveColumnDescription?: (field: string, desc: string | null) => void;
+  onEditColumnFormula?: (field: string) => void;
   onChangeColumnType?: (
     field: string,
     newConfig: ColumnConfig,
@@ -202,6 +203,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
     onSaveColumnRules,
     onSaveColumnValidation,
     onSaveColumnDescription,
+    onEditColumnFormula,
     onChangeColumnType,
     onDeleteColumn,
     onShowLinkedFields,
@@ -481,6 +483,9 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
                           setDescEditor(c.field);
                         }
                       : undefined
+                  }
+                  onEditFormula={
+                    onEditColumnFormula ? () => onEditColumnFormula(c.field) : undefined
                   }
                   onFilter={(v) =>
                     setFilterSet((cur) => {

@@ -1564,6 +1564,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           onSaveColumnRules={props.onSaveColumnRules}
           onSaveColumnValidation={props.onSaveColumnValidation}
           onSaveColumnDescription={props.onSaveColumnDescription}
+          onEditColumnFormula={props.onEditColumnFormula}
           onChangeColumnType={props.onChangeColumnType}
           onDeleteColumn={props.onDeleteColumn}
           onShowLinkedFields={props.onShowLinkedFields}

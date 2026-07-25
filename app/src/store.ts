@@ -1082,6 +1082,11 @@ export async function addField(
     displayFields?: string[];
     required?: boolean;
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+    formula?: {
+      expr: string;
+      resultType: "text" | "number" | "boolean";
+      numberFormat?: NumberFormat;
+    };
   },
 ): Promise<void> {
   await api(`/tables/${encodeURIComponent(refTableId)}/fields`, {
@@ -1351,12 +1356,47 @@ export async function setFieldValue(
     emit();
     throw e;
   }
-  const type = refTables
-    .find((d) => d.id === refTableId)
-    ?.fields?.find((f) => f.field === field)?.type;
-  if (type === "number" || type === "date" || type === "linked") {
+  const table = refTables.find((d) => d.id === refTableId);
+  const type = table?.fields?.find((f) => f.field === field)?.type;
+  // Formula columns are server-computed, so any dependency edit means the whole
+  // row's computed values may have changed — re-fetch when the table has one.
+  const hasFormula = table?.fields?.some((f) => f.type === "formula");
+  if (type === "number" || type === "date" || type === "linked" || hasFormula) {
     void refreshDim(refTableId).then(emit);
   }
+}
+
+/** Dry-run a candidate formula against the table's first record so the field
+ *  editor can show live errors / a sample value without a client-side evaluator. */
+export async function validateFormula(
+  refTableId: string,
+  expr: string,
+): Promise<{ ok: boolean; error?: string; warning?: string; sample?: string | null }> {
+  return api(`/tables/${encodeURIComponent(refTableId)}/formula/validate`, {
+    method: "POST",
+    body: JSON.stringify({ expr }),
+  });
+}
+
+/** Update an existing formula column's expression / result type. The server
+ *  re-validates and shallow-merges into field_config. */
+export async function updateFieldFormula(
+  refTableId: string,
+  field: string,
+  formula: { expr: string; resultType: "text" | "number" | "boolean"; numberFormat?: NumberFormat },
+): Promise<void> {
+  await api<void>(`/tables/${encodeURIComponent(refTableId)}/fields/${encodeURIComponent(field)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      field_config: JSON.stringify({
+        expr: formula.expr,
+        resultType: formula.resultType,
+        ...(formula.numberFormat ? { numberFormat: formula.numberFormat } : {}),
+      }),
+    }),
+  });
+  await refreshDim(refTableId);
+  emit();
 }
 
 export interface CatalogTable {

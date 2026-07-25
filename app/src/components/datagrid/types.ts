@@ -72,8 +72,9 @@ export interface ColumnDef<Row> {
   /** System columns (e.g. the key/record columns) whose values are already
    *  constrained — the "Validation…" menu is suppressed for them. */
   noValidation?: boolean;
-  /** Discriminator used by the right-click menu and rendering layer. */
-  columnKind?: "fk" | "lookup";
+  /** Discriminator used by the right-click menu and rendering layer.
+   *  "computed" = a read-only Formula column (value comes from the server). */
+  columnKind?: "fk" | "lookup" | "computed";
   /** For lookup columns, the FK column's field name. */
   sourceField?: string;
   /** Lookup column whose target-refTable field no longer exists. */
@@ -199,6 +200,8 @@ export interface DataGridProps<Row> {
   ) => void;
   /** Save a plain-text description for a column (persisted in reference_table_field.description). */
   onSaveColumnDescription?: (field: string, description: string | null) => void;
+  /** Open the formula editor for a computed column (columnKind === "computed"). */
+  onEditColumnFormula?: (field: string) => void;
   /** Optional per-row activity map (rowKey → latest audit entry).
    *  When present, each row gets a left-edge pip + hover-revealed badge. */
   activity?: Map<string, RowActivityEntry>;
