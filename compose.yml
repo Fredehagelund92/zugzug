@@ -1,9 +1,10 @@
 name: zugzug
 
 # One-command demo. `docker compose up` → http://localhost:8080
-# Password auth (first signup = admin), demo reference tables seeded, no warehouse.
-# For a real self-host: set SEED_DEMO=false, supply your own ORIGIN, and wire a
-# warehouse (ATTACH_WAREHOUSE=true + WAREHOUSE_ADAPTER + MOTHERDUCK_TOKEN).
+# Password auth (first signup = admin), demo reference tables seeded, plus a
+# bundled local DuckDB warehouse so the source catalog is browsable and scannable.
+# For a real self-host: set SEED_DEMO=false, supply your own ORIGIN, and wire your
+# own warehouse (e.g. WAREHOUSE_ADAPTER=motherduck + MOTHERDUCK_TOKEN).
 
 services:
   postgres:
@@ -28,7 +29,12 @@ services:
     environment:
       DATABASE_URL: postgres://zugzug:zugzug@postgres:5432/zugzug
       PORT: "8787"
-      ATTACH_WAREHOUSE: "false"
+      # Bundled local DuckDB warehouse — bootstrap generates the file on first boot
+      # (idempotent; survives the Postgres-only demo reset) and the seed wires its
+      # columns as scannable sources. No MotherDuck token needed.
+      ATTACH_WAREHOUSE: "true"
+      WAREHOUSE_ADAPTER: "duckdb"
+      DUCK_WAREHOUSE_PATH: /data/demo.duckdb
       SEED_DEMO: "true"
       ORIGIN: http://localhost:8080
       ZUGZUG_SELF_HOSTED: "1"
