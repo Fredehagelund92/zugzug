@@ -38,6 +38,10 @@ services:
       SEED_DEMO: "true"
       ORIGIN: http://localhost:8080
       ZUGZUG_SELF_HOSTED: "1"
+      # Demo mode: surface the one-click login on the sign-in page so visitors
+      # land straight in the seeded workspace (no signup). Drop this for a real
+      # self-host — it grants admin access without a password.
+      DEV_BYPASS_AUTH: "true"
       ZUGZUG_DATA_DIR: /data
       WEBHOOKS_ENABLED: "1"
     volumes:
