@@ -42,7 +42,12 @@ async function field(
   ref: string,
   label: string,
   type: string,
-  opts: { options?: string[]; ref?: string; required?: boolean } = {},
+  opts: {
+    options?: string[];
+    ref?: string;
+    required?: boolean;
+    formula?: { expr: string; resultType: "text" | "number" | "boolean" };
+  } = {},
 ): Promise<string> {
   const options = opts.options?.map((l) => ({ label: l, color: null }));
   const r = await addField(
@@ -54,6 +59,7 @@ async function field(
       referencedRefTableId: opts.ref,
       displayFields: opts.ref ? ["label"] : undefined,
       required: opts.required,
+      formula: opts.formula,
     },
     U,
     T,
@@ -155,6 +161,14 @@ export async function seedDemo(): Promise<void> {
   const coRegion = await field(country, "Region", "linked", { ref: region });
   const coCurrency = await field(country, "Currency", "linked", { ref: currency });
   const coEu = await field(country, "EU member", "boolean");
+  // Read-only Formula column — computed on read from the other columns, never
+  // stored. Showcases IF/CONCAT and referencing sibling fields by label.
+  await field(country, "Bloc", "formula", {
+    formula: {
+      expr: 'IF([EU member] = "true", CONCAT("EU · ", [ISO-3]), [ISO-3])',
+      resultType: "text",
+    },
+  });
   const countries: Array<[string, string, string, string, string, string]> = [
     // key, label, iso3, region, currency, eu
     ["us", "United States", "USA", "north_america", "usd", "false"],
