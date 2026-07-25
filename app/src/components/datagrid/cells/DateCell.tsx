@@ -48,7 +48,9 @@ function sameYMD(a: Date, b: Date): boolean {
 function Renderer<Row>({ value }: CellCtx<Row>) {
   const s = value == null || value === "" ? null : String(value);
   return s ? (
-    <span className="font-mono text-[12px] text-ink">{s}</span>
+    <span className="truncate font-mono text-[12px] text-ink" title={s}>
+      {s}
+    </span>
   ) : (
     <span className="font-mono text-[12px] text-ink-2">—</span>
   );
