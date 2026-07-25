@@ -148,10 +148,10 @@ describe("Triage — rejected draft presentation", () => {
       </MemoryRouter>,
     );
     await waitFor(() => {
-      // The rejected badge should contain the word "rejected" and the reason
+      // The sent-back badge should carry the reviewer's reason.
       const badge = screen.getByTitle("does not match our naming convention");
       expect(badge).toBeInTheDocument();
-      expect(badge.textContent).toMatch(/rejected.*does not match/i);
+      expect(badge.textContent).toMatch(/sent back.*does not match/i);
     });
   });
 

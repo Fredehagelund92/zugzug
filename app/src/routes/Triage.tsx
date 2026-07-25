@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
-import { IconArrowRight, IconSearch, IconX } from "../components/Icons";
+import { IconArrowRight, IconSearch, IconX, IconWand } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { toast } from "../components/Toast";
-import { GetSuggestionButton } from "../components/GetSuggestionButton";
 import type { MappingRefTable } from "../data";
 import {
   useRefTables,
@@ -27,9 +34,8 @@ import {
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
-import { useAiHint, type AiHint } from "../lib/use-ai-hint";
-import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
-import { ComboSelect } from "../components/ComboSelect";
+import type { AiHint } from "../lib/use-ai-hint";
+import { ComboSelect, type ComboSelectHandle } from "../components/ComboSelect";
 import { useRefTableValuesPage, type ScanValueRow } from "../lib/use-ref-table-values-page";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 import { PublishPreviewDialog, type PublishGroup } from "../components/PublishPreviewDialog";
@@ -49,11 +55,10 @@ type RStatus = "mapped" | "new" | "skipped" | "rejected";
 // Keyboard shortcuts surfaced in the toolbar as keycaps (desktop only). "Ranked
 // by impact" lives in the page lede, so it's intentionally not repeated here.
 const KBD_HINTS: ReadonlyArray<readonly [string, string]> = [
-  ["↑↓", "navigate"],
-  ["A", "accept"],
-  ["↵", "pick"],
+  ["↑↓", "move"],
+  ["↵", "choose"],
   ["S", "skip"],
-  ["N", "next"],
+  ["G", "suggest"],
   ["⌘↵", "publish"],
 ];
 
@@ -173,8 +178,6 @@ function TriageInner() {
     );
   }, []);
 
-  const aiHint = useAiHint(cursor?.refTableId ?? "", cursor?.raw ?? "", cursor !== null);
-
   const refTableById = useMemo(() => new Map(refTables.map((d) => [d.id, d])), [refTables]);
 
   // Rank refTables by impact using the scalar newCount × log10(rows). When filter is
@@ -229,21 +232,6 @@ function TriageInner() {
           : discardDraft(refTableId, raw),
     });
     return saveDraft(refTableId, raw, "mapped", label, keyForLabelIn(refTableId, label));
-  };
-  const acceptCross = (refTableId: string, raw: string) => {
-    if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
-    // No per-row suggestion in the scan-values payload — accept relies on the
-    // AI hint for the focused cursor row.
-    const suggestion = aiHint.hint?.suggestion;
-    if (!suggestion) {
-      toast(`No suggestion to accept for "${raw}".`, "error");
-      return;
-    }
-    stageMapCross(refTableId, raw, suggestion).catch((err) =>
-      reportDraftError(`accept "${raw}"`, err),
-    );
-    flashRow(`[data-row-key="${attrEsc(`${refTableId}::${raw}`)}"]`);
-    advanceCrossNext(refTableId, raw);
   };
   const skipCross = (refTableId: string, raw: string) => {
     if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
@@ -424,12 +412,12 @@ function TriageInner() {
               <>
                 Review{" "}
                 <span className="font-mono text-[14px] text-ink-3">
-                  · {totalNew} across {rankedDims.length} table
+                  · {totalNew} to map across {rankedDims.length} table
                   {rankedDims.length === 1 ? "" : "s"}
                 </span>
               </>
             }
-            lede="Sorted by blast radius. Press ⌘↵ to publish."
+            lede="Choose the record each value belongs to, then publish. Ask AI for a suggestion whenever you want one."
           />
         </div>
 
@@ -452,7 +440,7 @@ function TriageInner() {
                       : "text-ink-2 hover:bg-hover hover:text-ink",
                   )}
                 >
-                  {k === "new" ? "Needs review" : k === "all" ? "All" : "Mapped"}
+                  {k === "new" ? "To map" : k === "all" ? "All" : "Mapped"}
                 </button>
               ))}
             </div>
@@ -491,11 +479,15 @@ function TriageInner() {
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <div className="px-3 pt-3">
-              <AwaitingReview />
-            </div>
+            {/* Zone 1 — Map these values (you drive) */}
+            <ZoneHeader
+              title="Map these values"
+              hint="Choose the record each value belongs to. Ask AI for a suggestion any time."
+              count={totalNew}
+              countLabel="to map"
+            />
             {rankedDims.length === 0 ? (
-              <div className="px-3 pt-3">
+              <div className="px-3 py-3">
                 <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
               </div>
             ) : (
@@ -510,24 +502,20 @@ function TriageInner() {
                   canEdit={canEdit}
                   cursor={cursor}
                   setCursor={setCursor}
-                  onAccept={(raw) => acceptCross(rd.d.id, raw)}
                   onSkip={(raw) => skipCross(rd.d.id, raw)}
                   onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
                   onRestage={(raw) => restageCross(rd.d.id, raw)}
                   onCommitAll={() => void openPublishPreview()}
-                  aiHint={
-                    i === activeRefTableIdx ? aiHint : { hint: null, loading: false, error: false }
-                  }
                   rescanning={rescanning && i === activeRefTableIdx}
                   onRescan={async () => {
                     setRescanning(true);
                     try {
                       await triggerRescan(rd.d.id);
                       valuesPage.refetch();
-                      toast("Rescan complete");
+                      toast("Re-scan complete");
                     } catch (err) {
                       toast(
-                        err instanceof Error ? `Rescan failed: ${err.message}` : "Rescan failed",
+                        err instanceof Error ? `Re-scan failed: ${err.message}` : "Re-scan failed",
                         "error",
                       );
                     } finally {
@@ -537,6 +525,9 @@ function TriageInner() {
                 />
               ))
             )}
+
+            {/* Zone 2 — Approve teammates' work (sign off) */}
+            <AwaitingReview />
           </div>
 
           <CrossRefTableFooter
@@ -614,6 +605,148 @@ function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: 
   return <EmptyStateCard glyph="📋" title="No tables yet." />;
 }
 
+// ── ZoneHeader — labels each of the two jobs on the page ──────────────────────
+function ZoneHeader({
+  title,
+  hint,
+  count,
+  countLabel,
+}: {
+  title: string;
+  hint: string;
+  count: number;
+  countLabel: string;
+}) {
+  return (
+    <div className="sticky top-0 z-[1] flex items-start justify-between gap-3 border-b border-line bg-surface px-4 py-2.5">
+      <div className="min-w-0">
+        <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">{title}</div>
+        <div className="mt-0.5 text-[12px] text-ink-2">{hint}</div>
+      </div>
+      <span className="shrink-0 whitespace-nowrap pt-0.5 font-mono text-[11px] text-ink-3 tabular-nums">
+        {count} {countLabel}
+      </span>
+    </div>
+  );
+}
+
+// ── on-demand AI suggestion — offers, never decides ───────────────────────────
+type OfferState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "offer"; hint: AiHint }
+  | { kind: "none" }
+  | { kind: "error" };
+
+interface SuggestHandle {
+  suggest: () => void;
+}
+
+const SuggestOffer = forwardRef<
+  SuggestHandle,
+  { refTableId: string; raw: string; onUse: (label: string) => void }
+>(function SuggestOffer({ refTableId, raw, onUse }, ref) {
+  const [state, setState] = useState<OfferState>({ kind: "idle" });
+
+  const fetchHint = async () => {
+    setState({ kind: "loading" });
+    try {
+      const qs = new URLSearchParams({ refTableId, raw });
+      const res = await apiFetch(`/triage/ai-hint?${qs.toString()}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const hint = (await res.json()) as AiHint;
+      setState(hint.suggestion ? { kind: "offer", hint } : { kind: "none" });
+    } catch {
+      setState({ kind: "error" });
+    }
+  };
+
+  // Keyboard "G" on the row opens the same on-demand suggestion.
+  useImperativeHandle(ref, () => ({ suggest: () => void fetchHint() }));
+
+  if (state.kind === "idle" || state.kind === "error") {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          void fetchHint();
+        }}
+        className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-1 font-mono text-[11px] text-ink-3 transition-colors hover:bg-hover hover:text-accent"
+      >
+        <IconWand className="h-3.5 w-3.5" />
+        {state.kind === "error" ? "Try AI again" : "Suggest with AI"}
+      </button>
+    );
+  }
+
+  if (state.kind === "loading") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-mono text-[11px] text-ink-3">
+        <IconWand className="h-3.5 w-3.5 animate-pulse" />
+        Thinking…
+      </span>
+    );
+  }
+
+  if (state.kind === "none") {
+    return (
+      <span className="inline-flex items-center gap-2 px-1.5 py-1 font-mono text-[11px] text-ink-3">
+        AI isn’t sure on this one — your call.
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setState({ kind: "idle" });
+          }}
+          className="text-ink-3 underline decoration-dotted hover:text-ink"
+        >
+          dismiss
+        </button>
+      </span>
+    );
+  }
+
+  // offer
+  const { hint } = state;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5 py-1 font-mono text-[11px] text-ink-2">
+      <IconWand className="h-3.5 w-3.5 shrink-0 text-accent" />
+      <span>
+        AI suggests <span className="font-display font-medium text-ink">{hint.suggestion}</span>
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onUse(hint.suggestion!);
+        }}
+        className="rounded-sm bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent-ink transition-opacity hover:opacity-90"
+      >
+        Use it
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setState({ kind: "idle" });
+        }}
+        className="text-ink-3 underline decoration-dotted hover:text-ink"
+      >
+        dismiss
+      </button>
+      {hint.reasoning && (
+        <span
+          title={hint.reasoning}
+          className="inline-grid h-3.5 w-3.5 cursor-help place-items-center rounded-full bg-surface-3 text-[8px] text-ink-3"
+        >
+          ?
+        </span>
+      )}
+    </span>
+  );
+});
+
 // ── RefTableSection ───────────────────────────────────────────────────────────────
 interface RefTableSectionProps {
   refTable: MappingRefTable;
@@ -624,12 +757,10 @@ interface RefTableSectionProps {
   canEdit: boolean;
   cursor: { refTableId: string; raw: string } | null;
   setCursor: (c: { refTableId: string; raw: string } | null) => void;
-  onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
   onRestage: (raw: string) => void;
   onCommitAll: () => void;
-  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   rescanning: boolean;
   onRescan: () => void;
 }
@@ -665,11 +796,11 @@ function RefTableSection(p: RefTableSectionProps) {
       >
         <Chip label={refTable.refTable} bucket="chip-3" />
         <span className="font-mono text-[11px] text-ink-2 tabular-nums">
-          {refTable.counts.newCount} unmapped / {refTable.counts.totalDistinct} distinct ·{" "}
-          {refTable.counts.unmappedRowsTotal.toLocaleString()} rows at risk
+          {refTable.counts.newCount} to map · {refTable.counts.unmappedRowsTotal.toLocaleString()}{" "}
+          rows
         </span>
         <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
-          {p.isActive ? "▾ active" : "▸ expand"}
+          {p.isActive ? "▾ open" : "▸ show"}
         </span>
       </button>
 
@@ -694,12 +825,10 @@ function RefTableSection(p: RefTableSectionProps) {
             canEdit={p.canEdit}
             cursor={p.cursor}
             setCursor={p.setCursor}
-            onAccept={p.onAccept}
             onSkip={p.onSkip}
             onPick={p.onPick}
             onRestage={p.onRestage}
             onCommitAll={p.onCommitAll}
-            aiHint={p.aiHint}
             sentinelRef={sentinelRef}
           />
         </>
@@ -715,18 +844,19 @@ interface RefTableSectionBodyProps {
   canEdit: boolean;
   cursor: { refTableId: string; raw: string } | null;
   setCursor: (c: { refTableId: string; raw: string } | null) => void;
-  onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
   onRestage: (raw: string) => void;
   onCommitAll: () => void;
-  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
 function RefTableSectionBody(p: RefTableSectionBodyProps) {
   const options = useMemo(() => p.refTable.record.map((c) => c.label), [p.refTable.record]);
-  const [editingRaw, setEditingRaw] = useState<string | null>(null);
+  // Handles to each row's record picker + suggestion, so the keyboard can drive
+  // the row: Enter/M opens the picker, G asks AI for a suggestion.
+  const comboRefs = useRef<Map<string, ComboSelectHandle | null>>(new Map());
+  const suggestRefs = useRef<Map<string, SuggestHandle | null>>(new Map());
   const me = useCurrentUser();
 
   const rowStatus = (
@@ -757,25 +887,20 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
     const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
     if (!plain) return;
     const k = e.key.toLowerCase();
-    // A/S/M keyboard actions are blocked on rejected rows — the only valid
-    // actions are Re-stage (button) and Discard (button). See task-9-brief.md.
+    // Keyboard actions are blocked on rejected rows — the only valid actions
+    // there are Re-stage (button) and Discard (button).
     const isRejected = p.drafts[dkey(p.refTable.id, raw)]?.status === "rejected";
-    if (p.canEdit && k === "a" && !isRejected) {
-      e.preventDefault();
-      p.onAccept(raw);
-    } else if (p.canEdit && k === "s" && !isRejected) {
+    if (p.canEdit && k === "s" && !isRejected) {
       e.preventDefault();
       p.onSkip(raw);
     } else if (p.canEdit && (k === "m" || k === "enter") && !isRejected) {
+      // Open this row's record picker — choosing is the primary action.
       e.preventDefault();
-      setEditingRaw(raw);
-    } else if (k === "n") {
+      comboRefs.current.get(raw)?.open();
+    } else if (p.canEdit && k === "g" && !isRejected) {
+      // Ask AI for a suggestion on this row — on demand, never automatic.
       e.preventDefault();
-      // advance handled in parent via onAccept/onSkip; for plain "n" with no
-      // action, walk forward one row in the current page.
-      const idx = p.page.items.findIndex((x) => x.raw === raw);
-      const next = p.page.items[(idx + 1) % p.page.items.length];
-      if (next) focus(next.raw);
+      suggestRefs.current.get(raw)?.suggest();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       const idx = p.page.items.findIndex((x) => x.raw === raw);
@@ -838,64 +963,86 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
                     {r.occurrences.length > 1 && ` +${r.occurrences.length - 1}`}
                   </span>
                 </span>
-                <span className="w-56 truncate font-display text-[13px] text-ink">
-                  {editingRaw === r.raw ? (
-                    <ComboSelect
-                      options={options}
-                      value={target}
-                      suggestion={null}
-                      onPick={(t) => {
-                        setEditingRaw(null);
-                        p.onPick(r.raw, t);
-                      }}
-                      onClose={() => setEditingRaw(null)}
-                    />
-                  ) : target ? (
-                    target
-                  ) : (
-                    <span className="font-mono text-[12px] text-ink-3">—</span>
-                  )}
-                </span>
-                <span className={status === "rejected" ? "w-auto max-w-[180px]" : "w-20"}>
-                  {status === "mapped" ? (
-                    <Chip label="Mapped" bucket="chip-1" dot />
-                  ) : status === "skipped" ? (
-                    <Chip label="Skipped" bucket="chip-5" />
-                  ) : status === "rejected" ? (
-                    <span
-                      className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
-                      title={rejectedReason ?? undefined}
-                    >
-                      rejected
-                      {rejectedReason
-                        ? `: ${rejectedReason.slice(0, 60)}${rejectedReason.length > 60 ? "…" : ""}`
-                        : ""}
+
+                {status === "rejected" ? (
+                  <>
+                    <span className="w-auto max-w-[220px]">
+                      <span
+                        className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
+                        title={rejectedReason ?? undefined}
+                      >
+                        Sent back
+                        {rejectedReason
+                          ? `: ${rejectedReason.slice(0, 60)}${rejectedReason.length > 60 ? "…" : ""}`
+                          : ""}
+                      </span>
                     </span>
-                  ) : (
-                    <Chip label="New" bucket="chip-2" dot />
-                  )}
-                </span>
-                {status === "rejected" &&
-                  p.canEdit &&
-                  p.drafts[dkey(p.refTable.id, r.raw)]?.user.id === me?.id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        p.onRestage(r.raw);
-                      }}
-                    >
-                      Re-stage
-                    </Button>
-                  )}
+                    {p.canEdit && p.drafts[dkey(p.refTable.id, r.raw)]?.user.id === me?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          p.onRestage(r.raw);
+                        }}
+                      >
+                        Re-stage
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* The record picker is the primary, always-visible control. */}
+                    {p.canEdit ? (
+                      <span className="w-60 shrink-0">
+                        <ComboSelect
+                          ref={(h) => {
+                            comboRefs.current.set(r.raw, h);
+                          }}
+                          options={options}
+                          value={target}
+                          placeholder="Choose record"
+                          ariaLabel={`Choose record for ${r.raw}`}
+                          onPick={(t) => p.onPick(r.raw, t)}
+                        />
+                      </span>
+                    ) : (
+                      <span className="w-60 shrink-0 truncate font-display text-[13px] text-ink">
+                        {target ?? <span className="font-mono text-[12px] text-ink-3">—</span>}
+                      </span>
+                    )}
+                    <span className="w-16 shrink-0">
+                      {status === "mapped" ? (
+                        <Chip label="Mapped" bucket="chip-1" dot />
+                      ) : status === "skipped" ? (
+                        <Chip label="Skipped" bucket="chip-5" />
+                      ) : null}
+                    </span>
+                    {status === "new" && p.canEdit && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          p.onSkip(r.raw);
+                        }}
+                        className="shrink-0 rounded-sm px-1.5 py-1 font-mono text-[11px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
+                      >
+                        Skip
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
-              {isCursor && !target && status !== "rejected" && (
-                <div className="flex flex-col gap-2 pl-1 pt-1">
-                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
-                  {status === "new" && p.canEdit && (
-                    <GetSuggestionButton refTableId={p.refTable.id} rawValue={r.raw} />
-                  )}
+              {status === "new" && p.canEdit && (
+                <div className="pl-1 pt-0.5">
+                  <SuggestOffer
+                    ref={(h) => {
+                      suggestRefs.current.set(r.raw, h);
+                    }}
+                    refTableId={p.refTable.id}
+                    raw={r.raw}
+                    onUse={(label) => p.onPick(r.raw, label)}
+                  />
                 </div>
               )}
             </li>
@@ -1093,12 +1240,12 @@ function CrossRefTableFooter(p: FooterProps) {
         <span className="font-mono text-[11px] text-ink-2">
           {stagedCount > 0 ? (
             <>
-              {stagedCount} change{stagedCount === 1 ? "" : "s"} across {grouped.length} refTable
-              {grouped.length === 1 ? "" : "s"}, ready to publish
+              {stagedCount} to publish across {grouped.length} table
+              {grouped.length === 1 ? "" : "s"}
             </>
           ) : (
             <span className="hidden md:inline">
-              nothing to publish yet — accept or merge values above to stage them
+              Nothing to publish yet — map a few values above.
             </span>
           )}
         </span>
