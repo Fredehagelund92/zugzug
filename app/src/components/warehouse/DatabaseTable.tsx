@@ -87,12 +87,14 @@ export function DatabaseTable(props: Props): JSX.Element {
         <table className="w-full">
           <tbody>
             {props.databases.map((d) => (
+              // On phones the three cells can't share one row without clipping, so
+              // the row stacks (flex-col) — name, stats, then status + actions.
               <tr
                 key={d.id}
                 data-row={d.id}
-                className="border-b border-line transition-colors last:border-b-0 hover:bg-surface-2"
+                className="border-b border-line transition-colors last:border-b-0 hover:bg-surface-2 max-sm:flex max-sm:flex-col max-sm:items-start max-sm:gap-1.5 max-sm:py-2"
               >
-                <td className="px-4 py-3 align-middle">
+                <td className="px-4 py-3 align-middle max-sm:py-1">
                   <div className="font-mono text-[12.5px] font-medium text-ink">
                     {d.databaseName}
                   </div>
@@ -100,12 +102,12 @@ export function DatabaseTable(props: Props): JSX.Element {
                     <div className="mt-0.5 text-[11.5px] italic text-ink-3">{d.label}</div>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 align-middle text-[12px] text-ink-2">
+                <td className="px-4 py-3 align-middle text-[12px] text-ink-2 max-sm:py-0">
                   {schemaText(d.schemaCount)}
                   <span className="mx-2 text-ink-3">·</span>
                   {d.sourceCount} source value{d.sourceCount === 1 ? "" : "s"}
                 </td>
-                <td className="px-4 py-3 text-right align-middle">
+                <td className="px-4 py-3 text-right align-middle max-sm:py-1 max-sm:text-left">
                   <div className="inline-flex items-center gap-2.5">
                     <ProbeBadge db={d} />
                     {props.onRemove && (
