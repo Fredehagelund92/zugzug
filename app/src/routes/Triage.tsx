@@ -449,15 +449,15 @@ function TriageInner() {
         </div>
 
         <div
-          className="zz-rise flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-surface"
+          className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface md:flex-row"
           style={{ animationDelay: "150ms" }}
         >
           {/* Left rail — desktop: always visible. Mobile: the first screen,
               hidden once a table is opened (drill-down). */}
           <div
             className={cx(
-              "w-full flex-col overflow-y-auto bg-surface md:flex md:w-60 md:shrink-0 md:border-r md:border-line",
-              mobileShowDetail ? "hidden" : "flex",
+              "w-full flex-col overflow-y-auto bg-surface md:w-60 md:shrink-0 md:border-r md:border-line",
+              mobileShowDetail ? "hidden md:flex" : "flex",
             )}
           >
             <TableRail
@@ -474,7 +474,7 @@ function TriageInner() {
 
           {/* Main pane — desktop: always. Mobile: only once a table is opened. */}
           <div
-            className={cx("min-w-0 flex-1 flex-col md:flex", mobileShowDetail ? "flex" : "hidden")}
+            className={cx("min-w-0 flex-1 flex-col", mobileShowDetail ? "flex" : "hidden md:flex")}
           >
             {/* Mobile-only back to the table list. */}
             <button
@@ -684,7 +684,7 @@ function RailRow({
       <div className="flex items-center justify-between gap-2">
         <span
           className={cx(
-            "truncate font-display text-[13px]",
+            "min-w-0 truncate font-display text-[13px]",
             clean ? "font-medium text-ink-2" : "font-semibold text-ink",
           )}
         >
