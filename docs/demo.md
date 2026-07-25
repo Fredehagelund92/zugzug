@@ -16,7 +16,7 @@ included. Any of these work; cheapest first:
 - **Hetzner CX22** — ~€4/mo (2 vCPU / 4 GB), plenty for a demo.
 - **DigitalOcean / Vultr** — ~$4–6/mo.
 
-You need a domain (or subdomain, e.g. `demo.zugzughq.io`) with a DNS **A** record
+You need a domain (or subdomain, e.g. `demo.zugzughq.com`) with a DNS **A** record
 pointing at the VM.
 
 ## Deploy
@@ -32,9 +32,9 @@ cp .env.prod.example .env
 Edit `.env` for a demo:
 
 ```bash
-DOMAIN=demo.zugzughq.io
+DOMAIN=demo.zugzughq.com
 ACME_EMAIL=you@example.com
-ORIGIN=https://demo.zugzughq.io
+ORIGIN=https://demo.zugzughq.com
 POSTGRES_PASSWORD=$(openssl rand -hex 32)
 ZUGZUG_CURSOR_KEY=$(openssl rand -base64 32)
 SEED_DEMO=true                             # load the fictional demo dataset on first boot
@@ -55,7 +55,7 @@ docker compose -f compose.prod.yml up -d --build
 ```
 
 Point DNS at the VM, wait for Caddy to provision the certificate, and open
-`https://demo.zugzughq.io`. The **first signup becomes the admin** — do it once
+`https://demo.zugzughq.com`. The **first signup becomes the admin** — do it once
 yourself so the demo has an owner.
 
 ## Keep it clean (daily reset)
