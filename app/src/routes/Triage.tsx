@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
-import { IconArrowRight, IconSearch, IconX } from "../components/Icons";
+import { IconArrowRight, IconSearch, IconX, IconWand } from "../components/Icons";
 import { cx } from "../lib/cx";
 import { toast } from "../components/Toast";
-import { GetSuggestionButton } from "../components/GetSuggestionButton";
 import type { MappingRefTable } from "../data";
 import {
   useRefTables,
@@ -27,9 +34,8 @@ import {
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
-import { useAiHint, type AiHint } from "../lib/use-ai-hint";
-import { TriageReasoningStrip } from "../components/TriageReasoningStrip";
-import { ComboSelect } from "../components/ComboSelect";
+import type { AiHint } from "../lib/use-ai-hint";
+import { ComboSelect, type ComboSelectHandle } from "../components/ComboSelect";
 import { useRefTableValuesPage, type ScanValueRow } from "../lib/use-ref-table-values-page";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 import { PublishPreviewDialog, type PublishGroup } from "../components/PublishPreviewDialog";
@@ -49,11 +55,10 @@ type RStatus = "mapped" | "new" | "skipped" | "rejected";
 // Keyboard shortcuts surfaced in the toolbar as keycaps (desktop only). "Ranked
 // by impact" lives in the page lede, so it's intentionally not repeated here.
 const KBD_HINTS: ReadonlyArray<readonly [string, string]> = [
-  ["↑↓", "navigate"],
-  ["A", "accept"],
-  ["↵", "pick"],
+  ["↑↓", "move"],
+  ["↵", "choose"],
   ["S", "skip"],
-  ["N", "next"],
+  ["G", "suggest"],
   ["⌘↵", "publish"],
 ];
 
@@ -121,12 +126,13 @@ function TriageInner() {
   const undo = useUndoStack();
   const wsInfo = useWorkspaceInfo();
   const canEdit = useCanEdit();
+  const me = useCurrentUser();
 
   // URL ?filter= and ?q= state — both round-trip.
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = ((): Filter => {
-    const v = searchParams.get("filter");
-    return v === "new" || v === "all" || v === "mapped" ? v : "new";
+    // Review is the "to map" queue; "mapped" is the per-table peek. ("all" retired.)
+    return searchParams.get("filter") === "mapped" ? "mapped" : "new";
   })();
   const [filter, setFilterBase] = useState<Filter>(initialFilter);
   const [searchText, setSearchTextBase] = useState<string>(searchParams.get("q") ?? "");
@@ -173,28 +179,55 @@ function TriageInner() {
     );
   }, []);
 
-  const aiHint = useAiHint(cursor?.refTableId ?? "", cursor?.raw ?? "", cursor !== null);
-
   const refTableById = useMemo(() => new Map(refTables.map((d) => [d.id, d])), [refTables]);
 
-  // Rank refTables by impact using the scalar newCount × log10(rows). When filter is
-  // "new", drop refTables with no unmapped values; otherwise show them all.
-  const rankedDims = useMemo(
+  // Tables with unmapped values, ranked by impact (newCount × log10(rows)) — the
+  // rail's "to map" group. Tables with nothing left form the "clean" group.
+  const toMap = useMemo(
     () =>
       [...refTables]
+        .filter((d) => d.counts.newCount > 0)
         .map((d) => ({ d, score: d.counts.newCount * Math.log10(Math.max(10, d.rows)) }))
-        .filter((x) => (filter === "new" ? x.d.counts.newCount > 0 : true))
-        .sort((a, b) => b.score - a.score),
-    [refTables, filter],
+        .sort((a, b) => b.score - a.score)
+        .map((x) => x.d),
+    [refTables],
+  );
+  const cleanTables = useMemo(() => refTables.filter((d) => d.counts.newCount === 0), [refTables]);
+
+  // Drafts other people mapped, waiting on my sign-off — the rail's "Approve" item.
+  const awaitingCount = useMemo(
+    () =>
+      Object.values(allDrafts).filter((d) => d.status === "mapped" && d.user.id !== me?.id).length,
+    [allDrafts, me?.id],
   );
 
-  const [activeRefTableIdx, setActiveRefTableIdx] = useState(0);
-  // Clamp active idx when ranking changes (filter switch can shorten the list).
+  // Which pane the main area shows: a specific table, or the approve inbox.
+  const [view, setView] = useState<{ kind: "table"; id: string } | { kind: "approve" }>(() => {
+    const first = toMap[0] ?? refTables[0];
+    return first ? { kind: "table", id: first.id } : { kind: "approve" };
+  });
+  // On phones the rail and detail can't sit side by side — drill down instead:
+  // the rail is the first screen, selecting a table slides to its detail. On
+  // md+ both panes are always visible (Tailwind md: overrides), so this flag is
+  // a no-op there.
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const openTable = useCallback((id: string) => {
+    setView({ kind: "table", id });
+    setMobileShowDetail(true);
+  }, []);
+  const openApprove = useCallback(() => {
+    setView({ kind: "approve" });
+    setMobileShowDetail(true);
+  }, []);
+  // Keep the selected table valid as data changes.
   useEffect(() => {
-    if (activeRefTableIdx >= rankedDims.length) setActiveRefTableIdx(0);
-  }, [rankedDims.length, activeRefTableIdx]);
+    if (view.kind === "table" && !refTableById.has(view.id)) {
+      const next = toMap[0] ?? refTables[0];
+      if (next) setView({ kind: "table", id: next.id });
+    }
+  }, [view, refTableById, toMap, refTables]);
 
-  const activeDim = rankedDims[activeRefTableIdx]?.d ?? null;
+  const activeDim = view.kind === "table" ? (refTableById.get(view.id) ?? null) : null;
   const valuesPage = useRefTableValuesPage({
     refTableId: activeDim?.id ?? null,
     filter,
@@ -229,21 +262,6 @@ function TriageInner() {
           : discardDraft(refTableId, raw),
     });
     return saveDraft(refTableId, raw, "mapped", label, keyForLabelIn(refTableId, label));
-  };
-  const acceptCross = (refTableId: string, raw: string) => {
-    if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
-    // No per-row suggestion in the scan-values payload — accept relies on the
-    // AI hint for the focused cursor row.
-    const suggestion = aiHint.hint?.suggestion;
-    if (!suggestion) {
-      toast(`No suggestion to accept for "${raw}".`, "error");
-      return;
-    }
-    stageMapCross(refTableId, raw, suggestion).catch((err) =>
-      reportDraftError(`accept "${raw}"`, err),
-    );
-    flashRow(`[data-row-key="${attrEsc(`${refTableId}::${raw}`)}"]`);
-    advanceCrossNext(refTableId, raw);
   };
   const skipCross = (refTableId: string, raw: string) => {
     if (allDrafts[dkey(refTableId, raw)]?.status === "rejected") return;
@@ -409,10 +427,7 @@ function TriageInner() {
   const [rescanning, setRescanning] = useState(false);
 
   // ── render ───────────────────────────────────────────────────────────────
-  const totalNew = useMemo(
-    () => rankedDims.reduce((n, x) => n + x.d.counts.newCount, 0),
-    [rankedDims],
-  );
+  const totalNew = useMemo(() => toMap.reduce((n, d) => n + d.counts.newCount, 0), [toMap]);
 
   return (
     <>
@@ -424,110 +439,125 @@ function TriageInner() {
               <>
                 Review{" "}
                 <span className="font-mono text-[14px] text-ink-3">
-                  · {totalNew} across {rankedDims.length} table
-                  {rankedDims.length === 1 ? "" : "s"}
+                  · {totalNew} to map across {toMap.length} table
+                  {toMap.length === 1 ? "" : "s"}
                 </span>
               </>
             }
-            lede="Sorted by blast radius. Press ⌘↵ to publish."
+            lede="Pick a table on the left, choose the record each value belongs to, then publish."
           />
         </div>
 
         <div
-          className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface"
+          className="zz-rise flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface md:flex-row"
           style={{ animationDelay: "150ms" }}
         >
-          {/* toolbar */}
-          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-3 py-2.5 md:px-4">
-            <div className="flex flex-wrap items-center gap-1">
-              {(["new", "all", "mapped"] as Filter[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setFilter(k)}
-                  className={cx(
-                    "min-h-[44px] rounded-sm px-2.5 py-1 text-sm font-semibold transition-colors md:min-h-0",
-                    filter === k
-                      ? "bg-accent text-accent-ink"
-                      : "text-ink-2 hover:bg-hover hover:text-ink",
-                  )}
-                >
-                  {k === "new" ? "Needs review" : k === "all" ? "All" : "Mapped"}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex min-w-[10rem] max-w-md flex-1 items-center gap-2 rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 text-ink-3 transition-colors focus-within:border-accent">
-              <IconSearch className="h-3.5 w-3.5 shrink-0" />
-              <input
-                type="search"
-                placeholder="Search values…"
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                className="w-full min-w-0 bg-transparent font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:appearance-none"
-              />
-              {searchText && (
-                <button
-                  type="button"
-                  onClick={() => setSearchText("")}
-                  aria-label="Clear search"
-                  className="shrink-0 text-ink-3 transition-colors hover:text-ink"
-                >
-                  <IconX className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="ml-auto hidden shrink-0 items-center gap-2.5 lg:flex">
-              {KBD_HINTS.map(([keys, label]) => (
-                <span key={label} className="flex items-center gap-1 text-ink-3">
-                  <kbd className="rounded-sm border border-line bg-surface-2 px-1 py-0.5 font-mono text-[10px] leading-none text-ink-2">
-                    {keys}
-                  </kbd>
-                  <span className="font-mono text-[10px] uppercase tracking-wider">{label}</span>
-                </span>
-              ))}
-            </div>
+          {/* Left rail — desktop: always visible. Mobile: the first screen,
+              hidden once a table is opened (drill-down). */}
+          <div
+            className={cx(
+              "w-full flex-col overflow-y-auto bg-surface md:w-60 md:shrink-0 md:border-r md:border-line",
+              mobileShowDetail ? "hidden md:flex" : "flex",
+            )}
+          >
+            <TableRail
+              toMap={toMap}
+              clean={cleanTables}
+              totalToMap={totalNew}
+              activeId={view.kind === "table" ? view.id : null}
+              approveCount={awaitingCount}
+              approveActive={view.kind === "approve"}
+              onSelectTable={openTable}
+              onSelectApprove={openApprove}
+            />
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-            <div className="px-3 pt-3">
-              <AwaitingReview />
-            </div>
-            {rankedDims.length === 0 ? (
-              <div className="px-3 pt-3">
-                <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
+          {/* Main pane — desktop: always. Mobile: only once a table is opened. */}
+          <div
+            className={cx("min-w-0 flex-1 flex-col", mobileShowDetail ? "flex" : "hidden md:flex")}
+          >
+            {/* Mobile-only back to the table list. */}
+            <button
+              type="button"
+              onClick={() => setMobileShowDetail(false)}
+              className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-2.5 text-left font-mono text-[12px] text-ink-2 transition-colors hover:text-ink md:hidden"
+            >
+              ‹ All tables
+            </button>
+
+            {view.kind === "table" && activeDim && (
+              <div className="flex shrink-0 items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-3 py-2.5 md:px-4">
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 text-ink-3 transition-colors focus-within:border-accent md:max-w-md">
+                  <IconSearch className="h-3.5 w-3.5 shrink-0" />
+                  <input
+                    type="search"
+                    placeholder="Search values…"
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className="w-full min-w-0 bg-transparent font-mono text-[12.5px] text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:appearance-none"
+                  />
+                  {searchText && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchText("")}
+                      aria-label="Clear search"
+                      className="shrink-0 text-ink-3 transition-colors hover:text-ink"
+                    >
+                      <IconX className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="ml-auto hidden shrink-0 items-center gap-2.5 lg:flex">
+                  {KBD_HINTS.map(([keys, label]) => (
+                    <span key={label} className="flex items-center gap-1 text-ink-3">
+                      <kbd className="rounded-sm border border-line bg-surface-2 px-1 py-0.5 font-mono text-[10px] leading-none text-ink-2">
+                        {keys}
+                      </kbd>
+                      <span className="font-mono text-[10px] uppercase tracking-wider">
+                        {label}
+                      </span>
+                    </span>
+                  ))}
+                </div>
               </div>
-            ) : (
-              rankedDims.map((rd, i) => (
-                <RefTableSection
-                  key={rd.d.id}
-                  refTable={rd.d}
-                  isActive={i === activeRefTableIdx}
-                  onActivate={() => setActiveRefTableIdx(i)}
-                  page={i === activeRefTableIdx ? valuesPage : null}
+            )}
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              {view.kind === "approve" ? (
+                <div className="p-3">
+                  <AwaitingReview />
+                </div>
+              ) : toMap.length === 0 && awaitingCount === 0 && filter !== "mapped" ? (
+                // Nothing to map anywhere and nothing to approve — the settled state.
+                <div className="p-3">
+                  <EmptyState filter="new" onSwitchToNew={() => setFilter("new")} />
+                </div>
+              ) : activeDim ? (
+                <MapPane
+                  key={activeDim.id}
+                  refTable={activeDim}
+                  page={valuesPage}
                   drafts={allDrafts}
                   canEdit={canEdit}
                   cursor={cursor}
                   setCursor={setCursor}
-                  onAccept={(raw) => acceptCross(rd.d.id, raw)}
-                  onSkip={(raw) => skipCross(rd.d.id, raw)}
-                  onPick={(raw, label) => pickCross(rd.d.id, raw, label)}
-                  onRestage={(raw) => restageCross(rd.d.id, raw)}
+                  filter={filter}
+                  setFilter={setFilter}
+                  onSkip={(raw) => skipCross(activeDim.id, raw)}
+                  onPick={(raw, label) => pickCross(activeDim.id, raw, label)}
+                  onRestage={(raw) => restageCross(activeDim.id, raw)}
                   onCommitAll={() => void openPublishPreview()}
-                  aiHint={
-                    i === activeRefTableIdx ? aiHint : { hint: null, loading: false, error: false }
-                  }
-                  rescanning={rescanning && i === activeRefTableIdx}
+                  rescanning={rescanning}
                   onRescan={async () => {
                     setRescanning(true);
                     try {
-                      await triggerRescan(rd.d.id);
+                      await triggerRescan(activeDim.id);
                       valuesPage.refetch();
-                      toast("Rescan complete");
+                      toast("Re-scan complete");
                     } catch (err) {
                       toast(
-                        err instanceof Error ? `Rescan failed: ${err.message}` : "Rescan failed",
+                        err instanceof Error ? `Re-scan failed: ${err.message}` : "Re-scan failed",
                         "error",
                       );
                     } finally {
@@ -535,24 +565,28 @@ function TriageInner() {
                     }
                   }}
                 />
-              ))
-            )}
-          </div>
+              ) : (
+                <div className="p-3">
+                  <EmptyState filter={filter} onSwitchToNew={() => setFilter("new")} />
+                </div>
+              )}
+            </div>
 
-          <CrossRefTableFooter
-            refTableById={refTableById}
-            stagedDrafts={stagedAllDrafts}
-            discard={discardCross}
-            commitAll={() => void openPublishPreview()}
-            committing={committing}
-            commitError={commitError}
-            setCommitError={setCommitError}
-            draftError={draftError}
-            setDraftError={setDraftError}
-            undo={undo}
-            wsInfo={wsInfo}
-            canEdit={canEdit}
-          />
+            <CrossRefTableFooter
+              refTableById={refTableById}
+              stagedDrafts={stagedAllDrafts}
+              discard={discardCross}
+              commitAll={() => void openPublishPreview()}
+              committing={committing}
+              commitError={commitError}
+              setCommitError={setCommitError}
+              draftError={draftError}
+              setDraftError={setDraftError}
+              undo={undo}
+              wsInfo={wsInfo}
+              canEdit={canEdit}
+            />
+          </div>
         </div>
       </div>
       {preview && (
@@ -614,99 +648,362 @@ function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: 
   return <EmptyStateCard glyph="📋" title="No tables yet." />;
 }
 
-// ── RefTableSection ───────────────────────────────────────────────────────────────
-interface RefTableSectionProps {
+// ── TableRail — the progress ledger you work from ─────────────────────────────
+function railProgress(d: MappingRefTable): number {
+  const total = Math.max(1, d.counts.totalDistinct);
+  return Math.round(((total - d.counts.newCount) / total) * 100);
+}
+
+function RailRow({
+  name,
+  count,
+  progress,
+  active,
+  clean,
+  onClick,
+}: {
+  name: string;
+  count: number;
+  progress: number;
+  active: boolean;
+  clean?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active}
+      className={cx(
+        "block w-full border-l-2 px-3.5 py-2.5 text-left transition-colors",
+        active
+          ? "border-accent bg-surface-2"
+          : "border-transparent hover:border-line-2 hover:bg-hover",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={cx(
+            "min-w-0 truncate font-display text-[13px]",
+            clean ? "font-medium text-ink-2" : "font-semibold text-ink",
+          )}
+        >
+          {name}
+        </span>
+        <span
+          className={cx(
+            "shrink-0 font-mono text-[11px] font-semibold tabular-nums",
+            clean ? "text-ok" : "text-accent",
+          )}
+        >
+          {clean ? "✓" : count}
+        </span>
+      </div>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-pill bg-surface-3">
+        <span
+          className="block h-full rounded-pill bg-ok transition-[width]"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </button>
+  );
+}
+
+interface TableRailProps {
+  toMap: MappingRefTable[];
+  clean: MappingRefTable[];
+  totalToMap: number;
+  activeId: string | null;
+  approveCount: number;
+  approveActive: boolean;
+  onSelectTable: (id: string) => void;
+  onSelectApprove: () => void;
+}
+
+function TableRail(p: TableRailProps) {
+  return (
+    <div className="flex min-h-full w-full flex-col">
+      <div className="px-3.5 pb-1.5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
+        To map · {p.totalToMap} left
+      </div>
+      {p.toMap.length === 0 ? (
+        <div className="px-3.5 py-2 font-mono text-[11px] text-ink-3">All caught up 🎉</div>
+      ) : (
+        p.toMap.map((d) => (
+          <RailRow
+            key={d.id}
+            name={d.refTable}
+            count={d.counts.newCount}
+            progress={railProgress(d)}
+            active={p.activeId === d.id}
+            onClick={() => p.onSelectTable(d.id)}
+          />
+        ))
+      )}
+
+      {p.clean.length > 0 && (
+        <>
+          <div className="px-3.5 pb-1.5 pt-4 font-mono text-[10px] uppercase tracking-wider text-ink-3">
+            Clean · nothing to do
+          </div>
+          {p.clean.map((d) => (
+            <RailRow
+              key={d.id}
+              name={d.refTable}
+              count={0}
+              progress={100}
+              clean
+              active={p.activeId === d.id}
+              onClick={() => p.onSelectTable(d.id)}
+            />
+          ))}
+        </>
+      )}
+
+      {p.approveCount > 0 && (
+        <div className="mt-auto border-t border-line pt-1">
+          <button
+            type="button"
+            onClick={p.onSelectApprove}
+            aria-current={p.approveActive}
+            className={cx(
+              "flex w-full items-center justify-between gap-2 border-l-2 px-3.5 py-3 text-left transition-colors",
+              p.approveActive
+                ? "border-accent bg-surface-2"
+                : "border-transparent hover:border-line-2 hover:bg-hover",
+            )}
+          >
+            <span className="truncate font-display text-[13px] font-semibold text-ink">
+              Approve teammates’ work
+            </span>
+            <span className="shrink-0 rounded-pill bg-accent-soft px-1.5 font-mono text-[11px] font-semibold text-accent tabular-nums">
+              {p.approveCount}
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MapPane — the selected table's values (header + list + infinite scroll) ────
+interface MapPaneProps {
   refTable: MappingRefTable;
-  isActive: boolean;
-  onActivate: () => void;
-  page: ReturnType<typeof useRefTableValuesPage> | null;
+  page: ReturnType<typeof useRefTableValuesPage>;
   drafts: Record<string, Draft>;
   canEdit: boolean;
   cursor: { refTableId: string; raw: string } | null;
   setCursor: (c: { refTableId: string; raw: string } | null) => void;
-  onAccept: (raw: string) => void;
+  filter: Filter;
+  setFilter: (f: Filter) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
   onRestage: (raw: string) => void;
   onCommitAll: () => void;
-  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   rescanning: boolean;
   onRescan: () => void;
 }
 
-function RefTableSection(p: RefTableSectionProps) {
+function MapPane(p: MapPaneProps) {
   const { refTable } = p;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Infinite scroll — sentinel at the bottom of the loaded list calls loadMore.
   useEffect(() => {
-    if (!p.isActive || !p.page) return;
     const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) p.page?.loadMore();
+        if (entries.some((e) => e.isIntersecting)) p.page.loadMore();
       },
       { rootMargin: "200px" },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [p.isActive, p.page]);
+  }, [p.page]);
 
   return (
-    <section className="border-b border-line last:border-b-0">
-      <button
-        type="button"
-        onClick={p.onActivate}
-        className={cx(
-          "flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors",
-          p.isActive ? "bg-surface-2" : "hover:bg-hover",
-        )}
-      >
-        <Chip label={refTable.refTable} bucket="chip-3" />
-        <span className="font-mono text-[11px] text-ink-2 tabular-nums">
-          {refTable.counts.newCount} unmapped / {refTable.counts.totalDistinct} distinct ·{" "}
-          {refTable.counts.unmappedRowsTotal.toLocaleString()} rows at risk
-        </span>
-        <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-ink-3">
-          {p.isActive ? "▾ active" : "▸ expand"}
-        </span>
-      </button>
-
-      {p.isActive && p.page && (
-        <>
-          {refTable.counts.scannedAt && (
-            <div className="flex items-center justify-between border-t border-line bg-surface-2 px-4 py-2 text-[11px] text-ink-3">
-              <span className="font-mono">
-                As of {new Date(refTable.counts.scannedAt).toLocaleString()}
+    <>
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
+            {p.filter === "mapped" ? "Already mapped" : "Map these values"}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="truncate font-display text-[16px] font-semibold text-ink">
+              {refTable.refTable}
+            </span>
+            {p.filter === "mapped" ? (
+              // Review/fix an already-mapped value, then get back to the queue.
+              <span className="flex items-center gap-2 font-mono text-[11px] tabular-nums">
+                <button
+                  type="button"
+                  onClick={() => p.setFilter("new")}
+                  className="text-accent transition-colors hover:underline"
+                >
+                  ‹ {refTable.counts.newCount} to map
+                </button>
+                <span className="text-ink-3">· showing {refTable.counts.mappedCount} mapped</span>
               </span>
-              {p.canEdit && (
-                <Button variant="ghost" size="sm" loading={p.rescanning} onClick={p.onRescan}>
-                  Re-scan
-                </Button>
-              )}
-            </div>
-          )}
-          <RefTableSectionBody
-            refTable={refTable}
-            page={p.page}
-            drafts={p.drafts}
-            canEdit={p.canEdit}
-            cursor={p.cursor}
-            setCursor={p.setCursor}
-            onAccept={p.onAccept}
-            onSkip={p.onSkip}
-            onPick={p.onPick}
-            onRestage={p.onRestage}
-            onCommitAll={p.onCommitAll}
-            aiHint={p.aiHint}
-            sentinelRef={sentinelRef}
-          />
-        </>
-      )}
-    </section>
+            ) : (
+              <span className="flex items-center gap-2 font-mono text-[11px] tabular-nums">
+                <span className="text-ink-3">
+                  {refTable.counts.newCount} to map ·{" "}
+                  {refTable.counts.unmappedRowsTotal.toLocaleString()} rows
+                </span>
+                {refTable.counts.mappedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => p.setFilter("mapped")}
+                    className="text-ink-3 transition-colors hover:text-ink"
+                    title="Review or fix values you've already mapped"
+                  >
+                    · {refTable.counts.mappedCount} mapped ✓
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+        </div>
+        {refTable.counts.scannedAt && p.canEdit && (
+          <Button variant="ghost" size="sm" loading={p.rescanning} onClick={p.onRescan}>
+            Re-scan
+          </Button>
+        )}
+      </div>
+      <RefTableSectionBody
+        refTable={refTable}
+        page={p.page}
+        drafts={p.drafts}
+        canEdit={p.canEdit}
+        cursor={p.cursor}
+        setCursor={p.setCursor}
+        onSkip={p.onSkip}
+        onPick={p.onPick}
+        onRestage={p.onRestage}
+        onCommitAll={p.onCommitAll}
+        sentinelRef={sentinelRef}
+      />
+    </>
   );
 }
+
+// ── on-demand AI suggestion — offers, never decides ───────────────────────────
+type OfferState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "offer"; hint: AiHint }
+  | { kind: "none" }
+  | { kind: "error" };
+
+interface SuggestHandle {
+  suggest: () => void;
+}
+
+const SuggestOffer = forwardRef<
+  SuggestHandle,
+  { refTableId: string; raw: string; onUse: (label: string) => void }
+>(function SuggestOffer({ refTableId, raw, onUse }, ref) {
+  const [state, setState] = useState<OfferState>({ kind: "idle" });
+
+  const fetchHint = async () => {
+    setState({ kind: "loading" });
+    try {
+      const qs = new URLSearchParams({ refTableId, raw });
+      const res = await apiFetch(`/triage/ai-hint?${qs.toString()}`);
+      if (!res.ok) throw new Error(`${res.status}`);
+      const hint = (await res.json()) as AiHint;
+      setState(hint.suggestion ? { kind: "offer", hint } : { kind: "none" });
+    } catch {
+      setState({ kind: "error" });
+    }
+  };
+
+  // Keyboard "G" on the row opens the same on-demand suggestion.
+  useImperativeHandle(ref, () => ({ suggest: () => void fetchHint() }));
+
+  if (state.kind === "idle" || state.kind === "error") {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          void fetchHint();
+        }}
+        className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-1 font-mono text-[11px] text-ink-3 transition-colors hover:bg-hover hover:text-accent"
+      >
+        <IconWand className="h-3.5 w-3.5" />
+        {state.kind === "error" ? "Try AI again" : "Suggest with AI"}
+      </button>
+    );
+  }
+
+  if (state.kind === "loading") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-mono text-[11px] text-ink-3">
+        <IconWand className="h-3.5 w-3.5 animate-pulse" />
+        Thinking…
+      </span>
+    );
+  }
+
+  if (state.kind === "none") {
+    return (
+      <span className="inline-flex items-center gap-2 px-1.5 py-1 font-mono text-[11px] text-ink-3">
+        AI isn’t sure on this one — your call.
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setState({ kind: "idle" });
+          }}
+          className="text-ink-3 underline decoration-dotted hover:text-ink"
+        >
+          dismiss
+        </button>
+      </span>
+    );
+  }
+
+  // offer
+  const { hint } = state;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5 py-1 font-mono text-[11px] text-ink-2">
+      <IconWand className="h-3.5 w-3.5 shrink-0 text-accent" />
+      <span>
+        AI suggests <span className="font-display font-medium text-ink">{hint.suggestion}</span>
+      </span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onUse(hint.suggestion!);
+        }}
+        className="rounded-sm bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent-ink transition-opacity hover:opacity-90"
+      >
+        Use it
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setState({ kind: "idle" });
+        }}
+        className="text-ink-3 underline decoration-dotted hover:text-ink"
+      >
+        dismiss
+      </button>
+      {hint.reasoning && (
+        <span
+          title={hint.reasoning}
+          className="inline-grid h-3.5 w-3.5 cursor-help place-items-center rounded-full bg-surface-3 text-[8px] text-ink-3"
+        >
+          ?
+        </span>
+      )}
+    </span>
+  );
+});
 
 interface RefTableSectionBodyProps {
   refTable: MappingRefTable;
@@ -715,18 +1012,19 @@ interface RefTableSectionBodyProps {
   canEdit: boolean;
   cursor: { refTableId: string; raw: string } | null;
   setCursor: (c: { refTableId: string; raw: string } | null) => void;
-  onAccept: (raw: string) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
   onRestage: (raw: string) => void;
   onCommitAll: () => void;
-  aiHint: { hint: AiHint | null; loading: boolean; error: boolean };
   sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
 function RefTableSectionBody(p: RefTableSectionBodyProps) {
   const options = useMemo(() => p.refTable.record.map((c) => c.label), [p.refTable.record]);
-  const [editingRaw, setEditingRaw] = useState<string | null>(null);
+  // Handles to each row's record picker + suggestion, so the keyboard can drive
+  // the row: Enter/M opens the picker, G asks AI for a suggestion.
+  const comboRefs = useRef<Map<string, ComboSelectHandle | null>>(new Map());
+  const suggestRefs = useRef<Map<string, SuggestHandle | null>>(new Map());
   const me = useCurrentUser();
 
   const rowStatus = (
@@ -757,25 +1055,20 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
     const plain = !e.metaKey && !e.ctrlKey && !e.altKey;
     if (!plain) return;
     const k = e.key.toLowerCase();
-    // A/S/M keyboard actions are blocked on rejected rows — the only valid
-    // actions are Re-stage (button) and Discard (button). See task-9-brief.md.
+    // Keyboard actions are blocked on rejected rows — the only valid actions
+    // there are Re-stage (button) and Discard (button).
     const isRejected = p.drafts[dkey(p.refTable.id, raw)]?.status === "rejected";
-    if (p.canEdit && k === "a" && !isRejected) {
-      e.preventDefault();
-      p.onAccept(raw);
-    } else if (p.canEdit && k === "s" && !isRejected) {
+    if (p.canEdit && k === "s" && !isRejected) {
       e.preventDefault();
       p.onSkip(raw);
     } else if (p.canEdit && (k === "m" || k === "enter") && !isRejected) {
+      // Open this row's record picker — choosing is the primary action.
       e.preventDefault();
-      setEditingRaw(raw);
-    } else if (k === "n") {
+      comboRefs.current.get(raw)?.open();
+    } else if (p.canEdit && k === "g" && !isRejected) {
+      // Ask AI for a suggestion on this row — on demand, never automatic.
       e.preventDefault();
-      // advance handled in parent via onAccept/onSkip; for plain "n" with no
-      // action, walk forward one row in the current page.
-      const idx = p.page.items.findIndex((x) => x.raw === raw);
-      const next = p.page.items[(idx + 1) % p.page.items.length];
-      if (next) focus(next.raw);
+      suggestRefs.current.get(raw)?.suggest();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       const idx = p.page.items.findIndex((x) => x.raw === raw);
@@ -829,73 +1122,93 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
                 isCursor ? "bg-accent-wash/30" : "hover:bg-hover",
               )}
             >
-              <div className="flex items-center gap-3">
-                <span className="min-w-0 flex-1">
+              {/* Desktop: fixed 3-column grid (value | picker | status) so every
+                  "Choose record" control lines up. Mobile: stack vertically with
+                  a full-width picker. */}
+              <div className="flex flex-col gap-2 md:grid md:grid-cols-[minmax(0,1fr)_15rem_5.5rem] md:items-center md:gap-3">
+                <span className="min-w-0">
                   <span className="block truncate font-mono text-[13px] text-ink">{r.raw}</span>
-                  <span className="block font-mono text-[10px] text-ink-3 tabular-nums">
+                  <span className="block truncate font-mono text-[10px] text-ink-3 tabular-nums">
                     {r.totalRows.toLocaleString()} rows
                     {r.occurrences[0] && ` · ${r.occurrences[0].table}.${r.occurrences[0].column}`}
                     {r.occurrences.length > 1 && ` +${r.occurrences.length - 1}`}
                   </span>
                 </span>
-                <span className="w-56 truncate font-display text-[13px] text-ink">
-                  {editingRaw === r.raw ? (
-                    <ComboSelect
-                      options={options}
-                      value={target}
-                      suggestion={null}
-                      onPick={(t) => {
-                        setEditingRaw(null);
-                        p.onPick(r.raw, t);
-                      }}
-                      onClose={() => setEditingRaw(null)}
-                    />
-                  ) : target ? (
-                    target
-                  ) : (
-                    <span className="font-mono text-[12px] text-ink-3">—</span>
-                  )}
-                </span>
-                <span className={status === "rejected" ? "w-auto max-w-[180px]" : "w-20"}>
-                  {status === "mapped" ? (
-                    <Chip label="Mapped" bucket="chip-1" dot />
-                  ) : status === "skipped" ? (
-                    <Chip label="Skipped" bucket="chip-5" />
-                  ) : status === "rejected" ? (
+
+                {/* col 2 — the record picker (or the sent-back note) */}
+                {status === "rejected" ? (
+                  <span className="min-w-0">
                     <span
                       className="inline-block max-w-full truncate rounded-sm bg-danger-soft px-1.5 py-0.5 font-mono text-[10px] text-danger"
                       title={rejectedReason ?? undefined}
                     >
-                      rejected
+                      Sent back
                       {rejectedReason
                         ? `: ${rejectedReason.slice(0, 60)}${rejectedReason.length > 60 ? "…" : ""}`
                         : ""}
                     </span>
-                  ) : (
-                    <Chip label="New" bucket="chip-2" dot />
-                  )}
-                </span>
-                {status === "rejected" &&
-                  p.canEdit &&
-                  p.drafts[dkey(p.refTable.id, r.raw)]?.user.id === me?.id && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
+                  </span>
+                ) : p.canEdit ? (
+                  <ComboSelect
+                    ref={(h) => {
+                      comboRefs.current.set(r.raw, h);
+                    }}
+                    options={options}
+                    value={target}
+                    placeholder="Choose record"
+                    ariaLabel={`Choose record for ${r.raw}`}
+                    onPick={(t) => p.onPick(r.raw, t)}
+                  />
+                ) : (
+                  <span className="truncate font-display text-[13px] text-ink">
+                    {target ?? <span className="font-mono text-[12px] text-ink-3">—</span>}
+                  </span>
+                )}
+
+                {/* col 3 — status / skip / re-stage, right-aligned */}
+                <span className="flex items-center justify-end gap-2">
+                  {status === "rejected" ? (
+                    p.canEdit &&
+                    p.drafts[dkey(p.refTable.id, r.raw)]?.user.id === me?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          p.onRestage(r.raw);
+                        }}
+                      >
+                        Re-stage
+                      </Button>
+                    )
+                  ) : status === "mapped" ? (
+                    <Chip label="Mapped" bucket="chip-1" dot />
+                  ) : status === "skipped" ? (
+                    <Chip label="Skipped" bucket="chip-5" />
+                  ) : status === "new" && p.canEdit ? (
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        p.onRestage(r.raw);
+                        p.onSkip(r.raw);
                       }}
+                      className="rounded-sm px-1.5 py-1 font-mono text-[11px] text-ink-3 transition-colors hover:bg-hover hover:text-ink"
                     >
-                      Re-stage
-                    </Button>
-                  )}
+                      Skip
+                    </button>
+                  ) : null}
+                </span>
               </div>
-              {isCursor && !target && status !== "rejected" && (
-                <div className="flex flex-col gap-2 pl-1 pt-1">
-                  <TriageReasoningStrip hint={p.aiHint.hint} loading={p.aiHint.loading} />
-                  {status === "new" && p.canEdit && (
-                    <GetSuggestionButton refTableId={p.refTable.id} rawValue={r.raw} />
-                  )}
+              {status === "new" && p.canEdit && (
+                <div className="pl-1 pt-0.5">
+                  <SuggestOffer
+                    ref={(h) => {
+                      suggestRefs.current.set(r.raw, h);
+                    }}
+                    refTableId={p.refTable.id}
+                    raw={r.raw}
+                    onUse={(label) => p.onPick(r.raw, label)}
+                  />
                 </div>
               )}
             </li>
@@ -1093,12 +1406,12 @@ function CrossRefTableFooter(p: FooterProps) {
         <span className="font-mono text-[11px] text-ink-2">
           {stagedCount > 0 ? (
             <>
-              {stagedCount} change{stagedCount === 1 ? "" : "s"} across {grouped.length} refTable
-              {grouped.length === 1 ? "" : "s"}, ready to publish
+              {stagedCount} to publish across {grouped.length} table
+              {grouped.length === 1 ? "" : "s"}
             </>
           ) : (
             <span className="hidden md:inline">
-              nothing to publish yet — accept or merge values above to stage them
+              Nothing to publish yet — map a few values above.
             </span>
           )}
         </span>

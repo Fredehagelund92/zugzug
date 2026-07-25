@@ -215,6 +215,16 @@ export async function handleDevLogin(): Promise<Response> {
      ON CONFLICT (id) DO UPDATE SET is_super_admin = true`,
     [userId],
   );
+  // Join the default workspace as admin so one-click login lands in the seeded
+  // demo with full access — mirrors the first-signup path in auth-password.ts.
+  // No-op if the default tenant isn't provisioned (plain local dev without seed).
+  await run(
+    `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+     SELECT 'default', $1, 'admin', now()
+      WHERE EXISTS (SELECT 1 FROM ${pg("tenant")} WHERE id = 'default')
+     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+    [userId],
+  );
   const { cookie: setCookie } = await issueSession(userId);
   const headers = new Headers({ Location: "/app" });
   headers.append("Set-Cookie", setCookie);

@@ -95,7 +95,10 @@ function Renderer<Row>(ctx: CellCtx<Row>) {
     return <span className="font-mono text-[12px] text-ink-3">—</span>;
   }
   return (
-    <span className="block w-full text-right tabular-nums font-mono text-[12px] text-ink">
+    <span
+      className="block w-full truncate text-right tabular-nums font-mono text-[12px] text-ink"
+      title={formatNumber(n, fmt)}
+    >
       {formatNumber(n, fmt)}
     </span>
   );

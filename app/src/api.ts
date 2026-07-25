@@ -66,6 +66,9 @@ export async function fetchWarehouseDatabases(): Promise<
 /** Deployment-global connection metadata (adapter type). Backed by `GET /api/warehouse/info`. */
 export async function fetchWarehouseInfo(): Promise<{
   adapter: "duckdb" | "snowflake";
+  /** Deployment engine — distinguishes local DuckDB from MotherDuck (both report
+   *  adapter "duckdb"). "disabled" when no warehouse is attached. */
+  engine?: "duckdb" | "motherduck" | "disabled";
   databaseTerm: string;
 }> {
   const res = await authFetch("/warehouse/info");

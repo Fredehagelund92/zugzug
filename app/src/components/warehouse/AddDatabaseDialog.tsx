@@ -8,6 +8,8 @@ interface Discovered {
 }
 
 interface Props {
+  /** Deployment engine name for the "Discovered in …" label (e.g. "DuckDB"). */
+  engineName?: string;
   onCancel: () => void;
   onAdded: () => void;
 }
@@ -65,7 +67,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
         <div className="space-y-4 p-4">
           <div>
             <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
-              Discovered in MotherDuck
+              Discovered in {props.engineName ?? "the warehouse"}
             </div>
             {discoverFailed ? (
               <div className="text-[12.5px] text-danger">

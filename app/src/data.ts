@@ -18,6 +18,9 @@ export interface RecordValue {
   fields?: Record<string, string | null>;
   unresolved?: boolean;
   position?: string | null;
+  /** Per-field message when a Formula column can't be computed for this record
+   *  (keyed by field id). Absent when every formula computed cleanly. */
+  formulaErrors?: Record<string, string>;
 }
 /** A predetermined option on a single-select field, with optional color. */
 export interface OptionDef {
@@ -46,6 +49,13 @@ export interface FieldDef {
   rules?: import("./components/datagrid/types").ConditionalRule[];
   required?: boolean;
   validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+  /** Present only when type === "formula": a read-only computed column whose
+   *  value is the expression evaluated per row (server-computed). */
+  formula?: {
+    expr: string;
+    resultType: "text" | "number" | "boolean";
+    numberFormat?: NumberFormat;
+  };
 }
 /* where a raw value was seen in the warehouse (table.column + row impact) */
 export interface SourceOccurrence {

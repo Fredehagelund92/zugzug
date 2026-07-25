@@ -42,6 +42,8 @@ interface Props<Row> {
     validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
   }) => void;
   onEditDescription?: () => void;
+  /** Open the formula editor for a computed column (columnKind === "computed"). */
+  onEditFormula?: () => void;
   // Linked-column (fk / lookup) actions. Present the kind-appropriate subset
   // depending on `column.columnKind`.
   onShowLinkedFields?: () => void;
@@ -72,6 +74,7 @@ export function ColumnHeaderMenu<Row>({
   onOpenRules,
   onSaveValidation,
   onEditDescription,
+  onEditFormula,
   onShowLinkedFields,
   onOpenTargetRefTable,
   onChangeDisplayedField,
@@ -187,6 +190,7 @@ export function ColumnHeaderMenu<Row>({
   const iconCls = "h-3.5 w-3.5 shrink-0 text-ink-3";
   const isLookup = column.columnKind === "lookup";
   const isFk = column.columnKind === "fk";
+  const isComputed = column.columnKind === "computed";
 
   return createPortal(
     <div
@@ -307,9 +311,23 @@ export function ColumnHeaderMenu<Row>({
           <button type="button" className={item} onClick={() => setMode("rename")}>
             <IconEdit className={iconCls} /> Rename column
           </button>
-          <button type="button" className={item} onClick={() => setMode("type")}>
-            <IconType className={iconCls} /> Change type
-          </button>
+          {isComputed && onEditFormula && (
+            <button
+              type="button"
+              className={item}
+              onClick={() => {
+                onEditFormula();
+                onClose();
+              }}
+            >
+              <IconEdit className={iconCls} /> Edit formula…
+            </button>
+          )}
+          {!isComputed && (
+            <button type="button" className={item} onClick={() => setMode("type")}>
+              <IconType className={iconCls} /> Change type
+            </button>
+          )}
           <button type="button" className={item} onClick={() => setMode("filter")}>
             <IconFilter className={iconCls} /> Filter…
             {filterValue && (
@@ -330,7 +348,7 @@ export function ColumnHeaderMenu<Row>({
               <IconRules className={iconCls} /> Conditional formatting…
             </button>
           )}
-          {onSaveValidation && (
+          {onSaveValidation && !isComputed && (
             <button type="button" className={item} onClick={() => setMode("validation")}>
               <IconCheck className={iconCls} /> Validation…
             </button>

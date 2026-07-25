@@ -463,6 +463,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const adapter = await getAdapterFn();
         return json({
           adapter: adapter.capabilities.id,
+          // Local DuckDB and MotherDuck share capabilities.id "duckdb"; surface the
+          // deployment engine so the UI can label them apart (DuckDB vs MotherDuck).
+          engine: env.warehouseAdapter,
           databaseTerm: adapter.capabilities.databaseTerm,
         });
       } catch (e) {
@@ -931,6 +934,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const adapterInstance = await getAdapterFn();
         return json({
           adapter: adapterInstance.capabilities.id,
+          engine: env.warehouseAdapter,
           writable: adapterInstance.capabilities.writable,
           recordMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
         });
@@ -1322,6 +1326,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             displayFields,
             required,
             validation,
+            formula,
           } = (await req.json()) as {
             label: string;
             type?: string;
@@ -1335,6 +1340,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               unique?: boolean;
               min?: number | string | null;
               max?: number | string | null;
+            };
+            formula?: {
+              expr: string;
+              resultType: "text" | "number" | "boolean";
+              numberFormat?: NumberFormat;
             };
           };
           return json(
@@ -1350,10 +1360,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
                 displayFields,
                 required,
                 validation,
+                formula,
               },
               me,
             ),
           );
+        }
+        // POST /api/tables/:id/formula/validate {expr, resultType} — parse + dry-run
+        // a formula against one sample record so the field editor can show live
+        // errors without shipping the evaluator to the browser.
+        if (
+          seg[3] === "formula" &&
+          seg[4] === "validate" &&
+          seg.length === 5 &&
+          method === "POST"
+        ) {
+          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          if (denied) return denied;
+          const { expr } = (await req.json()) as { expr?: string };
+          return json(await reqRepo.validateTableFormula(id, expr ?? "", me));
         }
         // POST /api/tables/:id/fields/:field/options {label} — append a select option
         if (seg[3] === "fields" && seg[5] === "options" && seg.length === 6 && method === "POST") {
@@ -1814,6 +1839,7 @@ if (import.meta.main) {
 
   const server = Bun.serve<PresenceWsData>({
     port: env.port,
+    hostname: env.host,
     idleTimeout: 120,
     maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
     async fetch(req, srv) {

@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Chip } from "../Chip";
+import { useAnchoredPopover } from "../useAnchoredPopover";
 import { PALETTE, PALETTE_NAMES } from "../../../lib/palette";
 import type { CellCtx, EditCtx } from "../types";
 import type { OptionDef } from "../../../data";
@@ -44,29 +45,7 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
   }, []);
 
   // Position the portal popover below (or above) the anchor cell using fixed coords.
-  useLayoutEffect(() => {
-    const pop = popRef.current;
-    const anchor = anchorRef.current;
-    if (!pop || !anchor) return;
-    const place = () => {
-      const a = anchor.getBoundingClientRect();
-      const popH = pop.offsetHeight;
-      let left = a.left;
-      if (left + POPOVER_WIDTH > window.innerWidth - 8)
-        left = window.innerWidth - POPOVER_WIDTH - 8;
-      let top = a.bottom + 2;
-      if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - 2 - popH);
-      pop.style.top = `${top}px`;
-      pop.style.left = `${left}px`;
-    };
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [anchorRef]);
+  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {

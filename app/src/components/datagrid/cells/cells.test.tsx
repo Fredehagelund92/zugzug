@@ -9,6 +9,7 @@ import { RatingCell } from "./RatingCell.tsx";
 import { SelectCell } from "./SelectCell.tsx";
 import { LinkedCell } from "./LinkedCell.tsx";
 import { NumberCell } from "./NumberCell.tsx";
+import { DateCell } from "./DateCell.tsx";
 
 // Minimal CellCtx factory — column comes from a real fixture when config matters.
 function ctx(value: unknown, column: ColumnDef<Record<string, unknown>>) {
@@ -65,6 +66,10 @@ function linkedColumn(): ColumnDef<Record<string, unknown>> {
 
 function numberColumn(): ColumnDef<Record<string, unknown>> {
   return { field: "count", label: "Count", config: { type: "number" } };
+}
+
+function dateColumn(): ColumnDef<Record<string, unknown>> {
+  return { field: "due", label: "Due", config: { type: "date" } };
 }
 
 describe("BooleanCell.Renderer", () => {
@@ -225,5 +230,32 @@ describe("NumberCell.Renderer", () => {
     };
     render(<NumberCell.Renderer {...ctx(1234567, col)} />);
     expect(screen.getByText("1,234,567")).toBeInTheDocument();
+  });
+});
+
+// A long value must truncate (…) within the column instead of spilling into
+// adjacent cells, matching the text-cell behaviour. jsdom has no layout, so we
+// assert the truncation class is present on the value-bearing element.
+describe("cell overflow containment", () => {
+  test("select chip label truncates and the chip is width-capped", () => {
+    render(<SelectCell.Renderer {...ctx("AMER", selectColumn())} />);
+    const label = screen.getByText("AMER");
+    expect(label).toHaveClass("truncate");
+    expect(label.parentElement).toHaveClass("max-w-full", "min-w-0");
+  });
+
+  test("number value truncates", () => {
+    render(<NumberCell.Renderer {...ctx(1234567890, numberColumn())} />);
+    expect(screen.getByText("1234567890")).toHaveClass("truncate");
+  });
+
+  test("date value truncates", () => {
+    render(<DateCell.Renderer {...ctx("2026-07-25", dateColumn())} />);
+    expect(screen.getByText("2026-07-25")).toHaveClass("truncate");
+  });
+
+  test("linked value truncates", () => {
+    render(<LinkedCell.Renderer {...ctx("k1", linkedColumn())} />);
+    expect(screen.getByText("Alice")).toHaveClass("truncate");
   });
 });

@@ -306,19 +306,24 @@ export function AwaitingReview() {
   return (
     <div className="mb-4 rounded-lg border border-line bg-surface">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-ink-2">
-          Awaiting review · {totalCount}
-        </span>
-        {canEdit && selectedDrafts.length > 0 && (
-          <div className="flex items-center gap-2">
-            {!rejecting ? (
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
+        <div className="min-w-0">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
+            Approve teammates’ work
+          </div>
+          <div className="mt-0.5 text-[12px] text-ink-2">
+            Sign off on values your teammates mapped, or send one back with a note.
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          {canEdit && selectedDrafts.length > 0 ? (
+            !rejecting ? (
               <>
                 <Button size="sm" onClick={() => void handlePublishSelected()}>
-                  Publish selected
+                  Approve &amp; publish
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setRejecting(true)}>
-                  Reject selected
+                  Send back
                 </Button>
               </>
             ) : (
@@ -337,7 +342,7 @@ export function AwaitingReview() {
                   loading={rejectLoading}
                   onClick={() => void handleRejectSelected()}
                 >
-                  Reject selected
+                  Send back
                 </Button>
                 <Button
                   variant="ghost"
@@ -350,9 +355,13 @@ export function AwaitingReview() {
                   Cancel
                 </Button>
               </div>
-            )}
-          </div>
-        )}
+            )
+          ) : (
+            <span className="whitespace-nowrap font-mono text-[11px] text-ink-3 tabular-nums">
+              {totalCount} waiting
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Table groups */}

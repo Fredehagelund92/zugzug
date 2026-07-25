@@ -23,7 +23,10 @@ export function Login() {
   const [devBypass, setDevBypass] = useState(false);
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    // Probe the dev/demo one-click login. The button only renders when the route
+    // is live, which requires the operator to have opted in with DEV_BYPASS_AUTH=1
+    // (self-host demo). When off — the default — this 404s and stays hidden, so it
+    // is safe to probe in production builds too, not just local dev.
     authFetch("/auth/dev", { method: "GET", redirect: "manual" })
       .then((r) => {
         // 302 / "opaqueredirect" (Bun returns 302 with status "manual") indicates the route is live.

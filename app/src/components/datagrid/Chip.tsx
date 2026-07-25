@@ -34,28 +34,30 @@ export function Chip({ label, color, bucket, className, dot }: ChipProps) {
     const tint = PALETTE[color];
     return (
       <span
+        title={label}
         className={cx(
-          "inline-flex items-center gap-1.5 rounded-pill border px-2.5 py-0.5 font-mono text-[10.5px]",
+          "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-pill border px-2.5 py-0.5 font-mono text-[10.5px]",
           className,
         )}
         style={{ background: tint.wash, color: tint.fg, borderColor: tint.border }}
       >
-        <span className="h-1.5 w-1.5 rounded-pill" style={{ background: tint.bg }} />
-        {label}
+        <span className="h-1.5 w-1.5 shrink-0 rounded-pill" style={{ background: tint.bg }} />
+        <span className="truncate">{label}</span>
       </span>
     );
   }
   const b = bucket ?? bucketFor(label);
   return (
     <span
+      title={label}
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-sm border border-transparent px-2 py-0.5 font-mono text-[11px] font-medium",
+        "inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-sm border border-transparent px-2 py-0.5 font-mono text-[11px] font-medium",
         STYLES[b],
         className,
       )}
     >
-      {dot && <span className="h-1.5 w-1.5 rounded-pill bg-current" />}
-      {label}
+      {dot && <span className="h-1.5 w-1.5 shrink-0 rounded-pill bg-current" />}
+      <span className="truncate">{label}</span>
     </span>
   );
 }

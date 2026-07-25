@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CellCtx, EditCtx } from "../types";
+import { useAnchoredPopover } from "../useAnchoredPopover";
 
 /* DateCell — typed YYYY-MM-DD input + custom calendar popover.
 
@@ -47,7 +48,9 @@ function sameYMD(a: Date, b: Date): boolean {
 function Renderer<Row>({ value }: CellCtx<Row>) {
   const s = value == null || value === "" ? null : String(value);
   return s ? (
-    <span className="font-mono text-[12px] text-ink">{s}</span>
+    <span className="truncate font-mono text-[12px] text-ink" title={s}>
+      {s}
+    </span>
   ) : (
     <span className="font-mono text-[12px] text-ink-2">—</span>
   );
@@ -120,29 +123,7 @@ function Editor<Row>({ value, initial, commit, cancel, anchorRef }: DateEditorPr
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Anchor the popover under the cell — scroll/resize aware (matches SelectCell).
-  useLayoutEffect(() => {
-    const pop = popRef.current;
-    const anchor = anchorRef.current;
-    if (!pop || !anchor) return;
-    const place = () => {
-      const a = anchor.getBoundingClientRect();
-      const popH = pop.offsetHeight;
-      let left = a.left;
-      if (left + POPOVER_WIDTH > window.innerWidth - 8)
-        left = window.innerWidth - POPOVER_WIDTH - 8;
-      let top = a.bottom + 2;
-      if (top + popH > window.innerHeight - 8) top = Math.max(8, a.top - 2 - popH);
-      pop.style.top = `${top}px`;
-      pop.style.left = `${left}px`;
-    };
-    place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [anchorRef]);
+  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH);
 
   // Outside click closes (commits the typed value if valid, else cancels).
   useEffect(() => {

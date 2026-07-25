@@ -37,3 +37,41 @@ describe("parseFieldConfig validation", () => {
     expect(cfg.validation?.min).toBe(1.5);
   });
 });
+
+describe("parseFieldConfig formula", () => {
+  it("reads expr + resultType for a formula field", () => {
+    const raw = JSON.stringify({ expr: 'IF(amount > 0, "yes", "no")', resultType: "text" });
+    const cfg = parseFieldConfig("formula", raw);
+    expect(cfg.formula).toEqual({ expr: 'IF(amount > 0, "yes", "no")', resultType: "text" });
+  });
+
+  it("defaults resultType to text when missing or invalid", () => {
+    expect(parseFieldConfig("formula", JSON.stringify({ expr: "1" })).formula?.resultType).toBe(
+      "text",
+    );
+    expect(
+      parseFieldConfig("formula", JSON.stringify({ expr: "1", resultType: "bogus" })).formula
+        ?.resultType,
+    ).toBe("text");
+  });
+
+  it("keeps numberFormat only for a number result", () => {
+    const raw = JSON.stringify({
+      expr: "amount * 2",
+      resultType: "number",
+      numberFormat: { format: "decimal", precision: 2 },
+    });
+    const cfg = parseFieldConfig("formula", raw);
+    expect(cfg.formula?.resultType).toBe("number");
+    expect(cfg.formula?.numberFormat).toEqual({ format: "decimal", precision: 2 });
+  });
+
+  it("omits formula when expr is empty or missing", () => {
+    expect(parseFieldConfig("formula", JSON.stringify({ expr: "  " })).formula).toBeUndefined();
+    expect(parseFieldConfig("formula", JSON.stringify({})).formula).toBeUndefined();
+  });
+
+  it("does not attach formula config to non-formula types", () => {
+    expect(parseFieldConfig("text", JSON.stringify({ expr: "1" })).formula).toBeUndefined();
+  });
+});

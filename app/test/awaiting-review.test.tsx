@@ -145,7 +145,7 @@ describe("AwaitingReview", () => {
     // My draft must NOT appear
     expect(screen.queryByText("GBR")).not.toBeInTheDocument();
     // Section header present
-    expect(screen.getByText(/awaiting review/i)).toBeInTheDocument();
+    expect(screen.getByText(/approve teammates/i)).toBeInTheDocument();
     // Grouped under Country table
     expect(screen.getByText("Country")).toBeInTheDocument();
     // Author name present (appears in group header and provenance column)
@@ -181,10 +181,10 @@ describe("AwaitingReview", () => {
     await user.click(checkbox);
 
     // Click "Reject selected" to open inline reject UI
-    await user.click(screen.getByRole("button", { name: /reject selected/i }));
+    await user.click(screen.getByRole("button", { name: /send back/i }));
 
     // The Reject button should now be disabled (no reason entered yet)
-    const rejectBtn = screen.getAllByRole("button", { name: /reject selected/i })[0];
+    const rejectBtn = screen.getAllByRole("button", { name: /send back/i })[0];
     expect(rejectBtn).toBeDisabled();
 
     // Type a reason
@@ -228,8 +228,8 @@ describe("AwaitingReview", () => {
     // No checkboxes
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     // No publish/reject buttons
-    expect(screen.queryByRole("button", { name: /publish selected/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /reject selected/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /approve .*publish/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /send back/i })).not.toBeInTheDocument();
   });
 
   test("reject with one table failing shows partial-failure message and keeps reason input open", async () => {
@@ -273,14 +273,14 @@ describe("AwaitingReview", () => {
     await user.click(screen.getByRole("checkbox", { name: /select nyc/i }));
 
     // Open reject UI
-    await user.click(screen.getByRole("button", { name: /reject selected/i }));
+    await user.click(screen.getByRole("button", { name: /send back/i }));
 
     // Enter reason
     const reasonInput = screen.getByPlaceholderText(/reason \(required\)/i);
     await user.type(reasonInput, "test reason");
 
     // Submit
-    await user.click(screen.getAllByRole("button", { name: /reject selected/i })[0]);
+    await user.click(screen.getAllByRole("button", { name: /send back/i })[0]);
 
     // Partial-failure message appears
     await waitFor(() => {

@@ -282,12 +282,28 @@ export class TenantRepo {
       displayFields?: string[];
       required?: boolean;
       validation?: { unique?: boolean; min?: number | string | null; max?: number | string | null };
+      formula?: {
+        expr: string;
+        resultType: "text" | "number" | "boolean";
+        numberFormat?: NumberFormat;
+      };
     } = {},
     userId: string,
   ): Promise<{ field: string } | null> {
     this.assertRole("manage_adapter");
     return this.withClearCtx(() =>
       repoRecord.addField(refTableId, label, type, options, opts, userId, this.tenantId),
+    );
+  }
+
+  validateTableFormula(
+    refTableId: string,
+    expr: string,
+    _userId: string,
+  ): Promise<{ ok: boolean; error?: string; warning?: string; sample?: string | null }> {
+    this.assertRole("manage_adapter");
+    return this.withClearCtx(() =>
+      repoRecord.validateTableFormula(refTableId, expr, this.tenantId),
     );
   }
 
