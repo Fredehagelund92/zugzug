@@ -1814,6 +1814,7 @@ if (import.meta.main) {
 
   const server = Bun.serve<PresenceWsData>({
     port: env.port,
+    hostname: env.host,
     idleTimeout: 120,
     maxRequestBodySize: 512 * 1024, // 512 KB — largest legit payload is a grid layout
     async fetch(req, srv) {

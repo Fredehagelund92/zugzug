@@ -123,6 +123,9 @@ export const env = {
   appSchema: "zugzug_app",
   duckPath: process.env.DUCK_PATH?.trim() || ":memory:",
   port: Number(process.env.PORT?.trim() || 8787),
+  /** Bind address. Unset → Bun default (0.0.0.0, IPv4). Set HOST=:: to bind
+   *  dual-stack for IPv6-only private networks (e.g. Railway internal DNS). */
+  host: process.env.HOST?.trim() || undefined,
 
   // Auth mode resolution. If OIDC_ISSUER_URL is set, OIDC is the only auth path
   // (the Login page shows "Sign in with SSO"). Otherwise, password is the only
