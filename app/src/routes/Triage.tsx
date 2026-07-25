@@ -131,8 +131,8 @@ function TriageInner() {
   // URL ?filter= and ?q= state — both round-trip.
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = ((): Filter => {
-    const v = searchParams.get("filter");
-    return v === "new" || v === "all" || v === "mapped" ? v : "new";
+    // Review is the "to map" queue; "mapped" is the per-table peek. ("all" retired.)
+    return searchParams.get("filter") === "mapped" ? "mapped" : "new";
   })();
   const [filter, setFilterBase] = useState<Filter>(initialFilter);
   const [searchText, setSearchTextBase] = useState<string>(searchParams.get("q") ?? "");
@@ -206,6 +206,19 @@ function TriageInner() {
     const first = toMap[0] ?? refTables[0];
     return first ? { kind: "table", id: first.id } : { kind: "approve" };
   });
+  // On phones the rail and detail can't sit side by side — drill down instead:
+  // the rail is the first screen, selecting a table slides to its detail. On
+  // md+ both panes are always visible (Tailwind md: overrides), so this flag is
+  // a no-op there.
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const openTable = useCallback((id: string) => {
+    setView({ kind: "table", id });
+    setMobileShowDetail(true);
+  }, []);
+  const openApprove = useCallback(() => {
+    setView({ kind: "approve" });
+    setMobileShowDetail(true);
+  }, []);
   // Keep the selected table valid as data changes.
   useEffect(() => {
     if (view.kind === "table" && !refTableById.has(view.id)) {
@@ -439,41 +452,42 @@ function TriageInner() {
           className="zz-rise flex min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-surface"
           style={{ animationDelay: "150ms" }}
         >
-          {/* Left rail — every table's progress, plus the approve inbox. */}
-          <TableRail
-            toMap={toMap}
-            clean={cleanTables}
-            totalToMap={totalNew}
-            activeId={view.kind === "table" ? view.id : null}
-            approveCount={awaitingCount}
-            approveActive={view.kind === "approve"}
-            onSelectTable={(id) => setView({ kind: "table", id })}
-            onSelectApprove={() => setView({ kind: "approve" })}
-          />
+          {/* Left rail — desktop: always visible. Mobile: the first screen,
+              hidden once a table is opened (drill-down). */}
+          <div
+            className={cx(
+              "w-full flex-col overflow-y-auto bg-surface md:flex md:w-60 md:shrink-0 md:border-r md:border-line",
+              mobileShowDetail ? "hidden" : "flex",
+            )}
+          >
+            <TableRail
+              toMap={toMap}
+              clean={cleanTables}
+              totalToMap={totalNew}
+              activeId={view.kind === "table" ? view.id : null}
+              approveCount={awaitingCount}
+              approveActive={view.kind === "approve"}
+              onSelectTable={openTable}
+              onSelectApprove={openApprove}
+            />
+          </div>
 
-          {/* Main pane — the selected table's values, or the approve inbox. */}
-          <div className="flex min-w-0 flex-1 flex-col">
+          {/* Main pane — desktop: always. Mobile: only once a table is opened. */}
+          <div
+            className={cx("min-w-0 flex-1 flex-col md:flex", mobileShowDetail ? "flex" : "hidden")}
+          >
+            {/* Mobile-only back to the table list. */}
+            <button
+              type="button"
+              onClick={() => setMobileShowDetail(false)}
+              className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-2.5 text-left font-mono text-[12px] text-ink-2 transition-colors hover:text-ink md:hidden"
+            >
+              ‹ All tables
+            </button>
+
             {view.kind === "table" && activeDim && (
-              <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-3 py-2.5 md:px-4">
-                <div className="flex flex-wrap items-center gap-1">
-                  {(["new", "all", "mapped"] as Filter[]).map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setFilter(k)}
-                      className={cx(
-                        "min-h-[44px] rounded-sm px-2.5 py-1 text-sm font-semibold transition-colors md:min-h-0",
-                        filter === k
-                          ? "bg-accent text-accent-ink"
-                          : "text-ink-2 hover:bg-hover hover:text-ink",
-                      )}
-                    >
-                      {k === "new" ? "To map" : k === "all" ? "All" : "Mapped"}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex min-w-[10rem] max-w-md flex-1 items-center gap-2 rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 text-ink-3 transition-colors focus-within:border-accent">
+              <div className="flex shrink-0 items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-3 py-2.5 md:px-4">
+                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-sm border border-line-2 bg-bg px-2.5 py-1.5 text-ink-3 transition-colors focus-within:border-accent md:max-w-md">
                   <IconSearch className="h-3.5 w-3.5 shrink-0" />
                   <input
                     type="search"
@@ -514,7 +528,7 @@ function TriageInner() {
                 <div className="p-3">
                   <AwaitingReview />
                 </div>
-              ) : toMap.length === 0 && awaitingCount === 0 && filter === "new" ? (
+              ) : toMap.length === 0 && awaitingCount === 0 && filter !== "mapped" ? (
                 // Nothing to map anywhere and nothing to approve — the settled state.
                 <div className="p-3">
                   <EmptyState filter="new" onSwitchToNew={() => setFilter("new")} />
@@ -528,6 +542,8 @@ function TriageInner() {
                   canEdit={canEdit}
                   cursor={cursor}
                   setCursor={setCursor}
+                  filter={filter}
+                  setFilter={setFilter}
                   onSkip={(raw) => skipCross(activeDim.id, raw)}
                   onPick={(raw, label) => pickCross(activeDim.id, raw, label)}
                   onRestage={(raw) => restageCross(activeDim.id, raw)}
@@ -706,7 +722,7 @@ interface TableRailProps {
 
 function TableRail(p: TableRailProps) {
   return (
-    <div className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-line bg-surface">
+    <div className="flex min-h-full w-full flex-col">
       <div className="px-3.5 pb-1.5 pt-3 font-mono text-[10px] uppercase tracking-wider text-ink-3">
         To map · {p.totalToMap} left
       </div>
@@ -778,6 +794,8 @@ interface MapPaneProps {
   canEdit: boolean;
   cursor: { refTableId: string; raw: string } | null;
   setCursor: (c: { refTableId: string; raw: string } | null) => void;
+  filter: Filter;
+  setFilter: (f: Filter) => void;
   onSkip: (raw: string) => void;
   onPick: (raw: string, label: string) => void;
   onRestage: (raw: string) => void;
@@ -809,16 +827,42 @@ function MapPane(p: MapPaneProps) {
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-2.5">
         <div className="min-w-0">
           <div className="font-mono text-[10px] uppercase tracking-wider text-ink-3">
-            Map these values
+            {p.filter === "mapped" ? "Already mapped" : "Map these values"}
           </div>
-          <div className="mt-0.5 flex items-center gap-2">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="truncate font-display text-[16px] font-semibold text-ink">
               {refTable.refTable}
             </span>
-            <span className="shrink-0 font-mono text-[11px] text-ink-3 tabular-nums">
-              {refTable.counts.newCount} to map ·{" "}
-              {refTable.counts.unmappedRowsTotal.toLocaleString()} rows
-            </span>
+            {p.filter === "mapped" ? (
+              // Review/fix an already-mapped value, then get back to the queue.
+              <span className="flex items-center gap-2 font-mono text-[11px] tabular-nums">
+                <button
+                  type="button"
+                  onClick={() => p.setFilter("new")}
+                  className="text-accent transition-colors hover:underline"
+                >
+                  ‹ {refTable.counts.newCount} to map
+                </button>
+                <span className="text-ink-3">· showing {refTable.counts.mappedCount} mapped</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-2 font-mono text-[11px] tabular-nums">
+                <span className="text-ink-3">
+                  {refTable.counts.newCount} to map ·{" "}
+                  {refTable.counts.unmappedRowsTotal.toLocaleString()} rows
+                </span>
+                {refTable.counts.mappedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => p.setFilter("mapped")}
+                    className="text-ink-3 transition-colors hover:text-ink"
+                    title="Review or fix values you've already mapped"
+                  >
+                    · {refTable.counts.mappedCount} mapped ✓
+                  </button>
+                )}
+              </span>
+            )}
           </div>
         </div>
         {refTable.counts.scannedAt && p.canEdit && (
@@ -1078,9 +1122,10 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
                 isCursor ? "bg-accent-wash/30" : "hover:bg-hover",
               )}
             >
-              {/* Fixed 3-column grid: value | picker | status — so every
-                  "Choose record" control lines up in the same column. */}
-              <div className="grid grid-cols-[minmax(0,1fr)_15rem_5.5rem] items-center gap-3">
+              {/* Desktop: fixed 3-column grid (value | picker | status) so every
+                  "Choose record" control lines up. Mobile: stack vertically with
+                  a full-width picker. */}
+              <div className="flex flex-col gap-2 md:grid md:grid-cols-[minmax(0,1fr)_15rem_5.5rem] md:items-center md:gap-3">
                 <span className="min-w-0">
                   <span className="block truncate font-mono text-[13px] text-ink">{r.raw}</span>
                   <span className="block truncate font-mono text-[10px] text-ink-3 tabular-nums">
