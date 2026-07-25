@@ -174,62 +174,64 @@ export function Users() {
             body="Try a different search term, filter, or invite teammates from a workspace."
           />
         ) : (
-          <div className="divide-y divide-line">
-            <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5">
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                User
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Last seen
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
-                Workspaces
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
-                Role
-              </span>
-              <span />
-            </div>
-            {filteredUsers.map((u) => (
-              <div
-                key={u.id}
-                className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-7 w-7 shrink-0 rounded-full bg-accent flex items-center justify-center">
-                    <span className="font-mono text-[10px] font-bold text-accent-ink">
-                      {u.initials}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm text-ink truncate">{u.name}</div>
-                    <div className="font-mono text-xs text-ink-3 truncate">{u.email ?? "—"}</div>
-                  </div>
-                </div>
-                <span className="font-mono text-xs text-ink-3 tabular-nums">
-                  {relativeTime(u.lastSeenAt)}
+          <div className="overflow-x-auto">
+            <div className="min-w-[760px] divide-y divide-line">
+              <div className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-2.5">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                  User
                 </span>
-                <span className="font-mono text-xs text-ink-3 tabular-nums text-right">
-                  {u.membershipCount}
+                <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                  Last seen
                 </span>
-                <div>
-                  {u.isSuperAdmin ? (
-                    <SuperAdminBadge />
-                  ) : (
-                    <span className="font-mono text-[10px] text-ink-3">—</span>
-                  )}
-                </div>
-                <div className="flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setPending({ user: u, promote: !u.isSuperAdmin })}
-                  >
-                    {u.isSuperAdmin ? "Demote" : "Promote"}
-                  </Button>
-                </div>
+                <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3 text-right">
+                  Workspaces
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-widest text-ink-3">
+                  Role
+                </span>
+                <span />
               </div>
-            ))}
+              {filteredUsers.map((u) => (
+                <div
+                  key={u.id}
+                  className="grid grid-cols-[1fr_160px_80px_100px_120px] gap-4 items-center px-5 py-3 hover:bg-hover transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-7 w-7 shrink-0 rounded-full bg-accent flex items-center justify-center">
+                      <span className="font-mono text-[10px] font-bold text-accent-ink">
+                        {u.initials}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm text-ink truncate">{u.name}</div>
+                      <div className="font-mono text-xs text-ink-3 truncate">{u.email ?? "—"}</div>
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs text-ink-3 tabular-nums">
+                    {relativeTime(u.lastSeenAt)}
+                  </span>
+                  <span className="font-mono text-xs text-ink-3 tabular-nums text-right">
+                    {u.membershipCount}
+                  </span>
+                  <div>
+                    {u.isSuperAdmin ? (
+                      <SuperAdminBadge />
+                    ) : (
+                      <span className="font-mono text-[10px] text-ink-3">—</span>
+                    )}
+                  </div>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPending({ user: u, promote: !u.isSuperAdmin })}
+                    >
+                      {u.isSuperAdmin ? "Demote" : "Promote"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Panel>

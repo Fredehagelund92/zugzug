@@ -393,7 +393,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   const gridStyle = useMemo(() => {
     const tracks = orderedVisible.map((c) => {
       const w = colWidth(c.field);
-      return w ? `${w}px` : "minmax(0, 1fr)";
+      return w ? `${w}px` : "minmax(var(--zz-col-min, 0px), 1fr)";
     });
     if (selectionCol) tracks.unshift("28px");
     if (showRowNumbers) tracks.unshift("36px");

@@ -356,6 +356,16 @@
 .zz-grid-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--line-2) transparent;
+  /* Floor for auto-sized (1fr) columns — see DataGrid gridStyle. On desktop
+     unsized columns fill the viewport (min 0); on phones that squeezes them to
+     unreadable 2-char stubs, so we give each a legible minimum and let the grid
+     scroll sideways instead. */
+  --zz-col-min: 0px;
+}
+@media (max-width: 640px) {
+  .zz-grid-scroll {
+    --zz-col-min: 8.5rem;
+  }
 }
 .zz-grid-scroll::-webkit-scrollbar {
   width: 10px;
