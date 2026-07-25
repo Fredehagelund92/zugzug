@@ -25,7 +25,12 @@ import { basename } from "node:path";
 import { env } from "./env.ts";
 
 const T = "default";
-const U = "u_verify";
+// Attribute demo activity to the seeded demo team (bootstrap.ts seeds Ada/Li/Cory)
+// so Review and Activity show real reviewers instead of "Unknown". Ada authors the
+// governed tables and published mappings; Li and Cory own the pending-review drafts.
+const U = "u_ada";
+const LI = "u_li";
+const CORY = "u_cory";
 
 // ── tiny helpers over the repo primitives ───────────────────────────────────
 
@@ -66,8 +71,8 @@ const inject = (ref: string, tbl: string, col: string, vals: Array<[string, numb
     scannedAt: new Date(),
   });
 
-const map = (ref: string, raw: string, key: string, label: string) =>
-  saveDraft(ref, raw, "mapped", label, key, U, T);
+const map = (ref: string, raw: string, key: string, label: string, by: string = U) =>
+  saveDraft(ref, raw, "mapped", label, key, by, T);
 const publish = (ref: string) => commit(ref, U, T);
 
 // Populate a table's source values for value-mapping. With the bundled local
@@ -207,10 +212,10 @@ export async function seedDemo(): Promise<void> {
     await map(country, raw, key, label);
   await publish(country); // → the above are live in dim_/map_country
   // These stay as pending drafts (visible in Review as "awaiting publish"):
-  await map(country, "Great Britain", "gb", "United Kingdom");
-  await map(country, "The Netherlands", "nl", "Netherlands");
-  await map(country, "Nederland", "nl", "Netherlands");
-  await map(country, "Brasil", "br", "Brazil");
+  await map(country, "Great Britain", "gb", "United Kingdom", LI);
+  await map(country, "The Netherlands", "nl", "Netherlands", LI);
+  await map(country, "Nederland", "nl", "Netherlands", LI);
+  await map(country, "Brasil", "br", "Brazil", CORY);
 
   // 4. Vendor — the reconciliation hero. Invented company names; messy invoice
   //    strings map to approved vendor records. select + boolean + date columns.
@@ -279,11 +284,11 @@ export async function seedDemo(): Promise<void> {
     await map(vendor, raw, key, label);
   await publish(vendor);
   // Pending in Review:
-  await map(vendor, "vantage prtnrs", "vantage_partners", "Vantage Partners");
-  await map(vendor, "Meridian Sys", "meridian_systems", "Meridian Systems");
-  await map(vendor, "Trellis Software", "trellis_software", "Trellis Software");
-  await map(vendor, "Trellis", "trellis_software", "Trellis Software");
-  await map(vendor, "Northgate Advisory", "northgate_advisory", "Northgate Advisory");
+  await map(vendor, "vantage prtnrs", "vantage_partners", "Vantage Partners", CORY);
+  await map(vendor, "Meridian Sys", "meridian_systems", "Meridian Systems", CORY);
+  await map(vendor, "Trellis Software", "trellis_software", "Trellis Software", LI);
+  await map(vendor, "Trellis", "trellis_software", "Trellis Software", LI);
+  await map(vendor, "Northgate Advisory", "northgate_advisory", "Northgate Advisory", CORY);
 
   // 5. Marketing Channel — another value-mapping table (fb/google sprawl).
   const channel = await table("Marketing Channel");
@@ -330,9 +335,9 @@ export async function seedDemo(): Promise<void> {
   ] as const)
     await map(channel, raw, key, label);
   await publish(channel);
-  await map(channel, "facebook ads", "paid_social", "Paid Social");
-  await map(channel, "newsletter", "email", "Email");
-  await map(channel, "email", "email", "Email");
+  await map(channel, "facebook ads", "paid_social", "Paid Social", LI);
+  await map(channel, "newsletter", "email", "Email", CORY);
+  await map(channel, "email", "email", "Email", CORY);
 
   // 6. Subscription Plan — a small governed list with numbers + boolean.
   const plan = await table("Subscription Plan");
