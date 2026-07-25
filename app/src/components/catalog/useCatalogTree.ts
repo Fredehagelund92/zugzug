@@ -3,8 +3,11 @@ import { fetchWarehouseDatabases, fetchWarehouseInfo } from "../../api";
 import { listSchemas, listTablesInSchema } from "../../store";
 import { tintForSchema, type TreeNode } from "./catalog-tree";
 
+// Keyed by deployment engine (preferred) then adapter id. Local DuckDB and
+// MotherDuck both report adapter "duckdb"; the engine field tells them apart.
 const CONN_META: Record<string, { name: string; glyph: string }> = {
-  duckdb: { name: "MotherDuck", glyph: "🦆" },
+  motherduck: { name: "MotherDuck", glyph: "🦆" },
+  duckdb: { name: "DuckDB", glyph: "🦆" },
   snowflake: { name: "Snowflake", glyph: "◆" },
 };
 
@@ -20,7 +23,8 @@ export function useCatalogTree() {
     Promise.all([fetchWarehouseInfo(), fetchWarehouseDatabases()])
       .then(([info, dbs]) => {
         if (cancelled) return;
-        const meta = CONN_META[info.adapter] ?? { name: info.adapter, glyph: "▦" };
+        const meta = CONN_META[info.engine ?? ""] ??
+          CONN_META[info.adapter] ?? { name: info.adapter, glyph: "▦" };
         const conn: TreeNode = {
           id: "conn",
           kind: "connection",

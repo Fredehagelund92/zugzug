@@ -18,6 +18,8 @@ interface Props {
    *  flashing the "No databases registered yet" empty state. */
   loading?: boolean;
   canAdd: boolean;
+  /** Deployment engine name for the badge / empty state (e.g. "DuckDB", "MotherDuck"). */
+  engineName?: string;
   onAdd: () => void;
   onRemove?: (db: DatabaseRow) => void;
 }
@@ -60,11 +62,12 @@ function schemaText(n: number | null): string {
 
 export function DatabaseTable(props: Props): JSX.Element {
   const n = props.databases.length;
+  const engine = props.engineName ?? "the warehouse";
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-surface">
       <div className="flex items-center justify-between gap-3 border-b border-line bg-surface-2 px-4 py-2.5">
         <span className="flex items-center gap-2.5 text-[12px] text-ink-2">
-          <Badge tone="accent">MotherDuck</Badge>
+          <Badge tone="accent">{props.engineName ?? "Warehouse"}</Badge>
           {props.loading && n === 0 ? "" : `${n} database${n === 1 ? "" : "s"} registered`}
         </span>
         {props.canAdd && (
@@ -78,7 +81,7 @@ export function DatabaseTable(props: Props): JSX.Element {
         <div className="px-4 py-6 text-[12.5px] text-ink-3">Loading databases…</div>
       ) : props.databases.length === 0 ? (
         <div className="px-4 py-6 text-[12.5px] text-ink-2">
-          No databases registered yet — click “+ Add database” to pick one discovered in MotherDuck.
+          No databases registered yet — click “+ Add database” to pick one discovered in {engine}.
         </div>
       ) : (
         <table className="w-full">

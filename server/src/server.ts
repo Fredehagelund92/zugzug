@@ -463,6 +463,9 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const adapter = await getAdapterFn();
         return json({
           adapter: adapter.capabilities.id,
+          // Local DuckDB and MotherDuck share capabilities.id "duckdb"; surface the
+          // deployment engine so the UI can label them apart (DuckDB vs MotherDuck).
+          engine: env.warehouseAdapter,
           databaseTerm: adapter.capabilities.databaseTerm,
         });
       } catch (e) {
@@ -931,6 +934,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const adapterInstance = await getAdapterFn();
         return json({
           adapter: adapterInstance.capabilities.id,
+          engine: env.warehouseAdapter,
           writable: adapterInstance.capabilities.writable,
           recordMode: adapterInstance.capabilities.writable ? "warehouse" : "postgres-export",
         });

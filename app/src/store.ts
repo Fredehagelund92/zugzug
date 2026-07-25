@@ -132,6 +132,9 @@ export interface Preferences {
 
 export interface WorkspaceInfo {
   adapter: "duckdb" | "snowflake";
+  /** Deployment engine — distinguishes local DuckDB from MotherDuck (both report
+   *  adapter "duckdb"). Absent on older servers. */
+  engine?: "duckdb" | "motherduck" | "disabled";
   writable: boolean;
   recordMode: "warehouse" | "postgres-export";
 }

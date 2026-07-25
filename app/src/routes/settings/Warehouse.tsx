@@ -91,11 +91,22 @@ function StatusPill() {
   );
 }
 
+/** Local DuckDB and MotherDuck both report adapter "duckdb"; label from the
+ *  deployment engine so a DuckDB demo doesn't read as "MotherDuck". */
+function engineName(engine?: string, adapterFallback?: string): string {
+  if (engine === "duckdb") return "DuckDB";
+  if (engine === "motherduck") return "MotherDuck";
+  if (adapterFallback) return adapterFallback[0]?.toUpperCase() + adapterFallback.slice(1);
+  return "Warehouse";
+}
+
 /* --------------------------------------------------------------- databases */
 
 function DatabasesSection() {
   const tenant = useTenant();
   const isSuperAdmin = tenant.isSuperAdmin === true;
+  const wsInfo = useWorkspaceInfo();
+  const engine = engineName(wsInfo?.engine, wsInfo?.adapter);
   const [databases, setDatabases] = useState<DatabaseRow[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -120,7 +131,7 @@ function DatabasesSection() {
   return (
     <SettingsSection
       title="Warehouse databases"
-      hint="Pick which MotherDuck databases this deployment uses. The token is loaded from the environment; databases are shared across all workspaces."
+      hint="Pick which warehouse databases this deployment uses. Credentials are loaded from the environment; databases are shared across all workspaces."
       bare
     >
       <div className="space-y-2">
@@ -136,6 +147,7 @@ function DatabasesSection() {
             databases={databases}
             loading={dbLoading}
             canAdd={isSuperAdmin}
+            engineName={engine}
             onAdd={() => setShowAdd(true)}
             onRemove={isSuperAdmin ? (db) => setRemoving(db) : undefined}
           />
@@ -144,6 +156,7 @@ function DatabasesSection() {
 
       {showAdd && (
         <AddDatabaseDialog
+          engineName={engine}
           onCancel={() => setShowAdd(false)}
           onAdded={async () => {
             setShowAdd(false);
@@ -208,11 +221,7 @@ function ConnCard({
 function ConnectionsSection() {
   const tenant = useTenant();
   const wsInfo = useWorkspaceInfo();
-  const adapterLabel = wsInfo
-    ? wsInfo.adapter === "duckdb"
-      ? "MotherDuck"
-      : wsInfo.adapter[0]?.toUpperCase() + wsInfo.adapter.slice(1)
-    : "…";
+  const adapterLabel = wsInfo ? engineName(wsInfo.engine, wsInfo.adapter) : "…";
   const health = useConnectionHealth();
   const refreshHealth = useAsyncAction(async () => {
     await refreshConnectionHealth({ force: true });
