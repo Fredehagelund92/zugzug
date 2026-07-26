@@ -76,7 +76,56 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
   }));
 }
 
-export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
+/** Default/max page sizes for the workspace-wide drafts read (#151). Keeps a
+ *  single request from materializing an unbounded backlog in the Bun process. */
+const DEFAULT_LIMIT_ALL_DRAFTS = 1000;
+const MAX_LIMIT_ALL_DRAFTS = 2000;
+
+/** Opaque keyset cursor for listAllDraftsPage. The keyset is the draft's
+ *  primary-key tail (reference_table_id, raw, user_id) — unique per tenant and
+ *  already index-backed by the composite PK. Tenant is enforced from the
+ *  authenticated request, never from the cursor, so a plain base64 encoding is
+ *  safe (a tampered cursor can only reposition within the caller's own tenant). */
+interface DraftCursor {
+  r: string; // reference_table_id
+  w: string; // raw
+  u: string; // user_id
+}
+function encodeDraftCursor(c: DraftCursor): string {
+  return Buffer.from(JSON.stringify(c)).toString("base64url");
+}
+function decodeDraftCursor(s: string): DraftCursor {
+  try {
+    const o = JSON.parse(Buffer.from(s, "base64url").toString("utf8")) as DraftCursor;
+    if (typeof o.r === "string" && typeof o.w === "string" && typeof o.u === "string") return o;
+  } catch {
+    /* fall through */
+  }
+  throw new AppError("VALIDATION_FAILED", "invalid drafts cursor", 400);
+}
+
+/** One keyset-paginated page of every draft in the workspace. Ordered by the
+ *  PK tail (reference_table_id, raw, user_id) so the cursor is stable and the
+ *  scan rides the composite primary key. The Review inbox pages through with
+ *  the returned nextCursor until it is null. */
+export async function listAllDraftsPage(
+  tenantId: string,
+  opts?: { cursor?: string | null; limit?: number },
+): Promise<{ drafts: Draft[]; nextCursor: string | null }> {
+  const limit =
+    !opts?.limit || opts.limit <= 0
+      ? DEFAULT_LIMIT_ALL_DRAFTS
+      : Math.min(Math.floor(opts.limit), MAX_LIMIT_ALL_DRAFTS);
+  const after = opts?.cursor ? decodeDraftCursor(opts.cursor) : null;
+
+  const params: unknown[] = [tenantId];
+  let keyset = "";
+  if (after) {
+    params.push(after.r, after.w, after.u);
+    keyset = ` AND (reference_table_id, raw, user_id) > ($2, $3, $4)`;
+  }
+  params.push(limit + 1); // fetch one extra to know whether another page exists
+
   const rows = await pgAll<{
     refTableId: string;
     raw: string;
@@ -97,10 +146,19 @@ export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
-     FROM ${pg("draft")} WHERE tenant_id = $1 ORDER BY reference_table_id, created_at DESC`,
-    [tenantId],
+     FROM ${pg("draft")} WHERE tenant_id = $1${keyset}
+     ORDER BY reference_table_id, raw, user_id
+     LIMIT $${params.length}`,
+    params,
   );
-  if (rows.length === 0) return [];
+
+  let nextCursor: string | null = null;
+  if (rows.length > limit) {
+    rows.pop(); // drop the sentinel extra row
+    const tail = rows[rows.length - 1]!;
+    nextCursor = encodeDraftCursor({ r: tail.refTableId, w: tail.raw, u: tail.uid });
+  }
+  if (rows.length === 0) return { drafts: [], nextCursor };
 
   const uids = Array.from(new Set(rows.map((r) => r.uid)));
   const users = await pgAll<User>(
@@ -110,7 +168,7 @@ export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
   const byId = new Map(users.map((u) => [u.id, u]));
   const unknownUser: User = { id: "unknown", name: "Unknown", initials: "??" };
 
-  return rows.map((r) => ({
+  const drafts = rows.map((r) => ({
     refTableId: r.refTableId,
     raw: r.raw,
     status: r.status,
@@ -124,6 +182,7 @@ export async function listAllDrafts(tenantId: string): Promise<Draft[]> {
     rejectedReason: r.rejectedReason,
     rejectedBy: r.rejectedBy,
   }));
+  return { drafts, nextCursor };
 }
 
 export async function saveDraft(
@@ -338,19 +397,24 @@ function canonRow(row: unknown): string {
  *  first publish ships the whole table). Otherwise: keys stamped in
  *  record_version since the last publish, minus records whose values are
  *  back to identical with the last snapshot — so reverting an edit clears it. */
+/** Row executor: pgAll by default, or a tx.all so callers can read inside an
+ *  open transaction (pgTx does not auto-route pg.* through its connection). */
+type RowExec = <T = Record<string, unknown>>(q: string, p?: unknown[]) => Promise<T[]>;
+
 async function changedKeysSince(
   refTableId: string,
   tenantId: string,
   since: Date | null,
   meta: { dimTable: string; keyCol: string },
+  exec: RowExec = pgAll,
 ): Promise<string[]> {
   if (!since) {
-    const rows = await pgAll<{ key: string }>(
+    const rows = await exec<{ key: string }>(
       `SELECT ${qid(meta.keyCol)}::text AS key FROM ${cq(meta.dimTable)} ORDER BY 1`,
     );
     return rows.map((r) => r.key);
   }
-  const stamped = await pgAll<{ key: string }>(
+  const stamped = await exec<{ key: string }>(
     `SELECT key FROM ${pg("record_version")}
      WHERE reference_table_id = $1 AND tenant_id = $2
        AND (updated_at > $3 OR retired_at > $3)
@@ -362,7 +426,7 @@ async function changedKeysSince(
 
   // Legacy double-encoded snapshots yield no rows here → every stamped key
   // counts as changed, which degrades to the pre-diff behaviour.
-  const snapRows = await pgAll<{ key: string; row: unknown }>(
+  const snapRows = await exec<{ key: string; row: unknown }>(
     `SELECT e.rec->>$4 AS key, e.rec AS row
        FROM ${pg("reference_table_version")} v
        CROSS JOIN LATERAL jsonb_array_elements(v.snapshot->'records') AS e(rec)
@@ -372,7 +436,7 @@ async function changedKeysSince(
         AND e.rec->>$4 = ANY($3)`,
     [refTableId, tenantId, keys, meta.keyCol],
   );
-  const curRows = await pgAll<{ key: string; row: unknown }>(
+  const curRows = await exec<{ key: string; row: unknown }>(
     `SELECT ${qid(meta.keyCol)}::text AS key, to_jsonb(t) AS row
        FROM ${cq(meta.dimTable)} t
       WHERE ${qid(meta.keyCol)}::text = ANY($1)`,
@@ -753,37 +817,63 @@ export async function commit(
 
   const rowsRecovered = await rowsForUnmappedDrafts(refTableId, tenantId, meta.mapTable);
 
-  // Capture distinct target_keys BEFORE the tx so they're available after
-  // the draft rows are deleted inside the transaction.
-  const committedRows = await pgAll<{ target_key: string }>(
-    `SELECT DISTINCT target_key FROM ${DRAFT}
-     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
-    baseParams(),
-  );
-
-  // Snapshot approved drafts BEFORE the tx so we can pass them to the
-  // warehouse adapter after the Postgres commit succeeds.
-  const approvedDrafts = await pgAll<{ raw: string; key: string; label: string | null }>(
-    `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
-     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
-    baseParams(),
-  );
-
-  // Identify remaps (raw already mapped but to a different target_key) so we
-  // can record them separately in the outbound event and audit log.
-  const remappedDrafts = await pgAll<{ raw: string; from_key: string; to_key: string }>(
-    `SELECT d.raw, m.${key} AS from_key, d.target_key AS to_key
-     FROM ${DRAFT} d
-     JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
-     WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
-       AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}`,
-    baseParamsD(),
-  );
+  // Event/audit inputs are captured INSIDE the tx below (not here) so they
+  // agree with the version snapshot written in the same transaction (#152): a
+  // concurrent record edit landing between a pre-tx read and the snapshot would
+  // otherwise be counted in one but not the other. Declared out here so the
+  // post-commit warehouse sync and audit loop can still read them.
+  let committedRows: { target_key: string }[] = [];
+  let approvedDrafts: { raw: string; key: string; label: string | null }[] = [];
+  let recordChangedForEvent: string[] = [];
 
   // PR2b Task 8 adds tenant_id to dim_*/map_*. Until then, the dynamic SQL
   // stays per-tenant-implicit (refTable ids are globally unique → effectively
   // per-tenant via the refTable registry's WHERE tenant_id = $N gate above).
   await pgTx(async (tx) => {
+    // Serialize version assignment per (tenant, reference table). The next
+    // version is derived from count(*) of prior table.published events below;
+    // under READ COMMITTED two concurrent publishers would both read the same
+    // count and compute the same version, and the loser rolls back on the
+    // reference_table_version unique index (#150). A transaction-scoped
+    // advisory lock makes the second publisher wait for the first to commit,
+    // so it sees the new event row and picks the next version. Released
+    // automatically at tx end.
+    await tx.run(`SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`, [tenantId, refTableId]);
+
+    // Capture every event/audit input inside the tx, before any mutation, so
+    // they are mutually consistent and consistent with the version snapshot
+    // written below (#152). changedKeysSince routes through tx.all so it reads
+    // this transaction's snapshot, not a separate pooled connection.
+    recordChangedForEvent = await changedKeysSince(
+      refTableId,
+      tenantId,
+      lastPublish?.at ?? null,
+      { dimTable: meta.dimTable, keyCol: meta.keyCol },
+      tx.all,
+    );
+    // Distinct target_keys — read before the draft rows are deleted below.
+    committedRows = await tx.all<{ target_key: string }>(
+      `SELECT DISTINCT target_key FROM ${DRAFT}
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+      baseParams(),
+    );
+    // Approved drafts — passed to the warehouse adapter after the tx commits.
+    approvedDrafts = await tx.all<{ raw: string; key: string; label: string | null }>(
+      `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+      baseParams(),
+    );
+    // Remaps (raw already mapped but to a different target_key) — recorded
+    // separately in the outbound event and audit log.
+    const remappedDrafts = await tx.all<{ raw: string; from_key: string; to_key: string }>(
+      `SELECT d.raw, m.${key} AS from_key, d.target_key AS to_key
+       FROM ${DRAFT} d
+       JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
+       WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
+         AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}`,
+      baseParamsD(),
+    );
+
     // Update existing map rows whose target has changed (remaps).
     if (remappedDrafts.length > 0) {
       await tx.run(
@@ -909,7 +999,7 @@ export async function commit(
         summary: {
           added: addedKeys.length,
           remapped: remappedKeys.length,
-          updated: recordChanged.length,
+          updated: recordChangedForEvent.length,
           merged: 0,
           retired: 0,
         },
@@ -942,7 +1032,7 @@ export async function commit(
     await appendAuditAs(
       userId,
       "Published",
-      `${recordChanged.length} record change${recordChanged.length === 1 ? "" : "s"} → ${meta.dimTable}`,
+      `${recordChangedForEvent.length} record change${recordChangedForEvent.length === 1 ? "" : "s"} → ${meta.dimTable}`,
       { tenantId },
     );
   }

@@ -1,4 +1,5 @@
 import { cx } from "../lib/cx";
+import { focusRing } from "../lib/focus-ring";
 import { IconCheck } from "./Icons";
 
 /* Checkbox — a squared, token-driven checkbox supporting a mixed state. */
@@ -23,6 +24,7 @@ export function Checkbox({
       onClick={onClick}
       className={cx(
         "grid h-4 w-4 shrink-0 place-items-center rounded-sm border transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+        focusRing,
         state === "off"
           ? "border-line-2 hover:border-accent"
           : "border-accent bg-accent text-accent-ink",

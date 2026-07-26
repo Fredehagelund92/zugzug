@@ -10,6 +10,7 @@ import {
 import { usePageTitle } from "../hooks/usePageTitle";
 import { Link, useSearchParams } from "react-router-dom";
 import { useNavLinks } from "../lib/use-tenant-navigate";
+import { useDebouncedValue } from "../lib/use-debounced-value";
 import { Button } from "../components/Button";
 import { NoTablesYet } from "../components/NoTablesYet";
 import { PageHeader } from "../components/PageHeader";
@@ -228,10 +229,13 @@ function TriageInner() {
   }, [view, refTableById, toMap, refTables]);
 
   const activeDim = view.kind === "table" ? (refTableById.get(view.id) ?? null) : null;
+  // Debounce the query that re-keys the fetch hook so typing doesn't fire a
+  // request + setItems([]) per keystroke; the input itself stays immediate (#158).
+  const debouncedSearch = useDebouncedValue(searchText, 250);
   const valuesPage = useRefTableValuesPage({
     refTableId: activeDim?.id ?? null,
     filter,
-    q: searchText || undefined,
+    q: debouncedSearch || undefined,
   });
 
   // Focus-refetch: when the user returns to the tab, reload the active section

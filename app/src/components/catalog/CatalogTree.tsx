@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { IconChevron } from "../Icons";
 import { cx } from "../../lib/cx";
+import { focusRing } from "../../lib/focus-ring";
 import { flattenVisible, type TreeNode } from "./catalog-tree";
 
 const ROW = 28;
@@ -37,7 +38,12 @@ export function CatalogTree({
   const useVirtual = items.length > 0;
 
   return (
-    <div ref={parentRef} className="min-h-0 flex-1 overflow-auto px-1.5 pb-6 pt-1.5">
+    <div
+      ref={parentRef}
+      role="tree"
+      aria-label="Warehouse catalog"
+      className="min-h-0 flex-1 overflow-auto px-1.5 pb-6 pt-1.5"
+    >
       <div
         className="relative w-full"
         style={useVirtual ? { height: virtual.getTotalSize() } : undefined}
@@ -87,6 +93,9 @@ function TreeRow({
   return (
     <button
       type="button"
+      role="treeitem"
+      aria-selected={selected}
+      aria-expanded={hasKids ? open : undefined}
       onClick={() => {
         if (hasKids) onToggle();
         onSelect();
@@ -94,6 +103,7 @@ function TreeRow({
       style={{ paddingLeft: 8 + node.depth * 14 }}
       className={cx(
         "relative flex h-7 w-full items-center gap-1.5 rounded-sm pr-2 text-left transition-colors",
+        focusRing,
         selected
           ? "bg-accent/15 text-ink before:absolute before:left-0 before:h-[18px] before:w-0.5 before:rounded before:bg-accent"
           : "text-ink-2 hover:bg-surface-2 hover:text-ink",

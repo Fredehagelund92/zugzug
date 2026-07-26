@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, memo } from "react";
 import {
   useDrafts,
   useRefTables,
@@ -15,6 +15,7 @@ import { Button } from "./Button";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
 import { toast } from "./Toast";
 import { cx } from "../lib/cx";
+import { focusRing } from "../lib/focus-ring";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 
 const SYSTEM_USER_ID = "u_system";
@@ -57,6 +58,54 @@ interface TableGroup {
   totalDrafts: number;
 }
 
+/** One review row, memoized on its own props (#158). Selection lives in a Set
+ *  on the parent; toggling one checkbox previously re-rendered every row because
+ *  each recomputed `selected.has(k)`. With React.memo + a stable `onToggle`, only
+ *  the toggled row (whose `isSelected` actually changed) re-renders. */
+const DraftRow = memo(function DraftRow({
+  draft,
+  isSelected,
+  canEdit,
+  authorName,
+  onToggle,
+}: {
+  draft: Draft;
+  isSelected: boolean;
+  canEdit: boolean;
+  authorName: string;
+  onToggle: (d: Draft) => void;
+}) {
+  return (
+    <li
+      className={cx(
+        "flex items-center gap-3 px-4 py-2 transition-colors",
+        isSelected ? "bg-accent-wash/20" : "hover:bg-hover",
+      )}
+    >
+      {canEdit && (
+        <Checkbox
+          state={isSelected ? "on" : "off"}
+          onClick={() => onToggle(draft)}
+          aria-label={`Select ${draft.raw}`}
+        />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate font-mono text-[13px] text-ink">{draft.raw}</span>
+        <span className="block font-mono text-[10px] text-ink-3">source value</span>
+      </span>
+      <span className="w-40 truncate font-display text-[13px] text-ink">
+        {draft.targetLabel ?? <span className="text-ink-3">—</span>}
+      </span>
+      <span className="w-28 font-mono text-[10px] text-ink-3">
+        {draft.source === "ai" ? `AI · ${draft.confidence ?? "?"}` : authorName}
+      </span>
+      <span className="w-16 shrink-0 text-right font-mono text-[10px] text-ink-3">
+        {relativeTime(draft.at)}
+      </span>
+    </li>
+  );
+});
+
 export function AwaitingReview() {
   const allDrafts = useDrafts();
   const refTables = useRefTables();
@@ -72,6 +121,9 @@ export function AwaitingReview() {
   // publish preview
   const [preview, setPreview] = useState<PublishGroup[] | null>(null);
   const [publishing, setPublishing] = useState(false);
+  // Guards the Approve & publish button while its preview fetch is in flight so
+  // rapid clicks can't queue multiple publish flows (#161).
+  const [previewLoading, setPreviewLoading] = useState(false);
   // per-table collapse state (expanded when <= threshold)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -117,6 +169,18 @@ export function AwaitingReview() {
     return groups.sort((a, b) => b.totalDrafts - a.totalDrafts);
   }, [othersMappedDrafts, refTables]);
 
+  // Stable identity so the memoized DraftRow's props don't change every render.
+  // Declared before the early returns so hook order stays constant (#158).
+  const toggleRow = useCallback((d: Draft) => {
+    const k = `${d.refTableId}::${d.raw}`;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }, []);
+
   if (!myId) return null;
   if (tableGroups.length === 0) return null;
 
@@ -145,21 +209,12 @@ export function AwaitingReview() {
     });
   };
 
-  const toggleRow = (d: Draft) => {
-    const k = selKey(d);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(k)) next.delete(k);
-      else next.add(k);
-      return next;
-    });
-  };
-
   const selectedDrafts = othersMappedDrafts.filter((d) => selected.has(selKey(d)));
 
   // Publish selected
   const handlePublishSelected = async () => {
-    if (selectedDrafts.length === 0) return;
+    if (selectedDrafts.length === 0 || previewLoading) return;
+    setPreviewLoading(true);
     const refTableIds = [...new Set(selectedDrafts.map((d) => d.refTableId))];
     try {
       const states = await Promise.all(refTableIds.map((id) => fetchPublishState(id)));
@@ -177,6 +232,8 @@ export function AwaitingReview() {
         err instanceof Error ? err.message : "Could not load publish preview — try again.",
         "error",
       );
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -319,7 +376,11 @@ export function AwaitingReview() {
           {canEdit && selectedDrafts.length > 0 ? (
             !rejecting ? (
               <>
-                <Button size="sm" onClick={() => void handlePublishSelected()}>
+                <Button
+                  size="sm"
+                  loading={previewLoading}
+                  onClick={() => void handlePublishSelected()}
+                >
                   Approve &amp; publish
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setRejecting(true)}>
@@ -373,6 +434,14 @@ export function AwaitingReview() {
             ? allDraftsInTable.slice(0, COLLAPSE_THRESHOLD)
             : allDraftsInTable;
           const hiddenCount = tg.totalDrafts - COLLAPSE_THRESHOLD;
+          // Bucket the visible drafts by author once (O(visible)) so each author
+          // group is a Map lookup, not a fresh filter over visibleDrafts (#158).
+          const visibleByAuthor = new Map<string, Draft[]>();
+          for (const d of visibleDrafts) {
+            const arr = visibleByAuthor.get(d.user.id) ?? [];
+            arr.push(d);
+            visibleByAuthor.set(d.user.id, arr);
+          }
 
           return (
             <div key={tg.refTableId}>
@@ -395,7 +464,10 @@ export function AwaitingReview() {
                   <button
                     type="button"
                     onClick={() => toggleCollapse(tg.refTableId, tg.totalDrafts)}
-                    className="font-mono text-[10px] text-ink-3 hover:text-ink-2"
+                    className={cx(
+                      "rounded-sm font-mono text-[10px] text-ink-3 hover:text-ink-2",
+                      focusRing,
+                    )}
                   >
                     {collapsed_ ? `show all ${tg.totalDrafts}` : "collapse"}
                   </button>
@@ -404,7 +476,7 @@ export function AwaitingReview() {
 
               {/* Author groups + rows */}
               {tg.authorGroups.map((ag) => {
-                const visibleForAuthor = visibleDrafts.filter((d) => d.user.id === ag.authorId);
+                const visibleForAuthor = visibleByAuthor.get(ag.authorId) ?? [];
                 if (visibleForAuthor.length === 0) return null;
                 return (
                   <div key={ag.authorId}>
@@ -412,44 +484,16 @@ export function AwaitingReview() {
                       {ag.authorName}
                     </div>
                     <ul className="divide-y divide-line">
-                      {visibleForAuthor.map((d) => {
-                        const k = selKey(d);
-                        const isSelected = selected.has(k);
-                        return (
-                          <li
-                            key={k}
-                            className={cx(
-                              "flex items-center gap-3 px-4 py-2 transition-colors",
-                              isSelected ? "bg-accent-wash/20" : "hover:bg-hover",
-                            )}
-                          >
-                            {canEdit && (
-                              <Checkbox
-                                state={isSelected ? "on" : "off"}
-                                onClick={() => toggleRow(d)}
-                                aria-label={`Select ${d.raw}`}
-                              />
-                            )}
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate font-mono text-[13px] text-ink">
-                                {d.raw}
-                              </span>
-                              <span className="block font-mono text-[10px] text-ink-3">
-                                source value
-                              </span>
-                            </span>
-                            <span className="w-40 truncate font-display text-[13px] text-ink">
-                              {d.targetLabel ?? <span className="text-ink-3">—</span>}
-                            </span>
-                            <span className="w-28 font-mono text-[10px] text-ink-3">
-                              {d.source === "ai" ? `AI · ${d.confidence ?? "?"}` : ag.authorName}
-                            </span>
-                            <span className="w-16 shrink-0 text-right font-mono text-[10px] text-ink-3">
-                              {relativeTime(d.at)}
-                            </span>
-                          </li>
-                        );
-                      })}
+                      {visibleForAuthor.map((d) => (
+                        <DraftRow
+                          key={selKey(d)}
+                          draft={d}
+                          isSelected={selected.has(selKey(d))}
+                          canEdit={canEdit}
+                          authorName={ag.authorName}
+                          onToggle={toggleRow}
+                        />
+                      ))}
                     </ul>
                   </div>
                 );
@@ -460,7 +504,10 @@ export function AwaitingReview() {
                 <button
                   type="button"
                   onClick={() => toggleCollapse(tg.refTableId, tg.totalDrafts)}
-                  className="w-full px-4 py-2 text-left font-mono text-[11px] text-ink-3 hover:text-ink-2"
+                  className={cx(
+                    "w-full px-4 py-2 text-left font-mono text-[11px] text-ink-3 hover:text-ink-2",
+                    focusRing,
+                  )}
                 >
                   and {hiddenCount} more…
                 </button>

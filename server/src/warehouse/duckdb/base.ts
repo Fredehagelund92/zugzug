@@ -128,10 +128,12 @@ export abstract class DuckDbBase {
           const conn = await this.connect();
           // Catalog-qualified information_schema doesn't resolve on MotherDuck
           // (or bare in-memory) catalogs — duckdb_schemas() is the query that
-          // works across every attached catalog.
-          const escaped = databaseName.replace(/'/g, "''");
+          // works across every attached catalog. Bind databaseName as a
+          // parameter rather than string-interpolating it (#155 defense-in-depth
+          // — no interpolated SQL in the adapter layer).
           const result = await conn.runAndReadAll(
-            `SELECT 1 FROM duckdb_schemas() WHERE database_name = '${escaped}' LIMIT 1`,
+            `SELECT 1 FROM duckdb_schemas() WHERE database_name = $1 LIMIT 1`,
+            [databaseName],
           );
           return result.getRows().length > 0;
         },
@@ -146,8 +148,22 @@ export abstract class DuckDbBase {
       }
       return { ok: true };
     } catch (err) {
-      return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+      return {
+        ok: false,
+        reason: this.maskSecrets(err instanceof Error ? err.message : String(err)),
+      };
     }
+  }
+
+  /** Redact warehouse credentials from any string that may reach a client
+   *  (e.g. probeDatabase's `reason`) or a log line (#155 defense-in-depth). A
+   *  DuckDB/MotherDuck connection error can embed the connection string, which
+   *  carries motherduck_token=…; scrub the literal token plus common secret
+   *  query params so it never surfaces. */
+  protected maskSecrets(msg: string): string {
+    let out = msg;
+    if (this.creds.token) out = out.split(this.creds.token).join("***");
+    return out.replace(/\b(motherduck_token|token|password|passphrase)=[^\s&;'"]+/gi, "$1=***");
   }
 
   // ---- connection lifecycle ----
@@ -168,7 +184,14 @@ export abstract class DuckDbBase {
       const path = useMd
         ? `md:?motherduck_token=${encodeURIComponent(this.creds.token!)}`
         : (this.creds.path ?? ":memory:");
-      const inst = await DuckDBInstance.create(path);
+      // Mask the token before any create() failure (which can embed the
+      // token-bearing connection string) propagates to a caller or log (#155).
+      let inst;
+      try {
+        inst = await DuckDBInstance.create(path);
+      } catch (e) {
+        throw new Error(this.maskSecrets(e instanceof Error ? e.message : String(e)), { cause: e });
+      }
       const c = await inst.connect();
       this.conn = c;
       return c;

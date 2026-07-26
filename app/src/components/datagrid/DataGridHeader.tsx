@@ -70,6 +70,7 @@ interface SortState {
 }
 
 interface DataGridHeaderProps<Row> {
+  gridId: string; // stable grid id — cells reference each header via aria-describedby (#160)
   columns: ColumnDef<Row>[]; // ordered visible
   allColumns: ColumnDef<Row>[]; // full list (for hidden-list merging)
   gridStyle: React.CSSProperties;
@@ -165,6 +166,7 @@ interface DataGridHeaderProps<Row> {
 
 export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.ReactElement {
   const {
+    gridId,
     columns,
     allColumns,
     gridStyle,
@@ -263,6 +265,7 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
           return (
             <div
               key={c.field}
+              id={`${gridId}col::${c.field}`}
               role="columnheader"
               aria-colindex={idx + 1}
               aria-sort={

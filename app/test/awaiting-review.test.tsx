@@ -152,6 +152,65 @@ describe("AwaitingReview", () => {
     expect(screen.getAllByText("Max Thorn").length).toBeGreaterThan(0);
   });
 
+  test("Approve & publish opens the publish preview (#161)", async () => {
+    setupMocks({ drafts: { "country::USA": stubDraftOther }, refTables: [stubDim] });
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    const user = userEvent.setup();
+    render(<AwaitingReview />);
+
+    await user.click(screen.getByRole("checkbox", { name: /select usa/i }));
+    await user.click(screen.getByRole("button", { name: /approve.*publish/i }));
+
+    // handlePublishSelected fetched the state and opened the preview dialog.
+    await waitFor(() => expect(screen.getByText(/Publish v\d+ of Country/i)).toBeInTheDocument());
+  });
+
+  test("surfaces a toast when the publish-preview fetch fails (#161)", async () => {
+    vi.doMock("../src/store", async (orig) => {
+      const real = await orig<typeof import("../src/store")>();
+      return {
+        ...real,
+        useDrafts: () => ({ "country::USA": stubDraftOther }),
+        useRefTables: () => [stubDim],
+        useCanEdit: () => true,
+        useCurrentUser: () => ME,
+        rejectDrafts: vi.fn(async () => {}),
+        commit: vi.fn(async () => ({ committed: 1, rowsRecovered: 0 })),
+        fetchPublishState: vi.fn(async () => {
+          throw new Error("preview boom");
+        }),
+      };
+    });
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    const { ToastStack } = await import("../src/components/Toast");
+    const user = userEvent.setup();
+    render(
+      <>
+        <AwaitingReview />
+        <ToastStack />
+      </>,
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: /select usa/i }));
+    await user.click(screen.getByRole("button", { name: /approve.*publish/i }));
+
+    await waitFor(() => expect(screen.getByText(/preview boom/i)).toBeInTheDocument());
+  });
+
+  test("shows AI provenance for AI-sourced drafts (#160)", async () => {
+    const aiDraft = {
+      ...stubDraftOther,
+      raw: "u.s.a.",
+      source: "ai" as const,
+      confidence: "high" as const,
+    };
+    setupMocks({ drafts: { "country::u.s.a.": aiDraft }, refTables: [stubDim] });
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    render(<AwaitingReview />);
+    // The DraftRow AI branch renders "AI · <confidence>" instead of the author.
+    expect(screen.getByText(/AI · high/i)).toBeInTheDocument();
+  });
+
   test("renders nothing when all staged drafts are mine", async () => {
     setupMocks({
       drafts: {

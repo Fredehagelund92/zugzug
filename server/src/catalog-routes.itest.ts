@@ -247,3 +247,22 @@ describe("GET /api/t/:slug/warehouse/values", () => {
     expect(res.status).toBe(400);
   });
 });
+
+// #151: GET /api/t/:slug/drafts — keyset-paginated boot path. Exercises the
+// route handler, the TenantRepo.listAllDraftsPage wrapper, and the repo query.
+describe("GET /api/t/:slug/drafts (paginated boot path)", () => {
+  it("returns { drafts, nextCursor } for the workspace", async () => {
+    const res = await handle(tenantReq("/drafts"), noop);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { drafts: unknown[]; nextCursor: string | null };
+    expect(Array.isArray(body.drafts)).toBe(true);
+    expect(body).toHaveProperty("nextCursor");
+  });
+
+  it("honors an explicit ?limit", async () => {
+    const res = await handle(tenantReq("/drafts?limit=1"), noop);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { drafts: unknown[] };
+    expect(body.drafts.length).toBeLessThanOrEqual(1);
+  });
+});

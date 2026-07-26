@@ -16,6 +16,24 @@ function makeAnchor() {
 }
 
 describe("AddFieldPopover validation", () => {
+  it("announces a validation error via role=alert on submit (#161)", () => {
+    render(
+      <AddFieldPopover
+        anchorRef={{ current: makeAnchor() }}
+        onClose={() => {}}
+        onSubmit={vi.fn()}
+        allDims={[]}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText(/field name/i), { target: { value: "Owner" } });
+    // Linked type with no target selected → "Pick the table…" validation error.
+    fireEvent.click(screen.getByText("Linked"));
+    fireEvent.click(screen.getByRole("button", { name: /add field/i }));
+
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/pick the table/i);
+  });
+
   it("includes unique + min in the submitted field for a number type", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(

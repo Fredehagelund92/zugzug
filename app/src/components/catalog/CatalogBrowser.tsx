@@ -25,6 +25,9 @@ export function CatalogBrowser(): JSX.Element {
   const [results, setResults] = useState<SearchResultRow[] | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [searching, setSearching] = useState(false);
+  // Number of per-database searches that failed — surfaced so a partial result
+  // set isn't mistaken for "nothing else matches" (#161).
+  const [failedDbs, setFailedDbs] = useState(0);
   const [searchSelected, setSearchSelected] = useState<{
     dbId: string;
     tablePath: string;
@@ -53,6 +56,7 @@ export function CatalogBrowser(): JSX.Element {
       setResults(null);
       setTruncated(false);
       setSearching(false);
+      setFailedDbs(0);
       setSearchSelected(null);
       return;
     }
@@ -80,18 +84,26 @@ export function CatalogBrowser(): JSX.Element {
           if (ticket !== seq.current) return;
           const rows: SearchResultRow[] = [];
           let anyTruncated = false;
+          let failed = 0;
           for (const s of settled) {
             if (s.status === "fulfilled") {
               rows.push(...s.value.rows);
               if (s.value.truncated) anyTruncated = true;
+            } else {
+              failed++;
             }
           }
           setResults(rows);
           setTruncated(anyTruncated);
+          setFailedDbs(failed);
           setSearching(false);
         })
         .catch(() => {
           if (ticket !== seq.current) return;
+          // The whole search pass failed — surface it rather than showing an
+          // empty, "nothing matches" result (#161).
+          setResults([]);
+          setFailedDbs(Math.max(1, roots[0]?.children?.length ?? 1));
           setSearching(false);
         });
     }, 220);
@@ -180,6 +192,7 @@ export function CatalogBrowser(): JSX.Element {
             selectedKey={selectedKey}
             onSelect={handleSearchSelect}
             truncated={truncated}
+            failedCount={failedDbs}
           />
         ) : (
           <CatalogTree

@@ -179,4 +179,37 @@ describe("CatalogSearchResults", () => {
     );
     expect(screen.queryByText(/Showing the first matches/)).toBeNull();
   });
+
+  // #161: a failed per-DB search must be surfaced, not silently dropped.
+  it("surfaces a role=alert banner when some sources failed to search", () => {
+    render(
+      <CatalogSearchResults
+        results={[row]}
+        searching={false}
+        query="users"
+        multiDb={true}
+        selectedKey={null}
+        onSelect={() => {}}
+        failedCount={2}
+      />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/2 sources couldn’t be searched/);
+  });
+
+  it("shows the failed-search banner even when results are empty", () => {
+    render(
+      <CatalogSearchResults
+        results={[]}
+        searching={false}
+        query="xyz"
+        multiDb={true}
+        selectedKey={null}
+        onSelect={() => {}}
+        failedCount={1}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toMatch(/1 source couldn’t be searched/);
+    expect(screen.getByText("No tables or columns match.")).toBeTruthy();
+  });
 });

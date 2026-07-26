@@ -679,9 +679,12 @@ export function AddFieldPopover({
           </>
         )}
 
-        {/* Error banner */}
+        {/* Error banner — role="alert" so screen readers announce it on submit (#161). */}
         {error && (
-          <div className="rounded-sm border border-danger/40 bg-danger/10 px-3 py-2 font-mono text-[11px] text-danger">
+          <div
+            role="alert"
+            className="rounded-sm border border-danger/40 bg-danger/10 px-3 py-2 font-mono text-[11px] text-danger"
+          >
             {error}
           </div>
         )}
