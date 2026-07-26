@@ -101,10 +101,11 @@ describe("MapValuesBody", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows an Open as grid escape hatch, not a Focused/Grid toggle", () => {
+  it("is a single list — no grid or Focused/Grid toggle", () => {
     render(<MapValuesBody refTable={REF} isActive />);
-    expect(screen.getByRole("button", { name: /open as grid/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open as grid/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^focused$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^grid$/i })).not.toBeInTheDocument();
   });
 
   it("moves the cursor with ArrowDown and marks the focused row", async () => {

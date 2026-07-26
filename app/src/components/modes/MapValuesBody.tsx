@@ -3,7 +3,6 @@ import type { MappingRefTable } from "../../data";
 import type { ComboSelectHandle } from "../ComboSelect";
 import { MapValueRow } from "./MapValueRow";
 import { SourcesFeedStrip } from "./SourcesFeedStrip";
-import { MatchModeBody } from "./MatchModeBody";
 import { useRefTableClusters } from "../../lib/use-ref-table-clusters";
 import { useDrafts, listDrafts, commit, useCanEdit, saveDraft } from "../../store";
 import { toast } from "../Toast";
@@ -14,8 +13,7 @@ import { cx } from "../../lib/cx";
 /* MapValuesBody — the Map values tab: one calm worklist for a single table.
    Every source value that needs a record is one row (value · record picker ·
    status), mirroring the Review queue. Mapping a row stages one draft per
-   look-alike spelling in its cluster, so one decision covers the whole family.
-   "Open as grid" drops to the MatchModeBody power surface for bulk paste. */
+   look-alike spelling in its cluster, so one decision covers the whole family. */
 export function MapValuesBody({
   refTable,
   isActive,
@@ -23,7 +21,6 @@ export function MapValuesBody({
   refTable: MappingRefTable;
   isActive: boolean;
 }) {
-  const [view, setView] = useState<"list" | "grid">("list");
   const [filter, setFilter] = useState<"new" | "mapped">("new");
   const [cursor, setCursor] = useState(0);
   const drafts = useDrafts();
@@ -32,7 +29,7 @@ export function MapValuesBody({
   const feed = useRefTableClusters({
     refTableId: refTable.id,
     filter,
-    enabled: isActive && view === "list",
+    enabled: isActive,
   });
 
   const recordLabels = useMemo(() => refTable.record.map((r) => r.label), [refTable.record]);
@@ -56,22 +53,6 @@ export function MapValuesBody({
       throw e;
     }
   });
-
-  if (view === "grid") {
-    return (
-      <div className="flex flex-1 flex-col min-h-0 bg-surface">
-        <div className="flex items-center gap-3 border-b border-line bg-surface px-4 pt-3 pb-2.5">
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
-            map values · {refTable.refTable} · grid
-          </span>
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setView("list")}>
-            ← Back to list
-          </Button>
-        </div>
-        <MatchModeBody refTable={refTable} isActive={isActive} />
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-1 flex-col min-h-0 bg-surface">
@@ -104,9 +85,6 @@ export function MapValuesBody({
               </button>
             ))}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setView("grid")}>
-            Open as grid
-          </Button>
         </div>
       </div>
 
