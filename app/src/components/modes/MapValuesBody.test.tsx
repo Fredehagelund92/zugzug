@@ -38,18 +38,36 @@ const CLUSTERS: Cluster[] = [
   },
 ];
 
+const MAPPED_CLUSTERS: Cluster[] = [
+  {
+    key: "fr",
+    rep: "France",
+    rows: 500,
+    mappedCount: 1,
+    members: [
+      {
+        raw: "France",
+        rows: 500,
+        isMapped: true,
+        mappedLabel: "France",
+        occurrences: [{ table: "geo.customers", column: "country", rows: 500 }],
+      },
+    ],
+  },
+];
+
 vi.mock("../../lib/use-ref-table-clusters", () => ({
-  useRefTableClusters: () => ({
-    clusters: CLUSTERS,
+  useRefTableClusters: vi.fn(({ filter }: { filter: "new" | "mapped" }) => ({
+    clusters: filter === "mapped" ? MAPPED_CLUSTERS : CLUSTERS,
     coverage: { resolvedRows: 0, atRiskRows: 2084, pct: 0 },
     truncated: false,
     loading: false,
     error: null,
     refetch: vi.fn(),
-  }),
+  })),
 }));
 vi.mock("../../store", () => ({
-  listDrafts: () => [],
+  listDrafts: vi.fn(() => []),
   commit: vi.fn(),
   useDrafts: () => ({}),
   useCanEdit: () => true,
@@ -115,5 +133,61 @@ describe("MapValuesBody", () => {
     list.focus();
     fireEvent.keyDown(list, { key: "s", metaKey: true });
     expect(saveDraft).not.toHaveBeenCalled();
+  });
+
+  it("does not crash pressing S after the cursor outlives a filter switch to a shorter list", async () => {
+    vi.mocked(saveDraft).mockClear();
+    const user = (await import("@testing-library/user-event")).default.setup();
+    // React's dev-mode event dispatch rethrows synchronous handler errors via
+    // a deferred (uncaught-exception-style) path rather than from the
+    // fireEvent/user-event call itself, so catch it at the process level.
+    const errors: unknown[] = [];
+    const onUncaught = (err: unknown) => errors.push(err);
+    process.on("uncaughtException", onUncaught);
+    try {
+      render(<MapValuesBody refTable={REF} isActive />);
+      const list = screen.getByRole("list", { name: /values to map/i });
+      list.focus();
+      // move the cursor to the last "new" row (index 1 of 2 clusters)
+      await user.keyboard("{ArrowDown}");
+      // switch to the "Mapped" filter, which returns a single (shorter) cluster
+      await user.click(screen.getByRole("button", { name: /^mapped$/i }));
+      // pressing S must not crash, even though the old cursor (1) would be out
+      // of range for the shorter "mapped" list if it weren't reset
+      fireEvent.keyDown(list, { key: "s" });
+      await new Promise((r) => setTimeout(r, 100));
+    } finally {
+      process.off("uncaughtException", onUncaught);
+    }
+    expect(errors).toEqual([]);
+    // the cursor reset means S now targets the mapped list's own row (index 0),
+    // never an out-of-range member
+    expect(saveDraft).not.toHaveBeenCalledWith("t1", "Deutschland", "skipped", null, null);
+    expect(saveDraft).not.toHaveBeenCalledWith("t1", "U.S.A.", "skipped", null, null);
+  });
+
+  it("renders the publish button enabled with the mapped-draft count when drafts are staged", async () => {
+    const { listDrafts } = await import("../../store");
+    vi.mocked(listDrafts).mockReturnValue([
+      {
+        id: "d1",
+        refTableId: "t1",
+        raw: "Deutschland",
+        status: "mapped",
+        recordKey: "germany",
+        version: 1,
+      },
+    ] as never);
+    render(<MapValuesBody refTable={REF} isActive />);
+    const publishBtn = screen.getByRole("button", { name: /publish 1 change/i });
+    expect(publishBtn).toBeEnabled();
+  });
+
+  it("disables the publish button when no drafts are staged", async () => {
+    const { listDrafts } = await import("../../store");
+    vi.mocked(listDrafts).mockReturnValue([]);
+    render(<MapValuesBody refTable={REF} isActive />);
+    const publishBtn = screen.getByRole("button", { name: /publish 0 changes/i });
+    expect(publishBtn).toBeDisabled();
   });
 });

@@ -91,7 +91,10 @@ export function MapValuesBody({
               <button
                 key={f}
                 type="button"
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  setFilter(f);
+                  setCursor(0);
+                }}
                 className={cx(
                   "px-2.5 py-1 font-mono text-[11px]",
                   filter === f ? "bg-surface-2 text-ink" : "text-ink-3 hover:text-ink-2",
@@ -164,7 +167,9 @@ export function MapValuesBody({
               if (staged > 0 && canEdit) void publish.run();
             } else if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && !e.altKey) {
               e.preventDefault();
-              for (const mem of feed.clusters[cursor].members) {
+              const c = feed.clusters[cursor];
+              if (!c) return;
+              for (const mem of c.members) {
                 void saveDraft(refTable.id, mem.raw, "skipped", null, null);
               }
             }
