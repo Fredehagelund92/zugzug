@@ -371,8 +371,11 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDrafts.listDrafts(refTableId, this.tenantId));
   }
 
-  listAllDrafts(): Promise<Draft[]> {
-    return this.withClearCtx(() => repoDrafts.listAllDrafts(this.tenantId));
+  listAllDraftsPage(opts?: {
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<{ drafts: Draft[]; nextCursor: string | null }> {
+    return this.withClearCtx(() => repoDrafts.listAllDraftsPage(this.tenantId, opts));
   }
 
   saveDraft(

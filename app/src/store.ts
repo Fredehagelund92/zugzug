@@ -429,9 +429,18 @@ async function refreshDrafts(refTableId?: string): Promise<void> {
     draftsFlat = next;
     return;
   }
-  const list = await api<Draft[]>("/drafts");
+  // The workspace-wide drafts read is keyset-paginated server-side (#151) so
+  // no single request materializes an unbounded backlog. Page through until the
+  // server stops handing back a cursor.
   const flat: Record<string, Draft> = {};
-  for (const d of list) flat[dkey(d.refTableId, d.raw)] = d;
+  let cursor: string | null = null;
+  for (;;) {
+    const qs: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    const page = await api<{ drafts: Draft[]; nextCursor: string | null }>(`/drafts${qs}`);
+    for (const d of page.drafts) flat[dkey(d.refTableId, d.raw)] = d;
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
   draftsFlat = flat;
 }
 async function refreshAudit(): Promise<void> {

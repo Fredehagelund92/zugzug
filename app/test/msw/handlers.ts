@@ -40,6 +40,6 @@ export const handlers = [
       postgres: { status: "ok", lastCheckedAt: new Date().toISOString() },
     }),
   ),
-  http.get("/api/t/:slug/drafts", () => HttpResponse.json([])),
+  http.get("/api/t/:slug/drafts", () => HttpResponse.json({ drafts: [], nextCursor: null })),
   http.get("/api/warehouse/health", () => HttpResponse.json({ ok: true })),
 ];

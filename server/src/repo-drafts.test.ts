@@ -15,7 +15,21 @@ import {
   setFieldValue,
   deleteRefTable,
 } from "./repo-record.ts";
-import { saveDraft, commit, listDrafts, rejectDrafts, listAllDrafts } from "./repo-drafts.ts";
+import { saveDraft, commit, listDrafts, rejectDrafts, listAllDraftsPage } from "./repo-drafts.ts";
+import type { Draft } from "./repo-shared.ts";
+
+// Collect every page the keyset paginator hands back — mirrors what the Review
+// inbox does client-side (page through until nextCursor is null).
+async function collectAllDrafts(tenantId: string, limit?: number): Promise<Draft[]> {
+  const out: Draft[] = [];
+  let cursor: string | null = null;
+  do {
+    const page = await listAllDraftsPage(tenantId, { cursor, limit });
+    out.push(...page.drafts);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return out;
+}
 import { getPreferences, setPreferences } from "./repo-meta.ts";
 
 // Drop each tenant's refTables through deleteRefTable so the physical
@@ -166,21 +180,63 @@ afterAll(async () => {
   await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id = $1`, [U_ALL]).catch(() => {});
 });
 
-test("listAllDrafts returns every refTable's drafts for the tenant in one call", async () => {
+test("listAllDraftsPage returns every refTable's drafts for the tenant", async () => {
   const refTableA = (globalThis as Record<string, unknown>).__listAllRefTableA as string;
   const refTableB = (globalThis as Record<string, unknown>).__listAllRefTableB as string;
-  const all = await listAllDrafts(T1);
+  const all = await collectAllDrafts(T1);
   expect(all.map((d) => d.refTableId).sort()).toEqual([refTableA, refTableA, refTableB].sort());
 });
 
-test("listAllDrafts is tenant-scoped — a second tenant's drafts never appear", async () => {
+test("listAllDraftsPage is tenant-scoped — a second tenant's drafts never appear", async () => {
   const refTableA_t2 = (globalThis as Record<string, unknown>).__listAllRefTableA_t2 as string;
-  const all = await listAllDrafts(T1);
+  const all = await collectAllDrafts(T1);
   expect(all.every((d) => d.refTableId !== refTableA_t2)).toBe(true);
 });
 
-test("listAllDrafts returns [] for an empty workspace", async () => {
-  expect(await listAllDrafts(T_EMPTY)).toEqual([]);
+test("listAllDraftsPage returns [] with no cursor for an empty workspace", async () => {
+  const page = await listAllDraftsPage(T_EMPTY);
+  expect(page.drafts).toEqual([]);
+  expect(page.nextCursor).toBeNull();
+});
+
+test("listAllDraftsPage keyset-paginates a large backlog without dropping/duplicating rows (#151)", async () => {
+  const run = crypto.randomUUID().slice(0, 8);
+  const tenant = `test_dp_${run}`;
+  await pgRun(
+    `INSERT INTO "zugzug_app"."tenant" (id, slug, label, created_at)
+     VALUES ($1, $1, 'Paging', now()) ON CONFLICT DO NOTHING`,
+    [tenant],
+  );
+  const refTableId = await addRefTable(`PageDim_${run}`, [], { keyKind: "slug" }, U_ALL, tenant);
+  const N = 25;
+  for (let i = 0; i < N; i++) {
+    await saveDraft(refTableId, `raw_${String(i).padStart(3, "0")}`, "mapped", `L${i}`, `k${i}`, U_ALL, tenant);
+  }
+
+  // Small page size forces multiple pages; assert bounded pages + full coverage.
+  const page1 = await listAllDraftsPage(tenant, { limit: 10 });
+  expect(page1.drafts.length).toBe(10);
+  expect(page1.nextCursor).not.toBeNull();
+
+  const all = await collectAllDrafts(tenant, 10);
+  const raws = all.map((d) => d.raw);
+  expect(raws.length).toBe(N);
+  expect(new Set(raws).size).toBe(N); // no duplicates across page boundaries
+
+  // An unbounded default page must still cap the fetch, not return everything raw.
+  const defaultPage = await listAllDraftsPage(tenant);
+  expect(defaultPage.drafts.length).toBe(N); // N < default limit → single page
+  expect(defaultPage.nextCursor).toBeNull();
+
+  await deleteRefTable(refTableId, "test-teardown", tenant).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."draft" WHERE tenant_id = $1`, [tenant]).catch(() => {});
+  await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [tenant]).catch(() => {});
+});
+
+test("listAllDraftsPage rejects a malformed cursor", async () => {
+  await expect(listAllDraftsPage(T1, { cursor: "not-a-valid-cursor!!!" })).rejects.toThrow(
+    /cursor/i,
+  );
 });
 
 // ---- commit() fires table.published event ----------------------------
@@ -401,5 +457,54 @@ describe("commit() concurrent publish (#150)", () => {
       [refTableId, T],
     );
     expect(versions.map((v) => v.version)).toEqual([1, 2]);
+  });
+});
+
+// ---- #152: audit/event counts agree with the version snapshot ---------
+async function latestPublishPayload(refTableId: string): Promise<Record<string, unknown>> {
+  const evt = await pgGet<{ payload: unknown }>(
+    `SELECT payload FROM "zugzug_app"."outbound_event"
+      WHERE tenant_id = $1 AND reference_table_id = $2 AND type = 'table.published'
+      ORDER BY occurred_at DESC LIMIT 1`,
+    [T, refTableId],
+  );
+  return typeof evt!.payload === "string"
+    ? (JSON.parse(evt!.payload) as Record<string, unknown>)
+    : (evt!.payload as Record<string, unknown>);
+}
+
+describe("commit() event/audit counts agree with the snapshot (#152)", () => {
+  it("summary.updated counts exactly the records changed since the last publish", async () => {
+    const run = crypto.randomUUID().slice(0, 8);
+    const refTableId = await addRefTable(`Sum_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", "alpha", U, T);
+    await addRecordOne(refTableId, "Beta", "beta", U, T);
+    await addRecordOne(refTableId, "Gamma", "gamma", U, T);
+    await addField(refTableId, "Region", "text", undefined, {}, U, T);
+    await commit(refTableId, U, T); // v1 baseline
+
+    // Edit exactly two of the three records.
+    await setFieldValue(refTableId, "alpha", "region", "Americas", U, T);
+    await setFieldValue(refTableId, "beta", "region", "EMEA", U, T);
+    await commit(refTableId, U, T); // v2
+
+    // The event's updated count is now read inside the publish transaction, so
+    // it reflects the same change set the version snapshot captured.
+    const payload = await latestPublishPayload(refTableId);
+    expect((payload.summary as { updated: number }).updated).toBe(2);
+    expect((payload.version as number)).toBe(2);
+
+    // And the v2 snapshot actually carries the edited values — the event count
+    // and the snapshot describe the same publish.
+    const snap = await pgGet<{ snapshot: { records: Record<string, unknown>[] } }>(
+      `SELECT snapshot FROM "zugzug_app"."reference_table_version"
+        WHERE reference_table_id = $1 AND tenant_id = $2 AND version = 2`,
+      [refTableId, T],
+    );
+    const regions = snap!.snapshot.records
+      .map((r) => r.region)
+      .filter(Boolean)
+      .sort();
+    expect(regions).toEqual(["Americas", "EMEA"]);
   });
 });

@@ -593,14 +593,19 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       return handleChangePassword(req, me);
     }
 
-    // GET /api/t/:slug/drafts — all drafts for the workspace in one query (boot path).
+    // GET /api/t/:slug/drafts — one keyset-paginated page of workspace drafts
+    // (boot path). The client pages through with ?cursor= until nextCursor is
+    // null so no single request materializes an unbounded backlog (#151).
     if (
       tenantSlugFromPath !== null &&
       seg[1] === "drafts" &&
       seg.length === 2 &&
       method === "GET"
     ) {
-      return json(await reqRepo.listAllDrafts());
+      const cursor = url.searchParams.get("cursor");
+      const limitRaw = url.searchParams.get("limit");
+      const limit = limitRaw ? Number(limitRaw) : undefined;
+      return json(await reqRepo.listAllDraftsPage({ cursor, limit }));
     }
 
     // PATCH /api/t/:slug — rename workspace label and/or set color (admin only)
