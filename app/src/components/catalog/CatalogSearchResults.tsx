@@ -17,15 +17,34 @@ export function CatalogSearchResults(props: {
   selectedKey: string | null;
   onSelect: (row: SearchResultRow) => void;
   truncated?: boolean;
+  /** Number of per-database searches that failed (#161). */
+  failedCount?: number;
 }): JSX.Element {
-  const { results, searching, query, multiDb, selectedKey, onSelect, truncated } = props;
+  const { results, searching, query, multiDb, selectedKey, onSelect, truncated, failedCount } =
+    props;
 
   if (searching && !results) {
     return <div className="px-3 py-2 font-mono text-[10.5px] text-ink-3">searching…</div>;
   }
 
+  const searchFailedBanner =
+    failedCount && failedCount > 0 ? (
+      <div
+        role="alert"
+        className="border-b border-danger/30 bg-danger/10 px-3 py-2 font-mono text-[10.5px] text-danger"
+      >
+        {failedCount} source{failedCount === 1 ? "" : "s"} couldn’t be searched — results may be
+        incomplete.
+      </div>
+    ) : null;
+
   if (results && results.length === 0) {
-    return <div className="px-3 py-2 text-[12.5px] text-ink-3">No tables or columns match.</div>;
+    return (
+      <div>
+        {searchFailedBanner}
+        <div className="px-3 py-2 text-[12.5px] text-ink-3">No tables or columns match.</div>
+      </div>
+    );
   }
 
   const q = query.trim().toLowerCase();
@@ -60,7 +79,12 @@ export function CatalogSearchResults(props: {
     );
   };
 
-  return <VirtualizedResults rows={rows} {...{ selectedKey, onSelect, truncated, renderRow }} />;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {searchFailedBanner}
+      <VirtualizedResults rows={rows} {...{ selectedKey, onSelect, truncated, renderRow }} />
+    </div>
+  );
 }
 
 /* A multi-DB warehouse search can yield ~1000 result buttons (backend caps each

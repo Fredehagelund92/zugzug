@@ -120,6 +120,9 @@ export function AwaitingReview() {
   // publish preview
   const [preview, setPreview] = useState<PublishGroup[] | null>(null);
   const [publishing, setPublishing] = useState(false);
+  // Guards the Approve & publish button while its preview fetch is in flight so
+  // rapid clicks can't queue multiple publish flows (#161).
+  const [previewLoading, setPreviewLoading] = useState(false);
   // per-table collapse state (expanded when <= threshold)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -209,7 +212,8 @@ export function AwaitingReview() {
 
   // Publish selected
   const handlePublishSelected = async () => {
-    if (selectedDrafts.length === 0) return;
+    if (selectedDrafts.length === 0 || previewLoading) return;
+    setPreviewLoading(true);
     const refTableIds = [...new Set(selectedDrafts.map((d) => d.refTableId))];
     try {
       const states = await Promise.all(refTableIds.map((id) => fetchPublishState(id)));
@@ -227,6 +231,8 @@ export function AwaitingReview() {
         err instanceof Error ? err.message : "Could not load publish preview — try again.",
         "error",
       );
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -369,7 +375,11 @@ export function AwaitingReview() {
           {canEdit && selectedDrafts.length > 0 ? (
             !rejecting ? (
               <>
-                <Button size="sm" onClick={() => void handlePublishSelected()}>
+                <Button
+                  size="sm"
+                  loading={previewLoading}
+                  onClick={() => void handlePublishSelected()}
+                >
                   Approve &amp; publish
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setRejecting(true)}>
