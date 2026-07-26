@@ -43,9 +43,9 @@ describe("Tables grid height-constraint chain", () => {
     expect(rootDiv).toContain("flex");
   });
 
-  test("MatchModeBody's root div is height-constrained (guards the sibling mode)", () => {
-    const src = readFileSync(join(__dirname, "../src/components/modes/MatchModeBody.tsx"), "utf8");
-    const rootDiv = rootDivOfComponent(src, "MatchModeBody");
+  test("MapValuesBody's root div is height-constrained (guards the sibling mode)", () => {
+    const src = readFileSync(join(__dirname, "../src/components/modes/MapValuesBody.tsx"), "utf8");
+    const rootDiv = rootDivOfComponent(src, "MapValuesBody");
     expect(rootDiv).toContain("min-h-0");
     expect(rootDiv).toContain("flex");
   });

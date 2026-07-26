@@ -68,7 +68,6 @@ import type { RecordValue, MappingRefTable, FieldDef } from "../data";
 import { buildLinkedColumns } from "./linked/buildLinkedColumns";
 import { ModeStrip } from "./modes/ModeStrip";
 import { MapValuesBody } from "./modes/MapValuesBody";
-import { SourcesMonitorBody } from "./modes/SourcesMonitorBody";
 import type { Mode } from "../lib/available-modes";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
@@ -125,7 +124,7 @@ interface TablePaneProps {
    *  so callers that haven't wired URL-folded mode yet still compile. Task 3.4
    *  threads the real value through from MasterTables. */
   mode?: Mode;
-  /** Modes available for this refTable (records always present; match + sources
+  /** Modes available for this refTable (records always present; match
    *  conditional on wiring). Optional + defaults to ["records"] — when ≤ 1
    *  the ModeStrip self-hides anyway, so no chrome appears. */
   modes?: readonly Mode[];
@@ -155,11 +154,6 @@ function countNewForDim(refTable: MappingRefTable): number {
 }
 
 function TablePaneInner({ refTable, isActive, mode, modes, onModeChange }: TablePaneProps) {
-  const sources = useSources();
-  const wired = useMemo(
-    () => sources.filter((s) => s.refTableId === refTable.id),
-    [sources, refTable.id],
-  );
   const activeModes: readonly Mode[] = modes ?? ["records"];
   const activeMode: Mode = mode ?? "records";
 
@@ -198,7 +192,6 @@ function TablePaneInner({ refTable, isActive, mode, modes, onModeChange }: Table
             onSelect={onModeChange ?? (() => {})}
             badges={{
               match: { count: countNewForDim(refTable) },
-              sources: { warn: wired.some((s) => s.unmapped > 0) },
             }}
           />
         </div>
@@ -208,7 +201,6 @@ function TablePaneInner({ refTable, isActive, mode, modes, onModeChange }: Table
           <RecordsBody refTable={refTable} isActive={isActive} onModeChange={onModeChange} />
         )}
         {activeMode === "match" && <MapValuesBody refTable={refTable} isActive={isActive} />}
-        {activeMode === "sources" && <SourcesMonitorBody refTable={refTable} />}
       </div>
     </div>
   );

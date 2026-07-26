@@ -163,7 +163,7 @@
 }
 
 /* fade-in only: opacity 0→1, no translate. Use on full-height flex containers
-   (RecordsBody, WiredSourcesModeBody) where a translateY entrance causes a
+   (RecordsBody) where a translateY entrance causes a
    visible ~16px downward settle on cold open (craft-j1-02/03). */
 .zz-fade-in {
   opacity: 0;

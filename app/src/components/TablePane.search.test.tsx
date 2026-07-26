@@ -123,7 +123,6 @@ vi.mock("./RecordHistoryDrawer", () => ({ RecordHistoryDrawer: () => null }));
 vi.mock("./ConflictBanner", () => ({ ConflictBanner: () => null }));
 vi.mock("./RenameConfirmation", () => ({ RenameConfirmation: () => null }));
 vi.mock("./modes/MapValuesBody", () => ({ MapValuesBody: () => null }));
-vi.mock("./modes/SourcesMonitorBody", () => ({ SourcesMonitorBody: () => null }));
 vi.mock("../hooks/use-add-queue", () => ({ useAddQueue: () => ({ queue: [], flush: vi.fn() }) }));
 
 // Import after mocks

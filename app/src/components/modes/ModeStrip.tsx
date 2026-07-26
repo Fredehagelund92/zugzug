@@ -6,21 +6,19 @@ interface ModeStripProps {
   modes: readonly Mode[];
   active: Mode;
   onSelect: (m: Mode) => void;
-  /** badge counts per mode — accent count for match (new), warn dot for sources (unmapped). */
+  /** badge counts per mode — accent count for match (new). */
   badges?: Partial<Record<Mode, { count?: number; warn?: boolean }>>;
 }
 
 const LABEL: Record<Mode, string> = {
   records: "Records",
   match: "Map values",
-  sources: "Sources",
 };
 
 export function ModeStrip({ modes, active, onSelect, badges }: ModeStripProps) {
   const refs = useRef<Record<Mode, HTMLButtonElement | null>>({
     records: null,
     match: null,
-    sources: null,
   });
   const [marker, setMarker] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
 
