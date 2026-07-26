@@ -23,7 +23,6 @@ import {
 import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
 import { appendAuditAs } from "./repo-meta.ts";
-import { saveDraft } from "./repo-drafts.ts";
 import { materializeSourceScanValues } from "./repo-source-scan.ts";
 import { clusterForSeed } from "./cluster-values.ts";
 import { AppError } from "./errors.ts";
@@ -353,6 +352,58 @@ export async function refTablesWithWiredSources(tenantId: string): Promise<strin
   return rows.map((r) => r.refTableId);
 }
 
+/** The set-based exact-match diff behind autoStageExactMatches (#154). The old
+ *  pass materialized every source_scan_value raw, dim label, and map raw into
+ *  the Bun process to diff as in-memory sets — a multi-GB spike that OOM'd the
+ *  cron scheduler on large tables. This does the whole diff in SQL:
+ *   - staged: one INSERT … SELECT stages a u_system draft for each source raw
+ *     whose lower(raw) equals an existing record label and isn't already mapped.
+ *     DISTINCT ON (v.raw) collapses the case where two labels collide
+ *     case-insensitively (picks the smallest key deterministically); without it
+ *     the ON CONFLICT would try to touch the same draft twice. The upsert clause
+ *     mirrors saveDraft.
+ *   - unmatched: source raws neither already mapped nor matching any label.
+ *  Split out from the public entry point so it's unit-testable without a live
+ *  warehouse (the liveSources gate needs one). */
+export async function stageExactMatchDrafts(
+  refTableId: string,
+  tenantId: string,
+  meta: { dimTable: string; mapTable: string; keyCol: string },
+): Promise<{ matched: number; unmatched: number }> {
+  const staged = await pgAll<{ raw: string }>(
+    `INSERT INTO ${pg("draft")}
+       (reference_table_id, raw, status, target_label, target_key, user_id, created_at, tenant_id)
+     SELECT DISTINCT ON (v.raw)
+            $1::varchar, v.raw, 'mapped', d.label, d.${qid(meta.keyCol)}, 'u_system', current_timestamp, $2::varchar
+       FROM zugzug_app.source_scan_value v
+       JOIN ${cq(meta.dimTable)} d
+         ON d.label IS NOT NULL AND lower(d.label) = v.raw_lower
+      WHERE v.tenant_id = $2 AND v.reference_table_id = $1
+        AND NOT EXISTS (SELECT 1 FROM ${cq(meta.mapTable)} m WHERE lower(m.raw) = v.raw_lower)
+      ORDER BY v.raw, d.${qid(meta.keyCol)}
+     ON CONFLICT (tenant_id, reference_table_id, raw, user_id) DO UPDATE SET
+        status = 'mapped',
+        target_label = EXCLUDED.target_label,
+        target_key = EXCLUDED.target_key,
+        created_at = EXCLUDED.created_at,
+        rejected_reason = NULL,
+        rejected_by = NULL
+     RETURNING raw`,
+    [refTableId, tenantId],
+  );
+
+  const un = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM zugzug_app.source_scan_value v
+      WHERE v.tenant_id = $2 AND v.reference_table_id = $1
+        AND NOT EXISTS (SELECT 1 FROM ${cq(meta.mapTable)} m WHERE lower(m.raw) = v.raw_lower)
+        AND NOT EXISTS (SELECT 1 FROM ${cq(meta.dimTable)} d
+                         WHERE d.label IS NOT NULL AND lower(d.label) = v.raw_lower)`,
+    [refTableId, tenantId],
+  );
+
+  return { matched: staged.length, unmatched: Number(un?.n ?? 0) };
+}
+
 /** Auto-stage a draft (owned by u_system) for every warehouse raw value that
  *  case-insensitively matches an existing record label and is not yet in
  *  the refTable's lookup table. The match is deterministic — no AI, no fuzzy
@@ -373,50 +424,17 @@ export async function autoStageExactMatches(
   const sources = await liveSources(refTableId, tenantId);
   if (!sources.length) return { matched: 0, unmatched: 0 };
 
-  // Materialized: distinct raw values from source_scan_value
-  const rows = await pgAll<{ raw: string }>(
-    `SELECT raw FROM zugzug_app.source_scan_value
-       WHERE tenant_id = $1 AND reference_table_id = $2`,
-    [tenantId, refTableId],
-  );
-  if (!rows.length) return { matched: 0, unmatched: 0 };
-  const warehouseRaws = rows.map((r) => r.raw);
+  const { matched, unmatched } = await stageExactMatchDrafts(refTableId, tenantId, meta);
 
-  // Postgres: record labels
-  const canonRows = await pgAll<{ key: string; label: string }>(
-    `SELECT ${qid(meta.keyCol)} AS key, label FROM ${cq(meta.dimTable)} WHERE label IS NOT NULL`,
-  ).catch(() => [] as { key: string; label: string }[]);
-  const labelToCanon = new Map<string, { key: string; label: string }>();
-  for (const r of canonRows) labelToCanon.set(r.label.toLowerCase(), r);
-
-  // Postgres: already-mapped raws
-  const mappedRows = await pgAll<{ raw: string }>(`SELECT raw FROM ${cq(meta.mapTable)}`).catch(
-    () => [] as { raw: string }[],
-  );
-  const mappedSet = new Set(mappedRows.map((r) => r.raw.toLowerCase()));
-
-  // JS: find exact case-insensitive matches not yet mapped
-  const matches: { raw: string; key: string; label: string }[] = [];
-  let unmatched = 0;
-  for (const raw of warehouseRaws) {
-    const lower = raw.toLowerCase();
-    if (mappedSet.has(lower)) continue;
-    const canon = labelToCanon.get(lower);
-    if (canon) matches.push({ raw, key: canon.key, label: canon.label });
-    else unmatched++;
+  if (matched > 0) {
+    await appendAuditAs(
+      "u_system",
+      "Auto-matched",
+      `${matched} value${matched === 1 ? "" : "s"} staged in ${refTableId} (exact label match)`,
+      { tenantId },
+    );
   }
-
-  if (!matches.length) return { matched: 0, unmatched };
-  for (const m of matches) {
-    await saveDraft(refTableId, m.raw, "mapped", m.label, m.key, "u_system", tenantId);
-  }
-  await appendAuditAs(
-    "u_system",
-    "Auto-matched",
-    `${matches.length} value${matches.length === 1 ? "" : "s"} staged in ${refTableId} (exact label match)`,
-    { tenantId },
-  );
-  return { matched: matches.length, unmatched };
+  return { matched, unmatched };
 }
 
 /** Register a warehouse column as a source for a refTable (idempotent).
