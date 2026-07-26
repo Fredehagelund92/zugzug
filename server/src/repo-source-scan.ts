@@ -137,24 +137,37 @@ export async function getSourceScanScalars(tenantId: string): Promise<SourceScan
     [tenantId],
   );
 
-  const out: SourceScanScalars[] = [];
-  for (const r of rows) {
-    const mapTable = mapByDim.get(r.refTableId);
-    let mapped = 0;
-    let mappedRows = 0;
-    if (mapTable) {
-      const m = await pgAll<{ n: number; rows: number }>(
-        `SELECT COUNT(*)::bigint              AS n,
+  // Mapped counts join source_scan_value against each refTable's own physical
+  // map_<table>, so it cannot be a single GROUP BY. Fold the per-table loop
+  // into one UNION ALL round-trip instead of N sequential queries (#153).
+  // Table names come from the trusted refTable registry, never user input.
+  const mappedById = new Map<string, { mapped: number; mappedRows: number }>();
+  const withMap = rows.filter((r) => mapByDim.get(r.refTableId));
+  if (withMap.length > 0) {
+    const sql = withMap
+      .map(
+        (r, i) => `SELECT $${i + 2}::text AS id,
+                COUNT(*)::bigint AS n,
                 COALESCE(SUM(v.total_rows), 0)::bigint AS rows
            FROM zugzug_app.source_scan_value v
-           JOIN ${cq(mapTable)} m
+           JOIN ${cq(mapByDim.get(r.refTableId)!)} m
              ON m.tenant_id = v.tenant_id AND LOWER(m.raw) = v.raw_lower
-           WHERE v.tenant_id = $1 AND v.reference_table_id = $2`,
-        [tenantId, r.refTableId],
-      );
-      mapped = Number(m[0]?.n ?? 0);
-      mappedRows = Number(m[0]?.rows ?? 0);
+          WHERE v.tenant_id = $1 AND v.reference_table_id = $${i + 2}`,
+      )
+      .join(" UNION ALL ");
+    const mrows = await pgAll<{ id: string; n: number; rows: number }>(sql, [
+      tenantId,
+      ...withMap.map((r) => r.refTableId),
+    ]);
+    for (const m of mrows) {
+      mappedById.set(m.id, { mapped: Number(m.n), mappedRows: Number(m.rows) });
     }
+  }
+
+  const out: SourceScanScalars[] = [];
+  for (const r of rows) {
+    const mapped = mappedById.get(r.refTableId)?.mapped ?? 0;
+    const mappedRows = mappedById.get(r.refTableId)?.mappedRows ?? 0;
     const rowsTotal = Number(r.rowsTotal);
     out.push({
       refTableId: r.refTableId,

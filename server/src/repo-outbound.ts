@@ -90,16 +90,31 @@ function splitRefTableTable(dimTable: string): { schema: string; table: string }
   return { schema: dimTable.slice(0, dot), table: dimTable.slice(dot + 1) };
 }
 
+/** Cache of a dim_* table's field columns (#153). discoverFieldColumns ran an
+ *  information_schema query on EVERY listRecordPage / getRecordRow; the column
+ *  set only changes on a schema mutation (add/remove field), which is rare
+ *  relative to record reads. A short TTL bounds staleness (an added field shows
+ *  up in the Pull API's `fields` within FIELD_COLS_TTL_MS) while self-healing —
+ *  no cross-module invalidation to miss. Keyed by "schema.table:keyCol". */
+const FIELD_COLS_TTL_MS = 30_000;
+const fieldColsCache = new Map<string, { cols: string[]; at: number }>();
+
 /** Discover non-system field columns of a dim_* table for dynamic JSON projection. */
 async function discoverFieldColumns(dimTable: string, keyCol: string): Promise<string[]> {
   const { schema, table } = splitRefTableTable(dimTable);
+  const cacheKey = `${schema}.${table}:${keyCol}`;
+  const hit = fieldColsCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < FIELD_COLS_TTL_MS) return hit.cols;
+
   const refTableCols = await pgAll<{ column_name: string }>(
     `SELECT column_name FROM information_schema.columns
       WHERE table_schema = $1 AND table_name = $2
         AND column_name NOT IN ('label', 'position', 'tenant_id')`,
     [schema, table],
   );
-  return refTableCols.map((c) => c.column_name).filter((c) => c !== keyCol);
+  const cols = refTableCols.map((c) => c.column_name).filter((c) => c !== keyCol);
+  fieldColsCache.set(cacheKey, { cols, at: Date.now() });
+  return cols;
 }
 
 function buildFieldsJsonExpr(fieldColumns: string[]): string {
@@ -119,17 +134,19 @@ export async function listRefTablesForApi(tenantId: string): Promise<{ tables: R
     record_count: number;
     last_published_at: string | null;
   }>(
+    // One GROUP BY join over record_version instead of two correlated
+    // subqueries per table (#153). count()/max() ignore the NULLs a LEFT JOIN
+    // produces for tables with no live records, so empty tables report 0/null.
     `SELECT d.id,
             d.label,
             COALESCE(d.key_kind, 'slug') AS key_kind,
-            COALESCE((SELECT count(*) FROM "zugzug_app"."record_version" cv
-                       WHERE cv.reference_table_id = d.id AND cv.tenant_id = d.tenant_id
-                         AND cv.retired_at IS NULL), 0)::int AS record_count,
-            (SELECT max(cv.updated_at)::text FROM "zugzug_app"."record_version" cv
-              WHERE cv.reference_table_id = d.id AND cv.tenant_id = d.tenant_id
-                AND cv.retired_at IS NULL) AS last_published_at
+            count(cv.key) FILTER (WHERE cv.retired_at IS NULL)::int AS record_count,
+            max(cv.updated_at) FILTER (WHERE cv.retired_at IS NULL)::text AS last_published_at
        FROM ${pg("reference_table")} d
+       LEFT JOIN "zugzug_app"."record_version" cv
+         ON cv.reference_table_id = d.id AND cv.tenant_id = d.tenant_id
       WHERE d.tenant_id = $1
+      GROUP BY d.id, d.label, d.key_kind
       ORDER BY d.label`,
     [tenantId],
   );

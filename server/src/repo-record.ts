@@ -274,13 +274,36 @@ export async function listRefTables(tenantId: string): Promise<RefTableMeta[]> {
      FROM ${pg("reference_table")} WHERE tenant_id = $1 ORDER BY label`,
     [tenantId],
   );
-  const counts = await Promise.all(
-    metas.map((m) =>
-      pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`).catch(() => null),
-    ),
-  );
+  // One UNION ALL round-trip for every map_<table> count instead of N+1
+  // per-table pgGet calls on the boot path (#153). Table names come from the
+  // trusted refTable registry (never user input), same as the per-table path.
+  const byId = new Map<string, number>();
+  if (metas.length > 0) {
+    const sql = metas
+      .map((m, i) => `SELECT $${i + 1}::text AS id, count(*)::int AS n FROM ${cq(m.mapTable)}`)
+      .join(" UNION ALL ");
+    try {
+      const counts = await pgAll<{ id: string; n: number }>(
+        sql,
+        metas.map((m) => m.id),
+      );
+      for (const c of counts) byId.set(c.id, Number(c.n));
+    } catch {
+      // A missing map_<table> (corruption / mid-migration) would fail the whole
+      // UNION — fall back to the resilient per-table path so one bad table
+      // doesn't zero out the rest.
+      const counts = await Promise.all(
+        metas.map((m) =>
+          pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(m.mapTable)}`).catch(
+            () => null,
+          ),
+        ),
+      );
+      metas.forEach((m, i) => byId.set(m.id, Number(counts[i]?.n ?? 0)));
+    }
+  }
 
-  return metas.map((m, i) => ({ ...m, rows: Number(counts[i]?.n ?? 0) }));
+  return metas.map((m) => ({ ...m, rows: byId.get(m.id) ?? 0 }));
 }
 
 /** Lightweight refTable lookup — id + display label only, scoped to tenant.

@@ -107,6 +107,40 @@ describe("listRefTablesForApi", () => {
     expect(country!.record_count).toBeGreaterThanOrEqual(1);
     expect(typeof country!.last_published_at).toBe("string");
   });
+
+  // #153: the single GROUP BY join must match the old per-table correlated
+  // subqueries — notably the LEFT JOIN's NULL rows for an empty table and the
+  // retired-record exclusion.
+  it("reports 0 record_count and null last_published_at for an empty table", async () => {
+    const refTableId = await makeDim("OutEmpty153");
+    const out = await listRefTablesForApi(T);
+    const entry = out.tables.find((d) => d.slug === refTableId);
+    expect(entry).toBeDefined();
+    expect(entry!.record_count).toBe(0);
+    expect(entry!.last_published_at).toBeNull();
+  });
+
+  it("excludes retired records from record_count", async () => {
+    const refTableId = await makeDim("OutRetired153");
+    await addRecord(
+      refTableId,
+      [
+        { key: "LIVE", label: "Live" },
+        { key: "DEAD", label: "Dead" },
+      ],
+      T,
+    );
+    const v = await pgGet<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."record_version"
+       WHERE reference_table_id = $1 AND key = 'DEAD' AND tenant_id = $2`,
+      [refTableId, T],
+    );
+    await retireRecord(refTableId, "DEAD", U, v!.version, T);
+
+    const out = await listRefTablesForApi(T);
+    const entry = out.tables.find((d) => d.slug === refTableId);
+    expect(entry!.record_count).toBe(1); // only LIVE counted
+  });
 });
 
 describe("getSchemaForApi", () => {
