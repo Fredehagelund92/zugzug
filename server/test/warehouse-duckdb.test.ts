@@ -353,3 +353,29 @@ test("DuckDbWritableAdapter: commitRecord is idempotent on repeat", async () => 
   const mapRows = await c.runAndReadAll(`SELECT count(*) AS n FROM zugzug.map_country`);
   expect(mapRows.getRowObjects()).toEqual([{ n: 1n }]);
 });
+
+// #155: defense-in-depth for the warehouse adapter.
+test("maskSecrets redacts the token and connection-string secrets", () => {
+  const a = new DuckDbReadOnlyAdapter({
+    type: "duckdb",
+    token: "SECRET-TOKEN-123",
+    attached: true,
+  });
+  // @ts-expect-error — reach into the protected mask helper for the test
+  const masked = a.maskSecrets(
+    "connect failed for md:?motherduck_token=SECRET-TOKEN-123 (password=hunter2)",
+  );
+  expect(masked).not.toContain("SECRET-TOKEN-123");
+  expect(masked).not.toContain("hunter2");
+  expect(masked).toContain("motherduck_token=***");
+  expect(masked).toContain("password=***");
+});
+
+test("probeDatabase binds databaseName (quotes don't break the query)", async () => {
+  const a = new DuckDbReadOnlyAdapter({ type: "duckdb", path: ":memory:", attached: false });
+  // A single quote would have broken string-interpolated SQL; parameterized it
+  // just returns a clean not-visible result.
+  const res = await a.probeDatabase("weird'name");
+  expect(res.ok).toBe(false);
+  if (!res.ok) expect(typeof res.reason).toBe("string");
+});
