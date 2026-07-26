@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MapValuesBody } from "./MapValuesBody";
+import { saveDraft } from "../../store";
 import type { MappingRefTable } from "../../data";
 import type { Cluster } from "../../lib/use-ref-table-clusters";
 
@@ -86,5 +87,24 @@ describe("MapValuesBody", () => {
     render(<MapValuesBody refTable={REF} isActive />);
     expect(screen.getByRole("button", { name: /open as grid/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^focused$/i })).not.toBeInTheDocument();
+  });
+
+  it("moves the cursor with ArrowDown and marks the focused row", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    render(<MapValuesBody refTable={REF} isActive />);
+    const list = screen.getByRole("list", { name: /values to map/i });
+    list.focus();
+    await user.keyboard("{ArrowDown}");
+    // second row becomes the cursor row → its skip affordance is now reachable
+    expect(screen.getAllByText(/skip/i).length).toBeGreaterThan(0);
+  });
+
+  it("stages a skipped draft for the cursor cluster on S", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    render(<MapValuesBody refTable={REF} isActive />);
+    const list = screen.getByRole("list", { name: /values to map/i });
+    list.focus();
+    await user.keyboard("s");
+    expect(saveDraft).toHaveBeenCalledWith("t1", "Deutschland", "skipped", null, null);
   });
 });

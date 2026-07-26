@@ -5,7 +5,7 @@ import { MapValueRow } from "./MapValueRow";
 import { SourcesFeedStrip } from "./SourcesFeedStrip";
 import { MatchModeBody } from "./MatchModeBody";
 import { useRefTableClusters } from "../../lib/use-ref-table-clusters";
-import { useDrafts, listDrafts, commit, useCanEdit } from "../../store";
+import { useDrafts, listDrafts, commit, useCanEdit, saveDraft } from "../../store";
 import { toast } from "../Toast";
 import { useAsyncAction } from "../../hooks/useAsyncAction";
 import { Button } from "../Button";
@@ -25,6 +25,7 @@ export function MapValuesBody({
 }) {
   const [view, setView] = useState<"list" | "grid">("list");
   const [filter, setFilter] = useState<"new" | "mapped">("new");
+  const [cursor, setCursor] = useState(0);
   const drafts = useDrafts();
   const canEdit = useCanEdit();
 
@@ -106,6 +107,22 @@ export function MapValuesBody({
         </div>
       </div>
 
+      {/* keyboard hint */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-line bg-surface px-4 py-1.5 font-mono text-[10.5px] text-ink-3">
+        <span>
+          <span className="text-ink-2">↑↓</span> move
+        </span>
+        <span>
+          <span className="text-ink-2">⏎</span> pick a record
+        </span>
+        <span>
+          <span className="text-ink-2">S</span> skip
+        </span>
+        <span>
+          <span className="text-ink-2">⌘⏎</span> publish
+        </span>
+      </div>
+
       {/* body */}
       {feed.loading ? (
         <div className="px-4 py-12 text-center font-mono text-[12px] text-ink-3">loading…</div>
@@ -123,15 +140,44 @@ export function MapValuesBody({
           </div>
         </div>
       ) : (
-        <ul className="flex-1 overflow-y-auto">
+        <ul
+          className="flex-1 overflow-y-auto outline-none"
+          tabIndex={0}
+          role="list"
+          aria-label="Values to map"
+          onKeyDown={(e) => {
+            const t = e.target as HTMLElement;
+            if (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+            const n = feed.clusters.length;
+            if (n === 0) return;
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setCursor((c) => Math.min(c + 1, n - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setCursor((c) => Math.max(c - 1, 0));
+            } else if (e.key === "Enter" && !(e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              comboRefs.current[cursor]?.open();
+            } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              if (staged > 0 && canEdit) void publish.run();
+            } else if (e.key === "s" || e.key === "S") {
+              e.preventDefault();
+              for (const mem of feed.clusters[cursor].members) {
+                void saveDraft(refTable.id, mem.raw, "skipped", null, null);
+              }
+            }
+          }}
+        >
           {feed.clusters.map((c, i) => (
             <MapValueRow
               key={c.key}
               cluster={c}
               refTable={refTable}
               recordLabels={recordLabels}
-              isCursor={false}
-              onFocus={() => {}}
+              isCursor={i === cursor}
+              onFocus={() => setCursor(i)}
               comboRef={(el) => {
                 comboRefs.current[i] = el;
               }}
