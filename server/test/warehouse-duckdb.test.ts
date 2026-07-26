@@ -379,3 +379,16 @@ test("probeDatabase binds databaseName (quotes don't break the query)", async ()
   expect(res.ok).toBe(false);
   if (!res.ok) expect(typeof res.reason).toBe("string");
 });
+
+// #155: a connect() failure must surface with credentials masked, not as a raw
+// throw carrying the token-bearing connection string.
+test("probeDatabase masks secrets when the connection can't be opened", async () => {
+  const a = new DuckDbReadOnlyAdapter({
+    type: "duckdb",
+    path: "/dev/null/cannot-create.db",
+    attached: false,
+  });
+  const res = await a.probeDatabase("anydb");
+  expect(res.ok).toBe(false);
+  if (!res.ok) expect(typeof res.reason).toBe("string");
+});

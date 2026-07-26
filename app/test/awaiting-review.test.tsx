@@ -197,6 +197,20 @@ describe("AwaitingReview", () => {
     await waitFor(() => expect(screen.getByText(/preview boom/i)).toBeInTheDocument());
   });
 
+  test("shows AI provenance for AI-sourced drafts (#160)", async () => {
+    const aiDraft = {
+      ...stubDraftOther,
+      raw: "u.s.a.",
+      source: "ai" as const,
+      confidence: "high" as const,
+    };
+    setupMocks({ drafts: { "country::u.s.a.": aiDraft }, refTables: [stubDim] });
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    render(<AwaitingReview />);
+    // The DraftRow AI branch renders "AI · <confidence>" instead of the author.
+    expect(screen.getByText(/AI · high/i)).toBeInTheDocument();
+  });
+
   test("renders nothing when all staged drafts are mine", async () => {
     setupMocks({
       drafts: {
