@@ -42,6 +42,9 @@ export function MapValueRow({
 
   const extra = cluster.members.length - 1;
   const occ = cluster.members[0]?.occurrences[0];
+  // The record this cluster is already published-mapped to (null when unmapped).
+  // A pending draft takes precedence; otherwise the picker/status reflect this.
+  const committedLabel = cluster.members.find((m) => m.isMapped)?.mappedLabel ?? null;
 
   const map = (label: string) => {
     const key = labelToKey.get(label) ?? slug(label);
@@ -82,7 +85,13 @@ export function MapValueRow({
       <ComboSelect
         ref={comboRef}
         options={recordLabels}
-        value={draft?.status === "mapped" ? draft.targetLabel : null}
+        value={
+          draft?.status === "mapped"
+            ? draft.targetLabel
+            : draft?.status === "skipped"
+              ? null
+              : committedLabel
+        }
         suggestion={suggestion}
         placeholder="Pick a record…"
         allowCreate
@@ -105,6 +114,10 @@ export function MapValueRow({
           <button type="button" onClick={clear} className="text-ink-3 hover:text-ink-2">
             skipped
           </button>
+        ) : committedLabel ? (
+          <span className="inline-flex items-center gap-1.5 text-ink-3">
+            <span className="h-1.5 w-1.5 rounded-pill bg-committed opacity-60" /> mapped
+          </span>
         ) : isCursor ? (
           <button type="button" onClick={skip} className="text-ink-3 hover:text-ink-2">
             <span className="text-ink-2">S</span> skip

@@ -47,6 +47,23 @@ const REF = {
   record: [{ key: "germany", label: "Germany", version: 1 }],
 } as unknown as MappingRefTable;
 
+// An already-published mapping: the member carries mappedLabel and there is no draft.
+const MAPPED_CLUSTER: Cluster = {
+  key: "us",
+  rep: "US",
+  rows: 9302,
+  mappedCount: 1,
+  members: [
+    {
+      raw: "US",
+      rows: 9302,
+      isMapped: true,
+      mappedLabel: "United States",
+      occurrences: [{ table: "raw.orders", column: "shipping_country", rows: 9302 }],
+    },
+  ],
+};
+
 beforeEach(() => saveDraft.mockClear());
 
 describe("MapValueRow", () => {
@@ -79,5 +96,19 @@ describe("MapValueRow", () => {
     await user.click(screen.getByText("Germany"));
     expect(saveDraft).toHaveBeenCalledWith("t1", "Deutschland", "mapped", "Germany", "germany");
     expect(saveDraft).toHaveBeenCalledWith("t1", "DEUTSCHLAND", "mapped", "Germany", "germany");
+  });
+
+  it("shows the current mapped record for an already-mapped value (no draft)", () => {
+    render(
+      <MapValueRow
+        cluster={MAPPED_CLUSTER}
+        refTable={REF}
+        recordLabels={["United States"]}
+        isCursor={false}
+        onFocus={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText("Record for US")).toHaveTextContent("United States");
+    expect(screen.getByText("mapped")).toBeInTheDocument();
   });
 });
