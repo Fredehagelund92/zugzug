@@ -80,9 +80,8 @@ export function MapValuesBody({
           map values · {refTable.refTable}
         </span>
         <span className="font-mono text-[11px] text-ink">
-          <span className="font-semibold text-accent">
-            {feed.clusters.length} {filter === "new" ? "to map" : "mapped"}
-          </span>
+          <span className="font-semibold text-accent">{feed.clusters.length}</span>{" "}
+          {filter === "new" ? "to map" : "mapped"}
         </span>
         <div className="ml-auto flex items-center gap-3">
           <SourcesFeedStrip refTable={refTable} />

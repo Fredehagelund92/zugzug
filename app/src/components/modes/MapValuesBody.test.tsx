@@ -72,7 +72,14 @@ describe("MapValuesBody", () => {
     expect(screen.getByText(/map values ·/i)).toBeInTheDocument();
     expect(screen.getByText("Deutschland")).toBeInTheDocument();
     expect(screen.getByText("U.S.A.")).toBeInTheDocument();
-    expect(screen.getByText(/2 to map/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (_content, el) =>
+          el?.tagName === "SPAN" &&
+          el?.textContent === "2 to map" &&
+          el?.className.includes("text-ink"),
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows an Open as grid escape hatch, not a Focused/Grid toggle", () => {
