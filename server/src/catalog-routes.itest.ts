@@ -121,7 +121,7 @@ describe("GET /api/warehouse/info", () => {
     const res = await handle(globalReq("/warehouse/info"), noop);
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ adapter: "duckdb", databaseTerm: "database" });
+    expect(body).toEqual({ adapter: "duckdb", engine: "disabled", databaseTerm: "database" });
   });
 });
 

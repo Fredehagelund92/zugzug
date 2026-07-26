@@ -162,7 +162,7 @@ export function MapValuesBody({
             } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
               e.preventDefault();
               if (staged > 0 && canEdit) void publish.run();
-            } else if (e.key === "s" || e.key === "S") {
+            } else if ((e.key === "s" || e.key === "S") && !e.metaKey && !e.ctrlKey && !e.altKey) {
               e.preventDefault();
               for (const mem of feed.clusters[cursor].members) {
                 void saveDraft(refTable.id, mem.raw, "skipped", null, null);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MapValuesBody } from "./MapValuesBody";
 import { saveDraft } from "../../store";
 import type { MappingRefTable } from "../../data";
@@ -106,5 +106,14 @@ describe("MapValuesBody", () => {
     list.focus();
     await user.keyboard("s");
     expect(saveDraft).toHaveBeenCalledWith("t1", "Deutschland", "skipped", null, null);
+  });
+
+  it("does not skip on Cmd+S", async () => {
+    vi.mocked(saveDraft).mockClear();
+    render(<MapValuesBody refTable={REF} isActive />);
+    const list = screen.getByRole("list", { name: /values to map/i });
+    list.focus();
+    fireEvent.keyDown(list, { key: "s", metaKey: true });
+    expect(saveDraft).not.toHaveBeenCalled();
   });
 });
