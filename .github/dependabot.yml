@@ -1,35 +1,16 @@
-# Dependabot version updates. Weekly, grouped to keep PR noise low; security
-# updates are handled separately (enabled in repo settings) and are not grouped.
+# Dependabot version updates.
+#
+# NOTE: the server/, app/, and e2e/ workspaces use Bun (bun.lock). Dependabot's
+# npm ecosystem can't regenerate bun.lock in a way that satisfies
+# `bun install --frozen-lockfile`, so every PR it opens for those workspaces
+# fails CI. They are intentionally excluded here — update Bun deps manually with
+# `bun update` (Dependabot *alerts* still flag vulnerable Bun deps regardless).
+#
+# Only ecosystems Dependabot maintains cleanly are enabled: docs-site (npm /
+# package-lock.json), GitHub Actions, and Docker base images.
 version: 2
 updates:
-  # --- JS/TS workspaces (Bun + npm) ---
-  - package-ecosystem: "npm"
-    directory: "/server"
-    schedule: { interval: "weekly" }
-    open-pull-requests-limit: 5
-    groups:
-      server-deps:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "npm"
-    directory: "/app"
-    schedule: { interval: "weekly" }
-    open-pull-requests-limit: 5
-    groups:
-      app-deps:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "npm"
-    directory: "/e2e"
-    schedule: { interval: "weekly" }
-    open-pull-requests-limit: 3
-    groups:
-      e2e-deps:
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
+  # docs-site uses npm (package-lock.json), which Dependabot maintains correctly.
   - package-ecosystem: "npm"
     directory: "/docs-site"
     schedule: { interval: "weekly" }
@@ -39,7 +20,6 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
 
-  # --- GitHub Actions ---
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule: { interval: "weekly" }
@@ -47,7 +27,6 @@ updates:
       actions:
         patterns: ["*"]
 
-  # --- Container base images ---
   - package-ecosystem: "docker"
     directory: "/server"
     schedule: { interval: "weekly" }
