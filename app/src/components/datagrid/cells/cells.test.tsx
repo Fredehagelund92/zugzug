@@ -1,7 +1,8 @@
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { test, expect, describe } from "vitest";
-import type { CellCtx, ColumnDef } from "../types";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { test, expect, describe, vi } from "vitest";
+import { createRef } from "react";
+import type { CellCtx, ColumnDef, EditCtx } from "../types";
 import { BooleanCell } from "./BooleanCell.tsx";
 import { EmailCell } from "./EmailCell.tsx";
 import { UrlCell } from "./UrlCell.tsx";
@@ -203,6 +204,60 @@ describe("LinkedCell.Renderer", () => {
   test("empty string renders em dash", () => {
     render(<LinkedCell.Renderer {...ctx("", linkedColumn())} />);
     expect(screen.getByText("—")).toBeInTheDocument();
+  });
+});
+
+describe("LinkedCell.Editor (#157)", () => {
+  function editorProps(
+    candidates: { key: string; label: string }[],
+    commit: (v: string | null) => void,
+  ) {
+    return {
+      row: {},
+      rowKey: "r0",
+      field: "owner",
+      value: null,
+      column: linkedColumn(),
+      candidates,
+      commit,
+      cancel: () => {},
+      anchorRef: createRef<HTMLDivElement>(),
+    } as unknown as Parameters<typeof LinkedCell.Editor>[0] & EditCtx<Record<string, unknown>>;
+  }
+
+  test("filters candidates by the search query", () => {
+    const cands = [
+      { key: "k1", label: "Alice" },
+      { key: "k2", label: "Bob" },
+      { key: "k3", label: "Carol" },
+    ];
+    render(<LinkedCell.Editor {...editorProps(cands, vi.fn())} />);
+    fireEvent.change(screen.getByPlaceholderText(/search records/i), { target: { value: "bo" } });
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(screen.queryByText("Carol")).not.toBeInTheDocument();
+  });
+
+  test("clamps a stale highlight when the candidate set shrinks (#157)", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ key: `k${i}`, label: `Person ${i}` }));
+    const few = [
+      { key: "a", label: "Solo A" },
+      { key: "b", label: "Solo B" },
+    ];
+    const commit = vi.fn();
+    const { rerender } = render(<LinkedCell.Editor {...editorProps(many, commit)} />);
+    const input = screen.getByPlaceholderText(/search records/i);
+    // Move the highlight well past what the shrunken list will contain.
+    for (let i = 0; i < 12; i++) fireEvent.keyDown(input, { key: "ArrowDown" });
+
+    // Re-render with far fewer candidates (as a parent narrowing would do).
+    rerender(<LinkedCell.Editor {...editorProps(few, commit)} />);
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    // The clamp keeps hl in range, so Enter commits a real row (the last of the
+    // shrunken list) rather than an out-of-bounds undefined that no-ops.
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(["a", "b"]).toContain(commit.mock.calls[0]![0]);
   });
 });
 
