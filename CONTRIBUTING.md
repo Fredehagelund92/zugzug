@@ -4,6 +4,11 @@ Thanks for your interest in contributing! This project uses the
 [Developer Certificate of Origin (DCO)](https://developercertificate.org/)
 to manage contributions.
 
+> **New here?** Start with a
+> [`good first issue`](https://github.com/Fredehagelund92/zugzug/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+> — each is small, self-contained, and spells out where to look and how to
+> verify your change.
+
 ## DCO sign-off
 
 Every commit must include a `Signed-off-by:` line that certifies you
