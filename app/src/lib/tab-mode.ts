@@ -2,7 +2,7 @@ import type { Mode } from "./available-modes";
 
 export const TAB_MODE_KEY = (refTableId: string): string => `zugzug:tab-mode:${refTableId}`;
 
-const isMode = (s: string): s is Mode => s === "records" || s === "match" || s === "sources";
+const isMode = (s: string): s is Mode => s === "records" || s === "match";
 
 export function readStoredMode(refTableId: string, valid: readonly Mode[]): Mode {
   try {
