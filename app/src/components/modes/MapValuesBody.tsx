@@ -59,7 +59,7 @@ export function MapValuesBody({
 
   if (view === "grid") {
     return (
-      <div className="flex flex-1 flex-col min-h-0">
+      <div className="flex flex-1 flex-col min-h-0 bg-surface">
         <div className="flex items-center gap-3 border-b border-line bg-surface px-4 pt-3 pb-2.5">
           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
             map values · {refTable.refTable} · grid
@@ -74,7 +74,7 @@ export function MapValuesBody({
   }
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
+    <div className="flex flex-1 flex-col min-h-0 bg-surface">
       {/* header: kicker · count · sources strip · filter · grid escape hatch */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface px-4 pt-3 pb-2.5">
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-3">
