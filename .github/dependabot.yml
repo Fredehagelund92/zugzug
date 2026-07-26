@@ -1,0 +1,56 @@
+# Dependabot version updates. Weekly, grouped to keep PR noise low; security
+# updates are handled separately (enabled in repo settings) and are not grouped.
+version: 2
+updates:
+  # --- JS/TS workspaces (Bun + npm) ---
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule: { interval: "weekly" }
+    open-pull-requests-limit: 5
+    groups:
+      server-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/app"
+    schedule: { interval: "weekly" }
+    open-pull-requests-limit: 5
+    groups:
+      app-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule: { interval: "weekly" }
+    open-pull-requests-limit: 3
+    groups:
+      e2e-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/docs-site"
+    schedule: { interval: "weekly" }
+    open-pull-requests-limit: 3
+    groups:
+      docs-deps:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # --- GitHub Actions ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule: { interval: "weekly" }
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # --- Container base images ---
+  - package-ecosystem: "docker"
+    directory: "/server"
+    schedule: { interval: "weekly" }
+  - package-ecosystem: "docker"
+    directory: "/app"
+    schedule: { interval: "weekly" }
