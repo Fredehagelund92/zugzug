@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { SourcesFeedStrip } from "./SourcesFeedStrip";
+import { scanSources } from "../../store";
+import { toast } from "../Toast";
 import type { MappingRefTable } from "../../data";
 
 const WIRED = [
@@ -19,8 +22,9 @@ const WIRED = [
 ];
 vi.mock("../../store", () => ({
   useSources: () => WIRED,
-  scanSources: vi.fn(async () => 1),
+  scanSources: vi.fn(async () => 3),
 }));
+vi.mock("../Toast", () => ({ toast: vi.fn() }));
 const REF = { id: "t1", refTable: "country" } as unknown as MappingRefTable;
 
 describe("SourcesFeedStrip", () => {
@@ -33,5 +37,13 @@ describe("SourcesFeedStrip", () => {
   it("renders nothing when no columns are wired", () => {
     const { container } = render(<SourcesFeedStrip refTable={{ id: "nope" } as MappingRefTable} />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("re-scans and reports the result when Re-scan is clicked", async () => {
+    const user = userEvent.setup();
+    render(<SourcesFeedStrip refTable={REF} />);
+    await user.click(screen.getByRole("button", { name: /re-scan/i }));
+    await waitFor(() => expect(scanSources).toHaveBeenCalled());
+    expect(toast).toHaveBeenCalledWith("Re-scanned 3 columns");
   });
 });

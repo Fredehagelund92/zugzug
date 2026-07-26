@@ -2,8 +2,19 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MapValuesBody } from "./MapValuesBody";
 import { saveDraft } from "../../store";
+import { useRefTableClusters } from "../../lib/use-ref-table-clusters";
 import type { MappingRefTable } from "../../data";
 import type { Cluster } from "../../lib/use-ref-table-clusters";
+
+const feed = (over: Partial<ReturnType<typeof useRefTableClusters>>) => ({
+  clusters: [],
+  coverage: { resolvedRows: 0, atRiskRows: 0, pct: 0 },
+  truncated: false,
+  loading: false,
+  error: null,
+  refetch: vi.fn(),
+  ...over,
+});
 
 const CLUSTERS: Cluster[] = [
   {
@@ -116,6 +127,36 @@ describe("MapValuesBody", () => {
     await user.keyboard("{ArrowDown}");
     // second row becomes the cursor row → its skip affordance is now reachable
     expect(screen.getAllByText(/skip/i).length).toBeGreaterThan(0);
+  });
+
+  it("moves the cursor back up with ArrowUp", async () => {
+    const user = (await import("@testing-library/user-event")).default.setup();
+    render(<MapValuesBody refTable={REF} isActive />);
+    const list = screen.getByRole("list", { name: /values to map/i });
+    list.focus();
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowUp}");
+    expect(screen.getByText("Deutschland")).toBeInTheDocument();
+  });
+
+  it("renders the loading state", () => {
+    vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ loading: true }));
+    render(<MapValuesBody refTable={REF} isActive />);
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+  });
+
+  it("renders the error state and retries", () => {
+    const refetch = vi.fn();
+    vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ error: "boom", refetch }));
+    render(<MapValuesBody refTable={REF} isActive />);
+    expect(screen.getByText(/couldn.t load values/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it("renders the all-mapped empty state when there are no clusters", () => {
+    vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ clusters: [] }));
+    render(<MapValuesBody refTable={REF} isActive />);
+    expect(screen.getByText(/is all mapped/i)).toBeInTheDocument();
   });
 
   it("stages a skipped draft for the cursor cluster on S", async () => {
