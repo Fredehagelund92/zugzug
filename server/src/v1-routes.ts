@@ -17,6 +17,7 @@ import { lookupAliasedSlug } from "./slug-alias.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { checkRateLimit } from "./rate-limit.ts";
 import { env } from "./env.ts";
+import { log } from "./log.ts";
 import {
   listRefTablesForApi,
   getSchemaForApi,
@@ -53,6 +54,26 @@ function json(data: unknown, status = 200, extraHeaders: Record<string, string> 
     status,
     headers: { "content-type": "application/json", ...extraHeaders },
   });
+}
+
+// Accept only ISO-8601 dates/timestamps for the Pull API `since` param (#156).
+// Without this a value like `since=yesterday` flows into a `$::text::timestamp`
+// cast and surfaces as a raw Postgres 500 instead of a clean 400.
+const ISO_8601 = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+function isValidSince(s: string): boolean {
+  return ISO_8601.test(s) && !Number.isNaN(Date.parse(s));
+}
+
+/** Sanitize an unexpected handler error into a 500 { error: "internal" }: log
+ *  the detail server-side (#156) rather than echoing raw DB error text to the
+ *  client. Known cursor errors are handled by the caller before this. */
+function internalError(where: string, e: unknown): Response {
+  log({
+    level: "error",
+    msg: `v1 ${where} failed`,
+    err: e instanceof Error ? e.message : String(e),
+  });
+  return jsonError(500, "internal");
 }
 
 function jsonError(status: number, error: string, retryAfter?: number): Response {
@@ -155,6 +176,7 @@ async function dispatch(
   if (v1[0] === "tables" && v1[2] === "records" && v1.length === 3 && method === "GET") {
     const refTableSlug = decodeURIComponent(v1[1]!);
     const since = url.searchParams.get("since") ?? undefined;
+    if (since !== undefined && !isValidSince(since)) return jsonError(400, "invalid_since");
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "");
     try {
@@ -167,7 +189,7 @@ async function dispatch(
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === "cursor_invalid" || msg === "cursor_mismatch") return jsonError(400, msg);
-      throw e;
+      return internalError("records", e);
     }
   }
 
@@ -184,6 +206,7 @@ async function dispatch(
   if (v1[0] === "tables" && v1[2] === "removed" && v1.length === 3 && method === "GET") {
     const refTableSlug = decodeURIComponent(v1[1]!);
     const since = url.searchParams.get("since") ?? undefined;
+    if (since !== undefined && !isValidSince(since)) return jsonError(400, "invalid_since");
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "");
     try {
@@ -196,7 +219,7 @@ async function dispatch(
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === "cursor_invalid" || msg === "cursor_mismatch") return jsonError(400, msg);
-      throw e;
+      return internalError("removed", e);
     }
   }
 
@@ -204,6 +227,7 @@ async function dispatch(
   if (v1[0] === "events" && v1.length === 1 && method === "GET") {
     const type = url.searchParams.get("type") ?? undefined;
     const since = url.searchParams.get("since") ?? undefined;
+    if (since !== undefined && !isValidSince(since)) return jsonError(400, "invalid_since");
     const cursor = url.searchParams.get("cursor") ?? undefined;
     const limit = Number(url.searchParams.get("limit") ?? "");
     try {
@@ -217,7 +241,7 @@ async function dispatch(
     } catch (e) {
       const msg = (e as Error).message;
       if (msg === "cursor_invalid" || msg === "cursor_mismatch") return jsonError(400, msg);
-      throw e;
+      return internalError("events", e);
     }
   }
 

@@ -196,6 +196,23 @@ describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
     const body = (await res!.json()) as { error: string };
     expect(body.error).toBe("cursor_invalid");
   });
+
+  // #156: a malformed `since` must be a clean 400, not a raw Postgres 500.
+  it("returns 400 invalid_since for a non-ISO since value", async () => {
+    const res = await handleV1Route(
+      authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records?since=yesterday`),
+    );
+    expect(res!.status).toBe(400);
+    const body = (await res!.json()) as { error: string };
+    expect(body.error).toBe("invalid_since");
+  });
+
+  it("accepts a valid ISO-8601 since value", async () => {
+    const res = await handleV1Route(
+      authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/records?since=2024-01-01T00:00:00Z`),
+    );
+    expect(res!.status).toBe(200);
+  });
 });
 
 describe("GET /api/t/:slug/v1/tables/:slug/records/:key", () => {
@@ -239,6 +256,13 @@ describe("GET /api/t/:slug/v1/events", () => {
     expect(res!.status).toBe(200);
     const body = (await res!.json()) as { events: unknown[] };
     expect(body.events).toEqual([]);
+  });
+
+  it("returns 400 invalid_since for a malformed since (#156)", async () => {
+    const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/events?since=not-a-date`));
+    expect(res!.status).toBe(400);
+    const body = (await res!.json()) as { error: string };
+    expect(body.error).toBe("invalid_since");
   });
 });
 
