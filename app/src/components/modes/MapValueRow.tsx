@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { Cluster } from "../../lib/use-ref-table-clusters";
 import type { MappingRefTable } from "../../data";
 import { ComboSelect, type ComboSelectHandle } from "../ComboSelect";
@@ -30,6 +30,7 @@ export function MapValueRow({
 }: MapValueRowProps) {
   const drafts = useDrafts();
   const canEdit = useCanEdit();
+  const [expanded, setExpanded] = useState(false);
 
   const primaryRaw = cluster.members[0]?.raw ?? cluster.rep;
   const draft = drafts[dkey(refTable.id, primaryRaw)];
@@ -48,7 +49,13 @@ export function MapValueRow({
 
   const map = (label: string) => {
     const key = labelToKey.get(label) ?? slug(label);
-    for (const m of cluster.members) void saveDraft(refTable.id, m.raw, "mapped", label, key);
+    for (const m of cluster.members) {
+      // Picking the record a value is already published-mapped to is a no-op:
+      // drop any pending draft instead of staging a redundant "change". This
+      // makes re-selecting the original record net back to zero pending changes.
+      if (m.mappedLabel === label) void discardDraft(refTable.id, m.raw);
+      else void saveDraft(refTable.id, m.raw, "mapped", label, key);
+    }
   };
   const skip = () => {
     for (const m of cluster.members) void saveDraft(refTable.id, m.raw, "skipped", null, null);
@@ -65,20 +72,40 @@ export function MapValueRow({
         isCursor ? "border-l-accent bg-accent-wash" : "border-l-transparent hover:bg-hover",
       )}
     >
-      {/* value + spellings chip + provenance */}
+      {/* value + grouping chip + provenance */}
       <div className="min-w-0">
         <span className="break-words font-mono text-[14px] font-semibold tracking-[-0.01em] text-ink">
           {cluster.rep}
           {extra > 0 && (
-            <span className="ml-2 rounded-sm border border-dashed border-line-2 px-1.5 py-px font-mono text-[11px] font-normal text-ink-3">
-              +{extra} spelling{extra === 1 ? "" : "s"}
-            </span>
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              className="rounded-sm ml-2 border border-dashed border-line-2 px-1.5 py-px font-mono text-[11px] font-normal text-ink-3 hover:border-line hover:text-ink-2"
+            >
+              {expanded ? `${cluster.members.length} grouped ▾` : `+${extra} more ▸`}
+            </button>
           )}
         </span>
         <div className="mt-0.5 font-mono text-[10.5px] tabular-nums text-ink-3">
           {cluster.rows.toLocaleString("en-US")} rows
           {occ ? ` · ${occ.table}.${occ.column}` : ""}
         </div>
+        {expanded && extra > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {cluster.members.map((m) => (
+              <span
+                key={m.raw}
+                className="rounded-sm border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-ink-2"
+              >
+                {m.raw}
+              </span>
+            ))}
+            <span className="font-mono text-[10.5px] text-ink-3">
+              one decision maps all {cluster.members.length}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* record picker */}

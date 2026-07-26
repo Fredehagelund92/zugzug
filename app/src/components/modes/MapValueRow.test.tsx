@@ -6,9 +6,10 @@ import type { Cluster } from "../../lib/use-ref-table-clusters";
 import type { MappingRefTable } from "../../data";
 
 const saveDraft = vi.fn();
+const discardDraft = vi.fn();
 vi.mock("../../store", () => ({
   saveDraft: (...a: unknown[]) => saveDraft(...a),
-  discardDraft: vi.fn(),
+  discardDraft: (...a: unknown[]) => discardDraft(...a),
   useDrafts: () => ({}),
   useCanEdit: () => true,
   slug: (s: string) =>
@@ -64,10 +65,13 @@ const MAPPED_CLUSTER: Cluster = {
   ],
 };
 
-beforeEach(() => saveDraft.mockClear());
+beforeEach(() => {
+  saveDraft.mockClear();
+  discardDraft.mockClear();
+});
 
 describe("MapValueRow", () => {
-  it("shows the representative value and a +N spellings chip", () => {
+  it("shows the representative value and a +N more grouping chip", () => {
     render(
       <MapValueRow
         cluster={CLUSTER}
@@ -78,7 +82,25 @@ describe("MapValueRow", () => {
       />,
     );
     expect(screen.getByText("Deutschland")).toBeInTheDocument();
-    expect(screen.getByText("+1 spelling")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+1 more/i })).toBeInTheDocument();
+  });
+
+  it("reveals the grouped values (and the maps-all note) when the chip is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <MapValueRow
+        cluster={CLUSTER}
+        refTable={REF}
+        recordLabels={["Germany"]}
+        isCursor={false}
+        onFocus={() => {}}
+      />,
+    );
+    // collapsed: the other spelling is hidden
+    expect(screen.queryByText("DEUTSCHLAND")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /\+1 more/i }));
+    expect(screen.getByText("DEUTSCHLAND")).toBeInTheDocument();
+    expect(screen.getByText(/one decision maps all 2/i)).toBeInTheDocument();
   });
 
   it("stages a mapped draft for every member when a record is picked", async () => {
@@ -110,5 +132,40 @@ describe("MapValueRow", () => {
     );
     expect(screen.getByLabelText("Record for US")).toHaveTextContent("United States");
     expect(screen.getByText("mapped")).toBeInTheDocument();
+  });
+
+  it("discards (no draft) when the picked record equals the committed mapping", async () => {
+    const user = userEvent.setup();
+    render(
+      <MapValueRow
+        cluster={MAPPED_CLUSTER}
+        refTable={REF}
+        recordLabels={["United States", "Germany"]}
+        isCursor
+        onFocus={() => {}}
+      />,
+    );
+    await user.click(screen.getByLabelText("Record for US"));
+    await user.click(screen.getByRole("option", { name: "United States" }));
+    // Picking the already-committed record is a no-op — drop any draft, don't stage one.
+    expect(discardDraft).toHaveBeenCalledWith("t1", "US");
+    expect(saveDraft).not.toHaveBeenCalled();
+  });
+
+  it("stages a mapped draft when the picked record differs from the committed mapping", async () => {
+    const user = userEvent.setup();
+    render(
+      <MapValueRow
+        cluster={MAPPED_CLUSTER}
+        refTable={REF}
+        recordLabels={["United States", "Germany"]}
+        isCursor
+        onFocus={() => {}}
+      />,
+    );
+    await user.click(screen.getByLabelText("Record for US"));
+    await user.click(screen.getByRole("option", { name: "Germany" }));
+    expect(saveDraft).toHaveBeenCalledWith("t1", "US", "mapped", "Germany", "germany");
+    expect(discardDraft).not.toHaveBeenCalled();
   });
 });
