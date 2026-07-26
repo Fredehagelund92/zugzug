@@ -375,3 +375,31 @@ describe("rejectDrafts()", () => {
     await expect(rejectDrafts(refTableId, T, ["usa"], "  ", U2)).rejects.toThrow(/reason/i);
   });
 });
+
+// ---- #150: concurrent-publish version race ---------------------------
+describe("commit() concurrent publish (#150)", () => {
+  it("two concurrent commits on one table both succeed with distinct versions", async () => {
+    const run = crypto.randomUUID().slice(0, 8);
+    const refTableId = await addRefTable(`ConcPublish_${run}`, [], { keyKind: "slug" }, U, T);
+    await saveDraft(refTableId, "aaa", "mapped", "Aaa", "aaa", U, T);
+    await saveDraft(refTableId, "bbb", "mapped", "Bbb", "bbb", U2, T);
+
+    // Cross-publish so the four-eyes gate passes whether or not it is enabled:
+    // each committer folds the *other* user's draft. Without version-assignment
+    // serialization these two transactions can both compute the same next
+    // version and one rolls back on the unique index.
+    const [r1, r2] = await Promise.all([
+      commit(refTableId, U, T, ["bbb"]),
+      commit(refTableId, U2, T, ["aaa"]),
+    ]);
+    expect(r1.committed).toBe(1);
+    expect(r2.committed).toBe(1);
+
+    const versions = await pgAll<{ version: number }>(
+      `SELECT version FROM "zugzug_app"."reference_table_version"
+        WHERE reference_table_id = $1 AND tenant_id = $2 ORDER BY version`,
+      [refTableId, T],
+    );
+    expect(versions.map((v) => v.version)).toEqual([1, 2]);
+  });
+});

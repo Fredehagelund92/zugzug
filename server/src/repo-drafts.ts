@@ -784,6 +784,15 @@ export async function commit(
   // stays per-tenant-implicit (refTable ids are globally unique → effectively
   // per-tenant via the refTable registry's WHERE tenant_id = $N gate above).
   await pgTx(async (tx) => {
+    // Serialize version assignment per (tenant, reference table). The next
+    // version is derived from count(*) of prior table.published events below;
+    // under READ COMMITTED two concurrent publishers would both read the same
+    // count and compute the same version, and the loser rolls back on the
+    // reference_table_version unique index (#150). A transaction-scoped
+    // advisory lock makes the second publisher wait for the first to commit,
+    // so it sees the new event row and picks the next version. Released
+    // automatically at tx end.
+    await tx.run(`SELECT pg_advisory_xact_lock(hashtext($1 || ':' || $2))`, [tenantId, refTableId]);
     // Update existing map rows whose target has changed (remaps).
     if (remappedDrafts.length > 0) {
       await tx.run(
