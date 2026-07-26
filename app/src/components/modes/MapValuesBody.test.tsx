@@ -1,61 +1,83 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent } from "@testing-library/react";
-
-// Mock the two heavy bodies + the store so the wrapper is testable in isolation.
-vi.mock("./ClusterMapperCard", () => ({ ClusterMapperCard: () => <div>FOCUSED CARD</div> }));
-vi.mock("./MatchModeBody", () => ({ MatchModeBody: () => <div>GRID BODY</div> }));
-
-const { draftsRef } = vi.hoisted(() => ({
-  draftsRef: { current: [] as { refTableId: string; status: string }[] },
-}));
-vi.mock("../../store", () => ({
-  useDrafts: () => draftsRef.current,
-  listDrafts: (refTableId: string) => draftsRef.current.filter((d) => d.refTableId === refTableId),
-  commit: vi.fn().mockResolvedValue({ committed: 2, rowsRecovered: 0 }),
-  useCanEdit: () => true,
-}));
-vi.mock("../Toast", () => ({ toast: vi.fn() }));
-
-import { commit } from "../../store";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { MapValuesBody } from "./MapValuesBody";
 import type { MappingRefTable } from "../../data";
+import type { Cluster } from "../../lib/use-ref-table-clusters";
 
-const commitMock = commit as unknown as ReturnType<typeof vi.fn>;
-const REF_TABLE = { id: "d1", refTable: "Country" } as unknown as MappingRefTable;
+const CLUSTERS: Cluster[] = [
+  {
+    key: "de",
+    rep: "Deutschland",
+    rows: 1204,
+    mappedCount: 0,
+    members: [
+      {
+        raw: "Deutschland",
+        rows: 1204,
+        isMapped: false,
+        mappedLabel: null,
+        occurrences: [{ table: "geo.customers", column: "country", rows: 1204 }],
+      },
+    ],
+  },
+  {
+    key: "us",
+    rep: "U.S.A.",
+    rows: 880,
+    mappedCount: 0,
+    members: [
+      {
+        raw: "U.S.A.",
+        rows: 880,
+        isMapped: false,
+        mappedLabel: null,
+        occurrences: [{ table: "geo.orders", column: "ship_country", rows: 880 }],
+      },
+    ],
+  },
+];
 
-beforeEach(() => {
-  commitMock.mockClear();
-  draftsRef.current = [];
-});
+vi.mock("../../lib/use-ref-table-clusters", () => ({
+  useRefTableClusters: () => ({
+    clusters: CLUSTERS,
+    coverage: { resolvedRows: 0, atRiskRows: 2084, pct: 0 },
+    truncated: false,
+    loading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+}));
+vi.mock("../../store", () => ({
+  listDrafts: () => [],
+  commit: vi.fn(),
+  useDrafts: () => ({}),
+  useCanEdit: () => true,
+  saveDraft: vi.fn(),
+  discardDraft: vi.fn(),
+  useSources: () => [],
+  scanSources: vi.fn(),
+  slug: (s: string) => s,
+  dkey: (id: string, raw: string) => `${id}::${raw}`,
+}));
+
+const REF = {
+  id: "t1",
+  refTable: "country",
+  record: [{ key: "germany", label: "Germany", version: 1 }],
+} as unknown as MappingRefTable;
 
 describe("MapValuesBody", () => {
-  it("defaults to the Focused card and can toggle to the Grid power view", () => {
-    const { getByText, queryByText } = render(<MapValuesBody refTable={REF_TABLE} isActive />);
-    expect(getByText("FOCUSED CARD")).toBeTruthy();
-    expect(queryByText("GRID BODY")).toBeNull();
-
-    fireEvent.click(getByText("Grid"));
-    expect(getByText("GRID BODY")).toBeTruthy();
-    expect(queryByText("FOCUSED CARD")).toBeNull();
+  it("renders one row per cluster with the map-values kicker and count", () => {
+    render(<MapValuesBody refTable={REF} isActive />);
+    expect(screen.getByText(/map values ·/i)).toBeInTheDocument();
+    expect(screen.getByText("Deutschland")).toBeInTheDocument();
+    expect(screen.getByText("U.S.A.")).toBeInTheDocument();
+    expect(screen.getByText(/2 to map/i)).toBeInTheDocument();
   });
 
-  it("shows the staged count and publishes via commit", () => {
-    draftsRef.current = [
-      { refTableId: "d1", status: "mapped" },
-      { refTableId: "d1", status: "mapped" },
-      { refTableId: "d1", status: "skipped" }, // not counted
-      { refTableId: "other", status: "mapped" }, // other refTable, not counted
-    ];
-    const { getByText } = render(<MapValuesBody refTable={REF_TABLE} isActive />);
-    expect(getByText(/2 drafts/i)).toBeTruthy();
-    fireEvent.click(getByText(/Publish 2 changes/i));
-    expect(commitMock).toHaveBeenCalledWith("d1");
-  });
-
-  it("disables publish when nothing is staged", () => {
-    const { getByText } = render(<MapValuesBody refTable={REF_TABLE} isActive />);
-    expect((getByText(/Publish 0 changes/i).closest("button") as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+  it("shows an Open as grid escape hatch, not a Focused/Grid toggle", () => {
+    render(<MapValuesBody refTable={REF} isActive />);
+    expect(screen.getByRole("button", { name: /open as grid/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^focused$/i })).not.toBeInTheDocument();
   });
 });
