@@ -128,7 +128,11 @@ function GridCellInner<Row>(props: GridCellProps<Row>): React.ReactElement {
       ref={editing ? editingCellRef : undefined}
       role="gridcell"
       aria-colindex={idx + 1}
-      aria-selected={focused ? true : undefined}
+      // Reflect range selection in ARIA, not just the single focused cell, so a
+      // multi-cell selection is announced (#160).
+      aria-selected={focused || inRange ? true : undefined}
+      // Associate the cell with its column header for screen-reader context.
+      aria-describedby={`${gridId}col::${c.field}`}
       data-in-range={inRange ? "true" : undefined}
       id={`${gridId}${encodeURIComponent(rk)}::${c.field}`}
       data-cell={data}

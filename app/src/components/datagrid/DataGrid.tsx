@@ -1526,6 +1526,7 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
         )}
         {/* header row */}
         <DataGridHeader
+          gridId={gridId}
           columns={orderedVisible}
           allColumns={columns}
           gridStyle={gridStyle}

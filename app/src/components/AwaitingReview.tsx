@@ -15,6 +15,7 @@ import { Button } from "./Button";
 import { PublishPreviewDialog, type PublishGroup } from "./PublishPreviewDialog";
 import { toast } from "./Toast";
 import { cx } from "../lib/cx";
+import { focusRing } from "../lib/focus-ring";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
 
 const SYSTEM_USER_ID = "u_system";
@@ -463,7 +464,10 @@ export function AwaitingReview() {
                   <button
                     type="button"
                     onClick={() => toggleCollapse(tg.refTableId, tg.totalDrafts)}
-                    className="font-mono text-[10px] text-ink-3 hover:text-ink-2"
+                    className={cx(
+                      "rounded-sm font-mono text-[10px] text-ink-3 hover:text-ink-2",
+                      focusRing,
+                    )}
                   >
                     {collapsed_ ? `show all ${tg.totalDrafts}` : "collapse"}
                   </button>
@@ -500,7 +504,10 @@ export function AwaitingReview() {
                 <button
                   type="button"
                   onClick={() => toggleCollapse(tg.refTableId, tg.totalDrafts)}
-                  className="w-full px-4 py-2 text-left font-mono text-[11px] text-ink-3 hover:text-ink-2"
+                  className={cx(
+                    "w-full px-4 py-2 text-left font-mono text-[11px] text-ink-3 hover:text-ink-2",
+                    focusRing,
+                  )}
                 >
                   and {hiddenCount} more…
                 </button>

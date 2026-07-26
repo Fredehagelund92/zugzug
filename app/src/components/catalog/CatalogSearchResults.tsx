@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { focusRing } from "../../lib/focus-ring";
 
 export interface SearchResultRow {
   dbId: string;
@@ -118,6 +119,7 @@ function VirtualizedResults({
   const rowClass = (key: string) =>
     [
       "w-full px-3 py-1.5 text-left",
+      focusRing,
       selectedKey === key ? "bg-accent/15 text-ink" : "text-ink hover:bg-surface-2",
     ].join(" ");
 

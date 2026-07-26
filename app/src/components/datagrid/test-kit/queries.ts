@@ -12,8 +12,16 @@ export function cellAt(container: HTMLElement, rowKey: string, field: string): H
 }
 
 export function cursorCell(container: HTMLElement): { rowKey: string; field: string } | null {
-  const el = container.querySelector('[role="gridcell"][aria-selected="true"]');
-  return el ? parseCell(el) : null;
+  // The focused cell is the grid's aria-activedescendant. (aria-selected now
+  // also marks range-selected cells, so it no longer uniquely identifies the
+  // cursor — #160.)
+  const grid = container.querySelector("[aria-activedescendant]");
+  const activeId = grid?.getAttribute("aria-activedescendant");
+  if (activeId) {
+    const el = container.querySelector<HTMLElement>(`[id="${CSS.escape(activeId)}"]`);
+    if (el) return parseCell(el);
+  }
+  return null;
 }
 
 export function selectedCells(container: HTMLElement): Array<{ rowKey: string; field: string }> {
