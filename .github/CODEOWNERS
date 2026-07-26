@@ -1,0 +1,4 @@
+# Default owner for everything — auto-requested as reviewer on every PR.
+# (The branch ruleset requires 1 approval; enable "require code owner review"
+#  in the ruleset if you want this to be mandatory rather than advisory.)
+* @Fredehagelund92
