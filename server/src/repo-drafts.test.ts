@@ -210,7 +210,15 @@ test("listAllDraftsPage keyset-paginates a large backlog without dropping/duplic
   const refTableId = await addRefTable(`PageDim_${run}`, [], { keyKind: "slug" }, U_ALL, tenant);
   const N = 25;
   for (let i = 0; i < N; i++) {
-    await saveDraft(refTableId, `raw_${String(i).padStart(3, "0")}`, "mapped", `L${i}`, `k${i}`, U_ALL, tenant);
+    await saveDraft(
+      refTableId,
+      `raw_${String(i).padStart(3, "0")}`,
+      "mapped",
+      `L${i}`,
+      `k${i}`,
+      U_ALL,
+      tenant,
+    );
   }
 
   // Small page size forces multiple pages; assert bounded pages + full coverage.
@@ -492,7 +500,7 @@ describe("commit() event/audit counts agree with the snapshot (#152)", () => {
     // it reflects the same change set the version snapshot captured.
     const payload = await latestPublishPayload(refTableId);
     expect((payload.summary as { updated: number }).updated).toBe(2);
-    expect((payload.version as number)).toBe(2);
+    expect(payload.version as number).toBe(2);
 
     // And the v2 snapshot actually carries the edited values — the event count
     // and the snapshot describe the same publish.
