@@ -858,9 +858,13 @@ export async function commit(
       baseParams(),
     );
     // Approved drafts — passed to the warehouse adapter after the tx commits.
+    // DISTINCT ON (lower(raw)) collapses the same raw drafted by multiple
+    // editors (draft PK is per-user) to one row — latest draft wins — so the
+    // warehouse map MERGE agrees with the single-row-per-raw Postgres fold below.
     approvedDrafts = await tx.all<{ raw: string; key: string; label: string | null }>(
-      `SELECT raw, target_key AS key, target_label AS label FROM ${DRAFT}
-       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+      `SELECT DISTINCT ON (lower(raw)) raw, target_key AS key, target_label AS label FROM ${DRAFT}
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}
+       ORDER BY lower(raw), created_at DESC, user_id`,
       baseParams(),
     );
     // Remaps (raw already mapped but to a different target_key) — recorded
@@ -919,11 +923,16 @@ export async function commit(
         baseParamsD(),
       );
     }
+    // DISTINCT ON (lower(d.raw)) collapses the same raw drafted by multiple
+    // editors (draft PK is per-user) to a single map row — latest draft wins —
+    // so two editors mapping the same value can't violate the raw PK on the
+    // map table. The NOT EXISTS still guards against raws already committed.
     await tx.run(
       `INSERT INTO ${MAPT} (raw, ${key})
-       SELECT d.raw, d.target_key FROM ${DRAFT} d
+       SELECT DISTINCT ON (lower(d.raw)) d.raw, d.target_key FROM ${DRAFT} d
        WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}`,
+         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}
+       ORDER BY lower(d.raw), d.created_at DESC, d.user_id`,
       baseParamsD(),
     );
     // DELETE: scoped → only delete the requested draft raws; unscoped → delete all mapped.
