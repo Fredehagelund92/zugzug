@@ -1,0 +1,111 @@
+---
+title: Pull API
+description: Read published records over HTTP — the recommended way to sync into dbt, Fivetran, or any pipeline.
+---
+
+The Pull API serves your published records as JSON, so your warehouse team can ingest
+them through the pipeline they already trust. It's the default half of
+[pull-first publishing](/docs/guides/publishing).
+
+## Base URL
+
+```
+https://<host>/api/t/<workspace-slug>/v1
+```
+
+Every path is scoped to one workspace. The Integrations → **Pull API** page in the app
+shows the exact base URL and a ready-to-copy `curl` for each table.
+
+## Authentication
+
+Every request needs a **service-account** bearer token (`zzsa_…`), created on the
+Integrations → **Service accounts** page. Tokens are read-only and scoped to a single
+workspace.
+
+```bash
+curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \
+  https://<host>/api/t/acme/v1/tables
+```
+
+## Endpoints
+
+| Method & path | Returns |
+|---|---|
+| `GET /v1/tables` | Every table in the workspace. |
+| `GET /v1/tables/:slug/fields` | A table's field definitions. |
+| `GET /v1/tables/:slug/records` | Published records. Paginated; supports `?since=` and `?cursor=`. |
+| `GET /v1/tables/:slug/removed` | Records removed since a point in time (tombstones). |
+
+### `GET /v1/tables`
+
+```json
+{
+  "tables": [
+    { "slug": "country", "label": "Country", "record_count": 16, "last_published_at": "2026-01-01T12:00:00Z" }
+  ]
+}
+```
+
+### `GET /v1/tables/:slug/fields`
+
+```json
+{
+  "dim_slug": "country",
+  "label": "Country",
+  "fields": [
+    { "name": "iso3", "type": "text", "description": "ISO-3166 alpha-3" }
+  ]
+}
+```
+
+### `GET /v1/tables/:slug/records`
+
+```json
+{
+  "records": [
+    {
+      "key": "br",
+      "label": "Brazil",
+      "fields": { "iso3": "BRA", "region": "Latin America" },
+      "updated_at": "2026-01-01T12:00:00Z"
+    }
+  ],
+  "cursor": { "next": "eyJ…signed…" },
+  "meta": { "dim_slug": "country", "page_size": 500 }
+}
+```
+
+## Incremental sync
+
+Records are ordered by `(updated_at, key)`, and pages carry a signed cursor:
+
+- **First sync** — call `…/records` with no params, then follow `cursor.next` until it's
+  `null`.
+- **Since a timestamp** — `?since=<ISO-8601>` returns only records at or after that
+  instant (inclusive). Persist the newest `updated_at` you've seen and pass it next run.
+- **Resume a page** — `?cursor=<value>` continues exactly where the previous page ended.
+
+Only ISO-8601 values are accepted for `since` (e.g. `2026-01-01T00:00:00Z`).
+
+```bash
+# Pull everything new since your last successful sync
+curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \
+  "https://<host>/api/t/acme/v1/tables/country/records?since=2026-01-01T00:00:00Z"
+```
+
+Deletions don't appear in `/records`. Poll `/removed` (also `?since=`/`?cursor=`) to
+tombstone records that were retired — a webhook `changes_truncated` event is the signal
+to reconcile against it.
+
+## Errors & limits
+
+| Response | Meaning |
+|---|---|
+| `400 cursor_invalid` | The cursor was invalidated (e.g. server-key rotation). Re-sync from `?since=`. |
+| `429` + `Retry-After` | Rate limited. Default **600 req/min** per credential (`ZUGZUG_PULL_API_RPM`). |
+
+## Consuming it in dbt
+
+Point a scheduled job or your extract tool at `…/records`, land the JSON in a raw table,
+and model it like any other source. Because it's plain HTTP + cursors, every publish
+flows through the same dev → prod and review path as the rest of your warehouse.

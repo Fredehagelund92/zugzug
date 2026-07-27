@@ -1,32 +1,40 @@
 ---
 title: What is Zug Zug?
-description: Warehouse-native master data management — the messy-values-to-one-record layer, self-hosted next to your data.
+description: One record for every spelling your warehouse can't agree on — self-hosted, next to your data.
 ---
 
-Zug Zug is **master data management, minus the enterprise**. Your warehouse fills
-with names nobody agrees on — `BCG`, `B.C.G.`, `Boston Consulting Group`. Zug Zug
-is where a team pins them to one approved **record**, and keeps the governed
-**lists** — Country, Currency, Partner — that everything downstream depends on.
+Every warehouse fills with names nobody agrees on — `BCG`, `B.C.G.`,
+`Boston Consulting Group`, all the same company. **Zug Zug is where your team pins them
+to one approved record**, and maintains the reference tables — Country, Currency,
+Partner — that everything downstream depends on.
 
-It runs **next to your warehouse**, sets up with **one command**, and it's yours
-to host.
+It runs **next to your warehouse**, reads with a **read-only credential**, sets up with
+**one command**, and it's yours to host.
+
+> *The enterprise calls this "master data management." The incumbents — Tamr, Stibo,
+> Reltio — cost six figures and are closed. Zug Zug is the small, self-hosted version,
+> for the people who actually know the data.*
 
 ## The shape of it
 
-- **Read-only in.** Point Zug Zug at a warehouse column with a read-only
-  credential. It scans the distinct values still waiting for a mapping.
-- **Agreed by a human.** The team maps each source value to an approved record in
-  a spreadsheet-fast grid — drafts, review, bulk merge, roles, full audit history.
-- **Written back to your warehouse.** Publishing materializes `dim_<x>` /
-  `map_<x>` tables that whatever reads your warehouse can join directly.
+- **Read-only in.** Point Zug Zug at a warehouse column with a read-only credential. It
+  scans the distinct values still waiting for a mapping.
+- **Agreed by a human.** The team maps each source value to an approved record in a
+  spreadsheet-fast grid — drafts, review, bulk merge, roles, full audit history.
+  Optional AI suggestions can propose a record, but nothing is saved until a human
+  confirms it.
+- **Published as plain tables.** Publishing materializes `dim_<x>` / `map_<x>` tables
+  you pull into your own warehouse — no lock-in, no proprietary format — that anything
+  reading your warehouse can join directly.
 
 ## Not entity resolution. Not an app builder.
 
-Curated lists, and the mappings into them — materialized where your warehouse can
-read them. No probabilistic matching, no golden-record survivorship, no app
-platform.
+Curated lists, and the mappings into them — materialized where your warehouse can read
+them. No automatic merging, no survivorship rules, no app platform. A person decides
+which values mean the same thing, and the result is a table.
 
 <Cards>
   <Card title="Quickstart" href="/docs/quickstart" description="Run the demo in 30 seconds with Docker." />
+  <Card title="Your first mapping" href="/docs/first-mapping" description="Scan a column, map a value, publish — the whole loop." />
   <Card title="Concepts" href="/docs/concepts" description="Tables, records, source values, mappings, publish." />
 </Cards>

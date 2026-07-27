@@ -1,0 +1,72 @@
+---
+title: Your first mapping
+description: Scan a column, map a messy value to a record, and publish — the whole loop in five minutes.
+---
+
+This walks the core loop end to end: **scan → map → publish**. If you followed the
+[Quickstart](/docs/quickstart), the demo already has scanned source values waiting, so
+you can do every step below without connecting a warehouse.
+
+## 1. Open Review
+
+**Review** (left nav) is the cross-table inbox of source values that have been scanned
+but not yet mapped. Values are grouped by table and ordered by **frequency** — the count
+next to each one is how many warehouse rows it covers.
+
+Start at the top. The most frequent few values usually cover the vast majority of your
+rows; the long tail can wait, or stay unmapped indefinitely. You are not expected to map
+everything.
+
+## 2. Map a value to a record
+
+Take a value like `Brasil`. In its row, open **Choose record** and pick the record it
+belongs to — `Brazil`. That creates a **draft**: a mapping saved in Zug Zug but not yet
+visible to your warehouse.
+
+A few ways to move faster:
+
+- **Not sure which record?** Choose **Suggest** for an optional AI suggestion (bring your
+  own OpenAI/Anthropic key in Preferences). It only proposes — nothing is saved until you
+  confirm it.
+- **Two records are really the same thing?** Select them in the grid and **merge** them
+  into one.
+- **Junk value you'll never want?** **Skip** it — it leaves Review without creating a
+  record.
+
+<Callout title="It's keyboard-driven">
+The Review inbox is built for speed: move, choose, skip, and publish without leaving the
+keyboard. The shortcuts are shown along the top of the list.
+</Callout>
+
+Drafts made by teammates land in **Approve teammates' work** — an editor reviews them
+before they go out. Roles decide who can map versus who can publish.
+
+## 3. Publish
+
+When you've mapped what matters, hit **Publish**. One publish folds every draft — and any
+record edits since the last version — into a new numbered version (`v17` → `v18`) and
+materializes the `dim_<x>` / `map_<x>` tables.
+
+Everything before publish is invisible to your warehouse. Publish is the single act that
+makes it real, and the audit log records who published what, and when. See
+[Publishing](/docs/guides/publishing) for how the result reaches your warehouse
+(pull-first by default).
+
+## 4. Use it
+
+The output is two plain tables per list — `map_<x>` turns every source spelling into a
+record's key, `dim_<x>` holds the approved records and their attributes. One join
+resolves messy input to an agreed value:
+
+```sql
+select o.*, d.label as country
+from raw.orders o
+left join map_country m on m.raw = o.shipping_country
+left join dim_country d on d.key  = m.key
+```
+
+## Next
+
+- [Connect a warehouse](/docs/guides/connect-a-warehouse) — point Zug Zug at your own columns.
+- [Pull API](/docs/reference/pull-api) — sync published records into dbt, Fivetran, or any pipeline.
+- [Publishing](/docs/guides/publishing) — versions, pull-first, and direct write.

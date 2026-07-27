@@ -40,3 +40,38 @@ A backup you don't take doesn't exist. Run the dump on a cron (daily is sane for
 most teams) and keep several days off-box. Match the cadence to how much curation
 work you're willing to lose.
 </Callout>
+
+## Restoring
+
+Restore into an **empty database on the same Postgres major version**, with the
+server stopped so nothing writes mid-restore. The custom-format dump above restores
+with `pg_restore`.
+
+For the Docker Compose stack:
+
+```bash
+# 1. Stop the server (Postgres stays up).
+docker compose stop server
+
+# 2. Restore — --clean --if-exists drops and recreates objects first.
+docker compose exec -T postgres \
+  pg_restore -U zugzug -d zugzug --clean --if-exists --no-owner \
+  < zugzug-20260101-120000.dump
+
+# 3. Bring the server back. Any newer migrations run automatically on boot.
+docker compose start server
+```
+
+For an external / managed Postgres:
+
+```bash
+pg_restore "$DATABASE_URL" --clean --if-exists --no-owner \
+  zugzug-20260101.dump
+```
+
+<Callout title="After a restore">
+Migrations run on server boot, so a dump from an older release is brought up to the
+current schema automatically — restore forward, never into an older binary. In
+direct-write mode the `dim_<x>` / `map_<x>` tables aren't in the dump; **re-publish**
+once to re-materialize them from the restored Postgres state.
+</Callout>
