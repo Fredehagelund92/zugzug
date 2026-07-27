@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import { LANDING_CSS, LANDING_HTML } from './landing-content';
 
 export const metadata: Metadata = {
-  title: 'Zug Zug — master data management, in your warehouse',
+  title: "Zug Zug — pin your warehouse's messy values to one record",
   description:
-    'Self-hosted master data management that runs next to your warehouse. Pin messy values to one approved record, keep the lists everything depends on, and set up in one command.',
+    'Open-source, self-hosted curation for your warehouse: pin messy values like BCG / B.C.G. / Boston Consulting Group to one approved record, keep the reference tables everything depends on, and set up in one command. (The category is master data management — minus the enterprise.)',
 };
 
 // The landing is our design mockup rendered verbatim. Its <style> is inlined
