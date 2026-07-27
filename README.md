@@ -12,7 +12,7 @@ maps messy values to one approved record and maintains the reference tables ever
 dashboard depends on — with roles, drafts, and full history. Publish, and the result
 is plain SQL tables back in your own warehouse. Self-hosted, one command to run.
 
-[**Live demo →**](https://demo.zugzughq.com) &nbsp;·&nbsp; [Quickstart](#try-it) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Architecture](./ARCHITECTURE.md)
+[**Live demo →**](https://demo.zugzughq.com) &nbsp;·&nbsp; [Docs](https://zugzughq.com/docs) &nbsp;·&nbsp; [Quickstart](#try-it) &nbsp;·&nbsp; [How it works](#how-it-works) &nbsp;·&nbsp; [Architecture](./ARCHITECTURE.md)
 
 <sub>**Status: pre-1.0 — early release.** Expect rough edges and breaking changes between minor versions until v1.0.</sub>
 
@@ -132,8 +132,8 @@ Prefer a direct push? Configure a writable warehouse adapter and each publish wr
 straight into your warehouse (e.g. a MotherDuck database you already query) — an opt-in
 convenience that trades pipeline control for simplicity. See [ADR-0007](./docs/adr/0007-publish-is-pull-first.md).
 
-Self-hosting? Read [backup & restore](./docs/operations.md) *before* you have real
-data to lose. Running it for real? See [Deploy to production](./docs/deploy.md) —
+Self-hosting? Read [backup & restore](https://zugzughq.com/docs/guides/backup-restore) *before* you have real
+data to lose. Running it for real? See [Deploy to production](https://zugzughq.com/docs/guides/deploy) —
 Caddy auto-HTTPS and bundled Postgres, with escape hatches for existing ingress and
 managed databases.
 
