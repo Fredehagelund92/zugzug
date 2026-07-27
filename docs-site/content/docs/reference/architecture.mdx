@@ -24,6 +24,16 @@ the record store, so it can query across them.
 - **Backend** (`server/`): a Bun HTTP server, path-routed under `/api`. Background
   work (scans, webhook dispatch, retention sweeps) runs on an in-process scheduler.
 
+## What leaves your warehouse
+
+The read path is deliberately narrow. For each **source** you register, Zug Zug runs
+`SELECT DISTINCT <column>` (with frequency counts) and copies **only those distinct
+values** into its Postgres, so the team can map them in Review. It never reads other
+columns, never reads full rows, and never writes back unless you turn on a writable
+adapter. The distinct values of the columns you register are the only warehouse data
+that ever lands in Zug Zug — a good property to keep in mind when you scope the
+read-only credential.
+
 ## Publish model
 
 Editing is instant on the working copy; **publish** folds drafts and record edits

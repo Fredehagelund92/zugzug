@@ -60,4 +60,20 @@ block from the `server` service. Recommended at scale for managed backups.
 - **Warehouse (optional):** set `ATTACH_WAREHOUSE=true` + `MOTHERDUCK_TOKEN`.
   If you enable direct write, validate against a staging warehouse first.
 - **Updates:** `git pull && docker compose -f compose.prod.yml up -d --build`.
-  Migrations run automatically on server boot.
+  Migrations run automatically on server boot. **Take a Postgres backup first** (see
+  below).
+
+## If an upgrade fails
+
+Migrations are forward-only and run on boot. If one fails, the server exits instead of
+serving a half-migrated schema — so a bad upgrade takes the service down rather than
+corrupting it. To recover:
+
+1. Pin the **previous release** (check out the prior tag/commit) and
+   `docker compose -f compose.prod.yml up -d --build` to get back online on the schema
+   you were on.
+2. If the failed migration had already partially applied, restore the pre-upgrade dump —
+   see [Backup & restore](/docs/guides/backup-restore#restoring).
+
+This is why the update step above starts with a backup: it's the only way back from a
+migration that fails halfway.

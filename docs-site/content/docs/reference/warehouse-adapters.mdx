@@ -7,11 +7,16 @@ A **warehouse adapter** is the TypeScript interface (`WarehouseAdapter`) through
 which Zug Zug talks to a specific warehouse technology. Each implements a
 read path (the distinct-value scan) and an optional write path.
 
-## Shipped today
+## Production-ready
 
 - **DuckDB / MotherDuck** — the reference read path, and the writable adapter
-  (`MERGE` into MotherDuck) behind `MOTHERDUCK_WRITABLE`.
-- **Snowflake** — read path shipped; key-pair auth (`SNOWFLAKE_JWT`) today.
+  (`MERGE` into MotherDuck) behind `MOTHERDUCK_WRITABLE`. This is what the demo runs on.
+
+## Experimental
+
+- **Snowflake** — key-pair (JWT) auth; the scan and publish paths work. Warehouse
+  catalog auto-discovery isn't wired up yet, so you register sources by explicit path.
+  See [Connect a warehouse](/docs/guides/connect-a-warehouse#snowflake-experimental).
 
 ## Community-roadmapped
 

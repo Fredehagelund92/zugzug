@@ -20,6 +20,27 @@ With `ATTACH_WAREHOUSE=false` (the default demo mode), the whole
 record-and-publish workflow still works against Postgres — handy for trying
 things out without a warehouse at all.
 
+## Snowflake (experimental)
+
+Snowflake uses **key-pair (JWT) auth**. Set `WAREHOUSE_ADAPTER=snowflake` and register
+the connection in **Settings → Warehouse** with these fields:
+
+| Field | Notes |
+|---|---|
+| `account` | Your account identifier (e.g. `orgname-account`). |
+| `user` | The Snowflake user the key belongs to. |
+| `privateKey` | PEM-encoded private key; the public key is set on the user in Snowflake. |
+| `privateKeyPassphrase` | Optional — only if the key is encrypted. |
+| `warehouse` | Compute warehouse to run scans on. |
+| `database` / `schema` | Where your source tables live. |
+
+<Callout type="warn" title="Experimental — register sources by path">
+The scan and publish paths work, but warehouse **catalog auto-discovery** isn't wired
+up yet: Zug Zug can't enumerate your databases and schemas for you. Register sources by
+their explicit `database.schema.table` path rather than browsing. Validate against a
+non-critical schema first, and prefer [pull-first publishing](/docs/guides/publishing).
+</Callout>
+
 ## Register a source
 
 A **source** is a warehouse column you want Zug Zug to watch. Register one

@@ -1,0 +1,60 @@
+---
+title: Authentication & roles
+description: Password or OIDC sign-in, per-workspace API tokens, and what each role can do.
+---
+
+Two sign-in modes, switched by environment variable, plus service-account tokens for
+automation. Set these in the server environment (`server/.env`).
+
+## Password (default)
+
+Local email + password — the mode you get out of the box. The **first user to sign up
+becomes the admin** and controls the invite allowlist. Restrict who may sign up with:
+
+```bash
+ALLOWED_DOMAIN=example.com   # only example.com addresses can register
+```
+
+## OIDC / SSO
+
+Set `OIDC_ISSUER_URL` to any compliant provider (Google Workspace, Okta, Authentik,
+Keycloak) and Zug Zug switches to SSO — the sign-in page shows an SSO button
+automatically.
+
+```bash
+OIDC_ISSUER_URL=https://accounts.google.com
+OIDC_CLIENT_ID=your-client-id
+OIDC_CLIENT_SECRET=your-client-secret
+OIDC_ALLOWED_DOMAIN=example.com   # optional — restrict signups to a domain
+OIDC_LABEL=Google                 # optional — label shown on the SSO button
+```
+
+<Callout title="Env-only today">
+OIDC is configured through environment variables, not the UI. Changing these values
+takes effect on the next server restart.
+</Callout>
+
+## API tokens (service accounts)
+
+Generated per workspace in Integrations → **Service accounts** (`zzsa_…`). They're
+read-only, scoped to a single workspace, and intended for the
+[Pull API](/docs/reference/pull-api), CI, and scripts.
+
+```bash
+curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" https://<host>/api/t/<slug>/v1/tables
+```
+
+## Roles
+
+Every member has one role per workspace:
+
+| Role | Map values | Publish | Warehouse & team |
+|---|---|---|---|
+| **Viewer** | — | — | — |
+| **Editor** | ✅ | ✅ | — |
+| **Admin** | ✅ | ✅ | ✅ |
+
+- **Viewer** — read-only. Browse tables, records, and audit history.
+- **Editor** — does the curation work: maps source values, edits records, and publishes.
+- **Admin** — everything an editor can, plus warehouse credentials, sources, and
+  team/invites.
