@@ -37,7 +37,7 @@ Scoped but not in a specific milestone. Community PRs welcome — open an issue 
 | Error recovery: per-record revert | Planned | After the first incident where published mutations need rolling back, or sufficient inbound demand. |
 | Bulk operations in Review + cascade delete | Wanted | Merge action shipped; cascade delete + remaining bulk actions are the open scope. |
 | Unified search (Cmd-K) | Wanted | After v1.0. |
-| AI-assisted suggestions | Exploring | Need design first; not adoption-blocking. |
+| AI-assisted suggestions | Shipped (opt-in, early) | Bring-your-own OpenAI/Anthropic key; a human confirms every suggestion, nothing auto-writes. Deeper design (bulk suggest, confidence tuning) still open. |
 
 ### Collaboration
 
