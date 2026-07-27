@@ -1,4 +1,18 @@
-# Default owner for everything — auto-requested as reviewer on every PR.
-# (The branch ruleset requires 1 approval; enable "require code owner review"
-#  in the ruleset if you want this to be mandatory rather than advisory.)
-* @Fredehagelund92
+# Code owners for documentation.
+#
+# The "main — pull request review" ruleset has `require_code_owner_review`
+# enabled, so any PR that touches the paths below requires an approving review
+# from a code owner (in addition to the ruleset's general 1-review requirement).
+# Non-docs PRs still need the general review, but not specifically a code owner's.
+#
+# Solo-maintainer note: since the owner below can't approve their own PR, docs
+# PRs authored by the owner must be merged via the Admin bypass — a deliberate
+# act. Add another owner here to turn this into real second-person review.
+
+/README.md          @Fredehagelund92
+/ROADMAP.md         @Fredehagelund92
+/ARCHITECTURE.md    @Fredehagelund92
+/CONTEXT.md         @Fredehagelund92
+/CONTRIBUTING.md    @Fredehagelund92
+/docs/              @Fredehagelund92
+/docs-site/         @Fredehagelund92
