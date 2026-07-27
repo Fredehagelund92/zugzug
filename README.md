@@ -139,14 +139,15 @@ managed databases.
 
 ## Adapters
 
-A warehouse adapter is a small TypeScript interface (`WarehouseAdapter`). Two are
-shipped; more are community-roadmapped.
+A warehouse adapter is a small TypeScript interface (`WarehouseAdapter`). DuckDB /
+MotherDuck is production-ready and is what the demo runs on; Snowflake is experimental;
+other warehouses are community-roadmapped.
 
 | Adapter | Status | Notes |
 |---|---|---|
 | DuckDB (read-only) | **shipped** | Local files, in-memory, or MotherDuck with a read-only token |
 | DuckDB / MotherDuck (writable) | **shipped** | Set `MOTHERDUCK_WRITABLE=true`; token needs write access |
-| Snowflake | **shipped** | Key-pair auth (`authenticator: SNOWFLAKE_JWT`). Password and SSO not yet implemented. |
+| Snowflake | **experimental** | Key-pair (JWT) auth; the scan and publish paths work. Warehouse catalog auto-discovery isn't wired up yet, so you register sources by explicit path. |
 | Postgres-as-warehouse | roadmapped | Community PR welcome — see [Add an adapter](https://github.com/Fredehagelund92/zugzug/issues/new?template=add-adapter.yml) |
 | BigQuery | roadmapped | See above |
 | Databricks | roadmapped | See above |

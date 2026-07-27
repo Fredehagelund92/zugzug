@@ -1,4 +1,4 @@
 {
   "title": "Reference",
-  "pages": ["architecture", "warehouse-adapters", "pull-api"]
+  "pages": ["architecture", "auth-and-roles", "warehouse-adapters", "pull-api"]
 }
