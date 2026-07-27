@@ -21,6 +21,7 @@ import {
 } from "./repo.ts";
 import { materializeSourceScanValues } from "./repo-source-scan.ts";
 import { addWarehouseDatabase } from "./repo-warehouse.ts";
+import { pgGet } from "./pg.ts";
 import { basename } from "node:path";
 import { env } from "./env.ts";
 
@@ -101,6 +102,17 @@ async function populate(
 // ── the dataset ──────────────────────────────────────────────────────────────
 
 export async function seedDemo(): Promise<void> {
+  // Seed once. bootstrap runs this on every boot when SEED_DEMO=true, so it must
+  // be a no-op once the demo exists (#192): re-running re-commits every mapping —
+  // redundant work that, against a warehouse-backed deploy, crashes the boot on a
+  // duplicate map_<table> key and crash-loops the server on redeploy. If the demo
+  // tenant already has reference tables, there is nothing to do.
+  const seeded = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM "zugzug_app"."reference_table" WHERE tenant_id = $1`,
+    [T],
+  );
+  if ((seeded?.n ?? 0) > 0) return;
+
   // If the bundled local DuckDB warehouse is attached, register it so sources
   // resolve against it (its catalog name is the file stem).
   if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
