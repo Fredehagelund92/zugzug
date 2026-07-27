@@ -313,8 +313,8 @@ export const LANDING_HTML = `
 <main>
   <!-- HERO -->
   <section class="hero wrap" style="border-top:none">
-    <div class="eyebrow"><span class="br">[</span> master data · next to your warehouse <span class="br">]</span></div>
-    <h1>Master data management, <span class="em">minus the enterprise</span>.</h1>
+    <div class="eyebrow"><span class="br">[</span> open source · next to your warehouse <span class="br">]</span></div>
+    <h1>Every messy value in your warehouse, <span class="em">pinned to one record</span>.</h1>
     <p class="lede">Every warehouse fills with names nobody agrees on — <code>BCG</code>, <code>B.C.G.</code>, <code>Boston Consulting Group</code>. Zug Zug pins them to one approved record, and keeps the lists everything downstream depends on. Right next to your warehouse. One command to run.</p>
     <div class="cta-row">
       <a class="btn btn-primary" href="https://demo.zugzughq.com">Try the live demo →</a>
