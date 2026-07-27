@@ -459,7 +459,7 @@ export const LANDING_HTML = `
     <nav>
       <a href="/docs">Docs</a>
       <a href="https://github.com/Fredehagelund92/zugzug">GitHub</a>
-      <a href="https://github.com/Fredehagelund92/zugzug/blob/main/docs/deploy.md">Deploy</a>
+      <a href="/docs/guides/deploy">Deploy</a>
     </nav>
   </div>
 </footer>

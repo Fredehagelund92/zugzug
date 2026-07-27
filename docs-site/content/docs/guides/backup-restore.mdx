@@ -38,8 +38,23 @@ pg_dump "$DATABASE_URL" --format=custom > zugzug-$(date +%Y%m%d).dump
 <Callout title="Schedule it">
 A backup you don't take doesn't exist. Run the dump on a cron (daily is sane for
 most teams) and keep several days off-box. Match the cadence to how much curation
-work you're willing to lose.
+work you're willing to lose — that's your RPO.
 </Callout>
+
+## Backing up the `/data` volume
+
+Only needed if you use webhooks. Copy the keys out of the server's data dir (compose
+volume `serverdata`, mounted at `/data`):
+
+```bash
+docker compose cp server:/data ./zugzug-data-backup
+```
+
+Or supply the keys explicitly via env (`ZUGZUG_CURSOR_KEY`,
+`ZUGZUG_WEBHOOK_MASTER_KEY` / `…_FILE`) and store them in your secret manager — then
+there's nothing in `/data` to lose. Either way, **keep the webhook master key
+somewhere you can recover it**: lose it and every stored webhook secret is
+unrecoverable.
 
 ## Restoring
 
@@ -69,9 +84,26 @@ pg_restore "$DATABASE_URL" --clean --if-exists --no-owner \
   zugzug-20260101.dump
 ```
 
+If you use webhooks, also restore `/data` so the master key matches the encrypted
+secrets in the restored database, then start the rest of the stack:
+
+```bash
+docker compose cp ./zugzug-data-backup/. server:/data
+docker compose up -d
+```
+
+Verify: `curl -fsS http://localhost:8080/api/health` returns `{"ok":true,…}`, and your
+tables and audit history are present in the app.
+
 <Callout title="After a restore">
 Migrations run on server boot, so a dump from an older release is brought up to the
 current schema automatically — restore forward, never into an older binary. In
 direct-write mode the `dim_<x>` / `map_<x>` tables aren't in the dump; **re-publish**
 once to re-materialize them from the restored Postgres state.
 </Callout>
+
+## Test your restore
+
+An untested backup is a guess. At least once, restore a dump into a throwaway database,
+confirm the app comes up against it, and check the data is intact. Do it before you
+need it, not during an incident.

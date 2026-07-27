@@ -50,9 +50,11 @@ the admin.** Do it immediately; to restrict further signups set `ALLOWED_DOMAIN`
 `compose.prod.yml`, publish `app` on a host port (e.g. `ports: ["8080:80"]`),
 terminate TLS upstream, and keep `ORIGIN=https://<domain>`.
 
-**Managed / external Postgres** — remove the `postgres` service, set
-`DATABASE_URL` to your managed instance, and remove the `depends_on: postgres`
-block from the `server` service. Recommended at scale for managed backups.
+**Managed / external Postgres** — remove the `postgres` service, set `DATABASE_URL`
+to your managed instance (e.g. `postgres://user:pass@host:5432/db?sslmode=require`),
+and remove the `depends_on: postgres` block from the `server` service (leaving it
+makes `docker compose` error with *"undefined service postgres"*). Recommended at
+scale for managed backups / PITR.
 
 ## Operate
 

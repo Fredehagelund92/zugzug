@@ -23,7 +23,7 @@ access pattern.
 
 - The **warehouse** is attached only when `ATTACH_WAREHOUSE=true` (with a warehouse adapter + token). With it off, the record-and-publish workflow still works fully against Postgres — this is the default demo mode.
 - The **record store** location depends on `MOTHERDUCK_WRITABLE`, and publishing is **pull-first** ([ADR-0007](./docs/adr/0007-publish-is-pull-first.md)). The recommended path is `false` (the default): published records stay in Postgres, and the warehouse team ingests them through their **own** pipeline — a dbt source, the Pull API (`?since=` cursors), or an on-demand Parquet snapshot — so publishes flow through the existing dev→prod, CI, and review path they already trust. `true` is an **opt-in convenience** that instead `MERGE`s each publish directly into a MotherDuck database your dbt reads; simpler for a solo setup, but it writes into your warehouse out-of-band — no environment promotion, tables mutated in place.
-- **App state** in Postgres is the crown jewels — drafts and audit history live nowhere else. See [operations](./docs/operations.md) for backup/restore.
+- **App state** in Postgres is the crown jewels — drafts and audit history live nowhere else. See [backup & restore](https://zugzughq.com/docs/guides/backup-restore).
 
 ### How the stores connect (server side)
 
@@ -72,7 +72,7 @@ data, not entity resolution) and
 
 - **Try it / self-host demo**: `docker compose up` — Postgres + server + nginx-served SPA, `ATTACH_WAREHOUSE=false`, seeded demo tables, password signup. See the README "Try it in 30 seconds". CI's `compose-smoke` job guards this path on every push.
 - **Real self-host**: point `DATABASE_URL` at your Postgres, set `ORIGIN`, and (optionally) wire a warehouse (`ATTACH_WAREHOUSE=true` + `WAREHOUSE_ADAPTER` + `MOTHERDUCK_TOKEN`) and OIDC. `SEED_DEMO=false`. Config reference: `server/.env.example`.
-- **Production stack**: `compose.prod.yml` fronts the app container with **Caddy** for automatic HTTPS (only Caddy is exposed to the host) over the same nginx-served SPA + Bun API, with a bundled or external Postgres. See [docs/deploy.md](./docs/deploy.md).
+- **Production stack**: `compose.prod.yml` fronts the app container with **Caddy** for automatic HTTPS (only Caddy is exposed to the host) over the same nginx-served SPA + Bun API, with a bundled or external Postgres. See the [deploy guide](https://zugzughq.com/docs/guides/deploy).
 
 ## Secrets & the `/data` volume
 
@@ -83,4 +83,4 @@ Two keys are generated on first boot into the server's data dir
 - the webhook master key (when `WEBHOOKS_ENABLED=1`) — AES-256-GCM key encrypting webhook signing secrets at rest. **Losing it makes every stored webhook secret unrecoverable — back up `/data`.**
 
 Both can be supplied explicitly via env instead of auto-generation. See
-[operations](./docs/operations.md) for what to back up.
+[backup & restore](https://zugzughq.com/docs/guides/backup-restore) for what to back up.
