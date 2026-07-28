@@ -77,6 +77,11 @@ jobs:
           ZUGZUG_CURSOR_KEY: lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=
       - name: Normalize server lcov paths
         run: bash "$GITHUB_WORKSPACE/scripts/normalize-lcov.sh" coverage/lcov.info server
+      # Bun's coverage marks comments and multi-line statement continuations as
+      # measurable-but-unhit, which diff-cover then counts against patch
+      # coverage. The app's v8 reporter doesn't, so this is server-only.
+      - name: Drop non-executable lines from server lcov
+        run: bun "$GITHUB_WORKSPACE/scripts/prune-lcov.ts" coverage/lcov.info "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-server
