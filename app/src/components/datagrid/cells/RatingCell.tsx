@@ -51,8 +51,14 @@ function Editor<Row>({ value, initial, commit, cancel, column }: EditCtx<Row>) {
   const current = n != null && Number.isFinite(n) ? Math.round(n) : null;
 
   const ref = useRef<HTMLSpanElement>(null);
+  // StrictMode double-invokes mount effects, which committed the seeded digit
+  // twice — two writes and a duplicate undo entry (#198). The keystroke that
+  // opened the editor is the user action here, so guard it to fire once.
+  const seeded = useRef(false);
 
   useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
     if (initial != null) {
       if (!/^[1-9]$/.test(initial) || parseInt(initial, 10) > max) {
         cancel();
