@@ -138,7 +138,12 @@ export function AnchoredPopover({
   }, [mounted, anchor, align]);
 
   return createPortal(
-    <div ref={setRef} className={`fixed z-50 ${className ?? ""}`} style={{ top: 0, left: 0 }} {...rest}>
+    <div
+      ref={setRef}
+      className={`fixed z-50 ${className ?? ""}`}
+      style={{ top: 0, left: 0 }}
+      {...rest}
+    >
       {children}
     </div>,
     document.body,
