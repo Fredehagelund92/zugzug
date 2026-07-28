@@ -1,0 +1,84 @@
+import { describe, test, expect, afterEach } from "vitest";
+import { render, cleanup } from "@testing-library/react";
+import { createRef } from "react";
+import { placeAnchored, AnchoredPopover } from "../src/components/AnchoredPopover";
+
+afterEach(cleanup);
+
+const VIEWPORT = { width: 1000, height: 800 };
+const POP = { width: 320, height: 200 };
+const box = (top: number, left: number, w = 100, h = 30) => ({
+  top,
+  left,
+  right: left + w,
+  bottom: top + h,
+});
+
+describe("placeAnchored", () => {
+  test("sits just below the anchor, left edges aligned", () => {
+    expect(placeAnchored(box(100, 200), POP, VIEWPORT)).toEqual({ top: 136, left: 200 });
+  });
+
+  test("clamps to the right edge instead of overflowing", () => {
+    // Anchor near the right edge: left-aligning would put the popover at 950,
+    // running 270px past the viewport.
+    const { left } = placeAnchored(box(100, 950), POP, VIEWPORT);
+    expect(left).toBe(VIEWPORT.width - POP.width - 8);
+    expect(left + POP.width).toBeLessThanOrEqual(VIEWPORT.width);
+  });
+
+  test("clamps to the left edge for a negative anchor", () => {
+    expect(placeAnchored(box(100, -50), POP, VIEWPORT).left).toBe(8);
+  });
+
+  test("flips above the anchor when it would overflow the bottom", () => {
+    // Anchor near the bottom (#195: the ⋯ menu on the last row of a group).
+    const { top } = placeAnchored(box(700, 200), POP, VIEWPORT);
+    expect(top).toBe(700 - 6 - POP.height);
+    expect(top).toBeGreaterThanOrEqual(8);
+  });
+
+  test("sits against the bottom edge when it fits neither below nor above", () => {
+    const tall = { width: 320, height: 700 };
+    const { top } = placeAnchored(box(400, 200), tall, VIEWPORT);
+    expect(top).toBeGreaterThanOrEqual(8);
+    expect(top + tall.height).toBeLessThanOrEqual(VIEWPORT.height);
+  });
+
+  test("right-aligned menus hang their right edge off the anchor's right", () => {
+    expect(placeAnchored(box(100, 500), POP, VIEWPORT, "right").left).toBe(600 - POP.width);
+  });
+});
+
+describe("AnchoredPopover", () => {
+  test("portals to document.body so an overflow-hidden ancestor cannot clip it", () => {
+    const ref = createRef<HTMLDivElement>();
+    const { container } = render(
+      <div style={{ overflow: "hidden" }}>
+        <div ref={ref}>trigger</div>
+        <AnchoredPopover anchor={ref} role="menu" aria-label="More actions">
+          <button type="button">Remove source</button>
+        </AnchoredPopover>
+      </div>,
+    );
+    // Not inside the clipping ancestor...
+    expect(container.querySelector('[role="menu"]')).toBeNull();
+    // ...but present in the document, parented to body.
+    const menu = document.body.querySelector('[role="menu"]');
+    expect(menu).not.toBeNull();
+    expect(menu?.parentElement).toBe(document.body);
+  });
+
+  test("a zero anchor rect centers rather than pinning to the top-left corner", () => {
+    // TablePane falls back to new DOMRect(0,0,0,0) when it can't resolve the
+    // column header, which is what put the linked-fields popup in the corner (#203).
+    render(
+      <AnchoredPopover anchor={{ top: 0, bottom: 0, left: 0, right: 0 }} role="dialog">
+        <div>body</div>
+      </AnchoredPopover>,
+    );
+    const el = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    expect(el.style.top).not.toBe("0px");
+    expect(el.style.left).not.toBe("0px");
+  });
+});
