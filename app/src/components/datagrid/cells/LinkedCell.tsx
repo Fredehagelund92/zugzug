@@ -136,10 +136,19 @@ function Editor<Row>({ value, commit, cancel, candidates, anchorRef }: LinkedEdi
         )}
         {/* Virtualized so a foreign-key column with thousands of records renders
             only the visible candidates, not the whole list per keystroke (#157).
-            jsdom has no layout → fall back to rendering every row so tests see them. */}
+            When the virtualizer has not measured yet, fall back to rendering
+            every row.
+
+            The height and per-row offsets below are applied on BOTH paths. Rows
+            are absolutely positioned, so gating the geometry on `useVirtual`
+            deadlocked: no items until the scroll element has height, and no
+            height until the geometry is applied — the rows all stacked at
+            offset 0 inside a zero-height box and the picker looked empty
+            (#202). Sizing the fallback too gives the virtualizer a real box to
+            measure, so it takes over on the next pass. */}
         <div
           className="relative w-full"
-          style={useVirtual ? { height: virtual.getTotalSize() } : undefined}
+          style={{ height: useVirtual ? virtual.getTotalSize() : filtered.length * ROW }}
         >
           {(useVirtual
             ? vItems
@@ -154,9 +163,7 @@ function Editor<Row>({ value, commit, cancel, candidates, anchorRef }: LinkedEdi
                 className={`absolute left-0 top-0 w-full px-3 py-1.5 text-left transition-colors ${
                   i === hl ? "bg-accent-wash" : "hover:bg-hover"
                 }`}
-                style={
-                  useVirtual ? { transform: `translateY(${vi.start}px)`, height: ROW } : undefined
-                }
+                style={{ transform: `translateY(${vi.start}px)`, height: ROW }}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   commit(c.key);
