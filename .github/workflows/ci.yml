@@ -269,9 +269,13 @@ jobs:
           # merge base, which a shallow fetch of the base branch doesn't provide
           # ("fatal: origin/main...HEAD: no merge base").
           git fetch --no-tags origin "${{ github.base_ref }}"
+          # 85, not 80: pruning non-executable lines from the server report
+          # removes lines that were systematically counted as misses, so the
+          # same diff now scores 15-20 points higher. 80 post-prune is a
+          # weaker bar than 80 was before it. See scripts/prune-lcov.ts.
           diff-cover cov-app/lcov.info cov-server/lcov.info \
             --compare-branch "origin/${{ github.base_ref }}" \
-            --fail-under 80 \
+            --fail-under 85 \
             --format "markdown:patch-coverage.md"
           echo "## Patch coverage" >> "$GITHUB_STEP_SUMMARY"
           cat patch-coverage.md >> "$GITHUB_STEP_SUMMARY"
