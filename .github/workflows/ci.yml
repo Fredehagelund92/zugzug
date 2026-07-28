@@ -77,6 +77,11 @@ jobs:
           ZUGZUG_CURSOR_KEY: lhpj7+vHLZDQJXKzZXiC/Qa/m2SNY3ObTBgxn7Awis8=
       - name: Normalize server lcov paths
         run: bash "$GITHUB_WORKSPACE/scripts/normalize-lcov.sh" coverage/lcov.info server
+      # Bun's coverage marks comments and multi-line statement continuations as
+      # measurable-but-unhit, which diff-cover then counts against patch
+      # coverage. The app's v8 reporter doesn't, so this is server-only.
+      - name: Drop non-executable lines from server lcov
+        run: bun "$GITHUB_WORKSPACE/scripts/prune-lcov.ts" coverage/lcov.info "$GITHUB_WORKSPACE"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-server
@@ -264,9 +269,13 @@ jobs:
           # merge base, which a shallow fetch of the base branch doesn't provide
           # ("fatal: origin/main...HEAD: no merge base").
           git fetch --no-tags origin "${{ github.base_ref }}"
+          # 85, not 80: pruning non-executable lines from the server report
+          # removes lines that were systematically counted as misses, so the
+          # same diff now scores 15-20 points higher. 80 post-prune is a
+          # weaker bar than 80 was before it. See scripts/prune-lcov.ts.
           diff-cover cov-app/lcov.info cov-server/lcov.info \
             --compare-branch "origin/${{ github.base_ref }}" \
-            --fail-under 80 \
+            --fail-under 85 \
             --format "markdown:patch-coverage.md"
           echo "## Patch coverage" >> "$GITHUB_STEP_SUMMARY"
           cat patch-coverage.md >> "$GITHUB_STEP_SUMMARY"
