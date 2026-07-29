@@ -383,14 +383,20 @@ async function latestSnapshotVersion(refTableId: string, tenantId: string): Prom
   return row ? Number(row.version) : null;
 }
 
-/** Stable serialisation of a flat to_jsonb row for value comparison. */
-function canonRow(row: unknown): string {
-  const o = (typeof row === "string" ? JSON.parse(row) : row) as Record<string, unknown>;
-  return JSON.stringify(
-    Object.keys(o)
-      .sort()
-      .map((k) => [k, o[k]]),
-  );
+function asRow(row: unknown): Record<string, unknown> {
+  return (typeof row === "string" ? JSON.parse(row) : row) as Record<string, unknown>;
+}
+
+/** Stable serialisation of a flat to_jsonb row for value comparison, restricted
+ *  to `cols` — the physical dim_ columns. Snapshot rows also carry evaluated
+ *  formula values (writeVersionSnapshot injects them so the Pull API sees what
+ *  the grid shows), and formula fields have no dim_ column. Comparing the raw
+ *  key sets would make every stamped record in a table with a formula column
+ *  differ from its snapshot forever, so the change count could never return to
+ *  zero and reverting an edit would never clear it. */
+function canonRow(row: unknown, cols: string[]): string {
+  const o = asRow(row);
+  return JSON.stringify(cols.map((k) => [k, o[k] ?? null]));
 }
 
 /** Record keys with unpublished changes. Never published → every record (the
@@ -442,8 +448,11 @@ async function changedKeysSince(
       WHERE ${qid(meta.keyCol)}::text = ANY($1)`,
     [keys],
   );
-  const snapBy = new Map(snapRows.map((r) => [r.key, canonRow(r.row)]));
-  const curBy = new Map(curRows.map((r) => [r.key, canonRow(r.row)]));
+  // to_jsonb(t) yields the same key set for every live row, so one row defines
+  // the physical column list both sides are compared over.
+  const cols = curRows.length > 0 ? Object.keys(asRow(curRows[0].row)).sort() : [];
+  const snapBy = new Map(snapRows.map((r) => [r.key, canonRow(r.row, cols)]));
+  const curBy = new Map(curRows.map((r) => [r.key, canonRow(r.row, cols)]));
   return keys.filter((k) => {
     const before = snapBy.get(k);
     const now = curBy.get(k);
