@@ -1023,7 +1023,7 @@ interface RefTableSectionBodyProps {
   sentinelRef: React.MutableRefObject<HTMLDivElement | null>;
 }
 
-function RefTableSectionBody(p: RefTableSectionBodyProps) {
+export function RefTableSectionBody(p: RefTableSectionBodyProps) {
   const options = useMemo(() => p.refTable.record.map((c) => c.label), [p.refTable.record]);
   // Handles to each row's record picker + suggestion, so the keyboard can drive
   // the row: Enter/M opens the picker, G asks AI for a suggestion.
@@ -1049,6 +1049,17 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
   };
 
   const focus = (raw: string) => p.setCursor({ refTableId: p.refTable.id, raw });
+
+  // Arrow keys have to move DOM focus too, not just the cursor: the keydown
+  // handler lives on each row, so leaving focus behind means every further press
+  // recomputes from the old row and the selection sticks after one move (#199).
+  // The row's own onFocus sets the cursor, so this also scrolls it into view.
+  const moveTo = (raw: string) => {
+    focus(raw);
+    document
+      .querySelector<HTMLLIElement>(`[data-row-key="${CSS.escape(`${p.refTable.id}::${raw}`)}"]`)
+      ?.focus();
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLLIElement>, raw: string) => {
     if (p.canEdit && (e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -1077,12 +1088,12 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
       e.preventDefault();
       const idx = p.page.items.findIndex((x) => x.raw === raw);
       const next = p.page.items[Math.min(p.page.items.length - 1, idx + 1)];
-      if (next) focus(next.raw);
+      if (next) moveTo(next.raw);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       const idx = p.page.items.findIndex((x) => x.raw === raw);
       const prev = p.page.items[Math.max(0, idx - 1)];
-      if (prev) focus(prev.raw);
+      if (prev) moveTo(prev.raw);
     }
   };
 
@@ -1122,8 +1133,11 @@ function RefTableSectionBody(p: RefTableSectionBodyProps) {
               onClick={() => focus(r.raw)}
               onKeyDown={(e) => onKeyDown(e, r.raw)}
               className={cx(
-                "flex flex-col gap-1 px-4 py-2.5 outline-none transition-colors",
-                isCursor ? "bg-accent-wash/30" : "hover:bg-hover",
+                "flex flex-col gap-1 border-l-2 px-4 py-2.5 outline-none transition-colors",
+                // Same selected treatment as Map values (MapValueRow) — a
+                // full-strength wash plus an accent bar, so the current row
+                // reads at a glance (#200).
+                isCursor ? "border-l-accent bg-accent-wash" : "border-l-transparent hover:bg-hover",
               )}
             >
               {/* Desktop: fixed 3-column grid (value | picker | status) so every
