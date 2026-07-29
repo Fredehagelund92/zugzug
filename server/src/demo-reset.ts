@@ -32,6 +32,23 @@ registerFactories({
 
 console.log("· resetting demo…");
 
+// 0. Open the local warehouse file FIRST. DuckDB is single-writer per file, so a
+// running server holding it makes this impossible — and it has to fail before
+// the truncate below, or the reset wipes the demo and then dies with nothing to
+// reseed from.
+if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
+  try {
+    await generateDemoWarehouse(env.duckWarehousePath);
+  } catch (err) {
+    console.error(
+      `refusing: could not open the DuckDB warehouse at ${env.duckWarehousePath} — nothing was changed.\n` +
+        "A running server holds the file (DuckDB allows one writer per file). Stop the server, rerun this, then start it again.\n" +
+        `cause: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    process.exit(1);
+  }
+}
+
 // 1. Empty every app-state table (keeps the schema + migration history intact).
 await pgRun(`DO $$ DECLARE r record; BEGIN
   FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'zugzug_app' LOOP
@@ -65,9 +82,6 @@ for (const u of DEMO_TEAM) {
   );
 }
 await provisionTenant({ id: "default", label: "Demo workspace" });
-if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
-  await generateDemoWarehouse(env.duckWarehousePath);
-}
 await seedDemo();
 
 console.log("· demo reset + reseeded");

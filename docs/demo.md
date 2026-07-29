@@ -69,6 +69,13 @@ restart or downtime, and it never touches the bundled warehouse or the TLS cert
 it can never fire by accident. **Never point it at a real instance** — it
 destroys all data.
 
+**With a file-based DuckDB warehouse** (`WAREHOUSE_ADAPTER=duckdb` +
+`DUCK_WAREHOUSE_PATH`), the reset needs the warehouse file, and DuckDB allows
+only one writer per file — so it can't run while the server holds it. It checks
+this up front and refuses without touching any data; stop the server, run the
+reset, then start it again. Deployments where each reset gets its own copy of
+the warehouse (the Fly.io scheduled Machine below) are unaffected.
+
 **On a VM (compose)** — a nightly cron running the bundled wrapper, which execs
 the reset inside the running server container:
 
