@@ -104,6 +104,64 @@ test("reverting an edit to its published value clears it from changed", async ()
   expect(s.version).toBe(1);
 });
 
+// Formula fields have no dim_ column, but the published snapshot carries their
+// evaluated values (writeVersionSnapshot injects them for the Pull API). The
+// changed-key diff must ignore them, or every stamped record in a table with a
+// formula column stays "changed" forever and the count never returns to zero.
+test("formula column: reverting an edit still clears it from changed", async () => {
+  const refTableId = await repo.addRefTable("Country", [], { keyKind: "slug" }, U, "default");
+  const region = await repo.addField(refTableId, "Region", "text", undefined, {}, U, "default");
+  await repo.addField(
+    refTableId,
+    "Shout",
+    "formula",
+    undefined,
+    { formula: { expr: "upper(label)", resultType: "text" } },
+    U,
+    "default",
+  );
+  await repo.saveDraft(refTableId, "Deutschland", "mapped", "Germany", "germany", U, "default");
+  await repo.commit(refTableId, U, "default");
+
+  // A fresh publish leaves nothing changed.
+  let s = await repo.getPublishState(refTableId, "default");
+  expect(s.changedKeys).toEqual([]);
+
+  await repo.setFieldValue(refTableId, "germany", region!.field, "Europe", U, "default");
+  s = await repo.getPublishState(refTableId, "default");
+  expect(s.changedKeys).toEqual(["germany"]);
+
+  await repo.setFieldValue(refTableId, "germany", region!.field, null, U, "default");
+  s = await repo.getPublishState(refTableId, "default");
+  expect(s.changedKeys).toEqual([]);
+});
+
+test("formula column: a boolean toggled back clears it from changed", async () => {
+  const refTableId = await repo.addRefTable("Country", [], { keyKind: "slug" }, U, "default");
+  const active = await repo.addField(refTableId, "Active", "boolean", undefined, {}, U, "default");
+  await repo.addField(
+    refTableId,
+    "Bloc",
+    "formula",
+    undefined,
+    { formula: { expr: 'IF([Active] = "true", "EU", "-")', resultType: "text" } },
+    U,
+    "default",
+  );
+  await repo.saveDraft(refTableId, "Deutschland", "mapped", "Germany", "germany", U, "default");
+  await repo.commit(refTableId, U, "default"); // creates the record
+  await repo.setFieldValue(refTableId, "germany", active!.field, "false", U, "default");
+  await repo.commit(refTableId, U, "default"); // publishes false as the baseline
+
+  await repo.setFieldValue(refTableId, "germany", active!.field, "true", U, "default");
+  let s = await repo.getPublishState(refTableId, "default");
+  expect(s.changedKeys).toEqual(["germany"]);
+
+  await repo.setFieldValue(refTableId, "germany", active!.field, "false", U, "default");
+  s = await repo.getPublishState(refTableId, "default");
+  expect(s.changedKeys).toEqual([]);
+});
+
 test("never-published table counts every record, even without version rows", async () => {
   const refTableId = await repo.addRefTable("Country", [], { keyKind: "slug" }, U, "default");
   await repo.addRecordOne(refTableId, "Germany", "germany", U, "default");
