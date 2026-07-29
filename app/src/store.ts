@@ -1372,7 +1372,15 @@ export async function setFieldValue(
   const hasFormula = table?.fields?.some((f) => f.type === "formula");
   if (type === "number" || type === "date" || type === "linked" || hasFormula) {
     void refreshDim(refTableId).then(emit);
+    return;
   }
+  // The optimistic emit above fired before the PUT was sent, so subscribers
+  // keyed on refTable identity — notably the unpublished-changes count, which
+  // re-reads the server-authoritative publish state — raced this write and saw
+  // the pre-edit count. Re-notify now that the write has landed (#194). The
+  // types above already get a post-write emit via their reconciling re-fetch.
+  patchRecord(refTableId, key, (c) => ({ ...c }));
+  emit();
 }
 
 /** Dry-run a candidate formula against the table's first record so the field
