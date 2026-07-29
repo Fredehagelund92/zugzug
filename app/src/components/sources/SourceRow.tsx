@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { IconWand } from "../Icons";
 import { cx } from "../../lib/cx";
+import { AnchoredPopover } from "../AnchoredPopover";
 import { ago } from "./utils";
 import type { SourceInfo } from "../../store";
 
@@ -23,6 +24,7 @@ export function SourceRow({
   onRemove,
 }: SourceRowProps) {
   const [menu, setMenu] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
 
   // Derive connection state
   const state =
@@ -65,6 +67,7 @@ export function SourceRow({
       {/* Actions menu */}
       <div className="relative justify-self-end">
         <button
+          ref={menuBtn}
           type="button"
           aria-label="More actions"
           onClick={() => setMenu((v) => !v)}
@@ -75,7 +78,15 @@ export function SourceRow({
         {menu && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
-            <div className="rounded-lg absolute right-0 top-full z-20 mt-1 min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop">
+            {/* Portaled: the Sources card is overflow-hidden, which clipped
+                this menu on the bottom row of a group (#195). */}
+            <AnchoredPopover
+              anchor={menuBtn}
+              align="right"
+              role="menu"
+              aria-label="More actions"
+              className="rounded-lg min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop"
+            >
               <button
                 type="button"
                 disabled={!canEdit || !!busy}
@@ -106,7 +117,7 @@ export function SourceRow({
               >
                 Remove source
               </button>
-            </div>
+            </AnchoredPopover>
           </>
         )}
       </div>

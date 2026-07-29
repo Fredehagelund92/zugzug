@@ -4,6 +4,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { useTenant } from "../../lib/tenant-context";
 import { cx } from "../../lib/cx";
+import { AnchoredPopover } from "../../components/AnchoredPopover";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
 import { ReadOnly } from "../../components/settings/ReadOnly";
@@ -115,13 +116,15 @@ function RolePopover({
   pending,
   onPick,
   onClose,
+  anchor,
 }: {
   current: RoleKey;
   pending: boolean;
   onPick: (role: RoleKey) => void;
   onClose: () => void;
+  anchor: React.RefObject<HTMLButtonElement | null>;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (ref.current?.contains(e.target as Node)) return;
@@ -136,11 +139,15 @@ function RolePopover({
     };
   }, [onClose]);
 
+  // Portaled + right-aligned: the member row's card clips an in-flow menu,
+  // and the last row's menu ran past the bottom edge.
   return (
-    <div
-      ref={ref}
+    <AnchoredPopover
+      anchor={anchor}
+      align="right"
+      popoverRef={ref}
       role="menu"
-      className="zz-pop-in absolute right-0 top-[calc(100%+4px)] z-20 min-w-[10rem] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
+      className="zz-pop-in min-w-[10rem] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
     >
       {(Object.keys(ROLE_META) as RoleKey[]).map((r) => {
         const meta = ROLE_META[r];
@@ -169,7 +176,7 @@ function RolePopover({
           </button>
         );
       })}
-    </div>
+    </AnchoredPopover>
   );
 }
 
@@ -187,6 +194,7 @@ function MemberRoleControl({
   onChange: (role: RoleKey) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   const meta = ROLE_META[member.role];
 
   if (!isAdmin || lockedReason) {
@@ -210,6 +218,7 @@ function MemberRoleControl({
   return (
     <div className="relative">
       <button
+        ref={trigger}
         type="button"
         disabled={pending}
         onClick={() => setOpen((o) => !o)}
@@ -236,6 +245,7 @@ function MemberRoleControl({
           pending={pending}
           onPick={onChange}
           onClose={() => setOpen(false)}
+          anchor={trigger}
         />
       )}
     </div>

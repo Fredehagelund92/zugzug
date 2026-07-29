@@ -320,7 +320,7 @@ function RecordsBody({
   const [publishGroups, setPublishGroups] = useState<PublishGroup[]>([]);
   const [linkPicker, setLinkPicker] = useState<{
     fkField: string;
-    anchorRect: DOMRect;
+    anchorRect: DOMRect | null;
   } | null>(null);
 
   const [conflicts, setConflicts] = useState<
@@ -835,9 +835,12 @@ function RecordsBody({
    *  popover stays put even after subsequent re-renders shift things). */
   const handleShowLinkedFields = (fkField: string): void => {
     if (!canEdit) return;
+    // The header may not be in the DOM — a hidden FK column, or one scrolled
+    // out of the virtualized window (the lookup-column entry points anchor to
+    // the *owning* FK's header). Pass null so the popover centers instead of
+    // being pinned to the top-left corner by a zero rect (#203).
     const headerEl = document.querySelector(`[data-header="${CSS.escape(fkField)}"]`);
-    const rect = headerEl?.getBoundingClientRect() ?? new DOMRect(0, 0, 0, 0);
-    setLinkPicker({ fkField, anchorRect: rect });
+    setLinkPicker({ fkField, anchorRect: headerEl?.getBoundingClientRect() ?? null });
   };
 
   /** Right-click "Open target refTable →" on an FK column header. Opens the

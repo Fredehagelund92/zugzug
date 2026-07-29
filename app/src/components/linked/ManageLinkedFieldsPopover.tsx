@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { AnchoredPopover, type AnchorBox } from "../AnchoredPopover";
 
 export interface TargetFieldOption {
   field: string;
@@ -11,7 +11,8 @@ interface Props {
   fkLabel: string;
   targetFields: TargetFieldOption[];
   current: string[];
-  anchorRect: DOMRect;
+  /** Trigger box, or null when the trigger could not be resolved (centers). */
+  anchorRect: AnchorBox | null;
   onCancel: () => void;
   onApply: (next: string[]) => void;
 }
@@ -71,16 +72,16 @@ export function ManageLinkedFieldsPopover(props: Props) {
     props.onApply(order);
   };
 
-  // Portal to document.body so the popover escapes any scrolling/transform
-  // parents (TablePane's grid uses transformed scroll containers that would
-  // otherwise clip a `position: fixed` child). Same pattern as
-  // AddFieldPopover — coordinates from anchorRect are viewport-relative.
-  return createPortal(
-    <div
+  // AnchoredPopover portals to document.body — escaping the grid's transformed
+  // scroll containers — and clamps to the viewport. It also treats an unresolved
+  // (all-zero) anchor rect as "no anchor" and centers instead, rather than
+  // pinning the popover to the top-left corner (#203).
+  return (
+    <AnchoredPopover
+      anchor={props.anchorRect}
       role="dialog"
       aria-label="Manage linked fields"
-      className="fixed z-50 w-[320px] rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
-      style={{ top: props.anchorRect.bottom + 6, left: props.anchorRect.left }}
+      className="w-[320px] rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
     >
       <div className="border-b border-line p-2">
         <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink-3">
@@ -140,7 +141,6 @@ export function ManageLinkedFieldsPopover(props: Props) {
           Apply
         </button>
       </div>
-    </div>,
-    document.body,
+    </AnchoredPopover>
   );
 }

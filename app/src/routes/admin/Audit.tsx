@@ -5,6 +5,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { PageHeader } from "../../components/PageHeader";
 import { SkeletonList } from "../../components/Skeleton";
 import { AuditTimeline } from "../../components/AuditTimeline";
+import { AnchoredPopover } from "../../components/AnchoredPopover";
 import type { AuditEntry } from "../../store";
 import { SuperAdminBadge } from "../../components/admin/SuperAdminBadge";
 
@@ -243,11 +244,16 @@ function TypePicker({
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // The panel is portaled, so it is not inside `ref` — test it separately.
+      if (ref.current?.contains(t) || pop.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
@@ -270,6 +276,7 @@ function TypePicker({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={trigger}
         type="button"
         data-active={Boolean(value)}
         onClick={() => setOpen((v) => !v)}
@@ -288,7 +295,11 @@ function TypePicker({
       </button>
 
       {open && (
-        <div className="rounded-lg zz-rise absolute left-0 z-20 mt-1 w-[280px] border border-line bg-surface shadow-lg">
+        <AnchoredPopover
+          anchor={trigger}
+          popoverRef={pop}
+          className="rounded-lg zz-rise w-[280px] border border-line bg-surface shadow-lg"
+        >
           <div className="border-b border-line p-2">
             <input
               autoFocus
@@ -307,7 +318,7 @@ function TypePicker({
               <li className="px-3 py-2 text-xs text-ink-3">No type matches “{filter}”.</li>
             )}
           </ul>
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );
@@ -330,11 +341,16 @@ function WorkspacePicker({
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const pop = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // The panel is portaled, so it is not inside `ref` — test it separately.
+      if (ref.current?.contains(t) || pop.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
@@ -360,6 +376,7 @@ function WorkspacePicker({
   return (
     <div ref={ref} className="relative">
       <button
+        ref={trigger}
         type="button"
         data-active={Boolean(value)}
         onClick={() => setOpen((v) => !v)}
@@ -380,7 +397,11 @@ function WorkspacePicker({
       </button>
 
       {open && (
-        <div className="rounded-lg zz-rise absolute left-0 z-20 mt-1 w-[280px] border border-line bg-surface shadow-lg">
+        <AnchoredPopover
+          anchor={trigger}
+          popoverRef={pop}
+          className="rounded-lg zz-rise w-[280px] border border-line bg-surface shadow-lg"
+        >
           <div className="border-b border-line p-2">
             <input
               autoFocus
@@ -404,7 +425,7 @@ function WorkspacePicker({
               <li className="px-3 py-2 text-xs text-ink-3">No workspace matches “{filter}”.</li>
             )}
           </ul>
-        </div>
+        </AnchoredPopover>
       )}
     </div>
   );
