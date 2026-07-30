@@ -128,9 +128,17 @@ export function TableDetail({
                 onlyUnmapped ? "bg-accent" : "bg-surface-3",
               )}
             >
+              {/* left-0 is load-bearing: without it the knob falls back to its
+                  static position, which the button's inherited text-align:center
+                  puts at the track's midpoint (16px). That offset every
+                  translate-x by half the track — the knob sat on the right edge
+                  when off and slid clean off the track when on. Transition the
+                  background too, or the knob snaps from dark to white on the
+                  first frame while it's still sliding (#196). */}
               <span
                 className={cx(
-                  "absolute top-0.5 h-3.5 w-3.5 rounded-full transition-transform",
+                  "absolute left-0 top-0.5 h-3.5 w-3.5 rounded-full",
+                  "transition-[translate,background-color]",
                   onlyUnmapped ? "translate-x-[16px] bg-surface" : "translate-x-0.5 bg-ink-2",
                 )}
               />
