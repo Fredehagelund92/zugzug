@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DuckDBInstance } from "@duckdb/node-api";
@@ -45,6 +45,7 @@ async function tryOpen(mode: "ro" | "rw"): Promise<"ok" | "locked"> {
     const c = await i.connect();
     await c.runAndReadAll("SELECT 1");
     c.disconnectSync();
+    i.closeSync();
     return "ok";
   } catch (e) {
     if (e instanceof Error && e.message.includes("Conflicting lock")) return "locked";
@@ -97,6 +98,12 @@ describe("DuckDB file locking", () => {
        process.kill(process.pid, "SIGKILL");`,
     ]);
     await proc.exited;
+    // Prove the WAL was actually hot (uncheckpointed) at kill time. If DuckDB
+    // ever auto-checkpoints before the SIGKILL, this assertion fails loudly
+    // instead of letting the read below silently stop exercising the
+    // read-through-a-hot-WAL path.
+    const walStat = statSync(`${p}.wal`);
+    expect(walStat.size).toBeGreaterThan(0);
     const i = await DuckDBInstance.create(p, { access_mode: "READ_ONLY" });
     const c = await i.connect();
     const r = await c.runAndReadAll("SELECT count(*) FROM raw.t");
