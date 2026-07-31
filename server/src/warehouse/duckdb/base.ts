@@ -184,7 +184,18 @@ export abstract class DuckDbBase {
       try {
         inst = await DuckDBInstance.create(open.path, open.options);
       } catch (e) {
-        throw new Error(this.maskSecrets(e instanceof Error ? e.message : String(e)), { cause: e });
+        const raw = this.maskSecrets(e instanceof Error ? e.message : String(e));
+        // READ_ONLY refuses to create a missing file, where read-write silently
+        // created an empty one. Say which file and how to fix it — this reaches
+        // self-hosters who never enable the demo seed, not just demo operators.
+        if (open.isReadOnlyFile && raw.includes("Cannot open database")) {
+          throw new Error(
+            `no DuckDB warehouse at ${open.path} — point DUCK_WAREHOUSE_PATH at an existing ` +
+              `DuckDB file, or set SEED_DEMO=true to generate the sample warehouse on boot`,
+            { cause: e },
+          );
+        }
+        throw new Error(raw, { cause: e });
       }
       const c = await inst.connect();
       this.conn = c;
