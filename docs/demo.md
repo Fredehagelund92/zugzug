@@ -72,8 +72,9 @@ destroys all data.
 This works the same with a file-based DuckDB warehouse (`WAREHOUSE_ADAPTER=duckdb`
 + `DUCK_WAREHOUSE_PATH`). The reset only reads the warehouse — it's sample data, and
 only the workspace data is wiped — so it runs happily alongside the live server; no
-downtime, no restart. If the warehouse file is missing entirely, the reset refuses
-without touching anything rather than leaving you with an empty demo.
+downtime, no restart. If the warehouse file is missing entirely and can't be regenerated because
+another process (the running server) holds it, the reset refuses without
+touching anything rather than leaving you with an empty demo.
 
 **On a VM (compose)** — a nightly cron running the bundled wrapper, which execs
 the reset inside the running server container:

@@ -136,7 +136,7 @@ jobs:
           docker compose exec -T postgres \
             psql -U zugzug -d zugzug -tAc "select count(*) from zugzug_app.reference_table" \
             | grep -qE '^[1-9]'
-      - name: Smoke — the server survived the reset and still serves the catalog
+      - name: Smoke — API health through nginx after the reset
         run: |
           curl -fsS http://localhost:8080/api/health | grep -q '"ok":true'
       - name: Smoke — first signup succeeds and becomes admin

@@ -20,15 +20,15 @@ await new Promise((r) => setTimeout(r, 30000));
 
 async function withHolder<T>(mode: "ro" | "rw", fn: () => Promise<T>): Promise<T> {
   const proc = Bun.spawn(["bun", "run", holderScript, dbPath, mode], { stdout: "pipe" });
-  const reader = proc.stdout.getReader();
-  const decoder = new TextDecoder();
-  let seen = "";
-  while (!seen.includes("READY")) {
-    const { value, done } = await reader.read();
-    if (done) throw new Error(`holder exited before READY: ${seen}`);
-    seen += decoder.decode(value);
-  }
   try {
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    let seen = "";
+    while (!seen.includes("READY")) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error(`holder exited before READY: ${seen}`);
+      seen += decoder.decode(value);
+    }
     return await fn();
   } finally {
     proc.kill();

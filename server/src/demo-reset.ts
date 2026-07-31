@@ -44,9 +44,10 @@ if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
       await generateDemoWarehouse(env.duckWarehousePath);
     } catch (err) {
       console.error(
-        `refusing: no usable DuckDB warehouse at ${env.duckWarehousePath}, and it can't be ` +
-          `generated while another process holds the file — nothing was changed.\n` +
-          `Stop the server, run this again, then start it back up.\n` +
+        `refusing: no usable DuckDB warehouse at ${env.duckWarehousePath}, and it could not be ` +
+          `generated — nothing was changed. This usually means another process holds the file; ` +
+          `if stopping the server and running this again doesn't help, check disk space and ` +
+          `file permissions on that path.\n` +
           `cause: ${err instanceof Error ? err.message : String(err)}`,
       );
       process.exit(1);
