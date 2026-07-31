@@ -17,7 +17,7 @@ import { provisionTenant } from "./tenant.ts";
 import { registerFactories } from "./warehouse/credentials.ts";
 import { createDuckDbAdapter } from "./warehouse/duckdb/index.ts";
 import { SnowflakeAdapter } from "./warehouse/snowflake/index.ts";
-import { generateDemoWarehouse } from "./seed-warehouse.ts";
+import { generateDemoWarehouse, isWarehousePopulated } from "./seed-warehouse.ts";
 import { seedDemo } from "./seed.ts";
 
 if (process.env.DEMO_RESET_CONFIRM !== "yes") {
@@ -32,20 +32,25 @@ registerFactories({
 
 console.log("· resetting demo…");
 
-// 0. Open the local warehouse file FIRST. DuckDB is single-writer per file, so a
-// running server holding it makes this impossible — and it has to fail before
-// the truncate below, or the reset wipes the demo and then dies with nothing to
-// reseed from.
+// 0. Settle the local warehouse BEFORE anything destructive. The reset only
+// reads the warehouse — it's static sample data, and only Postgres gets wiped —
+// so a read-only probe is enough, and it coexists with the running server's own
+// read-only handle. If the file is missing or empty we'd have to create it, which
+// needs an exclusive lock the server won't give up; refuse rather than wipe the
+// demo with nothing to reseed from (#190, #217).
 if (env.warehouseAdapter === "duckdb" && env.duckWarehousePath) {
-  try {
-    await generateDemoWarehouse(env.duckWarehousePath);
-  } catch (err) {
-    console.error(
-      `refusing: could not open the DuckDB warehouse at ${env.duckWarehousePath} — nothing was changed.\n` +
-        "A running server holds the file (DuckDB allows one writer per file). Stop the server, rerun this, then start it again.\n" +
-        `cause: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    process.exit(1);
+  if (!(await isWarehousePopulated(env.duckWarehousePath))) {
+    try {
+      await generateDemoWarehouse(env.duckWarehousePath);
+    } catch (err) {
+      console.error(
+        `refusing: no usable DuckDB warehouse at ${env.duckWarehousePath}, and it can't be ` +
+          `generated while another process holds the file — nothing was changed.\n` +
+          `Stop the server, run this again, then start it back up.\n` +
+          `cause: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(1);
+    }
   }
 }
 

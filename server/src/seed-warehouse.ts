@@ -100,6 +100,29 @@ function fill(
   });
 }
 
+/** Is this warehouse file present and already populated?
+ *
+ *  Opened READ_ONLY on purpose: a running server holds the same file, and DuckDB
+ *  allows concurrent READ_ONLY handles but only one read-write handle. Checking
+ *  read-write is what used to make the demo reset impossible with the server up
+ *  (#217). Returns false — never throws — when the file is missing or empty. */
+export async function isWarehousePopulated(path: string): Promise<boolean> {
+  if (!(await Bun.file(path).exists())) return false;
+  let conn;
+  try {
+    const inst = await DuckDBInstance.create(path, { access_mode: "READ_ONLY" });
+    conn = await inst.connect();
+    const res = await conn.runAndReadAll(
+      `SELECT count(*) AS n FROM information_schema.tables WHERE table_schema = 'raw'`,
+    );
+    return Number((res.getRows()[0]?.[0] as bigint | number | null) ?? 0) > 0;
+  } catch {
+    return false;
+  } finally {
+    conn?.disconnectSync();
+  }
+}
+
 export async function generateDemoWarehouse(path: string): Promise<void> {
   const inst = await DuckDBInstance.create(path);
   const conn = await inst.connect();
