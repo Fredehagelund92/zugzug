@@ -10,6 +10,7 @@ import type {
   ValueProvenance,
 } from "../adapter.ts";
 import type { DuckDbCreds } from "../credentials.ts";
+import { resolveOpen } from "./open.ts";
 import { withTimeout } from "../timeout.ts";
 
 // The DuckDB Node API decodes LIST columns into `DuckDBListValue` wrappers
@@ -172,23 +173,16 @@ export abstract class DuckDbBase {
     if (this.conn) return this.conn;
     if (this.connecting) return this.connecting;
     this.connecting = (async () => {
-      // When attaching MotherDuck, open the instance directly against `md:` (with the
-      // token in env) so every MD database appears as a first-class catalog in
-      // SHOW DATABASES — mirrors `duckdb.connect("md:?motherduck_token=...")`.
-      // A `:memory:` instance with `ATTACH 'md:'` only surfaces `md_information_schema`.
-      const useMd = this.creds.attached && this.creds.token;
+      const open = resolveOpen(this.creds);
       // Token via connection string (mirrors `duckdb.connect("md:?motherduck_token=...")`);
       // env var alone is unreliable during DuckDBInstance.create — extension load order
       // can race the env read and fall through to SSO browser auth.
-      if (useMd) process.env.motherduck_token = this.creds.token;
-      const path = useMd
-        ? `md:?motherduck_token=${encodeURIComponent(this.creds.token!)}`
-        : (this.creds.path ?? ":memory:");
+      if (this.creds.attached && this.creds.token) process.env.motherduck_token = this.creds.token;
       // Mask the token before any create() failure (which can embed the
       // token-bearing connection string) propagates to a caller or log (#155).
       let inst;
       try {
-        inst = await DuckDBInstance.create(path);
+        inst = await DuckDBInstance.create(open.path, open.options);
       } catch (e) {
         throw new Error(this.maskSecrets(e instanceof Error ? e.message : String(e)), { cause: e });
       }
