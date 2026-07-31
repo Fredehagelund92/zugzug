@@ -108,9 +108,10 @@ function fill(
  *  (#217). Returns false — never throws — when the file is missing or empty. */
 export async function isWarehousePopulated(path: string): Promise<boolean> {
   if (!(await Bun.file(path).exists())) return false;
+  let inst;
   let conn;
   try {
-    const inst = await DuckDBInstance.create(path, { access_mode: "READ_ONLY" });
+    inst = await DuckDBInstance.create(path, { access_mode: "READ_ONLY" });
     conn = await inst.connect();
     const res = await conn.runAndReadAll(
       `SELECT count(*) AS n FROM information_schema.tables WHERE table_schema = 'raw'`,
@@ -120,6 +121,7 @@ export async function isWarehousePopulated(path: string): Promise<boolean> {
     return false;
   } finally {
     conn?.disconnectSync();
+    inst?.closeSync();
   }
 }
 
