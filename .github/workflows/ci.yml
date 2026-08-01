@@ -125,6 +125,20 @@ jobs:
           docker compose exec -T postgres \
             psql -U zugzug -d zugzug -tAc "select count(*) from zugzug_app.reference_table" \
             | grep -qE '^[1-9]'
+      # #217 — the reset must work while the server holds the DuckDB warehouse.
+      # Before the read-only attach it refused here, leaving a duckdb demo with
+      # no unattended reset.
+      - name: Smoke — demo reset runs with the server up
+        run: |
+          docker compose exec -T -e DEMO_RESET_CONFIRM=yes server bun run demo-reset
+      - name: Smoke — data is back after the reset
+        run: |
+          docker compose exec -T postgres \
+            psql -U zugzug -d zugzug -tAc "select count(*) from zugzug_app.reference_table" \
+            | grep -qE '^[1-9]'
+      - name: Smoke — API health through nginx after the reset
+        run: |
+          curl -fsS http://localhost:8080/api/health | grep -q '"ok":true'
       - name: Smoke — first signup succeeds and becomes admin
         run: |
           code="$(curl -s -o /dev/null -w '%{http_code}' \
