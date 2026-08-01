@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { act } from "@testing-library/react";
-import { ARM_DELAY_MS } from "../AnchoredPopover";
+import { ARM_DELAY_MS } from "../../lib/overlay-scroll";
 import { renderGrid } from "./test-kit/render-grid";
 import { makeColumns, type Row } from "./test-kit/fixtures";
 import type { ColumnDef } from "./types";

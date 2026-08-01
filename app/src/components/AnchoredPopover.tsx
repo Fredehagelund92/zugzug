@@ -1,12 +1,11 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 
 /** Space between the anchor and the popover. */
 const GAP = 6;
 /** Smallest allowed distance from any viewport edge. */
 const MARGIN = 8;
-/** How long after opening a popover ignores scrolls for dismissal purposes. */
-export const ARM_DELAY_MS = 100;
 
 export interface AnchorBox {
   top: number;
@@ -141,33 +140,19 @@ export function AnchoredPopover({
       pop.style.left = `${left}px`;
     };
     place();
-    // Consumers focus something inside the popover in an effect that runs after
-    // this one. If the browser scrolls an ancestor to bring that element into
-    // view, the scroll would arrive with the listener already live and dismiss
-    // the popover in the moment it opened. Hold dismissal off for one short
-    // grace period; until then a scroll still re-places, as it always did.
-    // A timer rather than requestAnimationFrame: rAF only runs when the page
-    // paints, so on a quiet page the arming can be deferred past the very
-    // scroll it is meant to cover. Nobody opens a menu and scrolls this fast.
-    let armed = false;
-    const arm = window.setTimeout(() => {
-      armed = true;
-    }, ARM_DELAY_MS);
-    const onScroll = (e: Event) => {
-      // A scroll inside the popover's own list is not the page moving
-      // underneath it — only the latter should dismiss.
-      const target = e.target as Node | null;
-      const inside = target != null && target !== document && pop.contains(target);
-      if (armed && dismissRef.current && !inside) dismissRef.current();
-      else place();
-    };
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.clearTimeout(arm);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", place);
-    };
+    // The dismisser is read through the ref so an inline arrow from the parent
+    // doesn't re-bind (and re-place) on every render; whether there is one at
+    // all is fixed per call site.
+    // No `anchor` passed: this component's anchor may be a rect snapshot with
+    // no element behind it, and its triggers are buttons, not the text inputs
+    // whose own overflow scroll the anchor guard exists for. Unchanged from
+    // before the helper was extracted.
+    return bindOverlayScroll({
+      pop,
+      place,
+      onDismiss: onDismiss ? () => dismissRef.current?.() : undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onDismiss is read through dismissRef; depending on it would re-place on every parent render
   }, [mounted, anchor, align]);
 
   return createPortal(

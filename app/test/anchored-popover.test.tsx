@@ -1,7 +1,8 @@
 import { describe, test, expect, afterEach, vi } from "vitest";
 import { render, cleanup, act } from "@testing-library/react";
 import { createRef } from "react";
-import { placeAnchored, AnchoredPopover, ARM_DELAY_MS } from "../src/components/AnchoredPopover";
+import { placeAnchored, AnchoredPopover } from "../src/components/AnchoredPopover";
+import { ARM_DELAY_MS } from "../src/lib/overlay-scroll";
 
 afterEach(cleanup);
 
