@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ComboSelect } from "../ComboSelect";
 import { IconCheck, IconX } from "../Icons";
 import { cx } from "../../lib/cx";
+import { focusRing } from "../../lib/focus-ring";
 import {
   deriveRecord,
   fetchColumnValues,
@@ -120,7 +121,16 @@ export function TableDetail({
             role="switch"
             aria-checked={onlyUnmapped}
             onClick={() => setOnlyUnmapped((v) => !v)}
-            className="ml-auto flex items-center gap-2 text-[12px] text-ink-2"
+            // Tabbing here and then clicking leaves the ring on, because clicking
+            // an already-focused element fires no new focus event for
+            // :focus-visible to re-evaluate. That's correct — the control really
+            // does still have keyboard focus — so don't blur it away; blurring
+            // drops focus to <body> and the next Space press does nothing. Just
+            // use the soft shared ring the other hand-rolled controls use (#196).
+            className={cx(
+              "ml-auto flex items-center gap-2 rounded-sm text-[12px] text-ink-2",
+              focusRing,
+            )}
           >
             <span
               className={cx(
