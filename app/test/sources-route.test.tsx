@@ -44,6 +44,19 @@ vi.mock("../src/store", () => ({
 
 beforeEach(() => {
   useSources.mockImplementation(() => SOURCES);
+  // Sources renders its "Add source" trigger behind DesktopOnly, which reads
+  // window.matchMedia; jsdom doesn't implement it. Stub a desktop viewport so
+  // DesktopOnly renders children untouched, matching these tests' intent.
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 });
 vi.mock("../src/lib/use-tenant-navigate", () => ({
   useNavLinks: () => ({

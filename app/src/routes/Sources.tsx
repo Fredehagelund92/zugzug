@@ -5,6 +5,7 @@ import { useNavLinks } from "../lib/use-tenant-navigate";
 import { Button } from "../components/Button";
 import { EmptyState as SetupCard } from "../components/EmptyState";
 import { CatalogModal } from "../components/catalog/CatalogModal";
+import { DesktopOnly } from "../components/DesktopOnly";
 import { PageHeader } from "../components/PageHeader";
 import { SourceRow } from "../components/sources/SourceRow";
 import { ago } from "../components/sources/utils";
@@ -226,14 +227,16 @@ export function Sources() {
               >
                 {scanAction.isPending ? "Scanning…" : "Scan all"}
               </Button>
-              <Button
-                size="sm"
-                icon={<IconArrowRight className="h-3.5 w-3.5" />}
-                onClick={() => setCatalog(true)}
-                disabled={!canEdit}
-              >
-                Add source
-              </Button>
+              <DesktopOnly reason="Open on a larger screen to add a source.">
+                <Button
+                  size="sm"
+                  icon={<IconArrowRight className="h-3.5 w-3.5" />}
+                  onClick={() => setCatalog(true)}
+                  disabled={!canEdit}
+                >
+                  Add source
+                </Button>
+              </DesktopOnly>
             </div>
           }
         />

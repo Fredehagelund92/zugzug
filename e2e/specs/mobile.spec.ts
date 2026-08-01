@@ -80,3 +80,15 @@ test("source rows fit the screen and keep their actions reachable", async ({ pag
   );
   expect(overflowing).toBe(0);
 });
+
+test("add source is gated with an explanation on a phone", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/sources`);
+
+  const addSource = page.getByRole("button", { name: /add source/i });
+  await expect(addSource).toBeVisible();
+
+  await addSource.click();
+
+  await expect(page.getByLabel("Add source")).toBeHidden();
+  await expect(page.getByText(/larger screen/i)).toBeVisible();
+});
