@@ -71,6 +71,11 @@ interface Props {
   anchor: Anchor;
   /** Align the popover's left edge to the anchor's left (default) or its right edge to the anchor's right. */
   align?: "left" | "right";
+  /** Called when the page scrolls underneath the popover. Provide this and the
+   *  popover closes instead of chasing its anchor — dragging a menu around the
+   *  screen while the user scrolls is worse than dismissing it. Scrolling a list
+   *  *inside* the popover never dismisses it. */
+  onDismiss?: () => void;
   className?: string;
   children: ReactNode;
   /** Receives the portaled element. Outside-click handlers must consult this
@@ -99,9 +104,14 @@ export function AnchoredPopover({
   className,
   children,
   popoverRef,
+  onDismiss,
   ...rest
 }: Props): React.ReactPortal {
   const ref = useRef<HTMLDivElement | null>(null);
+  // Held in a ref so an inline `onDismiss={() => setOpen(false)}` doesn't
+  // re-subscribe the scroll listener (and re-place) on every parent render.
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
   const setRef = (el: HTMLDivElement | null) => {
     ref.current = el;
     if (popoverRef) popoverRef.current = el;
@@ -129,10 +139,18 @@ export function AnchoredPopover({
       pop.style.left = `${left}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
+    const onScroll = (e: Event) => {
+      // A scroll inside the popover's own list is not the page moving
+      // underneath it — only the latter should dismiss.
+      const target = e.target as Node | null;
+      const inside = target != null && target !== document && pop.contains(target);
+      if (dismissRef.current && !inside) dismissRef.current();
+      else place();
+    };
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", place);
     return () => {
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", place);
     };
   }, [mounted, anchor, align]);

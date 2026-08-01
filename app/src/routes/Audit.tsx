@@ -261,6 +261,7 @@ function PeoplePicker({
         <AnchoredPopover
           anchor={trigger}
           popoverRef={pop}
+          onDismiss={() => setOpen(false)}
           className="rounded-lg zz-rise w-[260px] border border-line bg-surface shadow-lg"
         >
           <div className="border-b border-line p-2">

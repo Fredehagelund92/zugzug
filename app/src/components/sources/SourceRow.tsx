@@ -85,6 +85,7 @@ export function SourceRow({
               align="right"
               role="menu"
               aria-label="More actions"
+              onDismiss={() => setMenu(false)}
               className="rounded-lg min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop"
             >
               <button

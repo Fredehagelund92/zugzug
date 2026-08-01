@@ -17,3 +17,19 @@ test("review: the value pane scrolls on a phone", async ({ page }) => {
   expect(box.clientH).toBeLessThan(844);
   expect(box.scrollH).toBeGreaterThan(box.clientH);
 });
+
+test("popovers close on scroll instead of sliding around", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/sources`);
+  await page.getByText("Raw", { exact: false }).first().click();
+
+  const menuButton = page.getByRole("button", { name: "More actions" }).first();
+  await menuButton.click();
+  const menu = page.getByRole("menu", { name: "More actions" });
+  await expect(menu).toBeVisible();
+
+  await page.evaluate(() => {
+    document.querySelector("#main")?.scrollBy(0, 250);
+  });
+
+  await expect(menu).toBeHidden();
+});

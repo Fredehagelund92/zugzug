@@ -79,6 +79,7 @@ export function ManageLinkedFieldsPopover(props: Props) {
   return (
     <AnchoredPopover
       anchor={props.anchorRect}
+      onDismiss={props.onCancel}
       role="dialog"
       aria-label="Manage linked fields"
       className="w-[320px] rounded-sm border border-line-2 bg-surface-elevated shadow-pop"

@@ -45,7 +45,10 @@ function Editor<Row>(props: SelectEditorProps<Row>) {
   }, []);
 
   // Position the portal popover below (or above) the anchor cell using fixed coords.
-  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH);
+  // Scrolling away closes it the same way clicking away does (below): this
+  // editor picks an option, it never edits text in place, so there is nothing
+  // to commit on close.
+  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH, cancel);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {

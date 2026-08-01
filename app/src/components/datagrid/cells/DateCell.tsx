@@ -123,7 +123,10 @@ function Editor<Row>({ value, initial, commit, cancel, anchorRef }: DateEditorPr
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Anchor the popover under the cell — scroll/resize aware (matches SelectCell).
-  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH);
+  // Scrolling away closes it exactly like clicking away does: this editor has a
+  // typed input, so the value in it is committed on the way out rather than
+  // thrown away.
+  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH, () => commitTyped());
 
   // Outside click closes (commits the typed value if valid, else cancels).
   useEffect(() => {

@@ -39,7 +39,10 @@ function Editor<Row>({ value, commit, cancel, candidates, anchorRef }: LinkedEdi
     inputRef.current?.focus();
   }, []);
 
-  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH);
+  // Scrolling away closes it the same way clicking away does (below): the
+  // search box only filters candidates, so closing discards nothing the user
+  // could have meant to keep.
+  useAnchoredPopover(popRef, anchorRef, POPOVER_WIDTH, cancel);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {

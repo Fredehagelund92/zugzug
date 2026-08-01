@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 /* Positions a fixed-position portal popover under (or above) its anchor cell,
    re-reading on scroll/resize.
@@ -13,9 +13,21 @@ export function useAnchoredPopover(
   popRef: React.RefObject<HTMLElement | null>,
   anchorRef: React.RefObject<HTMLElement | null>,
   width: number,
+  /* Called when the page scrolls underneath the editor. Provide it and the
+     editor closes instead of chasing its cell — a picker dragged across the
+     screen mid-scroll is worse than one that closes. Each caller passes the
+     same thing its outside-click handler does, so scrolling away and clicking
+     away treat an in-progress edit identically. Scrolling a list *inside* the
+     popover never dismisses it. */
+  onDismiss?: () => void,
 ): void {
   const [mounted, setMounted] = useState(false);
   useLayoutEffect(() => setMounted(true), []);
+  // Held in a ref: these editors re-render on every keystroke, and the
+  // dismisser closes over state, so depending on it directly would re-place
+  // the popover on each character typed.
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
 
   useLayoutEffect(() => {
     const pop = popRef.current;
@@ -32,10 +44,16 @@ export function useAnchoredPopover(
       pop.style.left = `${left}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
+    const onScroll = (e: Event) => {
+      const target = e.target as Node | null;
+      const inside = target != null && target !== document && pop.contains(target);
+      if (dismissRef.current && !inside) dismissRef.current();
+      else place();
+    };
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", place);
     return () => {
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", place);
     };
   }, [mounted, popRef, anchorRef, width]);
