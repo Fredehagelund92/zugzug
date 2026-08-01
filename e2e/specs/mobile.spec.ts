@@ -118,22 +118,85 @@ test("modals stay inside the screen", async ({ page }) => {
    background scroll while open (useScrollLock, refcounted so stacked overlays
    don't unlock each other early).
 
-   Why these tests assert on document.body's computed style rather than
-   "does #main still scroll": #main is a nested `overflow-y-auto` flex child,
-   not the document scroller — CSS overflow on an ancestor (here, body) does
-   not stop a descendant's own independent scrolling, and confirmed live: even
-   with `document.body.style.overflow` forced to "hidden" by hand, a direct
-   `main.scrollBy()` still moves it, and a synthesized wheel event over the
-   drawer's backdrop already reports zero scroll delta with or without the
-   lock (the backdrop's own pointer-events already swallow it). Neither
-   signal can tell a locked page from an unlocked one here, so both would be
-   vacuous. body.overflow / overscroll-behavior are the only state this hook
-   actually touches, and are exactly what a real iOS Safari rubber-band leak
-   — the bug this hook targets — depends on. */
+   These assert the actual behaviour, not the lock's mechanism: with an
+   overlay open, #main.scrollTop must not move for a scrollBy — not
+   "document.body.style.overflow === 'hidden'". An earlier version of these
+   tests asserted body's computed style instead, which is vacuous here: body
+   never scrolls in this app (every shell confines scrolling to a nested
+   overflow-y-auto region), so a body-only lock left #main scrolling right
+   behind the backdrop while the body-style assertion stayed green throughout.
+   useScrollLock now also freezes that real container (#main, or the admin
+   shells' fallback) — see use-scroll-lock.ts. */
+test("opening the nav drawer does not snap #main back to the top", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/audit`);
+
+  const mainOverflow = () =>
+    page.evaluate(() => {
+      const m = document.querySelector("#main");
+      return m ? m.scrollHeight - m.clientHeight : 0;
+    });
+  await expect.poll(mainOverflow).toBeGreaterThan(250);
+
+  // useScrollLock uses overflow:clip on #main (the only value that actually
+  // blocks scrollBy — see use-scroll-lock.ts), which forces the browser to
+  // repaint the container as if scrolled to 0 the instant it's applied —
+  // #main.scrollTop itself reads 0 while clip is active regardless of the
+  // fix, so it can't be the signal here. What must not move is what's
+  // actually on screen: the hook compensates with a matching transform, so
+  // assert on real paint position (getBoundingClientRect), not the property
+  // that clip makes unreliable to read.
+  const contentTop = () =>
+    page.evaluate(() => {
+      const el = document.querySelector("#main")?.querySelector("*");
+      return el ? el.getBoundingClientRect().top : null;
+    });
+
+  await page.evaluate(() => document.querySelector("#main")?.scrollBy(0, 400));
+  const before = await contentTop();
+  expect(before).not.toBeNull();
+  // Scrolled 400px down, content's top edge should now be well above (a very
+  // negative number relative to) the viewport.
+  expect(before!).toBeLessThan(-100);
+
+  await page.getByRole("button", { name: /open navigation/i }).click();
+  await expect(page.getByRole("dialog", { name: "Navigation" })).toBeVisible();
+
+  const during = await contentTop();
+  expect(during).not.toBeNull();
+  expect(Math.abs(during! - before!)).toBeLessThan(5);
+});
+
 test("the nav drawer locks background scroll and releases it on close", async ({ page }) => {
   await page.goto(`/app/${SLUG}/audit`);
 
-  const bodyOverflow = () => page.evaluate(() => getComputedStyle(document.body).overflow);
+  const mainOverflow = () =>
+    page.evaluate(() => {
+      const m = document.querySelector("#main");
+      return m ? m.scrollHeight - m.clientHeight : 0;
+    });
+  // #main must genuinely overflow on this page, or a locked and an unlocked
+  // page would be indistinguishable below (scrollBy would be a no-op either
+  // way) — fail loudly instead of passing vacuously if that stops holding.
+  await expect.poll(mainOverflow).toBeGreaterThan(250);
+
+  const scrollMain = (delta: number) =>
+    page.evaluate((d) => {
+      const m = document.querySelector("#main");
+      if (!m) return null;
+      const before = m.scrollTop;
+      m.scrollBy(0, d);
+      return m.scrollTop !== before;
+    }, delta);
+  const resetMainScroll = () =>
+    page.evaluate(() => {
+      const m = document.querySelector("#main");
+      if (m) m.scrollTop = 0;
+    });
+
+  // Sanity check the precondition end to end: unlocked, a scroll really moves it.
+  expect(await scrollMain(300)).toBe(true);
+  await resetMainScroll();
+
   // The drawer never leaves the DOM (it's hidden via a translateX transform,
   // not unmounted), so toBeVisible/toBeHidden — which only look at
   // display/visibility/size — can't tell it apart from open. Read its actual
@@ -143,38 +206,72 @@ test("the nav drawer locks background scroll and releases it on close", async ({
     return box !== null && box.x >= 0;
   };
 
-  expect(await bodyOverflow()).toBe("visible");
+  // Re-check the overflow precondition before each "still scrollable" assert
+  // below — Activity's feed can legitimately re-render between cycles (e.g.
+  // on refocus), and a momentarily-shorter list would make scrollMain a
+  // vacuous no-op rather than a real failure of the lock.
+  const expectScrollableAgain = async () => {
+    await expect.poll(mainOverflow).toBeGreaterThan(250);
+    await expect
+      .poll(() => scrollMain(300), "scrolling must work again once closed")
+      .toBe(true);
+  };
 
   // Close by the header's X button.
   await page.getByRole("button", { name: /open navigation/i }).click();
   await expect.poll(drawerOpen).toBe(true);
-  expect(await bodyOverflow()).toBe("hidden");
+  expect(await scrollMain(300)).toBe(false);
   await page.getByRole("button", { name: "Close navigation" }).click();
   await expect.poll(drawerOpen).toBe(false);
-  await expect.poll(bodyOverflow).toBe("visible");
+  await expectScrollableAgain();
+  await resetMainScroll();
 
   // Close by Escape.
   await page.getByRole("button", { name: /open navigation/i }).click();
   await expect.poll(drawerOpen).toBe(true);
-  expect(await bodyOverflow()).toBe("hidden");
+  expect(await scrollMain(300)).toBe(false);
   await page.keyboard.press("Escape");
   await expect.poll(drawerOpen).toBe(false);
-  await expect.poll(bodyOverflow).toBe("visible");
+  await expectScrollableAgain();
+  await resetMainScroll();
 
-  // Close by backdrop click.
+  // Close by backdrop click. The backdrop spans the full screen, but the
+  // drawer panel (higher z-index, ~85vw wide) visually sits on top of most
+  // of it — clicking the backdrop locator's default (center) position lands
+  // on the panel's own sidebar content instead once its slide-in transition
+  // settles, occasionally navigating the app instead of closing the drawer.
+  // Click a point past the panel's right edge, clear of it.
   await page.getByRole("button", { name: /open navigation/i }).click();
   await expect.poll(drawerOpen).toBe(true);
-  expect(await bodyOverflow()).toBe("hidden");
-  await page.locator('[aria-hidden="true"].fixed.inset-0').first().click({ force: true });
+  expect(await scrollMain(300)).toBe(false);
+  await page
+    .locator('[aria-hidden="true"].fixed.inset-0')
+    .first()
+    .click({ force: true, position: { x: 370, y: 700 } });
   await expect.poll(drawerOpen).toBe(false);
-  await expect.poll(bodyOverflow).toBe("visible");
+  await expectScrollableAgain();
 });
 
 test("scroll lock survives a stacked drawer + command palette and lifts only once both close", async ({
   page,
 }) => {
   await page.goto(`/app/${SLUG}/audit`);
-  const bodyOverflow = () => page.evaluate(() => getComputedStyle(document.body).overflow);
+
+  const mainOverflow = () =>
+    page.evaluate(() => {
+      const m = document.querySelector("#main");
+      return m ? m.scrollHeight - m.clientHeight : 0;
+    });
+  await expect.poll(mainOverflow).toBeGreaterThan(250);
+
+  const scrollMain = (delta: number) =>
+    page.evaluate((d) => {
+      const m = document.querySelector("#main");
+      if (!m) return null;
+      const before = m.scrollTop;
+      m.scrollBy(0, d);
+      return m.scrollTop !== before;
+    }, delta);
 
   // Open the nav drawer, then stack the command palette on top of it. The
   // drawer's backdrop covers the topbar's palette-trigger button, so open the
@@ -184,7 +281,7 @@ test("scroll lock survives a stacked drawer + command palette and lifts only onc
   await page.keyboard.press("Control+k");
   await expect(page.getByRole("combobox")).toBeVisible();
 
-  expect(await bodyOverflow()).toBe("hidden");
+  expect(await scrollMain(300)).toBe(false);
 
   // Close the inner overlay (palette) only, by clicking its own backdrop
   // below the result panel — not Escape, which AppShell's own global handler
@@ -193,18 +290,49 @@ test("scroll lock survives a stacked drawer + command palette and lifts only onc
   // keeps the lock held while the drawer is still open underneath.
   await page.mouse.click(370, 700);
   await expect(page.getByRole("combobox")).toBeHidden();
-  expect(await bodyOverflow()).toBe("hidden");
+  expect(await scrollMain(300)).toBe(false);
 
   // Close the drawer too — now the lock must lift.
   await page.keyboard.press("Escape");
-  await expect.poll(bodyOverflow).toBe("visible");
+  await expect
+    .poll(() => scrollMain(300), "scrolling must work again once both are closed")
+    .toBe(true);
 });
 
 test("the delete-table confirm dialog locks background scroll and releases it on every close path", async ({
   page,
 }) => {
   await page.goto(`/app/${SLUG}/tables`);
-  const bodyOverflow = () => page.evaluate(() => getComputedStyle(document.body).overflow);
+  await page.waitForSelector("#main");
+
+  // Unlike Activity, #main on the Tables route doesn't naturally overflow —
+  // TablePane's grid is its own internally-virtualized scroller and fills
+  // the viewport exactly, so #main itself has nothing to scroll here. Force
+  // genuine overflow rather than depend on that ever changing; the poll
+  // below still asserts it explicitly, so this fails loudly (not vacuously)
+  // if #main stops existing or stops being the real container.
+  await page.evaluate(() => {
+    const m = document.querySelector("#main");
+    if (!m) return;
+    const spacer = document.createElement("div");
+    spacer.style.height = "2000px";
+    m.appendChild(spacer);
+  });
+
+  const mainOverflow = () =>
+    page.evaluate(() => {
+      const m = document.querySelector("#main");
+      return m ? m.scrollHeight - m.clientHeight : 0;
+    });
+
+  const scrollMain = (delta: number) =>
+    page.evaluate((d) => {
+      const m = document.querySelector("#main");
+      if (!m) return null;
+      const before = m.scrollTop;
+      m.scrollBy(0, d);
+      return m.scrollTop !== before;
+    }, delta);
 
   // TableTabStrip mounts its delete-table ConfirmDialog only while a target is
   // set (open hardcoded true) — the other pattern in this codebase, distinct
@@ -220,10 +348,13 @@ test("the delete-table confirm dialog locks background scroll and releases it on
   // Scoped by name — the (closed, off-screen) nav drawer is also role="dialog".
   const confirmDialog = page.getByRole("dialog", { name: /^Delete / });
   await expect(confirmDialog).toBeVisible();
-  expect(await bodyOverflow()).toBe("hidden");
+  await expect.poll(mainOverflow).toBeGreaterThan(250);
+  expect(await scrollMain(300)).toBe(false);
 
   // Cancel — never confirm the delete phrase, this only checks the lock.
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(confirmDialog).toBeHidden();
-  await expect.poll(bodyOverflow).toBe("visible");
+  await expect
+    .poll(() => scrollMain(300), "scrolling must work again once closed")
+    .toBe(true);
 });
