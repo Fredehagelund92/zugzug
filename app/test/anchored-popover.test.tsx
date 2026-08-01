@@ -108,7 +108,11 @@ describe("AnchoredPopover close-on-scroll", () => {
         </AnchoredPopover>
       </div>,
     );
-    return { outside, inner: document.body.querySelector('[data-testid="inner-list"]')! };
+    return {
+      outside,
+      trigger: ref.current!,
+      inner: document.body.querySelector('[data-testid="inner-list"]')!,
+    };
   }
 
   const scroll = (node: Node) =>
@@ -149,10 +153,18 @@ describe("AnchoredPopover close-on-scroll", () => {
   });
 
   test("without onDismiss it keeps repositioning, as before", async () => {
-    const { outside } = open();
+    const { outside, trigger } = open();
+    const el = document.body.querySelector('[role="menu"]') as HTMLElement;
+    const before = el.style.top;
+
+    // jsdom reports every rect as 0×0, so move the anchor by stubbing its rect:
+    // a re-place must read the new position, a dismiss-instead would not.
+    trigger.getBoundingClientRect = () =>
+      ({ top: 300, bottom: 330, left: 100, right: 200 }) as DOMRect;
     await armed();
-    // No dismisser, so this must not throw and the panel must stay mounted.
     scroll(outside);
-    expect(document.body.querySelector('[role="menu"]')).not.toBeNull();
+
+    expect(el.style.top).not.toBe(before);
+    expect(el.style.top).toBe("336px");
   });
 });

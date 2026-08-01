@@ -58,7 +58,13 @@ export function useAnchoredPopover(
     }, ARM_DELAY_MS);
     const onScroll = (e: Event) => {
       const target = e.target as Node | null;
-      const inside = target != null && target !== document && pop.contains(target);
+      // The anchor counts as inside too: DateCell keeps its typed input in the
+      // cell rather than the portal, and a text input scrolls *itself* once its
+      // content overflows — which a narrow date column does mid-typing. Reading
+      // that as "the page moved" would dismiss the editor, and this editor
+      // commits on the way out, writing a half-typed date.
+      const inside =
+        target != null && target !== document && (pop.contains(target) || anchor.contains(target));
       if (armed && dismissRef.current && !inside) dismissRef.current();
       else place();
     };

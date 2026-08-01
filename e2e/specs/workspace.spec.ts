@@ -24,10 +24,10 @@ test("workspace switcher opens and displays the current workspace", async ({ pag
   const dialog = page.getByRole("dialog", { name: "Switch workspace" });
   await expect(dialog).toBeVisible();
 
-  // The "Current" section always shows the active workspace label.
-  // The default workspace label may be "default" or a display name; we match
-  // the slug text rendered in the Current row.
-  await expect(dialog).toContainText("default", { ignoreCase: true });
+  // The "Current" section renders the workspace *label* and role — never the
+  // slug. The default workspace is provisioned as "Demo workspace" by both the
+  // bootstrap seed and demo-reset, which is what this stack runs.
+  await expect(dialog).toContainText("Demo workspace");
 
   // The e2e admin belongs to exactly one workspace, so the "All workspaces"
   // section (which contains workspace-option-* testids for OTHER workspaces)

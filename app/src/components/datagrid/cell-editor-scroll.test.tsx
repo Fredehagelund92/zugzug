@@ -91,6 +91,26 @@ describe("cell editors close on scroll", () => {
     expect(g.onCommit).toHaveBeenCalledWith("r0", "due", "2026-03-04");
   });
 
+  it("DateCell does not commit when its own input scrolls while typing", async () => {
+    // DateCell renders its input in the cell, not in the portal. A text input
+    // fires a capture-phase scroll on itself once its content overflows — which
+    // a narrow date column does well before YYYY-MM-DD is fully typed. That
+    // must not read as "the page moved underneath the editor", because this
+    // editor commits on the way out: it would write a half-typed date.
+    const g = renderGrid({ columns: columns() });
+    await g.user.dblClick(g.cellAt(0, "due"));
+    const input = document.activeElement as HTMLInputElement;
+    await g.user.type(input, "2026-03");
+
+    await armed();
+    await act(async () => {
+      input.dispatchEvent(new Event("scroll", { bubbles: false }));
+    });
+
+    expect(g.onCommit).not.toHaveBeenCalled();
+    expect(pop()).not.toBeNull();
+  });
+
   it("a scroll in the moment the editor opened does not close it", async () => {
     // Each editor focuses its input in an effect that runs after the popover
     // subscribes; the browser may scroll a half-visible cell into view, which

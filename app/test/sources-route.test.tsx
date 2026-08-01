@@ -83,6 +83,29 @@ describe("Sources route", () => {
     expect(screen.getAllByText(/No sources connected yet/i).length).toBeGreaterThan(0);
   });
 
+  it("on a phone the empty state's 'Browse catalog' explains instead of opening", async () => {
+    // The first-run path: a workspace with zero sources. The catalog browser is
+    // unusable at 390px, so this trigger is gated exactly like the header's
+    // "Add source" — the e2e gate test can't see this, since the seeded demo
+    // always has sources and never renders the empty state.
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    useSources.mockImplementation(() => []);
+    await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /browse catalog/i }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Open on a larger screen to add a source.",
+    );
+  });
+
   it("renders the connection lede without monitoring copy", async () => {
     await renderPage();
     expect(screen.getByText(/2 columns connected across 2 systems/i)).toBeInTheDocument();

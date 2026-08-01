@@ -265,7 +265,11 @@ export function Sources() {
                   </span>
                 }
                 body="Pick a warehouse column from the catalog — Zug Zug will scan it for values."
-                action={<Button onClick={() => setCatalog(true)}>Browse catalog</Button>}
+                action={
+                  <DesktopOnly reason="Open on a larger screen to add a source.">
+                    <Button onClick={() => setCatalog(true)}>Browse catalog</Button>
+                  </DesktopOnly>
+                }
                 secondary={<BrowseWarehouse settingsBase={nav.settings} />}
               />
             </div>
