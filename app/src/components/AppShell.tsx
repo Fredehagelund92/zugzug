@@ -615,7 +615,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
 
   return (
     <div
-      className="flex h-screen overflow-hidden md:grid"
+      className="flex h-[100dvh] overflow-hidden md:grid"
       style={
         isMobile ? undefined : { gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }
       }
@@ -695,7 +695,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
         )}
 
       {/* main column — flex column with the inner main as the only scroll area */}
-      <div className="flex h-screen min-w-0 flex-1 flex-col">
+      <div className="flex h-[100dvh] min-w-0 flex-1 flex-col">
         <header className="relative z-10 flex h-[var(--ak-topbar)] shrink-0 items-center gap-3 border-b border-line bg-[var(--ak-glass)] px-3 backdrop-blur-md md:gap-4 md:px-4">
           {/* Mobile: hamburger. Desktop: collapse chevron. */}
           <button

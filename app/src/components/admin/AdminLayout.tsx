@@ -10,7 +10,7 @@ export function AdminLayout() {
     // AppShell) and scrollbarGutter:"stable" reserving the gutter — otherwise
     // navigating between admin pages of different heights toggles the window
     // scrollbar and re-centers the max-width header, shifting the logo sideways.
-    <div className="zz-canvas flex h-screen flex-col overflow-hidden">
+    <div className="zz-canvas flex h-[100dvh] flex-col overflow-hidden">
       <header className="shrink-0 border-b border-line bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto max-w-[var(--wide)] px-6 h-14 flex items-center gap-3">
           <Link to="/app" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
