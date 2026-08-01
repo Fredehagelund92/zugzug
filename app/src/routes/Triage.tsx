@@ -478,7 +478,10 @@ function TriageInner() {
 
           {/* Main pane — desktop: always. Mobile: only once a table is opened. */}
           <div
-            className={cx("min-w-0 flex-1 flex-col", mobileShowDetail ? "flex" : "hidden md:flex")}
+            className={cx(
+              "min-h-0 min-w-0 flex-1 flex-col",
+              mobileShowDetail ? "flex" : "hidden md:flex",
+            )}
           >
             {/* Mobile-only back to the table list. */}
             <button
