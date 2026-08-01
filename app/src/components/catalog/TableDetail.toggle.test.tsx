@@ -47,6 +47,29 @@ describe("Only unmapped toggle (#196)", () => {
     expect(knob().className).toContain("translate-x-[16px]");
   });
 
+  // #196 — the ring that shows after tab-then-click is correct platform
+  // behaviour (no new focus event fires, so :focus-visible persists), and it is
+  // NOT suppressed here: blurring on click drops focus to <body> and the control
+  // stops responding to further Space presses. What was wrong was the look — the
+  // blunt global 2px outline. Use the shared soft ring the other hand-rolled
+  // controls use (Checkbox, CatalogTree), so it reads as deliberate.
+  it("uses the shared focus ring rather than the blunt global outline", () => {
+    const cls = screen.getByRole("switch").className;
+    expect(cls).toContain("focus-visible:outline-none");
+    expect(cls).toContain("focus-visible:shadow-[0_0_0_3px_var(--accent-soft)]");
+  });
+
+  it("keeps the button focusable so keyboard activation still works", () => {
+    const btn = screen.getByRole("switch");
+    expect(btn).not.toHaveAttribute("tabindex", "-1");
+    btn.focus();
+    expect(document.activeElement).toBe(btn);
+    fireEvent.click(btn);
+    // Focus must survive activation — a blur-on-click "fix" breaks repeat
+    // Space presses for keyboard users.
+    expect(document.activeElement).toBe(btn);
+  });
+
   it("reflects state to assistive tech", () => {
     expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
     fireEvent.click(screen.getByRole("switch"));
