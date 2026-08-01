@@ -65,3 +65,18 @@ test("a page scroll closes an open popover; scrolling its own list does not", as
 
   await expect(panel).toBeHidden();
 });
+
+test("source rows fit the screen and keep their actions reachable", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/sources`);
+  await page.getByText("Raw", { exact: false }).first().click();
+
+  const menuButton = page.getByRole("button", { name: "More actions" }).first();
+  await expect(menuButton).toBeInViewport();
+
+  // No row may be wider than the card that holds it.
+  const overflowing = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('[class*="grid-cols-"]'))
+      .filter((el) => el.scrollWidth > el.clientWidth + 2).length,
+  );
+  expect(overflowing).toBe(0);
+});
