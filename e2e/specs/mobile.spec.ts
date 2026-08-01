@@ -92,3 +92,24 @@ test("add source is gated with an explanation on a phone", async ({ page }) => {
   await expect(page.getByLabel("Add source")).toBeHidden();
   await expect(page.getByText(/larger screen/i)).toBeVisible();
 });
+
+test("modals stay inside the screen", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/settings/webhooks`);
+  await page.getByRole("button", { name: /add endpoint|new webhook|create/i }).first().click();
+
+  const panel = page.locator('[role="dialog"] > div, .fixed.inset-0 > div').first();
+  await expect(panel).toBeVisible();
+
+  // The backdrop is a flex container, which shrinks the panel to fit the
+  // viewport by default regardless of its own width class — so a bounding-box
+  // check alone can't tell a clamped panel from an unclamped one (both render
+  // at 390px wide). Assert on the CSS itself: max-w-full must be present, so
+  // max-width resolves to a pixel value instead of the unset "none".
+  const maxWidth = await panel.evaluate((el) => getComputedStyle(el).maxWidth);
+  expect(maxWidth).not.toBe("none");
+
+  const box = await panel.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+});

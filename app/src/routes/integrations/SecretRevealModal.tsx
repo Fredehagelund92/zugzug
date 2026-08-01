@@ -14,7 +14,7 @@ export function SecretRevealModal({ value, onClose, title = "Copy your signing s
       <div
         role="dialog"
         aria-modal="true"
-        className="w-[460px] rounded-sm border border-line bg-surface p-5 space-y-3"
+        className="w-[460px] max-w-full rounded-sm border border-line bg-surface p-5 space-y-3"
         onKeyDown={(e) => {
           if (e.key === "Escape") e.stopPropagation();
         }}

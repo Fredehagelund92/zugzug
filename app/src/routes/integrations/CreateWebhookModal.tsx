@@ -66,7 +66,7 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        className="w-[520px] rounded-sm border border-line bg-surface p-5 space-y-4"
+        className="w-[520px] max-w-full rounded-sm border border-line bg-surface p-5 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="font-display text-[15px] font-semibold text-ink">New webhook</h2>

@@ -110,7 +110,7 @@ export function WorkspaceSwitcher() {
       {/* ── Modal ── */}
       {open &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
+          <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] p-4">
             {/* Backdrop */}
             <div
               role="presentation"
@@ -123,7 +123,7 @@ export function WorkspaceSwitcher() {
               role="dialog"
               aria-modal="true"
               aria-label="Switch workspace"
-              className="relative w-[360px] rounded-xl border border-line bg-surface shadow-2xl overflow-hidden"
+              className="relative w-[360px] max-w-full rounded-xl border border-line bg-surface shadow-2xl overflow-hidden"
             >
               {/* Search */}
               <div className="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-line">
