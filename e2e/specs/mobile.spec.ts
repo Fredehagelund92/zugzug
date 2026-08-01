@@ -1,8 +1,24 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, uniqueSuffix } from "../fixtures";
 
 const SLUG = "default";
 
-test("review: the value pane scrolls on a phone", async ({ page }) => {
+test("review: the value pane scrolls on a phone", async ({ page, request }) => {
+  // Seed our own unmapped backlog instead of relying on the ambient demo
+  // "Country" backlog — other specs consume it, which made this test flaky.
+  // Enough rows are seeded that the list overflows a phone viewport
+  // regardless of whatever else is already mapped in this run.
+  const suffix = uniqueSuffix();
+  const occurrences = Array.from({ length: 30 }, (_, i) => ({
+    raw: `E2E Country ${suffix}-${i}`,
+    table: "e2e.seed_countries",
+    column: "country_name",
+    rows: 1,
+  }));
+  const seedResp = await request.post("/api/e2e/seed-scan-values", {
+    data: { refTableId: "country", occurrences },
+  });
+  expect(seedResp.ok(), `seed endpoint returned ${seedResp.status()}`).toBe(true);
+
   await page.goto(`/app/${SLUG}/triage`);
   await page.getByText("Country", { exact: false }).first().click();
   await expect(page.getByText("Choose record").first()).toBeVisible();
@@ -359,3 +375,64 @@ test("the delete-table confirm dialog engages #main's scroll lock and releases i
   await expect(confirmDialog).toBeHidden();
   await expect.poll(containerOverflow).toBe("");
 });
+
+/* #197 Task 9 - a regression floor over the whole app surface, so a future
+   change can't silently reintroduce horizontal overflow on a page nobody
+   thought to check. The admin console was verified clean during the original
+   investigation and is deliberately excluded here - not an oversight.
+
+   Only the document-level overflow check ships: a "clipped elements" variant
+   was tried and needed a `truncate`-class exclusion to avoid false positives
+   on legitimately truncated text, which is a smell - it would generate noise,
+   and a noisy assertion is the one that gets deleted by whoever is racing to
+   get CI green, taking the useful check down with it. This one is boring and
+   lasts.
+
+   During the original investigation, several routes silently redirected to
+   the Dashboard and an overflow-only check sailed through with nothing
+   actually on screen. So before trusting the overflow assertion, each route
+   is confirmed to have genuinely loaded: the URL didn't redirect elsewhere,
+   and the app shell's content region rendered real content (not a blank
+   shell or only the RouteErrorBoundary, which renders outside #main). */
+const ROUTES = [
+  `/app/${SLUG}`,
+  `/app/${SLUG}/triage`,
+  `/app/${SLUG}/sources`,
+  `/app/${SLUG}/tables`,
+  `/app/${SLUG}/audit`,
+  `/app/${SLUG}/settings/general`,
+  `/app/${SLUG}/settings/members`,
+  `/app/${SLUG}/settings/mapping`,
+  `/app/${SLUG}/settings/warehouse`,
+  `/app/${SLUG}/settings/danger`,
+  `/app/${SLUG}/settings/pull-api`,
+  `/app/${SLUG}/settings/webhooks`,
+  `/app/${SLUG}/settings/service-accounts`,
+  `/app/${SLUG}/account/profile`,
+  `/app/${SLUG}/account/memberships`,
+];
+
+for (const route of ROUTES) {
+  test(`no horizontal overflow: ${route}`, async ({ page }) => {
+    await page.goto(route);
+    await page.waitForLoadState("networkidle");
+
+    // Prove the route actually loaded before trusting anything below: a
+    // redirect (e.g. to the Dashboard) or an error-boundary render would
+    // otherwise pass the overflow check with nothing real on screen.
+    expect(new URL(page.url()).pathname, "route must not redirect elsewhere").toBe(route);
+    const main = page.locator("#main");
+    await expect(main, "the app shell's content region must render").toBeVisible();
+    const mainText = await main.innerText();
+    expect(
+      mainText.trim().length,
+      "the page must render real content, not an empty shell",
+    ).toBeGreaterThan(10);
+
+    // The document itself must never scroll sideways.
+    const docOverflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(docOverflows).toBe(false);
+  });
+}
