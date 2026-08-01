@@ -130,16 +130,18 @@ test("modals stay inside the screen", async ({ page }) => {
    #main.scrollBy() itself, so scrollBy was never the right thing to assert on
    in the first place.
 
-   One more thing confirmed live and worth recording here so it isn't
-   rediscovered the hard way: a wheel/touch gesture aimed anywhere at an open
-   overlay can never reach #main to begin with, lock or no lock - all three
-   overlays (the drawer, the palette, ConfirmDialog) render a "fixed inset-0"
-   backdrop that covers the entire viewport with pointer-events enabled, so
-   real input always hits the backdrop first. Proven by forcing #main's
-   overflow back to "auto" while the drawer stayed open and repeating the same
-   wheel gesture at the same point: still 0px moved. That means a wheel test
-   driven through an open overlay's own backdrop cannot tell a locked #main
-   from an unlocked one - it would pass identically either way. So the tests
+   One more thing worth recording here so it isn't rediscovered the hard way:
+   a wheel/touch gesture aimed anywhere at an open overlay can never reach
+   #main to begin with, lock or no lock. Measured live for the drawer only:
+   forced #main's overflow back to "auto" while the drawer stayed open and
+   repeated the same wheel gesture at the same point - still 0px moved,
+   because its fixed inset-0 backdrop (portaled to document.body) covers the
+   entire viewport with pointer-events enabled and wins the hit-test first.
+   The same conclusion holds for CommandPalette (renders as a sibling of the
+   #main column, same full-viewport fixed backdrop) and ConfirmDialog (a DOM
+   descendant of #main, but still position:fixed, which in Blink hangs off
+   the viewport's scroll node rather than #main's) - but those two are
+   reasoned from the CSS, not separately measured the same way. So the tests
    below split the claim into its two real, non-vacuous parts: (1) opening/
    closing an overlay for real does engage and release overflow:hidden on
    #main (verified through actual button/Escape/backdrop interactions - this

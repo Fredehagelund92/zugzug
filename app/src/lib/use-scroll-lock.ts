@@ -27,6 +27,17 @@ function getScrollContainer(): HTMLElement | null {
 /**
  * Freezes background scrolling while an overlay is open, and stops iOS
  * scroll-chaining from rubber-banding the page behind it. Safe to nest.
+ *
+ * In Chrome this is inert for every overlay in this app: each one's own
+ * fixed inset-0 backdrop already covers the full viewport and wins the
+ * hit-test before a real wheel/touch gesture ever reaches the container, so
+ * nothing here is provably fixing a reproducible Chrome bug. The real payoff
+ * is iOS Safari's scroll-chaining/rubber-band behavior, which lets a touch
+ * that starts on the backdrop still move the page behind it — no headless
+ * browser (this one included) can reproduce or verify that, the same class
+ * of gap as the dvh viewport-unit fix. Don't mistake an all-green Chrome
+ * suite for proof this does something Chrome-visible; it doesn't, and that's
+ * expected.
  */
 export function useScrollLock(active: boolean): void {
   useLayoutEffect(() => {
