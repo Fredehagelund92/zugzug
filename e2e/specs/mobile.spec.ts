@@ -18,18 +18,50 @@ test("review: the value pane scrolls on a phone", async ({ page }) => {
   expect(box.scrollH).toBeGreaterThan(box.clientH);
 });
 
-test("popovers close on scroll instead of sliding around", async ({ page }) => {
-  await page.goto(`/app/${SLUG}/sources`);
-  await page.getByText("Raw", { exact: false }).first().click();
+/* Touch-scrolling the page behind an open dropdown used to drag the dropdown
+   across the screen, because every popover re-placed itself against its anchor
+   on every scroll. It now closes instead — but only for a scroll of the page,
+   not of the popover's own list (#197).
 
-  const menuButton = page.getByRole("button", { name: "More actions" }).first();
-  await menuButton.click();
-  const menu = page.getByRole("menu", { name: "More actions" });
-  await expect(menu).toBeVisible();
+   The Activity page is the mobile home for this: its timeline overflows a phone
+   viewport (the Sources page does not, so a scroll there is a no-op that would
+   assert nothing) and its Who picker has an inner scroller of its own. */
+test("a page scroll closes an open popover; scrolling its own list does not", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/audit`);
+  // Wait for the timeline before opening anything: the page must already
+  // overflow, or the scroll below is a no-op that would assert nothing.
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const m = document.querySelector("#main");
+        return m ? m.scrollHeight - m.clientHeight : 0;
+      }),
+    )
+    .toBeGreaterThan(250);
 
+  await page.getByRole("button", { name: /Who/ }).first().click();
+  const panel = page.getByPlaceholder("Find a person…");
+  await expect(panel).toBeVisible();
+  // A popover ignores scrolls for its first ARM_DELAY_MS (AnchoredPopover), so
+  // the browser scrolling a freshly focused input into view can't close it the
+  // instant it opens. A person cannot scroll that fast; this test can.
+  await page.waitForTimeout(250);
+
+  // Scrolling the picker's own list must leave it open.
   await page.evaluate(() => {
-    document.querySelector("#main")?.scrollBy(0, 250);
+    const list = document.querySelector("body > div ul.overflow-auto");
+    list?.dispatchEvent(new Event("scroll", { bubbles: false }));
   });
+  await expect(panel).toBeVisible();
 
-  await expect(menu).toBeHidden();
+  // Scrolling the page underneath it must close it.
+  const scrolled = await page.evaluate(() => {
+    const main = document.querySelector("#main");
+    if (!main) return 0;
+    main.scrollBy(0, 250);
+    return main.scrollTop;
+  });
+  expect(scrolled, "the page must really scroll for this to test anything").toBeGreaterThan(0);
+
+  await expect(panel).toBeHidden();
 });

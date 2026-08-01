@@ -76,10 +76,14 @@ export function ManageLinkedFieldsPopover(props: Props) {
   // scroll containers — and clamps to the viewport. It also treats an unresolved
   // (all-zero) anchor rect as "no anchor" and centers instead, rather than
   // pinning the popover to the top-left corner (#203).
+  //
+  // Deliberately no `onDismiss`: the anchor here is a frozen rect snapshot, so
+  // this panel never chased a moving anchor, and its only exits are Cancel and
+  // Apply. Closing it on scroll would silently discard whatever the user had
+  // ticked, with no outside-click behaviour to match (#197).
   return (
     <AnchoredPopover
       anchor={props.anchorRect}
-      onDismiss={props.onCancel}
       role="dialog"
       aria-label="Manage linked fields"
       className="w-[320px] rounded-sm border border-line-2 bg-surface-elevated shadow-pop"

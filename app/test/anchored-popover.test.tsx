@@ -1,9 +1,16 @@
-import { describe, test, expect, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { describe, test, expect, afterEach, vi } from "vitest";
+import { render, cleanup, act } from "@testing-library/react";
 import { createRef } from "react";
-import { placeAnchored, AnchoredPopover } from "../src/components/AnchoredPopover";
+import { placeAnchored, AnchoredPopover, ARM_DELAY_MS } from "../src/components/AnchoredPopover";
 
 afterEach(cleanup);
+
+/** Lets the popover's arming delay elapse, after which a scroll dismisses. */
+async function armed(): Promise<void> {
+  await act(async () => {
+    await new Promise<void>((resolve) => setTimeout(resolve, ARM_DELAY_MS + 20));
+  });
+}
 
 const VIEWPORT = { width: 1000, height: 800 };
 const POP = { width: 320, height: 200 };
@@ -80,5 +87,72 @@ describe("AnchoredPopover", () => {
     const el = document.body.querySelector('[role="dialog"]') as HTMLElement;
     expect(el.style.top).not.toBe("0px");
     expect(el.style.left).not.toBe("0px");
+  });
+});
+
+/* Close-on-scroll (#197). Touch-scrolling the page behind an open dropdown used
+   to drag the dropdown across the screen, because every popover re-placed
+   itself against its anchor on every capture-phase scroll. */
+describe("AnchoredPopover close-on-scroll", () => {
+  function open(onDismiss?: () => void) {
+    const ref = createRef<HTMLDivElement>();
+    const outside = document.createElement("div");
+    document.body.append(outside);
+    render(
+      <div>
+        <div ref={ref}>trigger</div>
+        <AnchoredPopover anchor={ref} role="menu" aria-label="More actions" onDismiss={onDismiss}>
+          <ul data-testid="inner-list">
+            <li>Remove source</li>
+          </ul>
+        </AnchoredPopover>
+      </div>,
+    );
+    return { outside, inner: document.body.querySelector('[data-testid="inner-list"]')! };
+  }
+
+  const scroll = (node: Node) =>
+    act(() => {
+      node.dispatchEvent(new Event("scroll", { bubbles: false }));
+    });
+
+  test("a scroll outside the panel dismisses it", async () => {
+    const onDismiss = vi.fn();
+    const { outside } = open(onDismiss);
+    await armed();
+    scroll(outside);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  test("a scroll inside the panel does not dismiss it", async () => {
+    // Half the consumers put a scrollable list in the panel. Capture-phase
+    // scroll on window fires for those too, so flicking through the options
+    // must not read as "the page moved".
+    const onDismiss = vi.fn();
+    const { inner } = open(onDismiss);
+    await armed();
+    scroll(inner);
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  test("a scroll in the moment it opened does not dismiss it", async () => {
+    // Consumers focus something inside the popover in a later effect; the
+    // browser may scroll an ancestor to reveal it, which would otherwise close
+    // the popover in the moment it opened.
+    const onDismiss = vi.fn();
+    const { outside } = open(onDismiss);
+    scroll(outside);
+    expect(onDismiss).not.toHaveBeenCalled();
+    await armed();
+    scroll(outside);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  test("without onDismiss it keeps repositioning, as before", async () => {
+    const { outside } = open();
+    await armed();
+    // No dismisser, so this must not throw and the panel must stay mounted.
+    scroll(outside);
+    expect(document.body.querySelector('[role="menu"]')).not.toBeNull();
   });
 });

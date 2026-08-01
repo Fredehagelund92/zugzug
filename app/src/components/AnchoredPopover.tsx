@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 const GAP = 6;
 /** Smallest allowed distance from any viewport edge. */
 const MARGIN = 8;
+/** How long after opening a popover ignores scrolls for dismissal purposes. */
+export const ARM_DELAY_MS = 100;
 
 export interface AnchorBox {
   top: number;
@@ -139,17 +141,30 @@ export function AnchoredPopover({
       pop.style.left = `${left}px`;
     };
     place();
+    // Consumers focus something inside the popover in an effect that runs after
+    // this one. If the browser scrolls an ancestor to bring that element into
+    // view, the scroll would arrive with the listener already live and dismiss
+    // the popover in the moment it opened. Hold dismissal off for one short
+    // grace period; until then a scroll still re-places, as it always did.
+    // A timer rather than requestAnimationFrame: rAF only runs when the page
+    // paints, so on a quiet page the arming can be deferred past the very
+    // scroll it is meant to cover. Nobody opens a menu and scrolls this fast.
+    let armed = false;
+    const arm = window.setTimeout(() => {
+      armed = true;
+    }, ARM_DELAY_MS);
     const onScroll = (e: Event) => {
       // A scroll inside the popover's own list is not the page moving
       // underneath it — only the latter should dismiss.
       const target = e.target as Node | null;
       const inside = target != null && target !== document && pop.contains(target);
-      if (dismissRef.current && !inside) dismissRef.current();
+      if (armed && dismissRef.current && !inside) dismissRef.current();
       else place();
     };
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", place);
     return () => {
+      window.clearTimeout(arm);
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", place);
     };
