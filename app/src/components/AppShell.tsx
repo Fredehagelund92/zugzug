@@ -37,6 +37,7 @@ import { can } from "../lib/permissions";
 import { scopedKey } from "../lib/tenant-storage";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { type Membership } from "./TenantLayout";
+import { useIsMobile } from "../lib/use-media-query";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -59,21 +60,6 @@ function useNavCollapsed(): [boolean, () => void] {
     localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
   return [collapsed, () => setCollapsed((c) => !c)];
-}
-
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia(query).matches;
-  });
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    setMatches(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, [query]);
-  return matches;
 }
 
 function SidebarGroup({ label, children }: { label: string; children: React.ReactNode }) {
@@ -261,7 +247,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const isMobile = useMediaQuery("(max-width: 767px)");
+  const isMobile = useIsMobile();
   const navLinks = useNavLinks();
 
   // Close the drawer whenever the viewport leaves mobile — avoids a stuck open
