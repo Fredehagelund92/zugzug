@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { PALETTE, type PaletteName } from "../lib/palette";
 import { IconPlus, IconX, IconSearch } from "./Icons";
 import { useRefTables, useDrafts, useCanEdit, deleteRefTable } from "../store";
@@ -62,12 +63,16 @@ function AddTabPopover({
 }) {
   const [q, setQ] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Read through a ref so an inline `onClose` from the parent doesn't re-bind
+  // (and re-place) the dropdown on every render.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useLayoutEffect(() => {
+    const dropdown = dropdownRef.current;
+    const anchor = anchorRef.current;
+    if (!dropdown || !anchor) return;
     const place = () => {
-      const dropdown = dropdownRef.current;
-      const anchor = anchorRef.current;
-      if (!dropdown || !anchor) return;
       const rect = anchor.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
@@ -95,12 +100,15 @@ function AddTabPopover({
       dropdown.style.top = `${top}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the dropdown rather than dragging it across the
+    // screen (#197). Only a search filter is in flight, and onClose is what an
+    // outside click already calls.
+    return bindOverlayScroll({
+      pop: dropdown,
+      anchor,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef]);
 
   useEffect(() => {

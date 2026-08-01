@@ -436,3 +436,44 @@ for (const route of ROUTES) {
     expect(docOverflows).toBe(false);
   });
 }
+
+/* #197 Task 10 — the eight overlays built on AnchoredPopover started closing on
+   a page scroll in Task 4, but ten more carried their own hand-rolled copy of
+   the placement listener and kept chasing their anchor instead. The topbar user
+   menu is one of them, and it is on every screen of the app, so it is the
+   cheapest honest proof that the shared helper is wired into real chrome.
+
+   The menu unmounts when it closes (`{open && createPortal(...)}`), so
+   toBeHidden() here is a real assertion — an earlier version of a sibling test
+   asserted "still present" against a panel nothing ever unmounts, which could
+   not fail. Activity is used for the same reason as the Task 4 case above: its
+   timeline is the reliable phone-width overflow, so the scroll below is not a
+   no-op. */
+test("a page scroll closes the topbar user menu", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/audit`);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const m = document.querySelector("#main");
+        return m ? m.scrollHeight - m.clientHeight : 0;
+      }),
+    )
+    .toBeGreaterThan(250);
+
+  await page.getByRole("button", { name: /^User menu for / }).click();
+  const menu = page.getByRole("button", { name: "Account settings" });
+  await expect(menu).toBeVisible();
+  // Past ARM_DELAY_MS, so the scroll below is read as the page moving rather
+  // than as the browser bringing a freshly focused element into view.
+  await page.waitForTimeout(250);
+
+  const scrolled = await page.evaluate(() => {
+    const main = document.querySelector("#main");
+    if (!main) return 0;
+    main.scrollBy(0, 250);
+    return main.scrollTop;
+  });
+  expect(scrolled, "the page must really scroll for this to test anything").toBeGreaterThan(0);
+
+  await expect(menu).toBeHidden();
+});

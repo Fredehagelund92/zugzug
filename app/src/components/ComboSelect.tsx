@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { IconSearch, IconChevron, IconPlus } from "./Icons";
 
 /* ComboSelect — generic searchable popover over string options, with optional
@@ -64,6 +65,10 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  // Read through a ref: callers pass inline `onClose` arrows, and depending on
+  // them here would re-place the dropdown on every render.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const listboxId = useId();
 
   useImperativeHandle(imperativeRef, () => ({ open: () => setOpen(true) }), []);
@@ -73,10 +78,10 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
   // and anchors below the trigger, clamped to the viewport.
   useLayoutEffect(() => {
     if (!open) return;
+    const dropdown = dropdownRef.current;
+    const trigger = triggerRef.current;
+    if (!dropdown || !trigger) return;
     const place = () => {
-      const dropdown = dropdownRef.current;
-      const trigger = triggerRef.current;
-      if (!dropdown || !trigger) return;
       const rect = trigger.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
@@ -103,12 +108,19 @@ export const ComboSelect = forwardRef<ComboSelectHandle, ComboSelectProps>(funct
       dropdown.style.top = `${top}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the dropdown rather than dragging it across the
+    // screen (#197) — this is the Review record picker, the control the bug was
+    // reported against. Same pair an outside click already calls; only the
+    // search filter is discarded, which is not user work.
+    return bindOverlayScroll({
+      pop: dropdown,
+      anchor: trigger,
+      place,
+      onDismiss: () => {
+        setOpen(false);
+        closeRef.current?.();
+      },
+    });
   }, [open]);
 
   useEffect(() => {

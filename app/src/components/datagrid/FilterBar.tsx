@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
+import { bindOverlayScroll } from "../../lib/overlay-scroll";
 import { IconFilter, IconX, IconChevronLeft } from "../Icons";
 import type { FilterCondition, FilterOperator, FilterSet, ColumnDef, CellType } from "./types";
 
@@ -71,6 +72,9 @@ function FilterConditionEditor<Row>({
 
   // Reposition popover below anchor.
   // On mobile (<768px) centers horizontally in the viewport.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
   useLayoutEffect(() => {
     const popover = ref.current;
     const anchor = anchorRef.current;
@@ -100,12 +104,18 @@ function FilterConditionEditor<Row>({
       popover.style.left = `${left}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the editor rather than dragging it across the screen
+    // (#197). It holds a filter value being edited, so the dismissal calls the
+    // *same* `onClose` the outside-click handler below already calls — a
+    // mousedown outside discards the unsaved condition today (only the Apply
+    // button and Enter reach `onSave`), so scrolling away discards it too. No
+    // new loss path.
+    return bindOverlayScroll({
+      pop: popover,
+      anchor,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef]);
 
   // Close on outside click

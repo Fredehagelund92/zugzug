@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { apiFetch, authFetch } from "../api";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
 import { CommandPalette, type Command } from "./CommandPalette";
@@ -132,10 +133,10 @@ function UserMenu() {
 
   useLayoutEffect(() => {
     if (!open) return;
+    const dropdown = dropdownRef.current;
+    const trigger = triggerRef.current;
+    if (!dropdown || !trigger) return;
     const place = () => {
-      const dropdown = dropdownRef.current;
-      const trigger = triggerRef.current;
-      if (!dropdown || !trigger) return;
       const rect = trigger.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
@@ -150,12 +151,14 @@ function UserMenu() {
       dropdown.style.top = `${top}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the menu rather than dragging it across the screen
+    // (#197) — the same thing an outside click already did.
+    return bindOverlayScroll({
+      pop: dropdown,
+      anchor: trigger,
+      place,
+      onDismiss: () => setOpen(false),
+    });
   }, [open]);
 
   useEffect(() => {

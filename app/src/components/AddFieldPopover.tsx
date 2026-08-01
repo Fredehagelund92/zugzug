@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { Button } from "./Button";
 import { OptionBuilder } from "./OptionBuilder";
 import { toast } from "./Toast";
@@ -70,6 +71,10 @@ export function AddFieldPopover({
   onValidateFormula,
 }: AddFieldPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
+  // Read through a ref so an inline `onClose` from the host doesn't re-bind
+  // (and re-place) the popover on every keystroke in the name field.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const nameInputRef = useRef<HTMLInputElement>(null);
 
   const [label, setLabel] = useState("");
@@ -146,12 +151,19 @@ export function AddFieldPopover({
     };
 
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the popover rather than dragging it across the
+    // screen (#197). This one holds a typed field name and its config, so the
+    // dismissal deliberately calls the *same* `onClose` the existing
+    // outside-click handler (below) already calls — a pointerdown outside
+    // discards the draft today, so scrolling away discards it too. No new
+    // loss path. The popover's own body is a scroller (max-h/overflow-y), and
+    // the inside guard keeps scrolling it from closing it.
+    return bindOverlayScroll({
+      pop: popover,
+      anchor: anchorRef.current,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef]);
 
   // Focus name input on mount

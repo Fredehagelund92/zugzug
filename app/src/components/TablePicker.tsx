@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { IconPlus, IconCheck, IconChevron, IconSearch } from "./Icons";
 import type { MappingRefTable } from "../data";
 import type { PaletteName } from "../data";
@@ -66,10 +67,10 @@ export function TablePicker({
 
   useLayoutEffect(() => {
     if (!open) return;
+    const dropdown = dropdownRef.current;
+    const trigger = triggerRef.current;
+    if (!dropdown || !trigger) return;
     const place = () => {
-      const dropdown = dropdownRef.current;
-      const trigger = triggerRef.current;
-      if (!dropdown || !trigger) return;
       const rect = trigger.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
@@ -96,12 +97,10 @@ export function TablePicker({
       dropdown.style.top = `${top}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the dropdown rather than dragging it across the
+    // screen (#197). `close` is exactly what an outside click already calls —
+    // only the search filter is discarded, which is not user work.
+    return bindOverlayScroll({ pop: dropdown, anchor: trigger, place, onDismiss: () => close() });
   }, [open]);
 
   useEffect(() => {

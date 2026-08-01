@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
+import { bindOverlayScroll } from "../../lib/overlay-scroll";
 import type { ConditionalRule, ColumnDef, RuleStyle } from "./types";
 import type { PaletteName } from "../../lib/palette";
 import { PALETTE_NAMES } from "../../lib/palette";
@@ -28,6 +29,10 @@ export function ConditionalFormatPopover<Row>({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [local, setLocal] = useState<ConditionalRule[]>(rules);
+  // Read through a ref so an inline `onClose` from the parent doesn't re-bind
+  // (and re-place) the popover on every render.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const numeric = column.config.type === "number" || column.config.type === "rating";
 
   useLayoutEffect(() => {
@@ -49,12 +54,17 @@ export function ConditionalFormatPopover<Row>({
       popover.style.left = `${left}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the popover rather than dragging it across the
+    // screen (#197). It holds a rule being edited, so the dismissal calls the
+    // *same* `onClose` the outside-click handler below already calls — a
+    // mousedown outside drops the unsaved `local` rules today (only Save
+    // reaches `onChange`), so scrolling away drops them too. No new loss path.
+    return bindOverlayScroll({
+      pop: popover,
+      anchor: anchorRef.current,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef, anchorRect, local.length]);
 
   useEffect(() => {
