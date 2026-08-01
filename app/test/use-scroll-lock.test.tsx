@@ -29,36 +29,7 @@ describe("useScrollLock", () => {
 
   it("locks the #main scroll container while active — the actual scroller in this app", () => {
     const { unmount } = renderHook(() => useScrollLock(true));
-    // "clip", not "hidden": hidden still permits script-driven scrollTop/
-    // scrollBy (it only removes the scrollbar/drag gesture), so it wouldn't
-    // actually stop anything. clip disallows scrolling by any means.
-    expect(main.style.overflow).toBe("clip");
-    unmount();
-  });
-
-  it("compensates a scrolled container with a transform so clip doesn't visually snap it to the top", () => {
-    // overflow:clip forces the browser to repaint the container as if
-    // scrolled to 0 the instant it's applied. Counter that by shifting the
-    // container's children up by the same amount with a transform, which
-    // doesn't affect layout — only where they paint.
-    const child = document.createElement("div");
-    main.appendChild(child);
-    main.scrollTop = 120;
-
-    const { unmount } = renderHook(() => useScrollLock(true));
-    expect(child.style.transform).toBe("translateY(-120px)");
-
-    unmount();
-    expect(child.style.transform).toBe("");
-  });
-
-  it("doesn't touch children's transform when the container isn't scrolled", () => {
-    const child = document.createElement("div");
-    main.appendChild(child);
-    // main.scrollTop stays 0 — nothing to compensate for.
-
-    const { unmount } = renderHook(() => useScrollLock(true));
-    expect(child.style.transform).toBe("");
+    expect(main.style.overflow).toBe("hidden");
     unmount();
   });
 
@@ -76,7 +47,7 @@ describe("useScrollLock", () => {
   it("restores a pre-existing inline overflow on the container on unmount", () => {
     main.style.overflow = "auto";
     const { unmount } = renderHook(() => useScrollLock(true));
-    expect(main.style.overflow).toBe("clip");
+    expect(main.style.overflow).toBe("hidden");
     unmount();
     expect(main.style.overflow).toBe("auto");
   });
@@ -88,7 +59,7 @@ describe("useScrollLock", () => {
     document.body.appendChild(adminMain);
 
     const { unmount } = renderHook(() => useScrollLock(true));
-    expect(adminMain.style.overflow).toBe("clip");
+    expect(adminMain.style.overflow).toBe("hidden");
     unmount();
     expect(adminMain.style.overflow).toBe("");
 
@@ -106,7 +77,7 @@ describe("useScrollLock", () => {
     // nothing at all, so prove the same hook does lock when switched on.
     rerender({ on: true });
     expect(document.body.style.overflow).toBe("hidden");
-    expect(main.style.overflow).toBe("clip");
+    expect(main.style.overflow).toBe("hidden");
     rerender({ on: false });
     expect(document.body.style.overflow).toBe("");
     expect(main.style.overflow).toBe("");
@@ -121,11 +92,11 @@ describe("useScrollLock", () => {
     const outer = renderHook(() => useScrollLock(true));
     const inner = renderHook(() => useScrollLock(true));
     expect(document.body.style.overflow).toBe("hidden");
-    expect(main.style.overflow).toBe("clip");
+    expect(main.style.overflow).toBe("hidden");
 
     inner.unmount();
     expect(document.body.style.overflow).toBe("hidden");
-    expect(main.style.overflow).toBe("clip");
+    expect(main.style.overflow).toBe("hidden");
 
     outer.unmount();
     expect(document.body.style.overflow).toBe("auto");
