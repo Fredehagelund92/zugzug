@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { cx } from "../lib/cx";
+import { useScrollLock } from "../lib/use-scroll-lock";
 import { IconSearch } from "./Icons";
 
 /* CommandPalette — global quick-switcher modal (Cmd+K). Reusable: takes a
@@ -138,6 +139,8 @@ export function CommandPalette({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  useScrollLock(open);
 
   if (!open) return null;
 

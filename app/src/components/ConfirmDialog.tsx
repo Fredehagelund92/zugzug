@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "./Button";
+import { useScrollLock } from "../lib/use-scroll-lock";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -70,6 +71,8 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) setPhrase("");
   }, [open]);
+
+  useScrollLock(open);
 
   if (!open) return null;
 

@@ -38,6 +38,7 @@ import { scopedKey } from "../lib/tenant-storage";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { type Membership } from "./TenantLayout";
 import { useIsMobile } from "../lib/use-media-query";
+import { useScrollLock } from "../lib/use-scroll-lock";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -249,6 +250,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
   const navLinks = useNavLinks();
+  useScrollLock(isMobile && drawerOpen);
 
   // Close the drawer whenever the viewport leaves mobile — avoids a stuck open
   // drawer if the user resizes or rotates their device to desktop width.
