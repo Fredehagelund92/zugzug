@@ -355,7 +355,9 @@ function GridRowInner<Row>(props: GridRowProps<Row>): React.ReactElement {
       role="row"
       aria-rowindex={rowIndex + 2}
       className={cx(
-        "relative group grid items-stretch border-b border-line",
+        // min-w-min: see DataGridHeader — the row must span its tracks for the
+        // pinned cell's sticky left: 0 to hold when scrolled right (#225).
+        "relative group grid min-w-min items-stretch border-b border-line",
         selected ? "bg-surface-2" : "hover:bg-hover",
       )}
       style={gridStyle}

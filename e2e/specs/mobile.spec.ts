@@ -477,3 +477,47 @@ test("a page scroll closes the topbar user menu", async ({ page }) => {
 
   await expect(menu).toBeHidden();
 });
+
+/* #225 — the pinned Record column scrolled off-screen on a phone. `position:
+   sticky` cannot escape its containing block, and the header/row elements were
+   sized to the scrollport (377px) while their grid tracks totalled ~1066px, so
+   the sticky cell was clamped inside a box that itself scrolled away.
+
+   Mobile-only: `--zz-col-min: 8.5rem` (globals.css) gives each auto column a
+   legible floor below 640px, which is what makes the tracks overflow. The test
+   asserts on the real geometry — the pinned cell's left edge against the
+   scroller's — and fails on the unfixed build with a large negative left. */
+test("the pinned column stays put when the grid is scrolled right", async ({ page }) => {
+  await page.goto(`/app/${SLUG}/tables?open=country&active=country`);
+
+  const scroller = page.locator(".zz-grid-scroll").first();
+  await expect(scroller).toBeVisible();
+  const pinned = page.locator('[role="gridcell"][data-field="label"]').first();
+  await expect(pinned).toBeVisible();
+
+  // The grid must really overflow sideways, or the scroll below is a no-op.
+  const overflow = await scroller.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow, "the grid must overflow the phone viewport to test anything").toBeGreaterThan(
+    100,
+  );
+
+  const scrolled = await scroller.evaluate((el) => {
+    el.scrollLeft = el.scrollWidth;
+    return el.scrollLeft;
+  });
+  expect(scrolled, "the grid must really scroll right").toBeGreaterThan(100);
+
+  const geom = await scroller.evaluate((el) => {
+    const cell = el.querySelector('[role="gridcell"][data-field="label"]') as HTMLElement;
+    return {
+      scrollerLeft: el.getBoundingClientRect().left,
+      cellLeft: cell.getBoundingClientRect().left,
+      cellWidth: cell.getBoundingClientRect().width,
+    };
+  });
+
+  // Sticky at left: 0 — the pinned cell sits on the scroller's left edge and is
+  // still on screen, whatever the scroll offset.
+  expect(Math.abs(geom.cellLeft - geom.scrollerLeft)).toBeLessThan(2);
+  expect(geom.cellWidth).toBeGreaterThan(50);
+});
