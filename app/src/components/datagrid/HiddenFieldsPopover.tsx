@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { bindOverlayScroll } from "../../lib/overlay-scroll";
 import type { ColumnDef } from "./types";
 
 interface Props<Row> {
@@ -14,6 +15,10 @@ const GAP = 4;
 
 export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose }: Props<Row>) {
   const ref = useRef<HTMLDivElement>(null);
+  // Read through a ref so an inline `onClose` from the parent doesn't re-bind
+  // (and re-place) the popover on every render.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useLayoutEffect(() => {
     const pop = ref.current;
@@ -45,12 +50,15 @@ export function HiddenFieldsPopover<Row>({ hidden, anchorRef, onUnhide, onClose 
       pop.style.left = `${left}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the popover rather than dragging it across the
+    // screen (#197). Its toggles apply live, so nothing is lost — and onClose
+    // is what an outside click already calls.
+    return bindOverlayScroll({
+      pop,
+      anchor,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef, hidden.length]);
 
   useEffect(() => {

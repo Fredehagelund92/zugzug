@@ -146,6 +146,7 @@ function RolePopover({
       anchor={anchor}
       align="right"
       popoverRef={ref}
+      onDismiss={onClose}
       role="menu"
       className="zz-pop-in min-w-[10rem] overflow-hidden rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
     >

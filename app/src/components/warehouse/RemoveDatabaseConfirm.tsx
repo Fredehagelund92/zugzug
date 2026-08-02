@@ -80,7 +80,7 @@ export function RemoveDatabaseConfirm({ database, onCancel, onRemoved }: Props):
         role="dialog"
         aria-modal="true"
         aria-label="Remove database"
-        className="w-[520px] rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
+        className="w-[520px] max-w-full rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
       >
         <div className="border-b border-line p-3 font-display text-[14px] font-semibold text-ink">
           Remove database {database.databaseName}?

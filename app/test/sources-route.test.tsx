@@ -44,6 +44,19 @@ vi.mock("../src/store", () => ({
 
 beforeEach(() => {
   useSources.mockImplementation(() => SOURCES);
+  // Sources renders its "Add source" trigger behind DesktopOnly, which reads
+  // window.matchMedia; jsdom doesn't implement it. Stub a desktop viewport so
+  // DesktopOnly renders children untouched, matching these tests' intent.
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 });
 vi.mock("../src/lib/use-tenant-navigate", () => ({
   useNavLinks: () => ({
@@ -68,6 +81,29 @@ describe("Sources route", () => {
     await renderPage();
     expect(screen.queryByText(/wired/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/No sources connected yet/i).length).toBeGreaterThan(0);
+  });
+
+  it("on a phone the empty state's 'Browse catalog' explains instead of opening", async () => {
+    // The first-run path: a workspace with zero sources. The catalog browser is
+    // unusable at 390px, so this trigger is gated exactly like the header's
+    // "Add source" — the e2e gate test can't see this, since the seeded demo
+    // always has sources and never renders the empty state.
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    useSources.mockImplementation(() => []);
+    await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /browse catalog/i }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Open on a larger screen to add a source.",
+    );
   });
 
   it("renders the connection lede without monitoring copy", async () => {

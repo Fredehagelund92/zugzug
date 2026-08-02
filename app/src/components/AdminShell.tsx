@@ -9,7 +9,7 @@ export function AdminShell() {
     // so navigating between pages of different heights never adds/removes the
     // viewport scrollbar — which otherwise shifts content sideways on click.
     // scrollbarGutter:"stable" reserves the gutter so short pages don't jump.
-    <div className="zz-canvas flex h-screen flex-col overflow-hidden">
+    <div className="zz-canvas flex h-[100dvh] flex-col overflow-hidden">
       <header className="border-b border-line px-6 py-3 flex items-center gap-3 shrink-0">
         <Mark className="h-6 w-6" />
         <span className="font-display font-bold">Zug Zug — Admin</span>

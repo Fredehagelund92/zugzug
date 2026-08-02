@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { Button } from "./Button";
 
 /* ToolbarMenu — a small portal-anchored dropdown for toolbar overflow / grouped
@@ -73,6 +74,10 @@ function MenuPortal({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Read through a ref so an inline `onClose` from the parent doesn't re-bind
+  // (and re-place) the menu on every render.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   // Fixed-position, right-aligned to the trigger, flipping up when it would
   // overflow the viewport bottom. Rendered in a portal so it escapes the
@@ -94,12 +99,14 @@ function MenuPortal({
       pop.style.top = `${top}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the menu rather than dragging it across the screen
+    // (#197) — the same thing an outside click already did.
+    return bindOverlayScroll({
+      pop,
+      anchor: anchorRef.current,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef]);
 
   // Close on outside click (skipping the trigger) or Escape.

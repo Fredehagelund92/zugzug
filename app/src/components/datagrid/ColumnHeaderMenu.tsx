@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "../../lib/cx";
+import { bindOverlayScroll } from "../../lib/overlay-scroll";
 import {
   IconEdit,
   IconType,
@@ -122,6 +123,10 @@ export function ColumnHeaderMenu<Row>({
   const [ratingMaxCustom, setRatingMaxCustom] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  // Read through a ref so an inline `onClose` from the parent doesn't re-bind
+  // (and re-place) the menu on every render.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   useEffect(() => {
     if (mode === "rename") {
@@ -162,12 +167,15 @@ export function ColumnHeaderMenu<Row>({
       popover.style.left = `${left}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the menu rather than dragging it across the screen
+    // (#197). onClose is what an outside click already calls, so a rename draft
+    // in progress is discarded either way — no new loss path.
+    return bindOverlayScroll({
+      pop: popover,
+      anchor: anchorRef.current,
+      place,
+      onDismiss: () => closeRef.current(),
+    });
   }, [anchorRef, anchorRect, mode]);
 
   // Close on outside click. Skip clicks on the anchor button itself so the

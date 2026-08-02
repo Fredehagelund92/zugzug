@@ -59,7 +59,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
         role="dialog"
         aria-modal="true"
         aria-label="Add database"
-        className="w-[480px] rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
+        className="w-[480px] max-w-full rounded-sm border border-line-2 bg-surface-elevated shadow-pop"
       >
         <div className="border-b border-line p-3 font-display text-[14px] font-semibold text-ink">
           Add database

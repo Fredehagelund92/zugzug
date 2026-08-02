@@ -47,7 +47,7 @@ export function SourceRow({
   const tableOnly = dotIdx !== -1 ? row.table.slice(dotIdx + 1) : row.table;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_minmax(120px,auto)_150px_32px] items-center gap-4 border-b border-line px-6 py-3 pl-10 transition-colors last:border-b-0 hover:bg-surface-2/40">
+    <div className="relative grid grid-cols-1 items-start gap-x-4 gap-y-1 border-b border-line px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-2/40 sm:grid-cols-[minmax(0,1fr)_minmax(120px,auto)_150px_32px] sm:items-center sm:gap-y-0 sm:px-6 sm:py-3 sm:pl-10">
       {/* Column identity: schema.table.column */}
       <div className="truncate font-mono text-[12.5px]">
         {schemaPrefix && <span className="text-ink-3">{schemaPrefix}</span>}
@@ -65,7 +65,7 @@ export function SourceRow({
       <div className={cx("whitespace-nowrap font-mono text-[11px]", state.tone)}>{state.label}</div>
 
       {/* Actions menu */}
-      <div className="relative justify-self-end">
+      <div className="absolute right-3 top-2.5 sm:relative sm:right-auto sm:top-auto sm:justify-self-end">
         <button
           ref={menuBtn}
           type="button"
@@ -85,6 +85,7 @@ export function SourceRow({
               align="right"
               role="menu"
               aria-label="More actions"
+              onDismiss={() => setMenu(false)}
               className="rounded-lg min-w-[180px] border border-line-2 bg-surface-3 p-1 shadow-pop"
             >
               <button

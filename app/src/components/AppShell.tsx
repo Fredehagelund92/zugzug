@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { apiFetch, authFetch } from "../api";
 import { cx } from "../lib/cx";
+import { bindOverlayScroll } from "../lib/overlay-scroll";
 import { Mark } from "./Mark";
 import { ThemeToggle } from "./ThemeToggle";
 import { CommandPalette, type Command } from "./CommandPalette";
@@ -37,6 +38,8 @@ import { can } from "../lib/permissions";
 import { scopedKey } from "../lib/tenant-storage";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { type Membership } from "./TenantLayout";
+import { useIsMobile } from "../lib/use-media-query";
+import { useScrollLock } from "../lib/use-scroll-lock";
 
 /* AppShell — the signed-in product chrome.
    - The sidebar is a fixed column (doesn't scroll with the page); only the
@@ -59,21 +62,6 @@ function useNavCollapsed(): [boolean, () => void] {
     localStorage.setItem(NAV_COLLAPSED_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
   return [collapsed, () => setCollapsed((c) => !c)];
-}
-
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia(query).matches;
-  });
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    setMatches(mql.matches);
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, [query]);
-  return matches;
 }
 
 function SidebarGroup({ label, children }: { label: string; children: React.ReactNode }) {
@@ -145,10 +133,10 @@ function UserMenu() {
 
   useLayoutEffect(() => {
     if (!open) return;
+    const dropdown = dropdownRef.current;
+    const trigger = triggerRef.current;
+    if (!dropdown || !trigger) return;
     const place = () => {
-      const dropdown = dropdownRef.current;
-      const trigger = triggerRef.current;
-      if (!dropdown || !trigger) return;
       const rect = trigger.getBoundingClientRect();
       const dropH = dropdown.offsetHeight;
 
@@ -163,12 +151,14 @@ function UserMenu() {
       dropdown.style.top = `${top}px`;
     };
     place();
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
+    // A page scroll closes the menu rather than dragging it across the screen
+    // (#197) — the same thing an outside click already did.
+    return bindOverlayScroll({
+      pop: dropdown,
+      anchor: trigger,
+      place,
+      onDismiss: () => setOpen(false),
+    });
   }, [open]);
 
   useEffect(() => {
@@ -261,8 +251,9 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const isMobile = useMediaQuery("(max-width: 767px)");
+  const isMobile = useIsMobile();
   const navLinks = useNavLinks();
+  useScrollLock(isMobile && drawerOpen);
 
   // Close the drawer whenever the viewport leaves mobile — avoids a stuck open
   // drawer if the user resizes or rotates their device to desktop width.
@@ -615,7 +606,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
 
   return (
     <div
-      className="flex h-screen overflow-hidden md:grid"
+      className="flex h-[100dvh] overflow-hidden md:grid"
       style={
         isMobile ? undefined : { gridTemplateColumns: collapsed ? "64px 1fr" : "var(--ak-nav) 1fr" }
       }
@@ -695,7 +686,7 @@ export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
         )}
 
       {/* main column — flex column with the inner main as the only scroll area */}
-      <div className="flex h-screen min-w-0 flex-1 flex-col">
+      <div className="flex h-[100dvh] min-w-0 flex-1 flex-col">
         <header className="relative z-10 flex h-[var(--ak-topbar)] shrink-0 items-center gap-3 border-b border-line bg-[var(--ak-glass)] px-3 backdrop-blur-md md:gap-4 md:px-4">
           {/* Mobile: hamburger. Desktop: collapse chevron. */}
           <button

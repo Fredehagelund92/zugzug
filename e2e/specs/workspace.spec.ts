@@ -18,16 +18,28 @@ test("workspace switcher opens and displays the current workspace", async ({ pag
   await page.goto("/app/default");
   await expect(page.getByRole("navigation", { name: "Navigation" })).toBeVisible();
 
+  // The switcher trigger's first direct <span> child renders the current
+  // workspace's *label* (the avatar is a sibling <div>, the "▾" caret a
+  // trailing <span>). Read it before opening, so we can assert the dialog
+  // shows the same text.
+  const triggerLabel = await page
+    .getByTestId("workspace-switcher")
+    .locator("> span")
+    .first()
+    .innerText();
+
   // Open the switcher.
   await page.getByTestId("workspace-switcher").click();
 
   const dialog = page.getByRole("dialog", { name: "Switch workspace" });
   await expect(dialog).toBeVisible();
 
-  // The "Current" section always shows the active workspace label.
-  // The default workspace label may be "default" or a display name; we match
-  // the slug text rendered in the Current row.
-  await expect(dialog).toContainText("default", { ignoreCase: true });
+  // The "Current" section renders the same workspace *label* and role — never
+  // the slug. The label itself is seed-dependent (migration 0011 backfills
+  // "Default" on a fresh CI database; demo-reset overwrites it to "Demo
+  // workspace" on a long-lived local stack), so assert against whatever the
+  // trigger displayed rather than hardcoding either string.
+  await expect(dialog).toContainText(triggerLabel);
 
   // The e2e admin belongs to exactly one workspace, so the "All workspaces"
   // section (which contains workspace-option-* testids for OTHER workspaces)
