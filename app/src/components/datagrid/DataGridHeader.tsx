@@ -226,7 +226,12 @@ export function DataGridHeader<Row>(props: DataGridHeaderProps<Row>): React.Reac
       <div
         role="row"
         aria-rowindex={1}
-        className="zz-grid-header grid sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
+        // min-w-min (min-width: min-content) lets the row grow to its tracks
+        // instead of being clamped to the scrollport, so the sticky Record cell
+        // has a containing block that spans the scroll content (#225). It only
+        // binds when the tracks overflow — with --zz-col-min: 0 on desktop the
+        // min-content width is ~0 and the 1fr columns still fill the viewport.
+        className="zz-grid-header grid min-w-min sticky top-0 z-10 items-stretch border-b border-line bg-surface text-[12px] font-medium text-ink-2"
         style={gridStyle}
       >
         {showRowNumbers && (
