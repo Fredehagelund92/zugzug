@@ -1,13 +1,18 @@
 # Code owners for documentation.
 #
-# The "main — pull request review" ruleset has `require_code_owner_review`
-# enabled, so any PR that touches the paths below requires an approving review
-# from a code owner (in addition to the ruleset's general 1-review requirement).
-# Non-docs PRs still need the general review, but not specifically a code owner's.
+# This file only auto-requests review on PRs touching the paths below. It does
+# not block merges: the "main — pull request review" ruleset now sets
+# `required_approving_review_count: 0` and `require_code_owner_review: false`.
 #
-# Solo-maintainer note: since the owner below can't approve their own PR, docs
-# PRs authored by the owner must be merged via the Admin bypass — a deliberate
-# act. Add another owner here to turn this into real second-person review.
+# Why: with a single maintainer, who authors every PR, and GitHub disallowing
+# self-approval, a 1-review requirement could never be satisfied — so every
+# merge went through the Admin bypass. A rule that is bypassed every time
+# protects nothing and makes the bypass routine, which is how a real block
+# eventually gets waved through too. Merges are gated on the required status
+# checks instead ("main — required checks", which has no bypass actors).
+#
+# If a second maintainer joins, raise the review count back to 1 and re-enable
+# `require_code_owner_review` — at that point both become satisfiable.
 
 /README.md          @Fredehagelund92
 /ROADMAP.md         @Fredehagelund92
