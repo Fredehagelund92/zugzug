@@ -257,6 +257,7 @@ export function AwaitingReview() {
             refTableName: g.refTableName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
+            warehouseSynced: res.warehouseSynced,
             error: null,
           });
         } catch (err) {
@@ -281,7 +282,10 @@ export function AwaitingReview() {
       }
       const summary = summarizeOutcomes(outcomes);
       if (summary.ok) {
-        if (summary.committed > 0) toast(summary.message);
+        // A stale warehouse copy is a partial success — say it in the error
+        // tone so it isn't read as a clean publish.
+        if (summary.warehouseFailed.length > 0) toast(summary.message, "error");
+        else if (summary.committed > 0) toast(summary.message);
         setSelected(new Set());
       } else {
         toast(summary.message, "error");

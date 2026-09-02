@@ -8,7 +8,7 @@ export function Kpi({
   label,
   value,
   delta,
-  dir = "up",
+  dir = "neutral",
   spark,
   featured = false,
   coveragePct,
@@ -17,7 +17,9 @@ export function Kpi({
   label: string;
   value: string;
   delta?: string;
-  dir?: "up" | "down" | "warn";
+  /** Tone of the delta line. "neutral" (the default) is plain — an unchanged
+   *  or purely descriptive delta must not read as a green improvement. */
+  dir?: "up" | "down" | "warn" | "neutral";
   spark?: number[];
   featured?: boolean;
   /** 0-100 — when provided renders an inline coverage bar (committed teal) */
@@ -64,7 +66,13 @@ export function Kpi({
         <div
           className={cx(
             "mt-1 font-mono text-xs",
-            dir === "up" ? "text-ok" : dir === "warn" ? "text-warn" : "text-danger",
+            dir === "up"
+              ? "text-ok"
+              : dir === "warn"
+                ? "text-warn"
+                : dir === "down"
+                  ? "text-danger"
+                  : "text-ink-3",
           )}
         >
           {dir === "up" ? "▲ " : dir === "down" ? "▼ " : ""}

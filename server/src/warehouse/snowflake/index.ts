@@ -11,6 +11,7 @@ import type {
   WritableWarehouseAdapter,
   ApprovedDraft,
   CommitResult,
+  RecordSyncExtras,
 } from "../adapter.ts";
 import type { SnowflakeCreds } from "../credentials.ts";
 import { createRealConnection, type SnowflakeConnection } from "./sdk-wrapper.ts";
@@ -369,19 +370,35 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
               )`,
     });
   }
-  async commitRecord(refTable: RefTableSpec, drafts: ApprovedDraft[]): Promise<CommitResult> {
-    if (drafts.length === 0) return { rowsWritten: 0 };
+  async commitRecord(
+    refTable: RefTableSpec,
+    drafts: ApprovedDraft[],
+    extras: RecordSyncExtras = {},
+  ): Promise<CommitResult> {
+    const retiredKeys = extras.retiredKeys ?? [];
+    if (
+      drafts.length === 0 &&
+      !extras.records?.length &&
+      !extras.mappings?.length &&
+      !retiredKeys.length
+    )
+      return { rowsWritten: 0 };
     const refTableRef = this.parseTwoPartRef(refTable.dimTable);
     const mapRef = this.parseTwoPartRef(refTable.mapTable);
     const key = this.quoteIdentifier(refTable.keyCol);
 
-    // Deduplicate record rows by key (last write wins on label).
+    // Deduplicate record rows by key (last write wins on label). extras.records
+    // carry edits with no draft of their own (a rename).
     const canonByKey = new Map<string, string | null>();
     for (const d of drafts) canonByKey.set(d.key, d.label);
+    for (const r of extras.records ?? []) canonByKey.set(r.key, r.label);
     const canonRows = [...canonByKey.entries()].map(([k, l]) => ({ key: k, label: l }));
 
-    // Map rows: one per draft (one (raw, key) pair).
-    const mapRows = drafts.map((d) => ({ raw: d.raw, key: d.key }));
+    // Map rows: one per raw; extras (re-pointed by a record merge) win.
+    const mapByRaw = new Map<string, string>();
+    for (const d of drafts) mapByRaw.set(d.raw, d.key);
+    for (const m of extras.mappings ?? []) mapByRaw.set(m.raw, m.key);
+    const mapRows = [...mapByRaw.entries()].map(([raw, k]) => ({ raw, key: k }));
 
     let rowsWritten = 0;
     rowsWritten += await this.mergeChunked({
@@ -398,6 +415,19 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       onCol: `"RAW"`,
       pickBinds: (row) => [row.raw, row.key],
     });
+    // Retired (or merged-away) keys last, so a mapping this publish re-pointed
+    // to the survivor above is not deleted along with the key it left.
+    for (const c of chunk([...retiredKeys], 1000)) {
+      const holes = c.map(() => "?").join(", ");
+      await this._getConnection().executeAffected({
+        sqlText: `DELETE FROM ${this.qualifyRef(mapRef)} WHERE ${key} IN (${holes})`,
+        binds: [...c],
+      });
+      await this._getConnection().executeAffected({
+        sqlText: `DELETE FROM ${this.qualifyRef(refTableRef)} WHERE ${key} IN (${holes})`,
+        binds: [...c],
+      });
+    }
     return { rowsWritten };
   }
 
@@ -425,6 +455,7 @@ export class SnowflakeAdapter implements WritableWarehouseAdapter {
       const sqlText = `MERGE INTO ${this.qualifyRef(opts.targetRef)} T
                        USING (VALUES ${placeholders}) AS S(${colA}, ${colB})
                        ON T.${opts.onCol} = S.${colA}
+                       WHEN MATCHED THEN UPDATE SET ${colB} = S.${colB}
                        WHEN NOT MATCHED THEN INSERT (${colA}, ${colB}) VALUES (S.${colA}, S.${colB})`;
       // ^^ LIVE-VALIDATION: also confirm getNumUpdatedRows() returns the inserted row
       // count for an INSERT-only MERGE (it should — INSERT counts as "affected").

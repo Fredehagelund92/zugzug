@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
-import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { TenantProvider } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import { SettingsLayout } from "../src/components/settings/SettingsLayout";
 import { WebhookDetailRedirect } from "../src/routes/integrations/WebhookDetailRedirect";
 
@@ -36,14 +37,7 @@ vi.mock("../src/lib/integrations-api", () => ({
   IntegrationsApiError: class IntegrationsApiError extends Error {},
 }));
 
-const tenant: TenantContextValue = {
-  id: "t1",
-  slug: "acme",
-  label: "Acme",
-  color: null,
-  role: "admin",
-  isSuperAdmin: false,
-};
+const tenant = tenantFixture("admin");
 
 function Stub({ name }: { name: string }) {
   return <div data-testid="page">{name}</div>;

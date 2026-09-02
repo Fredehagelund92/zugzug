@@ -314,17 +314,28 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[2] === "tenants" && seg.length === 3) {
         if (method === "GET") return json({ tenants: await listTenantsForAdmin() });
         if (method === "POST") {
-          const body = (await req.json()) as {
-            id: string;
-            label: string;
-            slug?: string;
-            color?: string;
+          // The client sends what the form asks for: `slug` (the address) and
+          // `label`. It doubles as the workspace id — reading a different field
+          // name here made every Create click a 500 (missing id → TypeError).
+          const body = (await req.json().catch(() => ({}))) as {
+            slug?: unknown;
+            label?: unknown;
+            color?: unknown;
           };
+          const slug = typeof body.slug === "string" ? body.slug.trim() : "";
+          const label = typeof body.label === "string" ? body.label.trim() : "";
+          if (!slug || !label) {
+            throw new AppError(
+              "VALIDATION_FAILED",
+              "a workspace needs both an address and a name",
+              400,
+            );
+          }
           const tenant = await provisionTenant({
-            id: body.id,
-            label: body.label,
-            slug: body.slug,
-            color: body.color,
+            id: slug,
+            label,
+            slug,
+            color: typeof body.color === "string" ? body.color : undefined,
           });
           return json(tenant, 201);
         }

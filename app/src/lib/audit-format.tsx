@@ -120,6 +120,39 @@ export function humanize(row: AuditEntry): Phrase {
   return plain({ verb: a, target: d || undefined, kind: "other" });
 }
 
+/* ────────────────────────── action labels ────────────────────────── */
+
+/* Action codes carry internal vocabulary ("Committed mapping", "Warehouse
+   synced", "scan_failed"). Where they are offered as choices — the admin
+   Activity type filter — they are display strings, so translate the ones that
+   would otherwise put banned words on screen (CLAUDE.md §5). */
+const ACTION_LABEL: Record<string, string> = {
+  Committed: "Published",
+  "Committed mapping": "Published mapping",
+  "Warehouse synced": "Warehouse updated",
+  "Warehouse sync failed": "Warehouse update failed",
+  "Warehouse sync failed (rollback)": "Warehouse update failed",
+  "Warehouse rollback sync": "Warehouse restored",
+  discard_draft: "Discarded draft",
+  scan_failed: "Scan failed",
+  impersonate_start: "Opened a workspace as admin",
+  "admin.tenant.label_update": "Renamed workspace",
+  "workspace.rename": "Renamed workspace",
+};
+
+/** Plain-words label for a raw audit action code. Unknown codes degrade to
+ *  their own words rather than disappearing from the list. */
+export function actionLabel(action: string): string {
+  const mapped = ACTION_LABEL[action];
+  if (mapped) return mapped;
+  const words = action
+    .replace(/[._]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!words) return action;
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
+}
+
 /* ────────────────────────── time helpers ────────────────────────── */
 
 /* Force English regardless of the reader's browser locale — otherwise month

@@ -305,7 +305,7 @@ export function Dashboard() {
               <span className="font-display text-base font-bold text-ink">
                 {fmtK(valuesMapped)}
               </span>{" "}
-              records
+              mappings
             </span>
             <span className="text-sm text-ink-2">
               <span
@@ -473,10 +473,10 @@ export function Dashboard() {
                           </span>
                           {wsInfo?.writable && syncStatus[refTable.id] === "failed" && (
                             <span
-                              title="Last warehouse scan failed — manual re-scan required"
-                              className="inline-flex items-center font-mono text-[9px] text-amber-600"
+                              title="The last publish didn't reach the warehouse — publish again to retry"
+                              className="inline-flex items-center font-mono text-[9px] text-warn"
                             >
-                              🔄 needs re-scan
+                              ⚠ warehouse out of date
                             </span>
                           )}
                         </div>

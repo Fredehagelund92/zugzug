@@ -8,6 +8,10 @@ export const DuckDbCredentials = z.object({
   path: z.string().optional(),
   // The catalog name on MotherDuck side ("analytics", etc.). Used when qualifying refs.
   database: z.string().optional(),
+  // The catalog holding the published dim_/map_ tables (writable mode). Kept
+  // separate from `database` so it never becomes an implicit default for
+  // catalog browsing, which refuses that fallback on purpose.
+  recordDatabase: z.string().optional(),
   // When true, the adapter scans the warehouse; when false, scan methods return [].
   // Mirrors today's ATTACH_WAREHOUSE flag.
   attached: z.boolean().default(false),

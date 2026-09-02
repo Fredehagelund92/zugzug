@@ -63,7 +63,7 @@ test("POST /api/admin/tenants as super-admin provisions a new tenant", async () 
     new Request("http://localhost/api/admin/tenants", {
       method: "POST",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ id: "tadmin_e2e", label: "E2E Test" }),
+      body: JSON.stringify({ slug: "tadmin_e2e", label: "E2E Test" }),
     }),
     () => {},
   );
@@ -73,14 +73,30 @@ test("POST /api/admin/tenants as super-admin provisions a new tenant", async () 
   expect(body.label).toBe("E2E Test");
 });
 
-test("POST /api/admin/tenants with duplicate id → 409", async () => {
+test("POST /api/admin/tenants without a slug → 400, not a 500", async () => {
+  const cookie = await login("u_admin_e2e", true);
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request("http://localhost/api/admin/tenants", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ label: "No address" }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(400);
+  const body = (await res.json()) as { code: string };
+  expect(body.code).toBe("VALIDATION_FAILED");
+});
+
+test("POST /api/admin/tenants with duplicate address → 409", async () => {
   const cookie = await login("u_admin_e2e", true);
   const { handle } = await import("../src/server.ts");
   await handle(
     new Request("http://localhost/api/admin/tenants", {
       method: "POST",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ id: "tadmin_e2e", label: "First" }),
+      body: JSON.stringify({ slug: "tadmin_e2e", label: "First" }),
     }),
     () => {},
   );
@@ -88,7 +104,7 @@ test("POST /api/admin/tenants with duplicate id → 409", async () => {
     new Request("http://localhost/api/admin/tenants", {
       method: "POST",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ id: "tadmin_e2e", label: "Second" }),
+      body: JSON.stringify({ slug: "tadmin_e2e", label: "Second" }),
     }),
     () => {},
   );

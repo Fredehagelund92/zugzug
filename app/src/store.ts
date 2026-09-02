@@ -859,14 +859,19 @@ export type DraftKey = string | { raw: string; userId: string };
 export async function commit(
   refTableId: string,
   draftKeys?: DraftKey[],
-): Promise<{ committed: number; rowsRecovered: number }> {
-  const res = await api<{ committed: number; rowsRecovered: number }>(
-    `/tables/${encodeURIComponent(refTableId)}/commit`,
-    {
-      method: "POST",
-      ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
-    },
-  );
+): Promise<{
+  committed: number;
+  rowsRecovered: number;
+  warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
+}> {
+  const res = await api<{
+    committed: number;
+    rowsRecovered: number;
+    warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
+  }>(`/tables/${encodeURIComponent(refTableId)}/commit`, {
+    method: "POST",
+    ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
+  });
   await refreshDim(refTableId);
   await refreshDrafts(refTableId);
   await refreshSources();

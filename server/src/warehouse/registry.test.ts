@@ -43,6 +43,7 @@ describe("adapterConfigFor", () => {
     motherduckToken: "tok",
     motherduckWritable: true,
     duckWarehousePath: "/data/warehouse.duckdb",
+    recordSchema: "zugzug",
   };
 
   it("disabled: unattached, not writable", () => {
@@ -53,17 +54,28 @@ describe("adapterConfigFor", () => {
     });
   });
 
-  it("motherduck: attaches with the token and passes through writable", () => {
+  it("motherduck: attaches with the token, the record catalog, and writable", () => {
     expect(adapterConfigFor({ ...base, warehouseAdapter: "motherduck" })).toEqual({
       type: "duckdb",
       token: "tok",
+      // Without a catalog every writable-mode publish threw "missing catalog"
+      // when qualifying the two-part dim_/map_ names.
+      recordDatabase: "zugzug",
       attached: true,
       writable: true,
     });
   });
 
-  it("duckdb: attaches the local file, read-only", () => {
+  it("duckdb: attaches the local file and honours the writable opt-in", () => {
     expect(adapterConfigFor({ ...base, warehouseAdapter: "duckdb" })).toEqual({
+      type: "duckdb",
+      path: "/data/warehouse.duckdb",
+      attached: true,
+      writable: true,
+    });
+    expect(
+      adapterConfigFor({ ...base, warehouseAdapter: "duckdb", motherduckWritable: false }),
+    ).toEqual({
       type: "duckdb",
       path: "/data/warehouse.duckdb",
       attached: true,

@@ -23,7 +23,7 @@ import { writeVersionSnapshot } from "./repo-versions.ts";
 import { AppError } from "./errors.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { getAdapter } from "./warehouse/registry.ts";
-import { isWritable } from "./warehouse/adapter.ts";
+import { isWritable, type RecordSyncExtras } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
 export async function listDrafts(refTableId: string, tenantId: string): Promise<Draft[]> {
@@ -1138,9 +1138,10 @@ export async function commit(
       mapTable: meta.mapTable,
       keyCol: meta.keyCol,
     };
+    const extras = await warehouseExtras(refTableId, tenantId, meta, recordChangedForEvent);
     try {
       await adapter.ensureRecordTables(refTableSpec);
-      await adapter.commitRecord(refTableSpec, approvedDrafts);
+      await adapter.commitRecord(refTableSpec, approvedDrafts, extras);
       await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`, {
         tenantId,
       });
@@ -1174,6 +1175,40 @@ export async function commit(
   }
 
   return { committed, rowsRecovered, warehouseSynced };
+}
+
+/** The published state a draft payload can't express, read back from Postgres
+ *  (the master copy) after the fold: records renamed without a draft of their
+ *  own, records this publish retired or merged away, and the map rows a merge
+ *  re-pointed to the survivor. Without these the warehouse MERGE is
+ *  append-only and its dim_/map_ tables drift from the published version. */
+async function warehouseExtras(
+  refTableId: string,
+  tenantId: string,
+  meta: { dimTable: string; mapTable: string; keyCol: string },
+  changedKeys: string[],
+): Promise<RecordSyncExtras> {
+  if (changedKeys.length === 0) return {};
+  const key = qid(meta.keyCol);
+  const live = await pgAll<{ key: string; label: string | null }>(
+    `SELECT ${key}::text AS key, label FROM ${cq(meta.dimTable)} WHERE ${key}::text = ANY($1::text[])`,
+    [changedKeys],
+  );
+  const liveKeys = new Set(live.map((r) => r.key));
+  const retiredKeys = changedKeys.filter((k) => !liveKeys.has(k));
+  if (retiredKeys.length === 0) return { records: live };
+  // A merged-away key hands its variants to a survivor. Those map rows moved
+  // without a draft, so the warehouse has to learn their new target before the
+  // retired key is deleted — otherwise the delete takes the mappings with it.
+  const mappings = await pgAll<{ raw: string; key: string }>(
+    `SELECT m.raw, m.${key}::text AS key FROM ${cq(meta.mapTable)} m
+      WHERE m.${key}::text IN (
+        SELECT retired_into FROM ${pg("record_version")}
+         WHERE reference_table_id = $1 AND tenant_id = $2
+           AND key = ANY($3::text[]) AND retired_into IS NOT NULL)`,
+    [refTableId, tenantId, retiredKeys],
+  );
+  return { records: live, mappings, retiredKeys };
 }
 
 /** Warehouse rows for raws that have a mapped draft but aren't yet in the map.

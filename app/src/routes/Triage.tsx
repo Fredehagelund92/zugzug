@@ -375,6 +375,7 @@ function TriageInner() {
             refTableName: g.refTableName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
+            warehouseSynced: res.warehouseSynced,
             error: null,
           });
         } catch (err) {
@@ -393,10 +394,14 @@ function TriageInner() {
         }
       }
       const summary = summarizeOutcomes(outcomes);
-      if (summary.ok) {
-        if (summary.committed > 0) toast(summary.message);
-      } else {
+      if (!summary.ok) {
         setCommitError(summary.message);
+      } else if (summary.warehouseFailed.length > 0) {
+        // Published, but the warehouse copy is stale — that has to be read,
+        // not left to the activity log.
+        setCommitError(summary.message);
+      } else if (summary.committed > 0) {
+        toast(summary.message);
       }
     } finally {
       setCommitting(false);
