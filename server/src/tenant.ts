@@ -12,6 +12,19 @@ import { recordSlugAlias } from "./slug-alias.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
+/** Slugs the app's own URL space owns. `admin` is a live collision: `/app/admin/*`
+ *  is the super-admin shell, and apiFetch rewrites a workspace slugged `admin` to
+ *  `/api/admin/...`, so every fetch 403s for ordinary members. The rest are the
+ *  other top-level names (`/login`, `/signup`, `/design` routes plus the `/api`
+ *  prefix) — reserved defensively so they can never become collisions. */
+const RESERVED_SLUGS = new Set(["admin", "api", "login", "signup", "design"]);
+
+function assertSlugAllowed(slug: string): void {
+  if (RESERVED_SLUGS.has(slug)) {
+    throw new AppError("VALIDATION_FAILED", `slug '${slug}' is reserved`, 400);
+  }
+}
+
 export const WORKSPACE_COLORS = [
   "#6366f1",
   "#8b5cf6",
@@ -73,6 +86,7 @@ export async function provisionTenant(opts: {
       400,
     );
   }
+  assertSlugAllowed(slug);
   if (!label) {
     throw new AppError("VALIDATION_FAILED", `tenant label cannot be empty`, 400);
   }
@@ -400,6 +414,7 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
       400,
     );
   }
+  assertSlugAllowed(next);
   if (next === currentSlug) return;
   const existing = await pgGet<{ id: string }>(
     `SELECT id FROM "zugzug_app"."tenant" WHERE slug = $1 AND deleted_at IS NULL`,

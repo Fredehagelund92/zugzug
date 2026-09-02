@@ -98,21 +98,23 @@ export async function handleSignup(req: Request): Promise<Response> {
       if (!allowed?.ok) return { denied: true } as const;
     }
 
-    const role = userCount === 0 ? "admin" : "editor";
-
     await tx.run(
       `INSERT INTO ${pg("users")} (id, name, email, initials, password_hash, auth_provider)
        VALUES ($1, $2, $3, $4, $5, 'password')`,
       [userId, name, email, initialsOf(name), hash],
     );
 
-    // Seed default-tenant membership (first user = admin, rest = editor).
-    await tx.run(
-      `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
-       VALUES ('default', $1, $2, now())
-       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
-      [userId, role],
-    );
+    // Bootstrap only: the very first account on a fresh install becomes admin of
+    // the default workspace, otherwise the install is unusable. Everyone else
+    // gets exactly the memberships their invites grant (acceptInvitesFor below).
+    if (userCount === 0) {
+      await tx.run(
+        `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+         VALUES ('default', $1, 'admin', now())
+         ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+        [userId],
+      );
+    }
 
     return { denied: false } as const;
   });

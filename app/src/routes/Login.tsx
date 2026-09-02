@@ -23,19 +23,19 @@ export function Login() {
   const [devBypass, setDevBypass] = useState(false);
 
   useEffect(() => {
-    // Probe the dev/demo one-click login. The button only renders when the route
-    // is live, which requires the operator to have opted in with DEV_BYPASS_AUTH=1
-    // (self-host demo). When off — the default — this 404s and stays hidden, so it
-    // is safe to probe in production builds too, not just local dev.
-    authFetch("/auth/dev", { method: "GET", redirect: "manual" })
-      .then((r) => {
-        // 302 / "opaqueredirect" (Bun returns 302 with status "manual") indicates the route is live.
-        // 404 means dev bypass is off.
-        const live = r.status === 0 /* opaqueredirect */ || (r.status >= 300 && r.status < 400);
-        setDevBypass(live);
-      })
+    // Probe the dev/demo one-click login. GET only reports whether the operator
+    // opted in with DEV_BYPASS_AUTH=1 (self-host demo) — it creates no session and
+    // sets no cookie. When off — the default — it 404s and the button stays hidden.
+    // The login itself is the POST below.
+    authFetch("/auth/dev")
+      .then((r) => setDevBypass(r.ok))
       .catch(() => {});
   }, []);
+
+  const onDevLogin = async () => {
+    const res = await authFetch("/auth/dev", { method: "POST" });
+    if (res.ok) window.location.href = "/app";
+  };
 
   return (
     <AuthLayout>
@@ -62,12 +62,13 @@ export function Login() {
         )}
 
         {devBypass && (
-          <a
-            href="/api/auth/dev"
+          <button
+            type="button"
+            onClick={() => void onDevLogin()}
             className="flex w-full items-center justify-center rounded-sm border border-dashed border-line-2 px-4 py-2 text-[12px] text-ink-3 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             Dev mode login
-          </a>
+          </button>
         )}
       </div>
     </AuthLayout>

@@ -225,6 +225,52 @@ test("Admin can update member role — PUT /api/t/:slug/team/members/:userId/rol
   expect(members.find((m) => m.user_id === "u_tteam_other")?.role).toBe("viewer");
 });
 
+test("Demoting the last admin is refused — PUT .../role → 409 last_admin", async () => {
+  await ensureTenant("tteam_acme");
+  const adminCookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+  // Sole admin; a second member exists but is not an admin.
+  await setupUser("u_tteam_other");
+  await pgRun(
+    `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT DO NOTHING`,
+    ["tteam_acme", "u_tteam_other", "editor"],
+  );
+
+  const res = await req(
+    "PUT",
+    `/api/t/tteam_acme/team/members/${encodeURIComponent("u_tteam_admin")}/role`,
+    adminCookie,
+    { role: "editor" },
+  );
+  expect(res.status).toBe(409);
+  const body = (await res.json()) as { error: string };
+  expect(body.error).toBe("last_admin");
+
+  // Role unchanged.
+  const listRes = await req("GET", "/api/t/tteam_acme/team/members", adminCookie);
+  const members = (await listRes.json()) as { user_id: string; role: string }[];
+  expect(members.find((m) => m.user_id === "u_tteam_admin")?.role).toBe("admin");
+});
+
+test("Demoting an admin while a second admin exists succeeds", async () => {
+  await ensureTenant("tteam_acme");
+  const adminCookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+  await loginAs("u_tteam_other", "tteam_acme", "admin");
+
+  const res = await req(
+    "PUT",
+    `/api/t/tteam_acme/team/members/${encodeURIComponent("u_tteam_other")}/role`,
+    adminCookie,
+    { role: "editor" },
+  );
+  expect(res.status).toBe(204);
+
+  const listRes = await req("GET", "/api/t/tteam_acme/team/members", adminCookie);
+  const members = (await listRes.json()) as { user_id: string; role: string }[];
+  expect(members.find((m) => m.user_id === "u_tteam_other")?.role).toBe("editor");
+});
+
 test("Editor gets 403 on DELETE /api/t/:slug/team/members/:userId", async () => {
   await ensureTenant("tteam_acme");
   const editorCookie = await loginAs("u_tteam_editor", "tteam_acme", "editor");

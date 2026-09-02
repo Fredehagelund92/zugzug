@@ -224,8 +224,6 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
       if (!allowed?.ok) return { denied: true } as const;
     }
 
-    const role = userCount === 0 ? "admin" : "editor";
-
     // ON CONFLICT deliberately does NOT update role — an admin who re-logs in via
     // OIDC must stay admin; only the first-insert path sets the role.
     await tx.run(
@@ -239,14 +237,17 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
       [userId, name, email, sub, initials],
     );
 
-    // Seed default-tenant membership on first sign-in (first user = admin, rest = editor).
-    // ON CONFLICT DO NOTHING preserves existing role on re-login.
-    await tx.run(
-      `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
-       VALUES ('default', $1, $2, now())
-       ON CONFLICT (tenant_id, user_id) DO NOTHING`,
-      [userId, role],
-    );
+    // Bootstrap only: the very first account on a fresh install becomes admin of
+    // the default workspace, otherwise the install is unusable. Everyone else
+    // gets exactly the memberships their invites grant (acceptInvitesFor below).
+    if (userCount === 0) {
+      await tx.run(
+        `INSERT INTO ${pg("tenant_member")} (tenant_id, user_id, role, created_at)
+         VALUES ('default', $1, 'admin', now())
+         ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+        [userId],
+      );
+    }
 
     return { denied: false } as const;
   });

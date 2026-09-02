@@ -75,6 +75,23 @@ test("provisionTenant rejects invalid id formats", async () => {
   }
 });
 
+test("provisionTenant rejects a slug the app's URL space reserves", async () => {
+  // /app/admin/* is the super-admin shell — a workspace slugged 'admin' is
+  // unreachable and apiFetch rewrites its requests to /api/admin/...
+  for (const bad of ["admin", "api", "login", "signup", "design"]) {
+    let thrown: Error | null = null;
+    try {
+      await provisionTenant({ id: "tprov_a", slug: bad, label: "x" });
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown).not.toBeNull();
+    expect(thrown!.message.toLowerCase()).toContain("reserved");
+  }
+  // The id defaults to the slug, so the bare form is rejected too.
+  await expect(provisionTenant({ id: "admin", label: "x" })).rejects.toThrow(/reserved/i);
+});
+
 test("listTenants returns the default tenant plus any provisioned ones", async () => {
   await provisionTenant({ id: "tprov_a", label: "Test A" });
   await provisionTenant({ id: "tprov_b", label: "Test B" });

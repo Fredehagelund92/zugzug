@@ -17,8 +17,17 @@ import {
 import { presence } from "./realtime/presence-room.ts";
 
 /* ---- users & presence (Postgres) ---- */
-export async function listUsers(): Promise<User[]> {
-  return pgAll<User>(`SELECT id, name, initials FROM ${pg("users")} ORDER BY id`);
+/** Members of `tenantId` only — the users table is deployment-global, so an
+ *  unscoped list would leak every account in the deployment into one workspace. */
+export async function listUsers(tenantId: string): Promise<User[]> {
+  return pgAll<User>(
+    `SELECT u.id, u.name, u.initials
+       FROM ${pg("users")} u
+       JOIN ${pg("tenant_member")} tm ON tm.user_id = u.id
+      WHERE tm.tenant_id = $1
+      ORDER BY u.id`,
+    [tenantId],
+  );
 }
 
 /* ---- audit (Postgres, append-only) ---- */

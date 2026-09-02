@@ -206,7 +206,9 @@ export async function handleMe(req: Request): Promise<Response> {
   });
 }
 
-/** GET /api/auth/dev — one-click dev login; only works when devBypassAuth is true. */
+/** POST /api/auth/dev — one-click dev login; only works when devBypassAuth is true.
+ *  Side-effecting (creates the u_dev super-admin + a session), which is why the
+ *  Login page's "is the bypass on?" probe is a plain GET, handled by the router. */
 export async function handleDevLogin(): Promise<Response> {
   const userId = "u_dev";
   await run(
@@ -226,9 +228,9 @@ export async function handleDevLogin(): Promise<Response> {
     [userId],
   );
   const { cookie: setCookie } = await issueSession(userId);
-  const headers = new Headers({ Location: "/app" });
+  const headers = new Headers();
   headers.append("Set-Cookie", setCookie);
-  return new Response(null, { status: 302, headers });
+  return new Response(null, { status: 204, headers });
 }
 
 /** Updates the display name for an authenticated user. Throws AppError on empty name. */
@@ -321,8 +323,16 @@ export async function setSuperAdmin(
   if (!value && targetId === callerId) {
     throw new AppError("SELF_DEMOTE", "cannot demote yourself", 409);
   }
-  if (!value && (await countSuperAdmins()) <= 1) {
-    throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
+  // Only the last *actual* super-admin is protected — demoting someone who isn't
+  // one is a no-op, not a threat to the deployment's last super-admin.
+  if (!value) {
+    const target = await get<{ is_super_admin: boolean }>(
+      `SELECT is_super_admin FROM ${pg("users")} WHERE id = $1`,
+      [targetId],
+    );
+    if (target?.is_super_admin && (await countSuperAdmins()) <= 1) {
+      throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
+    }
   }
   await run(`UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`, [value, targetId]);
 }

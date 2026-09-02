@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
-import { requireAdmin, countRealLoginUsers, type TenantAuthContext } from "./auth.ts";
+import {
+  requireAdmin,
+  countRealLoginUsers,
+  countSuperAdmins,
+  setSuperAdmin,
+  type TenantAuthContext,
+} from "./auth.ts";
 import { handleSignup } from "./auth-password.ts";
 import { pgRun, pgGet, pgTx } from "./pg.ts";
 
@@ -196,6 +202,40 @@ describe("cross-path first-admin election", () => {
     // Neither may keep an unfiltered users count for the election.
     expect(pw).not.toContain("count(*)::int AS n FROM");
     expect(oidc).not.toContain("count(*)::int AS n FROM");
+  });
+});
+
+// ── setSuperAdmin ─────────────────────────────────────────────────────────────
+// The last-super-admin guard must key off the TARGET's current flag: demoting a
+// user who isn't a super-admin is a no-op and can never orphan the deployment.
+
+describe("setSuperAdmin", () => {
+  beforeEach(async () => {
+    await pgRun(`DELETE FROM "zugzug_app"."users"`).catch(() => {});
+    await pgRun(
+      `INSERT INTO "zugzug_app"."users" (id, name, initials, email, is_super_admin)
+       VALUES ('u_sa_last', 'Last SA', 'LS', 'last-sa@zugzug.test', true),
+              ('u_sa_regular', 'Regular', 'RG', 'regular@zugzug.test', false)`,
+    );
+  });
+
+  afterAll(async () => {
+    await pgRun(`DELETE FROM "zugzug_app"."users" WHERE id IN ('u_sa_last', 'u_sa_regular')`).catch(
+      () => {},
+    );
+  });
+
+  it("demoting a non-super-admin succeeds while exactly one super-admin exists", async () => {
+    expect(await countSuperAdmins()).toBe(1);
+    await setSuperAdmin("u_sa_regular", "u_sa_last", false);
+    expect(await countSuperAdmins()).toBe(1);
+  });
+
+  it("still refuses to demote the last actual super-admin", async () => {
+    await expect(setSuperAdmin("u_sa_last", "u_sa_regular", false)).rejects.toThrow(
+      /last super-admin/i,
+    );
+    expect(await countSuperAdmins()).toBe(1);
   });
 });
 

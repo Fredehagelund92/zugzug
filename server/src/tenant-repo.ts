@@ -586,11 +586,12 @@ export class TenantRepo {
     return this.withClearCtx(() => repoActivity.listRecordHistory(tableId, rowKey, scope, opts));
   }
 
-  // --- user-scoped (no tenant) ----------------------------------------------
+  // --- users (workspace-scoped) ---------------------------------------------
   listUsers(): Promise<User[]> {
-    return this.withClearCtx(() => repoMeta.listUsers());
+    return this.withClearCtx(() => repoMeta.listUsers(this.tenantId));
   }
 
+  // --- user-scoped (no tenant) ----------------------------------------------
   getGridLayout(userId: string, refTableId: string): Promise<GridLayoutConfig> {
     return this.withClearCtx(() => repoMeta.getGridLayout(userId, refTableId));
   }

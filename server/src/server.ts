@@ -201,9 +201,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       return handleOidcCallback(req);
     }
 
-    // Dev bypass — local testing only
-    if (seg[2] === "dev" && method === "GET") {
+    // Dev bypass — local testing only. GET only reports whether the operator
+    // enabled it (no session, no cookie — the Login page probes it on render);
+    // POST is the side-effecting login.
+    if (seg[2] === "dev" && (method === "GET" || method === "POST")) {
       if (!env.devBypassAuth) return json({ error: "not found" }, 404);
+      if (method === "GET") return json({ enabled: true });
       return handleDevLogin();
     }
 
@@ -727,6 +730,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           (m) => m.user_id === targetUserId,
         );
         if (!exists) return json({ error: "not_found" }, 404);
+        if (
+          exists.role === "admin" &&
+          body.role !== "admin" &&
+          (await countAdmins(tenantCtx.tenantId)) <= 1
+        ) {
+          return json({ error: "last_admin" }, 409);
+        }
         await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
         await appendAuditAs(me, "member.role", `set ${targetUserId} role to ${body.role}`, {
           tenantId: tenantCtx.tenantId,
@@ -929,8 +939,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       // GET /api/users → { currentUser, collaborators }
       if (seg[1] === "users" && seg.length === 2 && method === "GET") {
         const users = await reqRepo.listUsers();
+        const mine = users.find((u) => u.id === me) ?? users[0];
         return json({
-          currentUser: users.find((u) => u.id === me) ?? users[0],
+          // Own email only — collaborators stay name + initials, never other
+          // members' addresses.
+          currentUser: mine && { ...mine, email: sessionUser.email },
           collaborators: users,
         });
       }
