@@ -628,7 +628,10 @@ export async function addRefTable(name: string, keyKind?: "slug" | "external_id"
 export async function deleteRefTable(refTableId: string): Promise<void> {
   await api(`/tables/${encodeURIComponent(refTableId)}`, { method: "DELETE" });
   refTables = refTables.filter((d) => d.id !== refTableId);
-  await Promise.all([refreshAudit(), refreshSources()]);
+  // Full refetch, not just this table's removal: linked columns on OTHER tables
+  // pointed here and the server drops them with the target, so their cached
+  // shapes (and lookup columns) are stale.
+  await Promise.all([refreshDims(), refreshAudit(), refreshSources()]);
   // Prune drafts for the deleted refTable without hitting the server for a gone endpoint
   const next: Record<string, Draft> = {};
   for (const [k, d] of Object.entries(draftsFlat)) if (d.refTableId !== refTableId) next[k] = d;

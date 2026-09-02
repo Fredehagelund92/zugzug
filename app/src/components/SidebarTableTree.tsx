@@ -140,9 +140,14 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
   const [q, setQ] = useState("");
   const activeRefTableId = activeId ? activeId.slice("tables:".length) : null;
 
+  // Only drafts publish would actually fold count as unpublished work — the
+  // same predicate the server's publish state uses. A table whose drafts were
+  // all rejected is not dirty.
   const dirtyRefTableIds = useMemo(() => {
     const s = new Set<string>();
-    for (const d of Object.values(drafts)) s.add(d.refTableId);
+    for (const d of Object.values(drafts)) {
+      if (d.status === "mapped" && d.targetKey != null) s.add(d.refTableId);
+    }
     return s;
   }, [drafts]);
 

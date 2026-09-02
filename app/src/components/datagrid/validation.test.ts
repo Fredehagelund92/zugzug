@@ -36,6 +36,14 @@ describe("valueShapeError", () => {
     const c: ColumnConfig = { type: "number", validation: {} };
     expect(valueShapeError(c, "abc", "x", [])).toBe("Enter a number.");
   });
+  it("rejects text that isn't a date in a date column", () => {
+    const c: ColumnConfig = { type: "date", validation: {} };
+    expect(valueShapeError(c, "hello", "x", [])).toBe("Enter a date as YYYY-MM-DD.");
+  });
+  it("accepts a well-formed date", () => {
+    const c: ColumnConfig = { type: "date", validation: { min: "2020-01-01" } };
+    expect(valueShapeError(c, "2026-01-31", "x", [])).toBeNull();
+  });
 });
 
 describe("columnBadges", () => {

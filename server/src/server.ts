@@ -1168,7 +1168,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // GET /api/tables/:id
         if (seg.length === 3 && id && method === "GET") {
           const refTable = await reqRepo.getRefTable(id);
-          return refTable ? json(refTable) : json({ error: "not found" }, 404);
+          // Carries `publish` like the ?full=true list route: the client swaps
+          // the whole cached table in after every mutation, so leaving it out
+          // blanked the Dashboard's publish summary until the next full load.
+          return refTable
+            ? json({ ...refTable, publish: await publishSummaryFor(id, tenantCtx.tenantId) })
+            : json({ error: "not found" }, 404);
         }
         // GET /api/tables/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
         if (seg[3] === "scan-values" && seg.length === 4 && id && method === "GET") {
@@ -1687,7 +1692,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             const retryAfter = Math.ceil((60_000 - (Date.now() - lastMs)) / 1000);
             return json(
               {
-                error: "REBALANCE_RATE_LIMITED",
+                // `code` is what the client branches on — without it the body
+                // surfaced as a generic Error nobody caught.
+                code: "REBALANCE_RATE_LIMITED",
+                error: `Positions were just rebalanced — try again in ${Math.max(1, retryAfter)}s.`,
                 lastRebalancedAt: existing?.last_rebalanced_at ?? null,
                 retryAfterSeconds: Math.max(1, retryAfter),
               },

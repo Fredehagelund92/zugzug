@@ -3,7 +3,7 @@ process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeAll, afterAll } from "bun:test";
-import { pgRun } from "../src/pg.ts";
+import { pgGet, pgRun } from "../src/pg.ts";
 import * as repo from "../src/repo-record.ts";
 
 const REF_TABLE = "d_route_conflict";
@@ -65,4 +65,30 @@ test("renameRecord with stale version throws AppError with details.current shape
   expect(thrown.details?.current?.updatedBy?.id).toBe("u_route_actor");
   expect(thrown.details?.current?.updatedBy?.name).toBe("Route Actor");
   expect(thrown.details?.current?.updatedBy?.initials).toBe("RA");
+});
+
+test("adding a record whose key is taken is refused and leaves the existing record untouched", async () => {
+  const before = await pgGet<{ version: number }>(
+    `SELECT version FROM "zugzug_app"."record_version"
+      WHERE reference_table_id = $1 AND key = 'dk' AND tenant_id = 'default'`,
+    [REF_TABLE],
+  );
+  let thrown: { code?: string; status?: number; message?: string } = {};
+  try {
+    await repo.addRecordOne(REF_TABLE, "Denmark", "dk", "u_route_actor", "default");
+  } catch (e) {
+    thrown = e as typeof thrown;
+  }
+  expect(thrown.code).toBe("ALREADY_EXISTS");
+  expect(thrown.status).toBe(409);
+  expect(thrown.message).toContain("already exists");
+
+  // The victim's version must not move — a bump would 409 everyone else's
+  // in-flight edits for an add that never happened.
+  const after = await pgGet<{ version: number }>(
+    `SELECT version FROM "zugzug_app"."record_version"
+      WHERE reference_table_id = $1 AND key = 'dk' AND tenant_id = 'default'`,
+    [REF_TABLE],
+  );
+  expect(after?.version).toBe(before!.version);
 });
