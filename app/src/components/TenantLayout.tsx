@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Navigate, Outlet, useParams } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../lib/tenant-context";
+import type { Capability } from "../lib/permissions";
 import { OpenTabsProvider } from "../lib/open-tabs";
 import { CreateTableModalProvider } from "../lib/create-table-modal";
 import { onTenantSwitch, initStore, useMemberships } from "../store";
@@ -10,6 +11,7 @@ export interface Membership {
   label: string;
   role: "admin" | "editor" | "viewer";
   color: string | null;
+  capabilities: Capability[];
 }
 
 export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
@@ -43,6 +45,7 @@ export function TenantLayout({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       color: m?.color ?? null,
       role: m?.role ?? "admin",
       isSuperAdmin,
+      capabilities: m?.capabilities ?? [],
     }),
     [tenantSlug, m, isSuperAdmin],
   );

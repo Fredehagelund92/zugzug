@@ -47,18 +47,32 @@ export interface SessionUser {
 export type Role = "admin" | "editor" | "viewer";
 
 export type Operation =
-  | "curate" // create/update drafts
-  | "commit" // commit drafts to record
-  | "manage_adapter"; // configure warehouse credentials
+  | "curate" // create/update drafts and record values
+  | "commit" // publish drafts to record
+  | "manage_tables" // create/delete tables, field operations, wire sources, run scans
+  | "manage_workspace" // preferences, members, danger zone
+  | "manage_integrations"; // webhooks + service accounts
 
-/** Static permission matrix. Returns true if the given role may perform op. */
+/** Static permission matrix — the ONE role→capability definition. tenant-repo.ts
+ *  (TenantRepo.assertRole) and the HTTP gates in server.ts both read it through
+ *  canMutate(), and it is serialized to the client on GET /api/me/memberships so
+ *  the UI enables exactly the controls the server will accept. */
+export const ROLE_CAPABILITIES: Record<Role, Operation[]> = {
+  admin: ["curate", "commit", "manage_tables", "manage_workspace", "manage_integrations"],
+  editor: ["curate", "commit", "manage_tables"],
+  viewer: [],
+};
+
+/** Returns true if the given role may perform op. */
 export function canMutate(role: Role, op: Operation): boolean {
-  const matrix: Record<Role, Operation[]> = {
-    admin: ["curate", "commit", "manage_adapter"],
-    editor: ["curate", "commit"],
-    viewer: [],
-  };
-  return matrix[role].includes(op);
+  return ROLE_CAPABILITIES[role].includes(op);
+}
+
+/** The capability list the client gets for a membership. Super-admins bypass
+ *  every per-tenant gate (see TenantRepo.assertRole / gateOrJson), so they are
+ *  served the full set regardless of their stored role. */
+export function capabilitiesFor(role: Role, isSuperAdmin = false): Operation[] {
+  return isSuperAdmin ? ROLE_CAPABILITIES.admin : ROLE_CAPABILITIES[role];
 }
 
 const SID = "zz_sid";

@@ -3,17 +3,12 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { General } from "../src/routes/settings/General";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 
 vi.mock("../src/api", () => ({ apiFetch: vi.fn().mockResolvedValue({ ok: true }) }));
 
 function wrap(ui: React.ReactNode, role: "viewer" | "editor" | "admin" = "admin") {
-  const value: TenantContextValue = {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    role,
-    isSuperAdmin: false,
-  };
+  const value: TenantContextValue = tenantFixture(role);
   return (
     <MemoryRouter>
       <TenantProvider value={value}>{ui}</TenantProvider>

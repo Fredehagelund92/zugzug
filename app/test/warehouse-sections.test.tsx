@@ -2,6 +2,7 @@ import { describe, test, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import { Warehouse } from "../src/routes/settings/Warehouse";
 
 vi.mock("../src/store", () => ({
@@ -36,13 +37,7 @@ vi.mock("../src/api", () => ({
 }));
 
 function harness(role: "viewer" | "editor" | "admin") {
-  const value: TenantContextValue = {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    role,
-    isSuperAdmin: false,
-  };
+  const value: TenantContextValue = tenantFixture(role);
   return render(
     <MemoryRouter>
       <TenantProvider value={value}>

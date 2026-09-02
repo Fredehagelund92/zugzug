@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DeliveryLog } from "./DeliveryLog";
 import { TenantProvider, type TenantContextValue } from "../../lib/tenant-context";
+import { tenantFixture } from "../../../test/tenant-fixture";
 import { listDeliveries, type WebhookDelivery } from "../../lib/integrations-api";
 
 vi.mock("../../lib/integrations-api", async (importOriginal) => ({
@@ -32,14 +33,7 @@ const ROW: WebhookDelivery = {
   completed_at: "2026-07-26T10:00:01",
 };
 
-const ADMIN: TenantContextValue = {
-  id: "t",
-  slug: "t",
-  label: "T",
-  color: null,
-  role: "admin",
-  isSuperAdmin: false,
-};
+const ADMIN: TenantContextValue = tenantFixture("admin");
 
 function renderLog(rows: WebhookDelivery[]) {
   vi.mocked(listDeliveries).mockResolvedValue(rows);

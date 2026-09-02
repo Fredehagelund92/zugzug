@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../../src/lib/tenant-context";
+import { tenantFixture } from "../tenant-fixture";
 import { Danger } from "../../src/routes/settings/Danger";
 import { General } from "../../src/routes/settings/General";
 import { clearToasts } from "../../src/components/Toast";
@@ -49,15 +50,7 @@ vi.mock("../../src/store", async (orig) => {
 // ---------------------------------------------------------------------------
 
 function makeTenant(overrides: Partial<TenantContextValue> = {}): TenantContextValue {
-  return {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    color: null,
-    role: "admin",
-    isSuperAdmin: false,
-    ...overrides,
-  };
+  return tenantFixture(overrides.role ?? "admin", overrides);
 }
 
 /** A probe component that exposes the current router location for assertions. */

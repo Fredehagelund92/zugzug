@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { VersionHistory } from "../src/components/VersionHistory";
 import { TenantProvider } from "../src/lib/tenant-context";
 import type { TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import type { VersionInfo } from "../src/store";
 
 vi.mock("../src/store", () => ({
@@ -49,7 +50,7 @@ const versions: VersionInfo[] = [
 ];
 
 function makeTenant(role: "admin" | "editor" | "viewer"): TenantContextValue {
-  return { id: "t1", slug: "acme", label: "Acme", color: null, role, isSuperAdmin: false };
+  return tenantFixture(role);
 }
 
 function renderHistory(

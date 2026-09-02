@@ -5,6 +5,7 @@ import { DangerZone } from "../src/components/settings/DangerZone";
 vi.setConfig({ testTimeout: 15000 });
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import { Danger } from "../src/routes/settings/Danger";
 
 vi.mock("../src/api", () => ({
@@ -17,13 +18,7 @@ vi.mock("../src/store", async (orig) => {
 });
 
 function harness(role: "viewer" | "editor" | "admin") {
-  const value: TenantContextValue = {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    role,
-    isSuperAdmin: false,
-  };
+  const value: TenantContextValue = tenantFixture(role);
   return render(
     <MemoryRouter initialEntries={["/app/acme/settings/danger"]}>
       <Routes>

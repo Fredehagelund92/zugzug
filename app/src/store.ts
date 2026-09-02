@@ -3,6 +3,7 @@ import type { RecordValue, MappingRefTable, OptionDef, PaletteName, NumberFormat
 import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
+import type { Capability } from "./lib/permissions";
 import { toast } from "./components/Toast";
 
 /** Thrown by client mutation helpers on HTTP 403 with a machine-readable code. */
@@ -535,15 +536,16 @@ export function useStoreLoading(): boolean {
   );
 }
 
-/** Convenience: true when the current user may mutate state in the active workspace.
- *  Reads role + super-admin from TenantContext (per-workspace, authoritative) rather
- *  than the global currentUser shape (which doesn't carry workspace role).
+/** Convenience: true when the current user may mutate records and mappings in
+ *  the active workspace. Reads the server-resolved capabilities off
+ *  TenantContext (per-workspace, authoritative) rather than the global
+ *  currentUser shape (which doesn't carry workspace role).
  *  Super-admin short-circuits to true per the 2026-06-13 settings spec. */
 export function useCanEdit(): boolean {
   const t = useTenantOptional();
   if (!t) return false;
   if (t.isSuperAdmin) return true;
-  return t.role !== "viewer";
+  return t.capabilities.includes("curate");
 }
 
 export async function setPreferences(p: Preferences): Promise<void> {
@@ -1559,6 +1561,8 @@ export interface MembershipLite {
   label: string;
   role: "admin" | "editor" | "viewer";
   color: string | null;
+  /** Resolved by the server from the role — see server/src/auth.ts. */
+  capabilities: Capability[];
 }
 
 let memberships: MembershipLite[] = [];

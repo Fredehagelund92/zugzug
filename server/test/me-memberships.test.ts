@@ -71,6 +71,48 @@ describe("GET /api/me/memberships", () => {
     });
   });
 
+  test("each membership carries the role's capability list", async () => {
+    const a = await provisionTenant({ id: "mem_acme", label: "Acme" });
+    const b = await provisionTenant({ id: "mem_globex", label: "Globex" });
+    const cookie = await login("u_mem_alice", false);
+    await pgRun(
+      `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
+       VALUES ($1, 'u_mem_alice', 'admin', now()), ($2, 'u_mem_alice', 'editor', now())`,
+      [a.id, b.id],
+    );
+
+    const { handle } = await import("../src/server.ts");
+    const { ROLE_CAPABILITIES } = await import("../src/auth.ts");
+    const res = await handle(
+      new Request("http://localhost/api/me/memberships", { headers: { cookie } }),
+      () => {},
+    );
+    const body = (await res.json()) as {
+      memberships: { slug: string; role: "admin" | "editor" | "viewer"; capabilities: string[] }[];
+    };
+    for (const m of body.memberships) {
+      expect(m.capabilities).toEqual(ROLE_CAPABILITIES[m.role]);
+    }
+    const globex = body.memberships.find((m) => m.slug === "mem_globex");
+    expect(globex?.capabilities).toContain("manage_tables");
+    expect(globex?.capabilities).not.toContain("manage_workspace");
+  });
+
+  test("super-admin gets the full capability list on every workspace", async () => {
+    await provisionTenant({ id: "mem_acme", label: "Acme" });
+    const cookie = await login("u_mem_alice", true);
+    const { handle } = await import("../src/server.ts");
+    const { ROLE_CAPABILITIES } = await import("../src/auth.ts");
+    const res = await handle(
+      new Request("http://localhost/api/me/memberships", { headers: { cookie } }),
+      () => {},
+    );
+    const body = (await res.json()) as { memberships: { capabilities: string[] }[] };
+    for (const m of body.memberships) {
+      expect(m.capabilities).toEqual(ROLE_CAPABILITIES.admin);
+    }
+  });
+
   test("isSuperAdmin is true when user is super-admin", async () => {
     const cookie = await login("u_mem_alice", true);
     const { handle } = await import("../src/server.ts");

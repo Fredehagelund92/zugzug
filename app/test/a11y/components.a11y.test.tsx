@@ -13,6 +13,7 @@ import { Signup } from "../../src/routes/Signup";
 import { General } from "../../src/routes/settings/General";
 import { Dashboard } from "../../src/routes/Dashboard";
 import { TenantProvider, type TenantContextValue } from "../../src/lib/tenant-context";
+import { tenantFixture } from "../tenant-fixture";
 import { DataGrid } from "../../src/components/datagrid/DataGrid";
 import { UndoStackProvider } from "../../src/components/datagrid/UndoStack";
 import type { ColumnDef } from "../../src/components/datagrid/types";
@@ -47,14 +48,7 @@ vi.mock("../../src/lib/use-tenant-navigate", () => ({
 
 // ── shared helpers ───────────────────────────────────────────────────────────
 
-const tenant: TenantContextValue = {
-  id: "t1",
-  slug: "acme",
-  label: "Acme",
-  color: null,
-  role: "admin",
-  isSuperAdmin: false,
-};
+const tenant: TenantContextValue = tenantFixture("admin");
 
 function withAll(ui: React.ReactNode, route = "/") {
   return render(ui, {

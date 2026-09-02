@@ -43,20 +43,36 @@ export function WebhookDetail() {
 
   const [w, setW] = useState<Webhook | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // A refused or failed fetch must land on an error, not leave the skeleton up
+  // forever with an unhandled rejection behind it.
   const refresh = useCallback(async () => {
     setLoading(true);
-    setW(await getWebhook(id));
-    setLoading(false);
+    setLoadError(null);
+    try {
+      setW(await getWebhook(id));
+    } catch (e) {
+      setLoadError(e instanceof IntegrationsApiError ? e.code : "load_failed");
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  if (loading || !w) return <SkeletonList rows={4} columns={[2, 3, 1]} />;
+  if (loading) return <SkeletonList rows={4} columns={[2, 3, 1]} />;
+
+  if (loadError || !w)
+    return (
+      <p className="text-[13px] text-danger">
+        Could not load this webhook: {humanError(loadError ?? "not_found")}
+      </p>
+    );
 
   const inGrace = showKidBadge(w.secret_previous_expires_at);
 

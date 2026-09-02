@@ -1547,7 +1547,12 @@ function RecordsBody({
             canEdit
               ? (field, label) => {
                   if (field.includes("__")) return;
-                  void renameColumn(activeId, field, label);
+                  renameColumn(activeId, field, label).catch((e: unknown) => {
+                    toast(
+                      e instanceof Error ? `Couldn't rename: ${e.message}` : "Couldn't rename.",
+                      "error",
+                    );
+                  });
                 }
               : undefined
           }

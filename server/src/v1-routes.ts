@@ -12,7 +12,7 @@
    keep dispatching". */
 
 import { authenticateBearer, type ServiceAccountCtx } from "./auth-api-tokens.ts";
-import { getSessionUser } from "./auth.ts";
+import { getSessionUser, canMutate } from "./auth.ts";
 import { lookupAliasedSlug } from "./slug-alias.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { checkRateLimit } from "./rate-limit.ts";
@@ -148,6 +148,16 @@ export async function handleV1Route(req: Request): Promise<Response | null> {
   return await dispatch(req, url, v1, tenantCtx, authed.serviceAccount, authed.user.id);
 }
 
+/** Admin gate for the integrations surface (webhooks + service accounts), read
+ *  off the one role→capability matrix in auth.ts. Super-admin bypasses, as in
+ *  gateOrJson/TenantRepo.assertRole. */
+function canManageIntegrations(ctx: {
+  role: "admin" | "editor" | "viewer";
+  isSuperAdmin: boolean;
+}): boolean {
+  return ctx.isSuperAdmin || canMutate(ctx.role, "manage_integrations");
+}
+
 async function dispatch(
   req: Request,
   url: URL,
@@ -247,7 +257,7 @@ async function dispatch(
 
   // /v1/service-accounts (admin only)
   if (v1[0] === "service-accounts") {
-    if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+    if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
     if (v1.length === 1 && method === "GET") {
       const list = await listServiceAccounts(ctx.tenantId);
       return json({ service_accounts: list });
@@ -288,7 +298,7 @@ async function dispatch(
 
     // POST /v1/webhooks — admin only
     if (v1.length === 1 && method === "POST") {
-      if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+      if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
       let body: { url?: string; events?: string[]; description?: string | null };
       try {
         body = (await req.json()) as typeof body;
@@ -327,7 +337,7 @@ async function dispatch(
         return wh ? json(wh) : jsonError(404, "not_found");
       }
       if (method === "PATCH") {
-        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
         let body: Record<string, unknown>;
         try {
           body = (await req.json()) as Record<string, unknown>;
@@ -353,7 +363,7 @@ async function dispatch(
         }
       }
       if (method === "DELETE") {
-        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
         const ok = await deleteWebhook(ctx.tenantId, id, userId);
         return ok ? new Response(null, { status: 204 }) : jsonError(404, "not_found");
       }
@@ -364,12 +374,12 @@ async function dispatch(
       const id = decodeURIComponent(v1[1]!);
       const action = v1[2];
       if (action === "reactivate" && method === "POST") {
-        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
         const ok = await reactivateWebhook(ctx.tenantId, id, userId);
         return ok ? new Response(null, { status: 204 }) : jsonError(404, "not_found");
       }
       if (action === "rotate-secret" && method === "POST") {
-        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
         try {
           const r = await rotateSecret({ tenantId: ctx.tenantId, id, userId });
           return json({ value: r.value, previous_expires_at: r.previousExpiresAt });
@@ -379,7 +389,7 @@ async function dispatch(
         }
       }
       if (action === "test" && method === "POST") {
-        if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+        if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
         const r = await sendTestEvent(ctx.tenantId, id, userId);
         return r ? json(r) : jsonError(404, "not_found");
       }
@@ -404,7 +414,7 @@ async function dispatch(
       return d ? json(d) : jsonError(404, "not_found");
     }
     if (v1.length === 3 && v1[2] === "replay" && method === "POST") {
-      if (ctx.role !== "admin" && !ctx.isSuperAdmin) return jsonError(403, "admin_required");
+      if (!canManageIntegrations(ctx)) return jsonError(403, "admin_required");
       const r = await replayDelivery(ctx.tenantId, decodeURIComponent(v1[1]!), userId);
       return r ? json({ delivery_id: r.id }, 202) : jsonError(404, "not_found");
     }

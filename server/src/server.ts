@@ -17,6 +17,7 @@ import {
   handleDevLogin,
   canMutate,
   requireAdmin,
+  capabilitiesFor,
   updateUserName,
   listUsers,
   setSuperAdmin,
@@ -236,11 +237,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
   if (pathname === "/api/me/memberships" && method === "GET") {
     const memberships = await listMembershipsForUser(sessionUser.id);
+    // `capabilities` is the role→capability matrix from auth.ts, resolved for
+    // this caller. The client gates its controls on it (app/src/lib/permissions.ts)
+    // so an enabled control is one the server will accept.
     let workspaces: {
       slug: string;
       label: string;
       role: "admin" | "editor" | "viewer";
       color: string | null;
+      capabilities: Operation[];
     }[];
     if (sessionUser.isSuperAdmin) {
       const allTenants = await listTenants();
@@ -250,6 +255,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         label: t.label,
         role: memberMap.get(t.id) ?? "admin",
         color: t.color ?? null,
+        capabilities: capabilitiesFor(memberMap.get(t.id) ?? "admin", true),
       }));
     } else {
       workspaces = memberships.map((m) => ({
@@ -257,6 +263,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         label: m.tenant.label,
         role: m.role,
         color: m.tenant.color ?? null,
+        capabilities: capabilitiesFor(m.role),
       }));
     }
     return json({ isSuperAdmin: sessionUser.isSuperAdmin, memberships: workspaces });
@@ -894,7 +901,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[1] === "preferences" && seg.length === 2) {
         if (method === "GET") return json(await reqRepo.getPreferences());
         if (method === "PUT") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_workspace");
           if (denied) return denied;
           const p = (await req.json()) as {
             publishThreshold: number;
@@ -975,7 +982,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
           return json(await reqRepo.scanStatus());
         if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           return json({ scanned: await reqRepo.scanSources() });
         }
@@ -1034,7 +1041,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
       if (seg[1] === "tables") {
         if (seg.length === 2 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           try {
             const input = (await req.json()) as tables.CreateTableInput;
@@ -1129,7 +1136,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // POST /api/tables/:id/scan — rescan this refTable's wired sources and
         // re-materialize its source_scan_value rows. Faster than POST /api/sources/scan.
         if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           await reqRepo.scanOneDim(id);
           return json({ ok: true });
@@ -1164,7 +1171,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // DELETE /api/tables/:id — permanently remove a table
         if (seg.length === 3 && id && method === "DELETE") {
-          const denied = gateOrJson(tenantCtx, "curate");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const ok = await reqRepo.deleteRefTable(id, me);
           return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
@@ -1216,7 +1223,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // resolveDefaultDatabase(). Bumps the user's MRU
         // (user_warehouse_state.recent_database_id) to the database written.
         if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const raw = (await req.json()) as {
             source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
@@ -1273,7 +1280,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // shapes as the POST above (bare "schema.table"+column resolves to the
         // default database; qualified passes databaseId explicitly).
         if (seg[3] === "sources" && seg.length === 4 && method === "DELETE") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const raw = (await req.json()) as {
             source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
@@ -1334,7 +1341,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/tables/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedRefTableId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const {
             label,
@@ -1395,7 +1402,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           seg.length === 5 &&
           method === "POST"
         ) {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const { expr } = (await req.json()) as { expr?: string };
           return json(await reqRepo.validateTableFormula(id, expr ?? "", me));
@@ -1420,7 +1427,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
-            const denied = gateOrJson(tenantCtx, "manage_adapter");
+            const denied = gateOrJson(tenantCtx, "manage_tables");
             if (denied) return denied;
             const body = (await req.json()) as {
               label?: string;
@@ -1447,7 +1454,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "PATCH") {
-            const denied = gateOrJson(tenantCtx, "curate");
+            const denied = gateOrJson(tenantCtx, "manage_tables");
             if (denied) return denied;
             const body = (await req.json()) as {
               description?: string | null;
@@ -1462,7 +1469,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "DELETE") {
-            const denied = gateOrJson(tenantCtx, "manage_adapter");
+            const denied = gateOrJson(tenantCtx, "manage_tables");
             if (denied) return denied;
             return json(await reqRepo.deleteColumn(id, field, me));
           }
@@ -1785,7 +1792,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         seg[2] === "seed-scan-values" &&
         method === "POST"
       ) {
-        const denied = gateOrJson(tenantCtx, "manage_adapter");
+        const denied = gateOrJson(tenantCtx, "manage_workspace");
         if (denied) return denied;
         const { materializeSourceScanValues } = await import("./repo-source-scan.ts");
         const body = (await req.json()) as {

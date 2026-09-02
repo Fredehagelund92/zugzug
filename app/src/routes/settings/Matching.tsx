@@ -7,12 +7,26 @@ import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { FormField } from "../../components/FormField";
 import { Checkbox } from "../../components/Checkbox";
+import { toast } from "../../components/Toast";
 
 export function Matching() {
   const tenant = useTenant();
   const canEdit = can(tenant, "settings.matching.edit");
   const canEditGov = can(tenant, "settings.general.edit");
   const prefs = usePreferences();
+
+  /** Writes go through PUT /api/preferences, which can refuse (403) or fail —
+   *  say so instead of leaving the control looking as if it took. */
+  const save = (next: Parameters<typeof setPreferences>[0]) => {
+    setPreferences(next)
+      .then(() => invalidate.tenant(tenant.slug))
+      .catch((e: unknown) => {
+        toast(
+          e instanceof Error ? `Couldn't save: ${e.message}` : "Couldn't save that setting.",
+          "error",
+        );
+      });
+  };
 
   return (
     <div className="space-y-8">
@@ -27,11 +41,7 @@ export function Matching() {
               publish={prefs.publishThreshold}
               suggest={prefs.suggestThreshold}
               onChange={({ publish, suggest }) => {
-                void setPreferences({
-                  ...prefs,
-                  publishThreshold: publish,
-                  suggestThreshold: suggest,
-                }).then(() => invalidate.tenant(tenant.slug));
+                save({ ...prefs, publishThreshold: publish, suggestThreshold: suggest });
               }}
             />
           </FormField>
@@ -43,12 +53,7 @@ export function Matching() {
           <Checkbox
             state={prefs.autoPublishEnabled ? "on" : "off"}
             disabled={!canEditGov}
-            onClick={() =>
-              void setPreferences({
-                ...prefs,
-                autoPublishEnabled: !prefs.autoPublishEnabled,
-              }).then(() => invalidate.tenant(tenant.slug))
-            }
+            onClick={() => save({ ...prefs, autoPublishEnabled: !prefs.autoPublishEnabled })}
             aria-label="Publish exact matches on its own"
           />
         </FormField>
@@ -60,10 +65,7 @@ export function Matching() {
             state={prefs.requireSecondPublisher ? "on" : "off"}
             disabled={!canEditGov}
             onClick={() =>
-              void setPreferences({
-                ...prefs,
-                requireSecondPublisher: !prefs.requireSecondPublisher,
-              }).then(() => invalidate.tenant(tenant.slug))
+              save({ ...prefs, requireSecondPublisher: !prefs.requireSecondPublisher })
             }
             aria-label="Require a second publisher"
           />

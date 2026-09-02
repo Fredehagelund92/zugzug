@@ -6,244 +6,236 @@ process.env.ALLOWED_DOMAIN = "example.com";
 
 import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "./setup.ts";
-import { makeWorkspace, makeMember, makeRefTable, req } from "./factories/index.ts";
+import { makeWorkspace, makeMember, makeRefTable, makeUser, req } from "./factories/index.ts";
+import type { Role } from "../src/auth.ts";
 
 beforeEach(resetDb);
 
-// ── POST /tables (structural: create table) ──────────────────────────────
+/* The role→route matrix, end to end.
+ *
+ * One row per protected route; `allow` lists the roles that must get past the
+ * gate. Every row runs for all three roles, so adding a route here is a single
+ * line. The assertion is only about the gate: an allowed role must not see 403
+ * (a later 4xx for a missing field or an empty body is fine), a denied role must.
+ *
+ * The matrix itself: editors curate, publish, run scans and own table structure
+ * (create/delete tables, add/rename/retype/delete/configure fields, wire
+ * sources); admins additionally own workspace settings (preferences, members,
+ * rename/delete, rollback) and the integrations surface (webhooks, service
+ * accounts); viewers read only. Editors may READ webhooks; service accounts are
+ * admin-only for read as well, because the values are credentials. */
 
-test("viewer is blocked from creating a table", async () => {
-  await makeWorkspace("w_rbac_v1");
-  const { cookie } = await makeMember("u_viewer_v1", "w_rbac_v1", "viewer");
-  const res = await req("POST", "/api/t/w_rbac_v1/tables", cookie, { name: "X" });
-  expect(res.status).toBe(403);
-});
+const ROLES: Role[] = ["viewer", "editor", "admin"];
+const EDITOR_UP: Role[] = ["editor", "admin"];
+const ADMIN_ONLY: Role[] = ["admin"];
 
-test("editor is blocked from creating a table (structural = admin-only)", async () => {
-  await makeWorkspace("w_rbac_e1");
-  const { cookie } = await makeMember("u_editor_e1", "w_rbac_e1", "editor");
-  const res = await req("POST", "/api/t/w_rbac_e1/tables", cookie, { name: "X" });
-  expect(res.status).toBe(403);
-});
+interface Fixture {
+  /** workspace slug (== id) */
+  ws: string;
+  /** a reference table with one field, "Code" */
+  refTableId: string;
+  /** a second member, so admin-only member routes have a target that isn't self */
+  otherUserId: string;
+}
 
-test("admin can create a table", async () => {
-  await makeWorkspace("w_rbac_a1");
-  const { cookie } = await makeMember("u_admin_a1", "w_rbac_a1", "admin");
-  const res = await req("POST", "/api/t/w_rbac_a1/tables", cookie, { name: "X" });
-  expect(res.status).not.toBe(403);
-});
+interface Case {
+  name: string;
+  method: string;
+  path: (f: Fixture) => string;
+  body?: unknown;
+  allow: Role[];
+}
 
-// ── POST /tables/:id/fields (structural: add field) ──────────────────────
+const CASES: Case[] = [
+  // ── content: curate + publish (editor) ──────────────────────────────────
+  {
+    name: "PUT /tables/:id/drafts",
+    method: "PUT",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/drafts`,
+    body: { raw: "acme", status: "mapped", targetLabel: "Acme", targetKey: null },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "POST /tables/:id/commit",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/commit`,
+    body: {},
+    allow: EDITOR_UP,
+  },
+  // ── table structure: manage_tables (editor) ─────────────────────────────
+  {
+    name: "POST /tables",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables`,
+    body: { name: "Made by role test" },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "DELETE /tables/:id",
+    method: "DELETE",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}`,
+    allow: EDITOR_UP,
+  },
+  {
+    name: "POST /tables/:id/fields",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/fields`,
+    body: { label: "Region" },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "PUT /tables/:id/fields/:field",
+    method: "PUT",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/fields/Code`,
+    body: { label: "Renamed" },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "PATCH /tables/:id/fields/:field",
+    method: "PATCH",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/fields/Code`,
+    body: { description: "a code" },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "DELETE /tables/:id/fields/:field",
+    method: "DELETE",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/fields/Code`,
+    allow: EDITOR_UP,
+  },
+  {
+    name: "POST /tables/:id/formula/validate",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/formula/validate`,
+    body: { expr: "1 + 1" },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "POST /tables/:id/sources",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/sources`,
+    body: { table: "public.vendors", column: "name" },
+    allow: EDITOR_UP,
+  },
+  {
+    name: "DELETE /tables/:id/sources",
+    method: "DELETE",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/sources`,
+    body: { table: "public.vendors", column: "name" },
+    allow: EDITOR_UP,
+  },
+  // ── scans: manage_tables (editor) ───────────────────────────────────────
+  {
+    name: "POST /tables/:id/scan",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/scan`,
+    body: {},
+    allow: EDITOR_UP,
+  },
+  {
+    name: "POST /sources/scan",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/sources/scan`,
+    body: {},
+    allow: EDITOR_UP,
+  },
+  // ── workspace settings: manage_workspace (admin) ────────────────────────
+  {
+    name: "PUT /preferences",
+    method: "PUT",
+    path: (f) => `/api/t/${f.ws}/preferences`,
+    body: {
+      publishThreshold: 1,
+      suggestThreshold: 1,
+      scanSchedule: null,
+      requireSecondPublisher: false,
+    },
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "PATCH /t/:slug (rename workspace)",
+    method: "PATCH",
+    path: (f) => `/api/t/${f.ws}`,
+    body: { label: "Renamed workspace" },
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "PUT /team/members/:id/role",
+    method: "PUT",
+    path: (f) => `/api/t/${f.ws}/team/members/${f.otherUserId}/role`,
+    body: { role: "editor" },
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "DELETE /team/members/:id",
+    method: "DELETE",
+    path: (f) => `/api/t/${f.ws}/team/members/${f.otherUserId}`,
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "POST /team/invites",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/team/invites`,
+    body: { email: "invitee@example.com", role: "viewer" },
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "POST /tables/:id/rollback",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/tables/${f.refTableId}/rollback`,
+    body: { toVersion: 1 },
+    allow: ADMIN_ONLY,
+  },
+  // ── integrations: manage_integrations (admin), editor may read webhooks ──
+  {
+    name: "GET /v1/webhooks",
+    method: "GET",
+    path: (f) => `/api/t/${f.ws}/v1/webhooks`,
+    allow: EDITOR_UP,
+  },
+  {
+    name: "POST /v1/webhooks",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/v1/webhooks`,
+    body: { url: "https://example.com/hook", events: ["record.published"] },
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "GET /v1/service-accounts",
+    method: "GET",
+    path: (f) => `/api/t/${f.ws}/v1/service-accounts`,
+    allow: ADMIN_ONLY,
+  },
+  {
+    name: "POST /v1/service-accounts",
+    method: "POST",
+    path: (f) => `/api/t/${f.ws}/v1/service-accounts`,
+    body: { name: "reader" },
+    allow: ADMIN_ONLY,
+  },
+];
 
-test("viewer is blocked from adding a field", async () => {
-  await makeWorkspace("w_rbac_v2");
-  const refTableId = await makeRefTable("w_rbac_v2", "Vendors");
-  const { cookie } = await makeMember("u_viewer_v2", "w_rbac_v2", "viewer");
-  const res = await req("POST", `/api/t/w_rbac_v2/tables/${refTableId}/fields`, cookie, {
-    label: "Code",
-  });
-  expect(res.status).toBe(403);
-});
+/** Fresh workspace per (case, role) so one case's mutation can't affect another. */
+async function fixture(ws: string): Promise<Fixture> {
+  await makeWorkspace(ws);
+  const refTableId = await makeRefTable(ws, "Vendors");
+  const { cookie: adminCookie } = await makeMember(`${ws}_setup`, ws, "admin");
+  await req("POST", `/api/t/${ws}/tables/${refTableId}/fields`, adminCookie, { label: "Code" });
+  const otherUserId = await makeUser(`${ws}_other`);
+  await makeMember(otherUserId, ws, "editor");
+  return { ws, refTableId, otherUserId };
+}
 
-test("editor is blocked from adding a field (structural = admin-only)", async () => {
-  await makeWorkspace("w_rbac_e2");
-  const refTableId = await makeRefTable("w_rbac_e2", "Vendors");
-  const { cookie } = await makeMember("u_editor_e2", "w_rbac_e2", "editor");
-  const res = await req("POST", `/api/t/w_rbac_e2/tables/${refTableId}/fields`, cookie, {
-    label: "Code",
-  });
-  expect(res.status).toBe(403);
-});
-
-test("admin can add a field", async () => {
-  await makeWorkspace("w_rbac_a2");
-  const refTableId = await makeRefTable("w_rbac_a2", "Vendors");
-  const { cookie } = await makeMember("u_admin_a2", "w_rbac_a2", "admin");
-  const res = await req("POST", `/api/t/w_rbac_a2/tables/${refTableId}/fields`, cookie, {
-    label: "Code",
-  });
-  expect(res.status).not.toBe(403);
-});
-
-// ── DELETE /tables/:id/fields/:field (structural: delete field) ───────────
-
-test("viewer is blocked from deleting a field", async () => {
-  await makeWorkspace("w_rbac_v3");
-  const refTableId = await makeRefTable("w_rbac_v3", "Vendors");
-  // add field as admin so there's something to delete
-  const { cookie: adminCookie } = await makeMember("u_admin_v3setup", "w_rbac_v3", "admin");
-  await req("POST", `/api/t/w_rbac_v3/tables/${refTableId}/fields`, adminCookie, {
-    label: "Code",
-  });
-  const { cookie } = await makeMember("u_viewer_v3", "w_rbac_v3", "viewer");
-  const res = await req("DELETE", `/api/t/w_rbac_v3/tables/${refTableId}/fields/Code`, cookie);
-  expect(res.status).toBe(403);
-});
-
-test("editor is blocked from deleting a field (structural = admin-only)", async () => {
-  await makeWorkspace("w_rbac_e3");
-  const refTableId = await makeRefTable("w_rbac_e3", "Vendors");
-  const { cookie: adminCookie } = await makeMember("u_admin_e3setup", "w_rbac_e3", "admin");
-  await req("POST", `/api/t/w_rbac_e3/tables/${refTableId}/fields`, adminCookie, {
-    label: "Code",
-  });
-  const { cookie } = await makeMember("u_editor_e3", "w_rbac_e3", "editor");
-  const res = await req("DELETE", `/api/t/w_rbac_e3/tables/${refTableId}/fields/Code`, cookie);
-  expect(res.status).toBe(403);
-});
-
-test("admin can delete a field", async () => {
-  await makeWorkspace("w_rbac_a3");
-  const refTableId = await makeRefTable("w_rbac_a3", "Vendors");
-  const { cookie } = await makeMember("u_admin_a3", "w_rbac_a3", "admin");
-  await req("POST", `/api/t/w_rbac_a3/tables/${refTableId}/fields`, cookie, { label: "Code" });
-  const res = await req("DELETE", `/api/t/w_rbac_a3/tables/${refTableId}/fields/Code`, cookie);
-  expect(res.status).not.toBe(403);
-});
-
-// ── POST /tables (manage_adapter) ────────────────────────────────────────────
-
-test("viewer is blocked from POST /tables", async () => {
-  await makeWorkspace("w_rbac_v4");
-  const { cookie } = await makeMember("u_viewer_v4", "w_rbac_v4", "viewer");
-  const res = await req("POST", "/api/t/w_rbac_v4/tables", cookie, {});
-  expect(res.status).toBe(403);
-});
-
-test("editor is blocked from POST /tables", async () => {
-  await makeWorkspace("w_rbac_e4");
-  const { cookie } = await makeMember("u_editor_e4", "w_rbac_e4", "editor");
-  const res = await req("POST", "/api/t/w_rbac_e4/tables", cookie, {});
-  expect(res.status).toBe(403);
-});
-
-test("admin passes the gate for POST /tables", async () => {
-  await makeWorkspace("w_rbac_a4");
-  const { cookie } = await makeMember("u_admin_a4", "w_rbac_a4", "admin");
-  const res = await req("POST", "/api/t/w_rbac_a4/tables", cookie, {});
-  expect(res.status).not.toBe(403);
-});
-
-// ── PUT /tables/:id/drafts (curate content op) ───────────────────────────
-
-test("viewer is blocked from saving a draft", async () => {
-  await makeWorkspace("w_rbac_v5");
-  const refTableId = await makeRefTable("w_rbac_v5", "Vendors");
-  const { cookie } = await makeMember("u_viewer_v5", "w_rbac_v5", "viewer");
-  const res = await req("PUT", `/api/t/w_rbac_v5/tables/${refTableId}/drafts`, cookie, {
-    raw: "acme",
-    status: "mapped",
-    targetLabel: "Acme",
-    targetKey: null,
-  });
-  expect(res.status).toBe(403);
-});
-
-test("editor CAN save a draft (curate content op)", async () => {
-  await makeWorkspace("w_rbac_e5");
-  const refTableId = await makeRefTable("w_rbac_e5", "Vendors");
-  const { cookie } = await makeMember("u_editor_e5", "w_rbac_e5", "editor");
-  const res = await req("PUT", `/api/t/w_rbac_e5/tables/${refTableId}/drafts`, cookie, {
-    raw: "acme",
-    status: "mapped",
-    targetLabel: "Acme",
-    targetKey: null,
-  });
-  expect(res.status).not.toBe(403);
-});
-
-test("admin CAN save a draft", async () => {
-  await makeWorkspace("w_rbac_a5");
-  const refTableId = await makeRefTable("w_rbac_a5", "Vendors");
-  const { cookie } = await makeMember("u_admin_a5", "w_rbac_a5", "admin");
-  const res = await req("PUT", `/api/t/w_rbac_a5/tables/${refTableId}/drafts`, cookie, {
-    raw: "acme",
-    status: "mapped",
-    targetLabel: "Acme",
-    targetKey: null,
-  });
-  expect(res.status).not.toBe(403);
-});
-
-// ── POST /tables/:id/commit ───────────────────────────────────────────────
-
-test("viewer is blocked from committing", async () => {
-  await makeWorkspace("w_rbac_v6");
-  const refTableId = await makeRefTable("w_rbac_v6", "Vendors");
-  const { cookie } = await makeMember("u_viewer_v6", "w_rbac_v6", "viewer");
-  const res = await req("POST", `/api/t/w_rbac_v6/tables/${refTableId}/commit`, cookie, {});
-  expect(res.status).toBe(403);
-});
-
-test("editor CAN commit (commit permission)", async () => {
-  await makeWorkspace("w_rbac_e6");
-  const refTableId = await makeRefTable("w_rbac_e6", "Vendors");
-  const { cookie } = await makeMember("u_editor_e6", "w_rbac_e6", "editor");
-  const res = await req("POST", `/api/t/w_rbac_e6/tables/${refTableId}/commit`, cookie, {});
-  expect(res.status).not.toBe(403);
-});
-
-test("admin CAN commit", async () => {
-  await makeWorkspace("w_rbac_a6");
-  const refTableId = await makeRefTable("w_rbac_a6", "Vendors");
-  const { cookie } = await makeMember("u_admin_a6", "w_rbac_a6", "admin");
-  const res = await req("POST", `/api/t/w_rbac_a6/tables/${refTableId}/commit`, cookie, {});
-  expect(res.status).not.toBe(403);
-});
-
-// ── PUT /tables/:id/fields/:field (structural: rename / change type) ───────
-// The gate runs before the handler, so the 403 is asserted independent of whether
-// the field exists; admin passes the gate (a later 4xx for the missing field is
-// fine — the point is the gate does not block admin).
-
-test("editor is blocked from renaming a field (structural = admin-only)", async () => {
-  await makeWorkspace("w_rbac_e7");
-  const refTableId = await makeRefTable("w_rbac_e7", "Vendors");
-  const { cookie } = await makeMember("u_editor_e7", "w_rbac_e7", "editor");
-  const res = await req("PUT", `/api/t/w_rbac_e7/tables/${refTableId}/fields/Code`, cookie, {
-    label: "Renamed",
-  });
-  expect(res.status).toBe(403);
-});
-
-test("admin is not blocked from renaming a field", async () => {
-  await makeWorkspace("w_rbac_a7");
-  const refTableId = await makeRefTable("w_rbac_a7", "Vendors");
-  const { cookie } = await makeMember("u_admin_a7", "w_rbac_a7", "admin");
-  const res = await req("PUT", `/api/t/w_rbac_a7/tables/${refTableId}/fields/Code`, cookie, {
-    label: "Renamed",
-  });
-  expect(res.status).not.toBe(403);
-});
-
-// ── PUT /preferences (workspace settings: manage_adapter, admin-only) ──────────
-// The route now gates at the HTTP layer to match TenantRepo.setPreferences, which
-// requires manage_adapter. Previously the route had no gate and relied on the repo.
-
-const PREFS_BODY = {
-  publishThreshold: 1,
-  suggestThreshold: 1,
-  scanSchedule: null,
-  requireSecondPublisher: false,
-};
-
-test("viewer is blocked from updating preferences", async () => {
-  await makeWorkspace("w_rbac_v8");
-  const { cookie } = await makeMember("u_viewer_v8", "w_rbac_v8", "viewer");
-  const res = await req("PUT", "/api/t/w_rbac_v8/preferences", cookie, PREFS_BODY);
-  expect(res.status).toBe(403);
-});
-
-test("editor is blocked from updating preferences (admin-only)", async () => {
-  await makeWorkspace("w_rbac_e8");
-  const { cookie } = await makeMember("u_editor_e8", "w_rbac_e8", "editor");
-  const res = await req("PUT", "/api/t/w_rbac_e8/preferences", cookie, PREFS_BODY);
-  expect(res.status).toBe(403);
-});
-
-test("admin can update preferences", async () => {
-  await makeWorkspace("w_rbac_a8");
-  const { cookie } = await makeMember("u_admin_a8", "w_rbac_a8", "admin");
-  const res = await req("PUT", "/api/t/w_rbac_a8/preferences", cookie, PREFS_BODY);
-  expect(res.status).not.toBe(403);
-});
+let n = 0;
+for (const c of CASES) {
+  for (const role of ROLES) {
+    const allowed = c.allow.includes(role);
+    test(`${c.name} — ${role} is ${allowed ? "allowed" : "blocked"}`, async () => {
+      const f = await fixture(`w_rbac${n++}`);
+      const { cookie } = await makeMember(`u_${role}_${f.ws}`, f.ws, role);
+      const res = await req(c.method, c.path(f), cookie, c.body);
+      if (allowed) expect(res.status).not.toBe(403);
+      else expect(res.status).toBe(403);
+    });
+  }
+}

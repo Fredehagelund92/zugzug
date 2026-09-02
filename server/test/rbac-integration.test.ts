@@ -94,21 +94,28 @@ function putReq(path: string, body: unknown, cookieHeader: string): Request {
 // Unit: canMutate gate behaviour (mirrors B3 but tests the gate helper path)
 // ---------------------------------------------------------------------------
 
-test("gate: viewer cannot curate, commit, or manage_adapter", () => {
-  const ops: Operation[] = ["curate", "commit", "manage_adapter"];
+test("gate: viewer cannot curate, commit, or manage anything", () => {
+  const ops: Operation[] = ["curate", "commit", "manage_tables", "manage_workspace"];
   for (const op of ops) {
     expect(canMutate("viewer", op)).toBe(false);
   }
 });
 
-test("gate: editor can curate and commit but not manage_adapter", () => {
+test("gate: editor can curate, commit and manage tables but not the workspace", () => {
   expect(canMutate("editor", "curate")).toBe(true);
   expect(canMutate("editor", "commit")).toBe(true);
-  expect(canMutate("editor", "manage_adapter")).toBe(false);
+  expect(canMutate("editor", "manage_tables")).toBe(true);
+  expect(canMutate("editor", "manage_workspace")).toBe(false);
 });
 
 test("gate: admin can perform all operations", () => {
-  const ops: Operation[] = ["curate", "commit", "manage_adapter"];
+  const ops: Operation[] = [
+    "curate",
+    "commit",
+    "manage_tables",
+    "manage_workspace",
+    "manage_integrations",
+  ];
   for (const op of ops) {
     expect(canMutate("admin", op)).toBe(true);
   }
@@ -159,9 +166,9 @@ test("POST /api/tables — editor allowed, viewer blocked (curate)", async () =>
 
 test("POST /api/t/:slug/members — admin allowed, editor/viewer blocked (tenant role gate)", async () => {
   // manage_team op removed; team management now guarded by tenantCtx.role === "admin" checks
-  expect(canMutate("admin", "manage_adapter")).toBe(true);
-  expect(canMutate("editor", "manage_adapter")).toBe(false);
-  expect(canMutate("viewer", "manage_adapter")).toBe(false);
+  expect(canMutate("admin", "manage_workspace")).toBe(true);
+  expect(canMutate("editor", "manage_workspace")).toBe(false);
+  expect(canMutate("viewer", "manage_workspace")).toBe(false);
 });
 
 test("POST /api/tables/:id/commit — editor allowed, viewer blocked (commit)", async () => {
@@ -170,10 +177,10 @@ test("POST /api/tables/:id/commit — editor allowed, viewer blocked (commit)", 
   expect(canMutate("admin", "commit")).toBe(true);
 });
 
-test("PUT /api/preferences — admin allowed, editor and viewer blocked (manage_adapter)", async () => {
-  expect(canMutate("admin", "manage_adapter")).toBe(true);
-  expect(canMutate("editor", "manage_adapter")).toBe(false);
-  expect(canMutate("viewer", "manage_adapter")).toBe(false);
+test("PUT /api/preferences — admin allowed, editor and viewer blocked (manage_workspace)", async () => {
+  expect(canMutate("admin", "manage_workspace")).toBe(true);
+  expect(canMutate("editor", "manage_workspace")).toBe(false);
+  expect(canMutate("viewer", "manage_workspace")).toBe(false);
 });
 
 test("getSessionUser round-trip — role absent from SessionUser (PR5 dropped users.role fallback)", async () => {

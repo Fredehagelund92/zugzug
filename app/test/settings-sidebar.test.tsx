@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import { SettingsSidebar } from "../src/components/settings/SettingsSidebar";
 
 let testRole: "viewer" | "editor" | "admin" = "admin";
@@ -30,13 +31,7 @@ function harness(role: "viewer" | "editor" | "admin", path = "/app/acme/settings
 }
 
 function SettingsLayout() {
-  const value: TenantContextValue = {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    role: testRole,
-    isSuperAdmin: false,
-  };
+  const value: TenantContextValue = tenantFixture(testRole);
   return (
     <TenantProvider value={value}>
       <SettingsSidebar />
