@@ -547,7 +547,11 @@ function TriageInner() {
               ) : toMap.length === 0 && awaitingCount === 0 && filter !== "mapped" ? (
                 // Nothing to map anywhere and nothing to approve — the settled state.
                 <div className="p-3">
-                  <EmptyState filter="new" onSwitchToNew={() => setFilter("new")} />
+                  <EmptyState
+                    filter="new"
+                    onSwitchToNew={() => setFilter("new")}
+                    onSwitchToMapped={activeDim ? () => setFilter("mapped") : undefined}
+                  />
                 </div>
               ) : activeDim ? (
                 <MapPane
@@ -638,7 +642,17 @@ function TriageInner() {
   );
 }
 
-function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: () => void }) {
+function EmptyState({
+  filter,
+  onSwitchToNew,
+  onSwitchToMapped,
+}: {
+  filter: Filter;
+  onSwitchToNew: () => void;
+  /** Present when there is a table to look at — the only way back to the
+   *  values already mapped once the queue is empty. */
+  onSwitchToMapped?: () => void;
+}) {
   const nav = useNavLinks();
   if (filter === "new")
     return (
@@ -646,9 +660,16 @@ function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: 
         glyph="🎉"
         title="Nothing left to review."
         secondary={
-          <Link to={nav.tables} className="text-accent hover:underline">
-            Curate records in Tables
-          </Link>
+          <div className="flex flex-col items-center gap-2">
+            {onSwitchToMapped && (
+              <button onClick={onSwitchToMapped} className="text-accent hover:underline">
+                Review mapped values →
+              </button>
+            )}
+            <Link to={nav.tables} className="text-accent hover:underline">
+              Curate records in Tables
+            </Link>
+          </div>
         }
       />
     );

@@ -60,7 +60,7 @@ nginx (prod)  ── proxies /api + /ws ──►  Bun API server (:8787)
 ## Publish model (ADR-0002)
 
 Editing is **instant** on the working copy. **Publish** is the single gate that
-folds staged mapping drafts and stamps record edits into a new numbered version
+folds mapping drafts and stamps record edits into a new numbered version
 (`vN`, a per-table counter) and materializes `dim_<x>` / `map_<x>` for dbt.
 Unpublished changes are *derived* (record edits since the last publish), not a
 separate staging queue. Nothing reaches dbt until publish. See

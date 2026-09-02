@@ -166,6 +166,19 @@ describe("MapValuesBody", () => {
     expect(refetch).toHaveBeenCalled();
   });
 
+  it("says the list is capped when the server truncated it", () => {
+    vi.mocked(useRefTableClusters).mockReturnValueOnce(
+      feed({ clusters: CLUSTERS, truncated: true }),
+    );
+    renderBody();
+    expect(screen.getByText(/showing the most common/i)).toBeInTheDocument();
+  });
+
+  it("says nothing about a cap when the whole list fits", () => {
+    renderBody();
+    expect(screen.queryByText(/showing the most common/i)).not.toBeInTheDocument();
+  });
+
   it("renders the all-mapped empty state when there are no clusters", () => {
     vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ clusters: [] }));
     renderBody();

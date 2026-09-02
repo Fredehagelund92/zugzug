@@ -5,10 +5,12 @@ import { authFetch } from "../api";
 import { useAuthConfig } from "../store";
 import { AuthLayout } from "../components/auth/AuthLayout";
 import { Button } from "../components/Button";
+import { returnToFrom } from "../lib/return-to";
 
 const ERROR_MESSAGES: Record<string, string> = {
   domain: "Your email domain is not allowed on this instance. Contact your admin.",
-  not_allowed: "Your account hasn't been added yet. Ask an existing user to add you in Settings.",
+  not_allowed:
+    "Your account hasn't been added yet. Ask an existing user to add you in Settings → Members.",
   token: "Authentication failed — please try again.",
   state: "Session expired — please try again.",
   no_code: "Login was cancelled.",
@@ -34,7 +36,7 @@ export function Login() {
 
   const onDevLogin = async () => {
     const res = await authFetch("/auth/dev", { method: "POST" });
-    if (res.ok) window.location.href = "/app";
+    if (res.ok) window.location.href = returnToFrom(window.location.search);
   };
 
   return (
@@ -92,7 +94,7 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
         body: JSON.stringify({ email, password }),
       });
       if (res.status === 200) {
-        window.location.href = "/app";
+        window.location.href = returnToFrom(window.location.search);
         return;
       }
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -121,7 +123,6 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
         <input
           type="password"
           required
-          minLength={12}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="mt-1.5 block w-full rounded-sm border border-line-2 bg-surface-2 px-3 py-[11px] text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"

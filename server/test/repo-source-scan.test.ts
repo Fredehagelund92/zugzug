@@ -272,3 +272,41 @@ test("getSourceScanValuesPage q substring matches case-insensitively", async () 
   });
   expect(page.items.map((i) => i.raw).sort()).toEqual(["ACME Corp", "acme Inc"]);
 });
+test("getSourceScanValuesPage q treats % and _ as characters, not wildcards", async () => {
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.map_test_color
+               (tenant_id varchar, raw varchar, color_code varchar)`);
+  await pgRun(`CREATE TABLE IF NOT EXISTS zugzug_app.dim_test_color
+               (color_code varchar PRIMARY KEY, label varchar)`);
+  await pgRun(
+    `INSERT INTO zugzug_app.reference_table
+       (id, label, dim_table, map_table, key_col, created_at, tenant_id)
+     VALUES ($1, 'Color', 'zugzug_app.dim_test_color',
+             'zugzug_app.map_test_color', 'color_code', current_timestamp, $2)
+     ON CONFLICT DO NOTHING`,
+    [REF_TABLE, TENANT],
+  );
+
+  await materializeSourceScanValues(REF_TABLE, TENANT, {
+    occurrences: [
+      { raw: "100% cotton", table: "raw.a", column: "c", rows: 10 },
+      { raw: "100 percent cotton", table: "raw.a", column: "c", rows: 20 },
+      { raw: "a_b", table: "raw.a", column: "c", rows: 30 },
+      { raw: "axb", table: "raw.a", column: "c", rows: 40 },
+    ],
+    scannedAt: new Date(),
+  });
+
+  const pct = await getSourceScanValuesPage(TENANT, REF_TABLE, {
+    filter: "all",
+    limit: 50,
+    q: "100%",
+  });
+  expect(pct.items.map((i) => i.raw)).toEqual(["100% cotton"]);
+
+  const underscore = await getSourceScanValuesPage(TENANT, REF_TABLE, {
+    filter: "all",
+    limit: 50,
+    q: "a_b",
+  });
+  expect(underscore.items.map((i) => i.raw)).toEqual(["a_b"]);
+});

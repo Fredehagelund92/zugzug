@@ -6,6 +6,7 @@ import { Mark } from "./Mark";
 import { Button } from "./Button";
 import { NoWorkspaceLanding } from "./NoWorkspaceLanding";
 import { LAST_SLUG_KEY } from "../lib/tenant-storage";
+import { loginUrlWithReturnTo } from "../lib/return-to";
 import type { Membership } from "./TenantLayout";
 
 export interface BootData {
@@ -43,7 +44,9 @@ export function BootGate({ children }: { children: (data: BootData) => ReactNode
     (async () => {
       const meRes = await authFetch("/auth/me");
       if (meRes.status === 401) {
-        window.location.replace("/login");
+        // Carry the page they asked for, so signing in lands them there and
+        // not on the default workspace.
+        window.location.replace(loginUrlWithReturnTo(window.location));
         return;
       }
       if (!meRes.ok) throw new Error(`API unreachable (${meRes.status})`);

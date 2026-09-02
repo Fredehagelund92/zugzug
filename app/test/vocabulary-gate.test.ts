@@ -39,6 +39,11 @@ const FILES = [
   "app/src/components/catalog/CatalogSearchResults.tsx",
   "app/src/routes/integrations/PullApi.tsx",
   "app/src/routes/integrations/CreateWebhookModal.tsx",
+  "app/src/routes/Login.tsx",
+  "app/src/routes/Signup.tsx",
+  "app/src/routes/Triage.tsx",
+  "app/src/routes/account/Profile.tsx",
+  "app/src/components/modes/MapValuesBody.tsx",
 ];
 
 const BANNED = [
@@ -252,6 +257,19 @@ describe("vocabulary gate", () => {
   // are the server's own action codes ("Warehouse synced"), which must stay
   // verbatim to match rows already in audit_log. What those codes RENDER as is
   // gated by audit-history-vocabulary.test.tsx and audit-action-label.test.ts.
+
+  // One page, one name: the nav item is "Members", so every pointer to it says
+  // so. It used to be called three things ("Settings → Team", "Settings", …).
+  test("copy points at the members page by the name the nav uses", () => {
+    for (const relPath of ["app/src/routes/Login.tsx", "app/src/routes/Signup.tsx"]) {
+      const source = readFileSync(join(REPO_ROOT, relPath), "utf8");
+      expect(source, `${relPath} still calls the members page "Team"`).not.toContain(
+        "Settings → Team",
+      );
+      expect(source, `${relPath} still points at bare "Settings"`).not.toMatch(/in Settings\./);
+      expect(source, `${relPath} should name Settings → Members`).toContain("Settings → Members");
+    }
+  });
 
   test("Dashboard intro avoids weak 'messy' copy", () => {
     const source = readFileSync(join(REPO_ROOT, "app/src/routes/Dashboard.tsx"), "utf8");

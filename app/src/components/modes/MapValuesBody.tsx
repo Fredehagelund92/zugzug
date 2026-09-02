@@ -65,6 +65,13 @@ export function MapValuesBody({
           <span className="font-semibold text-accent">{feed.clusters.length}</span>{" "}
           {filter === "new" ? "to map" : "mapped"}
         </span>
+        {feed.truncated && (
+          // The server caps how many values it clusters, so the count above is
+          // the head of a longer list — say so rather than under-report.
+          <span className="font-mono text-[11px] text-ink-3">
+            showing the most common — more appear as you work through these
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-3">
           <SourcesFeedStrip refTable={refTable} />
           <div className="inline-flex rounded-sm border border-line">

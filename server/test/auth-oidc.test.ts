@@ -141,6 +141,22 @@ test("oidc callback — token-exchange failure redirects with error=token", asyn
 });
 
 // ---------------------------------------------------------------------------
+// Test 4b: the user cancelled at the provider → error=no_code ("Login was
+// cancelled."), not the generic "Authentication failed".
+// ---------------------------------------------------------------------------
+
+test("oidc callback — provider reports access_denied redirects with error=no_code", async () => {
+  mockShouldThrow = new Error("should not reach the token exchange");
+  const req = new Request(
+    "http://localhost/api/auth/oidc/callback?error=access_denied&state=test-state",
+    { headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" } },
+  );
+  const res = await handleOidcCallback(req);
+  expect(res.status).toBe(302);
+  expect(res.headers.get("Location")).toContain("error=no_code");
+});
+
+// ---------------------------------------------------------------------------
 // Test 5: upserts existing user by sub (creates first, updates name on second)
 // ---------------------------------------------------------------------------
 

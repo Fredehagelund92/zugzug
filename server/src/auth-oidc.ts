@@ -158,8 +158,16 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
     return loginErrorRedirect("state", clearState, clearNonce);
   }
 
-  const config = await getOidcConfig();
   const callbackUrl = new URL(req.url);
+
+  // A user who backs out at the provider comes back with ?error=access_denied
+  // and no code. The grant below would report that as a generic failure, so
+  // answer with the message that says what actually happened.
+  if (callbackUrl.searchParams.get("error") === "access_denied") {
+    return loginErrorRedirect("no_code", clearState, clearNonce);
+  }
+
+  const config = await getOidcConfig();
 
   let claims: {
     sub: string;

@@ -1,6 +1,6 @@
 # Zugzug
 
-Curation layer between a data warehouse and dbt: teams turn messy raw values into approved records and maintain governed reference tables, exported as `dim_<x>` / `map_<x>` tables dbt joins directly.
+Curation layer between a data warehouse and dbt: teams turn messy source values into approved records and maintain governed reference tables, exported as `dim_<x>` / `map_<x>` tables dbt joins directly.
 
 ## Language
 

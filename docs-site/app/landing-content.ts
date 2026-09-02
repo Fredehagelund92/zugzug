@@ -404,7 +404,7 @@ export const LANDING_HTML = `
       <div class="pillar">
         <div class="lbl">value mapping</div>
         <h3>Reconcile the mess</h3>
-        <p>Turn thousands of raw variants into one agreed key. The crosswalk lands in <code>map_partner</code> — one join and messy input resolves, wherever you already query your warehouse.</p>
+        <p>Turn thousands of source spellings into one agreed key. The crosswalk lands in <code>map_partner</code> — one join and messy input resolves, wherever you already query your warehouse.</p>
         <ul>
           <li>frequency-ranked Review inbox</li>
           <li>bulk merge, skip, map-to</li>

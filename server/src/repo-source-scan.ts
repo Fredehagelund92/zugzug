@@ -219,6 +219,12 @@ export interface ValuesPage {
   nextCursor: string | null;
 }
 
+/** Escape ILIKE wildcards so a search for "100%" or "a_b" means those
+ *  characters, not "anything". Backslash is Postgres' default LIKE escape. */
+function likeEscape(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 function encodeCursor(totalRows: number, rawLower: string): string {
   return Buffer.from(JSON.stringify([totalRows, rawLower])).toString("base64url");
 }
@@ -253,7 +259,7 @@ export async function getSourceScanValuesPage(
   const params: unknown[] = [tenantId, refTableId];
   let where = `v.tenant_id = $1 AND v.reference_table_id = $2`;
   if (opts.q && opts.q.trim()) {
-    params.push(`%${opts.q.trim().toLowerCase()}%`);
+    params.push(`%${likeEscape(opts.q.trim().toLowerCase())}%`);
     where += ` AND v.raw_lower ILIKE $${params.length}`;
   }
   if (opts.filter === "new") {

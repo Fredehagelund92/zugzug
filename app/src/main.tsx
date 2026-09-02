@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
 import { BootGate, AppIndex } from "./components/BootGate";
+import { HashScroll } from "./components/HashScroll";
 import { AppShell } from "./components/AppShell";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { TenantLayout } from "./components/TenantLayout";
@@ -64,6 +65,7 @@ const root = document.getElementById("root")!;
 createRoot(root).render(
   <React.StrictMode>
     <BrowserRouter>
+      <HashScroll />
       <Routes>
         {/* Public — no session required */}
         <Route path="/login" element={<Login />} />

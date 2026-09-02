@@ -15,7 +15,11 @@ registerFactories({
   },
 });
 
-export const TEST_DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
+/* resetDb() DROPs and replays schemas, so it must target the SAME database the
+   pool uses — hardcoding it meant a run pointed elsewhere still reset this one,
+   wrecking any concurrent run. Mirrors preload-env.ts. */
+export const TEST_DATABASE_URL =
+  process.env.ZUGZUG_TEST_DATABASE_URL ?? "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 
 /* Migration 0021 (multi-database warehouse) needs zugzug.warehouse_db set
    on the connection for preflight C. We hand-walk the migration journal so
