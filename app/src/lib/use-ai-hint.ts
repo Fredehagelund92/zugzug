@@ -23,7 +23,9 @@ export function useAiConfigured(): boolean | null {
   useEffect(() => {
     if (configuredCache !== null) return;
     configuredPromise ??= apiFetch("/ai/status")
-      .then(async (r) => (r.ok ? (((await r.json()) as { configured?: boolean }).configured ?? false) : false))
+      .then(async (r) =>
+        r.ok ? (((await r.json()) as { configured?: boolean }).configured ?? false) : false,
+      )
       .catch(() => false)
       .then((v) => (configuredCache = v));
     let live = true;

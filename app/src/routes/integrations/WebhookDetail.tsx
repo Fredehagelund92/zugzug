@@ -228,7 +228,9 @@ export function WebhookDetail() {
           <Button
             disabled={w.status !== "active"}
             title={
-              w.status === "active" ? undefined : "Resume the webhook first — nothing is sent while it is not active"
+              w.status === "active"
+                ? undefined
+                : "Resume the webhook first — nothing is sent while it is not active"
             }
             onClick={async () => {
               try {
