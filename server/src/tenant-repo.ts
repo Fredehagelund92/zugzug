@@ -429,13 +429,16 @@ export class TenantRepo {
     refTableId: string,
     userId: string,
     draftKeys?: string[],
+    opts?: { onlyAuthor?: string },
   ): Promise<{
     committed: number;
     rowsRecovered: number;
     warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
   }> {
     this.assertRole("commit");
-    return this.withClearCtx(() => repoDrafts.commit(refTableId, userId, this.tenantId, draftKeys));
+    return this.withClearCtx(() =>
+      repoDrafts.commit(refTableId, userId, this.tenantId, draftKeys, opts),
+    );
   }
 
   getPublishState(refTableId: string): Promise<repoDrafts.PublishState> {

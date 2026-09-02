@@ -53,6 +53,22 @@ export async function materializeSourceScanValues(
     else byLower.set(lower, { raw: o.raw, total: o.rows });
   }
 
+  // Fold occurrences onto the occurrence PK (raw_lower, table, column) too:
+  // "Red" and "RED" in the SAME table.column arrive as separate occurrences but
+  // share one key, which would make ON CONFLICT DO UPDATE hit the same row twice
+  // in a chunk (error 21000) or overwrite instead of sum across chunks.
+  const byOccKey = new Map<
+    string,
+    { lower: string; table: string; column: string; rows: number }
+  >();
+  for (const o of opts.occurrences) {
+    const lower = o.raw.toLowerCase();
+    const key = `${lower}\u0000${o.table}\u0000${o.column}`;
+    const e = byOccKey.get(key);
+    if (e) e.rows += o.rows;
+    else byOccKey.set(key, { lower, table: o.table, column: o.column, rows: o.rows });
+  }
+
   // Uses pgTxRaw (not pgTxScoped): repo writers across the codebase rely on the
   // connection-role RLS bypass; per-row tenant_id is enforced explicitly via
   // the WHERE clauses below.
@@ -81,10 +97,10 @@ export async function materializeSourceScanValues(
       );
     }
 
-    if (opts.occurrences.length > 0) {
+    if (byOccKey.size > 0) {
       const rowsParams: unknown[][] = [];
-      for (const o of opts.occurrences) {
-        rowsParams.push([tenantId, refTableId, o.raw.toLowerCase(), o.table, o.column, o.rows]);
+      for (const o of byOccKey.values()) {
+        rowsParams.push([tenantId, refTableId, o.lower, o.table, o.column, o.rows]);
       }
       await bulkInsertChunked(
         tx,

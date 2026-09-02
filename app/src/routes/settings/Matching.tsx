@@ -37,6 +37,22 @@ export function Matching() {
           </FormField>
         </ReadOnly>
         <FormField
+          label="Publish exact matches on its own"
+          hint="When on, Zug Zug publishes the mappings it made itself on an exact name match — the source value “Germany” to the record Germany. It never publishes a draft one of your teammates wrote."
+        >
+          <Checkbox
+            state={prefs.autoPublishEnabled ? "on" : "off"}
+            disabled={!canEditGov}
+            onClick={() =>
+              void setPreferences({
+                ...prefs,
+                autoPublishEnabled: !prefs.autoPublishEnabled,
+              }).then(() => invalidate.tenant(tenant.slug))
+            }
+            aria-label="Publish exact matches on its own"
+          />
+        </FormField>
+        <FormField
           label="Four eyes on publish"
           hint="When on, a draft's author can't publish it — a second editor must. Applies to mapping drafts only; record edits are not drafted."
         >

@@ -37,6 +37,7 @@ test("setPreferences + getPreferences round-trip per tenant", async () => {
     suggestThreshold: 70,
     scanSchedule: "hourly",
     requireSecondPublisher: false,
+    autoPublishEnabled: false,
   });
 });
 

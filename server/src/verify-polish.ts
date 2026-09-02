@@ -47,6 +47,7 @@ await repo.setPreferences({
   suggestThreshold: 60,
   scanSchedule: null,
   requireSecondPublisher: false,
+  autoPublishEnabled: false,
 });
 const after = await repo.getPreferences();
 check(
@@ -61,6 +62,7 @@ await repo.setPreferences({
   suggestThreshold: 90,
   scanSchedule: null,
   requireSecondPublisher: false,
+  autoPublishEnabled: false,
 });
 const clamped = await repo.getPreferences();
 check(
@@ -75,6 +77,7 @@ await repo.setPreferences({
   suggestThreshold: before.suggestThreshold,
   scanSchedule: before.scanSchedule,
   requireSecondPublisher: before.requireSecondPublisher,
+  autoPublishEnabled: before.autoPublishEnabled,
 });
 
 // 2. u_system user exists (idempotent insert on schema bootstrap)

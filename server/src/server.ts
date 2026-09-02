@@ -880,7 +880,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     return await pgTxScoped(tenantCtx.tenantId, async () => {
-      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule, requireSecondPublisher?}
+      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule, requireSecondPublisher?, autoPublishEnabled?}
       if (seg[1] === "preferences" && seg.length === 2) {
         if (method === "GET") return json(await reqRepo.getPreferences());
         if (method === "PUT") {
@@ -891,12 +891,14 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             suggestThreshold: number;
             scanSchedule: "hourly" | "daily" | null;
             requireSecondPublisher?: boolean;
+            autoPublishEnabled?: boolean;
           };
           await reqRepo.setPreferences({
             publishThreshold: p.publishThreshold,
             suggestThreshold: p.suggestThreshold,
             scanSchedule: p.scanSchedule,
             requireSecondPublisher: p.requireSecondPublisher ?? false,
+            autoPublishEnabled: p.autoPublishEnabled ?? false,
           });
           return noContent();
         }

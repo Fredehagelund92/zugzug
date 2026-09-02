@@ -40,11 +40,13 @@ export const autoCommitJob: SchedulerJob = {
   async run(ctx: JobContext): Promise<JobResult> {
     if (!env.attachWarehouse) return {};
     const prefs = await ctx.repo.getPreferences();
-    if (prefs.publishThreshold > 100) return {}; // threshold disables auto-commit
+    if (!prefs.autoPublishEnabled) return {}; // off unless the workspace opted in
     const refTableIds = await ctx.repo.refTablesWithWiredSources();
     let totalCommitted = 0;
     for (const id of refTableIds) {
-      const result = await ctx.repo.commit(id, "u_system");
+      // onlyAuthor: fold nothing but the exact-match drafts autoStageJob wrote.
+      // A teammate's draft always needs a human to publish it.
+      const result = await ctx.repo.commit(id, "u_system", undefined, { onlyAuthor: "u_system" });
       totalCommitted += result.committed;
     }
     return { rowsScanned: totalCommitted };

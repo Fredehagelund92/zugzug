@@ -703,7 +703,12 @@ export async function commit(
   userId: string,
   tenantId: string,
   draftKeys?: string[],
-  opts?: { kind?: "publish" | "rollback"; restoresVersion?: number; skipWarehouseSync?: boolean },
+  opts?: {
+    kind?: "publish" | "rollback";
+    restoresVersion?: number;
+    skipWarehouseSync?: boolean;
+    onlyAuthor?: string;
+  },
 ): Promise<{
   committed: number;
   rowsRecovered: number;
@@ -730,12 +735,17 @@ export async function commit(
   // When draftKeys is provided, validate that all requested keys exist as
   // mapped drafts for this (refTable, tenant) before touching anything.
   const scoped = draftKeys !== undefined;
+  // Author scope: when set, only drafts authored by this user are folded. Used
+  // by the auto-publish job so it can never publish a teammate's draft.
+  const onlyAuthor = opts?.onlyAuthor;
   if (scoped && draftKeys!.length > 0) {
     const found = await pgAll<{ raw: string }>(
       `SELECT raw FROM ${DRAFT}
        WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL
-         AND raw = ANY($3)`,
-      [refTableId, tenantId, draftKeys],
+         AND raw = ANY($3)${onlyAuthor ? ` AND user_id = $4` : ""}`,
+      onlyAuthor
+        ? [refTableId, tenantId, draftKeys, onlyAuthor]
+        : [refTableId, tenantId, draftKeys],
     );
     const foundSet = new Set(found.map((r) => r.raw));
     const missing = draftKeys!.filter((k) => !foundSet.has(k));
@@ -752,13 +762,23 @@ export async function commit(
   // scoped=true + empty array → AND raw = ANY('{}') → matches nothing → zero-work fold.
   const scopeClause = scoped ? ` AND raw = ANY($3)` : "";
   const scopeClauseD = scoped ? ` AND d.raw = ANY($3)` : "";
-  const baseParams = (extra: unknown[] = []) =>
-    scoped ? [refTableId, tenantId, draftKeys, ...extra] : [refTableId, tenantId, ...extra];
+  // Author clause: appended after the scope clause, so its parameter follows
+  // draftKeys when scoped ($4) and tenant_id when not ($3).
+  const authorParam = scoped ? "$4" : "$3";
+  const authorClause = onlyAuthor ? ` AND user_id = ${authorParam}` : "";
+  const authorClauseD = onlyAuthor ? ` AND d.user_id = ${authorParam}` : "";
+  const baseParams = (extra: unknown[] = []) => [
+    refTableId,
+    tenantId,
+    ...(scoped ? [draftKeys] : []),
+    ...(onlyAuthor ? [onlyAuthor] : []),
+    ...extra,
+  ];
   const baseParamsD = baseParams; // alias for aliased-draft statements
 
   const approved = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${DRAFT}
-     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}${authorClause}`,
     baseParams(),
   );
   const committed = Number(approved?.n ?? 0);
@@ -811,8 +831,16 @@ export async function commit(
     const ownDrafts = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM ${DRAFT}
        WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'
-         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${scoped ? ` AND raw = ANY($4)` : ""}`,
-      scoped ? [refTableId, tenantId, userId, draftKeys] : [refTableId, tenantId, userId],
+         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${
+           scoped ? ` AND raw = ANY($4)` : ""
+         }${onlyAuthor ? ` AND user_id = $${scoped ? 5 : 4}` : ""}`,
+      [
+        refTableId,
+        tenantId,
+        userId,
+        ...(scoped ? [draftKeys] : []),
+        ...(onlyAuthor ? [onlyAuthor] : []),
+      ],
     );
     const own = Number(ownDrafts?.n ?? 0);
     if (own > 0) {
@@ -863,7 +891,7 @@ export async function commit(
     // Distinct target_keys — read before the draft rows are deleted below.
     committedRows = await tx.all<{ target_key: string }>(
       `SELECT DISTINCT target_key FROM ${DRAFT}
-       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}${authorClause}`,
       baseParams(),
     );
     // Approved drafts — passed to the warehouse adapter after the tx commits.
@@ -872,7 +900,7 @@ export async function commit(
     // warehouse map MERGE agrees with the single-row-per-raw Postgres fold below.
     approvedDrafts = await tx.all<{ raw: string; key: string; label: string | null }>(
       `SELECT DISTINCT ON (lower(raw)) raw, target_key AS key, target_label AS label FROM ${DRAFT}
-       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}${authorClause}
        ORDER BY lower(raw), created_at DESC, user_id`,
       baseParams(),
     );
@@ -883,7 +911,7 @@ export async function commit(
        FROM ${DRAFT} d
        JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
        WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
-         AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}`,
+         AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}${authorClauseD}`,
       baseParamsD(),
     );
 
@@ -896,7 +924,7 @@ export async function commit(
          WHERE lower(m.raw) = lower(d.raw)
            AND d.reference_table_id = $1 AND d.tenant_id = $2
            AND d.status = 'mapped' AND d.target_key IS NOT NULL
-           AND m.${key} <> d.target_key${scopeClauseD}`,
+           AND m.${key} <> d.target_key${scopeClauseD}${authorClauseD}`,
         baseParamsD(),
       );
     }
@@ -913,7 +941,7 @@ export async function commit(
            FROM ${DRAFT} d
            WHERE d.reference_table_id = $1 AND d.tenant_id = $2
              AND d.status = 'mapped' AND d.target_key IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}
+             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}${authorClauseD}
            GROUP BY target_key, target_label
          )
          INSERT INTO ${DIMT} (${key}, label, position)
@@ -928,7 +956,7 @@ export async function commit(
         `INSERT INTO ${DIMT} (${key}, label)
          SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
          WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}`,
+           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}${authorClauseD}`,
         baseParamsD(),
       );
     }
@@ -940,22 +968,16 @@ export async function commit(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT DISTINCT ON (lower(d.raw)) d.raw, d.target_key FROM ${DRAFT} d
        WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}
+         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}${authorClauseD}
        ORDER BY lower(d.raw), d.created_at DESC, d.user_id`,
       baseParamsD(),
     );
-    // DELETE: scoped → only delete the requested draft raws; unscoped → delete all mapped.
-    if (scoped) {
-      await tx.run(
-        `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND raw = ANY($3)`,
-        [refTableId, tenantId, draftKeys],
-      );
-    } else {
-      await tx.run(
-        `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
-        [refTableId, tenantId],
-      );
-    }
+    // DELETE: scoped → only the requested draft raws; author-scoped → only that
+    // author's drafts; otherwise every mapped draft for the table.
+    await tx.run(
+      `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'${scopeClause}${authorClause}`,
+      baseParams(),
+    );
 
     // Outbound event for downstream subscribers (PR3). Uses a count-based
     // per-(tenant, refTable, type) monotonic counter — simpler than extracting

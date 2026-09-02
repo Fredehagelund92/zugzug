@@ -128,6 +128,7 @@ export interface Preferences {
   suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
   requireSecondPublisher: boolean;
+  autoPublishEnabled: boolean;
 }
 
 export interface WorkspaceInfo {
@@ -183,6 +184,7 @@ function resetStore(): void {
     suggestThreshold: 80,
     scanSchedule: null,
     requireSecondPublisher: false,
+    autoPublishEnabled: false,
   };
   _authConfigCache = null;
   _authConfigPromise = null;
@@ -271,6 +273,7 @@ let preferences: Preferences = {
   suggestThreshold: 80,
   scanSchedule: null,
   requireSecondPublisher: false,
+  autoPublishEnabled: false,
 };
 let storeLoading = true;
 

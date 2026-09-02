@@ -161,8 +161,10 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
     suggest_threshold: number;
     scan_schedule: string | null;
     require_second_publisher: boolean;
+    auto_publish_enabled: boolean;
   }>(
-    `SELECT publish_threshold, suggest_threshold, scan_schedule, require_second_publisher
+    `SELECT publish_threshold, suggest_threshold, scan_schedule, require_second_publisher,
+            auto_publish_enabled
      FROM ${pg("preferences")}
      WHERE tenant_id = $1
      ORDER BY id LIMIT 1`,
@@ -177,6 +179,7 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
       ? (sched as Preferences["scanSchedule"])
       : null,
     requireSecondPublisher: row?.require_second_publisher ?? false,
+    autoPublishEnabled: row?.auto_publish_enabled ?? false,
   };
 }
 
@@ -186,20 +189,23 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
 
   await pgRun(
     `INSERT INTO ${pg("preferences")}
-       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id, require_second_publisher)
-     VALUES ($1, $2, $3, current_timestamp, $4, $5)
+       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id, require_second_publisher,
+        auto_publish_enabled)
+     VALUES ($1, $2, $3, current_timestamp, $4, $5, $6)
      ON CONFLICT (tenant_id) DO UPDATE
        SET publish_threshold        = EXCLUDED.publish_threshold,
            suggest_threshold        = EXCLUDED.suggest_threshold,
            scan_schedule            = EXCLUDED.scan_schedule,
            updated_at               = EXCLUDED.updated_at,
-           require_second_publisher = EXCLUDED.require_second_publisher`,
+           require_second_publisher = EXCLUDED.require_second_publisher,
+           auto_publish_enabled     = EXCLUDED.auto_publish_enabled`,
     [
       p.publishThreshold,
       p.suggestThreshold,
       p.scanSchedule,
       tenantId,
       p.requireSecondPublisher ?? false,
+      p.autoPublishEnabled ?? false,
     ],
   );
 }

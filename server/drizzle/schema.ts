@@ -228,6 +228,7 @@ export const preferences = app.table(
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
     last_outbound_sweep_at:      timestamp("last_outbound_sweep_at"),
     require_second_publisher:    boolean("require_second_publisher").notNull().default(false),
+    auto_publish_enabled:        boolean("auto_publish_enabled").notNull().default(false),
   },
   (t) => [
     uniqueIndex("preferences_tenant_unique").on(t.tenant_id),

@@ -1,7 +1,9 @@
 /* ThresholdRange — a two-thumb confidence-band picker. The bottom thumb sets
    the 'suggest' threshold (where suggestions appear); the top thumb sets the
-   'publish' threshold (where Zug Zug auto-publishes on scan). The visible
-   track is built from three positioned divs so its colors mirror the labels.
+   threshold above which a suggestion counts as near-certain. Nothing here
+   publishes on its own — auto-publish is its own setting and covers only
+   Zug Zug's own exact-name matches. The visible track is built from three
+   positioned divs so its colors mirror the labels.
 
    Implementation note: two stacked <input type="range"> elements with
    pointer-events disabled on the track and re-enabled on the thumb pseudo-
@@ -73,7 +75,7 @@ export function ThresholdRange({ publish, suggest, min = 50, max = 100, onChange
           {suggest}–{publish}%: <span className="text-warn">suggest</span>
         </span>
         <span>
-          ≥ {publish}%: <span className="text-ok">auto-publish</span>
+          ≥ {publish}%: <span className="text-ok">near-certain</span>
         </span>
       </div>
     </div>

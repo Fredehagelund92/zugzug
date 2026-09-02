@@ -392,6 +392,7 @@ export interface Preferences {
   suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
   requireSecondPublisher: boolean;
+  autoPublishEnabled: boolean;
 }
 
 /* ---- shared helpers ---- */

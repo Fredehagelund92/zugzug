@@ -288,6 +288,13 @@
       "when": 1784844058613,
       "tag": "0040_rename_dimension_to_reference_table",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1784934058613,
+      "tag": "0041_auto_publish_enabled",
+      "breakpoints": true
     }
   ]
 }

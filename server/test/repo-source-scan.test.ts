@@ -75,6 +75,48 @@ test("materializeSourceScanValues writes per-source occurrences", async () => {
   expect(occs[1]).toMatchObject({ table_name: "raw.products", rows: 100 });
 });
 
+test("materializeSourceScanValues folds case-variants within one table.column", async () => {
+  await materializeSourceScanValues(REF_TABLE, TENANT, {
+    occurrences: [
+      { raw: "Red", table: "raw.products", column: "color", rows: 100 },
+      { raw: "RED", table: "raw.products", column: "color", rows: 50 },
+    ],
+    scannedAt: new Date(),
+  });
+  const occs = await pgAll<{ table_name: string; column_name: string; rows: number }>(
+    `SELECT table_name, column_name, rows::int AS rows FROM zugzug_app.source_scan_occurrence
+       WHERE tenant_id = $1 AND reference_table_id = $2 AND raw_lower = 'red'`,
+    [TENANT, REF_TABLE],
+  );
+  expect(occs).toHaveLength(1);
+  expect(occs[0]).toMatchObject({ table_name: "raw.products", column_name: "color", rows: 150 });
+});
+
+test("materializeSourceScanValues sums case-variants split across insert chunks", async () => {
+  // Chunk size is 500 rows; put the two variants either side of that boundary.
+  const filler = Array.from({ length: 600 }, (_, i) => ({
+    raw: `v${i}`,
+    table: "raw.products",
+    column: "color",
+    rows: 1,
+  }));
+  await materializeSourceScanValues(REF_TABLE, TENANT, {
+    occurrences: [
+      { raw: "Red", table: "raw.products", column: "color", rows: 100 },
+      ...filler,
+      { raw: "RED", table: "raw.products", column: "color", rows: 50 },
+    ],
+    scannedAt: new Date(),
+  });
+  const occs = await pgAll<{ rows: number }>(
+    `SELECT rows::int AS rows FROM zugzug_app.source_scan_occurrence
+       WHERE tenant_id = $1 AND reference_table_id = $2 AND raw_lower = 'red'`,
+    [TENANT, REF_TABLE],
+  );
+  expect(occs).toHaveLength(1);
+  expect(occs[0].rows).toBe(150);
+});
+
 test("materializeSourceScanValues replaces prior rows for the same refTable", async () => {
   await materializeSourceScanValues(REF_TABLE, TENANT, {
     occurrences: [{ raw: "Red", table: "raw.a", column: "c", rows: 10 }],
