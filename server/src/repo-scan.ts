@@ -534,6 +534,7 @@ export async function topUnmapped(
   column: string,
   limit = 5,
   tenantId: string,
+  databaseId?: string,
 ): Promise<UnmappedSample[]> {
   const meta = await pgGet<{ mapTable: string }>(
     `SELECT map_table AS "mapTable" FROM ${pg("reference_table")} WHERE id = $1 AND tenant_id = $2`,
@@ -541,7 +542,7 @@ export async function topUnmapped(
   );
   if (!meta) return [];
   if (!env.attachWarehouse) return [];
-  const ref = await refForRegisteredTable(refTableId, table, tenantId);
+  const ref = await refForRegisteredTable(refTableId, table, tenantId, databaseId);
   if (!ref) return [];
   const adapter = await getAdapter();
   const n = Math.max(1, Math.min(50, Math.round(limit)));

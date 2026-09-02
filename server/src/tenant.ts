@@ -18,7 +18,11 @@ const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
  *  `/api/admin/...`, so every fetch 403s for ordinary members. The rest are the
  *  other top-level names (`/login`, `/signup`, `/design` routes plus the `/api`
  *  prefix) — reserved defensively so they can never become collisions. */
-const RESERVED_SLUGS = new Set(["admin", "api", "login", "signup", "design"]);
+// Only "admin" can actually be shadowed: workspaces live at /app/<slug>, so the
+// top-level /login, /signup and /design routes can never collide with one, and
+// apiFetch rewrites /app/admin/* to /api/admin/* — which 403s every request a
+// member of such a workspace makes.
+const RESERVED_SLUGS = new Set(["admin"]);
 
 function assertSlugAllowed(slug: string): void {
   if (RESERVED_SLUGS.has(slug)) {

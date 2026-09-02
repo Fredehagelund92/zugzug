@@ -146,3 +146,39 @@ test("DELETE /tables/:id/sources says when the wiring it was given matched nothi
   expect(await right.json()).toEqual({ removed: true });
   expect(await registrations(refTableId)).toEqual([]);
 });
+
+/* refForRegisteredTable backs nameTable and topUnmapped. Its lookup had a bare
+   LIMIT 1 with no ORDER BY, so when the same schema.table was registered against
+   two databases the row Postgres happened to return decided which warehouse was
+   read — the same ambiguity the wiring fix above closes everywhere else. */
+
+test("resolving a registered table honours the database it is given", async () => {
+  const refTableId = await wiredRefTable();
+  // The same schema.table wired in BOTH databases: ambiguous without a hint.
+  await deriveRecord(refTableId, "sales.orders", "region", undefined, { databaseId: DB1 }, U, T);
+  await deriveRecord(refTableId, "sales.orders", "country", undefined, { databaseId: DB2 }, U, T);
+
+  const { refForRegisteredTable } = await import("../src/repo-shared.ts");
+  expect(await refForRegisteredTable(refTableId, "sales.orders", T, DB2)).toEqual({
+    catalog: "analytics_two",
+    schema: "sales",
+    table: "orders",
+  });
+  expect(await refForRegisteredTable(refTableId, "sales.orders", T, DB1)).toEqual({
+    catalog: "analytics_one",
+    schema: "sales",
+    table: "orders",
+  });
+});
+
+test("resolving without a database is stable rather than arbitrary", async () => {
+  const refTableId = await wiredRefTable();
+  await deriveRecord(refTableId, "sales.orders", "region", undefined, { databaseId: DB1 }, U, T);
+  await deriveRecord(refTableId, "sales.orders", "country", undefined, { databaseId: DB2 }, U, T);
+
+  const { refForRegisteredTable } = await import("../src/repo-shared.ts");
+  const first = await refForRegisteredTable(refTableId, "sales.orders", T);
+  for (let i = 0; i < 5; i++) {
+    expect(await refForRegisteredTable(refTableId, "sales.orders", T)).toEqual(first);
+  }
+});

@@ -126,14 +126,26 @@ describe("mapping settings on a refused save", () => {
     await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't save: forbidden", "error"));
   });
 
-  it("leaves the whole page read-only for an editor — preferences are admin-only", () => {
-    const { container } = render(
+  it("leaves every control read-only for an editor — preferences are admin-only", () => {
+    render(
       <TenantProvider value={tenantFixture("editor")}>
         <Matching />
       </TenantProvider>,
     );
-    const fieldset = container.querySelector("fieldset");
-    expect(fieldset?.disabled).toBe(true);
+    // Asserted on the controls themselves rather than a wrapper: the page used
+    // to carry a confidence-band slider inside a disabled <fieldset>, but that
+    // control fed nothing on the server and was removed.
     expect(screen.getByLabelText("Require a second publisher")).toBeDisabled();
+    expect(screen.getByLabelText("Publish exact matches on its own")).toBeDisabled();
+  });
+
+  it("lets an admin change them", () => {
+    render(
+      <TenantProvider value={tenantFixture("admin")}>
+        <Matching />
+      </TenantProvider>,
+    );
+    expect(screen.getByLabelText("Require a second publisher")).toBeEnabled();
+    expect(screen.getByLabelText("Publish exact matches on its own")).toBeEnabled();
   });
 });

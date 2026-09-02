@@ -1,9 +1,7 @@
-import { ThresholdRange } from "../../components/ThresholdRange";
 import { usePreferences, setPreferences, invalidate } from "../../store";
 import { useTenant } from "../../lib/tenant-context";
 import { SettingsSection } from "../../components/settings/SettingsSection";
 import { SettingsPageHeader } from "../../components/settings/SettingsPageHeader";
-import { ReadOnly } from "../../components/settings/ReadOnly";
 import { can } from "../../lib/permissions";
 import { FormField } from "../../components/FormField";
 import { Checkbox } from "../../components/Checkbox";
@@ -11,7 +9,6 @@ import { toast } from "../../components/Toast";
 
 export function Matching() {
   const tenant = useTenant();
-  const canEdit = can(tenant, "settings.matching.edit");
   const canEditGov = can(tenant, "settings.general.edit");
   const prefs = usePreferences();
 
@@ -33,19 +30,8 @@ export function Matching() {
       <SettingsPageHeader title="Mapping" />
       <SettingsSection
         title="Mapping defaults"
-        hint="How aggressively Zug Zug maps new source values when a scan finds them."
+        hint="What Zug Zug is allowed to do on its own when a scan finds new source values."
       >
-        <ReadOnly enabled={!canEdit}>
-          <FormField label="Confidence bands">
-            <ThresholdRange
-              publish={prefs.publishThreshold}
-              suggest={prefs.suggestThreshold}
-              onChange={({ publish, suggest }) => {
-                save({ ...prefs, publishThreshold: publish, suggestThreshold: suggest });
-              }}
-            />
-          </FormField>
-        </ReadOnly>
         <FormField
           label="Publish exact matches on its own"
           hint="When on, Zug Zug publishes the mappings it made itself on an exact name match — the source value “Germany” to the record Germany. It never publishes a draft one of your teammates wrote."

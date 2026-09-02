@@ -493,9 +493,10 @@ export class TenantRepo {
     table: string,
     column: string,
     limit = 5,
+    databaseId?: string,
   ): Promise<repoScan.UnmappedSample[]> {
     return this.withClearCtx(() =>
-      repoScan.topUnmapped(refTableId, table, column, limit, this.tenantId),
+      repoScan.topUnmapped(refTableId, table, column, limit, this.tenantId, databaseId),
     );
   }
 

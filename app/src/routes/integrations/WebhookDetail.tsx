@@ -221,11 +221,15 @@ export function WebhookDetail() {
         <Panel as="section" padding="sm" className="space-y-2">
           <h3 className="font-display text-[14px] font-semibold text-ink">Send a test event</h3>
           <p className="text-[13px] text-ink-2">
-            POSTs a synthetic <code>webhook.test</code> payload to the endpoint. Marked with a TEST
-            badge in the delivery log; does not count toward auto-disable. Like every delivery, it
-            waits in the queue while the webhook is paused.
+            {w.status === "active"
+              ? "POSTs a synthetic webhook.test payload to the endpoint. Marked with a TEST badge in the delivery log; does not count toward auto-disable."
+              : `Resume this webhook to send a test event — while it is ${w.status}, nothing is sent to the endpoint.`}
           </p>
           <Button
+            disabled={w.status !== "active"}
+            title={
+              w.status === "active" ? undefined : "Resume the webhook first — nothing is sent while it is not active"
+            }
             onClick={async () => {
               try {
                 await sendTestEvent(id);

@@ -1047,9 +1047,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const table = url.searchParams.get("table") ?? "";
           const column = url.searchParams.get("column") ?? "";
           const limit = Number(url.searchParams.get("limit") ?? 5);
+          const databaseId = url.searchParams.get("databaseId") ?? undefined;
           if (!refTableId || !table || !column)
             return err("refTableId, table, column required", 400);
-          return json(await reqRepo.topUnmapped(refTableId, table, column, limit));
+          return json(await reqRepo.topUnmapped(refTableId, table, column, limit, databaseId));
         }
       }
 

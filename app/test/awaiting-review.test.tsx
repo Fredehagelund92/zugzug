@@ -27,7 +27,8 @@ const stubDraftOther = {
   targetLabel: "United States",
   targetKey: "us",
   user: OTHER,
-  at: new Date().toISOString(),
+  at: "just now",
+  createdAt: new Date().toISOString(),
   source: "user" as const,
   confidence: null,
   reasoning: null,
@@ -161,6 +162,27 @@ describe("AwaitingReview", () => {
     expect(screen.getByText("Country")).toBeInTheDocument();
     // Author name present (appears in group header and provenance column)
     expect(screen.getAllByText("Max Thorn").length).toBeGreaterThan(0);
+  });
+
+  // The server sends `at` as a DISPLAY string ("5m ago"), not a timestamp — only
+  // `createdAt` is parseable. Reading `at` fed new Date("5m ago") -> NaN, which
+  // the fallback silently printed verbatim, so it looked right by accident and
+  // broke the moment the format changed.
+  test("renders the age from createdAt, not the pre-formatted display string", async () => {
+    setupMocks({
+      drafts: {
+        "country::USA": {
+          ...stubDraftOther,
+          at: "5m ago",
+          createdAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+        },
+      },
+    });
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    render(<AwaitingReview />);
+
+    expect(screen.getByText("2h ago")).toBeInTheDocument();
+    expect(screen.queryByText("5m ago")).not.toBeInTheDocument();
   });
 
   test("Approve & publish opens the publish preview (#161)", async () => {

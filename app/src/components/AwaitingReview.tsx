@@ -101,7 +101,7 @@ const DraftRow = memo(function DraftRow({
         {draft.source === "ai" ? `AI · ${draft.confidence ?? "?"}` : authorName}
       </span>
       <span className="w-16 shrink-0 text-right font-mono text-[10px] text-ink-3">
-        {relativeTime(draft.at)}
+        {relativeTime(draft.createdAt)}
       </span>
     </li>
   );
