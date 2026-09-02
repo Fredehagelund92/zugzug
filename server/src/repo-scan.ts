@@ -459,7 +459,7 @@ export async function autoStageExactMatches(
     await appendAuditAs(
       "u_system",
       "Auto-matched",
-      `${matched} value${matched === 1 ? "" : "s"} staged in ${refTableId} (exact label match)`,
+      `${matched} value${matched === 1 ? "" : "s"} mapped in ${refTableId} (exact label)`,
       { tenantId },
     );
   }

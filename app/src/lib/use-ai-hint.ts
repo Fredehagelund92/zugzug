@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 
-/** One on-demand mapping hint from GET /api/triage/ai-hint. */
+/** One on-demand mapping hint from GET /api/review/ai-hint. */
 export interface AiHint {
   suggestion: string | null;
   confidence: number;

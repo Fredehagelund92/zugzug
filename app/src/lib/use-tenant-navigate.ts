@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTenant } from "./tenant-context";
 
-/** Prefixed navigate: nav("/triage") → navigate("/app/:slug/triage"). */
+/** Prefixed navigate: nav("/review") → navigate("/app/:slug/review"). */
 export function useTenantNavigate(): (to: string, opts?: { replace?: boolean }) => void {
   const { slug } = useTenant();
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export function useNavLinks() {
     () => ({
       base: `/app/${slug}`,
       dashboard: `/app/${slug}`,
-      triage: `/app/${slug}/triage`,
+      review: `/app/${slug}/review`,
       sources: `/app/${slug}/sources`,
       tables: `/app/${slug}/tables`,
       audit: `/app/${slug}/audit`,

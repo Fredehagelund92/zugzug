@@ -25,6 +25,13 @@ import {
   getPublishState,
 } from "./repo-drafts.ts";
 import type { Draft } from "./repo-shared.ts";
+import { EXAMPLE_REQUEST } from "../../app/src/components/integrations/webhook-recipes.ts";
+
+/** The JSON body of the example table.published delivery shown in the app. */
+function documentedPayload(): Record<string, unknown> {
+  const body = EXAMPLE_REQUEST.slice(EXAMPLE_REQUEST.indexOf("\n\n") + 2);
+  return JSON.parse(body) as Record<string, unknown>;
+}
 
 // Collect every page the keyset paginator hands back — mirrors what the Review
 // inbox does client-side (page through until nextCursor is null).
@@ -277,9 +284,16 @@ describe("commit() fires table.published event", () => {
       typeof evt!.payload === "string"
         ? (JSON.parse(evt!.payload) as Record<string, unknown>)
         : (evt!.payload as Record<string, unknown>);
-    expect(payload.dim_slug).toBe(refTableId);
+    expect(payload.table_slug).toBe(refTableId);
     const committedBy = payload.committed_by as { id: string } | undefined;
     expect(committedBy?.id).toBe(U);
+
+    // The example delivery shipped in the app (and read by every integrator
+    // writing their first handler) must name the keys we really send — a
+    // renamed wire key that misses the docs fails here, not in their inbox.
+    const documented = Object.keys(documentedPayload());
+    expect(documented).toContain("table_slug");
+    expect(documented.filter((k) => !(k in payload))).toEqual([]);
   });
 
   it("does NOT fire when commit() short-circuits (no approved drafts)", async () => {

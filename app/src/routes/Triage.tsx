@@ -930,7 +930,7 @@ const SuggestOffer = forwardRef<
     setState({ kind: "loading" });
     try {
       const qs = new URLSearchParams({ refTableId, raw });
-      const res = await apiFetch(`/triage/ai-hint?${qs.toString()}`);
+      const res = await apiFetch(`/review/ai-hint?${qs.toString()}`);
       // 503 means no AI provider is set up — retrying can never succeed, so say
       // so once instead of offering "Try AI again" forever.
       if (res.status === 503) {

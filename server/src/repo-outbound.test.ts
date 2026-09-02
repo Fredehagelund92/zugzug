@@ -144,11 +144,11 @@ describe("listRefTablesForApi", () => {
 });
 
 describe("getSchemaForApi", () => {
-  it("returns dim_slug + fields", async () => {
+  it("returns table_slug + fields", async () => {
     const refTableId = await makeDim("OutSchema");
     const out = await getSchemaForApi(T, refTableId);
     expect(out).not.toBeNull();
-    expect(out!.dim_slug).toBe(refTableId);
+    expect(out!.table_slug).toBe(refTableId);
     expect(out!.label).toBe("OutSchema");
     expect(Array.isArray(out!.fields)).toBe(true);
   });
@@ -170,7 +170,7 @@ describe("listRecordPage", () => {
     const page1 = await listRecordPage(T, refTableId, { limit: 3 });
     expect(page1.records.length).toBe(3);
     expect(page1.cursor.next).not.toBeNull();
-    expect(page1.meta.dim_slug).toBe(refTableId);
+    expect(page1.meta.table_slug).toBe(refTableId);
     expect(page1.meta.page_size).toBe(3);
 
     const page2 = await listRecordPage(T, refTableId, { limit: 3, cursor: page1.cursor.next! });

@@ -115,12 +115,12 @@ export function WebhookVerificationReference() {
           <SectionLabel n="03" title="Event payload (table.published)" />
           <div className="rounded-sm border border-line bg-surface-2 p-3">
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[11.5px]">
-              <dt className="font-mono uppercase tracking-wider text-ink-3">dim_slug</dt>
+              <dt className="font-mono uppercase tracking-wider text-ink-3">table_slug</dt>
               <dd className="text-ink-2">
                 Table identifier. The event type is not in the body — read it from{" "}
                 <code>x-zugzug-event</code>.
               </dd>
-              <dt className="font-mono uppercase tracking-wider text-ink-3">dim_label</dt>
+              <dt className="font-mono uppercase tracking-wider text-ink-3">table_label</dt>
               <dd className="text-ink-2">Human-readable table name</dd>
               <dt className="font-mono uppercase tracking-wider text-ink-3">version</dt>
               <dd className="text-ink-2">

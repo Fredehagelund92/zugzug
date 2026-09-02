@@ -41,7 +41,7 @@ vi.mock("../../src/lib/use-tenant-navigate", () => ({
   useNavLinks: () => ({
     tables: "/app/acme/tables",
     sources: "/app/acme/sources",
-    triage: "/app/acme/triage",
+    review: "/app/acme/review",
     table: (id: string) => `/app/acme/tables/${id}`,
   }),
 }));

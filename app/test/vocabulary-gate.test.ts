@@ -37,6 +37,8 @@ const FILES = [
   "app/src/components/warehouse/AddDatabaseDialog.tsx",
   "app/src/components/warehouse/DatabaseTable.tsx",
   "app/src/components/catalog/CatalogSearchResults.tsx",
+  "app/src/routes/integrations/PullApi.tsx",
+  "app/src/routes/integrations/CreateWebhookModal.tsx",
 ];
 
 const BANNED = [
@@ -230,6 +232,26 @@ describe("vocabulary gate", () => {
       "source{failedCount",
     );
   });
+
+  // The pull API and webhook pages describe what a consumer does with the data;
+  // they used the implementation's word for it.
+  test("integration copy avoids banned vocabulary", () => {
+    const pull = readFileSync(join(REPO_ROOT, "app/src/routes/integrations/PullApi.tsx"), "utf8");
+    expect(pull, 'pull API blurb still says "sync into dbt"').not.toContain("sync into");
+    expect(pull, 'section heading still says "incremental sync"').not.toContain("incremental sync");
+    expect(pull, 'cursor paragraph still says "resync"').not.toContain("resync");
+
+    const webhook = readFileSync(
+      join(REPO_ROOT, "app/src/routes/integrations/CreateWebhookModal.tsx"),
+      "utf8",
+    );
+    expect(webhook, 'description placeholder still says "Sync into…"').not.toContain("Sync into");
+  });
+
+  // audit-format.tsx is deliberately absent from the general scan: its map KEYS
+  // are the server's own action codes ("Warehouse synced"), which must stay
+  // verbatim to match rows already in audit_log. What those codes RENDER as is
+  // gated by audit-history-vocabulary.test.tsx and audit-action-label.test.ts.
 
   test("Dashboard intro avoids weak 'messy' copy", () => {
     const source = readFileSync(join(REPO_ROOT, "app/src/routes/Dashboard.tsx"), "utf8");

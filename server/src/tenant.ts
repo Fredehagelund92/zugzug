@@ -12,6 +12,9 @@ import { addWarehouseDatabase } from "./repo-warehouse.ts";
 import { recordSlugAlias, clearSlugAlias } from "./slug-alias.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
+/** TENANT_ID_RE in the words people read in an error (CONTEXT.md §Language). */
+const ID_RULE =
+  "start with a letter and use only lowercase letters, numbers or underscores (21 characters max)";
 
 /** Slugs the app's own URL space owns. `admin` is a live collision: `/app/admin/*`
  *  is the super-admin shell, and apiFetch rewrites a workspace slugged `admin` to
@@ -78,22 +81,14 @@ export async function provisionTenant(opts: {
   const color = opts.color ?? null;
 
   if (!TENANT_ID_RE.test(id)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `tenant id '${id}' must match ${TENANT_ID_RE.source}`,
-      400,
-    );
+    throw new AppError("VALIDATION_FAILED", `workspace id '${id}' must ${ID_RULE}`, 400);
   }
   if (!TENANT_ID_RE.test(slug)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `tenant slug '${slug}' must match ${TENANT_ID_RE.source}`,
-      400,
-    );
+    throw new AppError("VALIDATION_FAILED", `workspace slug '${slug}' must ${ID_RULE}`, 400);
   }
   assertSlugAllowed(slug);
   if (!label) {
-    throw new AppError("VALIDATION_FAILED", `tenant label cannot be empty`, 400);
+    throw new AppError("VALIDATION_FAILED", `workspace name cannot be empty`, 400);
   }
 
   if (color !== null) assertValidColor(color);
@@ -110,7 +105,11 @@ export async function provisionTenant(opts: {
     [id, slug, label, color],
   );
   if (!row) {
-    throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists (id or slug taken)`, 409);
+    throw new AppError(
+      "ALREADY_EXISTS",
+      `workspace '${id}' already exists (id or slug taken)`,
+      409,
+    );
   }
 
   // A live workspace outranks another workspace's stale redirect: drop any
@@ -153,7 +152,7 @@ export async function provisionTenant(opts: {
  *  soft-deleted (deleted_at = now()). Refuses to act on the 'default' tenant. */
 export async function teardownTenant(tenantId: string): Promise<void> {
   if (tenantId === "default") {
-    throw new AppError("VALIDATION_FAILED", "cannot teardown the default tenant", 400);
+    throw new AppError("VALIDATION_FAILED", "cannot delete the default workspace", 400);
   }
   await pgTxRaw(async (tx) => {
     // Capture dynamic dim_/map_ table names BEFORE deleting registry rows.
@@ -476,11 +475,7 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
     throw new AppError("FORBIDDEN", "cannot change slug of the default workspace", 403);
   }
   if (!TENANT_ID_RE.test(next)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `slug '${next}' must match ${TENANT_ID_RE.source}`,
-      400,
-    );
+    throw new AppError("VALIDATION_FAILED", `slug '${next}' must ${ID_RULE}`, 400);
   }
   assertSlugAllowed(next);
   if (next === currentSlug) return;
@@ -496,7 +491,7 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
     [currentSlug],
   );
   if (!current) {
-    throw new AppError("NOT_FOUND", `tenant '${currentSlug}' not found`, 404);
+    throw new AppError("NOT_FOUND", `workspace '${currentSlug}' not found`, 404);
   }
   // PR2 Task 12: persists old slug for 30-day redirect grace window.
   // Fired before the UPDATE so an UPDATE failure leaves a benign alias row

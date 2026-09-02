@@ -68,7 +68,7 @@ function setupMocks() {
     useNavLinks: () => ({
       base: "/app/test-ws",
       dashboard: "/app/test-ws",
-      triage: "/app/test-ws/triage",
+      review: "/app/test-ws/review",
       sources: "/app/test-ws/sources",
       tables: "/app/test-ws/tables",
       settings: "/app/test-ws/settings",
@@ -233,7 +233,7 @@ describe("Triage — rejected draft presentation", () => {
       useNavLinks: () => ({
         base: "/app/test-ws",
         dashboard: "/app/test-ws",
-        triage: "/app/test-ws/triage",
+        review: "/app/test-ws/review",
         sources: "/app/test-ws/sources",
         tables: "/app/test-ws/tables",
         settings: "/app/test-ws/settings",

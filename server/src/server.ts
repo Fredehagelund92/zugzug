@@ -986,7 +986,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         return json({ configured: await isAIConfigured(tenantCtx.tenantId) });
       }
 
-      if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
+      if (seg[1] === "review" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
         const refTableId = url.searchParams.get("refTableId") ?? "";
         const raw = url.searchParams.get("raw") ?? "";
         if (!refTableId || !raw) return err("refTableId and raw required", 400);
@@ -1739,7 +1739,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(
               {
                 error: "INVALID_REQUEST",
-                detail: "raw_value is required and must be a string",
+                detail: "source value is required and must be a string",
               },
               400,
             );
@@ -1749,8 +1749,8 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             if (!refTable) {
               return json(
                 {
-                  error: "DIMENSION_NOT_FOUND",
-                  detail: `RefTable ${id} not found in workspace`,
+                  error: "TABLE_NOT_FOUND",
+                  detail: `Table ${id} not found in workspace`,
                 },
                 404,
               );

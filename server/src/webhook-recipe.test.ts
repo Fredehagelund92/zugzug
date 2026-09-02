@@ -22,7 +22,7 @@ async function loadVerify(): Promise<(rawBody: string, header: string, secret: s
   return mod.verify;
 }
 
-const BODY = JSON.stringify({ dim_slug: "country", version: 12, kind: "publish" });
+const BODY = JSON.stringify({ table_slug: "country", version: 12, kind: "publish" });
 const SECRET = "whsec_recipe_test_secret_value";
 const OTHER = "whsec_some_other_secret_value";
 const now = () => Math.floor(Date.now() / 1000);

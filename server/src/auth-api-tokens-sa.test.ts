@@ -120,7 +120,7 @@ describe("resolveTenantContext — service account context", () => {
         isSuperAdmin: false,
         serviceAccount: authed!.serviceAccount,
       }),
-    ).rejects.toThrow(/tenant|mismatch/i);
+    ).rejects.toThrow(/workspace|mismatch/i);
 
     await pgRun(`DELETE FROM "zugzug_app"."audit_log" WHERE tenant_id = $1`, [tt]);
     await pgRun(`DELETE FROM "zugzug_app"."service_account" WHERE tenant_id = $1`, [tt]);

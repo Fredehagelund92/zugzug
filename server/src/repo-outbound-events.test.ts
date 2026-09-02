@@ -59,7 +59,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
         type: "table.published",
         refTableId: "dim_t1",
         occurredAt: new Date(),
-        payload: { dim_slug: "country", version: 1 },
+        payload: { table_slug: "country", version: 1 },
         idemKey,
       });
     });
@@ -77,7 +77,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
     expect(row!.type).toBe("table.published");
     expect(row!.reference_table_id).toBe("dim_t1");
     const payload = typeof row!.payload === "string" ? JSON.parse(row!.payload) : row!.payload;
-    expect((payload as { dim_slug: string }).dim_slug).toBe("country");
+    expect((payload as { table_slug: string }).table_slug).toBe("country");
   });
 
   it("idem_key collision aborts the surrounding tx (per design §3.1)", async () => {
@@ -124,7 +124,7 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
         type: "table.published",
         refTableId: "dim_t3",
         occurredAt: new Date(),
-        payload: { dim_slug: "country" },
+        payload: { table_slug: "country" },
         idemKey: `table.published:dim_t3:5`,
       });
     });

@@ -48,8 +48,8 @@ describe("useTenantNavigate", () => {
 
   test("prefixes an absolute path with the workspace slug", () => {
     const { result } = renderHook(() => useTenantNavigate(), { wrapper });
-    result.current("/triage");
-    expect(navigateSpy).toHaveBeenCalledWith("/app/acme/triage", undefined);
+    result.current("/review");
+    expect(navigateSpy).toHaveBeenCalledWith("/app/acme/review", undefined);
   });
 
   test("passes a relative path through unchanged", () => {
@@ -75,7 +75,7 @@ describe("useNavLinks", () => {
 
     expect(links.base).toBe("/app/acme");
     expect(links.dashboard).toBe("/app/acme");
-    expect(links.triage).toBe("/app/acme/triage");
+    expect(links.review).toBe("/app/acme/review");
     expect(links.sources).toBe("/app/acme/sources");
     expect(links.tables).toBe("/app/acme/tables");
     expect(links.audit).toBe("/app/acme/audit");

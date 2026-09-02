@@ -101,7 +101,8 @@ createRoot(root).render(
                     >
                       <Route element={<AppShell />}>
                         <Route index element={<Dashboard />} />
-                        <Route path="triage" element={<Triage />} />
+                        <Route path="review" element={<Triage />} />
+                        <Route path="triage" element={<Navigate to="../review" replace />} />
                         <Route path="sources" element={<Sources />} />
                         <Route path="tables" element={<MasterTables />} />
                         <Route path="audit" element={<Audit />} />

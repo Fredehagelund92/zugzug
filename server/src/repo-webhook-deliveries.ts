@@ -165,7 +165,7 @@ export async function sendTestEvent(
   const deliveryId = `whd_${crypto.randomUUID().replace(/-/g, "")}`;
   const eventId = `ev_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const payload = JSON.stringify({
-    dim_slug: null,
+    table_slug: null,
     message: "This is a test event from the Zugzug UI.",
   });
   await pgRun(

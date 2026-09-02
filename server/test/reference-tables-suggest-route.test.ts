@@ -161,7 +161,7 @@ test("POST /api/tables/:id/suggest returns 400 when raw_value is missing", async
   expect(res.status).toBe(400);
   const body = (await res.json()) as { error: string; detail: string };
   expect(body.error).toBe("INVALID_REQUEST");
-  expect(body.detail).toContain("raw_value");
+  expect(body.detail).toContain("source value");
 
   await cleanupCtx(ctx);
 });
@@ -225,7 +225,7 @@ test("POST /api/tables/:id/suggest returns 404 for non-existent refTable", async
 
   expect(res.status).toBe(404);
   const body = (await res.json()) as { error: string };
-  expect(body.error).toBe("DIMENSION_NOT_FOUND");
+  expect(body.error).toBe("TABLE_NOT_FOUND");
 
   await cleanupCtx(ctx);
 });

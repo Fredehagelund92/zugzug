@@ -385,7 +385,7 @@ export function AppShell() {
       testId: "nav-tables",
     },
     {
-      to: navLinks.triage,
+      to: navLinks.review,
       label: "Review",
       Icon: IconMapping,
       count: totalNew,
@@ -436,12 +436,12 @@ export function AppShell() {
       priority: true,
     });
     out.push({
-      id: "nav:triage",
+      id: "nav:review",
       group: "Navigate",
       label: "Review",
       secondary: totalNew > 0 ? `${totalNew} new` : undefined,
       icon: <IconMapping className="h-4 w-4" />,
-      action: () => navigate(navLinks.triage),
+      action: () => navigate(navLinks.review),
       keywords: "review unmapped source values mapping",
       priority: true,
     });

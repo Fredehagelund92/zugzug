@@ -1072,8 +1072,8 @@ export async function commit(
       refTableId,
       occurredAt: dbNow?.now ?? new Date(),
       payload: {
-        dim_slug: refTableId,
-        dim_label: meta.label,
+        table_slug: refTableId,
+        table_label: meta.label,
         version: v,
         previous_version: v - 1,
         committed_by: { id: userId, name: committedBy?.name ?? userId },

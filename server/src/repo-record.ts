@@ -1088,7 +1088,7 @@ export async function retireRecord(
       refTableId,
       occurredAt: firedAt,
       payload: {
-        dim_slug: refTableId,
+        table_slug: refTableId,
         key,
         label: labelRow?.label ?? key,
         deleted_by: { id: userId },

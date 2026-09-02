@@ -99,7 +99,7 @@ x-zugzug-delivery: whd_0f8e3a7c2d6b4c1f9a4e7b8c1d2e3f40
 x-zugzug-signature: t=1718457600,kid=current,v1=sha256=4f8a1e…
 x-zugzug-test: 0
 
-{"dim_slug":"country","dim_label":"Country","version":12,"previous_version":11,
+{"table_slug":"country","table_label":"Country","version":12,"previous_version":11,
  "committed_by":{"id":"u_7f3a","name":"Mia"},
  "changes":{"added":[{"key":"DE","label":"Germany"}],
             "remapped":[],"updated":[],"merged":[],"retired":[]},

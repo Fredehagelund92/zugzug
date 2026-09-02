@@ -202,10 +202,10 @@ describe("sendTestEvent", () => {
     expect(row!.attempts).toBe(0);
     const payload =
       typeof row!.payload === "string"
-        ? (JSON.parse(row!.payload) as { message: string; dim_slug: string | null })
-        : (row!.payload as { message: string; dim_slug: string | null });
+        ? (JSON.parse(row!.payload) as { message: string; table_slug: string | null })
+        : (row!.payload as { message: string; table_slug: string | null });
     expect(payload.message).toContain("test event");
-    expect(payload.dim_slug).toBeNull();
+    expect(payload.table_slug).toBeNull();
   });
 
   it("returns null when webhook does not exist", async () => {

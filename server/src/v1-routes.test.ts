@@ -167,11 +167,11 @@ describe("GET /api/t/:slug/v1/tables/:slug/records", () => {
     const body = (await res!.json()) as {
       records: unknown[];
       cursor: { next: string | null };
-      meta: { dim_slug: string };
+      meta: { table_slug: string };
     };
     expect(body.records.length).toBe(1);
     expect(body.cursor.next).not.toBeNull();
-    expect(body.meta.dim_slug).toBe(refTableId);
+    expect(body.meta.table_slug).toBe(refTableId);
   });
 
   it("cursor round-trip returns the next page without duplicates", async () => {
@@ -237,11 +237,11 @@ describe("GET /api/t/:slug/v1/tables/:slug/records/:key", () => {
 });
 
 describe("GET /api/t/:slug/v1/tables/:slug/fields", () => {
-  it("returns dim_slug + fields", async () => {
+  it("returns table_slug + fields", async () => {
     const res = await handleV1Route(authedReq(`/api/t/${SLUG}/v1/tables/${refTableId}/fields`));
     expect(res!.status).toBe(200);
-    const body = (await res!.json()) as { dim_slug: string; label: string; fields: unknown[] };
-    expect(body.dim_slug).toBe(refTableId);
+    const body = (await res!.json()) as { table_slug: string; label: string; fields: unknown[] };
+    expect(body.table_slug).toBe(refTableId);
   });
 });
 

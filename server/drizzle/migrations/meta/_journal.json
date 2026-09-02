@@ -302,6 +302,13 @@
       "when": 1785024058613,
       "tag": "0042_source_stat_scan_error",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1785114058613,
+      "tag": "0043_rename_dim_index_names",
+      "breakpoints": true
     }
   ]
 }

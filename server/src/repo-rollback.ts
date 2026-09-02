@@ -151,7 +151,7 @@ export async function rollbackToVersion(
       await appendAuditAs(
         userId,
         "Warehouse rollback sync",
-        `additive — rows added by the reverted version may remain; manual resync recommended`,
+        `additive — rows added by the reverted version may remain; refresh the warehouse to be sure`,
         { tenantId },
       );
       warehouseSynced = "synced-additive";
