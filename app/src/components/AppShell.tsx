@@ -24,7 +24,7 @@ import {
   IconMenu,
   IconX,
 } from "./Icons";
-import { useRefTables, currentUser } from "../store";
+import { useRefTables, useMemberships, currentUser } from "../store";
 import { Avatar } from "./Avatar";
 import { PALETTE, defaultTintFor } from "../lib/palette";
 import { RoleBadge } from "./RoleBadge";
@@ -37,7 +37,6 @@ import { useTenant } from "../lib/tenant-context";
 import { can } from "../lib/permissions";
 import { scopedKey } from "../lib/tenant-storage";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { type Membership } from "./TenantLayout";
 import { useIsMobile } from "../lib/use-media-query";
 import { useScrollLock } from "../lib/use-scroll-lock";
 
@@ -242,7 +241,10 @@ function UserMenu() {
   );
 }
 
-export function AppShell({ memberships = [] }: { memberships?: Membership[] }) {
+export function AppShell() {
+  // Live, not a boot snapshot — Account → Workspaces reads this through the
+  // outlet context and must lose a row the moment the user leaves it.
+  const memberships = useMemberships();
   const refTables = useRefTables();
   const tenant = useTenant();
   const { slug, role: tenantRole } = tenant;

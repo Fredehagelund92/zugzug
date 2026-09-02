@@ -141,7 +141,11 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
     for (const r of rows) expect(r.status).toBe("pending");
   });
 
-  it("does NOT enqueue for paused or disabled webhooks", async () => {
+  // Pause queues, it does not drop: enqueue no longer skips paused webhooks —
+  // the dispatcher's claim() is what holds the backlog back, and it is released
+  // on resume. A disabled endpoint is still skipped so a dead URL cannot
+  // accumulate a backlog forever.
+  it("enqueues for a paused webhook but not for a disabled one", async () => {
     const wh_paused = await seedWebhook(T, ["table.published"], "paused");
     const wh_disabled = await seedWebhook(T, ["table.published"], "disabled");
 
@@ -156,11 +160,12 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
       });
     });
 
-    const left = await pgAll<{ webhook_id: string }>(
-      `SELECT webhook_id FROM "zugzug_app"."webhook_delivery"
+    const left = await pgAll<{ webhook_id: string; status: string }>(
+      `SELECT webhook_id, status FROM "zugzug_app"."webhook_delivery"
         WHERE tenant_id = $1 AND webhook_id IN ($2, $3)`,
       [T, wh_paused, wh_disabled],
     );
-    expect(left.length).toBe(0);
+    expect(left.map((r) => r.webhook_id)).toEqual([wh_paused]);
+    expect(left[0]!.status).toBe("pending");
   });
 });

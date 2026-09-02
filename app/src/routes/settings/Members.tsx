@@ -887,16 +887,22 @@ export function Members() {
             allowedDomain ? `Must be a ${allowedDomain} email` : "Email domain not allowed",
           );
         if (!res.ok) throw new Error("Couldn't send invite — try again");
-        return c.id;
+        // An address that already has an account is added to the team on the
+        // spot; only the rest wait for an invite to be accepted.
+        const body = (await res.json().catch(() => null)) as { added?: boolean } | null;
+        return body?.added === true;
       }),
     );
 
     const failedById = new Map<string, string>();
     const succeededIds = new Set<string>();
+    let addedCount = 0;
     validChips.forEach((c, i) => {
       const r = results[i];
-      if (r!.status === "fulfilled") succeededIds.add(c.id);
-      else
+      if (r!.status === "fulfilled") {
+        succeededIds.add(c.id);
+        if (r!.value) addedCount++;
+      } else
         failedById.set(c.id, r!.reason instanceof Error ? (r!.reason as Error).message : "Failed");
     });
 
@@ -914,7 +920,10 @@ export function Members() {
     );
     setSubmitting(false);
     if (sentCount > 0) {
-      toast(`Invite${sentCount > 1 ? "s" : ""} sent.`, "success");
+      toast(
+        addedCount === sentCount ? `Added to the team.` : `Invite${sentCount > 1 ? "s" : ""} sent.`,
+        "success",
+      );
       void invalidate.members(tenant.slug);
     }
     inputRef.current?.focus();

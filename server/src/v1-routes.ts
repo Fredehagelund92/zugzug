@@ -14,6 +14,7 @@
 import { authenticateBearer, type ServiceAccountCtx } from "./auth-api-tokens.ts";
 import { getSessionUser, canMutate } from "./auth.ts";
 import { lookupAliasedSlug } from "./slug-alias.ts";
+import { tenantBySlug } from "./tenant.ts";
 import { resolveTenantContext } from "./tenant-middleware.ts";
 import { checkRateLimit } from "./rate-limit.ts";
 import { env } from "./env.ts";
@@ -96,9 +97,11 @@ export async function handleV1Route(req: Request): Promise<Response | null> {
   if (!m) return null;
   const slugInPath = decodeURIComponent(m[1]!);
 
-  // Alias redirect — BEFORE auth so we don't burn quota on stale URLs.
+  // Alias redirect — BEFORE auth so we don't burn quota on stale URLs. A live
+  // workspace on that slug always wins: once another workspace claims a slug
+  // this one renamed away from, its traffic must be served, not redirected.
   const alias = await lookupAliasedSlug(slugInPath);
-  if (alias && alias.currentSlug !== slugInPath) {
+  if (alias && alias.currentSlug !== slugInPath && !(await tenantBySlug(slugInPath))) {
     const newPath = url.pathname.replace(`/api/t/${slugInPath}/`, `/api/t/${alias.currentSlug}/`);
     return new Response(null, {
       status: 301,

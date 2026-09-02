@@ -6,9 +6,10 @@
  * scripts/admin.ts also calls in here for PR 1 bootstrap. */
 
 import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
+import { env } from "./env.ts";
 import { AppError } from "./errors.ts";
 import { addWarehouseDatabase } from "./repo-warehouse.ts";
-import { recordSlugAlias } from "./slug-alias.ts";
+import { recordSlugAlias, clearSlugAlias } from "./slug-alias.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
@@ -107,6 +108,10 @@ export async function provisionTenant(opts: {
   if (!row) {
     throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists (id or slug taken)`, 409);
   }
+
+  // A live workspace outranks another workspace's stale redirect: drop any
+  // alias sitting on the slug we just claimed.
+  await clearSlugAlias(slug);
 
   // Warehouse provisioning. Compensating-DELETE on failure: the repo-warehouse
   // writers call pgRun directly (no pgContext.tx threading), so we can't share
@@ -332,6 +337,65 @@ export async function createInvite(
   );
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** What adding an email to a workspace actually did. */
+export type AddMemberOutcome = { kind: "member"; userId: string } | { kind: "invite" };
+
+/** Adds `email` to a workspace from the Members screen.
+ *
+ *  An address that already has an account becomes a member on the spot: an
+ *  invite only turns into a membership inside login/signup (acceptInvitesFor),
+ *  and GET /api/me/memberships reads tenant_member, so an already-signed-in
+ *  user would otherwise never see the workspace until they signed out and back
+ *  in. Addresses with no account yet still get a pending invite.
+ *
+ *  Rejects what the Members screen already has copy for: a malformed or
+ *  out-of-domain address (400) and someone already on the team or already
+ *  invited (409). */
+export async function addMemberOrInvite(
+  tenantId: string,
+  email: string,
+  role: "admin" | "editor" | "viewer",
+  invitedBy: string,
+): Promise<AddMemberOutcome> {
+  const normalized = email.trim().toLowerCase();
+  if (!EMAIL_RE.test(normalized)) {
+    throw new AppError("VALIDATION_FAILED", `'${email}' is not an email address`, 400);
+  }
+  if (env.allowedDomain && normalized.split("@")[1] !== env.allowedDomain) {
+    throw new AppError("VALIDATION_FAILED", `must be a @${env.allowedDomain} address`, 400);
+  }
+
+  const user = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."users" WHERE lower(email) = $1`,
+    [normalized],
+  );
+  if (user && (await memberRole(tenantId, user.id)) !== null) {
+    throw new AppError("ALREADY_EXISTS", `${normalized} is already on the team`, 409);
+  }
+  const pending = await pgGet<{ email: string }>(
+    `SELECT email FROM "zugzug_app"."tenant_invite"
+      WHERE tenant_id = $1 AND lower(email) = $2`,
+    [tenantId, normalized],
+  );
+  if (pending) {
+    throw new AppError("ALREADY_EXISTS", `${normalized} is already invited`, 409);
+  }
+
+  if (!user) {
+    await createInvite(tenantId, normalized, role, invitedBy);
+    return { kind: "invite" };
+  }
+  await pgRun(
+    `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+    [tenantId, user.id, role],
+  );
+  return { kind: "member", userId: user.id };
+}
+
 export async function revokeInvite(tenantId: string, email: string): Promise<void> {
   await pgRun(
     `DELETE FROM "zugzug_app"."tenant_invite" WHERE tenant_id = $1 AND lower(email) = lower($2)`,
@@ -435,6 +499,9 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
   // pointing at the unchanged slug. Idempotent on old_slug.
   await recordSlugAlias(currentSlug, current.id);
   await pgRun(`UPDATE "zugzug_app"."tenant" SET slug = $1 WHERE slug = $2`, [next, currentSlug]);
+  // Claiming a slug drops any alias still redirecting away from it, so the
+  // workspace that now owns it can never be shadowed by an older rename.
+  await clearSlugAlias(next);
 }
 
 /**

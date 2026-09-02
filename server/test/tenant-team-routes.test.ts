@@ -173,6 +173,78 @@ test("Admin can revoke invite — DELETE /api/t/:slug/team/invites/:email", asyn
   expect(invites.some((i) => i.email === "todelete@example.com")).toBe(false);
 });
 
+test("Adding an email that already has an account makes them a member on the spot", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+  await setupUser("u_tteam_other"); // has an account, not on this team
+
+  const res = await req("POST", "/api/t/tteam_acme/team/invites", cookie, {
+    email: "u_tteam_other@example.com",
+    role: "editor",
+  });
+  expect(res.status).toBe(201);
+  expect(await res.json()).toMatchObject({ ok: true, added: true });
+
+  // They see the workspace on their very next request — no sign-out/sign-in.
+  const { issueSession } = await import("../src/auth.ts");
+  const { sessionId } = await issueSession("u_tteam_other");
+  const memRes = await req("GET", "/api/me/memberships", `zz_sid=${sessionId}`);
+  const mem = (await memRes.json()) as { memberships: { slug: string }[] };
+  expect(mem.memberships.map((m) => m.slug)).toContain("tteam_acme");
+
+  // …and no pending invite is left dangling on the Members screen.
+  const invRes = await req("GET", "/api/t/tteam_acme/team/invites", cookie);
+  expect(await invRes.json()).toHaveLength(0);
+});
+
+test("Adding an email with no account yet still creates a pending invite", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+
+  const res = await req("POST", "/api/t/tteam_acme/team/invites", cookie, {
+    email: "nobody-yet@example.com",
+    role: "editor",
+  });
+  expect(res.status).toBe(201);
+  expect(await res.json()).toMatchObject({ ok: true, added: false });
+
+  const invRes = await req("GET", "/api/t/tteam_acme/team/invites", cookie);
+  const invites = (await invRes.json()) as { email: string }[];
+  expect(invites.some((i) => i.email === "nobody-yet@example.com")).toBe(true);
+});
+
+test("An address that isn't an email is rejected — 400", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+
+  const res = await req("POST", "/api/t/tteam_acme/team/invites", cookie, {
+    email: "not-an-email",
+    role: "editor",
+  });
+  expect(res.status).toBe(400);
+});
+
+test("Someone already on the team is rejected — 409", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+  await loginAs("u_tteam_editor", "tteam_acme", "editor");
+
+  const res = await req("POST", "/api/t/tteam_acme/team/invites", cookie, {
+    email: "u_tteam_editor@example.com",
+    role: "editor",
+  });
+  expect(res.status).toBe(409);
+});
+
+test("An address already invited is rejected — 409", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+
+  const body = { email: "twice@example.com", role: "editor" };
+  expect((await req("POST", "/api/t/tteam_acme/team/invites", cookie, body)).status).toBe(201);
+  expect((await req("POST", "/api/t/tteam_acme/team/invites", cookie, body)).status).toBe(409);
+});
+
 test("Editor gets 403 on POST /api/t/:slug/team/invites", async () => {
   await ensureTenant("tteam_acme");
   const cookie = await loginAs("u_tteam_editor", "tteam_acme", "editor");

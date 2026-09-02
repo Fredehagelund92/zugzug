@@ -8,7 +8,7 @@ import { Badge } from "../../components/Badge";
 import { SkeletonList } from "../../components/Skeleton";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { toast } from "../../components/Toast";
-import { useTenantNavigate } from "../../lib/use-tenant-navigate";
+import { useTenantNavigate, useNavLinks } from "../../lib/use-tenant-navigate";
 import {
   getWebhook,
   patchWebhook,
@@ -40,6 +40,9 @@ export function WebhookDetail() {
   const tenant = useTenant();
   const canEdit = can(tenant, "integrations.webhooks.edit");
   const navigate = useTenantNavigate();
+  // Relative links resolve by ROUTE hierarchy, and this route nests under
+  // `settings`, so `to=".."` lands on Settings → General, not the list.
+  const nav = useNavLinks();
 
   const [w, setW] = useState<Webhook | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +82,7 @@ export function WebhookDetail() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Link to=".." className="text-[12px] text-ink-3 hover:text-ink">
+        <Link to={nav.integrationsWebhooks} className="text-[12px] text-ink-3 hover:text-ink">
           ← Webhooks
         </Link>
         {canEdit && (
@@ -146,6 +149,12 @@ export function WebhookDetail() {
                 Pause
               </Button>
             )}
+            {w.status !== "active" && w.queued_count > 0 && (
+              <span className="text-[12px] text-ink-3">
+                {w.queued_count} {w.queued_count === 1 ? "delivery" : "deliveries"} queued — sent on
+                resume
+              </span>
+            )}
             {canEdit && w.status === "paused" && (
               <Button
                 size="sm"
@@ -198,7 +207,10 @@ export function WebhookDetail() {
         </Row>
         <p className="text-[12px] text-ink-3 pt-1">
           Verify deliveries with the{" "}
-          <Link to=".." className="text-accent underline-offset-2 hover:underline">
+          <Link
+            to={nav.integrationsWebhooks}
+            className="text-accent underline-offset-2 hover:underline"
+          >
             signing recipe
           </Link>{" "}
           on the Webhooks page.
@@ -210,7 +222,8 @@ export function WebhookDetail() {
           <h3 className="font-display text-[14px] font-semibold text-ink">Send a test event</h3>
           <p className="text-[13px] text-ink-2">
             POSTs a synthetic <code>webhook.test</code> payload to the endpoint. Marked with a TEST
-            badge in the delivery log; does not count toward auto-disable.
+            badge in the delivery log; does not count toward auto-disable. Like every delivery, it
+            waits in the queue while the webhook is paused.
           </p>
           <Button
             onClick={async () => {

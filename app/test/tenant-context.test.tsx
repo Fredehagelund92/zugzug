@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { TenantProvider, useTenant } from "../src/lib/tenant-context";
@@ -65,8 +65,10 @@ describe("TenantLayout slug validation", () => {
         </Routes>
       </MemoryRouter>,
     );
+    // The slug is first checked against the rename aliases (GET
+    // /api/me/slug-alias/:slug) — only a miss falls through to /app.
     expect(screen.queryByTestId("kid")).toBeNull();
-    expect(screen.getByTestId("redirected")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("redirected")).toBeTruthy());
   });
 
   test("super-admin can enter a tenant they're not a member of", () => {

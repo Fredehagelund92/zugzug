@@ -16,6 +16,10 @@ import { createWebhook } from "./repo-webhooks.ts";
 import { _setMasterKeyForTest } from "./webhook-secrets.ts";
 import { generateMasterKeyB64 } from "./crypto-secret.ts";
 import { issueSession } from "./auth.ts";
+import {
+  WEBHOOK_WIRE_KEYS,
+  SERVICE_ACCOUNT_WIRE_KEYS,
+} from "../../app/src/lib/integrations-wire-keys.ts";
 
 const T = "test_v1_routes";
 const SLUG = "v1routes";
@@ -443,6 +447,105 @@ describe("/v1/webhooks routes", () => {
       adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`, { method: "DELETE" }),
     );
     expect(res!.status).toBe(204);
+  });
+});
+
+/* The server once selected snake_case and then renamed every field to camelCase
+   on the way out, while the client types declared snake_case — so the signing
+   prefix, rotation grace and expiry dates all rendered blank. These walk the key
+   lists the client declares and require the responses to match them exactly, in
+   both directions, so that drift cannot come back unnoticed. */
+describe("v1 wire shapes match the declared client types", () => {
+  it("GET /v1/webhooks rows carry exactly the keys `Webhook` declares", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/wire-shape",
+      events: ["table.published"],
+      createdBy: ADMIN,
+    });
+    const res = await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks`));
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as { webhooks: Record<string, unknown>[] };
+    const row = body.webhooks.find((w) => w.id === wh.id)!;
+    expect(row).toBeDefined();
+    expect(Object.keys(row).sort()).toEqual([...WEBHOOK_WIRE_KEYS].sort());
+  });
+
+  it("GET /v1/webhooks/:id carries exactly the keys `Webhook` declares", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/wire-shape-detail",
+      events: ["table.published"],
+      createdBy: ADMIN,
+    });
+    const res = await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`));
+    expect(res!.status).toBe(200);
+    const row = (await res!.json()) as Record<string, unknown>;
+    expect(Object.keys(row).sort()).toEqual([...WEBHOOK_WIRE_KEYS].sort());
+    // The fields the detail page renders must actually hold their values.
+    expect(typeof row.secret_prefix).toBe("string");
+    expect((row.secret_prefix as string).length).toBeGreaterThan(0);
+    expect(row.created_at).not.toBeNull();
+    expect(row.secret_previous_expires_at).toBeNull();
+    expect(row.queued_count).toBe(0);
+  });
+
+  it("a rotated webhook reports the grace window the detail page renders", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/wire-shape-rotate",
+      events: ["table.published"],
+      createdBy: ADMIN,
+    });
+    await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/rotate-secret`, { method: "POST" }),
+    );
+    const res = await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`));
+    const row = (await res!.json()) as Record<string, string | null>;
+    expect(row.secret_prefix_previous).not.toBeNull();
+    expect(new Date(row.secret_previous_expires_at!).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("GET /v1/service-accounts rows carry exactly the keys `ServiceAccount` declares", async () => {
+    const res = await handleV1Route(adminReq(`/api/t/${SLUG}/v1/service-accounts`));
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as { service_accounts: Record<string, unknown>[] };
+    expect(body.service_accounts.length).toBeGreaterThan(0);
+    for (const row of body.service_accounts) {
+      expect(Object.keys(row).sort()).toEqual([...SERVICE_ACCOUNT_WIRE_KEYS].sort());
+      expect(typeof row.token_prefix).toBe("string");
+      expect(row.created_at).not.toBeNull();
+    }
+  });
+
+  it("last_delivery_* reflect the newest attempted delivery", async () => {
+    const wh = await createWebhook({
+      tenantId: T,
+      url: "https://example.test/wire-shape-delivery",
+      events: ["table.published"],
+      createdBy: ADMIN,
+    });
+    await handleV1Route(adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}/test`, { method: "POST" }));
+    // Untried delivery: queued, nothing to report yet.
+    let row = (await (await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`),
+    ))!.json()) as Record<string, unknown>;
+    expect(row.last_delivery_at).toBeNull();
+    expect(row.queued_count).toBe(1);
+
+    await pgRun(
+      `UPDATE "zugzug_app"."webhook_delivery"
+          SET status = 'success', attempts = 1, last_attempt_at = now(),
+              last_response_code = 200, completed_at = now()
+        WHERE webhook_id = $1 AND tenant_id = $2`,
+      [wh.id, T],
+    );
+    row = (await (await handleV1Route(
+      adminReq(`/api/t/${SLUG}/v1/webhooks/${wh.id}`),
+    ))!.json()) as Record<string, unknown>;
+    expect(row.last_delivery_at).not.toBeNull();
+    expect(row.last_delivery_status).toBe(200);
+    expect(row.queued_count).toBe(0);
   });
 });
 

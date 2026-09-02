@@ -47,7 +47,7 @@ import {
   listMembershipsForUser,
   listMembersForTenant,
   listInvitesForTenant,
-  createInvite,
+  addMemberOrInvite,
   revokeInvite,
   setMemberRole,
   countAdmins,
@@ -57,6 +57,7 @@ import {
   updateTenantSlug,
   leaveTenant,
 } from "./tenant.ts";
+import { lookupAliasedSlug } from "./slug-alias.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
@@ -267,6 +268,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       }));
     }
     return json({ isSuperAdmin: sessionUser.isSuperAdmin, memberships: workspaces });
+  }
+
+  // GET /api/me/slug-alias/:slug — resolve a workspace address that was renamed
+  // within the grace window to its current one, so an old bookmark or shared
+  // link lands in the right workspace instead of bouncing to another. A live
+  // workspace on that address wins, and we only answer for workspaces the
+  // caller can actually enter.
+  if (seg[1] === "me" && seg[2] === "slug-alias" && seg.length === 4 && method === "GET") {
+    const oldSlug = decodeURIComponent(seg[3]!);
+    const alias = await lookupAliasedSlug(oldSlug);
+    if (!alias || (await tenantBySlug(oldSlug))) return json({ error: "not_found" }, 404);
+    if (!sessionUser.isSuperAdmin && (await memberRole(alias.tenantId, sessionUser.id)) === null) {
+      return json({ error: "not_found" }, 404);
+    }
+    return json({ slug: alias.currentSlug });
   }
 
   // Admin block — hoisted OUT of the pgContext.run wrapper because admin routes
@@ -778,12 +794,26 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const gate = requireAdmin(tenantCtx);
         if (!gate.ok) return json({ error: "forbidden" }, 403);
         const body = (await req.json()) as { email: string; role: "admin" | "editor" | "viewer" };
-        await createInvite(tenantCtx.tenantId, body.email, body.role, me);
-        await appendAuditAs(me, "invite.create", `invited ${body.email} as ${body.role}`, {
-          tenantId: tenantCtx.tenantId,
-          metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
-        });
-        return json({ ok: true }, 201);
+        let outcome;
+        try {
+          outcome = await addMemberOrInvite(tenantCtx.tenantId, body.email, body.role, me);
+        } catch (e) {
+          if (e instanceof AppError) {
+            return json({ error: e.code, message: e.message }, e.status);
+          }
+          throw e;
+        }
+        const added = outcome.kind === "member";
+        await appendAuditAs(
+          me,
+          added ? "member.add" : "invite.create",
+          `${added ? "added" : "invited"} ${body.email} as ${body.role}`,
+          {
+            tenantId: tenantCtx.tenantId,
+            metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
+          },
+        );
+        return json({ ok: true, added }, 201);
       }
       // DELETE /api/t/:slug/team/invites/:email
       if (seg[2] === "invites" && seg.length === 4 && method === "DELETE") {

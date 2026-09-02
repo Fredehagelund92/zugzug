@@ -20,7 +20,15 @@ export function General() {
   const tenant = useTenant();
   const navigate = useNavigate();
   const canEdit = can(tenant, "settings.general.edit");
-  const canChangeSlug = tenant.isSuperAdmin && tenant.slug !== "default";
+  // The server lets any workspace admin change the address (PATCH /slug behind
+  // requireAdmin) and refuses only on the default workspace — mirror that here.
+  const canChangeSlug = canEdit && tenant.slug !== "default";
+  // Why the address is fixed, when it is: the default workspace's is fixed for
+  // everyone, otherwise it's just that this member isn't an admin.
+  const slugFixedReason =
+    tenant.slug === "default"
+      ? "The default workspace’s address can’t be changed."
+      : "Only admins can change the address.";
   const [label, setLabel] = useState(tenant.label);
   const [newSlug, setNewSlug] = useState(tenant.slug);
   const [slugBusy, setSlugBusy] = useState(false);
@@ -70,7 +78,7 @@ export function General() {
       <SettingsPageHeader title="General" subtitle="Your workspace’s name, color, and address." />
       <SettingsSection
         title="Identity"
-        hint={canChangeSlug ? "Workspace identity." : "Workspace identity. Slug is immutable."}
+        hint={canChangeSlug ? "Workspace identity." : `Workspace identity. ${slugFixedReason}`}
       >
         <ReadOnly enabled={!canEdit}>
           <FormField
@@ -105,7 +113,9 @@ export function General() {
             </dt>
             <dd>
               <code className="font-mono text-accent">{tenant.slug}</code>
-              <span className="ml-2 text-xs text-ink-3">immutable</span>
+              <span className="ml-2 text-xs text-ink-3">
+                {tenant.slug === "default" ? "fixed" : "admins only"}
+              </span>
             </dd>
           </dl>
         )}
@@ -139,7 +149,7 @@ export function General() {
       {canChangeSlug && (
         <SettingsSection
           title="URL slug"
-          hint="Renaming the slug changes the URL for everyone using this workspace. Super-admin only."
+          hint="Changing the slug changes the URL for everyone using this workspace. Old links keep working for 30 days."
         >
           <FormField label="Slug">
             <div className="flex items-center gap-2">

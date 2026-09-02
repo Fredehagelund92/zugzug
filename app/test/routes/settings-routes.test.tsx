@@ -201,11 +201,22 @@ describe("General — role gating", () => {
   });
 });
 
-describe("General — slug editor (super-admin)", () => {
-  it("slug editor is NOT shown to a non-super-admin", () => {
-    renderGeneral(makeTenant({ isSuperAdmin: false }));
-    // The slug Save button is only present for super-admins
+describe("General — slug editor", () => {
+  it("slug editor is NOT shown to a member who can't manage the workspace", () => {
+    renderGeneral(makeTenant({ role: "editor", isSuperAdmin: false }));
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
+
+  it("slug editor is NOT shown on the default workspace", () => {
+    renderGeneral(makeTenant({ slug: "default", isSuperAdmin: true }));
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
+
+  // The server gates PATCH /api/t/:slug/slug on requireAdmin, not on
+  // super-admin, so a workspace admin gets the editor too.
+  it("workspace admin → slug editor is visible", () => {
+    renderGeneral(makeTenant({ role: "admin", isSuperAdmin: false }));
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
   });
 
   it("super-admin → slug editor is visible", () => {

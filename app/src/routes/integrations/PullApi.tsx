@@ -193,6 +193,14 @@ export function PullApi() {
   );
 }
 
+/** baseUrl already ends in `/v1` and every signature starts with `GET /v1/`,
+ *  so the version segment has to come off one of them or the curl 404s on
+ *  `/v1/v1/...`. */
+export function curlForEndpoint(baseUrl: string, sig: string): string {
+  const path = sig.replace(/^GET\s+/, "").replace(/^\/v1/, "");
+  return `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${path}`;
+}
+
 function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: string }) {
   const ENDPOINTS: { sig: string; desc: string }[] = [
     { sig: `GET /v1/tables`, desc: "List this workspace's tables." },
@@ -214,9 +222,9 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
           <code className="text-[12px] font-mono">{e.sig}</code>
           <p className="mt-1 text-[12.5px] text-ink-2">{e.desc}</p>
           <details className="mt-2">
-            <summary className="text-[12px] text-ink-3 cursor-pointer">Sample response</summary>
+            <summary className="text-[12px] text-ink-3 cursor-pointer">Try it with curl</summary>
             <pre className="mt-2 p-2 rounded-sm bg-surface-2 text-[11.5px] font-mono overflow-x-auto">
-              {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${e.sig.replace("GET ", "")}`}
+              {curlForEndpoint(baseUrl, e.sig)}
             </pre>
           </details>
         </Panel>

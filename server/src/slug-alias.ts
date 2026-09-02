@@ -46,3 +46,10 @@ export async function lookupAliasedSlug(oldSlug: string): Promise<AliasedSlug | 
   if (!row) return null;
   return { currentSlug: row.current_slug, tenantId: row.tenant_id };
 }
+
+/** Drops any alias sitting on `slug`. Called when a workspace claims that slug
+ *  (rename or provision) so a live workspace can never be shadowed by another
+ *  workspace's stale redirect. */
+export async function clearSlugAlias(slug: string): Promise<void> {
+  await pgRun(`DELETE FROM ${pg("tenant_slug_alias")} WHERE old_slug = $1`, [slug]);
+}

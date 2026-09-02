@@ -160,7 +160,7 @@ describe("listWebhooks + getWebhook", () => {
     const list = await listWebhooks(T);
     const found = list.find((w) => w.id === created.id);
     expect(found).toBeDefined();
-    expect(found!.secretPrefix).toBe(created.value.slice(0, 12));
+    expect(found!.secret_prefix).toBe(created.value.slice(0, 12));
     // No ciphertext-shaped property
     expect((found as unknown as { secret_ciphertext?: unknown }).secret_ciphertext).toBeUndefined();
     expect((found as unknown as { secretCiphertext?: unknown }).secretCiphertext).toBeUndefined();
