@@ -22,6 +22,7 @@ import {
 } from "./repo-shared.ts";
 import type { Ref } from "./warehouse/adapter.ts";
 import { getAdapter } from "./warehouse/registry.ts";
+import { withTimeout } from "./warehouse/timeout.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { materializeSourceScanValues } from "./repo-source-scan.ts";
 import { clusterForSeed } from "./cluster-values.ts";
@@ -55,11 +56,17 @@ export async function listSources(opts: {
   if (opts.status === "needs") where.push(`COALESCE(st.unmapped, 0) > 0`);
   else if (opts.status === "clean")
     where.push(`COALESCE(st.present, false) AND COALESCE(st.unmapped, 0) = 0`);
-  else if (opts.status === "missing") where.push(`st.scanned_at IS NOT NULL AND NOT st.present`);
+  // "missing" is the column-is-gone state only — a failed scan proves nothing
+  // about the column, so it gets its own filter.
+  else if (opts.status === "missing")
+    where.push(`st.scanned_at IS NOT NULL AND NOT st.present AND st.scan_error IS NULL`);
+  else if (opts.status === "failed") where.push(`st.scan_error IS NOT NULL`);
 
   const rows = await pgAll<{
     refTableId: string;
     refTable: string;
+    databaseId: string;
+    databaseName: string;
     table: string;
     column: string;
     present: boolean;
@@ -67,9 +74,11 @@ export async function listSources(opts: {
     values: number;
     unmapped: number;
     scanned: boolean;
+    scanError: string | null;
     scannedAt: string | null;
   }>(
     `SELECT s.reference_table_id AS "refTableId", d.label AS "refTable",
+            s.database_id AS "databaseId", wd.database_name AS "databaseName",
             (s.schema_name || '.' || s.table_name) AS "table",
             s.column_name AS column,
             COALESCE(st.present, false) AS present,
@@ -77,9 +86,11 @@ export async function listSources(opts: {
             COALESCE(st.distinct_values, 0)::int AS values,
             COALESCE(st.unmapped, 0)::int AS unmapped,
             (st.scanned_at IS NOT NULL) AS scanned,
+            st.scan_error AS "scanError",
             st.scanned_at::text AS "scannedAt"
      FROM ${pg("reference_table_source")} s
      JOIN ${pg("reference_table")} d ON d.id = s.reference_table_id AND d.tenant_id = s.tenant_id
+     JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
      LEFT JOIN ${pg("source_stat")} st
        ON st.reference_table_id = s.reference_table_id
       AND st.database_id = s.database_id
@@ -93,6 +104,8 @@ export async function listSources(opts: {
     params,
   );
   return rows.map((r) => ({
+    databaseId: r.databaseId,
+    databaseName: r.databaseName,
     table: r.table,
     column: r.column,
     refTable: r.refTable,
@@ -102,6 +115,7 @@ export async function listSources(opts: {
     values: Number(r.values),
     unmapped: Number(r.unmapped),
     scanned: !!r.scanned,
+    scanError: r.scanError ?? null,
     scannedAt: r.scannedAt ?? null,
   }));
 }
@@ -112,7 +126,8 @@ export async function sourceFacets(tenantId: string): Promise<SchemaFacet[]> {
     `SELECT s.schema_name AS schema,
             count(*)::int AS columns,
             COALESCE(sum(st.unmapped), 0)::int AS unmapped,
-            count(*) FILTER (WHERE st.scanned_at IS NOT NULL AND NOT st.present)::int AS missing
+            count(*) FILTER (WHERE st.scanned_at IS NOT NULL AND NOT st.present
+                                   AND st.scan_error IS NULL)::int AS missing
      FROM ${pg("reference_table_source")} s
      LEFT JOIN ${pg("source_stat")} st
        ON st.reference_table_id      = s.reference_table_id
@@ -267,6 +282,7 @@ async function scanOneSource(
   const ref: Ref = { catalog: r.catalog, schema: r.schema, table: r.table };
   const displayTable = `${r.schema}.${r.table}`;
   let present: boolean;
+  let scanError: string | null = null;
   let rows = 0;
   let distinct = 0;
   let unmapped = 0;
@@ -315,17 +331,29 @@ async function scanOneSource(
       timedOut,
     });
     present = false;
+    // The scan never reached an answer, so "the column is missing" is not one
+    // of the things we learned. Persist why — unless a cheap follow-up probe
+    // shows the column really is gone, which is the one case where
+    // "column not found" is the truth.
+    scanError = timedOut ? "scan timed out" : e instanceof Error ? e.message : String(e);
+    try {
+      const cols = await withTimeout(() => adapter.listColumns(ref), 5_000, "listColumns");
+      if (!cols.some((c) => c.name.toLowerCase() === r.column.toLowerCase())) scanError = null;
+    } catch {
+      /* the probe failed too — keep the scan error, don't invent a verdict */
+    }
   }
   await pgRun(
     `INSERT INTO ${pg("source_stat")}
        (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name,
-        present, rows, distinct_values, unmapped, scanned_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, current_timestamp)
+        present, rows, distinct_values, unmapped, scan_error, scanned_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, current_timestamp)
      ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO UPDATE SET
        present         = EXCLUDED.present,
        rows            = EXCLUDED.rows,
        distinct_values = EXCLUDED.distinct_values,
        unmapped        = EXCLUDED.unmapped,
+       scan_error      = EXCLUDED.scan_error,
        scanned_at      = EXCLUDED.scanned_at`,
     [
       tenantId,
@@ -338,6 +366,7 @@ async function scanOneSource(
       rows,
       distinct,
       unmapped,
+      scanError,
     ],
   );
 }
@@ -438,32 +467,62 @@ export async function autoStageExactMatches(
 }
 
 /** Register a warehouse column as a source for a refTable (idempotent).
+ *  Returns the warehouse_database.id the row was registered against.
  *
  *  Takes the convenience `"schema.table"` + column shape (used by seed and
- *  deriveRecord). Resolves the warehouse database via
- *  resolveDefaultDatabase() — the first registered warehouse_database for
- *  the deployment. Callers that already hold a databaseId should write the
- *  INSERT directly with that ID. */
+ *  deriveRecord). The database is resolved in this order: the caller's
+ *  explicit `opts.databaseId` (what the catalog UI browsed); else the database
+ *  this refTable already has this table registered against — so re-wiring or
+ *  re-scanning an existing source never forks a second registration under the
+ *  default database; else resolveDefaultDatabase(). */
 export async function addSource(
   refTableId: string,
   table: string,
   column: string,
   tenantId: string,
-  opts: { silent?: boolean } = {},
-): Promise<void> {
-  void opts;
+  opts: { silent?: boolean; databaseId?: string } = {},
+): Promise<string> {
   const parts = table.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     throw new AppError("VALIDATION_FAILED", `expected "schema.table", got: ${table}`, 422);
   }
   const { resolveDefaultDatabase } = await import("./repo-record.ts");
-  const databaseId = await resolveDefaultDatabase(tenantId);
+  const databaseId =
+    opts.databaseId ??
+    (await databaseOfRegisteredTable(refTableId, parts[0], parts[1], tenantId)) ??
+    (await resolveDefaultDatabase(tenantId));
   await pgRun(
     `INSERT INTO ${pg("reference_table_source")} (reference_table_id, tenant_id, database_id, schema_name, table_name, column_name)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (tenant_id, reference_table_id, database_id, schema_name, table_name, column_name) DO NOTHING`,
     [refTableId, tenantId, databaseId, parts[0], parts[1], column],
   );
+  return databaseId;
+}
+
+/** The database this refTable already registered `schema.table` against, if any. */
+async function databaseOfRegisteredTable(
+  refTableId: string,
+  schema: string,
+  table: string,
+  tenantId: string,
+): Promise<string | null> {
+  const row = await pgGet<{ databaseId: string }>(
+    `SELECT database_id AS "databaseId" FROM ${pg("reference_table_source")}
+      WHERE tenant_id = $1 AND reference_table_id = $2 AND schema_name = $3 AND table_name = $4
+      LIMIT 1`,
+    [tenantId, refTableId, schema, table],
+  );
+  return row?.databaseId ?? null;
+}
+
+/** database_name for a registered warehouse database id. */
+async function catalogNameOf(databaseId: string): Promise<string | null> {
+  const row = await pgGet<{ name: string }>(
+    `SELECT database_name AS name FROM ${pg("warehouse_database")} WHERE id = $1`,
+    [databaseId],
+  );
+  return row?.name ?? null;
 }
 
 /** Top-N unmapped raw values from a specific warehouse source column, with the
@@ -761,13 +820,16 @@ async function bulkInsert1(prefix: string, values: string[], conflict: string): 
  *     duplicate record records, defeating the whole point of dedup.
  *
  *  Pass `opts.force: true` to seed even when the refTable already has records — only
- *  use when bootstrapping a refTable from multiple equally-trusted sources. */
+ *  use when bootstrapping a refTable from multiple equally-trusted sources.
+ *  Pass `opts.databaseId` to wire the column in the warehouse database the
+ *  caller actually browsed; without it addSource keeps an existing
+ *  registration for the same table, or falls back to the default database. */
 export async function deriveRecord(
   refTableId: string,
   table: string,
   column: string,
   nameColumn: string | undefined,
-  opts: { silent?: boolean; force?: boolean } = {},
+  opts: { silent?: boolean; force?: boolean; databaseId?: string } = {},
   userId: string,
   tenantId: string,
 ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
@@ -777,9 +839,12 @@ export async function deriveRecord(
     [refTableId, tenantId],
   );
   if (!meta) return { derived: 0, mode: "seed", matched: 0, unmatched: 0 };
-  await addSource(refTableId, table, column, tenantId);
+  const databaseId = await addSource(refTableId, table, column, tenantId, {
+    databaseId: opts.databaseId,
+  });
   const external = meta.keyKind === "external_id";
-  if (external && nameColumn) await addSource(refTableId, table, nameColumn, tenantId);
+  if (external && nameColumn)
+    await addSource(refTableId, table, nameColumn, tenantId, { databaseId });
 
   const seeded = await pgGet<{ n: number }>(`SELECT 1 AS n FROM ${cq(meta.dimTable)} LIMIT 1`);
   const mode: "seed" | "connect" = seeded && !opts.force ? "connect" : "seed";
@@ -797,7 +862,7 @@ export async function deriveRecord(
       );
     }
     const cols = external && nameColumn ? [column, nameColumn] : [column];
-    await scanWiredSources(refTableId, table, cols, tenantId);
+    await scanWiredSources(refTableId, table, cols, tenantId, databaseId);
     // Inline the auto-stage so the caller gets real outcome counts immediately,
     // instead of waiting for the scheduler tick. The source is already
     // registered above; if auto-stage fails (warehouse blip, draft conflict),
@@ -827,16 +892,18 @@ export async function deriveRecord(
     return { derived: 0, mode, matched, unmatched };
   }
 
-  // Resolve the warehouse catalog from the just-registered source. Throws if
-  // the source isn't registered (shouldn't happen post-addSource).
-  const ref = await refForRegisteredTable(refTableId, table, tenantId);
-  if (!ref) {
+  // Resolve the warehouse catalog from the database the source was just
+  // registered against — not from whichever registration happens to sort first.
+  const catalog = await catalogNameOf(databaseId);
+  if (!catalog) {
     throw new AppError(
       "VALIDATION_FAILED",
       `could not resolve warehouse database for ${table}`,
       422,
     );
   }
+  const [refSchema, refTable] = table.split(".") as [string, string];
+  const ref: Ref = { catalog, schema: refSchema, table: refTable };
 
   const adapter = await getAdapter();
   // Let warehouse errors propagate — callers (TableDetail wiring,
@@ -857,6 +924,7 @@ export async function deriveRecord(
       table,
       [column, ...(external && nameColumn ? [nameColumn] : [])],
       tenantId,
+      databaseId,
     );
     return { derived: 0, mode, matched: 0, unmatched: 0 };
   }
@@ -895,6 +963,7 @@ export async function deriveRecord(
       table,
       [column, ...(nameColumn ? [nameColumn] : [])],
       tenantId,
+      databaseId,
     );
     return { derived: ids.length, mode, matched: 0, unmatched: 0 };
   }
@@ -928,7 +997,7 @@ export async function deriveRecord(
       `${refTableByKey.size} value${refTableByKey.size === 1 ? "" : "s"} from ${table}.${column} → ${meta.dimTable}`,
       { tenantId },
     );
-  await scanWiredSources(refTableId, table, [column], tenantId);
+  await scanWiredSources(refTableId, table, [column], tenantId, databaseId);
   return { derived: refTableByKey.size, mode, matched: 0, unmatched: 0 };
 }
 
@@ -941,6 +1010,7 @@ async function scanWiredSources(
   table: string,
   columns: string[],
   tenantId: string,
+  databaseId: string,
 ): Promise<void> {
   if (!columns.length) return;
   const parts = table.split(".");
@@ -960,8 +1030,9 @@ async function scanWiredSources(
         AND s.reference_table_id      = $2
         AND s.schema_name = $3
         AND s.table_name  = $4
-        AND s.column_name = ANY($5::text[])`,
-    [tenantId, refTableId, parts[0], parts[1], columns],
+        AND s.column_name = ANY($5::text[])
+        AND s.database_id = $6`,
+    [tenantId, refTableId, parts[0], parts[1], columns, databaseId],
   );
   if (!regs.length) return;
   try {

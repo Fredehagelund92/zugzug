@@ -101,17 +101,19 @@ export async function resolveDefaultDatabase(tenantId: string): Promise<string> 
   return row.id;
 }
 
-/** Remove a single wired source column from a refTable. Idempotent — deleting
- *  a nonexistent wiring is a no-op. */
+/** Remove a single wired source column from a refTable. Idempotent, but says
+ *  which it was: `true` when a wiring was deleted, `false` when nothing
+ *  matched — the caller must not claim a removal that never happened. */
 export async function removeSource(
   refTableId: string,
   source: QualifiedSource,
   tenantId: string,
-): Promise<void> {
-  await pgRun(
+): Promise<boolean> {
+  const deleted = await pgAll<{ ok: number }>(
     `DELETE FROM ${pg("reference_table_source")}
       WHERE tenant_id = $1 AND reference_table_id = $2 AND database_id = $3
-        AND schema_name = $4 AND table_name = $5 AND column_name = $6`,
+        AND schema_name = $4 AND table_name = $5 AND column_name = $6
+      RETURNING 1 AS ok`,
     [
       tenantId,
       refTableId,
@@ -121,6 +123,7 @@ export async function removeSource(
       source.columnName,
     ],
   );
+  return deleted.length > 0;
 }
 
 /** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */

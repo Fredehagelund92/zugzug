@@ -83,6 +83,7 @@ vi.mock("../../store", () => ({
   listDrafts: vi.fn(() => []),
   commit: vi.fn(),
   useDrafts: () => ({}),
+  useDraftsByValue: () => ({}),
   useCanEdit: () => true,
   saveDraft: vi.fn(),
   discardDraft: vi.fn(),

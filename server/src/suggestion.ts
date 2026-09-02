@@ -2,11 +2,12 @@
 //
 // Core suggestion generation: cache lookup → AI provider call → cache write.
 // Cache lives in `zugzug_app.ai_hint_cache` (see drizzle/schema.ts). AI config
-// (enabled flag, provider, API key) lives in `zugzug_app.preferences`, scoped
-// per tenant.
+// is resolved by resolveAIConfig() below — the single entry point every AI
+// caller shares: per-workspace `zugzug_app.preferences`, falling back to the
+// deployment-wide ANTHROPIC_API_KEY.
 
 import { pgGet, pgRun } from "./pg.ts";
-import { pg as pgTable } from "./env.ts";
+import { env, pg as pgTable } from "./env.ts";
 import { getAIProvider, InvalidAPIKeyError, type AIProviderType } from "./ai-providers/index.ts";
 
 export interface SuggestionContext {
@@ -23,10 +24,10 @@ export interface Suggestion {
   cached: boolean;
 }
 
-interface TenantAIConfig {
-  ai_enabled: boolean;
-  ai_provider: AIProviderType;
-  ai_api_key?: string;
+/** The provider + credential one suggestion call will use. */
+export interface ResolvedAIConfig {
+  provider: AIProviderType;
+  apiKey: string;
 }
 
 /**
@@ -50,16 +51,12 @@ export async function generateSuggestion(
     if (cached) return cached;
   }
 
-  const config = await getTenantAIConfig(tenantId);
-
-  if (!config.ai_enabled) {
+  const config = await resolveAIConfig(tenantId);
+  if (!config) {
     throw new AINotEnabledError("AI is not enabled for this workspace");
   }
-  if (!config.ai_api_key) {
-    throw new InvalidAPIKeyError("AI API key is not configured for this workspace");
-  }
 
-  const provider = getAIProvider(config.ai_provider, config.ai_api_key);
+  const provider = getAIProvider(config.provider, config.apiKey);
   const aiResponse = await provider.suggestMapping({
     refTableName: context.refTableName,
     rawValue: context.rawValue,
@@ -67,7 +64,7 @@ export async function generateSuggestion(
   });
 
   const confidenceScore = confidenceToScore(aiResponse.confidence);
-  const model = modelForProvider(config.ai_provider);
+  const model = modelForProvider(config.provider);
 
   await cacheSuggestion(tenantId, refTableId, rawValue, {
     suggestion: aiResponse.record,
@@ -152,7 +149,12 @@ async function cacheSuggestion(
   );
 }
 
-async function getTenantAIConfig(tenantId: string): Promise<TenantAIConfig> {
+/** The one place AI credentials are resolved, for every caller. A workspace can
+ *  bring its own provider and key through `preferences`; otherwise the
+ *  deployment-wide ANTHROPIC_API_KEY is used. Null means no AI is set up
+ *  anywhere, which is what lets the UI hide the affordance instead of offering
+ *  a retry that can never succeed. */
+export async function resolveAIConfig(tenantId: string): Promise<ResolvedAIConfig | null> {
   const row = await pgGet<{
     ai_enabled: boolean;
     ai_provider: string;
@@ -165,21 +167,34 @@ async function getTenantAIConfig(tenantId: string): Promise<TenantAIConfig> {
     [tenantId],
   );
 
-  if (!row) {
-    return { ai_enabled: false, ai_provider: "openai" };
+  if (row?.ai_enabled && row.ai_api_key) {
+    return {
+      provider: row.ai_provider === "anthropic" ? "anthropic" : "openai",
+      apiKey: row.ai_api_key,
+    };
   }
+  if (env.anthropicApiKey) return { provider: "anthropic", apiKey: env.anthropicApiKey };
+  // A workspace that switched AI on but never supplied a key gets the specific
+  // error rather than "no AI here".
+  if (row?.ai_enabled) {
+    throw new InvalidAPIKeyError("AI API key is not configured for this workspace");
+  }
+  return null;
+}
 
-  const provider: AIProviderType = row.ai_provider === "anthropic" ? "anthropic" : "openai";
-
-  return {
-    ai_enabled: row.ai_enabled,
-    ai_provider: provider,
-    ai_api_key: row.ai_api_key ?? undefined,
-  };
+/** True when a suggestion could actually be produced for this workspace. The
+ *  frontend asks before rendering "Suggest with AI". */
+export async function isAIConfigured(tenantId: string): Promise<boolean> {
+  try {
+    return (await resolveAIConfig(tenantId)) !== null;
+  } catch {
+    // AI switched on with an unusable key — still nothing the user can act on.
+    return false;
+  }
 }
 
 /** Map confidence band → numeric score persisted in cache (0–100). */
-function confidenceToScore(confidence: "high" | "medium" | "low"): number {
+export function confidenceToScore(confidence: "high" | "medium" | "low"): number {
   switch (confidence) {
     case "high":
       return 90;

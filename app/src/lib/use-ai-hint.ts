@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
 
+/** One on-demand mapping hint from GET /api/triage/ai-hint. */
 export interface AiHint {
   suggestion: string | null;
   confidence: number;
@@ -8,68 +9,28 @@ export interface AiHint {
   cached?: boolean;
 }
 
-interface State {
-  hint: AiHint | null;
-  loading: boolean;
-  error: boolean;
-}
+// Asked once per session — whether AI is set up doesn't change under the user,
+// and every Review row would otherwise ask again.
+let configuredCache: boolean | null = null;
+let configuredPromise: Promise<boolean> | null = null;
 
-// Module-level session cache — survives remounts, makes re-focuses instant.
-const sessionCache = new Map<string, AiHint>();
-
-function cacheKey(refTableId: string, raw: string): string {
-  return `${refTableId}::${raw}`;
-}
-
-export function useAiHint(refTableId: string, raw: string, enabled: boolean): State {
-  const [state, setState] = useState<State>(() => {
-    const cached = enabled ? sessionCache.get(cacheKey(refTableId, raw)) : undefined;
-    return { hint: cached ?? null, loading: false, error: false };
-  });
-
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
+/** Whether this deployment has an AI provider set up. Null while unknown.
+ *  Review hides "Suggest with AI" when this is false: without a provider the
+ *  request can only ever fail, and the old error state offered "Try AI again"
+ *  forever. */
+export function useAiConfigured(): boolean | null {
+  const [configured, setConfigured] = useState<boolean | null>(configuredCache);
   useEffect(() => {
-    if (!enabled || !refTableId || !raw) return;
-
-    const key = cacheKey(refTableId, raw);
-    const cached = sessionCache.get(key);
-    if (cached) {
-      setState({ hint: cached, loading: false, error: false });
-      return;
-    }
-
-    setState((s) => ({ ...s, loading: true, error: false }));
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(() => {
-      if (abortRef.current) abortRef.current.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      const qs = new URLSearchParams({ refTableId, raw });
-      apiFetch(`/triage/ai-hint?${qs.toString()}`, { signal: controller.signal })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`${res.status}`);
-          return res.json() as Promise<AiHint>;
-        })
-        .then((hint) => {
-          sessionCache.set(key, hint);
-          setState({ hint, loading: false, error: false });
-        })
-        .catch((e: unknown) => {
-          if (e instanceof DOMException && e.name === "AbortError") return;
-          setState({ hint: null, loading: false, error: true });
-        });
-    }, 150);
-
+    if (configuredCache !== null) return;
+    configuredPromise ??= apiFetch("/ai/status")
+      .then(async (r) => (r.ok ? (((await r.json()) as { configured?: boolean }).configured ?? false) : false))
+      .catch(() => false)
+      .then((v) => (configuredCache = v));
+    let live = true;
+    void configuredPromise.then((v) => live && setConfigured(v));
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (abortRef.current) abortRef.current.abort();
+      live = false;
     };
-  }, [refTableId, raw, enabled]);
-
-  return state;
+  }, []);
+  return configured;
 }

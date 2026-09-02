@@ -15,11 +15,16 @@ export function useCatalogTree() {
   const [roots, setRoots] = useState<TreeNode[]>([]);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  // A failed boot used to render as an empty tree — indistinguishable from a
+  // warehouse with nothing registered. Keep the failure and offer a retry.
+  const [rootsError, setRootsError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const rootsRef = useRef<TreeNode[]>([]);
   rootsRef.current = roots;
 
   useEffect(() => {
     let cancelled = false;
+    setRootsError(null);
     Promise.all([fetchWarehouseInfo(), fetchWarehouseDatabases()])
       .then(([info, dbs]) => {
         if (cancelled) return;
@@ -51,11 +56,15 @@ export function useCatalogTree() {
         setRoots([conn]);
         setOpen(new Set(["conn"]));
       })
-      .catch(() => setRoots([]));
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setRoots([]);
+        setRootsError(err instanceof Error ? err.message : "Couldn't reach the warehouse.");
+      });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   const patch = (id: string, fn: (n: TreeNode) => TreeNode) => {
     const walk = (nodes: TreeNode[]): TreeNode[] =>
@@ -76,6 +85,7 @@ export function useCatalogTree() {
   const loadChildren = async (node: TreeNode) => {
     if (node.childrenLoaded) return;
     mark(node.id, true);
+    patch(node.id, (n) => ({ ...n, loadFailed: false }));
     try {
       if (node.kind === "database") {
         const schemas = await listSchemas(dbIdOf(node.id));
@@ -121,6 +131,10 @@ export function useCatalogTree() {
           })),
         }));
       }
+    } catch (err) {
+      // A schema that failed to load must not look like an empty one.
+      patch(node.id, (n) => ({ ...n, loadFailed: true }));
+      throw err;
     } finally {
       mark(node.id, false);
     }
@@ -142,7 +156,9 @@ export function useCatalogTree() {
     }
   };
 
-  return { roots, open, loadingIds, toggle };
+  const retry = () => setAttempt((n) => n + 1);
+
+  return { roots, open, loadingIds, rootsError, retry, toggle };
 }
 
 function findNode(roots: TreeNode[], id: string): TreeNode | null {

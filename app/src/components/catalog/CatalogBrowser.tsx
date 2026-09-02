@@ -17,7 +17,7 @@ const TREE_WIDTH_DEFAULT = 326;
 const TREE_WIDTH_STEP = 16;
 
 export function CatalogBrowser(): JSX.Element {
-  const { roots, open, loadingIds, toggle } = useCatalogTree();
+  const { roots, open, loadingIds, rootsError, retry, toggle } = useCatalogTree();
   const refTables = useRefTables();
   const nav = useNavLinks();
   const [query, setQuery] = useState("");
@@ -183,7 +183,20 @@ export function CatalogBrowser(): JSX.Element {
                 : "Type to search · browse to explore"}
           </div>
         </div>
-        {isSearching ? (
+        {rootsError !== null ? (
+          <div className="px-3 py-3">
+            <div role="alert" className="font-mono text-[10.5px] text-danger">
+              Couldn’t load the warehouse — {rootsError}
+            </div>
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-2 rounded-sm border border-line-2 px-2.5 py-1 font-mono text-[11px] text-ink-2 hover:border-ink-3 hover:text-ink"
+            >
+              Try again
+            </button>
+          </div>
+        ) : isSearching ? (
           <CatalogSearchResults
             results={results}
             searching={searching}
@@ -237,6 +250,20 @@ export function CatalogBrowser(): JSX.Element {
           />
         ) : selected ? (
           <NodeOverview node={selected} />
+        ) : rootsError !== null ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2.5 px-10 text-center text-ink-3">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-danger">
+              Warehouse unreachable
+            </div>
+            <div>{rootsError}</div>
+            <button
+              type="button"
+              onClick={retry}
+              className="rounded-sm border border-line-2 px-2.5 py-1 font-mono text-[11px] text-ink-2 hover:border-ink-3 hover:text-ink"
+            >
+              Try again
+            </button>
+          </div>
         ) : roots[0] && roots[0].children.length === 0 && !isSearching ? (
           <div className="flex h-full flex-col items-center justify-center gap-2.5 px-10 text-center text-ink-3">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-3">

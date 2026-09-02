@@ -35,6 +35,7 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
     targetKey: string | null;
     uid: string;
     secs: number;
+    createdAt: Date;
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
@@ -45,6 +46,7 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            created_at AS "createdAt",
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
      FROM ${pg("draft")} WHERE reference_table_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
@@ -68,6 +70,7 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
     targetKey: r.targetKey,
     user: byId.get(r.uid) ?? unknownUser,
     at: rel(Number(r.secs)),
+    createdAt: new Date(r.createdAt).toISOString(),
     source: r.source,
     confidence: r.confidence,
     reasoning: r.reasoning,
@@ -134,6 +137,7 @@ export async function listAllDraftsPage(
     targetKey: string | null;
     uid: string;
     secs: number;
+    createdAt: Date;
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
@@ -144,6 +148,7 @@ export async function listAllDraftsPage(
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            created_at AS "createdAt",
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
      FROM ${pg("draft")} WHERE tenant_id = $1${keyset}
@@ -176,6 +181,7 @@ export async function listAllDraftsPage(
     targetKey: r.targetKey,
     user: byId.get(r.uid) ?? unknownUser,
     at: rel(Number(r.secs)),
+    createdAt: new Date(r.createdAt).toISOString(),
     source: r.source,
     confidence: r.confidence,
     reasoning: r.reasoning,
@@ -280,6 +286,7 @@ export async function createDraft(
     targetKey: string | null;
     uid: string;
     secs: number;
+    createdAt: Date;
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
@@ -288,6 +295,7 @@ export async function createDraft(
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            created_at AS "createdAt",
             source, confidence, reasoning
        FROM ${pg("draft")}
       WHERE tenant_id = $1 AND reference_table_id = $2 AND raw = $3 AND user_id = $4
@@ -310,6 +318,7 @@ export async function createDraft(
     targetKey: row.targetKey,
     user: user ?? { id: row.uid, name: "Unknown", initials: "??" },
     at: rel(Number(row.secs)),
+    createdAt: new Date(row.createdAt).toISOString(),
     source: row.source,
     confidence: row.confidence,
     reasoning: row.reasoning,
@@ -318,35 +327,66 @@ export async function createDraft(
   };
 }
 
+/** A draft picked out of the queue. A bare string means "this source value,
+ *  whichever draft is newest" — the fold publish already applies. An object
+ *  narrows to one author's draft, which is what the Approve inbox needs: it
+ *  lists a row per author, so acting on Mia's row must not touch Bob's. */
+export type DraftSelector = string | { raw: string; userId?: string | null };
+
+interface NormalizedSelector {
+  raw: string;
+  userId: string | null;
+}
+function normalizeSelectors(keys: DraftSelector[]): NormalizedSelector[] {
+  return keys.map((k) =>
+    typeof k === "string" ? { raw: k, userId: null } : { raw: k.raw, userId: k.userId ?? null },
+  );
+}
+/** SQL predicate matching the selected (raw, author) pairs. A null author in
+ *  the pair list matches every author of that raw. `$${r}`/`$${u}` are the raws
+ *  and authors arrays; `p` prefixes the draft table alias when there is one. */
+function selectorPredicate(r: number, u: number, p = ""): string {
+  return `EXISTS (SELECT 1 FROM unnest($${r}::text[], $${u}::text[]) AS sel(sr, su)
+                   WHERE sel.sr = ${p}raw AND (sel.su IS NULL OR sel.su = ${p}user_id))`;
+}
+
+/** Delete the caller's own draft for a value. Returns how many rows went, so
+ *  the caller can say "nothing was removed" instead of silently no-opping on
+ *  another editor's draft (the PK is per-author). */
 export async function discardDraft(
   refTableId: string,
   raw: string,
   userId: string,
   tenantId: string,
-): Promise<void> {
-  await pgRun(
-    `DELETE FROM ${pg("draft")} WHERE reference_table_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4`,
+): Promise<{ discarded: number }> {
+  const gone = await pgAll<{ raw: string }>(
+    `DELETE FROM ${pg("draft")} WHERE reference_table_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4
+     RETURNING raw`,
     [refTableId, raw, userId, tenantId],
   );
+  if (gone.length === 0) return { discarded: 0 };
   await appendAuditAs(userId, "discard_draft", `${refTableId}: ${raw}`, { tenantId });
+  return { discarded: gone.length };
 }
 
 export async function rejectDrafts(
   refTableId: string,
   tenantId: string,
-  raws: string[],
+  keys: DraftSelector[],
   reason: string,
   reviewerId: string,
 ): Promise<{ rejected: number }> {
   const trimmed = reason.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "a rejection reason is required", 400);
-  if (raws.length === 0) return { rejected: 0 };
+  if (keys.length === 0) return { rejected: 0 };
+  const sel = normalizeSelectors(keys);
   const res = await pgAll<{ raw: string }>(
     `UPDATE ${pg("draft")}
-        SET status = 'rejected', rejected_reason = $4, rejected_by = $5
-      WHERE reference_table_id = $1 AND tenant_id = $2 AND raw = ANY($3) AND status = 'mapped'
+        SET status = 'rejected', rejected_reason = $5, rejected_by = $6
+      WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'
+        AND ${selectorPredicate(3, 4)}
       RETURNING raw`,
-    [refTableId, tenantId, raws, trimmed, reviewerId],
+    [refTableId, tenantId, sel.map((k) => k.raw), sel.map((k) => k.userId), trimmed, reviewerId],
   );
   const n = res.length;
   await appendAuditAs(reviewerId, "Rejected drafts", `${n} in ${refTableId}: ${trimmed}`, {
@@ -361,7 +401,8 @@ export interface PublishState {
   version: number;
   publishedAt: string | null;
   publishedByName: string | null;
-  /** Staged mapping drafts awaiting publish. */
+  /** Source values with a mapping draft awaiting publish (one per value, even
+   *  when several editors drafted the same value). */
   pendingDrafts: number;
   /** Record keys edited, added, or retired since the last publish (ADR-0002:
    *  derived from record_version, not a staging queue). Keys created by
@@ -490,8 +531,11 @@ export async function getPublishState(refTableId: string, tenantId: string): Pro
     );
     publishedByName = latest?.by ?? null;
   }
+  // Distinct source values, not draft rows: the draft PK is per author, and the
+  // fold collapses every author's draft for a value into one mapping. Counting
+  // rows made "Publish 3 changes" preview only 2 mappings (#G1).
   const pending = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${pg("draft")}
+    `SELECT count(DISTINCT raw)::int AS n FROM ${pg("draft")}
      WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
     [refTableId, tenantId],
   );
@@ -702,7 +746,7 @@ export async function commit(
   refTableId: string,
   userId: string,
   tenantId: string,
-  draftKeys?: string[],
+  draftKeys?: DraftSelector[],
   opts?: {
     kind?: "publish" | "rollback";
     restoresVersion?: number;
@@ -735,42 +779,46 @@ export async function commit(
   // When draftKeys is provided, validate that all requested keys exist as
   // mapped drafts for this (refTable, tenant) before touching anything.
   const scoped = draftKeys !== undefined;
+  const sel = scoped ? normalizeSelectors(draftKeys!) : [];
+  const selRaws = sel.map((k) => k.raw);
+  const selAuthors = sel.map((k) => k.userId);
   // Author scope: when set, only drafts authored by this user are folded. Used
   // by the auto-publish job so it can never publish a teammate's draft.
   const onlyAuthor = opts?.onlyAuthor;
-  if (scoped && draftKeys!.length > 0) {
-    const found = await pgAll<{ raw: string }>(
-      `SELECT raw FROM ${DRAFT}
+  if (scoped && sel.length > 0) {
+    const found = await pgAll<{ raw: string; user_id: string }>(
+      `SELECT raw, user_id FROM ${DRAFT}
        WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL
-         AND raw = ANY($3)${onlyAuthor ? ` AND user_id = $4` : ""}`,
+         AND ${selectorPredicate(3, 4)}${onlyAuthor ? ` AND user_id = $5` : ""}`,
       onlyAuthor
-        ? [refTableId, tenantId, draftKeys, onlyAuthor]
-        : [refTableId, tenantId, draftKeys],
+        ? [refTableId, tenantId, selRaws, selAuthors, onlyAuthor]
+        : [refTableId, tenantId, selRaws, selAuthors],
     );
-    const foundSet = new Set(found.map((r) => r.raw));
-    const missing = draftKeys!.filter((k) => !foundSet.has(k));
+    const missing = sel.filter(
+      (k) => !found.some((f) => f.raw === k.raw && (k.userId === null || f.user_id === k.userId)),
+    );
     if (missing.length > 0) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `unknown or unstaged draft keys: ${missing.join(", ")}`,
+        `these drafts are no longer waiting to publish: ${missing.map((m) => m.raw).join(", ")}`,
         400,
       );
     }
   }
 
   // Scope clause: appended to every draft-filtered statement when draftKeys is provided.
-  // scoped=true + empty array → AND raw = ANY('{}') → matches nothing → zero-work fold.
-  const scopeClause = scoped ? ` AND raw = ANY($3)` : "";
-  const scopeClauseD = scoped ? ` AND d.raw = ANY($3)` : "";
+  // scoped=true + empty array → the pair list is empty → matches nothing → zero-work fold.
+  const scopeClause = scoped ? ` AND ${selectorPredicate(3, 4)}` : "";
+  const scopeClauseD = scoped ? ` AND ${selectorPredicate(3, 4, "d.")}` : "";
   // Author clause: appended after the scope clause, so its parameter follows
-  // draftKeys when scoped ($4) and tenant_id when not ($3).
-  const authorParam = scoped ? "$4" : "$3";
+  // the selector arrays when scoped ($5) and tenant_id when not ($3).
+  const authorParam = scoped ? "$5" : "$3";
   const authorClause = onlyAuthor ? ` AND user_id = ${authorParam}` : "";
   const authorClauseD = onlyAuthor ? ` AND d.user_id = ${authorParam}` : "";
   const baseParams = (extra: unknown[] = []) => [
     refTableId,
     tenantId,
-    ...(scoped ? [draftKeys] : []),
+    ...(scoped ? [selRaws, selAuthors] : []),
     ...(onlyAuthor ? [onlyAuthor] : []),
     ...extra,
   ];
@@ -832,13 +880,13 @@ export async function commit(
       `SELECT count(*)::int AS n FROM ${DRAFT}
        WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'
          AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${
-           scoped ? ` AND raw = ANY($4)` : ""
-         }${onlyAuthor ? ` AND user_id = $${scoped ? 5 : 4}` : ""}`,
+           scoped ? ` AND ${selectorPredicate(4, 5)}` : ""
+         }${onlyAuthor ? ` AND user_id = $${scoped ? 6 : 4}` : ""}`,
       [
         refTableId,
         tenantId,
         userId,
-        ...(scoped ? [draftKeys] : []),
+        ...(scoped ? [selRaws, selAuthors] : []),
         ...(onlyAuthor ? [onlyAuthor] : []),
       ],
     );

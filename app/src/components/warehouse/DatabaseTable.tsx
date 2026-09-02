@@ -105,7 +105,7 @@ export function DatabaseTable(props: Props): JSX.Element {
                 <td className="px-4 py-3 align-middle text-[12px] text-ink-2 max-sm:py-0">
                   {schemaText(d.schemaCount)}
                   <span className="mx-2 text-ink-3">·</span>
-                  {d.sourceCount} source value{d.sourceCount === 1 ? "" : "s"}
+                  {d.sourceCount} source{d.sourceCount === 1 ? "" : "s"}
                 </td>
                 <td className="px-4 py-3 text-right align-middle max-sm:py-1 max-sm:text-left">
                   <div className="inline-flex items-center gap-2.5">

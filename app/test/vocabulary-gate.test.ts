@@ -34,6 +34,9 @@ const FILES = [
   "app/src/routes/Sources.tsx",
   "app/src/components/warehouse/RemoveDatabaseConfirm.tsx",
   "app/src/routes/settings/Matching.tsx",
+  "app/src/components/warehouse/AddDatabaseDialog.tsx",
+  "app/src/components/warehouse/DatabaseTable.tsx",
+  "app/src/components/catalog/CatalogSearchResults.tsx",
 ];
 
 const BANNED = [
@@ -198,6 +201,33 @@ describe("vocabulary gate", () => {
     );
     expect(source, 'ShortcutsOverlay shortcut still says "commit + edit"').not.toContain(
       "commit + edit",
+    );
+  });
+
+  test("warehouse + catalog copy calls each thing by its defined name", () => {
+    const dialog = readFileSync(
+      join(REPO_ROOT, "app/src/components/warehouse/AddDatabaseDialog.tsx"),
+      "utf8",
+    );
+    expect(dialog, 'label placeholder still surfaces "raw"').not.toContain("Production raw");
+
+    // A registered warehouse COLUMN is a "source"; a "source value" is the
+    // distinct string scanned out of one. The database row counts the former.
+    const table = readFileSync(
+      join(REPO_ROOT, "app/src/components/warehouse/DatabaseTable.tsx"),
+      "utf8",
+    );
+    expect(table, 'database row still labels sources as "source value"').not.toContain(
+      "source value",
+    );
+
+    // A per-database search that failed is a database, not a "source".
+    const results = readFileSync(
+      join(REPO_ROOT, "app/src/components/catalog/CatalogSearchResults.tsx"),
+      "utf8",
+    );
+    expect(results, 'failed-search banner still calls databases "sources"').not.toContain(
+      "source{failedCount",
     );
   });
 

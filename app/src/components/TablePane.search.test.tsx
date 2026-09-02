@@ -16,6 +16,7 @@ vi.mock("../store", () => ({
   useSources: () => [],
   useRefTables: () => [],
   useDrafts: () => [],
+  useDraftsByValue: () => ({}),
   useCanEdit: () => false,
   useCurrentUser: () => null,
   fetchPublishState: () => Promise.resolve(null),

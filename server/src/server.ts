@@ -7,7 +7,7 @@ import { initSentry, captureError, flushSentry } from "./observability.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
 import type { ImportRow } from "./repo-record.ts";
 import { rebalanceRefTablePositions } from "./repo-record.ts";
-import { publishSummaryFor } from "./repo-drafts.ts";
+import { publishSummaryFor, type DraftSelector } from "./repo-drafts.ts";
 import { refTableMeta } from "./repo-shared.ts";
 import {
   getSessionUser,
@@ -65,7 +65,7 @@ import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
 import { checkHealth } from "./health.ts"; // used by the /api/health/connections route below
-import { generateSuggestion, AINotEnabledError } from "./suggestion.ts";
+import { generateSuggestion, AINotEnabledError, isAIConfigured } from "./suggestion.ts";
 import {
   InvalidAPIKeyError,
   AIProviderError,
@@ -88,6 +88,23 @@ const json = (data: unknown, status = 200) =>
 const noContent = () => new Response(null, { status: 204, headers: corsHeaders });
 const err = (e: unknown, status = 500) =>
   json({ error: e instanceof Error ? e.message : String(e) }, status);
+
+/** Parse a draft selection from a request body. Accepts bare source values
+ *  ("publish this value, whichever draft is newest" — what the publish footer
+ *  sends) and {raw, userId} objects ("exactly this person's draft" — what the
+ *  Approve inbox sends, where a row per author is on screen). Returns null when
+ *  the field is absent or not an array. */
+function draftSelectors(v: unknown): DraftSelector[] | null {
+  if (!Array.isArray(v)) return null;
+  return v.map((k) =>
+    typeof k === "string"
+      ? k
+      : {
+          raw: String((k as { raw?: unknown }).raw ?? ""),
+          userId: ((k as { userId?: unknown }).userId as string | undefined) ?? null,
+        },
+  );
+}
 
 /** Returns a 403 Response if the role cannot perform op; null otherwise.
  * Super-admin short-circuits to allowed per the 2026-06-13 settings spec —
@@ -951,13 +968,21 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
       }
 
+      // GET /api/ai/status — whether any AI provider is set up for this
+      // workspace. The Review page asks before rendering "Suggest with AI", so
+      // a deployment with no AI shows no affordance instead of a retry loop.
+      if (seg[1] === "ai" && seg[2] === "status" && seg.length === 3 && method === "GET") {
+        return json({ configured: await isAIConfigured(tenantCtx.tenantId) });
+      }
+
       if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
         const refTableId = url.searchParams.get("refTableId") ?? "";
         const raw = url.searchParams.get("raw") ?? "";
         if (!refTableId || !raw) return err("refTableId and raw required", 400);
         const refTable = await reqRepo.getRefTable(refTableId);
         if (!refTable) return json({ error: "not found" }, 404);
-        if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
+        if (!(await isAIConfigured(tenantCtx.tenantId)))
+          return json({ error: "ai_not_configured" }, 503);
         try {
           const recordLabels = refTable.record.map((c) => c.label);
           const hint = await reqRepo.getAiHint(refTableId, raw, recordLabels, {
@@ -1231,17 +1256,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (seg.length === 5 && method === "DELETE") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
-            await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
-            return noContent();
+            // A draft is keyed per author, so a DELETE can legitimately match
+            // nothing (someone else's draft for the same value). Report the
+            // count instead of a 204 the client would read as success.
+            return json(await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me));
           }
           // POST /api/tables/:id/drafts/reject
+          // { drafts: [{raw, userId?}] | raws: string[], reason }
           if (seg.length === 5 && seg[4] === "reject" && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
-            const b = (await req.json()) as { raws: string[]; reason: string };
-            if (!Array.isArray(b.raws)) return err("raws must be an array", 400);
+            const b = (await req.json()) as {
+              drafts?: unknown;
+              raws?: unknown;
+              reason: string;
+            };
+            const keys = draftSelectors(b.drafts ?? b.raws);
+            if (!keys) return err("drafts must be an array", 400);
             if (typeof b.reason !== "string") return err("reason is required", 400);
-            const result = await reqRepo.rejectDrafts(id, b.raws, b.reason, me);
+            const result = await reqRepo.rejectDrafts(id, keys, b.reason, me);
             return json(result);
           }
         }
@@ -1341,20 +1374,28 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               columnName: input.column,
             };
           }
-          await removeSource(id, qualified, tenantCtx.tenantId);
-          return new Response(null, { status: 204, headers: corsHeaders });
+          const removed = await removeSource(id, qualified, tenantCtx.tenantId);
+          // 200 + {removed} rather than a blanket 204: the UI used to toast
+          // "Removed …" for a DELETE that matched nothing (wrong database).
+          return json({ removed });
         }
-        // POST /api/tables/:id/derive {table, column, nameColumn?} — seed record
+        // POST /api/tables/:id/derive {table, column, nameColumn?, databaseId?} — seed record.
+        // databaseId names the warehouse database the caller browsed; without it
+        // the wiring falls back to an existing registration for the same table,
+        // then to the default database.
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const { table, column, nameColumn, force } = (await req.json()) as {
+          const { table, column, nameColumn, force, databaseId } = (await req.json()) as {
             table: string;
             column: string;
             nameColumn?: string;
             force?: boolean;
+            databaseId?: string;
           };
-          return json(await reqRepo.deriveRecord(id, table, column, nameColumn, { force }, me));
+          return json(
+            await reqRepo.deriveRecord(id, table, column, nameColumn, { force, databaseId }, me),
+          );
         }
         // POST /api/tables/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
@@ -1605,9 +1646,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const body = req.headers.get("content-length")
             ? ((await req.json().catch(() => null)) as { draftKeys?: unknown } | null)
             : null;
-          const draftKeys = Array.isArray(body?.draftKeys)
-            ? (body.draftKeys as string[])
-            : undefined;
+          const draftKeys = draftSelectors(body?.draftKeys) ?? undefined;
           return json(await reqRepo.commit(id, me, draftKeys));
         }
         // POST /api/tables/:id/revert — restore all changed records to the last published version
@@ -1686,7 +1725,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             );
           }
           try {
-            const refTable = await reqRepo.getRefTableBasic(id);
+            const refTable = await reqRepo.getRefTable(id);
             if (!refTable) {
               return json(
                 {
@@ -1696,22 +1735,41 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
                 404,
               );
             }
-            const records = await reqRepo.getRecordValues(id, { limit: 30 });
             const suggestion = await generateSuggestion(
               tenantCtx.tenantId,
               {
                 refTableId: id,
-                refTableName: refTable.label,
+                refTableName: refTable.refTable,
                 rawValue,
-                existingRecordValues: records,
+                existingRecordValues: refTable.record.slice(0, 30).map((c) => c.label),
               },
               { forceRefresh },
             );
+            // Every publish path filters on target_key, so a draft without one
+            // shows as ready but can never ship — and blocks the whole publish
+            // when it's included. Only stage the mapping when the suggested
+            // label resolves to a real record; otherwise hand the suggestion
+            // back and let the user pick.
+            const target = refTable.record.find((c) => c.label === suggestion.record);
+            if (!target) {
+              return json({
+                draft_id: null,
+                draft: null,
+                suggestion: {
+                  target_label: suggestion.record,
+                  confidence: suggestion.confidence,
+                  reasoning: suggestion.reasoning ?? null,
+                },
+                detail: `"${suggestion.record}" is not a record in this table — nothing was staged`,
+                cached: suggestion.cached,
+              });
+            }
             const draft = await reqRepo.createDraft(
               {
                 reference_table_id: id,
                 raw: rawValue,
-                target_label: suggestion.record,
+                target_label: target.label,
+                target_key: target.key,
                 source: "ai",
                 confidence: suggestion.confidence,
                 reasoning: suggestion.reasoning ?? null,
@@ -1742,7 +1800,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               return json(
                 {
                   error: "AI_NOT_CONFIGURED",
-                  detail: "Enable AI in Workspace Settings",
+                  detail: "AI suggestions aren't set up for this workspace",
                 },
                 400,
               );
@@ -1877,11 +1935,9 @@ if (import.meta.main) {
 
   const scheduler = createScheduler({
     tickIntervalMs: 60_000,
-    shouldRun: async (tenantId) => {
-      // Per-tenant gate: only run jobs for tenants whose scan_run cadence is due.
-      const probe = new TenantRepo(tenantId, "admin", true);
-      return probe.anyScanDue(new Date());
-    },
+    // No tenant-level gate: each job decides for itself (SchedulerJob.shouldRun).
+    // The scan cadence used to gate every job, so a workspace with scans "Off"
+    // also lost auto-matching and auto-publishing.
     jobs: buildJobs(),
   });
   scheduler.start();

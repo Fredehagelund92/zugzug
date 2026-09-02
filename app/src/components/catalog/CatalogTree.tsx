@@ -119,6 +119,15 @@ function TreeRow({
       <span className="flex-1 truncate font-mono text-[12px] tracking-tight" title={node.name}>
         {node.name}
       </span>
+      {node.loadFailed && (
+        <span
+          data-testid="load-failed-indicator"
+          title="Couldn’t load — click to retry"
+          className="shrink-0 rounded-pill bg-danger-soft px-1.5 font-mono text-[10px] text-danger"
+        >
+          failed
+        </span>
+      )}
       {node.unreachable && (
         <span
           data-testid="offline-indicator"

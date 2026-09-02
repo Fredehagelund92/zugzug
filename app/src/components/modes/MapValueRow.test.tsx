@@ -11,6 +11,7 @@ vi.mock("../../store", () => ({
   saveDraft: (...a: unknown[]) => saveDraft(...a),
   discardDraft: (...a: unknown[]) => discardDraft(...a),
   useDrafts: () => ({}),
+  useDraftsByValue: () => ({}),
   useCanEdit: () => true,
   slug: (s: string) =>
     s

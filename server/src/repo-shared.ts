@@ -282,6 +282,10 @@ export interface RefTableMeta {
  *  warehouse isn't attached); counts are 0 when empty/unreachable. Always returned
  *  so the UI can show the wiring even before any data lands. */
 export interface SourceInfo {
+  /** warehouse_database.id the column was registered against. */
+  databaseId: string;
+  /** Its database_name — two databases can hold the same schema.table.column. */
+  databaseName: string;
   table: string;
   column: string;
   refTable: string;
@@ -291,6 +295,9 @@ export interface SourceInfo {
   values: number;
   unmapped: number;
   scanned: boolean;
+  /** Why the last scan failed, or null when it reached the warehouse. A failed
+   *  scan says nothing about whether the column exists. */
+  scanError: string | null;
   schedule?: string | null; // null | 'hourly' | 'daily'
   scannedAt?: string | null; // ISO timestamp of last scan
 }
@@ -342,6 +349,10 @@ export interface Draft {
   targetKey: string | null;
   user: User;
   at: string;
+  /** ISO creation timestamp. The draft key is (table, value, author), so the
+   *  client needs the real ordering to reproduce the newest-wins fold publish
+   *  applies — `at` is a display string ("5m ago") and can't be sorted. */
+  createdAt: string;
   source: "user" | "ai";
   confidence: "high" | "medium" | "low" | null;
   reasoning: string | null;

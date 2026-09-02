@@ -62,9 +62,10 @@ export function Scans() {
 
   const scanNow = useAsyncAction(async () => {
     try {
+      // scanSources() returns the number of source COLUMNS it scanned, not values.
       const n = await scanSources();
       await loadStatus();
-      toast(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+      toast(`Scanned ${n} source${n === 1 ? "" : "s"}.`);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't scan.", "error");
     }

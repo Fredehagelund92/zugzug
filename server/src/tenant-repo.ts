@@ -402,27 +402,27 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDrafts.createDraft(input, userId, this.tenantId));
   }
 
-  discardDraft(refTableId: string, raw: string, userId: string): Promise<void> {
+  discardDraft(refTableId: string, raw: string, userId: string): Promise<{ discarded: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() => repoDrafts.discardDraft(refTableId, raw, userId, this.tenantId));
   }
 
   rejectDrafts(
     refTableId: string,
-    raws: string[],
+    keys: repoDrafts.DraftSelector[],
     reason: string,
     reviewerId: string,
   ): Promise<{ rejected: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoDrafts.rejectDrafts(refTableId, this.tenantId, raws, reason, reviewerId),
+      repoDrafts.rejectDrafts(refTableId, this.tenantId, keys, reason, reviewerId),
     );
   }
 
   commit(
     refTableId: string,
     userId: string,
-    draftKeys?: string[],
+    draftKeys?: repoDrafts.DraftSelector[],
     opts?: { onlyAuthor?: string },
   ): Promise<{
     committed: number;
@@ -480,8 +480,8 @@ export class TenantRepo {
     refTableId: string,
     table: string,
     column: string,
-    opts: { silent?: boolean } = {},
-  ): Promise<void> {
+    opts: { silent?: boolean; databaseId?: string } = {},
+  ): Promise<string> {
     this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoScan.addSource(refTableId, table, column, this.tenantId, opts),
@@ -544,7 +544,7 @@ export class TenantRepo {
     table: string,
     column: string,
     nameColumn: string | undefined,
-    opts: { silent?: boolean; force?: boolean } = {},
+    opts: { silent?: boolean; force?: boolean; databaseId?: string } = {},
     userId: string,
   ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
     this.assertRole("commit");

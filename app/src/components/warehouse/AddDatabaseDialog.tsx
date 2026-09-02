@@ -109,7 +109,7 @@ export function AddDatabaseDialog(props: Props): JSX.Element {
                 name="label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="e.g. Production raw"
+                placeholder="e.g. Production warehouse"
                 className="w-full rounded-sm border border-line-2 bg-bg px-2 py-1.5 font-mono text-[11px] outline-none focus:border-accent"
               />
             </div>

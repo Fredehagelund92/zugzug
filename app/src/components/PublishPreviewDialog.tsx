@@ -20,6 +20,7 @@ export function PublishPreviewDialog({
   groups,
   publishing,
   onDiscardDraft,
+  canDiscard,
   onConfirm,
   onCancel,
 }: {
@@ -27,6 +28,9 @@ export function PublishPreviewDialog({
   groups: PublishGroup[];
   publishing: boolean;
   onDiscardDraft?: (d: Draft) => void;
+  /** Drafts are stored per author and only their author can remove one, so the
+   *  ✕ is offered on a teammate's line only if this says so. */
+  canDiscard?: (d: Draft) => boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -56,7 +60,7 @@ export function PublishPreviewDialog({
                 <ul className="mt-1.5 space-y-0.5">
                   {g.drafts.slice(0, SAMPLE).map((d) => (
                     <li
-                      key={`${d.refTableId}::${d.raw}`}
+                      key={`${d.refTableId}::${d.raw}::${d.user.id}`}
                       className="flex items-center gap-2 font-mono text-[11px] text-ink-2"
                     >
                       <span className="truncate">{d.raw}</span>
@@ -65,7 +69,7 @@ export function PublishPreviewDialog({
                       <span className="ml-auto shrink-0 text-ink-3">
                         {d.source === "ai" ? `AI · ${d.confidence ?? "?"}` : d.user.name}
                       </span>
-                      {onDiscardDraft && (
+                      {onDiscardDraft && (canDiscard?.(d) ?? true) && (
                         <button
                           type="button"
                           aria-label={`Don't publish mapping for ${d.raw}`}

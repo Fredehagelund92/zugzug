@@ -12,7 +12,7 @@ import {
   slug,
   useSources,
   useRefTables,
-  useDrafts,
+  useDraftsByValue,
   discardDraft,
   addRecord,
   renameRecord,
@@ -239,7 +239,9 @@ function RecordsBody({
 }) {
   const sources = useSources();
   const allDims = useRefTables();
-  const drafts = useDrafts();
+  // One draft per source value, folded the way publish folds them — so the
+  // preview and the "N drafts" count match what actually ships.
+  const drafts = useDraftsByValue();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = refTable.id;
@@ -2209,8 +2211,11 @@ function RecordsBody({
         open={publishPreview}
         publishing={publishing}
         groups={publishGroups}
+        canDiscard={(d) => d.user.id === currentUser?.id}
         onDiscardDraft={(d) => {
-          void discardDraft(d.refTableId, d.raw);
+          discardDraft(d.refTableId, d.raw).catch((e) =>
+            toast(e instanceof Error ? e.message : "Couldn't discard that draft.", "error"),
+          );
           setPublishGroups((gs) =>
             gs
               .map((g) =>

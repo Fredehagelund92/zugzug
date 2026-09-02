@@ -11,6 +11,9 @@ interface SourceRowProps {
   mapValuesHref: string;
   canEdit?: boolean;
   busy?: boolean;
+  /** Prefix the column with its warehouse database — only worth the noise when
+   *  the workspace reads from more than one. */
+  showDatabase?: boolean;
   onDerive: () => void;
   onRemove: () => void;
 }
@@ -20,21 +23,25 @@ export function SourceRow({
   mapValuesHref,
   canEdit = true,
   busy,
+  showDatabase,
   onDerive,
   onRemove,
 }: SourceRowProps) {
   const [menu, setMenu] = useState(false);
   const menuBtn = useRef<HTMLButtonElement>(null);
 
-  // Derive connection state
-  const state =
-    row.scanned && !row.present
-      ? { label: "⚠ column not found", tone: "text-danger" }
+  // Derive connection state. A failed scan (timeout, warehouse blip, auth) is
+  // NOT evidence the column is gone — it gets its own, softer state.
+  const state = row.scanError
+    ? { label: "⚠ scan failed — will retry", tone: "text-warn", title: row.scanError }
+    : row.scanned && !row.present
+      ? { label: "⚠ column not found", tone: "text-danger", title: undefined }
       : !row.scanned && !row.scannedAt
-        ? { label: "never scanned", tone: "text-warn" }
+        ? { label: "never scanned", tone: "text-warn", title: undefined }
         : {
             label: row.scannedAt ? `scanned ${ago(row.scannedAt)} ago` : "scanned",
             tone: "text-ink-3",
+            title: undefined,
           };
 
   // Render schema.table.column as one mono string:
@@ -50,6 +57,7 @@ export function SourceRow({
     <div className="relative grid grid-cols-1 items-start gap-x-4 gap-y-1 border-b border-line px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-2/40 sm:grid-cols-[minmax(0,1fr)_minmax(120px,auto)_150px_32px] sm:items-center sm:gap-y-0 sm:px-6 sm:py-3 sm:pl-10">
       {/* Column identity: schema.table.column */}
       <div className="truncate font-mono text-[12.5px]">
+        {showDatabase && <span className="text-ink-3">{row.databaseName}.</span>}
         {schemaPrefix && <span className="text-ink-3">{schemaPrefix}</span>}
         <span className="text-ink">{tableOnly}</span>
         <span className="text-ink-3">.{row.column}</span>
@@ -62,7 +70,12 @@ export function SourceRow({
       </div>
 
       {/* Connection state */}
-      <div className={cx("whitespace-nowrap font-mono text-[11px]", state.tone)}>{state.label}</div>
+      <div
+        title={state.title}
+        className={cx("whitespace-nowrap font-mono text-[11px]", state.tone)}
+      >
+        {state.label}
+      </div>
 
       {/* Actions menu */}
       <div className="absolute right-3 top-2.5 sm:relative sm:right-auto sm:top-auto sm:justify-self-end">

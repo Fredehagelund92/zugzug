@@ -106,48 +106,42 @@ describe("useNavLinks", () => {
 });
 
 // ---------------------------------------------------------------------------
-// useAiHint
+// useAiConfigured
 // ---------------------------------------------------------------------------
-describe("useAiHint", () => {
+describe("useAiConfigured", () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
-  test("fetches and returns hint when enabled", async () => {
+  test("reports configured when the server says an AI provider is set up", async () => {
     const { apiFetch } = await import("../../src/api");
-    const { useAiHint } = await import("../../src/lib/use-ai-hint");
+    vi.mocked(apiFetch).mockResolvedValue(
+      new Response(JSON.stringify({ configured: true }), { status: 200 }),
+    );
+    const { useAiConfigured } = await import("../../src/lib/use-ai-hint");
 
-    const { result } = renderHook(() => useAiHint("refTable-42", "US", true));
-
-    await waitFor(() => expect(result.current.loading).toBe(false), { timeout: 500 });
-
-    expect(apiFetch).toHaveBeenCalled();
-    expect(result.current.hint).not.toBeNull();
-    expect(result.current.hint?.suggestion).toBe("United States");
-    expect(result.current.hint?.confidence).toBe(85);
-    expect(result.current.hint?.reasoning).toBe("Exact match.");
-    expect(result.current.error).toBe(false);
+    const { result } = renderHook(() => useAiConfigured());
+    await waitFor(() => expect(result.current).toBe(true), { timeout: 500 });
+    expect(apiFetch).toHaveBeenCalledWith("/ai/status");
   });
 
-  test("does NOT fetch when enabled is false", async () => {
+  test("reports NOT configured when the deployment has no AI — so Review can hide the affordance", async () => {
     const { apiFetch } = await import("../../src/api");
-    const { useAiHint } = await import("../../src/lib/use-ai-hint");
-    vi.mocked(apiFetch).mockClear();
+    vi.mocked(apiFetch).mockResolvedValue(
+      new Response(JSON.stringify({ configured: false }), { status: 200 }),
+    );
+    const { useAiConfigured } = await import("../../src/lib/use-ai-hint");
 
-    renderHook(() => useAiHint("refTable-99", "CA", false));
-
-    // Give the debounce window time to pass; no call should ever fire.
-    await new Promise((r) => setTimeout(r, 200));
-
-    expect(apiFetch).not.toHaveBeenCalled();
+    const { result } = renderHook(() => useAiConfigured());
+    await waitFor(() => expect(result.current).toBe(false), { timeout: 500 });
   });
 
-  test("starts with loading false and null hint when disabled", async () => {
-    const { useAiHint } = await import("../../src/lib/use-ai-hint");
+  test("treats a failed status call as no AI rather than retryable", async () => {
+    const { apiFetch } = await import("../../src/api");
+    vi.mocked(apiFetch).mockRejectedValue(new Error("offline"));
+    const { useAiConfigured } = await import("../../src/lib/use-ai-hint");
 
-    const { result } = renderHook(() => useAiHint("refTable-77", "FR", false));
-    expect(result.current.loading).toBe(false);
-    expect(result.current.hint).toBeNull();
-    expect(result.current.error).toBe(false);
+    const { result } = renderHook(() => useAiConfigured());
+    await waitFor(() => expect(result.current).toBe(false), { timeout: 500 });
   });
 });

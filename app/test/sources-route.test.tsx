@@ -5,6 +5,9 @@ import type { SourceInfo } from "../src/store";
 
 const SOURCES: SourceInfo[] = [
   {
+    databaseId: "db-1",
+    databaseName: "analytics",
+    scanError: null,
     table: "authco.users",
     column: "plan_type",
     refTable: "Plan",
@@ -17,6 +20,9 @@ const SOURCES: SourceInfo[] = [
     scannedAt: "2026-07-17T10:00:00Z",
   },
   {
+    databaseId: "db-1",
+    databaseName: "analytics",
+    scanError: null,
     table: "billing.invoices",
     column: "currency",
     refTable: "Currency",
@@ -29,7 +35,7 @@ const SOURCES: SourceInfo[] = [
     scannedAt: "2026-07-16T10:00:00Z",
   },
 ];
-const removeSource = vi.fn().mockResolvedValue(undefined);
+const removeSource = vi.fn().mockResolvedValue(true);
 const useSources = vi.fn(() => SOURCES);
 
 vi.mock("../src/store", () => ({
@@ -140,6 +146,8 @@ describe("Sources route", () => {
     const planRow = screen.getByText("Plan").closest("div.grid")!;
     fireEvent.click(within(planRow).getByLabelText(/more actions/i));
     fireEvent.click(screen.getByText(/remove source/i));
-    expect(removeSource).toHaveBeenCalledWith("d1", "authco.users", "plan_type");
+    // The database is part of the wiring's identity — without it the server
+    // deletes from whichever database happens to be the default.
+    expect(removeSource).toHaveBeenCalledWith("d1", "authco.users", "plan_type", "db-1");
   });
 });
