@@ -5,14 +5,32 @@
  * back by hand, so the bounce writes it into `?next=` and the sign-in and
  * sign-up forms read it back.
  *
- * Only a same-origin path is honoured: a full URL or "//host" would turn the
- * sign-in form into an open redirect, and /login or /signup would loop. */
+ * Only a same-origin path is honoured, or the sign-in form becomes an open
+ * redirect. */
 
 export const RETURN_TO_PARAM = "next";
 
-function isSafe(to: string): boolean {
-  if (!to.startsWith("/") || to.startsWith("//") || to.startsWith("/\\")) return false;
-  return !/^\/(login|signup)(\/|\?|#|$)/.test(to);
+/* Resolved against a sentinel origin rather than checked with string prefixes.
+ * Browsers strip tab, newline and carriage return before resolving a URL, so
+ * "/\t/evil.com" slips past a startsWith("//") test and then loads
+ * //evil.com — an open redirect. Anything that does not resolve back to the
+ * sentinel came from somewhere else and is refused. */
+const SENTINEL = "https://return-to.invalid";
+
+/** The same-origin path to honour, or null if `to` is not one. Returns the
+ *  NORMALIZED path so callers use the string that was actually validated. */
+function safePath(to: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(to, SENTINEL);
+  } catch {
+    return null;
+  }
+  if (u.origin !== SENTINEL) return null;
+  // /login and /signup would bounce the user straight back here.
+  if (/^\/(login|signup)(\/|$)/.test(u.pathname)) return null;
+  const path = `${u.pathname}${u.search}${u.hash}`;
+  return path === "/" ? null : path;
 }
 
 /** "/login" for the page the user was trying to reach, with `?next=` when
@@ -22,13 +40,12 @@ export function loginUrlWithReturnTo(loc: {
   search: string;
   hash: string;
 }): string {
-  const to = `${loc.pathname}${loc.search}${loc.hash}`;
-  if (to === "/" || !isSafe(to)) return "/login";
-  return `/login?${RETURN_TO_PARAM}=${encodeURIComponent(to)}`;
+  const to = safePath(`${loc.pathname}${loc.search}${loc.hash}`);
+  return to ? `/login?${RETURN_TO_PARAM}=${encodeURIComponent(to)}` : "/login";
 }
 
 /** The destination from a "?next=…" query string, or `fallback`. */
 export function returnToFrom(search: string, fallback = "/app"): string {
   const raw = new URLSearchParams(search).get(RETURN_TO_PARAM);
-  return raw && isSafe(raw) ? raw : fallback;
+  return (raw && safePath(raw)) || fallback;
 }

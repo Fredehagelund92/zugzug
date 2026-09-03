@@ -49,7 +49,7 @@ test("seed source values, map in Review, and publish", async ({ page, request })
   expect(seedResp.ok(), `seed endpoint returned ${seedResp.status()}`).toBe(true);
 
   // ── 2. Navigate to the Review page ────────────────────────────────────────
-  await page.goto("/app/default/triage");
+  await page.goto("/app/default/review");
 
   // Each table with values still to map is a rail <button> labelled
   // "<name> <count>" — e.g. "Country 1" now that we seeded one unmapped value.

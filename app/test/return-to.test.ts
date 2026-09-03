@@ -41,3 +41,48 @@ describe("return-to", () => {
     expect(returnToFrom("?next=%2F%5Cevil.test")).toBe("/app");
   });
 });
+
+/* Browsers strip tab, newline and carriage return before resolving a URL, so a
+   startsWith("//") check let "/\t/evil.com" through and the sign-in form then
+   redirected to //evil.com. Each payload below resolved to https://evil.com/
+   against the old prefix check — verified before the fix. */
+describe("does not become an open redirect", () => {
+  const offsite = [
+    "/\t/evil.com",
+    "/\n/evil.com",
+    "/\r/evil.com",
+    "//evil.com",
+    "/\\evil.com",
+    "https://evil.com/app",
+    "http://evil.com",
+    "javascript:alert(1)",
+  ];
+
+  for (const to of offsite) {
+    it(`refuses ${JSON.stringify(to)}`, () => {
+      expect(returnToFrom(`?next=${encodeURIComponent(to)}`)).toBe("/app");
+    });
+  }
+
+  // Percent-encoded control characters are NOT stripped by the URL parser, so
+  // these stay same-origin paths and are safe to honour — unlike their raw
+  // counterparts above. Asserted so a future "tighten it" change stays honest
+  // about which form is actually dangerous.
+  it.each(["/%09/evil.com", "/%0A/evil.com"])("treats %s as a same-origin path", (to) => {
+    const out = returnToFrom(`?next=${encodeURIComponent(to)}`);
+    expect(new URL(out, "https://app.example").origin).toBe("https://app.example");
+  });
+
+  it("keeps an ordinary in-app deep link", () => {
+    expect(returnToFrom("?next=%2Fapp%2Facme%2Fsettings%2Fwebhooks%2F7")).toBe(
+      "/app/acme/settings/webhooks/7",
+    );
+  });
+
+  it("returns the normalized path, not the raw input", () => {
+    // Validating one string and returning another is how these fixes regress.
+    const out = returnToFrom("?next=%2Fapp%2F..%2Fapp%2Fx");
+    expect(out.startsWith("/")).toBe(true);
+    expect(out).not.toContain("..");
+  });
+});

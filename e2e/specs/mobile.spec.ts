@@ -19,7 +19,7 @@ test("review: the value pane scrolls on a phone", async ({ page, request }) => {
   });
   expect(seedResp.ok(), `seed endpoint returned ${seedResp.status()}`).toBe(true);
 
-  await page.goto(`/app/${SLUG}/triage`);
+  await page.goto(`/app/${SLUG}/review`);
   await page.getByText("Country", { exact: false }).first().click();
   await expect(page.getByText("Choose record").first()).toBeVisible();
 
@@ -396,7 +396,7 @@ test("the delete-table confirm dialog engages #main's scroll lock and releases i
    shell or only the RouteErrorBoundary, which renders outside #main). */
 const ROUTES = [
   `/app/${SLUG}`,
-  `/app/${SLUG}/triage`,
+  `/app/${SLUG}/review`,
   `/app/${SLUG}/sources`,
   `/app/${SLUG}/tables`,
   `/app/${SLUG}/audit`,

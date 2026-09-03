@@ -97,3 +97,18 @@ test("version history panel opens on a fresh table and shows its state", async (
   await page.getByRole("button", { name: "Close version history" }).click();
   await expect(page.getByText("Version history", { exact: true })).not.toBeVisible();
 });
+
+/* The Review page's route was "triage" until the vocabulary sweep; the word is
+   banned from anything a user sees, and it was visible in the address bar and in
+   every shared link. The rename keeps a redirect so those old links still work —
+   this asserts the redirect end to end, since a stale bookmark is exactly the
+   case a unit test on the route table cannot prove. */
+test("a link to the old Review address still lands on the page", async ({ page }) => {
+  await page.goto("/app/default/triage");
+  await page.waitForLoadState("networkidle");
+
+  await expect(page).toHaveURL(/\/app\/default\/review$/);
+  await expect(page.locator("#main")).toBeVisible();
+  // Proves the page really rendered rather than redirecting to an empty shell.
+  await expect(page.locator("#main")).not.toBeEmpty();
+});
