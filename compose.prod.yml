@@ -24,6 +24,13 @@ services:
   app:
     build: ./app
     restart: unless-stopped
+    environment:
+      # Per-IP budget for the argon2 password endpoints (nginx rate syntax).
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-60r/m}
+      # Set to the range of any proxy sitting IN FRONT of this container, or
+      # every visitor arrives with that proxy's address and shares one throttle
+      # bucket. Loopback means "nginx is the edge".
+      TRUSTED_PROXY_CIDR: ${TRUSTED_PROXY_CIDR:-127.0.0.1}
     depends_on:
       server:
         condition: service_healthy
