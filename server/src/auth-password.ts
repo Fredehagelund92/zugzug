@@ -64,8 +64,7 @@ export async function handleSignup(req: Request): Promise<Response> {
   const password = String(body.password ?? "");
   const name = String(body.name ?? "").trim();
 
-  if (email.length > EMAIL_MAX || !EMAIL_RX.test(email))
-    return jsonError(400, "invalid_email");
+  if (email.length > EMAIL_MAX || !EMAIL_RX.test(email)) return jsonError(400, "invalid_email");
   if (password.length < MIN_PASSWORD_LENGTH) {
     return jsonError(400, "password_too_short", { minLength: MIN_PASSWORD_LENGTH });
   }
