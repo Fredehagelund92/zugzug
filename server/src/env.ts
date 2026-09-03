@@ -157,6 +157,11 @@ export const env = {
    *  argon2 on every attempt. Default 10 req/min; set to 0 to disable. Far
    *  above what a person types, far below what guessing a password needs. */
   authRpm: process.env.ZUGZUG_AUTH_RPM ? Number(process.env.ZUGZUG_AUTH_RPM) : 10,
+  /** Per-WORKSPACE budget for AI suggestions, which cost a paid provider call
+   *  each. The workspace is the billing unit, so it is the budget: one member
+   *  looping the endpoint spends their own workspace's allowance rather than
+   *  the deployment's. Default 60 req/min; set to 0 to disable. */
+  aiRpm: process.env.ZUGZUG_AI_RPM ? Number(process.env.ZUGZUG_AI_RPM) : 60,
   /** Enable E2E-test-only routes (e.g. POST /api/e2e/seed-scan-values).
    *  MUST NOT be set in production. Set ZUGZUG_E2E_TEST_ROUTES=1 in the
    *  compose.e2e.yml override when running the Playwright suite. */

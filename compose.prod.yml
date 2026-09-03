@@ -65,6 +65,7 @@ services:
       PG_POOL_MAX: ${PG_POOL_MAX:-5}
       ZUGZUG_PULL_API_RPM: ${ZUGZUG_PULL_API_RPM:-600}
       ZUGZUG_AUTH_RPM: ${ZUGZUG_AUTH_RPM:-10}
+      ZUGZUG_AI_RPM: ${ZUGZUG_AI_RPM:-60}
     volumes:
       - serverdata:/data
 
