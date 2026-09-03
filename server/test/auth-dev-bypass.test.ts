@@ -8,11 +8,13 @@ import { pgGet, pgRun } from "../src/pg.ts";
 import { env } from "../src/env.ts";
 import { handle } from "../src/server.ts";
 
-/** env.devBypassAuth is resolved once at import time, so flip the resolved
- *  value for the duration of the call (same idiom as scheduler-jobs.test.ts). */
-async function withDevBypass(fn: () => Promise<Response>): Promise<Response> {
+/** env.devBypassAuth is resolved once at import time — and bun loads
+ *  server/.env before any preload, so a developer with DEV_BYPASS_AUTH=true
+ *  there starts from the opposite value. Pin the resolved value for the
+ *  duration of the call (same idiom as scheduler-jobs.test.ts). */
+async function withDevBypass(on: boolean, fn: () => Promise<Response>): Promise<Response> {
   const saved = env.devBypassAuth;
-  (env as { devBypassAuth: boolean }).devBypassAuth = true;
+  (env as { devBypassAuth: boolean }).devBypassAuth = on;
   try {
     return await fn();
   } finally {
@@ -29,7 +31,7 @@ beforeEach(cleanup);
 afterAll(cleanup);
 
 test("GET /api/auth/dev only reports the flag — no cookie, no user, no session", async () => {
-  const res = await withDevBypass(() =>
+  const res = await withDevBypass(true, () =>
     handle(new Request("http://localhost/api/auth/dev"), () => {}),
   );
   expect(res.status).toBe(200);
@@ -40,7 +42,7 @@ test("GET /api/auth/dev only reports the flag — no cookie, no user, no session
 });
 
 test("POST /api/auth/dev is the login — it issues the session cookie", async () => {
-  const res = await withDevBypass(() =>
+  const res = await withDevBypass(true, () =>
     handle(new Request("http://localhost/api/auth/dev", { method: "POST" }), () => {}),
   );
   expect(res.status).toBe(204);
@@ -51,6 +53,8 @@ test("POST /api/auth/dev is the login — it issues the session cookie", async (
 });
 
 test("GET /api/auth/dev is 404 when the bypass is off", async () => {
-  const res = await handle(new Request("http://localhost/api/auth/dev"), () => {});
+  const res = await withDevBypass(false, () =>
+    handle(new Request("http://localhost/api/auth/dev"), () => {}),
+  );
   expect(res.status).toBe(404);
 });

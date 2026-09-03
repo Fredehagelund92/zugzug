@@ -9,7 +9,16 @@ export function HashScroll() {
   const { hash } = useLocation();
   useEffect(() => {
     if (!hash) return;
-    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+    // A malformed escape ("#%") makes decodeURIComponent throw, and an
+    // exception from a root-level effect unmounts the whole app — so a crafted
+    // link would blank the page. Fall back to the fragment as written.
+    let id: string;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      id = hash.slice(1);
+    }
+    document.getElementById(id)?.scrollIntoView();
   }, [hash]);
   return null;
 }

@@ -341,6 +341,10 @@ export async function createInvite(
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** RFC 5321's cap on an address. Checked BEFORE EMAIL_RE: that pattern's last
+ *  two groups both admit '.', so it backtracks over every dot in the domain —
+ *  quadratic, and a 40k-character address blocks the event loop for seconds. */
+const EMAIL_MAX = 254;
 
 /** What adding an email to a workspace actually did. */
 export type AddMemberOutcome = { kind: "member"; userId: string } | { kind: "invite" };
@@ -363,7 +367,7 @@ export async function addMemberOrInvite(
   invitedBy: string,
 ): Promise<AddMemberOutcome> {
   const normalized = email.trim().toLowerCase();
-  if (!EMAIL_RE.test(normalized)) {
+  if (normalized.length > EMAIL_MAX || !EMAIL_RE.test(normalized)) {
     throw new AppError("VALIDATION_FAILED", `'${email}' is not an email address`, 400);
   }
   if (env.allowedDomain && normalized.split("@")[1] !== env.allowedDomain) {

@@ -224,6 +224,23 @@ test("An address that isn't an email is rejected — 400", async () => {
   expect(res.status).toBe(400);
 });
 
+test("A pathological address is refused without backtracking — 400", async () => {
+  await ensureTenant("tteam_acme");
+  const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");
+
+  // "a@" + "a." * n + "@" makes the email pattern try every dot as the
+  // separator before failing. Without the length cap that is quadratic: 32k
+  // characters took ~4s on the single-threaded event loop, so an admin (or a
+  // stolen admin session) could stall the server with one request.
+  const t0 = performance.now();
+  const res = await req("POST", "/api/t/tteam_acme/team/invites", cookie, {
+    email: `a@${"a.".repeat(40_000)}@`,
+    role: "editor",
+  });
+  expect(res.status).toBe(400);
+  expect(performance.now() - t0).toBeLessThan(1000);
+});
+
 test("Someone already on the team is rejected — 409", async () => {
   await ensureTenant("tteam_acme");
   const cookie = await loginAs("u_tteam_admin", "tteam_acme", "admin");

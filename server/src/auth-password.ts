@@ -9,6 +9,11 @@ import { acceptInvitesFor } from "./tenant.ts";
 import { log } from "./log.ts";
 
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** RFC 5321's cap on an address, checked BEFORE EMAIL_RX. Both of that
+ *  pattern's trailing groups admit ".", so the engine tries every dot in the
+ *  domain as the separator: a 32k-character address costs ~4s of the single
+ *  event loop, and /login and /signup take one with no session. */
+const EMAIL_MAX = 254;
 const MIN_PASSWORD_LENGTH = 12;
 
 interface SignupBody {
@@ -59,7 +64,8 @@ export async function handleSignup(req: Request): Promise<Response> {
   const password = String(body.password ?? "");
   const name = String(body.name ?? "").trim();
 
-  if (!EMAIL_RX.test(email)) return jsonError(400, "invalid_email");
+  if (email.length > EMAIL_MAX || !EMAIL_RX.test(email))
+    return jsonError(400, "invalid_email");
   if (password.length < MIN_PASSWORD_LENGTH) {
     return jsonError(400, "password_too_short", { minLength: MIN_PASSWORD_LENGTH });
   }
@@ -149,7 +155,8 @@ export async function handleLogin(req: Request): Promise<Response> {
   // Generic error message — don't reveal whether email exists.
   const genericFail = jsonError(401, "invalid_credentials");
 
-  if (!EMAIL_RX.test(email) || password.length === 0) return genericFail;
+  if (email.length > EMAIL_MAX || !EMAIL_RX.test(email) || password.length === 0)
+    return genericFail;
 
   const user = await pgGet<{
     id: string;

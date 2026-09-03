@@ -35,6 +35,21 @@ describe("HashScroll", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
+  it("survives a fragment that isn't valid percent-encoding", () => {
+    // decodeURIComponent("%") throws, and HashScroll sits at the router root —
+    // an unhandled throw there unmounts the app, so "/app/acme#%" would blank
+    // the page for anyone who followed the link.
+    expect(() =>
+      render(
+        <MemoryRouter initialEntries={["/app/acme/settings/warehouse#%"]}>
+          <HashScroll />
+          <div id="scans">Scans</div>
+        </MemoryRouter>,
+      ),
+    ).not.toThrow();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it("does nothing when the fragment names no element on the page", () => {
     render(
       <MemoryRouter initialEntries={["/app/acme/settings/warehouse#nope"]}>
