@@ -7,6 +7,7 @@ import { pgRun, pgGet, pgTx } from "./pg.ts";
 import { issueSession, countRealLoginUsers } from "./auth.ts";
 import { acceptInvitesFor } from "./tenant.ts";
 import { log } from "./log.ts";
+import { checkRateLimit } from "./rate-limit.ts";
 
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** RFC 5321's cap on an address, checked BEFORE EMAIL_RX. Both of that
@@ -36,6 +37,28 @@ function jsonError(status: number, error: string, extra: Record<string, unknown>
   return new Response(JSON.stringify({ error, ...extra }), {
     status,
     headers: { "content-type": "application/json" },
+  });
+}
+
+/* Every handler below runs argon2 (hash on signup, verify on login and
+   change-password), so an unlimited caller gets both password guessing and a
+   CPU-exhaustion lever on a single-threaded runtime. The budget is per
+   ACCOUNT — the identifier being acted on — because there is no trustworthy
+   client IP here: the app sits behind a proxy, nothing parses X-Forwarded-For,
+   and honouring a spoofable header would let an attacker lock out a victim by
+   forging theirs. Per-account stops the attack that matters (guessing one
+   account's password) and bounds argon2 per account; it does NOT stop a spray
+   across many addresses, which needs IP limiting at the proxy or a trusted
+   -proxy config here. */
+async function rateLimited(key: string): Promise<Response | null> {
+  const rate = await checkRateLimit(key, env.authRpm);
+  if (rate.ok) return null;
+  return new Response(JSON.stringify({ error: "rate_limited" }), {
+    status: 429,
+    headers: {
+      "content-type": "application/json",
+      "retry-after": String(rate.retryAfterSeconds),
+    },
   });
 }
 
@@ -69,6 +92,8 @@ export async function handleSignup(req: Request): Promise<Response> {
     return jsonError(400, "password_too_short", { minLength: MIN_PASSWORD_LENGTH });
   }
   if (!name) return jsonError(400, "name_required");
+  const signupLimited = await rateLimited(`signup:${email}`);
+  if (signupLimited) return signupLimited;
   if (env.allowedDomain && email.split("@")[1] !== env.allowedDomain) {
     return jsonError(400, "domain_not_allowed", { allowedDomain: env.allowedDomain });
   }
@@ -157,6 +182,11 @@ export async function handleLogin(req: Request): Promise<Response> {
   if (email.length > EMAIL_MAX || !EMAIL_RX.test(email) || password.length === 0)
     return genericFail;
 
+  // Keyed on the submitted address whether or not it exists, so a 429 reveals
+  // nothing the generic failure above is hiding.
+  const loginLimited = await rateLimited(`login:${email}`);
+  if (loginLimited) return loginLimited;
+
   const user = await pgGet<{
     id: string;
     name: string;
@@ -200,6 +230,11 @@ export async function handleChangePassword(req: Request, userId: string): Promis
   if (next.length < MIN_PASSWORD_LENGTH) {
     return jsonError(400, "password_too_short", { minLength: MIN_PASSWORD_LENGTH });
   }
+
+  // Authenticated, so the session's own user id is the key — unspoofable, and
+  // it bounds guessing of the CURRENT password by whoever holds the session.
+  const pwLimited = await rateLimited(`pwchg:${userId}`);
+  if (pwLimited) return pwLimited;
 
   const user = await pgGet<{ password_hash: string | null; auth_provider: string }>(
     `SELECT password_hash, auth_provider FROM ${pg("users")} WHERE id = $1`,
