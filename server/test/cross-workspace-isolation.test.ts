@@ -37,6 +37,26 @@ test("unknown workspace slug is 404", async () => {
   expect(res.status).toBe(404);
 });
 
+// ── User-directory isolation ─────────────────────────────────────────────────
+
+test("a member of A never appears in B's /api/users, and the caller gets their own email", async () => {
+  await makeWorkspace("w_iso_a5");
+  await makeWorkspace("w_iso_b5");
+  await makeMember("u_iso_a5", "w_iso_a5", "admin"); // member of A only
+  const { cookie } = await makeMember("u_iso_b5", "w_iso_b5", "admin");
+
+  const res = await req("GET", "/api/t/w_iso_b5/users", cookie);
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as {
+    currentUser: { id: string; email?: string };
+    collaborators: { id: string }[];
+  };
+  expect(body.collaborators.map((u) => u.id)).toEqual(["u_iso_b5"]);
+  // Own email only — it is what the members screen uses to mark "you".
+  expect(body.currentUser.id).toBe("u_iso_b5");
+  expect(body.currentUser.email).toBe("u_iso_b5@example.com");
+});
+
 // ── Data isolation ────────────────────────────────────────────────────────────
 
 test("a table in A is not visible from B, but B sees its own", async () => {

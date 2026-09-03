@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../../src/lib/tenant-context";
+import { tenantFixture } from "../tenant-fixture";
 import { Danger } from "../../src/routes/settings/Danger";
 import { General } from "../../src/routes/settings/General";
 import { clearToasts } from "../../src/components/Toast";
@@ -49,15 +50,7 @@ vi.mock("../../src/store", async (orig) => {
 // ---------------------------------------------------------------------------
 
 function makeTenant(overrides: Partial<TenantContextValue> = {}): TenantContextValue {
-  return {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    color: null,
-    role: "admin",
-    isSuperAdmin: false,
-    ...overrides,
-  };
+  return tenantFixture(overrides.role ?? "admin", overrides);
 }
 
 /** A probe component that exposes the current router location for assertions. */
@@ -208,11 +201,22 @@ describe("General — role gating", () => {
   });
 });
 
-describe("General — slug editor (super-admin)", () => {
-  it("slug editor is NOT shown to a non-super-admin", () => {
-    renderGeneral(makeTenant({ isSuperAdmin: false }));
-    // The slug Save button is only present for super-admins
+describe("General — slug editor", () => {
+  it("slug editor is NOT shown to a member who can't manage the workspace", () => {
+    renderGeneral(makeTenant({ role: "editor", isSuperAdmin: false }));
     expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
+
+  it("slug editor is NOT shown on the default workspace", () => {
+    renderGeneral(makeTenant({ slug: "default", isSuperAdmin: true }));
+    expect(screen.queryByRole("button", { name: /^save$/i })).toBeNull();
+  });
+
+  // The server gates PATCH /api/t/:slug/slug on requireAdmin, not on
+  // super-admin, so a workspace admin gets the editor too.
+  it("workspace admin → slug editor is visible", () => {
+    renderGeneral(makeTenant({ role: "admin", isSuperAdmin: false }));
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeInTheDocument();
   });
 
   it("super-admin → slug editor is visible", () => {

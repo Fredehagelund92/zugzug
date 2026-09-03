@@ -153,6 +153,10 @@ export const env = {
   /** Per-credential rate-limit budget for the /v1/ surface. Default 600
    *  req/min; set to 0 to disable. */
   pullApiRpm: process.env.ZUGZUG_PULL_API_RPM ? Number(process.env.ZUGZUG_PULL_API_RPM) : 600,
+  /** Per-account rate-limit budget for the password-auth endpoints, which run
+   *  argon2 on every attempt. Default 10 req/min; set to 0 to disable. Far
+   *  above what a person types, far below what guessing a password needs. */
+  authRpm: process.env.ZUGZUG_AUTH_RPM ? Number(process.env.ZUGZUG_AUTH_RPM) : 10,
   /** Enable E2E-test-only routes (e.g. POST /api/e2e/seed-scan-values).
    *  MUST NOT be set in production. Set ZUGZUG_E2E_TEST_ROUTES=1 in the
    *  compose.e2e.yml override when running the Playwright suite. */

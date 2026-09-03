@@ -4,12 +4,16 @@
      1. reapStuck:  in_flight rows whose last_attempt_at is >30s old → 'retry' with
                     last_error='reaped_stuck'. Belt-and-suspenders for crashed workers.
      2. claim:      FOR UPDATE SKIP LOCKED claim of up to GLOBAL_BUDGET due rows in a
-                    SHORT transaction. Flips status='in_flight', attempts += 1,
-                    last_attempt_at=now() and RETURNS the snapshot.
+                    SHORT transaction, joined to the webhook so only 'active' ones
+                    are picked up — a paused or auto-disabled endpoint keeps its
+                    backlog queued and receives it on resume. Flips
+                    status='in_flight', attempts += 1, last_attempt_at=now() and
+                    RETURNS the snapshot.
      3. round-robin slice across tenants — cap PER_TENANT_CAP per tick to keep a
         single noisy tenant from starving others.
      4. fan out via runWithConcurrency(CONCURRENCY) — each attempt decrypts the
-        webhook secret, signs the payload, POSTs with AbortSignal.timeout(10s), and
+        webhook secret (both keys while a rotation grace is open, so the payload
+        carries a signature for each), POSTs with AbortSignal.timeout(10s), and
         writes its terminal state in a short autocommit-style UPDATE.
      5. retry ladder RETRY_SCHEDULE_SEC, dlq after attempt 5.
      6. when a non-test dlq is recorded → check last 50 non-test rows for that
@@ -22,7 +26,7 @@ import { pg } from "./env.ts";
 import { pgRun, pgGet, pgAll, pgTx } from "./pg.ts";
 import { runWithConcurrency } from "./concurrency.ts";
 import { decryptWebhookSecret } from "./webhook-secrets.ts";
-import { signPayload, type Kid } from "./webhook-signing.ts";
+import { signPayloadMulti, deliveryHeaders, type Kid, type SigningKey } from "./webhook-signing.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 
 const GLOBAL_BUDGET = 256;
@@ -73,11 +77,14 @@ async function claim(): Promise<ClaimedRow[]> {
   return await pgTx(async (tx) => {
     return await tx.all<ClaimedRow>(
       `WITH cte AS (
-         SELECT id
-           FROM ${pg("webhook_delivery")}
-          WHERE status IN ('pending', 'retry')
-            AND (next_attempt_at IS NULL OR next_attempt_at <= now())
-          ORDER BY COALESCE(next_attempt_at, created_at), id
+         SELECT wd.id
+           FROM ${pg("webhook_delivery")} wd
+           JOIN ${pg("webhook")} w
+             ON w.id = wd.webhook_id AND w.tenant_id = wd.tenant_id
+          WHERE wd.status IN ('pending', 'retry')
+            AND (wd.next_attempt_at IS NULL OR wd.next_attempt_at <= now())
+            AND w.status = 'active'
+          ORDER BY COALESCE(wd.next_attempt_at, wd.created_at), wd.id
           LIMIT $1
           FOR UPDATE SKIP LOCKED
        )
@@ -133,11 +140,17 @@ interface WebhookSecretRow {
   secret_previous_expires_at: Date | string | null;
 }
 
-async function loadWebhookSecret(
+/* Returns the keys a delivery is signed with: the one its signing_kid names
+   first, plus — while the 24h rotation grace is still open — the other one.
+   Dual-signing is what makes the promised overlap window real: a delivery
+   enqueued before a rotation still verifies under the secret the consumer had
+   at enqueue time, and one enqueued after it verifies under both. Empty means
+   the named key is gone (swept previous secret) and the row must go to dlq. */
+async function loadSigningKeys(
   webhookId: string,
   tenantId: string,
   kid: Kid,
-): Promise<string | null> {
+): Promise<SigningKey[]> {
   const row = await pgGet<WebhookSecretRow>(
     `SELECT secret_ciphertext, secret_nonce, secret_key_version,
             secret_ciphertext_previous, secret_nonce_previous, secret_previous_expires_at
@@ -145,35 +158,32 @@ async function loadWebhookSecret(
       WHERE id = $1 AND tenant_id = $2`,
     [webhookId, tenantId],
   );
-  if (!row) return null;
-  try {
-    if (kid === "current") {
+  if (!row) return [];
+  const decrypt = (ciphertext: Buffer | null, nonce: Buffer | null): string | null => {
+    if (!ciphertext || !nonce) return null;
+    try {
       return decryptWebhookSecret({
-        ciphertext: new Uint8Array(row.secret_ciphertext),
-        nonce: new Uint8Array(row.secret_nonce),
+        ciphertext: new Uint8Array(ciphertext),
+        nonce: new Uint8Array(nonce),
         keyVersion: row.secret_key_version,
       });
-    }
-    if (
-      !row.secret_ciphertext_previous ||
-      !row.secret_nonce_previous ||
-      !row.secret_previous_expires_at
-    ) {
+    } catch {
       return null;
     }
-    const expAt =
-      typeof row.secret_previous_expires_at === "string"
-        ? new Date(row.secret_previous_expires_at)
-        : row.secret_previous_expires_at;
-    if (expAt.getTime() < Date.now()) return null;
-    return decryptWebhookSecret({
-      ciphertext: new Uint8Array(row.secret_ciphertext_previous),
-      nonce: new Uint8Array(row.secret_nonce_previous),
-      keyVersion: row.secret_key_version,
-    });
-  } catch {
-    return null;
-  }
+  };
+  const graceOpen =
+    row.secret_previous_expires_at !== null &&
+    new Date(row.secret_previous_expires_at).getTime() >= Date.now();
+  const current = decrypt(row.secret_ciphertext, row.secret_nonce);
+  const previous = graceOpen
+    ? decrypt(row.secret_ciphertext_previous, row.secret_nonce_previous)
+    : null;
+  const primary = kid === "current" ? current : previous;
+  if (!primary) return [];
+  const secondary = kid === "current" ? previous : current;
+  const keys: SigningKey[] = [{ kid, secret: primary }];
+  if (secondary) keys.push({ kid: kid === "current" ? "previous" : "current", secret: secondary });
+  return keys;
 }
 
 function truncBody(body: string): string {
@@ -281,28 +291,26 @@ async function scheduleRetryOrDlq(
 }
 
 async function attempt(row: ClaimedRow): Promise<void> {
-  const secret = await loadWebhookSecret(row.webhook_id, row.tenant_id, row.signing_kid);
-  if (!secret) {
+  const keys = await loadSigningKeys(row.webhook_id, row.tenant_id, row.signing_kid);
+  if (!keys.length) {
     await markDlq(row, "secret_unavailable", null, null, null);
     return;
   }
 
   const rawBody = typeof row.payload === "string" ? row.payload : JSON.stringify(row.payload);
   const nowSec = Math.floor(Date.now() / 1000);
-  const signature = signPayload(rawBody, secret, row.signing_kid, nowSec);
+  const signature = signPayloadMulti(rawBody, keys, nowSec);
 
   try {
     const resp = await fetch(row.delivery_url, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "user-agent": "zugzug-webhook/1",
-        "x-zugzug-event": row.event_type,
-        "x-zugzug-event-id": row.event_id,
-        "x-zugzug-delivery": row.id,
-        "x-zugzug-signature": signature,
-        "x-zugzug-test": row.is_test ? "1" : "0",
-      },
+      headers: deliveryHeaders({
+        eventType: row.event_type,
+        eventId: row.event_id,
+        deliveryId: row.id,
+        signature,
+        isTest: row.is_test,
+      }),
       body: rawBody,
       signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
     });

@@ -24,6 +24,10 @@ export interface SchedulerJob {
   /** "global" jobs run once per tick across all tenants — they do their own
    *  cross-tenant claims. Default "per-tenant": iterated once per active tenant. */
   scope?: "per-tenant" | "global";
+  /** Per-job gate, checked once per tenant per tick. Default: run. Each job
+   *  owns its own condition — a tenant with scans switched off must not also
+   *  stop auto-matching and auto-publishing. */
+  shouldRun?(ctx: JobContext): Promise<boolean>;
   /** Returns rowsScanned-ish metadata (or empty object). Throws on hard failure. */
   run(ctx: JobContext): Promise<JobResult>;
 }
@@ -108,7 +112,9 @@ async function defaultListTenants(): Promise<Array<{ id: string }>> {
 export interface CreateSchedulerOpts {
   tickIntervalMs: number;
   jobs: SchedulerJob[];
-  /** Per-tenant gate: called once per tenant per tick. Default: always run. */
+  /** Per-tenant gate: called once per tenant per tick, before any job runs.
+   *  Default: always run — individual jobs gate themselves via
+   *  SchedulerJob.shouldRun. */
   shouldRun?: (tenantId: string) => Promise<boolean>;
   /** Returns the tenants to iterate this tick. Default: SELECT id FROM tenant WHERE deleted_at IS NULL. */
   listTenants?: () => Promise<Array<{ id: string }>>;
@@ -211,6 +217,16 @@ export function createScheduler(opts: CreateSchedulerOpts): Scheduler {
             };
             for (const job of jobs) {
               if (job.scope === "global") continue;
+              if (job.shouldRun !== undefined) {
+                let due: boolean;
+                try {
+                  due = await job.shouldRun(ctx);
+                } catch (e) {
+                  console.error(`· scheduler: ${job.name}.shouldRun(${t.id}) failed:`, e);
+                  continue;
+                }
+                if (!due) continue;
+              }
               await recordScanRun(
                 `${t.id}:${job.name}`,
                 t.id,

@@ -136,6 +136,77 @@ describe("refreshDrafts() boot path — single batch request", () => {
     expect(draftsB).toHaveLength(1);
   });
 
+  test("two people's drafts for one value fold to the mapping publish will apply", async () => {
+    const mine = {
+      ...FAKE_DRAFTS[0],
+      raw: "usa",
+      targetLabel: "United States",
+      createdAt: "2026-01-01T10:00:00.000Z",
+    };
+    const theirs = {
+      ...FAKE_DRAFTS[0],
+      raw: "usa",
+      targetLabel: "USA Inc",
+      user: { id: "u2", name: "Bob", initials: "BO" },
+      createdAt: "2026-01-01T11:00:00.000Z",
+    };
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/drafts") && !url.includes("/tables/")) {
+        // listDrafts orders created_at DESC — the newest arrives first, which
+        // used to mean the OLDEST won the per-value slot.
+        return jsonOk({ drafts: [theirs, mine], nextCursor: null });
+      }
+      if (url.includes("/users")) {
+        return jsonOk({
+          currentUser: { id: "u1", name: "Alice", initials: "AL" },
+          collaborators: [],
+        });
+      }
+      if (url.includes("/tables")) return jsonOk(FAKE_DIMS);
+      if (url.includes("/warehouse/health")) return jsonOk({ ok: true });
+      if (url.includes("/preferences")) return jsonOk({});
+      return jsonOk([]);
+    }) as unknown as typeof fetch;
+
+    const { initStore, listDrafts } = await import("../src/store");
+    await initStore();
+
+    // One mapping previewed for the value, naming the newest draft's target —
+    // the one the server's fold commits.
+    const folded = listDrafts(DIM_A);
+    expect(folded).toHaveLength(1);
+    expect(folded[0].targetLabel).toBe("USA Inc");
+  });
+
+  test("discarding a draft that is not yours reports that nothing was removed", async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (/\/tables\/.+\/drafts\/.+/.test(url)) return jsonOk({ discarded: 0 });
+      if (/\/tables\/.+\/drafts$/.test(url)) return jsonOk([]);
+      if (url.includes("/drafts") && !url.includes("/tables/")) {
+        return jsonOk({ drafts: [], nextCursor: null });
+      }
+      if (url.includes("/users")) {
+        return jsonOk({
+          currentUser: { id: "u1", name: "Alice", initials: "AL" },
+          collaborators: [],
+        });
+      }
+      if (url.includes("/tables")) return jsonOk(FAKE_DIMS);
+      if (url.includes("/warehouse/health")) return jsonOk({ ok: true });
+      if (url.includes("/preferences")) return jsonOk({});
+      return jsonOk([]);
+    }) as unknown as typeof fetch;
+
+    const { initStore, discardDraft } = await import("../src/store");
+    await initStore();
+
+    // Before: the DELETE matched nothing server-side and the client called it a
+    // success, so the row popped back on the next refresh with no explanation.
+    await expect(discardDraft(DIM_A, "someone-elses")).rejects.toThrow(/nothing was removed/i);
+  });
+
   test("follows the keyset cursor across pages until nextCursor is null (#151)", async () => {
     const draftUrls: string[] = [];
 

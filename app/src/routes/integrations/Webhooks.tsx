@@ -7,7 +7,13 @@ import { Panel } from "../../components/Panel";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { SkeletonList } from "../../components/Skeleton";
-import { listWebhooks, type Webhook, type WebhookStatus } from "../../lib/integrations-api";
+import {
+  listWebhooks,
+  humanError,
+  IntegrationsApiError,
+  type Webhook,
+  type WebhookStatus,
+} from "../../lib/integrations-api";
 import { CreateWebhookModal } from "./CreateWebhookModal";
 import { SecretRevealModal } from "./SecretRevealModal";
 import { WebhookVerificationReference } from "../../components/integrations/WebhookVerificationReference";
@@ -47,13 +53,22 @@ export function Webhooks() {
   const canEdit = can(tenant, "integrations.webhooks.edit");
   const [items, setItems] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [secret, setSecret] = useState<{ value: string } | null>(null);
 
+  // A refused or failed list must land on an error, not leave the skeleton up
+  // forever with an unhandled rejection behind it.
   const refresh = async () => {
     setLoading(true);
-    setItems(await listWebhooks());
-    setLoading(false);
+    setLoadError(null);
+    try {
+      setItems(await listWebhooks());
+    } catch (e) {
+      setLoadError(e instanceof IntegrationsApiError ? e.code : "load_failed");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
     void refresh();
@@ -62,6 +77,11 @@ export function Webhooks() {
   const dupSet = useMemo(() => computeDuplicateUrlSet(items), [items]);
 
   if (loading) return <SkeletonList rows={3} columns={[1, 1, 100, 140, 80]} />;
+
+  if (loadError)
+    return (
+      <p className="text-[13px] text-danger">Could not load webhooks: {humanError(loadError)}</p>
+    );
 
   if (items.length === 0) {
     return (

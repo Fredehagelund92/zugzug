@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import { SettingsSidebar } from "../src/components/settings/SettingsSidebar";
+import { SettingsLayout as RealSettingsLayout } from "../src/components/settings/SettingsLayout";
 
 let testRole: "viewer" | "editor" | "admin" = "admin";
 
@@ -30,13 +32,7 @@ function harness(role: "viewer" | "editor" | "admin", path = "/app/acme/settings
 }
 
 function SettingsLayout() {
-  const value: TenantContextValue = {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    role: testRole,
-    isSuperAdmin: false,
-  };
+  const value: TenantContextValue = tenantFixture(testRole);
   return (
     <TenantProvider value={value}>
       <SettingsSidebar />
@@ -120,5 +116,29 @@ describe("SettingsSidebar", () => {
     for (const link of links) {
       expect(link.querySelector("svg")).not.toBeNull();
     }
+  });
+});
+
+describe("SettingsLayout", () => {
+  // Mapping and Danger have no link anywhere else in the app — before the
+  // sidebar was mounted here they were reachable only by typing the URL.
+  test("mounts the sidebar so Mapping and Danger are one click away", () => {
+    render(
+      <MemoryRouter initialEntries={["/app/acme/settings/general"]}>
+        <TenantProvider value={tenantFixture("admin")}>
+          <Routes>
+            <Route path="/app/acme/settings" element={<RealSettingsLayout />}>
+              <Route path="general" element={<div>General</div>} />
+            </Route>
+          </Routes>
+        </TenantProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: /Mapping/ }).getAttribute("href")).toBe(
+      "/app/acme/settings/mapping",
+    );
+    expect(screen.getByRole("link", { name: /Danger/ }).getAttribute("href")).toBe(
+      "/app/acme/settings/danger",
+    );
   });
 });

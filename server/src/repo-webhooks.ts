@@ -66,20 +66,28 @@ export interface CreateWebhookResult {
   value: string;
 }
 
+/** Wire shape. snake_case like the rest of the v1 surface (see
+ *  repo-webhook-deliveries.ts:DeliverySummary) — the client type
+ *  `Webhook` in app/src/lib/integrations-api.ts declares exactly these keys. */
 export interface WebhookSummary {
   id: string;
   url: string;
   events: string[];
   status: "active" | "paused" | "disabled";
   description: string | null;
-  secretPrefix: string;
-  secretPrefixPrevious: string | null;
-  secretPreviousExpiresAt: string | null;
-  createdAt: string;
-  createdBy: string;
-  pausedAt: string | null;
-  disabledAt: string | null;
-  disabledReason: string | null;
+  secret_prefix: string;
+  secret_prefix_previous: string | null;
+  secret_previous_expires_at: string | null;
+  created_at: string;
+  created_by: string;
+  paused_at: string | null;
+  disabled_at: string | null;
+  disabled_reason: string | null;
+  /** Most recent attempted delivery — null until the dispatcher has tried once. */
+  last_delivery_at: string | null;
+  last_delivery_status: number | null;
+  /** Deliveries waiting to be sent. Non-zero while the webhook is paused. */
+  queued_count: number;
 }
 
 export interface PatchWebhookBody {
@@ -103,51 +111,35 @@ export interface RotateSecretResult {
 
 /* ---------- SELECT projection ---------- */
 
-const SUMMARY_COLS = `
-  id, url, events, status, description,
-  secret_prefix,
-  secret_prefix_previous,
-  secret_previous_expires_at::text AS secret_previous_expires_at,
-  created_at::text AS created_at,
-  created_by,
-  paused_at::text AS paused_at,
-  disabled_at::text AS disabled_at,
-  disabled_reason
+/* last_delivery_* and queued_count are read back per webhook: the list page
+   shows "Last delivery" and the detail page shows how much a pause has
+   queued up. Both are bounded by the admin-sized webhook count. */
+const SUMMARY_SELECT = `
+  SELECT w.id, w.url, w.events, w.status, w.description,
+         w.secret_prefix,
+         w.secret_prefix_previous,
+         w.secret_previous_expires_at::text AS secret_previous_expires_at,
+         w.created_at::text AS created_at,
+         w.created_by,
+         w.paused_at::text   AS paused_at,
+         w.disabled_at::text AS disabled_at,
+         w.disabled_reason,
+         ld.last_attempt_at::text AS last_delivery_at,
+         ld.last_response_code    AS last_delivery_status,
+         (SELECT count(*)::int
+            FROM ${pg("webhook_delivery")} q
+           WHERE q.tenant_id = w.tenant_id AND q.webhook_id = w.id
+             AND q.status IN ('pending', 'retry')) AS queued_count
+    FROM ${pg("webhook")} w
+    LEFT JOIN LATERAL (
+      SELECT d.last_attempt_at, d.last_response_code
+        FROM ${pg("webhook_delivery")} d
+       WHERE d.tenant_id = w.tenant_id AND d.webhook_id = w.id
+         AND d.last_attempt_at IS NOT NULL
+       ORDER BY d.last_attempt_at DESC
+       LIMIT 1
+    ) ld ON true
 `;
-
-interface SummaryRow {
-  id: string;
-  url: string;
-  events: string[];
-  status: "active" | "paused" | "disabled";
-  description: string | null;
-  secret_prefix: string;
-  secret_prefix_previous: string | null;
-  secret_previous_expires_at: string | null;
-  created_at: string;
-  created_by: string;
-  paused_at: string | null;
-  disabled_at: string | null;
-  disabled_reason: string | null;
-}
-
-function toSummary(r: SummaryRow): WebhookSummary {
-  return {
-    id: r.id,
-    url: r.url,
-    events: r.events,
-    status: r.status,
-    description: r.description,
-    secretPrefix: r.secret_prefix,
-    secretPrefixPrevious: r.secret_prefix_previous,
-    secretPreviousExpiresAt: r.secret_previous_expires_at,
-    createdAt: r.created_at,
-    createdBy: r.created_by,
-    pausedAt: r.paused_at,
-    disabledAt: r.disabled_at,
-    disabledReason: r.disabled_reason,
-  };
-}
 
 /* ---------- createWebhook ---------- */
 
@@ -194,26 +186,22 @@ export async function createWebhook(input: CreateWebhookInput): Promise<CreateWe
 /* ---------- listWebhooks ---------- */
 
 export async function listWebhooks(tenantId: string): Promise<WebhookSummary[]> {
-  const rows = await pgAll<SummaryRow>(
-    `SELECT ${SUMMARY_COLS}
-       FROM ${pg("webhook")}
-      WHERE tenant_id = $1
-      ORDER BY created_at DESC`,
+  return await pgAll<WebhookSummary>(
+    `${SUMMARY_SELECT}
+      WHERE w.tenant_id = $1
+      ORDER BY w.created_at DESC`,
     [tenantId],
   );
-  return rows.map(toSummary);
 }
 
 /* ---------- getWebhook ---------- */
 
 export async function getWebhook(tenantId: string, id: string): Promise<WebhookSummary | null> {
-  const row = await pgGet<SummaryRow>(
-    `SELECT ${SUMMARY_COLS}
-       FROM ${pg("webhook")}
-      WHERE id = $1 AND tenant_id = $2`,
+  return await pgGet<WebhookSummary>(
+    `${SUMMARY_SELECT}
+      WHERE w.id = $1 AND w.tenant_id = $2`,
     [id, tenantId],
   );
-  return row ? toSummary(row) : null;
 }
 
 /* ---------- patchWebhook ---------- */

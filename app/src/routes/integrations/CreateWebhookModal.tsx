@@ -107,7 +107,7 @@ export function CreateWebhookModal({ onClose, onCreated }: Props) {
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Sync into Acme CRM"
+            placeholder="Send records to Acme CRM"
             className="w-full rounded-sm border border-line bg-surface-2 px-2 py-1.5 text-[13px]"
           />
         </FormField>

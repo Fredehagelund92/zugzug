@@ -1,7 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
-import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { TenantProvider } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import { SettingsLayout } from "../src/components/settings/SettingsLayout";
 
 vi.mock("../src/store", async (orig) => {
@@ -16,10 +17,6 @@ vi.mock("../src/store", async (orig) => {
   };
 });
 
-function value(role: "viewer" | "editor" | "admin"): TenantContextValue {
-  return { id: "t1", slug: "acme", label: "Acme", role, isSuperAdmin: false };
-}
-
 function Stub({ name }: { name: string }) {
   return <div data-testid="active">{name}</div>;
 }
@@ -28,7 +25,7 @@ describe("Settings redirect", () => {
   test("/settings → /settings/general for admin", () => {
     render(
       <MemoryRouter initialEntries={["/app/acme/settings"]}>
-        <TenantProvider value={value("admin")}>
+        <TenantProvider value={tenantFixture("admin")}>
           <Routes>
             <Route path="/app/:slug/settings" element={<SettingsLayout />}>
               <Route index element={<Navigate to="general" replace />} />

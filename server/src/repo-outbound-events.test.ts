@@ -59,7 +59,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
         type: "table.published",
         refTableId: "dim_t1",
         occurredAt: new Date(),
-        payload: { dim_slug: "country", version: 1 },
+        payload: { table_slug: "country", version: 1 },
         idemKey,
       });
     });
@@ -77,7 +77,7 @@ describe("dispatchOutbound — writes outbound_event row", () => {
     expect(row!.type).toBe("table.published");
     expect(row!.reference_table_id).toBe("dim_t1");
     const payload = typeof row!.payload === "string" ? JSON.parse(row!.payload) : row!.payload;
-    expect((payload as { dim_slug: string }).dim_slug).toBe("country");
+    expect((payload as { table_slug: string }).table_slug).toBe("country");
   });
 
   it("idem_key collision aborts the surrounding tx (per design §3.1)", async () => {
@@ -124,7 +124,7 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
         type: "table.published",
         refTableId: "dim_t3",
         occurredAt: new Date(),
-        payload: { dim_slug: "country" },
+        payload: { table_slug: "country" },
         idemKey: `table.published:dim_t3:5`,
       });
     });
@@ -141,7 +141,11 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
     for (const r of rows) expect(r.status).toBe("pending");
   });
 
-  it("does NOT enqueue for paused or disabled webhooks", async () => {
+  // Pause queues, it does not drop: enqueue no longer skips paused webhooks —
+  // the dispatcher's claim() is what holds the backlog back, and it is released
+  // on resume. A disabled endpoint is still skipped so a dead URL cannot
+  // accumulate a backlog forever.
+  it("enqueues for a paused webhook but not for a disabled one", async () => {
     const wh_paused = await seedWebhook(T, ["table.published"], "paused");
     const wh_disabled = await seedWebhook(T, ["table.published"], "disabled");
 
@@ -156,11 +160,12 @@ describe("dispatchOutbound — enqueues webhook_delivery rows", () => {
       });
     });
 
-    const left = await pgAll<{ webhook_id: string }>(
-      `SELECT webhook_id FROM "zugzug_app"."webhook_delivery"
+    const left = await pgAll<{ webhook_id: string; status: string }>(
+      `SELECT webhook_id, status FROM "zugzug_app"."webhook_delivery"
         WHERE tenant_id = $1 AND webhook_id IN ($2, $3)`,
       [T, wh_paused, wh_disabled],
     );
-    expect(left.length).toBe(0);
+    expect(left.map((r) => r.webhook_id)).toEqual([wh_paused]);
+    expect(left[0]!.status).toBe("pending");
   });
 });

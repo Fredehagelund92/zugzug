@@ -75,8 +75,8 @@ export function PullApi() {
           Your records, available as a JSON API
         </h2>
         <p className="text-[13px] text-ink-2">
-          Use this to sync into dbt, Fivetran, or any ETL pipeline. Authenticate with a service
-          account from this workspace.
+          Use this to load records into dbt, Fivetran, or any ETL pipeline. Authenticate with a
+          service account from this workspace.
         </p>
         <div className="flex items-center gap-2 mt-2">
           <code className="flex-1 px-2 py-1.5 rounded-sm bg-surface-2 text-[12px] font-mono">
@@ -172,13 +172,13 @@ export function PullApi() {
 
       <Panel as="section" padding="sm" className="space-y-2">
         <h3 className="font-display text-[14px] font-semibold text-ink">
-          Pagination + incremental sync
+          Pagination + incremental reads
         </h3>
         <p className="text-[13px] text-ink-2">
           All paginated endpoints accept <code>?since=&lt;ISO&gt;</code> (inclusive lower bound) and
           return a HMAC-signed cursor in <code>cursor.next</code>. Resume by passing{" "}
           <code>?cursor=&lt;value&gt;</code>. Cursors invalidated by server-key rotation return{" "}
-          <code>400 cursor_invalid</code>; consumers should resync from <code>?since=</code>.
+          <code>400 cursor_invalid</code>; consumers should start again from <code>?since=</code>.
         </p>
       </Panel>
 
@@ -191,6 +191,14 @@ export function PullApi() {
       </Panel>
     </div>
   );
+}
+
+/** baseUrl already ends in `/v1` and every signature starts with `GET /v1/`,
+ *  so the version segment has to come off one of them or the curl 404s on
+ *  `/v1/v1/...`. */
+export function curlForEndpoint(baseUrl: string, sig: string): string {
+  const path = sig.replace(/^GET\s+/, "").replace(/^\/v1/, "");
+  return `curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${path}`;
 }
 
 function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: string }) {
@@ -214,9 +222,9 @@ function EndpointCards({ baseUrl, firstSlug }: { baseUrl: string; firstSlug: str
           <code className="text-[12px] font-mono">{e.sig}</code>
           <p className="mt-1 text-[12.5px] text-ink-2">{e.desc}</p>
           <details className="mt-2">
-            <summary className="text-[12px] text-ink-3 cursor-pointer">Sample response</summary>
+            <summary className="text-[12px] text-ink-3 cursor-pointer">Try it with curl</summary>
             <pre className="mt-2 p-2 rounded-sm bg-surface-2 text-[11.5px] font-mono overflow-x-auto">
-              {`curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" ${baseUrl}${e.sig.replace("GET ", "")}`}
+              {curlForEndpoint(baseUrl, e.sig)}
             </pre>
           </details>
         </Panel>

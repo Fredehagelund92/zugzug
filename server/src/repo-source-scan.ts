@@ -53,6 +53,22 @@ export async function materializeSourceScanValues(
     else byLower.set(lower, { raw: o.raw, total: o.rows });
   }
 
+  // Fold occurrences onto the occurrence PK (raw_lower, table, column) too:
+  // "Red" and "RED" in the SAME table.column arrive as separate occurrences but
+  // share one key, which would make ON CONFLICT DO UPDATE hit the same row twice
+  // in a chunk (error 21000) or overwrite instead of sum across chunks.
+  const byOccKey = new Map<
+    string,
+    { lower: string; table: string; column: string; rows: number }
+  >();
+  for (const o of opts.occurrences) {
+    const lower = o.raw.toLowerCase();
+    const key = `${lower}\u0000${o.table}\u0000${o.column}`;
+    const e = byOccKey.get(key);
+    if (e) e.rows += o.rows;
+    else byOccKey.set(key, { lower, table: o.table, column: o.column, rows: o.rows });
+  }
+
   // Uses pgTxRaw (not pgTxScoped): repo writers across the codebase rely on the
   // connection-role RLS bypass; per-row tenant_id is enforced explicitly via
   // the WHERE clauses below.
@@ -81,10 +97,10 @@ export async function materializeSourceScanValues(
       );
     }
 
-    if (opts.occurrences.length > 0) {
+    if (byOccKey.size > 0) {
       const rowsParams: unknown[][] = [];
-      for (const o of opts.occurrences) {
-        rowsParams.push([tenantId, refTableId, o.raw.toLowerCase(), o.table, o.column, o.rows]);
+      for (const o of byOccKey.values()) {
+        rowsParams.push([tenantId, refTableId, o.lower, o.table, o.column, o.rows]);
       }
       await bulkInsertChunked(
         tx,
@@ -203,6 +219,12 @@ export interface ValuesPage {
   nextCursor: string | null;
 }
 
+/** Escape ILIKE wildcards so a search for "100%" or "a_b" means those
+ *  characters, not "anything". Backslash is Postgres' default LIKE escape. */
+function likeEscape(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 function encodeCursor(totalRows: number, rawLower: string): string {
   return Buffer.from(JSON.stringify([totalRows, rawLower])).toString("base64url");
 }
@@ -237,7 +259,7 @@ export async function getSourceScanValuesPage(
   const params: unknown[] = [tenantId, refTableId];
   let where = `v.tenant_id = $1 AND v.reference_table_id = $2`;
   if (opts.q && opts.q.trim()) {
-    params.push(`%${opts.q.trim().toLowerCase()}%`);
+    params.push(`%${likeEscape(opts.q.trim().toLowerCase())}%`);
     where += ` AND v.raw_lower ILIKE $${params.length}`;
   }
   if (opts.filter === "new") {

@@ -181,7 +181,7 @@ describe("CatalogSearchResults", () => {
   });
 
   // #161: a failed per-DB search must be surfaced, not silently dropped.
-  it("surfaces a role=alert banner when some sources failed to search", () => {
+  it("surfaces a role=alert banner when some databases failed to search", () => {
     render(
       <CatalogSearchResults
         results={[row]}
@@ -194,7 +194,7 @@ describe("CatalogSearchResults", () => {
       />,
     );
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toMatch(/2 sources couldn’t be searched/);
+    expect(alert.textContent).toMatch(/2 databases couldn’t be searched/);
   });
 
   it("shows the failed-search banner even when results are empty", () => {
@@ -209,7 +209,7 @@ describe("CatalogSearchResults", () => {
         failedCount={1}
       />,
     );
-    expect(screen.getByRole("alert").textContent).toMatch(/1 source couldn’t be searched/);
+    expect(screen.getByRole("alert").textContent).toMatch(/1 database couldn’t be searched/);
     expect(screen.getByText("No tables or columns match.")).toBeTruthy();
   });
 });

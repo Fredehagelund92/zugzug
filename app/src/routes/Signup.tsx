@@ -5,6 +5,7 @@ import { authFetch } from "../api";
 import { useAuthConfig } from "../store";
 import { AuthLayout } from "../components/auth/AuthLayout";
 import { Button } from "../components/Button";
+import { returnToFrom } from "../lib/return-to";
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_email: "That doesn't look like an email address.",
@@ -12,7 +13,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   name_required: "Please enter your name.",
   domain_not_allowed: "Your email domain isn't allowed on this instance.",
   not_allowed:
-    "Your email has not been added to the allowlist yet. Ask an existing user to invite you in Settings → Team.",
+    "Your email has not been added to the allowlist yet. Ask an existing user to invite you in Settings → Members.",
   email_taken: "An account with this email already exists. Try signing in instead.",
 };
 
@@ -37,7 +38,7 @@ export function Signup() {
         body: JSON.stringify({ name, email, password }),
       });
       if (res.status === 200) {
-        window.location.href = "/app";
+        window.location.href = returnToFrom(window.location.search);
         return;
       }
       const body = (await res.json().catch(() => null)) as {

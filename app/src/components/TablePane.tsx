@@ -12,7 +12,7 @@ import {
   slug,
   useSources,
   useRefTables,
-  useDrafts,
+  useDraftsByValue,
   discardDraft,
   addRecord,
   renameRecord,
@@ -239,7 +239,9 @@ function RecordsBody({
 }) {
   const sources = useSources();
   const allDims = useRefTables();
-  const drafts = useDrafts();
+  // One draft per source value, folded the way publish folds them — so the
+  // preview and the "N drafts" count match what actually ships.
+  const drafts = useDraftsByValue();
   const canEdit = useCanEdit();
   const [searchParams] = useSearchParams();
   const activeId = refTable.id;
@@ -685,6 +687,12 @@ function RecordsBody({
       });
     },
     (label, err) => {
+      // The add threw, so no undo entry was pushed above — Cmd-Z can't retire
+      // the record that already holds the key.
+      if (err instanceof ApiCodeError && err.code === "ALREADY_EXISTS") {
+        toast(`"${label}" wasn't added — a record with this key already exists.`, "error");
+        return;
+      }
       toast(
         `Couldn't add "${label}" — ${err instanceof Error ? err.message : "please try again"}`,
         "error",
@@ -706,7 +714,6 @@ function RecordsBody({
     const losers = sel.filter((k) => k !== survivor);
     if (!losers.length) return;
     const loserRows = list.filter((c) => losers.includes(c.key));
-    const snapshot = loserRows.map((c) => ({ key: c.key, label: c.label, fields: c.fields }));
     const expectedVersions = Object.fromEntries(
       [survivorRow, ...loserRows].map((r) => [r.key, r.version]),
     );
@@ -722,24 +729,10 @@ function RecordsBody({
       if (!surfaceConflict(anchor, e)) throw e;
       return;
     }
-    undo.push({
-      label: `merge ${losers.length} into "${survivorLabel}"`,
-      surface: "Records",
-      apply: () => {
-        const currentExpectedVersions = Object.fromEntries(
-          [survivor, ...losers]
-            .map((k) => getRecord(activeId, k))
-            .filter((r): r is RecordValue => r !== undefined)
-            .map((r) => [r.key, r.version]),
-        );
-        return mergeRecord(activeId, survivor, losers, currentExpectedVersions).then(
-          () => undefined,
-        );
-      },
-      inverse: async () => {
-        for (const s of snapshot) await addRecord(activeId, s.label);
-      },
-    });
+    // No undo entry: the inverse would have to re-point every source value the
+    // merge moved to the survivor, and the client has no way to do that. An
+    // entry that only re-adds the losers by label restores empty records and
+    // leaves their source values on the survivor — worse than no undo at all.
     setBusy(false);
     setSel([]);
     for (const k of [survivor, ...losers]) dismissConflict(k);
@@ -761,6 +754,13 @@ function RecordsBody({
         return;
       }
       dismissConflict(key);
+      // Snapshot the stored cells so undo restores the record, not an empty
+      // shell. Formula columns are computed and lookup columns mirror the
+      // linked target, so neither is ours to write back.
+      const restore = Object.entries(row?.fields ?? {}).filter(
+        ([f, v]) =>
+          v != null && !f.includes("__") && fields.find((d) => d.field === f)?.type !== "formula",
+      );
       undo.push({
         label: `remove "${label}"`,
         surface: "Records",
@@ -768,7 +768,10 @@ function RecordsBody({
           const v = getRecord(activeId, key)?.version ?? 1;
           return retireRecord(activeId, key, v).then(() => undefined);
         },
-        inverse: () => addRecord(activeId, label),
+        inverse: async () => {
+          await addRecord(activeId, label, key);
+          for (const [f, v] of restore) await setFieldValue(activeId, key, f, v);
+        },
       });
     } catch (err) {
       if (!surfaceConflict(key, err)) {
@@ -1547,7 +1550,12 @@ function RecordsBody({
             canEdit
               ? (field, label) => {
                   if (field.includes("__")) return;
-                  void renameColumn(activeId, field, label);
+                  renameColumn(activeId, field, label).catch((e: unknown) => {
+                    toast(
+                      e instanceof Error ? `Couldn't rename: ${e.message}` : "Couldn't rename.",
+                      "error",
+                    );
+                  });
                 }
               : undefined
           }
@@ -1603,7 +1611,12 @@ function RecordsBody({
                     });
                     return;
                   }
-                  void deleteColumn(activeId, field);
+                  deleteColumn(activeId, field).catch((e: unknown) => {
+                    toast(
+                      e instanceof Error ? `Couldn't delete: ${e.message}` : "Couldn't delete.",
+                      "error",
+                    );
+                  });
                 }
               : undefined
           }
@@ -2106,7 +2119,11 @@ function RecordsBody({
           if (!deleteColumnConfirm) return;
           const { field } = deleteColumnConfirm;
           setDeleteColumnConfirm(null);
-          await deleteColumn(activeId, field);
+          try {
+            await deleteColumn(activeId, field);
+          } catch (e) {
+            flash(e instanceof Error ? e.message : "Couldn't delete the column.", "danger");
+          }
         }}
         onCancel={() => setDeleteColumnConfirm(null)}
       />
@@ -2136,7 +2153,7 @@ function RecordsBody({
               ) : (
                 <>Their source values will be re-pointed. </>
               )}
-              Use Undo if you change your mind.
+              This can&apos;t be undone.
             </>
           )
         }
@@ -2194,7 +2211,14 @@ function RecordsBody({
         body="Reassign positions in evenly-spaced steps of 1024. This is safe to do at any time."
         confirmLabel="Rebalance"
         onConfirm={async () => {
-          await rebalancePositions(activeId);
+          try {
+            await rebalancePositions(activeId);
+          } catch (e) {
+            flash(
+              e instanceof Error ? e.message : "Couldn't rebalance — please try again.",
+              "danger",
+            );
+          }
           setRebalanceConfirm(false);
         }}
         onCancel={() => setRebalanceConfirm(false)}
@@ -2204,8 +2228,11 @@ function RecordsBody({
         open={publishPreview}
         publishing={publishing}
         groups={publishGroups}
+        canDiscard={(d) => d.user.id === currentUser?.id}
         onDiscardDraft={(d) => {
-          void discardDraft(d.refTableId, d.raw);
+          discardDraft(d.refTableId, d.raw).catch((e) =>
+            toast(e instanceof Error ? e.message : "Couldn't discard that draft.", "error"),
+          );
           setPublishGroups((gs) =>
             gs
               .map((g) =>

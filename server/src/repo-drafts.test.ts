@@ -15,8 +15,23 @@ import {
   setFieldValue,
   deleteRefTable,
 } from "./repo-record.ts";
-import { saveDraft, commit, listDrafts, rejectDrafts, listAllDraftsPage } from "./repo-drafts.ts";
+import {
+  saveDraft,
+  commit,
+  listDrafts,
+  rejectDrafts,
+  listAllDraftsPage,
+  discardDraft,
+  getPublishState,
+} from "./repo-drafts.ts";
 import type { Draft } from "./repo-shared.ts";
+import { EXAMPLE_REQUEST } from "../../app/src/components/integrations/webhook-recipes.ts";
+
+/** The JSON body of the example table.published delivery shown in the app. */
+function documentedPayload(): Record<string, unknown> {
+  const body = EXAMPLE_REQUEST.slice(EXAMPLE_REQUEST.indexOf("\n\n") + 2);
+  return JSON.parse(body) as Record<string, unknown>;
+}
 
 // Collect every page the keyset paginator hands back — mirrors what the Review
 // inbox does client-side (page through until nextCursor is null).
@@ -269,9 +284,16 @@ describe("commit() fires table.published event", () => {
       typeof evt!.payload === "string"
         ? (JSON.parse(evt!.payload) as Record<string, unknown>)
         : (evt!.payload as Record<string, unknown>);
-    expect(payload.dim_slug).toBe(refTableId);
+    expect(payload.table_slug).toBe(refTableId);
     const committedBy = payload.committed_by as { id: string } | undefined;
     expect(committedBy?.id).toBe(U);
+
+    // The example delivery shipped in the app (and read by every integrator
+    // writing their first handler) must name the keys we really send — a
+    // renamed wire key that misses the docs fails here, not in their inbox.
+    const documented = Object.keys(documentedPayload());
+    expect(documented).toContain("table_slug");
+    expect(documented.filter((k) => !(k in payload))).toEqual([]);
   });
 
   it("does NOT fire when commit() short-circuits (no approved drafts)", async () => {
@@ -414,6 +436,84 @@ describe("commit() manual ordering mode", () => {
   });
 });
 
+// ---- G1: the draft key is (table, value, author) ----------------------
+describe("drafts keyed per (value, author)", () => {
+  const run = Date.now();
+
+  it("counts one pending change per value, and publish applies the newest draft", async () => {
+    await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
+    const refTableId = await addRefTable(`TwoAuthors_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", "alpha", U, T);
+    await addRecordOne(refTableId, "Beta", "beta", U, T);
+    await saveDraft(refTableId, "shared", "mapped", "Alpha", "alpha", U, T);
+    await saveDraft(refTableId, "shared", "mapped", "Beta", "beta", U2, T);
+
+    // Both rows survive — the PK is per author.
+    const rows = await listDrafts(refTableId, T);
+    expect(rows.length).toBe(2);
+    // ...and each carries a real timestamp, so the client can reproduce the
+    // newest-wins fold instead of showing whichever row happened to land last.
+    expect(rows.every((d) => !Number.isNaN(Date.parse(d.createdAt)))).toBe(true);
+
+    // The publish footer counts mappings, not rows: one value → one change.
+    const state = await getPublishState(refTableId, T);
+    expect(state.pendingDrafts).toBe(1);
+
+    // Publishing the value folds both rows into the newest author's target.
+    const res = await commit(refTableId, U, T, ["shared"]);
+    expect(res.committed).toBe(2);
+    expect((await listDrafts(refTableId, T)).length).toBe(0);
+    const meta = await pgGet<{ mapTable: string; keyCol: string }>(
+      `SELECT map_table AS "mapTable", key_col AS "keyCol"
+       FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
+    );
+    const mapped = await pgGet<{ k: string }>(
+      `SELECT ${meta!.keyCol} AS k FROM ${meta!.mapTable} WHERE raw = $1`,
+      ["shared"],
+    );
+    expect(mapped!.k).toBe("beta");
+  });
+
+  it("scoped commit publishes the selected author's draft, not the newest", async () => {
+    await setPreferences({ ...(await getPreferences(T)), requireSecondPublisher: false }, T);
+    const refTableId = await addRefTable(`AuthorScoped_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", "alpha", U, T);
+    await addRecordOne(refTableId, "Beta", "beta", U, T);
+    await saveDraft(refTableId, "shared", "mapped", "Alpha", "alpha", U, T);
+    await saveDraft(refTableId, "shared", "mapped", "Beta", "beta", U2, T);
+
+    // Approve the OLDER draft (U's) — the Approve inbox lists a row per author.
+    const res = await commit(refTableId, U2, T, [{ raw: "shared", userId: U }]);
+    expect(res.committed).toBe(1);
+
+    const meta = await pgGet<{ mapTable: string; keyCol: string }>(
+      `SELECT map_table AS "mapTable", key_col AS "keyCol"
+       FROM "zugzug_app"."reference_table" WHERE id = $1 AND tenant_id = $2`,
+      [refTableId, T],
+    );
+    const mapped = await pgGet<{ k: string }>(
+      `SELECT ${meta!.keyCol} AS k FROM ${meta!.mapTable} WHERE raw = $1`,
+      ["shared"],
+    );
+    expect(mapped!.k).toBe("alpha");
+    // The draft nobody approved is untouched.
+    const left = await listDrafts(refTableId, T);
+    expect(left.map((d) => d.user.id)).toEqual([U2]);
+  });
+
+  it("discarding another editor's draft removes nothing and says so", async () => {
+    const refTableId = await addRefTable(`DiscardScope_${run}`, [], { keyKind: "slug" }, U, T);
+    await addRecordOne(refTableId, "Alpha", "alpha", U, T);
+    await saveDraft(refTableId, "mine", "mapped", "Alpha", "alpha", U, T);
+
+    expect(await discardDraft(refTableId, "mine", U2, T)).toEqual({ discarded: 0 });
+    expect((await listDrafts(refTableId, T)).length).toBe(1);
+    expect(await discardDraft(refTableId, "mine", U, T)).toEqual({ discarded: 1 });
+    expect((await listDrafts(refTableId, T)).length).toBe(0);
+  });
+});
+
 describe("rejectDrafts()", () => {
   it("reject sets status, reason, reviewer; re-staging clears them", async () => {
     const refTableId = await addRefTable("RejectDim", [], { keyKind: "slug" }, U, T);
@@ -434,6 +534,19 @@ describe("rejectDrafts()", () => {
     expect(d2.status).toBe("mapped");
     expect(d2.rejectedReason).toBeNull();
   });
+  it("rejects only the selected author's draft", async () => {
+    const refTableId = await addRefTable("RejectPerAuthor", [], { keyKind: "slug" }, U, T);
+    await saveDraft(refTableId, "usa", "mapped", "United States", "united_states", U, T);
+    await saveDraft(refTableId, "usa", "mapped", "USA Inc", "usa_inc", U2, T);
+
+    const r = await rejectDrafts(refTableId, T, [{ raw: "usa", userId: U2 }], "wrong target", U);
+    expect(r.rejected).toBe(1);
+
+    const rows = await listDrafts(refTableId, T);
+    expect(rows.find((d) => d.user.id === U2)!.status).toBe("rejected");
+    expect(rows.find((d) => d.user.id === U)!.status).toBe("mapped");
+  });
+
   it("reject with empty reason 400s", async () => {
     const refTableId = await addRefTable("RejectEmptyReason", [], { keyKind: "slug" }, U, T);
     await expect(rejectDrafts(refTableId, T, ["usa"], "  ", U2)).rejects.toThrow(/reason/i);

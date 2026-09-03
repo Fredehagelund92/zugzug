@@ -1,4 +1,5 @@
 import { AppError } from "./errors.ts";
+import { canMutate, type Role, type Operation } from "./auth.ts";
 import { pgContext } from "./pg.ts";
 import * as repoMeta from "./repo-meta.ts";
 import * as repoRecord from "./repo-record.ts";
@@ -26,14 +27,7 @@ import type {
   User,
 } from "./repo-shared.ts";
 
-export type Role = "admin" | "editor" | "viewer";
-export type Operation = "curate" | "commit" | "manage_adapter";
-
-const ROLE_OPS: Record<Role, Operation[]> = {
-  admin: ["curate", "commit", "manage_adapter"],
-  editor: ["curate", "commit"],
-  viewer: [],
-};
+export type { Role, Operation } from "./auth.ts";
 
 /* TenantRepo — request-scoped DB surface.
  *
@@ -42,8 +36,8 @@ const ROLE_OPS: Record<Role, Operation[]> = {
  * function (which now accepts a `tenantId` parameter — see repo-meta.ts). PR2b
  * expands this to the remaining ~40 repo functions.
  *
- * Mutation methods call `this.assertRole(op)` first. The static permission
- * matrix here mirrors auth.ts.canMutate. */
+ * Mutation methods call `this.assertRole(op)` first, which reads the single
+ * role→capability matrix in auth.ts (ROLE_CAPABILITIES / canMutate). */
 export class TenantRepo {
   constructor(
     public readonly tenantId: string,
@@ -53,7 +47,7 @@ export class TenantRepo {
 
   assertRole(op: Operation): void {
     if (this.isSuperAdmin) return; // super-admin bypasses per-tenant role gates
-    if (!ROLE_OPS[this.role].includes(op)) {
+    if (!canMutate(this.role, op)) {
       throw new AppError("FORBIDDEN", `role '${this.role}' cannot ${op}`, 403);
     }
   }
@@ -72,7 +66,7 @@ export class TenantRepo {
   }
 
   setPreferences(p: Preferences): Promise<void> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_workspace");
     return this.withClearCtx(() => repoMeta.setPreferences(p, this.tenantId));
   }
 
@@ -138,14 +132,14 @@ export class TenantRepo {
     opts: { keyKind?: "slug" | "external_id"; silent?: boolean } = {},
     userId: string,
   ): Promise<string> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.addRefTable(name, sources, opts, userId, this.tenantId),
     );
   }
 
   deleteRefTable(refTableId: string, userId: string): Promise<boolean> {
-    this.assertRole("curate");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() => repoRecord.deleteRefTable(refTableId, userId, this.tenantId));
   }
 
@@ -263,7 +257,7 @@ export class TenantRepo {
     updates: { description?: string | null; fieldConfig?: string | null },
     userId: string,
   ): Promise<void> {
-    this.assertRole("curate");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.updateField(refTableId, field, updates, userId, this.tenantId),
     );
@@ -290,7 +284,7 @@ export class TenantRepo {
     } = {},
     userId: string,
   ): Promise<{ field: string } | null> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.addField(refTableId, label, type, options, opts, userId, this.tenantId),
     );
@@ -301,14 +295,14 @@ export class TenantRepo {
     expr: string,
     _userId: string,
   ): Promise<{ ok: boolean; error?: string; warning?: string; sample?: string | null }> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.validateTableFormula(refTableId, expr, this.tenantId),
     );
   }
 
   renameColumn(refTableId: string, field: string, newLabel: string, userId: string): Promise<void> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.renameColumn(refTableId, field, newLabel, userId, this.tenantId),
     );
@@ -326,14 +320,14 @@ export class TenantRepo {
       userId: string;
     },
   ): Promise<{ ok: boolean; invalidCount?: number; options?: OptionDef[] }> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.changeColumnType(refTableId, field, opts, this.tenantId),
     );
   }
 
   deleteColumn(refTableId: string, field: string, userId: string): Promise<{ ok: boolean }> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoRecord.deleteColumn(refTableId, field, userId, this.tenantId),
     );
@@ -408,34 +402,37 @@ export class TenantRepo {
     return this.withClearCtx(() => repoDrafts.createDraft(input, userId, this.tenantId));
   }
 
-  discardDraft(refTableId: string, raw: string, userId: string): Promise<void> {
+  discardDraft(refTableId: string, raw: string, userId: string): Promise<{ discarded: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() => repoDrafts.discardDraft(refTableId, raw, userId, this.tenantId));
   }
 
   rejectDrafts(
     refTableId: string,
-    raws: string[],
+    keys: repoDrafts.DraftSelector[],
     reason: string,
     reviewerId: string,
   ): Promise<{ rejected: number }> {
     this.assertRole("curate");
     return this.withClearCtx(() =>
-      repoDrafts.rejectDrafts(refTableId, this.tenantId, raws, reason, reviewerId),
+      repoDrafts.rejectDrafts(refTableId, this.tenantId, keys, reason, reviewerId),
     );
   }
 
   commit(
     refTableId: string,
     userId: string,
-    draftKeys?: string[],
+    draftKeys?: repoDrafts.DraftSelector[],
+    opts?: { onlyAuthor?: string },
   ): Promise<{
     committed: number;
     rowsRecovered: number;
     warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
   }> {
     this.assertRole("commit");
-    return this.withClearCtx(() => repoDrafts.commit(refTableId, userId, this.tenantId, draftKeys));
+    return this.withClearCtx(() =>
+      repoDrafts.commit(refTableId, userId, this.tenantId, draftKeys, opts),
+    );
   }
 
   getPublishState(refTableId: string): Promise<repoDrafts.PublishState> {
@@ -461,12 +458,12 @@ export class TenantRepo {
   }
 
   scanSources(): Promise<number> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() => repoScan.scanSources(this.tenantId));
   }
 
   scanOneDim(refTableId: string): Promise<void> {
-    this.assertRole("manage_adapter");
+    this.assertRole("manage_tables");
     return this.withClearCtx(() => repoScan.scanOneDim(refTableId, this.tenantId));
   }
 
@@ -483,9 +480,9 @@ export class TenantRepo {
     refTableId: string,
     table: string,
     column: string,
-    opts: { silent?: boolean } = {},
-  ): Promise<void> {
-    this.assertRole("manage_adapter");
+    opts: { silent?: boolean; databaseId?: string } = {},
+  ): Promise<string> {
+    this.assertRole("manage_tables");
     return this.withClearCtx(() =>
       repoScan.addSource(refTableId, table, column, this.tenantId, opts),
     );
@@ -496,9 +493,10 @@ export class TenantRepo {
     table: string,
     column: string,
     limit = 5,
+    databaseId?: string,
   ): Promise<repoScan.UnmappedSample[]> {
     return this.withClearCtx(() =>
-      repoScan.topUnmapped(refTableId, table, column, limit, this.tenantId),
+      repoScan.topUnmapped(refTableId, table, column, limit, this.tenantId, databaseId),
     );
   }
 
@@ -547,7 +545,7 @@ export class TenantRepo {
     table: string,
     column: string,
     nameColumn: string | undefined,
-    opts: { silent?: boolean; force?: boolean } = {},
+    opts: { silent?: boolean; force?: boolean; databaseId?: string } = {},
     userId: string,
   ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
     this.assertRole("commit");
@@ -583,11 +581,12 @@ export class TenantRepo {
     return this.withClearCtx(() => repoActivity.listRecordHistory(tableId, rowKey, scope, opts));
   }
 
-  // --- user-scoped (no tenant) ----------------------------------------------
+  // --- users (workspace-scoped) ---------------------------------------------
   listUsers(): Promise<User[]> {
-    return this.withClearCtx(() => repoMeta.listUsers());
+    return this.withClearCtx(() => repoMeta.listUsers(this.tenantId));
   }
 
+  // --- user-scoped (no tenant) ----------------------------------------------
   getGridLayout(userId: string, refTableId: string): Promise<GridLayoutConfig> {
     return this.withClearCtx(() => repoMeta.getGridLayout(userId, refTableId));
   }

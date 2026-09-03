@@ -71,6 +71,16 @@ export interface CommitResult {
   readonly rowsWritten: number;
 }
 
+/** What a publish changed beyond its approved drafts. Postgres is the master
+ *  copy of the published state; these three lists are what a draft-only payload
+ *  cannot express — a record renamed with no draft of its own, a mapping the
+ *  publish re-pointed when two records were merged, and the keys it retired. */
+export interface RecordSyncExtras {
+  readonly records?: ReadonlyArray<{ readonly key: string; readonly label: string | null }>;
+  readonly mappings?: ReadonlyArray<{ readonly raw: string; readonly key: string }>;
+  readonly retiredKeys?: readonly string[];
+}
+
 interface BaseWarehouseAdapter {
   readonly capabilities: AdapterCapabilities;
 
@@ -113,7 +123,11 @@ interface BaseWarehouseAdapter {
 export interface WritableWarehouseAdapter extends BaseWarehouseAdapter {
   readonly capabilities: AdapterCapabilities & { readonly writable: true };
   ensureRecordTables(refTable: RefTableSpec): Promise<void>;
-  commitRecord(refTable: RefTableSpec, drafts: ApprovedDraft[]): Promise<CommitResult>;
+  commitRecord(
+    refTable: RefTableSpec,
+    drafts: ApprovedDraft[],
+    extras?: RecordSyncExtras,
+  ): Promise<CommitResult>;
 }
 
 export interface ReadOnlyWarehouseAdapter extends BaseWarehouseAdapter {

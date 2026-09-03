@@ -71,7 +71,7 @@ export const refTableSource = app.table(
     primaryKey({
       columns: [t.tenant_id, t.reference_table_id, t.database_id, t.schema_name, t.table_name, t.column_name],
     }),
-    index("reference_table_source_dim_idx").on(t.tenant_id, t.reference_table_id),
+    index("reference_table_source_ref_table_idx").on(t.tenant_id, t.reference_table_id),
     index("reference_table_source_database_idx").on(t.tenant_id, t.database_id),
     foreignKey({
       columns:        [t.database_id],
@@ -228,6 +228,7 @@ export const preferences = app.table(
     tenant_id:         varchar("tenant_id").notNull().references(() => tenant.id),
     last_outbound_sweep_at:      timestamp("last_outbound_sweep_at"),
     require_second_publisher:    boolean("require_second_publisher").notNull().default(false),
+    auto_publish_enabled:        boolean("auto_publish_enabled").notNull().default(false),
   },
   (t) => [
     uniqueIndex("preferences_tenant_unique").on(t.tenant_id),
@@ -261,8 +262,8 @@ export const aiHintCache = app.table(
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.raw] }),
-    index("ai_hint_cache_dim_id_idx").on(t.reference_table_id),
-    index("ai_hint_cache_tenant_dim_idx").on(t.tenant_id, t.reference_table_id),
+    index("ai_hint_cache_ref_table_id_idx").on(t.reference_table_id),
+    index("ai_hint_cache_tenant_ref_table_idx").on(t.tenant_id, t.reference_table_id),
   ],
 );
 
@@ -298,7 +299,7 @@ export const sourceScanValue = app.table(
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.raw_lower] }),
-    index("source_scan_value_dim_rows_idx").on(t.tenant_id, t.reference_table_id, t.total_rows.desc(), t.raw_lower),
+    index("source_scan_value_ref_table_rows_idx").on(t.tenant_id, t.reference_table_id, t.total_rows.desc(), t.raw_lower),
     check("source_scan_value_raw_nonempty",      sql`length(${t.raw}) > 0`),
     check("source_scan_value_total_rows_nonneg", sql`${t.total_rows} >= 0`),
   ],
@@ -343,7 +344,7 @@ export const recordVersion = app.table(
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.reference_table_id, t.key] }),
     index("record_version_recent_idx").on(t.reference_table_id, t.updated_at),
-    index("record_version_tenant_dim_idx").on(t.tenant_id, t.reference_table_id),
+    index("record_version_tenant_ref_table_idx").on(t.tenant_id, t.reference_table_id),
     /* Pull API live-row read path (PR2). Partial over un-retired rows. */
     index("record_version_pull_idx")
       .on(t.tenant_id, t.reference_table_id, t.updated_at, t.key)

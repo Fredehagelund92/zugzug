@@ -5,6 +5,7 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { resetDb } from "./setup.ts";
 import * as repo from "../src/repo.ts";
+import { pgGet } from "../src/pg.ts";
 import { registerFactories } from "../src/warehouse/credentials.ts";
 import { _resetAdapterCache } from "../src/warehouse/registry.ts";
 import { createDuckDbAdapter, DuckDbWritableAdapter } from "../src/warehouse/duckdb/index.ts";
@@ -199,6 +200,119 @@ test("commit in writable DuckDB mode: rows land in MERGE-target tables end-to-en
   // Audit log captures the sync
   const audits = await repo.listAudit(10);
   expect(audits.some((a) => a.action === "Warehouse synced")).toBe(true);
+});
+
+test("writable DuckDB publish: schema auto-created; re-map, rename and retire follow through", async () => {
+  // No CREATE SCHEMA here on purpose — ensureRecordTables has to provision it,
+  // which is what a first publish against a fresh warehouse actually hits.
+  const wh = new DuckDbWritableAdapter({
+    type: "duckdb",
+    path: ":memory:",
+    attached: false,
+    writable: true,
+  });
+  registerFactories({ duckdb: async () => wh, snowflake: async () => wh });
+  _resetAdapterCache();
+
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
+  await repo.saveDraft(refTableId, "USA", "mapped", "United States", "us", "u_test", "default");
+  expect((await repo.commit(refTableId, "u_test", "default")).warehouseSynced).toBe("synced");
+
+  // @ts-expect-error — protected connect()
+  const c = await wh["connect"]();
+  const rows = async (sql: string) => (await c.runAndReadAll(sql)).getRowObjects();
+  const version = async (key: string) =>
+    Number(
+      (
+        await pgGet<{ v: number }>(
+          `SELECT version AS v FROM "zugzug_app"."record_version"
+            WHERE reference_table_id = $1 AND key = $2 AND tenant_id = 'default'`,
+          [refTableId, key],
+        )
+      )?.v ?? 1,
+    );
+
+  expect(await rows(`SELECT * FROM zugzug.map_country ORDER BY raw`)).toEqual([
+    { raw: "USA", country_code: "us" },
+  ]);
+
+  // Re-map the same source value to a different record: the existing map row
+  // must move, not gain a duplicate.
+  await repo.saveDraft(
+    refTableId,
+    "USA",
+    "mapped",
+    "United States of America",
+    "usa",
+    "u_test",
+    "default",
+  );
+  await repo.commit(refTableId, "u_test", "default");
+  expect(await rows(`SELECT * FROM zugzug.map_country ORDER BY raw`)).toEqual([
+    { raw: "USA", country_code: "usa" },
+  ]);
+
+  // Rename a record — no draft of its own, so only the record-edit path carries it.
+  await repo.renameRecord(refTableId, "usa", "USA", "u_test", await version("usa"), "default");
+  await repo.commit(refTableId, "u_test", "default");
+  expect(await rows(`SELECT label FROM zugzug.dim_country WHERE country_code = 'usa'`)).toEqual([
+    { label: "USA" },
+  ]);
+
+  // Retire the record the value used to point at — its published row must go.
+  await repo.retireRecord(refTableId, "us", "u_test", await version("us"), "default");
+  await repo.commit(refTableId, "u_test", "default");
+  expect(await rows(`SELECT country_code FROM zugzug.dim_country ORDER BY 1`)).toEqual([
+    { country_code: "usa" },
+  ]);
+});
+
+test("writable DuckDB publish: a record merge re-points the published map rows", async () => {
+  const wh = new DuckDbWritableAdapter({
+    type: "duckdb",
+    path: ":memory:",
+    attached: false,
+    writable: true,
+  });
+  registerFactories({ duckdb: async () => wh, snowflake: async () => wh });
+  _resetAdapterCache();
+
+  const refTableId = await repo.addRefTable(
+    "Country",
+    [],
+    { keyKind: "slug" },
+    "u_test",
+    "default",
+  );
+  await repo.addRecordOne(refTableId, "US", undefined, "u_test", "default");
+  await repo.addRecordOne(refTableId, "USA", undefined, "u_test", "default");
+  await repo.saveDraft(refTableId, "U.S.", "mapped", "US", "us", "u_test", "default");
+  await repo.saveDraft(refTableId, "U.S.A.", "mapped", "USA", "usa", "u_test", "default");
+  await repo.commit(refTableId, "u_test", "default");
+
+  // @ts-expect-error — protected connect()
+  const c = await wh["connect"]();
+  const rows = async (sql: string) => (await c.runAndReadAll(sql)).getRowObjects();
+
+  // Fold "usa" into "us": Postgres re-points U.S.A. and drops the loser row.
+  await repo.mergeRecord(refTableId, "us", ["usa"], "u_test", { us: 1, usa: 1 }, "default");
+  await repo.commit(refTableId, "u_test", "default");
+
+  // The published map has to follow — the variant must not vanish with the key
+  // it was merged away from.
+  expect(await rows(`SELECT * FROM zugzug.map_country ORDER BY raw`)).toEqual([
+    { raw: "U.S.", country_code: "us" },
+    { raw: "U.S.A.", country_code: "us" },
+  ]);
+  expect(await rows(`SELECT country_code FROM zugzug.dim_country ORDER BY 1`)).toEqual([
+    { country_code: "us" },
+  ]);
 });
 
 // Cleanup: restore real factories at end of file so subsequent test files see DuckDB

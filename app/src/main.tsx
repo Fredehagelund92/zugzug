@@ -4,7 +4,8 @@ import * as Sentry from "@sentry/react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./globals.css";
 import { setAccent, setTheme, toggleTheme } from "./theme";
-import { BootGate } from "./components/BootGate";
+import { BootGate, AppIndex } from "./components/BootGate";
+import { HashScroll } from "./components/HashScroll";
 import { AppShell } from "./components/AppShell";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import { TenantLayout } from "./components/TenantLayout";
@@ -64,6 +65,7 @@ const root = document.getElementById("root")!;
 createRoot(root).render(
   <React.StrictMode>
     <BrowserRouter>
+      <HashScroll />
       <Routes>
         {/* Public — no session required */}
         <Route path="/login" element={<Login />} />
@@ -78,14 +80,10 @@ createRoot(root).render(
               <BootGate>
                 {(boot) => (
                   <Routes>
-                    {/* /app and / redirect via BootGate effect — these are sync fallbacks */}
+                    {/* "/" funnels into "/app"; AppIndex is the single place
+                        that decides which workspace that resolves to. */}
                     <Route path="/" element={<Navigate to="/app" replace />} />
-                    <Route
-                      path="/app"
-                      element={
-                        <Navigate to={`/app/${boot.memberships[0]?.slug ?? "admin"}`} replace />
-                      }
-                    />
+                    <Route path="/app" element={<AppIndex isSuperAdmin={boot.isSuperAdmin} />} />
 
                     {/* Super-admin shell */}
                     {boot.isSuperAdmin ? (
@@ -103,9 +101,10 @@ createRoot(root).render(
                       path="/app/:tenantSlug/*"
                       element={<TenantLayout isSuperAdmin={boot.isSuperAdmin} />}
                     >
-                      <Route element={<AppShell memberships={boot.memberships} />}>
+                      <Route element={<AppShell />}>
                         <Route index element={<Dashboard />} />
-                        <Route path="triage" element={<Triage />} />
+                        <Route path="review" element={<Triage />} />
+                        <Route path="triage" element={<Navigate to="../review" replace />} />
                         <Route path="sources" element={<Sources />} />
                         <Route path="tables" element={<MasterTables />} />
                         <Route path="audit" element={<Audit />} />

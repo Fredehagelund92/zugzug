@@ -32,6 +32,10 @@ function relativeTime(iso: string | null): string {
 
 type RoleFilter = "all" | "super_admin" | "regular";
 
+/** The server caps `limit` at 100; ask for one row past a page so we know
+ *  whether a next page exists without a separate count query. */
+const PAGE_SIZE = 50;
+
 export function Users() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +43,8 @@ export function Users() {
   const [filter, setFilter] = useState<RoleFilter>("all");
   const [pending, setPending] = useState<{ user: AdminUser; promote: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
 
   const counts = useMemo(() => {
     let sa = 0;
@@ -52,12 +58,18 @@ export function Users() {
     return users;
   }, [users, filter]);
 
-  const load = useCallback(async (q?: string) => {
+  const load = useCallback(async (q?: string, off = 0) => {
     setLoading(true);
     try {
-      const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-      const r = await apiFetch(`/users${qs}`);
-      if (r.ok) setUsers(((await r.json()) as { users: AdminUser[] }).users);
+      const sp = new URLSearchParams({ limit: String(PAGE_SIZE + 1), offset: String(off) });
+      if (q) sp.set("q", q);
+      const r = await apiFetch(`/users?${sp.toString()}`);
+      if (r.ok) {
+        const page = ((await r.json()) as { users: AdminUser[] }).users;
+        setHasMore(page.length > PAGE_SIZE);
+        setUsers(page.slice(0, PAGE_SIZE));
+        setOffset(off);
+      }
     } finally {
       setLoading(false);
     }
@@ -72,16 +84,21 @@ export function Users() {
     queryRef.current = query;
   }, [query]);
 
+  const offsetRef = useRef(offset);
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+
   useEffect(() => {
     const unsub = subscribeInvalidate("adminUsers", () => {
-      void load(queryRef.current.trim() || undefined);
+      void load(queryRef.current.trim() || undefined, offsetRef.current);
     });
     return unsub;
   }, [load]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    void load(query.trim() || undefined);
+    void load(query.trim() || undefined, 0);
   };
 
   const confirm = async () => {
@@ -235,6 +252,32 @@ export function Users() {
           </div>
         )}
       </Panel>
+
+      {(offset > 0 || hasMore) && (
+        <div className="flex items-center justify-between text-xs text-ink-3">
+          <span className="tabular-nums">
+            Showing {users.length === 0 ? 0 : offset + 1}–{offset + users.length}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={offset === 0 || loading}
+              onClick={() => void load(query.trim() || undefined, Math.max(0, offset - PAGE_SIZE))}
+            >
+              Previous
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!hasMore || loading}
+              onClick={() => void load(query.trim() || undefined, offset + PAGE_SIZE)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!pending}

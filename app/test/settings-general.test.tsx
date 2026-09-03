@@ -1,19 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { General } from "../src/routes/settings/General";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 
 vi.mock("../src/api", () => ({ apiFetch: vi.fn().mockResolvedValue({ ok: true }) }));
 
 function wrap(ui: React.ReactNode, role: "viewer" | "editor" | "admin" = "admin") {
-  const value: TenantContextValue = {
-    id: "t1",
-    slug: "acme",
-    label: "Acme",
-    role,
-    isSuperAdmin: false,
-  };
+  const value: TenantContextValue = tenantFixture(role);
   return (
     <MemoryRouter>
       <TenantProvider value={value}>{ui}</TenantProvider>
@@ -24,9 +19,12 @@ function wrap(ui: React.ReactNode, role: "viewer" | "editor" | "admin" = "admin"
 describe("Settings/General", () => {
   beforeEach(() => vi.useFakeTimers());
 
-  it("has no explicit Save button", () => {
+  it("autosaves the workspace name — no Save button beside it", () => {
     render(wrap(<General />));
-    expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
+    // Scoped to the Identity section: the URL-slug section below it does have a
+    // Save button, because a workspace admin may change the address.
+    const identity = screen.getByDisplayValue("Acme").closest("section")!;
+    expect(within(identity).queryByRole("button", { name: /save/i })).toBeNull();
   });
 
   it("autosaves the workspace label after debounce", async () => {

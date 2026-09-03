@@ -22,12 +22,18 @@ export type Role = "viewer" | "editor" | "admin";
 
 export interface DeliverySummary {
   id: string;
+  webhook_id: string;
+  event_id: string;
   event_type: string;
+  delivery_url: string;
   status: DeliveryStatus;
   attempts: number;
   max_attempts: number;
   last_response_code: number | null;
+  last_error: string | null;
+  next_attempt_at: string | null;
   last_attempt_at: string | null;
+  created_at: string;
   completed_at: string | null;
   signing_kid: "current" | "previous";
   is_test: boolean;
@@ -41,12 +47,18 @@ export interface DeliverySummary {
 
 interface DeliveryRow {
   id: string;
+  webhook_id: string;
+  event_id: string;
   event_type: string;
+  delivery_url: string;
   status: DeliveryStatus;
   attempts: number;
   max_attempts: number;
   last_response_code: number | null;
+  last_error: string | null;
+  next_attempt_at: string | null;
   last_attempt_at: string | null;
+  created_at: string;
   completed_at: string | null;
   signing_kid: "current" | "previous";
   is_test: boolean;
@@ -56,9 +68,12 @@ interface DeliveryRow {
 }
 
 const SELECT_COLS = `
-  id, event_type, status, attempts, max_attempts,
-  last_response_code,
+  id, webhook_id, event_id, event_type, delivery_url,
+  status, attempts, max_attempts,
+  last_response_code, last_error,
+  next_attempt_at::text AS next_attempt_at,
   last_attempt_at::text AS last_attempt_at,
+  created_at::text   AS created_at,
   completed_at::text AS completed_at,
   signing_kid, is_test,
   payload, signature, last_response_body
@@ -68,12 +83,18 @@ function mask(row: DeliveryRow, role: Role): DeliverySummary {
   const isViewer = role === "viewer";
   return {
     id: row.id,
+    webhook_id: row.webhook_id,
+    event_id: row.event_id,
     event_type: row.event_type,
+    delivery_url: row.delivery_url,
     status: row.status,
     attempts: row.attempts,
     max_attempts: row.max_attempts,
     last_response_code: row.last_response_code,
+    last_error: row.last_error,
+    next_attempt_at: row.next_attempt_at,
     last_attempt_at: row.last_attempt_at,
+    created_at: row.created_at,
     completed_at: row.completed_at,
     signing_kid: row.signing_kid,
     is_test: row.is_test,
@@ -144,7 +165,7 @@ export async function sendTestEvent(
   const deliveryId = `whd_${crypto.randomUUID().replace(/-/g, "")}`;
   const eventId = `ev_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
   const payload = JSON.stringify({
-    dim_slug: null,
+    table_slug: null,
     message: "This is a test event from the Zugzug UI.",
   });
   await pgRun(

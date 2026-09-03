@@ -109,7 +109,9 @@ export function DeliveryLog({ webhookId }: { webhookId: string }) {
                     {r.attempts}/{r.max_attempts}
                   </td>
                   <td>{r.last_response_code ?? "—"}</td>
-                  <td className="text-ink-2">{r.created_at.slice(0, 19).replace("T", " ")}</td>
+                  <td className="text-ink-2">
+                    {r.created_at ? r.created_at.slice(0, 19).replace("T", " ") : "—"}
+                  </td>
                   {canSeePayload && (
                     <td className="text-right">
                       {canReplay && (

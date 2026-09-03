@@ -117,9 +117,12 @@ export async function rollbackToVersion(
     skipWarehouseSync: true,
   });
 
-  // 6. Warehouse sync: commitRecord is INSERT-only (cannot delete stale rows),
-  //    so this sync is additive — rows from the reverted version may remain.
-  //    We pass ALL snapshot records so the adapter MERGEs the full restored state.
+  // 6. Warehouse sync: we pass ALL snapshot records, so the adapter MERGEs the
+  //    full restored state — every restored row is written, and one whose label
+  //    or target changed is corrected. It stays additive because rollback names
+  //    no retired keys: a record ADDED by the reverted version still has its
+  //    warehouse row. (commitRecord takes retiredKeys now; wiring rollback's
+  //    "keys not in the snapshot" through it is a follow-up.)
   let warehouseSynced: "n/a" | "synced-additive" | "failed" = "n/a";
   const adapter = await getAdapter();
   if (isWritable(adapter)) {
@@ -148,7 +151,7 @@ export async function rollbackToVersion(
       await appendAuditAs(
         userId,
         "Warehouse rollback sync",
-        `additive — rows added by the reverted version may remain; manual resync recommended`,
+        `additive — rows added by the reverted version may remain; refresh the warehouse to be sure`,
         { tenantId },
       );
       warehouseSynced = "synced-additive";

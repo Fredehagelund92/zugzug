@@ -1,6 +1,6 @@
 ---
 title: Pull API
-description: Read published records over HTTP — the recommended way to sync into dbt, Fivetran, or any pipeline.
+description: Read published records over HTTP — the recommended way to feed dbt, Fivetran, or any pipeline.
 ---
 
 The Pull API serves your published records as JSON, so your warehouse team can ingest
@@ -50,7 +50,7 @@ curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \
 
 ```json
 {
-  "dim_slug": "country",
+  "table_slug": "country",
   "label": "Country",
   "fields": [
     { "name": "iso3", "type": "text", "description": "ISO-3166 alpha-3" }
@@ -71,15 +71,15 @@ curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \
     }
   ],
   "cursor": { "next": "eyJ…signed…" },
-  "meta": { "dim_slug": "country", "page_size": 500 }
+  "meta": { "table_slug": "country", "page_size": 500 }
 }
 ```
 
-## Incremental sync
+## Incremental pulls
 
 Records are ordered by `(updated_at, key)`, and pages carry a signed cursor:
 
-- **First sync** — call `…/records` with no params, then follow `cursor.next` until it's
+- **First pull** — call `…/records` with no params, then follow `cursor.next` until it's
   `null`.
 - **Since a timestamp** — `?since=<ISO-8601>` returns only records at or after that
   instant (inclusive). Persist the newest `updated_at` you've seen and pass it next run.
@@ -88,7 +88,7 @@ Records are ordered by `(updated_at, key)`, and pages carry a signed cursor:
 Only ISO-8601 values are accepted for `since` (e.g. `2026-01-01T00:00:00Z`).
 
 ```bash
-# Pull everything new since your last successful sync
+# Pull everything new since your last successful pull
 curl -H "Authorization: Bearer zzsa_YOUR_TOKEN" \
   "https://<host>/api/t/acme/v1/tables/country/records?since=2026-01-01T00:00:00Z"
 ```
@@ -101,11 +101,11 @@ to reconcile against it.
 
 | Response | Meaning |
 |---|---|
-| `400 cursor_invalid` | The cursor was invalidated (e.g. server-key rotation). Re-sync from `?since=`. |
+| `400 cursor_invalid` | The cursor was invalidated (e.g. server-key rotation). Pull again from `?since=`. |
 | `429` + `Retry-After` | Rate limited. Default **600 req/min** per credential (`ZUGZUG_PULL_API_RPM`). |
 
 ## Consuming it in dbt
 
-Point a scheduled job or your extract tool at `…/records`, land the JSON in a raw table,
+Point a scheduled job or your extract tool at `…/records`, land the JSON in a landing table,
 and model it like any other source. Because it's plain HTTP + cursors, every publish
 flows through the same dev → prod and review path as the rest of your warehouse.

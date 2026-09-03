@@ -118,9 +118,11 @@ describe("stageExactMatchDrafts (#154)", () => {
 
   it("does not duplicate-stage when two records share a label case-insensitively", async () => {
     const refTableId = await addRefTable("AutoDup", [], { keyKind: "slug" }, U, T);
-    // Two distinct records whose labels collide when lower-cased.
-    await addRecordOne(refTableId, "Acme", undefined, U, T);
-    await addRecordOne(refTableId, "ACME", undefined, U, T);
+    // Two distinct records whose labels collide when lower-cased. The keys must
+    // be given explicitly — derived from the labels they would both slug to
+    // "acme", which is now a duplicate-key refusal, not a second record.
+    await addRecordOne(refTableId, "Acme", "acme_one", U, T);
+    await addRecordOne(refTableId, "ACME", "acme_two", U, T);
     await seedSourceValue(refTableId, "acme", 5);
 
     // DISTINCT ON (v.raw) must keep the INSERT to a single draft per raw —

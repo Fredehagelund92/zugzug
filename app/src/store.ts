@@ -3,6 +3,7 @@ import type { RecordValue, MappingRefTable, OptionDef, PaletteName, NumberFormat
 import type { ConditionalRule, FilterSet } from "./components/datagrid/types";
 import { apiFetch, authFetch } from "./api";
 import { useTenantOptional } from "./lib/tenant-context";
+import type { Capability } from "./lib/permissions";
 import { toast } from "./components/Toast";
 
 /** Thrown by client mutation helpers on HTTP 403 with a machine-readable code. */
@@ -79,7 +80,11 @@ export interface Draft {
   targetLabel: string | null;
   targetKey: string | null;
   user: User;
+  /** Display string from the server ("5m ago"), not a timestamp. */
   at: string;
+  /** ISO creation time — the only sortable ordering the client has, and what
+   *  the newest-wins fold below needs. */
+  createdAt: string;
   source: "user" | "ai";
   confidence: "high" | "medium" | "low" | null;
   reasoning: string | null;
@@ -97,6 +102,10 @@ export interface AuditEntry {
 /** A registered warehouse source column for a refTable (from the source registry,
  *  not the scan) — so the UI shows the tables even with zero warehouse rows. */
 export interface SourceInfo {
+  /** warehouse_database.id the column is registered against. */
+  databaseId: string;
+  /** Its name — two databases can hold the same schema.table.column. */
+  databaseName: string;
   table: string;
   column: string;
   refTable: string;
@@ -106,6 +115,8 @@ export interface SourceInfo {
   values: number;
   unmapped: number;
   scanned: boolean;
+  /** Why the last scan failed, or null when it reached the warehouse. */
+  scanError: string | null;
   scannedAt?: string | null; // ISO timestamp of last scan
 }
 
@@ -114,8 +125,15 @@ export const slug = (s: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_|_$/g, "");
-/** flat key for a per-(refTable,value) draft — matches the workbench overlay. */
+/** Key for one source value in a table — the grain every worklist row, picker
+ *  and publish line is drawn at. `useDraftsByValue()` is keyed by this. */
 export const dkey = (refTableId: string, raw: string) => `${refTableId}::${raw}`;
+/** Key for one draft ROW, mirroring the server primary key
+ *  (tenant, table, value, author). Two people can draft the same value; keying
+ *  the cache per value dropped one of them, so the preview showed a mapping
+ *  publish would not apply. `useDrafts()` is keyed by this. */
+export const akey = (refTableId: string, raw: string, userId: string) =>
+  `${refTableId}::${raw}::${userId}`;
 
 /* ---- session identity (populated by initStore before first render) ---- */
 export let currentUser: User = { id: "u_ada", name: "Ada Berg", initials: "AB" };
@@ -128,6 +146,7 @@ export interface Preferences {
   suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
   requireSecondPublisher: boolean;
+  autoPublishEnabled: boolean;
 }
 
 export interface WorkspaceInfo {
@@ -183,6 +202,7 @@ function resetStore(): void {
     suggestThreshold: 80,
     scanSchedule: null,
     requireSecondPublisher: false,
+    autoPublishEnabled: false,
   };
   _authConfigCache = null;
   _authConfigPromise = null;
@@ -271,6 +291,7 @@ let preferences: Preferences = {
   suggestThreshold: 80,
   scanSchedule: null,
   requireSecondPublisher: false,
+  autoPublishEnabled: false,
 };
 let storeLoading = true;
 
@@ -425,7 +446,7 @@ async function refreshDrafts(refTableId?: string): Promise<void> {
     const list = await api<Draft[]>(`/tables/${encodeURIComponent(refTableId)}/drafts`);
     const next: Record<string, Draft> = {};
     for (const [k, d] of Object.entries(draftsFlat)) if (d.refTableId !== refTableId) next[k] = d;
-    for (const d of list) next[dkey(d.refTableId, d.raw)] = d;
+    for (const d of list) next[akey(d.refTableId, d.raw, d.user.id)] = d;
     draftsFlat = next;
     return;
   }
@@ -437,7 +458,7 @@ async function refreshDrafts(refTableId?: string): Promise<void> {
   for (;;) {
     const qs: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     const page = await api<{ drafts: Draft[]; nextCursor: string | null }>(`/drafts${qs}`);
-    for (const d of page.drafts) flat[dkey(d.refTableId, d.raw)] = d;
+    for (const d of page.drafts) flat[akey(d.refTableId, d.raw, d.user.id)] = d;
     if (!page.nextCursor) break;
     cursor = page.nextCursor;
   }
@@ -488,12 +509,51 @@ export function useRefTables(): MappingRefTable[] {
     () => refTables,
   );
 }
+/** Every draft ROW, keyed by akey(table, value, author). Use this only where
+ *  authorship is on screen (the Approve inbox). */
 export function useDrafts(): Record<string, Draft> {
   return useSyncExternalStore(
     subscribe,
     () => draftsFlat,
     () => draftsFlat,
   );
+}
+
+/** True when `a` is the draft publish would keep for a value. Mirrors the
+ *  server fold's `ORDER BY created_at DESC, user_id`. */
+function winsOver(a: Draft, b: Draft): boolean {
+  if (a.createdAt !== b.createdAt) return a.createdAt > b.createdAt;
+  return a.user.id < b.user.id;
+}
+
+/** Collapse the per-author rows to one draft per value, exactly as publish
+ *  does. Exported for tests. */
+export function foldDraftsByValue(flat: Record<string, Draft>): Record<string, Draft> {
+  const out: Record<string, Draft> = {};
+  for (const d of Object.values(flat)) {
+    const k = dkey(d.refTableId, d.raw);
+    const cur = out[k];
+    if (!cur || winsOver(d, cur)) out[k] = d;
+  }
+  return out;
+}
+
+// The fold is recomputed only when the flat cache is replaced, so
+// useSyncExternalStore keeps getting the same snapshot between writes.
+let foldedDrafts: Record<string, Draft> = {};
+let foldedFrom: Record<string, Draft> | null = null;
+function draftsByValue(): Record<string, Draft> {
+  if (foldedFrom !== draftsFlat) {
+    foldedDrafts = foldDraftsByValue(draftsFlat);
+    foldedFrom = draftsFlat;
+  }
+  return foldedDrafts;
+}
+
+/** One draft per source value — the mapping publish will actually apply. This
+ *  is what worklist rows, pickers and the publish preview read. */
+export function useDraftsByValue(): Record<string, Draft> {
+  return useSyncExternalStore(subscribe, draftsByValue, draftsByValue);
 }
 export function useAudit(): AuditEntry[] {
   return useSyncExternalStore(
@@ -532,15 +592,16 @@ export function useStoreLoading(): boolean {
   );
 }
 
-/** Convenience: true when the current user may mutate state in the active workspace.
- *  Reads role + super-admin from TenantContext (per-workspace, authoritative) rather
- *  than the global currentUser shape (which doesn't carry workspace role).
+/** Convenience: true when the current user may mutate records and mappings in
+ *  the active workspace. Reads the server-resolved capabilities off
+ *  TenantContext (per-workspace, authoritative) rather than the global
+ *  currentUser shape (which doesn't carry workspace role).
  *  Super-admin short-circuits to true per the 2026-06-13 settings spec. */
 export function useCanEdit(): boolean {
   const t = useTenantOptional();
   if (!t) return false;
   if (t.isSuperAdmin) return true;
-  return t.role !== "viewer";
+  return t.capabilities.includes("curate");
 }
 
 export async function setPreferences(p: Preferences): Promise<void> {
@@ -567,7 +628,10 @@ export async function addRefTable(name: string, keyKind?: "slug" | "external_id"
 export async function deleteRefTable(refTableId: string): Promise<void> {
   await api(`/tables/${encodeURIComponent(refTableId)}`, { method: "DELETE" });
   refTables = refTables.filter((d) => d.id !== refTableId);
-  await Promise.all([refreshAudit(), refreshSources()]);
+  // Full refetch, not just this table's removal: linked columns on OTHER tables
+  // pointed here and the server drops them with the target, so their cached
+  // shapes (and lookup columns) are stale.
+  await Promise.all([refreshDims(), refreshAudit(), refreshSources()]);
   // Prune drafts for the deleted refTable without hitting the server for a gone endpoint
   const next: Record<string, Draft> = {};
   for (const [k, d] of Object.entries(draftsFlat)) if (d.refTableId !== refTableId) next[k] = d;
@@ -694,7 +758,7 @@ export async function saveDraft(
   targetLabel: string | null,
   targetKey: string | null,
 ): Promise<void> {
-  const k = dkey(refTableId, raw);
+  const k = akey(refTableId, raw, currentUser.id);
   const prev = draftsFlat[k];
   draftsFlat = {
     ...draftsFlat,
@@ -706,6 +770,7 @@ export async function saveDraft(
       targetKey,
       user: currentUser,
       at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       // Preserve AI provenance from previous draft if it exists; otherwise default to user.
       source: prev?.source ?? "user",
       confidence: prev?.confidence ?? null,
@@ -731,8 +796,12 @@ export async function saveDraft(
   void refreshDrafts(refTableId).then(emit);
 }
 
+/** Discard your own draft for a value. The server key is per author, so this
+ *  can only ever remove the signed-in user's row — it throws rather than
+ *  silently no-opping when the delete matched nothing (a teammate's draft for
+ *  the same value would otherwise vanish optimistically and pop back). */
 export async function discardDraft(refTableId: string, raw: string): Promise<void> {
-  const k = dkey(refTableId, raw);
+  const k = akey(refTableId, raw, currentUser.id);
   const prev = draftsFlat[k];
   if (prev) {
     const next = { ...draftsFlat };
@@ -741,9 +810,13 @@ export async function discardDraft(refTableId: string, raw: string): Promise<voi
     emit();
   }
   try {
-    await api(`/tables/${encodeURIComponent(refTableId)}/drafts/${encodeURIComponent(raw)}`, {
-      method: "DELETE",
-    });
+    const res = await api<{ discarded: number }>(
+      `/tables/${encodeURIComponent(refTableId)}/drafts/${encodeURIComponent(raw)}`,
+      { method: "DELETE" },
+    );
+    if (res && res.discarded === 0) {
+      throw new Error(`Nothing was removed — "${raw}" has no draft of yours to discard.`);
+    }
   } catch (e) {
     if (prev) {
       draftsFlat = { ...draftsFlat, [k]: prev };
@@ -754,69 +827,10 @@ export async function discardDraft(refTableId: string, raw: string): Promise<voi
   void refreshDrafts(refTableId).then(emit);
 }
 
-/** All staged edits for a refTable (sync read of the cache). */
+/** One staged edit per source value in a refTable — the same fold publish
+ *  applies (sync read of the cache). */
 export function listDrafts(refTableId: string): Draft[] {
-  return Object.values(draftsFlat).filter((d) => d.refTableId === refTableId);
-}
-
-/**
- * Generate AI mapping suggestion for an unmapped raw value.
- * POST /api/tables/:refTableId/suggest
- * Returns a draft created with source='ai' and confidence metadata.
- */
-export async function generateSuggestion(
-  refTableId: string,
-  rawValue: string,
-  options?: { forceRefresh?: boolean },
-): Promise<{
-  draft_id: string;
-  draft: {
-    id: string;
-    reference_table_id: string;
-    raw: string;
-    target_label: string;
-    target_key: string | null;
-    source: "ai" | "user";
-    confidence: "high" | "medium" | "low";
-    reasoning?: string;
-    created_at: string;
-    created_by: string;
-  };
-  cached?: boolean;
-}> {
-  const response = await apiFetch(`/tables/${encodeURIComponent(refTableId)}/suggest`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      raw_value: rawValue,
-      force_refresh: options?.forceRefresh,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = (await response.json().catch(() => ({}))) as {
-      detail?: string;
-      error?: string;
-    };
-    throw new Error(error.detail ?? error.error ?? "Failed to generate suggestion");
-  }
-
-  return response.json() as Promise<{
-    draft_id: string;
-    draft: {
-      id: string;
-      reference_table_id: string;
-      raw: string;
-      target_label: string;
-      target_key: string | null;
-      source: "ai" | "user";
-      confidence: "high" | "medium" | "low";
-      reasoning?: string;
-      created_at: string;
-      created_by: string;
-    };
-    cached?: boolean;
-  }>;
+  return Object.values(draftsByValue()).filter((d) => d.refTableId === refTableId);
 }
 
 /** Per-refTable publish state (ADR-0002): last published version + what's
@@ -834,20 +848,30 @@ export async function fetchPublishState(refTableId: string): Promise<PublishStat
   return api<PublishState>(`/tables/${encodeURIComponent(refTableId)}/publish-state`);
 }
 
+/** One draft picked for publish: a bare source value means "this value,
+ *  whichever draft is newest" (what the publish footer previews); an object
+ *  means exactly one person's draft (what the Approve inbox selects). */
+export type DraftKey = string | { raw: string; userId: string };
+
 /** Approve & commit the refTable's mapped drafts (server folds them into the
  *  record tables in one batch). When `draftKeys` is provided, only those
- *  raws are folded (scoped commit). Returns the count + warehouse rows recovered. */
+ *  drafts are folded (scoped commit). Returns the count + warehouse rows recovered. */
 export async function commit(
   refTableId: string,
-  draftKeys?: string[],
-): Promise<{ committed: number; rowsRecovered: number }> {
-  const res = await api<{ committed: number; rowsRecovered: number }>(
-    `/tables/${encodeURIComponent(refTableId)}/commit`,
-    {
-      method: "POST",
-      ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
-    },
-  );
+  draftKeys?: DraftKey[],
+): Promise<{
+  committed: number;
+  rowsRecovered: number;
+  warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
+}> {
+  const res = await api<{
+    committed: number;
+    rowsRecovered: number;
+    warehouseSynced: "n/a" | "synced" | "synced-additive" | "failed";
+  }>(`/tables/${encodeURIComponent(refTableId)}/commit`, {
+    method: "POST",
+    ...(draftKeys !== undefined ? { body: JSON.stringify({ draftKeys }) } : {}),
+  });
   await refreshDim(refTableId);
   await refreshDrafts(refTableId);
   await refreshSources();
@@ -898,15 +922,16 @@ export async function rollbackDim(refTableId: string, toVersion: number): Promis
   emit();
 }
 
-/** Reject a set of raw draft values with a reason. Refreshes drafts and emits. */
+/** Send a set of drafts back with a reason. Scoped per draft, not per value:
+ *  rejecting Mia's draft for "usa" must leave Bob's alone. Refreshes and emits. */
 export async function rejectDrafts(
   refTableId: string,
-  raws: string[],
+  drafts: DraftKey[],
   reason: string,
 ): Promise<void> {
   await api(`/tables/${encodeURIComponent(refTableId)}/drafts/reject`, {
     method: "POST",
-    body: JSON.stringify({ raws, reason }),
+    body: JSON.stringify({ drafts, reason }),
   });
   await refreshDrafts(refTableId);
   emit();
@@ -928,28 +953,55 @@ export async function scanSources(): Promise<number> {
   return scanned;
 }
 
-/** Wire a warehouse column to a refTable, then refresh the sources list. */
-export async function addSource(refTableId: string, table: string, column: string): Promise<void> {
+/** Wire a warehouse column to a refTable, then refresh the sources list.
+ *  `databaseId` names the warehouse database the column was browsed in. */
+export async function addSource(
+  refTableId: string,
+  table: string,
+  column: string,
+  databaseId?: string,
+): Promise<void> {
   await api(`/tables/${encodeURIComponent(refTableId)}/sources`, {
     method: "POST",
-    body: JSON.stringify({ table, column }),
+    body: JSON.stringify(
+      databaseId
+        ? { source: { databaseId, ...splitTable(table), columnName: column } }
+        : { table, column },
+    ),
   });
   await refreshSources();
   emit();
 }
 
-/** Unwire a warehouse column from a refTable, then refresh the sources list. */
+/** Unwire a warehouse column from a refTable, then refresh the sources list.
+ *  Returns false when nothing matched — the caller must not claim a removal
+ *  that never happened. */
 export async function removeSource(
   refTableId: string,
   table: string,
   column: string,
-): Promise<void> {
-  await api(`/tables/${encodeURIComponent(refTableId)}/sources`, {
-    method: "DELETE",
-    body: JSON.stringify({ table, column }),
-  });
+  databaseId?: string,
+): Promise<boolean> {
+  const { removed } = await api<{ removed: boolean }>(
+    `/tables/${encodeURIComponent(refTableId)}/sources`,
+    {
+      method: "DELETE",
+      body: JSON.stringify(
+        databaseId
+          ? { source: { databaseId, ...splitTable(table), columnName: column } }
+          : { table, column },
+      ),
+    },
+  );
   await refreshSources();
   emit();
+  return removed;
+}
+
+/** "schema.table" → the qualified-source field pair the server expects. */
+function splitTable(table: string): { schemaName: string; tableName: string } {
+  const dot = table.indexOf(".");
+  return { schemaName: table.slice(0, dot), tableName: table.slice(dot + 1) };
 }
 
 /** Top-N unmapped raw values from a specific warehouse source column. Drives
@@ -977,7 +1029,7 @@ export async function deriveRecord(
   table: string,
   column: string,
   nameColumn?: string,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; databaseId?: string } = {},
 ): Promise<{ derived: number; mode: "seed" | "connect"; matched: number; unmatched: number }> {
   const res = await api<{
     derived: number;
@@ -986,7 +1038,13 @@ export async function deriveRecord(
     unmatched: number;
   }>(`/tables/${encodeURIComponent(refTableId)}/derive`, {
     method: "POST",
-    body: JSON.stringify({ table, column, nameColumn, force: opts.force }),
+    body: JSON.stringify({
+      table,
+      column,
+      nameColumn,
+      force: opts.force,
+      databaseId: opts.databaseId,
+    }),
   });
   await refreshDim(refTableId);
   await refreshSources();
@@ -1480,13 +1538,22 @@ export async function listSchemas(database: string): Promise<SchemaFacet[]> {
   return api<SchemaFacet[]>(`/warehouse/schemas?database=${encodeURIComponent(database)}`);
 }
 
-/** Lazy: tables in one schema (reuses the paginated catalog search, scoped by schema). */
+/** Lazy: every table in one schema. Not routed through searchCatalog — that
+ *  clamps to 100 rows, which silently hid tables 101+ from the browse tree
+ *  while the schema node's badge still showed the true count. */
 export async function listTablesInSchema(
   database: string,
   schema: string,
 ): Promise<CatalogTable[]> {
-  const r = await searchCatalog({ database, schema, limit: 100, offset: 0 });
-  return r.rows;
+  const qs = new URLSearchParams({ database, schema });
+  const tables = await api<Array<{ schema: string; table: string; columns: string[] }>>(
+    `/warehouse/tables?${qs.toString()}`,
+  );
+  return tables.map((t) => ({
+    schema: t.schema,
+    table: `${t.schema}.${t.table}`,
+    columns: t.columns,
+  }));
 }
 
 /** Columns (with types) for one table. */
@@ -1556,6 +1623,8 @@ export interface MembershipLite {
   label: string;
   role: "admin" | "editor" | "viewer";
   color: string | null;
+  /** Resolved by the server from the role — see server/src/auth.ts. */
+  capabilities: Capability[];
 }
 
 let memberships: MembershipLite[] = [];

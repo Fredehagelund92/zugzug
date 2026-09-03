@@ -27,7 +27,8 @@ const stubDraftOther = {
   targetLabel: "United States",
   targetKey: "us",
   user: OTHER,
-  at: new Date().toISOString(),
+  at: "just now",
+  createdAt: new Date().toISOString(),
   source: "user" as const,
   confidence: null,
   reasoning: null,
@@ -47,6 +48,17 @@ const stubDraftSystem = {
   targetLabel: "Germany",
   targetKey: "de",
   user: SYSTEM_USER,
+};
+
+// A second teammate drafting the SAME source value. The draft key is
+// (table, value, author), so the inbox lists both — and acting on one must not
+// touch the other.
+const OTHER2 = { id: "u_other2", name: "Mia Vale", initials: "MV" };
+const stubDraftRival = {
+  ...stubDraftOther,
+  targetLabel: "USA Incorporated",
+  targetKey: "usa_inc",
+  user: OTHER2,
 };
 
 const stubDraftOtherDim = {
@@ -152,6 +164,27 @@ describe("AwaitingReview", () => {
     expect(screen.getAllByText("Max Thorn").length).toBeGreaterThan(0);
   });
 
+  // The server sends `at` as a DISPLAY string ("5m ago"), not a timestamp — only
+  // `createdAt` is parseable. Reading `at` fed new Date("5m ago") -> NaN, which
+  // the fallback silently printed verbatim, so it looked right by accident and
+  // broke the moment the format changed.
+  test("renders the age from createdAt, not the pre-formatted display string", async () => {
+    setupMocks({
+      drafts: {
+        "country::USA": {
+          ...stubDraftOther,
+          at: "5m ago",
+          createdAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+        },
+      },
+    });
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    render(<AwaitingReview />);
+
+    expect(screen.getByText("2h ago")).toBeInTheDocument();
+    expect(screen.queryByText("5m ago")).not.toBeInTheDocument();
+  });
+
   test("Approve & publish opens the publish preview (#161)", async () => {
     setupMocks({ drafts: { "country::USA": stubDraftOther }, refTables: [stubDim] });
     const { AwaitingReview } = await import("../src/components/AwaitingReview");
@@ -254,6 +287,55 @@ describe("AwaitingReview", () => {
     await waitFor(() => {
       expect(rejectBtn).not.toBeDisabled();
     });
+  });
+
+  test("sends back only the selected author's draft, not everyone's for that value", async () => {
+    const user = userEvent.setup();
+    setupMocks({
+      drafts: {
+        "country::USA::u_other": stubDraftOther,
+        "country::USA::u_other2": stubDraftRival,
+      },
+      refTables: [stubDim],
+    });
+    const store = await import("../src/store");
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    render(<AwaitingReview />);
+
+    // Two rows for one value — one per author.
+    const boxes = screen.getAllByRole("checkbox", { name: /select usa/i });
+    expect(boxes.length).toBe(2);
+    await user.click(boxes[1]);
+
+    await user.click(screen.getByRole("button", { name: /send back/i }));
+    await user.type(screen.getByPlaceholderText(/reason \(required\)/i), "wrong target");
+    await user.click(screen.getAllByRole("button", { name: /send back/i })[0]);
+
+    await waitFor(() => expect(store.rejectDrafts).toHaveBeenCalled());
+    const [, keys] = vi.mocked(store.rejectDrafts).mock.calls[0];
+    expect(keys).toEqual([{ raw: "USA", userId: "u_other2" }]);
+  });
+
+  test("approves the selected author's draft, not whichever is newest", async () => {
+    const user = userEvent.setup();
+    setupMocks({
+      drafts: {
+        "country::USA::u_other": stubDraftOther,
+        "country::USA::u_other2": stubDraftRival,
+      },
+      refTables: [stubDim],
+    });
+    const store = await import("../src/store");
+    const { AwaitingReview } = await import("../src/components/AwaitingReview");
+    render(<AwaitingReview />);
+
+    await user.click(screen.getAllByRole("checkbox", { name: /select usa/i })[0]);
+    await user.click(screen.getByRole("button", { name: /approve .*publish/i }));
+    await user.click(await screen.findByRole("button", { name: /^publish$/i }));
+
+    await waitFor(() => expect(store.commit).toHaveBeenCalled());
+    const [, draftKeys] = vi.mocked(store.commit).mock.calls[0];
+    expect(draftKeys).toEqual([{ raw: "USA", userId: "u_other" }]);
   });
 
   test("system drafts appear under System (rescan)", async () => {
@@ -390,7 +472,7 @@ describe("Review empty states", () => {
       useNavLinks: () => ({
         base: "/app/test-ws",
         dashboard: "/app/test-ws",
-        triage: "/app/test-ws/triage",
+        review: "/app/test-ws/review",
         sources: "/app/test-ws/sources",
         tables: "/app/test-ws/tables",
         settings: "/app/test-ws/settings",

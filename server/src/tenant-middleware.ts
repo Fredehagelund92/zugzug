@@ -40,12 +40,12 @@ export async function resolveTenantContext(opts: ResolveOpts): Promise<TenantCon
     if (opts.serviceAccount) {
       const tenant = await tenantBySlug(slug);
       if (!tenant) {
-        throw new AppError("NOT_FOUND", `No tenant for slug ${slug}`, 404);
+        throw new AppError("NOT_FOUND", `workspace '${slug}' not found`, 404);
       }
       if (tenant.id !== opts.serviceAccount.tenantId) {
         throw new AppError(
           "FORBIDDEN",
-          "Service-account token is bound to a different tenant",
+          "Service-account token is bound to a different workspace",
           403,
         );
       }

@@ -23,7 +23,7 @@ import { writeVersionSnapshot } from "./repo-versions.ts";
 import { AppError } from "./errors.ts";
 import { dispatchOutbound } from "./repo-outbound-events.ts";
 import { getAdapter } from "./warehouse/registry.ts";
-import { isWritable } from "./warehouse/adapter.ts";
+import { isWritable, type RecordSyncExtras } from "./warehouse/adapter.ts";
 
 /* ---- drafts (Postgres) ---- */
 export async function listDrafts(refTableId: string, tenantId: string): Promise<Draft[]> {
@@ -35,6 +35,7 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
     targetKey: string | null;
     uid: string;
     secs: number;
+    createdAt: Date;
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
@@ -45,6 +46,7 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            created_at AS "createdAt",
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
      FROM ${pg("draft")} WHERE reference_table_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
@@ -68,6 +70,7 @@ export async function listDrafts(refTableId: string, tenantId: string): Promise<
     targetKey: r.targetKey,
     user: byId.get(r.uid) ?? unknownUser,
     at: rel(Number(r.secs)),
+    createdAt: new Date(r.createdAt).toISOString(),
     source: r.source,
     confidence: r.confidence,
     reasoning: r.reasoning,
@@ -134,6 +137,7 @@ export async function listAllDraftsPage(
     targetKey: string | null;
     uid: string;
     secs: number;
+    createdAt: Date;
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
@@ -144,6 +148,7 @@ export async function listAllDraftsPage(
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            created_at AS "createdAt",
             source, confidence, reasoning,
             rejected_reason AS "rejectedReason", rejected_by AS "rejectedBy"
      FROM ${pg("draft")} WHERE tenant_id = $1${keyset}
@@ -176,6 +181,7 @@ export async function listAllDraftsPage(
     targetKey: r.targetKey,
     user: byId.get(r.uid) ?? unknownUser,
     at: rel(Number(r.secs)),
+    createdAt: new Date(r.createdAt).toISOString(),
     source: r.source,
     confidence: r.confidence,
     reasoning: r.reasoning,
@@ -280,6 +286,7 @@ export async function createDraft(
     targetKey: string | null;
     uid: string;
     secs: number;
+    createdAt: Date;
     source: "user" | "ai";
     confidence: "high" | "medium" | "low" | null;
     reasoning: string | null;
@@ -288,6 +295,7 @@ export async function createDraft(
             target_label AS "targetLabel", target_key AS "targetKey",
             user_id AS uid,
             EXTRACT(EPOCH FROM (current_timestamp - created_at))::int AS secs,
+            created_at AS "createdAt",
             source, confidence, reasoning
        FROM ${pg("draft")}
       WHERE tenant_id = $1 AND reference_table_id = $2 AND raw = $3 AND user_id = $4
@@ -310,6 +318,7 @@ export async function createDraft(
     targetKey: row.targetKey,
     user: user ?? { id: row.uid, name: "Unknown", initials: "??" },
     at: rel(Number(row.secs)),
+    createdAt: new Date(row.createdAt).toISOString(),
     source: row.source,
     confidence: row.confidence,
     reasoning: row.reasoning,
@@ -318,35 +327,66 @@ export async function createDraft(
   };
 }
 
+/** A draft picked out of the queue. A bare string means "this source value,
+ *  whichever draft is newest" — the fold publish already applies. An object
+ *  narrows to one author's draft, which is what the Approve inbox needs: it
+ *  lists a row per author, so acting on Mia's row must not touch Bob's. */
+export type DraftSelector = string | { raw: string; userId?: string | null };
+
+interface NormalizedSelector {
+  raw: string;
+  userId: string | null;
+}
+function normalizeSelectors(keys: DraftSelector[]): NormalizedSelector[] {
+  return keys.map((k) =>
+    typeof k === "string" ? { raw: k, userId: null } : { raw: k.raw, userId: k.userId ?? null },
+  );
+}
+/** SQL predicate matching the selected (raw, author) pairs. A null author in
+ *  the pair list matches every author of that raw. `$${r}`/`$${u}` are the raws
+ *  and authors arrays; `p` prefixes the draft table alias when there is one. */
+function selectorPredicate(r: number, u: number, p = ""): string {
+  return `EXISTS (SELECT 1 FROM unnest($${r}::text[], $${u}::text[]) AS sel(sr, su)
+                   WHERE sel.sr = ${p}raw AND (sel.su IS NULL OR sel.su = ${p}user_id))`;
+}
+
+/** Delete the caller's own draft for a value. Returns how many rows went, so
+ *  the caller can say "nothing was removed" instead of silently no-opping on
+ *  another editor's draft (the PK is per-author). */
 export async function discardDraft(
   refTableId: string,
   raw: string,
   userId: string,
   tenantId: string,
-): Promise<void> {
-  await pgRun(
-    `DELETE FROM ${pg("draft")} WHERE reference_table_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4`,
+): Promise<{ discarded: number }> {
+  const gone = await pgAll<{ raw: string }>(
+    `DELETE FROM ${pg("draft")} WHERE reference_table_id = $1 AND raw = $2 AND user_id = $3 AND tenant_id = $4
+     RETURNING raw`,
     [refTableId, raw, userId, tenantId],
   );
+  if (gone.length === 0) return { discarded: 0 };
   await appendAuditAs(userId, "discard_draft", `${refTableId}: ${raw}`, { tenantId });
+  return { discarded: gone.length };
 }
 
 export async function rejectDrafts(
   refTableId: string,
   tenantId: string,
-  raws: string[],
+  keys: DraftSelector[],
   reason: string,
   reviewerId: string,
 ): Promise<{ rejected: number }> {
   const trimmed = reason.trim();
   if (!trimmed) throw new AppError("VALIDATION_FAILED", "a rejection reason is required", 400);
-  if (raws.length === 0) return { rejected: 0 };
+  if (keys.length === 0) return { rejected: 0 };
+  const sel = normalizeSelectors(keys);
   const res = await pgAll<{ raw: string }>(
     `UPDATE ${pg("draft")}
-        SET status = 'rejected', rejected_reason = $4, rejected_by = $5
-      WHERE reference_table_id = $1 AND tenant_id = $2 AND raw = ANY($3) AND status = 'mapped'
+        SET status = 'rejected', rejected_reason = $5, rejected_by = $6
+      WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'
+        AND ${selectorPredicate(3, 4)}
       RETURNING raw`,
-    [refTableId, tenantId, raws, trimmed, reviewerId],
+    [refTableId, tenantId, sel.map((k) => k.raw), sel.map((k) => k.userId), trimmed, reviewerId],
   );
   const n = res.length;
   await appendAuditAs(reviewerId, "Rejected drafts", `${n} in ${refTableId}: ${trimmed}`, {
@@ -361,7 +401,8 @@ export interface PublishState {
   version: number;
   publishedAt: string | null;
   publishedByName: string | null;
-  /** Staged mapping drafts awaiting publish. */
+  /** Source values with a mapping draft awaiting publish (one per value, even
+   *  when several editors drafted the same value). */
   pendingDrafts: number;
   /** Record keys edited, added, or retired since the last publish (ADR-0002:
    *  derived from record_version, not a staging queue). Keys created by
@@ -490,8 +531,11 @@ export async function getPublishState(refTableId: string, tenantId: string): Pro
     );
     publishedByName = latest?.by ?? null;
   }
+  // Distinct source values, not draft rows: the draft PK is per author, and the
+  // fold collapses every author's draft for a value into one mapping. Counting
+  // rows made "Publish 3 changes" preview only 2 mappings (#G1).
   const pending = await pgGet<{ n: number }>(
-    `SELECT count(*)::int AS n FROM ${pg("draft")}
+    `SELECT count(DISTINCT raw)::int AS n FROM ${pg("draft")}
      WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL`,
     [refTableId, tenantId],
   );
@@ -702,8 +746,13 @@ export async function commit(
   refTableId: string,
   userId: string,
   tenantId: string,
-  draftKeys?: string[],
-  opts?: { kind?: "publish" | "rollback"; restoresVersion?: number; skipWarehouseSync?: boolean },
+  draftKeys?: DraftSelector[],
+  opts?: {
+    kind?: "publish" | "rollback";
+    restoresVersion?: number;
+    skipWarehouseSync?: boolean;
+    onlyAuthor?: string;
+  },
 ): Promise<{
   committed: number;
   rowsRecovered: number;
@@ -730,35 +779,54 @@ export async function commit(
   // When draftKeys is provided, validate that all requested keys exist as
   // mapped drafts for this (refTable, tenant) before touching anything.
   const scoped = draftKeys !== undefined;
-  if (scoped && draftKeys!.length > 0) {
-    const found = await pgAll<{ raw: string }>(
-      `SELECT raw FROM ${DRAFT}
+  const sel = scoped ? normalizeSelectors(draftKeys!) : [];
+  const selRaws = sel.map((k) => k.raw);
+  const selAuthors = sel.map((k) => k.userId);
+  // Author scope: when set, only drafts authored by this user are folded. Used
+  // by the auto-publish job so it can never publish a teammate's draft.
+  const onlyAuthor = opts?.onlyAuthor;
+  if (scoped && sel.length > 0) {
+    const found = await pgAll<{ raw: string; user_id: string }>(
+      `SELECT raw, user_id FROM ${DRAFT}
        WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL
-         AND raw = ANY($3)`,
-      [refTableId, tenantId, draftKeys],
+         AND ${selectorPredicate(3, 4)}${onlyAuthor ? ` AND user_id = $5` : ""}`,
+      onlyAuthor
+        ? [refTableId, tenantId, selRaws, selAuthors, onlyAuthor]
+        : [refTableId, tenantId, selRaws, selAuthors],
     );
-    const foundSet = new Set(found.map((r) => r.raw));
-    const missing = draftKeys!.filter((k) => !foundSet.has(k));
+    const missing = sel.filter(
+      (k) => !found.some((f) => f.raw === k.raw && (k.userId === null || f.user_id === k.userId)),
+    );
     if (missing.length > 0) {
       throw new AppError(
         "VALIDATION_FAILED",
-        `unknown or unstaged draft keys: ${missing.join(", ")}`,
+        `these drafts are no longer waiting to publish: ${missing.map((m) => m.raw).join(", ")}`,
         400,
       );
     }
   }
 
   // Scope clause: appended to every draft-filtered statement when draftKeys is provided.
-  // scoped=true + empty array → AND raw = ANY('{}') → matches nothing → zero-work fold.
-  const scopeClause = scoped ? ` AND raw = ANY($3)` : "";
-  const scopeClauseD = scoped ? ` AND d.raw = ANY($3)` : "";
-  const baseParams = (extra: unknown[] = []) =>
-    scoped ? [refTableId, tenantId, draftKeys, ...extra] : [refTableId, tenantId, ...extra];
+  // scoped=true + empty array → the pair list is empty → matches nothing → zero-work fold.
+  const scopeClause = scoped ? ` AND ${selectorPredicate(3, 4)}` : "";
+  const scopeClauseD = scoped ? ` AND ${selectorPredicate(3, 4, "d.")}` : "";
+  // Author clause: appended after the scope clause, so its parameter follows
+  // the selector arrays when scoped ($5) and tenant_id when not ($3).
+  const authorParam = scoped ? "$5" : "$3";
+  const authorClause = onlyAuthor ? ` AND user_id = ${authorParam}` : "";
+  const authorClauseD = onlyAuthor ? ` AND d.user_id = ${authorParam}` : "";
+  const baseParams = (extra: unknown[] = []) => [
+    refTableId,
+    tenantId,
+    ...(scoped ? [selRaws, selAuthors] : []),
+    ...(onlyAuthor ? [onlyAuthor] : []),
+    ...extra,
+  ];
   const baseParamsD = baseParams; // alias for aliased-draft statements
 
   const approved = await pgGet<{ n: number }>(
     `SELECT count(*)::int AS n FROM ${DRAFT}
-     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+     WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}${authorClause}`,
     baseParams(),
   );
   const committed = Number(approved?.n ?? 0);
@@ -811,8 +879,16 @@ export async function commit(
     const ownDrafts = await pgGet<{ n: number }>(
       `SELECT count(*)::int AS n FROM ${DRAFT}
        WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'
-         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${scoped ? ` AND raw = ANY($4)` : ""}`,
-      scoped ? [refTableId, tenantId, userId, draftKeys] : [refTableId, tenantId, userId],
+         AND target_key IS NOT NULL AND user_id = $3 AND user_id <> 'u_system'${
+           scoped ? ` AND ${selectorPredicate(4, 5)}` : ""
+         }${onlyAuthor ? ` AND user_id = $${scoped ? 6 : 4}` : ""}`,
+      [
+        refTableId,
+        tenantId,
+        userId,
+        ...(scoped ? [selRaws, selAuthors] : []),
+        ...(onlyAuthor ? [onlyAuthor] : []),
+      ],
     );
     const own = Number(ownDrafts?.n ?? 0);
     if (own > 0) {
@@ -863,7 +939,7 @@ export async function commit(
     // Distinct target_keys — read before the draft rows are deleted below.
     committedRows = await tx.all<{ target_key: string }>(
       `SELECT DISTINCT target_key FROM ${DRAFT}
-       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}`,
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}${authorClause}`,
       baseParams(),
     );
     // Approved drafts — passed to the warehouse adapter after the tx commits.
@@ -872,7 +948,7 @@ export async function commit(
     // warehouse map MERGE agrees with the single-row-per-raw Postgres fold below.
     approvedDrafts = await tx.all<{ raw: string; key: string; label: string | null }>(
       `SELECT DISTINCT ON (lower(raw)) raw, target_key AS key, target_label AS label FROM ${DRAFT}
-       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}
+       WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND target_key IS NOT NULL${scopeClause}${authorClause}
        ORDER BY lower(raw), created_at DESC, user_id`,
       baseParams(),
     );
@@ -883,7 +959,7 @@ export async function commit(
        FROM ${DRAFT} d
        JOIN ${MAPT} m ON lower(m.raw) = lower(d.raw)
        WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped'
-         AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}`,
+         AND d.target_key IS NOT NULL AND m.${key} <> d.target_key${scopeClauseD}${authorClauseD}`,
       baseParamsD(),
     );
 
@@ -896,7 +972,7 @@ export async function commit(
          WHERE lower(m.raw) = lower(d.raw)
            AND d.reference_table_id = $1 AND d.tenant_id = $2
            AND d.status = 'mapped' AND d.target_key IS NOT NULL
-           AND m.${key} <> d.target_key${scopeClauseD}`,
+           AND m.${key} <> d.target_key${scopeClauseD}${authorClauseD}`,
         baseParamsD(),
       );
     }
@@ -913,7 +989,7 @@ export async function commit(
            FROM ${DRAFT} d
            WHERE d.reference_table_id = $1 AND d.tenant_id = $2
              AND d.status = 'mapped' AND d.target_key IS NOT NULL
-             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}
+             AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}${authorClauseD}
            GROUP BY target_key, target_label
          )
          INSERT INTO ${DIMT} (${key}, label, position)
@@ -928,7 +1004,7 @@ export async function commit(
         `INSERT INTO ${DIMT} (${key}, label)
          SELECT DISTINCT d.target_key, d.target_label FROM ${DRAFT} d
          WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}`,
+           AND NOT EXISTS (SELECT 1 FROM ${DIMT} c WHERE c.${key} = d.target_key)${scopeClauseD}${authorClauseD}`,
         baseParamsD(),
       );
     }
@@ -940,22 +1016,16 @@ export async function commit(
       `INSERT INTO ${MAPT} (raw, ${key})
        SELECT DISTINCT ON (lower(d.raw)) d.raw, d.target_key FROM ${DRAFT} d
        WHERE d.reference_table_id = $1 AND d.tenant_id = $2 AND d.status = 'mapped' AND d.target_key IS NOT NULL
-         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}
+         AND NOT EXISTS (SELECT 1 FROM ${MAPT} m WHERE lower(m.raw) = lower(d.raw))${scopeClauseD}${authorClauseD}
        ORDER BY lower(d.raw), d.created_at DESC, d.user_id`,
       baseParamsD(),
     );
-    // DELETE: scoped → only delete the requested draft raws; unscoped → delete all mapped.
-    if (scoped) {
-      await tx.run(
-        `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped' AND raw = ANY($3)`,
-        [refTableId, tenantId, draftKeys],
-      );
-    } else {
-      await tx.run(
-        `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'`,
-        [refTableId, tenantId],
-      );
-    }
+    // DELETE: scoped → only the requested draft raws; author-scoped → only that
+    // author's drafts; otherwise every mapped draft for the table.
+    await tx.run(
+      `DELETE FROM ${DRAFT} WHERE reference_table_id = $1 AND tenant_id = $2 AND status = 'mapped'${scopeClause}${authorClause}`,
+      baseParams(),
+    );
 
     // Outbound event for downstream subscribers (PR3). Uses a count-based
     // per-(tenant, refTable, type) monotonic counter — simpler than extracting
@@ -1002,8 +1072,8 @@ export async function commit(
       refTableId,
       occurredAt: dbNow?.now ?? new Date(),
       payload: {
-        dim_slug: refTableId,
-        dim_label: meta.label,
+        table_slug: refTableId,
+        table_label: meta.label,
         version: v,
         previous_version: v - 1,
         committed_by: { id: userId, name: committedBy?.name ?? userId },
@@ -1068,9 +1138,10 @@ export async function commit(
       mapTable: meta.mapTable,
       keyCol: meta.keyCol,
     };
+    const extras = await warehouseExtras(refTableId, tenantId, meta, recordChangedForEvent);
     try {
       await adapter.ensureRecordTables(refTableSpec);
-      await adapter.commitRecord(refTableSpec, approvedDrafts);
+      await adapter.commitRecord(refTableSpec, approvedDrafts, extras);
       await appendAuditAs(userId, "Warehouse synced", `${committed} → ${meta.mapTable}`, {
         tenantId,
       });
@@ -1104,6 +1175,40 @@ export async function commit(
   }
 
   return { committed, rowsRecovered, warehouseSynced };
+}
+
+/** The published state a draft payload can't express, read back from Postgres
+ *  (the master copy) after the fold: records renamed without a draft of their
+ *  own, records this publish retired or merged away, and the map rows a merge
+ *  re-pointed to the survivor. Without these the warehouse MERGE is
+ *  append-only and its dim_/map_ tables drift from the published version. */
+async function warehouseExtras(
+  refTableId: string,
+  tenantId: string,
+  meta: { dimTable: string; mapTable: string; keyCol: string },
+  changedKeys: string[],
+): Promise<RecordSyncExtras> {
+  if (changedKeys.length === 0) return {};
+  const key = qid(meta.keyCol);
+  const live = await pgAll<{ key: string; label: string | null }>(
+    `SELECT ${key}::text AS key, label FROM ${cq(meta.dimTable)} WHERE ${key}::text = ANY($1::text[])`,
+    [changedKeys],
+  );
+  const liveKeys = new Set(live.map((r) => r.key));
+  const retiredKeys = changedKeys.filter((k) => !liveKeys.has(k));
+  if (retiredKeys.length === 0) return { records: live };
+  // A merged-away key hands its variants to a survivor. Those map rows moved
+  // without a draft, so the warehouse has to learn their new target before the
+  // retired key is deleted — otherwise the delete takes the mappings with it.
+  const mappings = await pgAll<{ raw: string; key: string }>(
+    `SELECT m.raw, m.${key}::text AS key FROM ${cq(meta.mapTable)} m
+      WHERE m.${key}::text IN (
+        SELECT retired_into FROM ${pg("record_version")}
+         WHERE reference_table_id = $1 AND tenant_id = $2
+           AND key = ANY($3::text[]) AND retired_into IS NOT NULL)`,
+    [refTableId, tenantId, retiredKeys],
+  );
+  return { records: live, mappings, retiredKeys };
 }
 
 /** Warehouse rows for raws that have a mapped draft but aren't yet in the map.

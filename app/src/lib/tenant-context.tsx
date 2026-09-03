@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
+import type { Capability } from "./permissions";
 
 export interface TenantContextValue {
   id: string;
@@ -7,6 +8,9 @@ export interface TenantContextValue {
   color: string | null;
   role: "admin" | "editor" | "viewer";
   isSuperAdmin: boolean;
+  /** Resolved server-side from the role and served on GET /api/me/memberships.
+   *  Read it through can() in permissions.ts, never by comparing `role`. */
+  capabilities: Capability[];
 }
 
 const Ctx = createContext<TenantContextValue | null>(null);

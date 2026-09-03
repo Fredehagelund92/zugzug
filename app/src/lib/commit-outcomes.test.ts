@@ -49,3 +49,21 @@ describe("summarizeOutcomes", () => {
     expect(s.message).toContain("their drafts weren't published.");
   });
 });
+
+describe("summarizeOutcomes — warehouse copy", () => {
+  it("a failed warehouse write is reported even though the publish succeeded", () => {
+    const s = summarizeOutcomes([
+      { ...ok("country", 3), warehouseSynced: "failed" },
+      { ...ok("channel", 2), warehouseSynced: "synced" },
+    ]);
+    expect(s.ok).toBe(true);
+    expect(s.warehouseFailed.map((f) => f.refTableId)).toEqual(["country"]);
+    expect(s.message).toContain("the warehouse copy of country wasn't updated");
+  });
+
+  it("a clean publish says nothing about the warehouse", () => {
+    const s = summarizeOutcomes([{ ...ok("country", 3), warehouseSynced: "synced" }]);
+    expect(s.warehouseFailed).toHaveLength(0);
+    expect(s.message).toBe("✓ 3 changes published · 30 rows recovered");
+  });
+});

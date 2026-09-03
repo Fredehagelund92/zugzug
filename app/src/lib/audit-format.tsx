@@ -79,6 +79,21 @@ export function humanize(row: AuditEntry): Phrase {
   const a = row.action;
   const d = row.detail || "";
 
+  // Known action codes first: their words are ours, not the server's.
+  const copy = ACTION_COPY[a];
+  if (copy) {
+    const [head, ...rest] = copy.label.split(" ");
+    const verb = copy.verb ?? head!.toLowerCase();
+    const noun = copy.noun ?? (rest.length ? rest.join(" ") : undefined);
+    const target = copy.systemDetail ? plainDetail(d) : d;
+    return {
+      verb,
+      noun,
+      target: target || undefined,
+      kind: copy.kind ?? KIND_BY_VERB[verb] ?? "other",
+    };
+  }
+
   // Sentence-case actions: "Added record", "Renamed column", …
   const m = a.match(/^([A-Z][a-z-]+)\s+(.+)$/);
   if (m) {
@@ -118,6 +133,99 @@ export function humanize(row: AuditEntry): Phrase {
   }
 
   return plain({ verb: a, target: d || undefined, kind: "other" });
+}
+
+/* ────────────────────────── action labels ────────────────────────── */
+
+/* Action codes carry internal vocabulary ("Committed mapping", "Warehouse
+   synced", "scan_failed"), and rows written before any server-side rename keep
+   those exact words forever — so the client owns the display copy (CLAUDE.md
+   §5). One map serves both surfaces: `label` names the event on its own (the
+   admin Activity type filter), `verb`/`noun` give the sentence the feed builds
+   around the actor ("Ada updated the warehouse"). Without an explicit verb the
+   label's first word becomes the verb and the rest the noun. */
+interface ActionCopy {
+  label: string;
+  verb?: string;
+  noun?: string;
+  kind?: EventKind;
+  /** Set where the detail is server boilerplate, so DETAIL_PLAIN may rewrite it.
+   *  Left off wherever the detail carries a source value or a name someone typed. */
+  systemDetail?: true;
+}
+const ACTION_COPY: Record<string, ActionCopy> = {
+  Committed: { label: "Published", kind: "publish" },
+  "Committed mapping": { label: "Published mapping", kind: "publish" },
+  "Warehouse synced": {
+    systemDetail: true,
+    label: "Warehouse updated",
+    verb: "updated",
+    noun: "the warehouse",
+    kind: "publish",
+  },
+  "Warehouse sync failed": {
+    systemDetail: true,
+    label: "Warehouse update failed",
+    verb: "could not update",
+    noun: "the warehouse",
+    kind: "system",
+  },
+  "Warehouse sync failed (rollback)": {
+    systemDetail: true,
+    label: "Warehouse update failed",
+    verb: "could not update",
+    noun: "the warehouse",
+    kind: "system",
+  },
+  "Warehouse rollback sync": {
+    systemDetail: true,
+    label: "Warehouse restored",
+    verb: "restored",
+    noun: "the warehouse",
+    kind: "publish",
+  },
+  "Auto-matched": {
+    systemDetail: true,
+    label: "Mapped automatically",
+    verb: "mapped",
+    noun: "automatically",
+    kind: "publish",
+  },
+  discard_draft: { label: "Discarded draft", kind: "delete" },
+  scan_failed: { label: "Scan failed", kind: "system", systemDetail: true },
+  impersonate_start: { label: "Opened a workspace as admin", kind: "security" },
+  "admin.tenant.label_update": { label: "Renamed workspace" },
+  "workspace.rename": { label: "Renamed workspace" },
+};
+
+/* Those events' details are server boilerplate, and older rows spell them in the
+   old words. Applied only to entries marked `systemDetail`, so a source value or
+   a name someone typed is never rewritten. */
+const DETAIL_PLAIN: Array<[RegExp, string]> = [
+  // Scheduler job names, which head every scan_failed detail.
+  [/\bauto-commit\b/gi, "auto-publish"],
+  [/\bauto-stage-exact-matches\b/gi, "automatic mapping"],
+  [/\bstaged in\b/gi, "mapped in"],
+  [/\(exact label match\)/gi, "(exact label)"],
+  [/manual resync recommended/gi, "refresh the warehouse to be sure"],
+];
+/** Rewrites the server's boilerplate detail into our words. Safe only for the
+ *  system events in ACTION_COPY — never for details holding user data. */
+export function plainDetail(detail: string): string {
+  return DETAIL_PLAIN.reduce((s, [re, to]) => s.replace(re, to), detail);
+}
+
+/** Plain-words label for an audit action code. Unknown codes degrade to
+ *  their own words rather than disappearing from the list. */
+export function actionLabel(action: string): string {
+  const mapped = ACTION_COPY[action]?.label;
+  if (mapped) return mapped;
+  const words = action
+    .replace(/[._]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+  if (!words) return action;
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase();
 }
 
 /* ────────────────────────── time helpers ────────────────────────── */

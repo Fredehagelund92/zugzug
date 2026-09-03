@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { can, type Action } from "./permissions";
 import type { TenantContextValue } from "./tenant-context";
+import { tenantFixture } from "../../test/tenant-fixture";
 
 function ctx(role: "admin" | "editor" | "viewer", isSuperAdmin = false): TenantContextValue {
-  return { id: "t1", slug: "t1", label: "T1", color: null, role, isSuperAdmin };
+  return tenantFixture(role, { isSuperAdmin });
 }
 
 const EDIT_ACTIONS: Action[] = [
@@ -50,6 +51,21 @@ describe("can()", () => {
   });
 });
 
+describe("table capabilities", () => {
+  it("editor and admin can create tables and run scans; viewer cannot", () => {
+    for (const a of ["table.create", "table.scan"] as Action[]) {
+      expect(can(ctx("viewer"), a)).toBe(false);
+      expect(can(ctx("editor"), a)).toBe(true);
+      expect(can(ctx("admin"), a)).toBe(true);
+    }
+  });
+
+  it("rollback stays admin-only", () => {
+    expect(can(ctx("editor"), "table.rollback")).toBe(false);
+    expect(can(ctx("admin"), "table.rollback")).toBe(true);
+  });
+});
+
 describe("integrations actions (§9 matrix)", () => {
   const viewer = ctx("viewer");
   const editor = ctx("editor");
@@ -61,10 +77,12 @@ describe("integrations actions (§9 matrix)", () => {
     expect(can(admin, "integrations.pull_api.view")).toBe(true);
   });
 
-  it("everyone sees the webhooks list", () => {
-    for (const t of [viewer, editor, admin]) {
-      expect(can(t, "integrations.webhooks.view")).toBe(true);
-    }
+  // GET /v1/webhooks answers a viewer with 403 editor_required — showing them
+  // the page only bought them a permanent skeleton.
+  it("editor and admin see the webhooks list; viewer does not", () => {
+    expect(can(viewer, "integrations.webhooks.view")).toBe(false);
+    expect(can(editor, "integrations.webhooks.view")).toBe(true);
+    expect(can(admin, "integrations.webhooks.view")).toBe(true);
   });
 
   it("viewer cannot see delivery payloads; editor and admin can", () => {
@@ -79,9 +97,11 @@ describe("integrations actions (§9 matrix)", () => {
     expect(can(admin, "integrations.webhooks.edit")).toBe(true);
   });
 
-  it("viewer cannot see service accounts; editor sees, admin edits", () => {
+  // Service-account values are credentials: /v1/service-accounts is admin-only
+  // for reads as well as writes.
+  it("only admin can see or edit service accounts", () => {
     expect(can(viewer, "integrations.service_accounts.view")).toBe(false);
-    expect(can(editor, "integrations.service_accounts.view")).toBe(true);
+    expect(can(editor, "integrations.service_accounts.view")).toBe(false);
     expect(can(admin, "integrations.service_accounts.view")).toBe(true);
     expect(can(viewer, "integrations.service_accounts.edit")).toBe(false);
     expect(can(editor, "integrations.service_accounts.edit")).toBe(false);

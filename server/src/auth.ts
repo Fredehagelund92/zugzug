@@ -47,18 +47,32 @@ export interface SessionUser {
 export type Role = "admin" | "editor" | "viewer";
 
 export type Operation =
-  | "curate" // create/update drafts
-  | "commit" // commit drafts to record
-  | "manage_adapter"; // configure warehouse credentials
+  | "curate" // create/update drafts and record values
+  | "commit" // publish drafts to record
+  | "manage_tables" // create/delete tables, field operations, wire sources, run scans
+  | "manage_workspace" // preferences, members, danger zone
+  | "manage_integrations"; // webhooks + service accounts
 
-/** Static permission matrix. Returns true if the given role may perform op. */
+/** Static permission matrix — the ONE role→capability definition. tenant-repo.ts
+ *  (TenantRepo.assertRole) and the HTTP gates in server.ts both read it through
+ *  canMutate(), and it is serialized to the client on GET /api/me/memberships so
+ *  the UI enables exactly the controls the server will accept. */
+export const ROLE_CAPABILITIES: Record<Role, Operation[]> = {
+  admin: ["curate", "commit", "manage_tables", "manage_workspace", "manage_integrations"],
+  editor: ["curate", "commit", "manage_tables"],
+  viewer: [],
+};
+
+/** Returns true if the given role may perform op. */
 export function canMutate(role: Role, op: Operation): boolean {
-  const matrix: Record<Role, Operation[]> = {
-    admin: ["curate", "commit", "manage_adapter"],
-    editor: ["curate", "commit"],
-    viewer: [],
-  };
-  return matrix[role].includes(op);
+  return ROLE_CAPABILITIES[role].includes(op);
+}
+
+/** The capability list the client gets for a membership. Super-admins bypass
+ *  every per-tenant gate (see TenantRepo.assertRole / gateOrJson), so they are
+ *  served the full set regardless of their stored role. */
+export function capabilitiesFor(role: Role, isSuperAdmin = false): Operation[] {
+  return isSuperAdmin ? ROLE_CAPABILITIES.admin : ROLE_CAPABILITIES[role];
 }
 
 const SID = "zz_sid";
@@ -206,7 +220,9 @@ export async function handleMe(req: Request): Promise<Response> {
   });
 }
 
-/** GET /api/auth/dev — one-click dev login; only works when devBypassAuth is true. */
+/** POST /api/auth/dev — one-click dev login; only works when devBypassAuth is true.
+ *  Side-effecting (creates the u_dev super-admin + a session), which is why the
+ *  Login page's "is the bypass on?" probe is a plain GET, handled by the router. */
 export async function handleDevLogin(): Promise<Response> {
   const userId = "u_dev";
   await run(
@@ -226,9 +242,9 @@ export async function handleDevLogin(): Promise<Response> {
     [userId],
   );
   const { cookie: setCookie } = await issueSession(userId);
-  const headers = new Headers({ Location: "/app" });
+  const headers = new Headers();
   headers.append("Set-Cookie", setCookie);
-  return new Response(null, { status: 302, headers });
+  return new Response(null, { status: 204, headers });
 }
 
 /** Updates the display name for an authenticated user. Throws AppError on empty name. */
@@ -321,8 +337,16 @@ export async function setSuperAdmin(
   if (!value && targetId === callerId) {
     throw new AppError("SELF_DEMOTE", "cannot demote yourself", 409);
   }
-  if (!value && (await countSuperAdmins()) <= 1) {
-    throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
+  // Only the last *actual* super-admin is protected — demoting someone who isn't
+  // one is a no-op, not a threat to the deployment's last super-admin.
+  if (!value) {
+    const target = await get<{ is_super_admin: boolean }>(
+      `SELECT is_super_admin FROM ${pg("users")} WHERE id = $1`,
+      [targetId],
+    );
+    if (target?.is_super_admin && (await countSuperAdmins()) <= 1) {
+      throw new AppError("LAST_SUPER_ADMIN", "cannot demote the last super-admin", 409);
+    }
   }
   await run(`UPDATE ${pg("users")} SET is_super_admin = $1 WHERE id = $2`, [value, targetId]);
 }

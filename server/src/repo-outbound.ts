@@ -26,7 +26,7 @@ export interface RefTableForApi {
 }
 
 export interface SchemaForApi {
-  dim_slug: string;
+  table_slug: string;
   label: string;
   fields: Array<{ name: string; type: string; description: string | null }>;
 }
@@ -40,7 +40,7 @@ export interface RecordRow {
 }
 
 export interface PageMeta {
-  dim_slug: string;
+  table_slug: string;
   page_size: number;
 }
 
@@ -174,7 +174,7 @@ export async function getSchemaForApi(
   if (!refTable) return null;
   const fields = await listFields(slug, tenantId);
   return {
-    dim_slug: refTable.id,
+    table_slug: refTable.id,
     label: refTable.label,
     fields: fields.map((f) => ({
       name: f.field,
@@ -209,7 +209,7 @@ export async function listRecordPage(
     [slug, tenantId],
   );
   if (!refTable) {
-    return { records: [], cursor: { next: null }, meta: { dim_slug: slug, page_size: limit } };
+    return { records: [], cursor: { next: null }, meta: { table_slug: slug, page_size: limit } };
   }
   const keyCol = qid(refTable.key_col);
 
@@ -267,7 +267,7 @@ export async function listRecordPage(
       version: r.version,
     })),
     cursor: { next },
-    meta: { dim_slug: slug, page_size: limit },
+    meta: { table_slug: slug, page_size: limit },
   };
 }
 

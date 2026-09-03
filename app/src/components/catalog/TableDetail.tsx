@@ -7,6 +7,7 @@ import {
   deriveRecord,
   fetchColumnValues,
   fetchColumns,
+  removeSource,
   useCanEdit,
   type CatalogColumn,
 } from "../../store";
@@ -14,6 +15,7 @@ import type { MappingRefTable } from "../../data";
 
 type WireState = {
   refTable: string;
+  refTableId: string;
   n: number | null;
   mode?: "seed" | "connect";
   matched?: number;
@@ -34,26 +36,32 @@ export function TableDetail({
 }) {
   const canEdit = useCanEdit();
   const [cols, setCols] = useState<CatalogColumn[] | null>(null);
+  const [colsError, setColsError] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, string[]>>({});
   const [wired, setWired] = useState<Record<string, WireState>>({});
   const [onlyUnmapped, setOnlyUnmapped] = useState(false);
+  const [reload, setReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setCols(null);
+    setColsError(null);
     setValues({});
     setWired({});
     fetchColumns(database, tablePath)
       .then((c) => {
         if (!cancelled) setCols(c);
       })
-      .catch(() => {
-        if (!cancelled) setCols([]);
+      .catch((err: unknown) => {
+        // An unreachable table is not an empty one — say which happened.
+        if (cancelled) return;
+        setColsError(err instanceof Error ? err.message : "Couldn't read this table.");
+        setCols([]);
       });
     return () => {
       cancelled = true;
     };
-  }, [database, tablePath]);
+  }, [database, tablePath, reload]);
 
   const peek = async (col: string) => {
     if (values[col]) return;
@@ -64,25 +72,58 @@ export function TableDetail({
   const wire = async (column: string, refTableLabel: string) => {
     const refTable = refTables.find((d) => d.refTable === refTableLabel);
     if (!refTable) return;
-    setWired((w) => ({ ...w, [column]: { refTable: refTableLabel, n: null } }));
+    setWired((w) => ({
+      ...w,
+      [column]: { refTable: refTableLabel, refTableId: refTable.id, n: null },
+    }));
     try {
+      // `database` is the warehouse_database the tree browsed — send it, or the
+      // server registers the column against the first database it finds.
       const { derived, mode, matched, unmatched } = await deriveRecord(
         refTable.id,
         tablePath,
         column,
+        undefined,
+        { databaseId: database },
       );
       setWired((w) => ({
         ...w,
-        [column]: { refTable: refTableLabel, n: derived, mode, matched, unmatched },
+        [column]: {
+          refTable: refTableLabel,
+          refTableId: refTable.id,
+          n: derived,
+          mode,
+          matched,
+          unmatched,
+        },
       }));
     } catch (err) {
       setWired((w) => ({
         ...w,
         [column]: {
           refTable: refTableLabel,
+          refTableId: refTable.id,
           n: null,
           error: err instanceof Error ? err.message : "wire failed",
         },
+      }));
+    }
+  };
+
+  /** The ✕ on a wired chip used to drop local state only, leaving the column
+   *  registered and scanned. Unwire it for real, then clear the chip. */
+  const unwire = async (column: string, w: WireState) => {
+    try {
+      await removeSource(w.refTableId, tablePath, column, database);
+      setWired((s) => {
+        const next = { ...s };
+        delete next[column];
+        return next;
+      });
+    } catch (err) {
+      setWired((s) => ({
+        ...s,
+        [column]: { ...w, error: err instanceof Error ? err.message : "remove failed" },
       }));
     }
   };
@@ -218,14 +259,8 @@ export function TableDetail({
                     {w.n !== null && (
                       <button
                         type="button"
-                        aria-label="Remove mapping"
-                        onClick={() =>
-                          setWired((s) => {
-                            const n = { ...s };
-                            delete n[c.name];
-                            return n;
-                          })
-                        }
+                        aria-label="Disconnect this column"
+                        onClick={() => void unwire(c.name, w)}
                         className="text-ink-3 hover:text-ink"
                       >
                         <IconX className="h-3 w-3" />
@@ -250,8 +285,25 @@ export function TableDetail({
             Loading columns…
           </div>
         )}
-        {cols?.length === 0 && (
-          <div className="px-3 py-16 text-center font-mono text-[12px] text-ink-3">No columns.</div>
+        {colsError !== null ? (
+          <div className="flex flex-col items-center gap-3 px-3 py-16 text-center">
+            <div className="font-mono text-[12px] text-danger">
+              Couldn’t read this table — {colsError}
+            </div>
+            <button
+              type="button"
+              onClick={() => setReload((n) => n + 1)}
+              className="rounded-sm border border-line-2 px-2.5 py-1 font-mono text-[11px] text-ink-2 hover:border-ink-3 hover:text-ink"
+            >
+              Try again
+            </button>
+          </div>
+        ) : (
+          cols?.length === 0 && (
+            <div className="px-3 py-16 text-center font-mono text-[12px] text-ink-3">
+              No columns.
+            </div>
+          )
         )}
       </div>
     </div>

@@ -117,6 +117,37 @@ describe("listDeliveries", () => {
     }
   });
 
+  it("includes every field the delivery-log client renders", async () => {
+    const seed = await seedDelivery(T, webhookId, { status: "success" });
+    const out = await listDeliveries(T, webhookId, { role: "admin" });
+    const d = out.deliveries.find((x) => x.id === seed.id)!;
+    // Fields declared by WebhookDelivery in app/src/lib/integrations-api.ts.
+    for (const k of [
+      "id",
+      "webhook_id",
+      "event_id",
+      "event_type",
+      "delivery_url",
+      "signing_kid",
+      "is_test",
+      "status",
+      "attempts",
+      "max_attempts",
+      "next_attempt_at",
+      "last_attempt_at",
+      "last_response_code",
+      "last_response_body",
+      "last_error",
+      "payload",
+      "signature",
+      "created_at",
+      "completed_at",
+    ] as const) {
+      expect(d[k]).not.toBeUndefined();
+    }
+    expect(typeof d.created_at).toBe("string");
+  });
+
   it("filters by status", async () => {
     await seedDelivery(T, webhookId, { status: "dlq" });
     const out = await listDeliveries(T, webhookId, { status: "dlq", role: "admin" });
@@ -171,10 +202,10 @@ describe("sendTestEvent", () => {
     expect(row!.attempts).toBe(0);
     const payload =
       typeof row!.payload === "string"
-        ? (JSON.parse(row!.payload) as { message: string; dim_slug: string | null })
-        : (row!.payload as { message: string; dim_slug: string | null });
+        ? (JSON.parse(row!.payload) as { message: string; table_slug: string | null })
+        : (row!.payload as { message: string; table_slug: string | null });
     expect(payload.message).toContain("test event");
-    expect(payload.dim_slug).toBeNull();
+    expect(payload.table_slug).toBeNull();
   });
 
   it("returns null when webhook does not exist", async () => {

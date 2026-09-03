@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MapValuesBody } from "./MapValuesBody";
+import { TenantProvider } from "../../lib/tenant-context";
+import { tenantFixture } from "../../../test/tenant-fixture";
 import { saveDraft } from "../../store";
 import { useRefTableClusters } from "../../lib/use-ref-table-clusters";
 import type { MappingRefTable } from "../../data";
@@ -81,6 +83,7 @@ vi.mock("../../store", () => ({
   listDrafts: vi.fn(() => []),
   commit: vi.fn(),
   useDrafts: () => ({}),
+  useDraftsByValue: () => ({}),
   useCanEdit: () => true,
   saveDraft: vi.fn(),
   discardDraft: vi.fn(),
@@ -96,9 +99,19 @@ const REF = {
   record: [{ key: "germany", label: "Germany", version: 1 }],
 } as unknown as MappingRefTable;
 
+/** MapValuesBody renders SourcesFeedStrip, which reads the workspace
+ *  capabilities — so it needs a tenant around it, as in the app. */
+function renderBody() {
+  return render(
+    <TenantProvider value={tenantFixture("editor")}>
+      <MapValuesBody refTable={REF} isActive />
+    </TenantProvider>,
+  );
+}
+
 describe("MapValuesBody", () => {
   it("renders one row per cluster with the map-values kicker and count", () => {
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     expect(screen.getByText(/map values ·/i)).toBeInTheDocument();
     expect(screen.getByText("Deutschland")).toBeInTheDocument();
     expect(screen.getByText("U.S.A.")).toBeInTheDocument();
@@ -113,7 +126,7 @@ describe("MapValuesBody", () => {
   });
 
   it("is a single list — no grid or Focused/Grid toggle", () => {
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     expect(screen.queryByRole("button", { name: /open as grid/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^focused$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^grid$/i })).not.toBeInTheDocument();
@@ -121,7 +134,7 @@ describe("MapValuesBody", () => {
 
   it("moves the cursor with ArrowDown and marks the focused row", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     const list = screen.getByRole("list", { name: /values to map/i });
     list.focus();
     await user.keyboard("{ArrowDown}");
@@ -131,7 +144,7 @@ describe("MapValuesBody", () => {
 
   it("moves the cursor back up with ArrowUp", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     const list = screen.getByRole("list", { name: /values to map/i });
     list.focus();
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowUp}");
@@ -140,28 +153,41 @@ describe("MapValuesBody", () => {
 
   it("renders the loading state", () => {
     vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ loading: true }));
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
 
   it("renders the error state and retries", () => {
     const refetch = vi.fn();
     vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ error: "boom", refetch }));
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     expect(screen.getByText(/couldn.t load values/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(refetch).toHaveBeenCalled();
   });
 
+  it("says the list is capped when the server truncated it", () => {
+    vi.mocked(useRefTableClusters).mockReturnValueOnce(
+      feed({ clusters: CLUSTERS, truncated: true }),
+    );
+    renderBody();
+    expect(screen.getByText(/showing the most common/i)).toBeInTheDocument();
+  });
+
+  it("says nothing about a cap when the whole list fits", () => {
+    renderBody();
+    expect(screen.queryByText(/showing the most common/i)).not.toBeInTheDocument();
+  });
+
   it("renders the all-mapped empty state when there are no clusters", () => {
     vi.mocked(useRefTableClusters).mockReturnValueOnce(feed({ clusters: [] }));
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     expect(screen.getByText(/is all mapped/i)).toBeInTheDocument();
   });
 
   it("stages a skipped draft for the cursor cluster on S", async () => {
     const user = (await import("@testing-library/user-event")).default.setup();
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     const list = screen.getByRole("list", { name: /values to map/i });
     list.focus();
     await user.keyboard("s");
@@ -170,7 +196,7 @@ describe("MapValuesBody", () => {
 
   it("does not skip on Cmd+S", async () => {
     vi.mocked(saveDraft).mockClear();
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     const list = screen.getByRole("list", { name: /values to map/i });
     list.focus();
     fireEvent.keyDown(list, { key: "s", metaKey: true });
@@ -187,7 +213,7 @@ describe("MapValuesBody", () => {
     const onUncaught = (err: unknown) => errors.push(err);
     process.on("uncaughtException", onUncaught);
     try {
-      render(<MapValuesBody refTable={REF} isActive />);
+      renderBody();
       const list = screen.getByRole("list", { name: /values to map/i });
       list.focus();
       // move the cursor to the last "new" row (index 1 of 2 clusters)
@@ -220,7 +246,7 @@ describe("MapValuesBody", () => {
         version: 1,
       },
     ] as never);
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     const publishBtn = screen.getByRole("button", { name: /publish 1 change/i });
     expect(publishBtn).toBeEnabled();
   });
@@ -228,7 +254,7 @@ describe("MapValuesBody", () => {
   it("disables the publish button when no drafts are staged", async () => {
     const { listDrafts } = await import("../../store");
     vi.mocked(listDrafts).mockReturnValue([]);
-    render(<MapValuesBody refTable={REF} isActive />);
+    renderBody();
     const publishBtn = screen.getByRole("button", { name: /publish 0 changes/i });
     expect(publishBtn).toBeDisabled();
   });

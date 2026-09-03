@@ -229,6 +229,33 @@ test("DuckDbWritableAdapter: ensureRecordTables creates dim_ and map_ idempotent
   expect(mapRows.getRowObjects()).toEqual([{ raw: "USA", country_code: "US" }]);
 });
 
+test("DuckDbWritableAdapter: a MotherDuck connection resolves a catalog for the record tables", () => {
+  const a = new DuckDbWritableAdapter({
+    type: "duckdb",
+    token: "md-token",
+    recordDatabase: "zugzug",
+    attached: true,
+    writable: true,
+  });
+  // @ts-expect-error — reach into the private ref parser
+  const ref = a["parseTwoPartRef"]("zugzug.dim_country");
+  // Without recordDatabase this threw "missing catalog" and every writable-mode
+  // publish failed before it reached the warehouse.
+  expect(a.qualifyRef(ref)).toBe('"zugzug"."zugzug"."dim_country"');
+});
+
+test("DuckDbWritableAdapter: a local connection keeps two-part record refs", () => {
+  const a = new DuckDbWritableAdapter({
+    type: "duckdb",
+    path: ":memory:",
+    attached: false,
+    writable: true,
+  });
+  // @ts-expect-error — reach into the private ref parser
+  const ref = a["parseTwoPartRef"]("zugzug.dim_country");
+  expect(a.qualifyRef(ref)).toBe('"zugzug"."dim_country"');
+});
+
 test("DuckDbWritableAdapter: commitRecord empty drafts returns rowsWritten=0 with no SQL", async () => {
   const a = new DuckDbWritableAdapter({
     type: "duckdb",

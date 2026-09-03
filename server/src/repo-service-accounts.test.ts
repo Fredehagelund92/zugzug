@@ -90,10 +90,9 @@ describe("listServiceAccounts", () => {
     expect(ids).toContain(a.id);
     expect(ids).toContain(b.id);
     const aRow = list.find((sa) => sa.id === a.id)!;
-    expect(aRow.tokenPrefix).toBe(a.value.slice(0, 12));
+    expect(aRow.token_prefix).toBe(a.value.slice(0, 12));
     expect(aRow.scopes).toEqual(["read"]);
-    expect(aRow.createdBy).toBe(U);
-    expect(aRow.revokedAt).toBeNull();
+    expect(aRow.created_by).toBe(U);
   });
 
   it("does NOT return revoked rows", async () => {

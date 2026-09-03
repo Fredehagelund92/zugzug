@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, memo } from "react";
 import {
+  akey,
   useDrafts,
   useRefTables,
   useCanEdit,
@@ -100,7 +101,7 @@ const DraftRow = memo(function DraftRow({
         {draft.source === "ai" ? `AI · ${draft.confidence ?? "?"}` : authorName}
       </span>
       <span className="w-16 shrink-0 text-right font-mono text-[10px] text-ink-3">
-        {relativeTime(draft.at)}
+        {relativeTime(draft.createdAt)}
       </span>
     </li>
   );
@@ -112,7 +113,8 @@ export function AwaitingReview() {
   const canEdit = useCanEdit();
   const me = useCurrentUser();
 
-  // selection: Set of "refTableId::raw" keys
+  // selection: Set of akey(refTableId, raw, authorId) — a row per author, so
+  // acting on Mia's draft for "usa" must never touch Bob's.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // reject UI state
   const [rejecting, setRejecting] = useState(false);
@@ -172,7 +174,7 @@ export function AwaitingReview() {
   // Stable identity so the memoized DraftRow's props don't change every render.
   // Declared before the early returns so hook order stays constant (#158).
   const toggleRow = useCallback((d: Draft) => {
-    const k = `${d.refTableId}::${d.raw}`;
+    const k = akey(d.refTableId, d.raw, d.user.id);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(k)) next.delete(k);
@@ -187,7 +189,7 @@ export function AwaitingReview() {
   const totalCount = othersMappedDrafts.length;
 
   // Selection helpers
-  const selKey = (d: Draft) => `${d.refTableId}::${d.raw}`;
+  const selKey = (d: Draft) => akey(d.refTableId, d.raw, d.user.id);
   const tableKeys = (tg: TableGroup) => tg.authorGroups.flatMap((ag) => ag.drafts.map(selKey));
 
   const tableSelState = (tg: TableGroup): "on" | "off" | "mixed" => {
@@ -244,15 +246,18 @@ export function AwaitingReview() {
       const outcomes: CommitOutcome[] = [];
       for (const g of preview) {
         try {
+          // Scope to the exact drafts on screen: publishing Mia's row must
+          // apply Mia's target, not whichever draft for that value is newest.
           const res = await commit(
             g.refTableId,
-            g.drafts.map((d) => d.raw),
+            g.drafts.map((d) => ({ raw: d.raw, userId: d.user.id })),
           );
           outcomes.push({
             refTableId: g.refTableId,
             refTableName: g.refTableName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
+            warehouseSynced: res.warehouseSynced,
             error: null,
           });
         } catch (err) {
@@ -277,7 +282,10 @@ export function AwaitingReview() {
       }
       const summary = summarizeOutcomes(outcomes);
       if (summary.ok) {
-        if (summary.committed > 0) toast(summary.message);
+        // A stale warehouse copy is a partial success — say it in the error
+        // tone so it isn't read as a clean publish.
+        if (summary.warehouseFailed.length > 0) toast(summary.message, "error");
+        else if (summary.committed > 0) toast(summary.message);
         setSelected(new Set());
       } else {
         toast(summary.message, "error");
@@ -292,20 +300,23 @@ export function AwaitingReview() {
   const handleRejectSelected = async () => {
     if (selectedDrafts.length === 0 || !rejectReason.trim()) return;
     setRejectLoading(true);
-    const byDim = new Map<string, { refTableName: string; raws: string[] }>();
+    const byDim = new Map<
+      string,
+      { refTableName: string; keys: Array<{ raw: string; userId: string }> }
+    >();
     for (const d of selectedDrafts) {
       const entry = byDim.get(d.refTableId) ?? {
         refTableName:
           tableGroups.find((tg) => tg.refTableId === d.refTableId)?.refTableName ?? d.refTableId,
-        raws: [],
+        keys: [],
       };
-      entry.raws.push(d.raw);
+      entry.keys.push({ raw: d.raw, userId: d.user.id });
       byDim.set(d.refTableId, entry);
     }
     const outcomes: Array<{ refTableName: string; rejected: boolean; error: string | null }> = [];
-    for (const [refTableId, { refTableName, raws }] of byDim) {
+    for (const [refTableId, { refTableName, keys }] of byDim) {
       try {
-        await rejectDrafts(refTableId, raws, rejectReason.trim());
+        await rejectDrafts(refTableId, keys, rejectReason.trim());
         outcomes.push({ refTableName, rejected: true, error: null });
       } catch (err) {
         outcomes.push({
@@ -334,9 +345,9 @@ export function AwaitingReview() {
       );
       setSelected((prev) => {
         const next = new Set<string>();
-        for (const k of prev) {
-          const refTableId = k.split("::")[0];
-          if (failedRefTableIds.has(refTableId)) next.add(k);
+        for (const d of selectedDrafts) {
+          const k = selKey(d);
+          if (prev.has(k) && failedRefTableIds.has(d.refTableId)) next.add(k);
         }
         return next;
       });
@@ -457,7 +468,7 @@ export function AwaitingReview() {
                 <span className="flex-1 font-mono text-[11px] font-semibold text-ink-2">
                   {tg.refTableName}
                   <span className="ml-2 font-normal text-ink-3">
-                    · {tg.totalDrafts} record{tg.totalDrafts === 1 ? "" : "s"}
+                    · {tg.totalDrafts} draft{tg.totalDrafts === 1 ? "" : "s"}
                   </span>
                 </span>
                 {tg.totalDrafts > COLLAPSE_THRESHOLD && (

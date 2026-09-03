@@ -34,7 +34,7 @@ export function CatalogSearchResults(props: {
         role="alert"
         className="border-b border-danger/30 bg-danger/10 px-3 py-2 font-mono text-[10.5px] text-danger"
       >
-        {failedCount} source{failedCount === 1 ? "" : "s"} couldn’t be searched — results may be
+        {failedCount} database{failedCount === 1 ? "" : "s"} couldn’t be searched — results may be
         incomplete.
       </div>
     ) : null;

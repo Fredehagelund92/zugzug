@@ -22,6 +22,7 @@ The core renames; everything else follows the same rule.
 | REST + Pull API: `/api/dimensions`, `canonical` wire keys | `/api/tables`, `record` wire keys | standardizes on the UI word; `/api/tables/:id/...` routes already exist, so this removes an existing `tables`-vs-`dimensions` split. Safe pre-launch (no external API consumers) |
 | **`dim_<x>` / `map_<x>` output tables** | **unchanged** | dbt contract + Kimball; see above |
 | **`dim_table` / `map_table` columns** (store the output names) | **unchanged** | they reference the tables that keep their names |
+| **`map_<x>.raw` column** | **unchanged** | the same dbt-facing argument as `map_<x>` itself: users join on it in their own SQL (`left join map_country m on m.raw = o.shipping_country` — README, [first mapping](../../docs-site/content/docs/first-mapping.mdx)), so renaming it breaks queries we do not control. "raw" stays banned in UI copy; the source value is a **source value** on screen |
 
 ## Consequences
 

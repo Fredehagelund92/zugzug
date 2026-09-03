@@ -46,14 +46,17 @@ export async function dispatchOutbound(tx: TxHelpers, input: DispatchInput): Pro
     ],
   );
 
-  // Enqueue one delivery per matching subscribed webhook (active only).
+  // Enqueue one delivery per matching subscribed webhook. Paused webhooks are
+  // included: pause queues, it does not drop — the dispatcher's claim() filters
+  // by webhook status, so the backlog is released on resume. Auto-disabled
+  // webhooks are excluded so a dead endpoint cannot accumulate one forever.
   // The signature is computed at attempt time by the dispatcher — we store
   // an empty string here and the dispatcher overwrites on first attempt.
   // delivery_url is snapshotted from the webhook's current URL.
   const subs = await tx.all<{ id: string; url: string }>(
     `SELECT id, url FROM ${pg("webhook")}
       WHERE tenant_id = $1
-        AND status = 'active'
+        AND status <> 'disabled'
         AND $2 = ANY(events)`,
     [input.tenantId, input.type],
   );

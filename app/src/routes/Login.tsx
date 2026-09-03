@@ -5,10 +5,12 @@ import { authFetch } from "../api";
 import { useAuthConfig } from "../store";
 import { AuthLayout } from "../components/auth/AuthLayout";
 import { Button } from "../components/Button";
+import { returnToFrom } from "../lib/return-to";
 
 const ERROR_MESSAGES: Record<string, string> = {
   domain: "Your email domain is not allowed on this instance. Contact your admin.",
-  not_allowed: "Your account hasn't been added yet. Ask an existing user to add you in Settings.",
+  not_allowed:
+    "Your account hasn't been added yet. Ask an existing user to add you in Settings → Members.",
   token: "Authentication failed — please try again.",
   state: "Session expired — please try again.",
   no_code: "Login was cancelled.",
@@ -23,19 +25,19 @@ export function Login() {
   const [devBypass, setDevBypass] = useState(false);
 
   useEffect(() => {
-    // Probe the dev/demo one-click login. The button only renders when the route
-    // is live, which requires the operator to have opted in with DEV_BYPASS_AUTH=1
-    // (self-host demo). When off — the default — this 404s and stays hidden, so it
-    // is safe to probe in production builds too, not just local dev.
-    authFetch("/auth/dev", { method: "GET", redirect: "manual" })
-      .then((r) => {
-        // 302 / "opaqueredirect" (Bun returns 302 with status "manual") indicates the route is live.
-        // 404 means dev bypass is off.
-        const live = r.status === 0 /* opaqueredirect */ || (r.status >= 300 && r.status < 400);
-        setDevBypass(live);
-      })
+    // Probe the dev/demo one-click login. GET only reports whether the operator
+    // opted in with DEV_BYPASS_AUTH=1 (self-host demo) — it creates no session and
+    // sets no cookie. When off — the default — it 404s and the button stays hidden.
+    // The login itself is the POST below.
+    authFetch("/auth/dev")
+      .then((r) => setDevBypass(r.ok))
       .catch(() => {});
   }, []);
+
+  const onDevLogin = async () => {
+    const res = await authFetch("/auth/dev", { method: "POST" });
+    if (res.ok) window.location.href = returnToFrom(window.location.search);
+  };
 
   return (
     <AuthLayout>
@@ -62,12 +64,13 @@ export function Login() {
         )}
 
         {devBypass && (
-          <a
-            href="/api/auth/dev"
+          <button
+            type="button"
+            onClick={() => void onDevLogin()}
             className="flex w-full items-center justify-center rounded-sm border border-dashed border-line-2 px-4 py-2 text-[12px] text-ink-3 transition-colors hover:border-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             Dev mode login
-          </a>
+          </button>
         )}
       </div>
     </AuthLayout>
@@ -91,7 +94,7 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
         body: JSON.stringify({ email, password }),
       });
       if (res.status === 200) {
-        window.location.href = "/app";
+        window.location.href = returnToFrom(window.location.search);
         return;
       }
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -120,7 +123,6 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
         <input
           type="password"
           required
-          minLength={12}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="mt-1.5 block w-full rounded-sm border border-line-2 bg-surface-2 px-3 py-[11px] text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"

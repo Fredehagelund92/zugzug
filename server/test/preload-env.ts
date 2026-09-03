@@ -11,7 +11,16 @@
  * env wins over .env, so this preload is a no-op there. It only changes
  * behavior for direct `bun test <file>` invocations.
  */
-process.env.DATABASE_URL = "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
+// ZUGZUG_TEST_DATABASE_URL is the one honoured override: a dedicated name that
+// server/.env does not define, so pointing a run at a scratch database stays
+// possible while DATABASE_URL from .env still cannot win. Parallel runs (several
+// agents, a CI matrix) need this — without it every run shares one database and
+// resetDb()'s DROP SCHEMA pulls the schema out from under the others.
+// A fresh override database must be migrated once first (`DATABASE_URL=<url>
+// bunx drizzle-kit migrate`): the files that never call resetDb() expect a
+// schema to already be there.
+process.env.DATABASE_URL =
+  process.env.ZUGZUG_TEST_DATABASE_URL ?? "postgres://zugzug:zugzug@localhost:55432/zugzug_test";
 // Forced, not `??=`: bun auto-loads server/.env before this preload runs, so a
 // soft assignment keeps the dev values (ATTACH_WAREHOUSE=true + real token) and
 // direct `bun test <file>` runs silently attach to the real warehouse.

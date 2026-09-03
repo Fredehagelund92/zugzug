@@ -161,7 +161,7 @@ test("POST /api/tables/:id/suggest returns 400 when raw_value is missing", async
   expect(res.status).toBe(400);
   const body = (await res.json()) as { error: string; detail: string };
   expect(body.error).toBe("INVALID_REQUEST");
-  expect(body.detail).toContain("raw_value");
+  expect(body.detail).toContain("source value");
 
   await cleanupCtx(ctx);
 });
@@ -225,7 +225,7 @@ test("POST /api/tables/:id/suggest returns 404 for non-existent refTable", async
 
   expect(res.status).toBe(404);
   const body = (await res.json()) as { error: string };
-  expect(body.error).toBe("DIMENSION_NOT_FOUND");
+  expect(body.error).toBe("TABLE_NOT_FOUND");
 
   await cleanupCtx(ctx);
 });
@@ -290,6 +290,11 @@ test("POST /api/tables/:id/suggest returns 201 with cached suggestion when AI en
     return;
   }
 
+  // The suggested label must be a real record: a draft whose target_key is
+  // null shows as ready to publish but every publish path filters it out, so
+  // the route only stages a mapping it can actually ship.
+  await record.addRecordOne(TEST_DIM_ID, "John Doe", undefined, ctx.userId, ctx.tenantId);
+
   // Pre-populate cache to avoid AI provider call
   const rawValue = "john";
   try {
@@ -326,6 +331,7 @@ test("POST /api/tables/:id/suggest returns 201 with cached suggestion when AI en
       raw: string;
       status: string;
       target_label: string;
+      target_key: string | null;
       source: string;
       confidence: string;
     };
@@ -335,8 +341,92 @@ test("POST /api/tables/:id/suggest returns 201 with cached suggestion when AI en
   expect(body.draft_id).toBeDefined();
   expect(body.draft.source).toBe("ai");
   expect(body.draft.target_label).toBe("John Doe");
+  expect(body.draft.target_key).toBe("john_doe");
   expect(["high", "medium", "low"]).toContain(body.draft.confidence);
   expect(body.cached).toBe(true);
+
+  await cleanupCtx(ctx);
+});
+
+test("a draft created by /suggest publishes via a scoped commit", async () => {
+  const ctx = await createTestCtx();
+  await pgRun(
+    `UPDATE ${pgTable("preferences")}
+     SET ai_enabled = true, ai_provider = 'openai', ai_api_key = 'sk-test'
+     WHERE tenant_id = $1`,
+    [ctx.tenantId],
+  );
+  await record.addRecordOne(TEST_DIM_ID, "Publishable", undefined, ctx.userId, ctx.tenantId);
+  const rawValue = "publish-me";
+  await pgRun(
+    `INSERT INTO ${pgTable("ai_hint_cache")}
+       (tenant_id, reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+     VALUES ($1, $2, $3, 'Publishable', 90, 'Test', 'gpt-4o-mini', now(), 0)`,
+    [ctx.tenantId, TEST_DIM_ID, rawValue],
+  );
+
+  const { handle } = await import("../src/server.ts");
+  const suggested = await handle(
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
+      method: "POST",
+      headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
+      body: JSON.stringify({ raw_value: rawValue }),
+    }),
+    () => {},
+  );
+  expect(suggested.status).toBe(201);
+
+  // The draft the suggestion staged must be publishable on its own. Before the
+  // fix it had no target_key, so scoped commit rejected the whole publish.
+  const published = await handle(
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/commit`, {
+      method: "POST",
+      headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
+      body: JSON.stringify({ draftKeys: [rawValue] }),
+    }),
+    () => {},
+  );
+  expect(published.status).toBe(200);
+  expect(((await published.json()) as { committed: number }).committed).toBe(1);
+
+  await cleanupCtx(ctx);
+});
+
+test("POST /api/tables/:id/suggest stages nothing when the suggested label is not a record", async () => {
+  const ctx = await createTestCtx();
+  await pgRun(
+    `UPDATE ${pgTable("preferences")}
+     SET ai_enabled = true, ai_provider = 'openai', ai_api_key = 'sk-test'
+     WHERE tenant_id = $1`,
+    [ctx.tenantId],
+  );
+  const rawValue = "no-such-record";
+  await pgRun(
+    `INSERT INTO ${pgTable("ai_hint_cache")}
+       (tenant_id, reference_table_id, raw, suggestion, confidence, reasoning, model, created_at, hits)
+     VALUES ($1, $2, $3, 'Invented Label', 90, 'Test', 'gpt-4o-mini', now(), 0)`,
+    [ctx.tenantId, TEST_DIM_ID, rawValue],
+  );
+
+  const { handle } = await import("../src/server.ts");
+  const res = await handle(
+    new Request(`http://localhost/api/tables/${TEST_DIM_ID}/suggest`, {
+      method: "POST",
+      headers: { cookie: ctx.sessionToken, "content-type": "application/json" },
+      body: JSON.stringify({ raw_value: rawValue }),
+    }),
+    () => {},
+  );
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { draft: unknown; suggestion: { target_label: string } };
+  expect(body.draft).toBeNull();
+  expect(body.suggestion.target_label).toBe("Invented Label");
+
+  const staged = await pgGet<{ n: number }>(
+    `SELECT count(*)::int AS n FROM ${pgTable("draft")} WHERE tenant_id = $1 AND raw = $2`,
+    [ctx.tenantId, rawValue],
+  );
+  expect(staged!.n).toBe(0);
 
   await cleanupCtx(ctx);
 });
@@ -357,6 +447,8 @@ test("POST /api/tables/:id/suggest includes reasoning in response", async () => 
     await cleanupCtx(ctx);
     return;
   }
+
+  await record.addRecordOne(TEST_DIM_ID, "Jane Smith", undefined, ctx.userId, ctx.tenantId);
 
   // Pre-cache with reasoning
   const rawValue = "jane";
@@ -407,6 +499,8 @@ test("POST /api/tables/:id/suggest response has all draft fields", async () => {
     await cleanupCtx(ctx);
     return;
   }
+
+  await record.addRecordOne(TEST_DIM_ID, "Complete Response", undefined, ctx.userId, ctx.tenantId);
 
   // Pre-cache
   const rawValue = "all-fields-test";

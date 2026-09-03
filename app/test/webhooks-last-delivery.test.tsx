@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { TenantProvider, type TenantContextValue } from "../src/lib/tenant-context";
+import { tenantFixture } from "./tenant-fixture";
 import type { Webhook } from "../src/lib/integrations-api";
 
 vi.mock("../src/lib/integrations-api", () => ({
@@ -22,14 +23,7 @@ vi.mock("../src/routes/integrations/SecretRevealModal", () => ({
   SecretRevealModal: () => null,
 }));
 
-const tenant: TenantContextValue = {
-  id: "t1",
-  slug: "acme",
-  label: "Acme",
-  color: null,
-  role: "admin",
-  isSuperAdmin: false,
-};
+const tenant: TenantContextValue = tenantFixture("admin");
 
 function makeWebhook(overrides: Partial<Webhook> = {}): Webhook {
   return {

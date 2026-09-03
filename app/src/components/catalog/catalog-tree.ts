@@ -12,6 +12,8 @@ export interface TreeNode {
   children: TreeNode[];
   columns?: string[];
   unreachable?: boolean;
+  /** Loading this node's children failed — not the same as having none. */
+  loadFailed?: boolean;
 }
 
 const TINTS = [

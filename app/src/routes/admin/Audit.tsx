@@ -8,6 +8,7 @@ import { AuditTimeline } from "../../components/AuditTimeline";
 import { AnchoredPopover } from "../../components/AnchoredPopover";
 import type { AuditEntry } from "../../store";
 import { SuperAdminBadge } from "../../components/admin/SuperAdminBadge";
+import { actionLabel } from "../../lib/audit-format";
 
 const PAGE_SIZE = 30;
 
@@ -265,7 +266,10 @@ function TypePicker({
   }, [open]);
 
   const f = filter.trim().toLowerCase();
-  const shown = f ? actions.filter((a) => a.toLowerCase().includes(f)) : actions;
+  // Search the words on screen as well as the code behind them.
+  const shown = f
+    ? actions.filter((a) => a.toLowerCase().includes(f) || actionLabel(a).toLowerCase().includes(f))
+    : actions;
 
   const pick = (a: string) => {
     onChange(a);
@@ -288,7 +292,7 @@ function TypePicker({
         }
       >
         <span className="font-mono text-[10px] uppercase tracking-[0.16em] opacity-70">Type</span>
-        <span className={value ? "font-mono text-[11px]" : ""}>{value || "All events"}</span>
+        <span>{value ? actionLabel(value) : "All events"}</span>
         <span aria-hidden className="text-ink-3">
           ▾
         </span>
@@ -313,7 +317,12 @@ function TypePicker({
           <ul className="max-h-64 overflow-auto py-1">
             <TypeOption label="All events" active={!value} onClick={() => pick("")} />
             {shown.map((a) => (
-              <TypeOption key={a} label={a} mono active={value === a} onClick={() => pick(a)} />
+              <TypeOption
+                key={a}
+                label={actionLabel(a)}
+                active={value === a}
+                onClick={() => pick(a)}
+              />
             ))}
             {shown.length === 0 && (
               <li className="px-3 py-2 text-xs text-ink-3">No type matches “{filter}”.</li>
@@ -437,12 +446,10 @@ function TypeOption({
   label,
   active,
   onClick,
-  mono,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
-  mono?: boolean;
 }) {
   return (
     <li>
@@ -451,7 +458,6 @@ function TypeOption({
         onClick={onClick}
         className={
           "flex w-full px-3 py-1.5 text-left text-sm transition-colors hover:bg-hover " +
-          (mono ? "font-mono text-[12px] " : "") +
           (active ? "bg-accent-soft text-accent" : "text-ink")
         }
       >

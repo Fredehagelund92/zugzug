@@ -12,10 +12,10 @@ beforeEach(resetDb);
 afterAll(resetDb);
 
 // ---------------------------------------------------------------------------
-// manage_adapter: addField — viewer AND editor cannot; admin can
+// manage_tables: addField — viewer cannot; editor and admin can
 // ---------------------------------------------------------------------------
 
-test("manage_adapter: viewer cannot addField → FORBIDDEN", async () => {
+test("manage_tables: viewer cannot addField → FORBIDDEN", async () => {
   await makeWorkspace("trbac");
   const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "viewer");
@@ -28,7 +28,7 @@ test("manage_adapter: viewer cannot addField → FORBIDDEN", async () => {
   expect(err?.code).toBe("FORBIDDEN");
 });
 
-test("manage_adapter: editor cannot addField → FORBIDDEN", async () => {
+test("manage_tables: editor can addField (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
   const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "editor");
@@ -38,16 +38,52 @@ test("manage_adapter: editor cannot addField → FORBIDDEN", async () => {
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
-  expect(err?.code).toBe("FORBIDDEN");
+  expect(err?.code).not.toBe("FORBIDDEN");
 });
 
-test("manage_adapter: admin can addField (no FORBIDDEN)", async () => {
+test("manage_tables: admin can addField (no FORBIDDEN)", async () => {
   await makeWorkspace("trbac");
   const refTableId = await makeRefTable("trbac", "Vendors");
   const repo = new TenantRepo("trbac", "admin");
   let err: AppError | null = null;
   try {
     await repo.addField(refTableId, "Category", "text", undefined, {}, "u1");
+  } catch (e) {
+    if (e instanceof AppError) err = e;
+  }
+  expect(err?.code).not.toBe("FORBIDDEN");
+});
+
+// ---------------------------------------------------------------------------
+// manage_workspace: setPreferences — viewer AND editor cannot; admin can
+// ---------------------------------------------------------------------------
+
+const PREFS = {
+  publishThreshold: 1,
+  suggestThreshold: 1,
+  scanSchedule: null,
+  requireSecondPublisher: false,
+  autoPublishEnabled: false,
+} as const;
+
+test("manage_workspace: editor cannot setPreferences → FORBIDDEN", async () => {
+  await makeWorkspace("trbac");
+  const repo = new TenantRepo("trbac", "editor");
+  let err: AppError | null = null;
+  try {
+    await repo.setPreferences({ ...PREFS });
+  } catch (e) {
+    if (e instanceof AppError) err = e;
+  }
+  expect(err?.code).toBe("FORBIDDEN");
+});
+
+test("manage_workspace: admin can setPreferences (no FORBIDDEN)", async () => {
+  await makeWorkspace("trbac");
+  const repo = new TenantRepo("trbac", "admin");
+  let err: AppError | null = null;
+  try {
+    await repo.setPreferences({ ...PREFS });
   } catch (e) {
     if (e instanceof AppError) err = e;
   }
@@ -169,7 +205,7 @@ test("read: viewer can getPreferences", async () => {
 });
 
 // ---------------------------------------------------------------------------
-// super-admin bypass: viewer with isSuperAdmin=true bypasses manage_adapter gate
+// super-admin bypass: viewer with isSuperAdmin=true bypasses manage_tables gate
 // ---------------------------------------------------------------------------
 
 test("super-admin bypass: viewer+isSuperAdmin can addField (no FORBIDDEN)", async () => {

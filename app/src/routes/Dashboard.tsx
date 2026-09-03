@@ -23,6 +23,7 @@ import {
   warehouseSyncStatusByDim,
 } from "./dashboard-helpers";
 import { PALETTE, defaultTintFor, type PaletteName } from "../lib/palette";
+import { plainDetail } from "../lib/audit-format";
 
 const MarkBackdrop = () => (
   <Mark className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 opacity-[0.05]" />
@@ -305,7 +306,7 @@ export function Dashboard() {
               <span className="font-display text-base font-bold text-ink">
                 {fmtK(valuesMapped)}
               </span>{" "}
-              records
+              mappings
             </span>
             <span className="text-sm text-ink-2">
               <span
@@ -329,7 +330,7 @@ export function Dashboard() {
         }
         action={
           totalNew > 0 ? (
-            <Link to={nav.triage}>
+            <Link to={nav.review}>
               <Button icon={<IconWand className="h-4 w-4" />} className="zz-glow-sm">
                 Review {totalNew} new
               </Button>
@@ -473,10 +474,10 @@ export function Dashboard() {
                           </span>
                           {wsInfo?.writable && syncStatus[refTable.id] === "failed" && (
                             <span
-                              title="Last warehouse scan failed — manual re-scan required"
-                              className="inline-flex items-center font-mono text-[9px] text-amber-600"
+                              title="The last publish didn't reach the warehouse — publish again to retry"
+                              className="inline-flex items-center font-mono text-[9px] text-warn"
                             >
-                              🔄 needs re-scan
+                              ⚠ warehouse out of date
                             </span>
                           )}
                         </div>
@@ -616,7 +617,7 @@ function ScanFailureFeed({ auditLog }: { auditLog: import("../store").AuditEntry
               {e.user.initials}
             </span>
             <div className="min-w-0 flex-1">
-              <span className="font-mono text-[11px] text-warn">{e.detail}</span>
+              <span className="font-mono text-[11px] text-warn">{plainDetail(e.detail)}</span>
             </div>
             <span className="shrink-0 font-mono text-[10px] text-ink-3">{formatTimeAgo(e.at)}</span>
           </li>

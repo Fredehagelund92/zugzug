@@ -106,7 +106,6 @@ describe("admin/Workspaces — populated list", () => {
         slug: "alpha",
         label: "Alpha Team",
         color: "#ff0000",
-        warehouse_id: "wh-abc",
         member_count: 3,
       },
       {
@@ -114,7 +113,6 @@ describe("admin/Workspaces — populated list", () => {
         slug: "beta",
         label: "Beta Team",
         color: "#00ff00",
-        warehouse_id: "wh-def",
         member_count: 7,
       },
     ];
@@ -145,7 +143,6 @@ describe("admin/Workspaces — inline rename", () => {
       slug: "alpha",
       label: "Alpha Team",
       color: null,
-      warehouse_id: "wh-abc",
       member_count: 2,
     };
 
@@ -185,6 +182,35 @@ describe("admin/Workspaces — inline rename", () => {
 });
 
 describe("admin/Workspaces — create workspace", () => {
+  it("a slug the server would reject shows an inline error and fires no request", async () => {
+    mockApiFetch.mockImplementation((path: string, opts?: RequestInit) => {
+      if (!opts || opts.method === undefined || opts.method === "GET")
+        return okJson({ tenants: [] });
+      return Promise.resolve({ ok: true } as Response);
+    });
+
+    renderWorkspaces();
+    await waitFor(() => screen.getByText("No workspaces yet"));
+
+    fireEvent.click(screen.getByRole("button", { name: /\+ new workspace/i }));
+    // Hyphens are outside the server's ^[a-z][a-z0-9_]{0,20}$ address shape —
+    // and used to be the placeholder's own example.
+    fireEvent.change(screen.getByPlaceholderText("my_workspace"), {
+      target: { value: "my-workspace" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("My Workspace"), {
+      target: { value: "My Workspace" },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /create workspace/i }));
+    });
+
+    expect(screen.getByText(/lowercase letters, digits and underscores/i)).toBeInTheDocument();
+    expect(
+      mockApiFetch.mock.calls.some(([, o]) => (o as RequestInit | undefined)?.method === "POST"),
+    ).toBe(false);
+  });
+
   it("+ New workspace → fill slug+label → Create → POST fires → list updates", async () => {
     const initial = [
       {
@@ -192,7 +218,6 @@ describe("admin/Workspaces — create workspace", () => {
         slug: "alpha",
         label: "Alpha Team",
         color: null,
-        warehouse_id: "wh-abc",
         member_count: 1,
       },
     ];
@@ -203,7 +228,6 @@ describe("admin/Workspaces — create workspace", () => {
         slug: "newbie",
         label: "New Workspace",
         color: null,
-        warehouse_id: "wh-abc",
         member_count: 0,
       },
     ];
@@ -237,7 +261,7 @@ describe("admin/Workspaces — create workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: /\+ new workspace/i }));
 
     // Fill in slug and label
-    const slugInput = screen.getByPlaceholderText("my-workspace");
+    const slugInput = screen.getByPlaceholderText("my_workspace");
     const labelInput = screen.getByPlaceholderText("My Workspace");
     fireEvent.change(slugInput, { target: { value: "newbie" } });
     fireEvent.change(labelInput, { target: { value: "New Workspace" } });

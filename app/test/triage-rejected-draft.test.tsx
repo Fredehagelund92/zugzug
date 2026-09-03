@@ -68,7 +68,7 @@ function setupMocks() {
     useNavLinks: () => ({
       base: "/app/test-ws",
       dashboard: "/app/test-ws",
-      triage: "/app/test-ws/triage",
+      review: "/app/test-ws/review",
       sources: "/app/test-ws/sources",
       tables: "/app/test-ws/tables",
       settings: "/app/test-ws/settings",
@@ -89,7 +89,7 @@ function setupMocks() {
       }),
       useStoreLoading: () => false,
       useCanEdit: () => true,
-      // Return current user matching the rejected-draft author so Re-stage button renders.
+      // Return current user matching the rejected-draft author so Restore renders.
       useCurrentUser: () => ({
         id: "u_reviewer",
         name: "Reviewer",
@@ -97,7 +97,7 @@ function setupMocks() {
         role: "admin" as const,
       }),
       useRefTables: () => [stubDim],
-      useDrafts: () => ({ "country::USA": stubRejectedDraft }),
+      useDraftsByValue: () => ({ "country::USA": stubRejectedDraft }),
       saveDraft: vi.fn().mockResolvedValue(undefined),
       discardDraft: vi.fn().mockResolvedValue(undefined),
       commit: vi.fn(async () => ({
@@ -123,7 +123,7 @@ function setupMocks() {
     }),
   }));
   vi.doMock("../src/lib/use-ai-hint", () => ({
-    useAiHint: () => ({ hint: null, loading: false, error: false }),
+    useAiConfigured: () => false,
   }));
   vi.doMock("../src/api", () => ({
     apiFetch: vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) })),
@@ -155,7 +155,7 @@ describe("Triage — rejected draft presentation", () => {
     });
   });
 
-  test("rejected draft shows Re-stage button", async () => {
+  test("rejected draft shows Restore button", async () => {
     setupMocks();
     const { Triage } = await import("../src/routes/Triage");
     render(
@@ -166,12 +166,12 @@ describe("Triage — rejected draft presentation", () => {
     await waitFor(() => {
       const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
       expect(
-        within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }),
+        within(rowEl as HTMLElement).getByRole("button", { name: /restore/i }),
       ).toBeInTheDocument();
     });
   });
 
-  test("Re-stage button calls saveDraft to clear the rejection", async () => {
+  test("Restore button calls saveDraft to clear the rejection", async () => {
     setupMocks();
     const storeMod = await import("../src/store");
     const saveDraftMock = vi.mocked(storeMod.saveDraft);
@@ -184,17 +184,17 @@ describe("Triage — rejected draft presentation", () => {
     );
     await waitFor(() => {
       const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
-      within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i });
+      within(rowEl as HTMLElement).getByRole("button", { name: /restore/i });
     });
     const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
-    fireEvent.click(within(rowEl as HTMLElement).getByRole("button", { name: /re-stage/i }));
+    fireEvent.click(within(rowEl as HTMLElement).getByRole("button", { name: /restore/i }));
     // saveDraft should be called to re-stage the draft (clearing rejection on server)
     await waitFor(() => {
       expect(saveDraftMock).toHaveBeenCalledWith("country", "USA", "mapped", "United States", "us");
     });
   });
 
-  test("Re-stage button is hidden for a non-author of the rejected draft", async () => {
+  test("Restore button is hidden for a non-author of the rejected draft", async () => {
     // Override useCurrentUser to return a different user than the draft author
     vi.doMock("../src/store", async (orig) => {
       const real = await orig<typeof import("../src/store")>();
@@ -217,7 +217,7 @@ describe("Triage — rejected draft presentation", () => {
           role: "admin" as const,
         }),
         useRefTables: () => [stubDim],
-        useDrafts: () => ({ "country::USA": stubRejectedDraft }),
+        useDraftsByValue: () => ({ "country::USA": stubRejectedDraft }),
         saveDraft: vi.fn().mockResolvedValue(undefined),
         discardDraft: vi.fn().mockResolvedValue(undefined),
         commit: vi.fn(async () => ({
@@ -233,7 +233,7 @@ describe("Triage — rejected draft presentation", () => {
       useNavLinks: () => ({
         base: "/app/test-ws",
         dashboard: "/app/test-ws",
-        triage: "/app/test-ws/triage",
+        review: "/app/test-ws/review",
         sources: "/app/test-ws/sources",
         tables: "/app/test-ws/tables",
         settings: "/app/test-ws/settings",
@@ -256,7 +256,7 @@ describe("Triage — rejected draft presentation", () => {
       }),
     }));
     vi.doMock("../src/lib/use-ai-hint", () => ({
-      useAiHint: () => ({ hint: null, loading: false, error: false }),
+      useAiConfigured: () => false,
     }));
     vi.doMock("../src/api", () => ({
       apiFetch: vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) })),
@@ -270,11 +270,11 @@ describe("Triage — rejected draft presentation", () => {
         <Triage />
       </MemoryRouter>,
     );
-    // Wait for the rejected badge to appear, then confirm Re-stage is absent
+    // Wait for the rejected badge to appear, then confirm Restore is absent
     await waitFor(() => {
       expect(screen.getByTitle("does not match our naming convention")).toBeInTheDocument();
     });
     const rowEl = document.querySelector('[data-row-key="country::USA"]') ?? document.body;
-    expect(within(rowEl as HTMLElement).queryByRole("button", { name: /re-stage/i })).toBeNull();
+    expect(within(rowEl as HTMLElement).queryByRole("button", { name: /restore/i })).toBeNull();
   });
 });

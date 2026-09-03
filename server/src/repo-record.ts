@@ -101,17 +101,19 @@ export async function resolveDefaultDatabase(tenantId: string): Promise<string> 
   return row.id;
 }
 
-/** Remove a single wired source column from a refTable. Idempotent — deleting
- *  a nonexistent wiring is a no-op. */
+/** Remove a single wired source column from a refTable. Idempotent, but says
+ *  which it was: `true` when a wiring was deleted, `false` when nothing
+ *  matched — the caller must not claim a removal that never happened. */
 export async function removeSource(
   refTableId: string,
   source: QualifiedSource,
   tenantId: string,
-): Promise<void> {
-  await pgRun(
+): Promise<boolean> {
+  const deleted = await pgAll<{ ok: number }>(
     `DELETE FROM ${pg("reference_table_source")}
       WHERE tenant_id = $1 AND reference_table_id = $2 AND database_id = $3
-        AND schema_name = $4 AND table_name = $5 AND column_name = $6`,
+        AND schema_name = $4 AND table_name = $5 AND column_name = $6
+      RETURNING 1 AS ok`,
     [
       tenantId,
       refTableId,
@@ -121,6 +123,7 @@ export async function removeSource(
       source.columnName,
     ],
   );
+  return deleted.length > 0;
 }
 
 /** TxHelpers shape from pg.ts — duplicated locally to keep the type narrow. */
@@ -234,6 +237,27 @@ async function seedVersionRow(
             version     = "record_version".version + 1,
             updated_at  = now(),
             updated_by  = EXCLUDED.updated_by`,
+    [refTableId, key, userId, tenantId],
+  );
+}
+
+/** Mark the record as edited without bumping its version: the row's *values*
+ *  are untouched, so nobody's in-flight edit is invalidated, but the stamp puts
+ *  the key into "changed since the last publish" (ADR-0002) so a manual reorder
+ *  can be published. */
+async function touchVersionRow(
+  tx: TxLike,
+  refTableId: string,
+  key: string,
+  userId: string,
+  tenantId: string,
+): Promise<void> {
+  await tx.run(
+    `INSERT INTO "zugzug_app"."record_version" (reference_table_id, key, version, updated_at, updated_by, tenant_id)
+     VALUES ($1, $2, 1, now(), $3, $4)
+     ON CONFLICT (tenant_id, reference_table_id, key) DO UPDATE
+        SET updated_at = now(),
+            updated_by = EXCLUDED.updated_by`,
     [refTableId, key, userId, tenantId],
   );
 }
@@ -684,6 +708,11 @@ export async function addRecord(
   }
 }
 
+/** Message for an add that collides with a record already in the table. */
+function duplicateKeyMessage(key: string): string {
+  return `A record with the key "${key}" already exists.`;
+}
+
 /** Add one record record (key derived from the label if not given). */
 export async function addRecordOne(
   refTableId: string,
@@ -700,20 +729,27 @@ export async function addRecordOne(
   // stays per-tenant-implicit (refTable ids are globally unique → effectively
   // per-tenant via the refTable registry's WHERE tenant_id = $N gate above).
   await pgTx(async (tx) => {
+    let inserted: { k: string } | null | undefined;
     if (m.orderingMode === "manual") {
       const pos = await nextPosition(tx, m.dimTable);
-      await tx.run(
+      inserted = await tx.get<{ k: string }>(
         `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label, position) VALUES ($1, $2, $3)
-         ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+         ON CONFLICT (${qid(m.keyCol)}) DO NOTHING
+         RETURNING ${qid(m.keyCol)} AS k`,
         [k, label, String(pos)],
       );
     } else {
-      await tx.run(
+      inserted = await tx.get<{ k: string }>(
         `INSERT INTO ${cq(m.dimTable)} (${qid(m.keyCol)}, label) VALUES ($1, $2)
-         ON CONFLICT (${qid(m.keyCol)}) DO NOTHING`,
+         ON CONFLICT (${qid(m.keyCol)}) DO NOTHING
+         RETURNING ${qid(m.keyCol)} AS k`,
         [k, label],
       );
     }
+    // Nothing inserted = the key is taken. Seeding the version row here would
+    // bump the *existing* record's version (409-ing everyone else's in-flight
+    // edits) for an add that never happened, so refuse instead.
+    if (!inserted) throw new AppError("ALREADY_EXISTS", duplicateKeyMessage(k), 409);
     await seedVersionRow(tx, refTableId, k, userId, tenantId);
   });
   await appendAuditAs(userId, "Added record", `${label} (${k})`, {
@@ -1052,7 +1088,7 @@ export async function retireRecord(
       refTableId,
       occurredAt: firedAt,
       payload: {
-        dim_slug: refTableId,
+        table_slug: refTableId,
         key,
         label: labelRow?.label ?? key,
         deleted_by: { id: userId },
@@ -1394,6 +1430,21 @@ export async function validateTableFormula(
   return { ok: true, sample: result === null ? null : String(result) };
 }
 
+/** Labels of the formula columns in this table whose expression references
+ *  `label`. Formulas address other columns by display label, so a rename or a
+ *  delete silently breaks every formula that names the column. */
+async function formulaColumnsReferencing(
+  refTableId: string,
+  label: string,
+  tenantId: string,
+): Promise<string[]> {
+  const fields = await listFields(refTableId, tenantId);
+  return fields
+    .filter((f) => f.type === "formula" && f.formula != null)
+    .filter((f) => validateFormula(f.formula!.expr).fieldRefs?.includes(label) === true)
+    .map((f) => f.label);
+}
+
 /** Rename a column's display label. The `field` (stable id / DB column name)
  *  stays put; only `label` changes. */
 export async function renameColumn(
@@ -1405,11 +1456,58 @@ export async function renameColumn(
 ): Promise<void> {
   const label = newLabel.trim();
   if (!label) return;
+  const current = (await listFields(refTableId, tenantId)).find((x) => x.field === field);
+  if (current && current.label !== label) {
+    const used = await formulaColumnsReferencing(refTableId, current.label, tenantId);
+    if (used.length > 0) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `"${current.label}" is used by the formula column ${used.map((u) => `"${u}"`).join(", ")} — update the formula first.`,
+        422,
+      );
+    }
+  }
   await pgRun(
     `UPDATE ${pg("reference_table_field")} SET label = $1 WHERE reference_table_id = $2 AND field = $3 AND tenant_id = $4`,
     [label, refTableId, field, tenantId],
   );
   await appendAuditAs(userId, "Renamed column", `${field} → "${label}"`, { tenantId });
+}
+
+/** The parts of a field_config that survive a type change: conditional rules
+ *  and the required flag apply to every type; validation bounds and uniqueness
+ *  are pruned to the types they mean anything for (same rule as the grid's
+ *  pruneValidationForType). Type-specific keys (options / numberFormat /
+ *  ratingMax / linked config) are the caller's to write. */
+function carryOverFieldConfig(raw: string | null, newType: string): Record<string, unknown> {
+  let cfg: Record<string, unknown> = {};
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        cfg = parsed as Record<string, unknown>;
+      }
+    } catch {
+      /* unparseable config — nothing to carry over */
+    }
+  }
+  const out: Record<string, unknown> = {};
+  if (Array.isArray(cfg.rules) && cfg.rules.length > 0) out.rules = cfg.rules;
+  if (cfg.required === true) out.required = true;
+  const v = cfg.validation;
+  if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+    const src = v as Record<string, unknown>;
+    const kept: Record<string, unknown> = {};
+    if (["number", "date", "text"].includes(newType)) {
+      if (src.min !== undefined) kept.min = src.min;
+      if (src.max !== undefined) kept.max = src.max;
+    }
+    if (src.unique === true && ["text", "number", "date", "url", "email"].includes(newType)) {
+      kept.unique = true;
+    }
+    if (Object.keys(kept).length > 0) out.validation = kept;
+  }
+  return out;
 }
 
 /** Change a column's type. Validates that every existing cell value parses to
@@ -1436,6 +1534,18 @@ export async function changeColumnType(
   const col = qid(field);
   const keyc = qid(m.keyCol);
   const { newType, coerceInvalidToNull, userId } = opts;
+  // Conditional formatting, the required flag and still-applicable validation
+  // outlive a type change — read the stored config so both paths below merge
+  // rather than overwrite.
+  const priorCfg = await pgGet<{ field_config: string | null }>(
+    `SELECT field_config FROM ${pg("reference_table_field")} WHERE reference_table_id = $1 AND field = $2 AND tenant_id = $3`,
+    [refTableId, field, tenantId],
+  );
+  const carried = carryOverFieldConfig(priorCfg?.field_config ?? null, newType);
+  const mergedConfig = (typeSpecific: Record<string, unknown> | null): string | null => {
+    const merged = { ...carried, ...(typeSpecific ?? {}) };
+    return Object.keys(merged).length > 0 ? JSON.stringify(merged) : null;
+  };
 
   // VARCHAR relabels — only safe when current SQL type is already VARCHAR
   if (
@@ -1444,8 +1554,8 @@ export async function changeColumnType(
   ) {
     await pgTx(async ({ run }) => {
       await run(
-        `UPDATE ${pg("reference_table_field")} SET type = $1, field_config = null WHERE reference_table_id = $2 AND field = $3 AND tenant_id = $4`,
-        [newType, refTableId, field, tenantId],
+        `UPDATE ${pg("reference_table_field")} SET type = $1, field_config = $2 WHERE reference_table_id = $3 AND field = $4 AND tenant_id = $5`,
+        [newType, mergedConfig(null), refTableId, field, tenantId],
       );
     });
     await appendAuditAs(userId, "Changed column type", `${field} → ${newType}`, { tenantId });
@@ -1551,13 +1661,15 @@ export async function changeColumnType(
       `UPDATE ${pg("reference_table_field")} SET type = $1, field_config = $2 WHERE reference_table_id = $3 AND field = $4 AND tenant_id = $5`,
       [
         newType,
-        newType === "select"
-          ? JSON.stringify(finalOptions ?? [])
-          : newType === "number" && opts.numberFormat != null
-            ? JSON.stringify({ numberFormat: opts.numberFormat })
-            : newType === "rating"
-              ? JSON.stringify({ ratingMax: opts.ratingMax ?? 5 })
-              : null,
+        mergedConfig(
+          newType === "select"
+            ? { options: finalOptions ?? [] }
+            : newType === "number" && opts.numberFormat != null
+              ? { numberFormat: opts.numberFormat }
+              : newType === "rating"
+                ? { ratingMax: opts.ratingMax ?? 5 }
+                : null,
+        ),
         refTableId,
         field,
         tenantId,
@@ -1584,6 +1696,17 @@ export async function deleteColumn(
 ): Promise<{ ok: boolean }> {
   const m = await refTableMeta(refTableId, tenantId);
   if (!m) return { ok: false };
+  const target = (await listFields(refTableId, tenantId)).find((x) => x.field === field);
+  if (target) {
+    const used = await formulaColumnsReferencing(refTableId, target.label, tenantId);
+    if (used.length > 0) {
+      throw new AppError(
+        "VALIDATION_FAILED",
+        `"${target.label}" is used by the formula column ${used.map((u) => `"${u}"`).join(", ")} — update the formula first.`,
+        422,
+      );
+    }
+  }
   const col = qid(field);
   await pgTx(async ({ all, run }) => {
     // Cascade: strip deleted field from displayFields of any linked fields in
@@ -1736,12 +1859,23 @@ export async function setFieldValue(
     const b = value === "true" ? true : value === "false" ? false : null;
     changed = await applyUpdate(b);
   } else if (f.type === "date") {
-    changed = await applyUpdate(empty ? null : value!.trim(), "::date");
+    const raw = empty ? null : value!.trim();
+    // The driver parses the value before Postgres ever sees it, so unparseable
+    // text ("hello", pasted from a spreadsheet) threw a RangeError → HTTP 500 →
+    // a generic "Couldn't save". Refuse it as the validation error it is.
+    if (raw !== null && Number.isNaN(new Date(raw).getTime())) {
+      throw new AppError("VALIDATION_FAILED", `"${value}" isn't a date — use YYYY-MM-DD.`, 422);
+    }
+    changed = await applyUpdate(raw, "::date");
   } else if (f.type === "linked") {
     let fkValue: string | null = empty ? null : value!.trim();
     if (fkValue !== null && f.referencedRefTableId) {
       const tm = await refTableMeta(f.referencedRefTableId, tenantId);
-      if (tm) {
+      if (!tm) {
+        // Target table is gone — storing the typed text would silently turn a
+        // linked column into free text. Keep it empty instead.
+        fkValue = null;
+      } else {
         const exists = await pgGet(
           `SELECT 1 FROM ${cq(tm.dimTable)} WHERE ${qid(tm.keyCol)} = $1`,
           [fkValue],
@@ -1957,6 +2091,18 @@ export async function deleteRefTable(
   const count = exists?.r
     ? await pgGet<{ n: number }>(`SELECT count(*)::int AS n FROM ${cq(refTable.dim_table)}`)
     : { n: 0 };
+  // Linked columns on OTHER tables point here. Left behind they resolve to no
+  // target, so setFieldValue stops validating them and they degrade into free
+  // text — drop them with their lookup columns instead.
+  const dependents = await pgAll<{ reference_table_id: string; field: string }>(
+    `SELECT reference_table_id, field FROM ${pg("reference_table_field")}
+      WHERE type = 'linked' AND tenant_id = $2 AND reference_table_id <> $1
+        AND field_config::jsonb ->> 'targetRefTableId' = $1`,
+    [id, tenantId],
+  );
+  for (const d of dependents) {
+    await deleteColumn(d.reference_table_id, d.field, userId, tenantId);
+  }
   const tenantSweeps = [
     "reference_table_source",
     "reference_table_field",
@@ -2112,11 +2258,13 @@ export async function addRecordOneAt(
   }
 
   await pgTx(async (tx) => {
-    await tx.run(
+    const inserted = await tx.get<{ k: string }>(
       `INSERT INTO ${DIMT} (${KC}, label, position) VALUES ($1, $2, $3)
-       ON CONFLICT (${KC}) DO NOTHING`,
+       ON CONFLICT (${KC}) DO NOTHING
+       RETURNING ${KC} AS k`,
       [k, label, String(newPos!)],
     );
+    if (!inserted) throw new AppError("ALREADY_EXISTS", duplicateKeyMessage(k), 409);
     await seedVersionRow(tx, refTableId, k, userId, tenantId);
   });
 
@@ -2217,6 +2365,9 @@ export async function reorderRecordRow(
     }
 
     await tx.run(`UPDATE ${DIMT} SET position = $1 WHERE ${KC} = $2`, [String(newPos), rowKey]);
+    // position is a published column, so a move is an unpublished change like
+    // any cell edit — without the stamp, publish never sees the new order.
+    await touchVersionRow(tx, refTableId, rowKey, userId, tenantId);
 
     await appendAuditAs(userId, "Reordered record", rowKey, {
       tableId: refTableId,

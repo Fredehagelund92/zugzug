@@ -7,6 +7,8 @@ import { IconPlus, IconPin, IconSearch } from "./Icons";
 import { useRefTables, useDrafts } from "../store";
 import { useOpenTabs } from "../lib/open-tabs";
 import { useCreateTableModal } from "../lib/create-table-modal";
+import { useTenant } from "../lib/tenant-context";
+import { can } from "../lib/permissions";
 import type { MappingRefTable } from "../data";
 
 const PINNED_KEY = "zugzug:pinned-refTables";
@@ -131,15 +133,21 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
   const drafts = useDrafts();
   const { activeId, openTab } = useOpenTabs();
   const create = useCreateTableModal();
+  const canCreate = can(useTenant(), "table.create");
   const navigate = useNavigate();
   const navLinks = useNavLinks();
   const [pinnedIds, togglePin] = usePinnedDims();
   const [q, setQ] = useState("");
   const activeRefTableId = activeId ? activeId.slice("tables:".length) : null;
 
+  // Only drafts publish would actually fold count as unpublished work — the
+  // same predicate the server's publish state uses. A table whose drafts were
+  // all rejected is not dirty.
   const dirtyRefTableIds = useMemo(() => {
     const s = new Set<string>();
-    for (const d of Object.values(drafts)) s.add(d.refTableId);
+    for (const d of Object.values(drafts)) {
+      if (d.status === "mapped" && d.targetKey != null) s.add(d.refTableId);
+    }
     return s;
   }, [drafts]);
 
@@ -159,15 +167,17 @@ export function SidebarTableTree({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-3 pb-2 pt-1">
-        <button
-          type="button"
-          onClick={create.open}
-          className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-accent bg-accent px-3 py-1.5 font-display text-[12.5px] font-semibold text-accent-ink transition-colors hover:brightness-105"
-        >
-          <IconPlus className="h-3.5 w-3.5" /> New table
-        </button>
-      </div>
+      {canCreate && (
+        <div className="shrink-0 px-3 pb-2 pt-1">
+          <button
+            type="button"
+            onClick={create.open}
+            className="flex w-full items-center justify-center gap-1.5 rounded-sm border border-accent bg-accent px-3 py-1.5 font-display text-[12.5px] font-semibold text-accent-ink transition-colors hover:brightness-105"
+          >
+            <IconPlus className="h-3.5 w-3.5" /> New table
+          </button>
+        </div>
+      )}
 
       <div className="shrink-0 flex items-center gap-2 border-y border-line px-3 py-2 text-ink-3">
         <IconSearch className="h-3.5 w-3.5" />

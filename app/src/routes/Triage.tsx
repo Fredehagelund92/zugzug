@@ -20,7 +20,7 @@ import { toast } from "../components/Toast";
 import type { MappingRefTable } from "../data";
 import {
   useRefTables,
-  useDrafts,
+  useDraftsByValue,
   saveDraft,
   discardDraft,
   commit,
@@ -35,7 +35,7 @@ import {
 import type { Draft, WorkspaceInfo } from "../store";
 import { UndoStackProvider, useUndoStack, Chip } from "../components/datagrid";
 import { useCreateTableModal } from "../lib/create-table-modal";
-import type { AiHint } from "../lib/use-ai-hint";
+import { useAiConfigured, type AiHint } from "../lib/use-ai-hint";
 import { ComboSelect, type ComboSelectHandle } from "../components/ComboSelect";
 import { useRefTableValuesPage, type ScanValueRow } from "../lib/use-ref-table-values-page";
 import { summarizeOutcomes, type CommitOutcome } from "../lib/commit-outcomes";
@@ -62,6 +62,9 @@ const KBD_HINTS: ReadonlyArray<readonly [string, string]> = [
   ["G", "suggest"],
   ["⌘↵", "publish"],
 ];
+/** "G suggest" only when there is an AI provider to ask. */
+const kbdHintsFor = (ai: boolean | null) =>
+  ai ? KBD_HINTS : KBD_HINTS.filter(([keys]) => keys !== "G");
 
 const attrEsc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 function flashRow(selector: string): void {
@@ -123,11 +126,12 @@ export function Triage() {
 
 function TriageInner() {
   const refTables = useRefTables();
-  const allDrafts = useDrafts();
+  const allDrafts = useDraftsByValue();
   const undo = useUndoStack();
   const wsInfo = useWorkspaceInfo();
   const canEdit = useCanEdit();
   const me = useCurrentUser();
+  const aiConfigured = useAiConfigured();
 
   // URL ?filter= and ?q= state — both round-trip.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -257,7 +261,7 @@ function TriageInner() {
   const stageMapCross = (refTableId: string, raw: string, label: string) => {
     const prev = allDrafts[dkey(refTableId, raw)];
     undo.push({
-      label: `match "${raw}" → ${label}`,
+      label: `map "${raw}" → ${label}`,
       surface: "Review",
       apply: () => saveDraft(refTableId, raw, "mapped", label, keyForLabelIn(refTableId, label)),
       inverse: () =>
@@ -293,8 +297,8 @@ function TriageInner() {
     flashRow(`[data-row-key="${attrEsc(`${refTableId}::${raw}`)}"]`);
     advanceCrossNext(refTableId, raw);
   };
-  // Re-stage a rejected draft: call saveDraft which clears rejected_reason/rejected_by
-  // on the server (the ON CONFLICT branch resets those columns to NULL).
+  // Restore a draft that was sent back: saveDraft clears rejected_reason/
+  // rejected_by on the server (the ON CONFLICT branch resets them to NULL).
   const restageCross = (refTableId: string, raw: string) => {
     const prev = allDrafts[dkey(refTableId, raw)];
     if (!prev || prev.status !== "rejected") return;
@@ -306,7 +310,7 @@ function TriageInner() {
         prev.targetLabel,
         prev.targetKey,
       ),
-    ).catch((err) => reportDraftError(`re-stage "${raw}"`, err));
+    ).catch((err) => reportDraftError(`restore "${raw}"`, err));
   };
   const discardCross = (refTableId: string, raw: string) => {
     const prev = allDrafts[dkey(refTableId, raw)];
@@ -336,7 +340,7 @@ function TriageInner() {
         const draft = allDrafts[dkey(activeDim.id, r.raw)];
         const rawStatus = draft ? draft.status : r.isMapped ? "mapped" : "new";
         // Rejected drafts are skipped for cursor advance — the row is visible and
-        // actionable (Re-stage / Discard), but not a "new" item to navigate through.
+        // actionable (Restore / Discard), but not a "new" item to navigate through.
         const status: RStatus = rawStatus === "rejected" ? "skipped" : rawStatus;
         if (status === "new") {
           setCursor({ refTableId: activeDim.id, raw: r.raw });
@@ -371,6 +375,7 @@ function TriageInner() {
             refTableName: g.refTableName,
             committed: res.committed,
             rowsRecovered: res.rowsRecovered,
+            warehouseSynced: res.warehouseSynced,
             error: null,
           });
         } catch (err) {
@@ -389,10 +394,14 @@ function TriageInner() {
         }
       }
       const summary = summarizeOutcomes(outcomes);
-      if (summary.ok) {
-        if (summary.committed > 0) toast(summary.message);
-      } else {
+      if (!summary.ok) {
         setCommitError(summary.message);
+      } else if (summary.warehouseFailed.length > 0) {
+        // Published, but the warehouse copy is stale — that has to be read,
+        // not left to the activity log.
+        setCommitError(summary.message);
+      } else if (summary.committed > 0) {
+        toast(summary.message);
       }
     } finally {
       setCommitting(false);
@@ -516,7 +525,7 @@ function TriageInner() {
                 </div>
 
                 <div className="ml-auto hidden shrink-0 items-center gap-2.5 lg:flex">
-                  {KBD_HINTS.map(([keys, label]) => (
+                  {kbdHintsFor(aiConfigured).map(([keys, label]) => (
                     <span key={label} className="flex items-center gap-1 text-ink-3">
                       <kbd className="rounded-sm border border-line bg-surface-2 px-1 py-0.5 font-mono text-[10px] leading-none text-ink-2">
                         {keys}
@@ -538,7 +547,11 @@ function TriageInner() {
               ) : toMap.length === 0 && awaitingCount === 0 && filter !== "mapped" ? (
                 // Nothing to map anywhere and nothing to approve — the settled state.
                 <div className="p-3">
-                  <EmptyState filter="new" onSwitchToNew={() => setFilter("new")} />
+                  <EmptyState
+                    filter="new"
+                    onSwitchToNew={() => setFilter("new")}
+                    onSwitchToMapped={activeDim ? () => setFilter("mapped") : undefined}
+                  />
                 </div>
               ) : activeDim ? (
                 <MapPane
@@ -601,8 +614,11 @@ function TriageInner() {
           open
           groups={preview}
           publishing={committing}
+          canDiscard={(d) => d.user.id === me?.id}
           onDiscardDraft={(d) => {
-            void discardDraft(d.refTableId, d.raw);
+            discardDraft(d.refTableId, d.raw).catch((err) =>
+              reportDraftError(`discard "${d.raw}"`, err),
+            );
             setPreview((p) => {
               const next =
                 p
@@ -626,7 +642,17 @@ function TriageInner() {
   );
 }
 
-function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: () => void }) {
+function EmptyState({
+  filter,
+  onSwitchToNew,
+  onSwitchToMapped,
+}: {
+  filter: Filter;
+  onSwitchToNew: () => void;
+  /** Present when there is a table to look at — the only way back to the
+   *  values already mapped once the queue is empty. */
+  onSwitchToMapped?: () => void;
+}) {
   const nav = useNavLinks();
   if (filter === "new")
     return (
@@ -634,9 +660,16 @@ function EmptyState({ filter, onSwitchToNew }: { filter: Filter; onSwitchToNew: 
         glyph="🎉"
         title="Nothing left to review."
         secondary={
-          <Link to={nav.tables} className="text-accent hover:underline">
-            Curate records in Tables
-          </Link>
+          <div className="flex flex-col items-center gap-2">
+            {onSwitchToMapped && (
+              <button onClick={onSwitchToMapped} className="text-accent hover:underline">
+                Review mapped values →
+              </button>
+            )}
+            <Link to={nav.tables} className="text-accent hover:underline">
+              Curate records in Tables
+            </Link>
+          </div>
         }
       />
     );
@@ -901,6 +934,7 @@ type OfferState =
   | { kind: "loading" }
   | { kind: "offer"; hint: AiHint }
   | { kind: "none" }
+  | { kind: "unavailable" }
   | { kind: "error" };
 
 interface SuggestHandle {
@@ -917,7 +951,13 @@ const SuggestOffer = forwardRef<
     setState({ kind: "loading" });
     try {
       const qs = new URLSearchParams({ refTableId, raw });
-      const res = await apiFetch(`/triage/ai-hint?${qs.toString()}`);
+      const res = await apiFetch(`/review/ai-hint?${qs.toString()}`);
+      // 503 means no AI provider is set up — retrying can never succeed, so say
+      // so once instead of offering "Try AI again" forever.
+      if (res.status === 503) {
+        setState({ kind: "unavailable" });
+        return;
+      }
       if (!res.ok) throw new Error(`${res.status}`);
       const hint = (await res.json()) as AiHint;
       setState(hint.suggestion ? { kind: "offer", hint } : { kind: "none" });
@@ -950,6 +990,14 @@ const SuggestOffer = forwardRef<
       <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-mono text-[11px] text-ink-3">
         <IconWand className="h-3.5 w-3.5 animate-pulse" />
         Thinking…
+      </span>
+    );
+  }
+
+  if (state.kind === "unavailable") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-1.5 py-1 font-mono text-[11px] text-ink-3">
+        AI suggestions aren’t set up for this workspace.
       </span>
     );
   }
@@ -1033,6 +1081,9 @@ export function RefTableSectionBody(p: RefTableSectionBodyProps) {
   const comboRefs = useRef<Map<string, ComboSelectHandle | null>>(new Map());
   const suggestRefs = useRef<Map<string, SuggestHandle | null>>(new Map());
   const me = useCurrentUser();
+  // Null while unknown — the row renders without the affordance until we know
+  // a suggestion is even possible.
+  const aiConfigured = useAiConfigured();
 
   const rowStatus = (
     r: ScanValueRow,
@@ -1074,7 +1125,7 @@ export function RefTableSectionBody(p: RefTableSectionBodyProps) {
     if (!plain) return;
     const k = e.key.toLowerCase();
     // Keyboard actions are blocked on rejected rows — the only valid actions
-    // there are Re-stage (button) and Discard (button).
+    // there are Restore (button) and Discard (button).
     const isRejected = p.drafts[dkey(p.refTable.id, raw)]?.status === "rejected";
     if (p.canEdit && k === "s" && !isRejected) {
       e.preventDefault();
@@ -1083,7 +1134,7 @@ export function RefTableSectionBody(p: RefTableSectionBodyProps) {
       // Open this row's record picker — choosing is the primary action.
       e.preventDefault();
       comboRefs.current.get(raw)?.open();
-    } else if (p.canEdit && k === "g" && !isRejected) {
+    } else if (p.canEdit && k === "g" && !isRejected && aiConfigured) {
       // Ask AI for a suggestion on this row — on demand, never automatic.
       e.preventDefault();
       suggestRefs.current.get(raw)?.suggest();
@@ -1199,7 +1250,7 @@ export function RefTableSectionBody(p: RefTableSectionBodyProps) {
                           p.onRestage(r.raw);
                         }}
                       >
-                        Re-stage
+                        Restore
                       </Button>
                     )
                   ) : status === "mapped" ? (
@@ -1220,7 +1271,7 @@ export function RefTableSectionBody(p: RefTableSectionBodyProps) {
                   ) : null}
                 </span>
               </div>
-              {status === "new" && p.canEdit && (
+              {status === "new" && p.canEdit && aiConfigured && (
                 <div className="pl-1 pt-0.5">
                   <SuggestOffer
                     ref={(h) => {
@@ -1290,6 +1341,7 @@ interface FooterProps {
 }
 
 function CrossRefTableFooter(p: FooterProps) {
+  const me = useCurrentUser();
   const [review, setReview] = useState(false);
   const stagedCount = p.stagedDrafts.length;
   const grouped = useMemo(() => {
@@ -1362,7 +1414,7 @@ function CrossRefTableFooter(p: FooterProps) {
                     <ul className="mt-1 divide-y divide-line">
                       {tg.drafts.map((d) => (
                         <li
-                          key={`${d.refTableId}::${d.raw}`}
+                          key={`${d.refTableId}::${d.raw}::${d.user.id}`}
                           className="zz-rise flex items-center gap-3 py-1 pl-5 font-mono text-[11px]"
                           style={{ animationDuration: "var(--dur-slide)" }}
                         >
@@ -1402,7 +1454,7 @@ function CrossRefTableFooter(p: FooterProps) {
                             </span>
                           )}
                           <span className="shrink-0 text-ink-2 tabular-nums">{d.at}</span>
-                          {p.canEdit && (
+                          {p.canEdit && d.user.id === me?.id && (
                             <button
                               type="button"
                               onClick={() => p.discard(d.refTableId, d.raw)}

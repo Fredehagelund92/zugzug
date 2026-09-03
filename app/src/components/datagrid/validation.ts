@@ -22,6 +22,9 @@ export function valueShapeError(
     if (v?.max != null && n > Number(v.max)) return `Must be ${v.max} or less.`;
   }
   if (config.type === "date") {
+    // Shape first: text the server can't read as a date used to reach it and
+    // come back as a generic save failure.
+    if (isNaN(new Date(raw).getTime())) return "Enter a date as YYYY-MM-DD.";
     if (v?.min != null && raw < String(v.min)) return `Must be on or after ${v.min}.`;
     if (v?.max != null && raw > String(v.max)) return `Must be on or before ${v.max}.`;
   }

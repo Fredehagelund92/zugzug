@@ -718,10 +718,15 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
   // `undefined` to mean "skip this cell" (unparseable / not a valid option).
   const coerceForColumn = useCallback(
     (rawVal: string, col: (typeof orderedVisible)[number]): unknown => {
+      // An empty source cell clears the target; text the column can't read is
+      // skipped, the same way an unmatchable SELECT option is — pasting garbage
+      // must never wipe a value that was already there.
+      const blank = rawVal.trim() === "";
       switch (col.config.type) {
         case "number": {
+          if (blank) return null;
           const n = Number(rawVal);
-          return isNaN(n) ? null : n;
+          return isNaN(n) ? undefined : n;
         }
         case "boolean":
           return rawVal.toLowerCase() === "true";
@@ -731,13 +736,16 @@ export function DataGrid<Row>(props: DataGridProps<Row>) {
           return rawVal;
         }
         case "rating": {
+          if (blank) return null;
           const n = parseInt(rawVal, 10);
-          return isNaN(n) ? null : n;
+          return isNaN(n) ? undefined : n;
         }
+        case "date":
+          if (blank) return null;
+          return isNaN(new Date(rawVal.trim()).getTime()) ? undefined : rawVal;
         case "text":
         case "url":
         case "email":
-        case "date":
         case "linked":
           return rawVal;
         default:

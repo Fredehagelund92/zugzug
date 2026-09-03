@@ -6,11 +6,32 @@
  * scripts/admin.ts also calls in here for PR 1 bootstrap. */
 
 import { pgGet, pgAll, pgRun, pgTxRaw } from "./pg.ts";
+import { env } from "./env.ts";
 import { AppError } from "./errors.ts";
 import { addWarehouseDatabase } from "./repo-warehouse.ts";
-import { recordSlugAlias } from "./slug-alias.ts";
+import { recordSlugAlias, clearSlugAlias } from "./slug-alias.ts";
 
 const TENANT_ID_RE = /^[a-z][a-z0-9_]{0,20}$/;
+/** TENANT_ID_RE in the words people read in an error (CONTEXT.md §Language). */
+const ID_RULE =
+  "start with a letter and use only lowercase letters, numbers or underscores (21 characters max)";
+
+/** Slugs the app's own URL space owns. `admin` is a live collision: `/app/admin/*`
+ *  is the super-admin shell, and apiFetch rewrites a workspace slugged `admin` to
+ *  `/api/admin/...`, so every fetch 403s for ordinary members. The rest are the
+ *  other top-level names (`/login`, `/signup`, `/design` routes plus the `/api`
+ *  prefix) — reserved defensively so they can never become collisions. */
+// Only "admin" can actually be shadowed: workspaces live at /app/<slug>, so the
+// top-level /login, /signup and /design routes can never collide with one, and
+// apiFetch rewrites /app/admin/* to /api/admin/* — which 403s every request a
+// member of such a workspace makes.
+const RESERVED_SLUGS = new Set(["admin"]);
+
+function assertSlugAllowed(slug: string): void {
+  if (RESERVED_SLUGS.has(slug)) {
+    throw new AppError("VALIDATION_FAILED", `slug '${slug}' is reserved`, 400);
+  }
+}
 
 export const WORKSPACE_COLORS = [
   "#6366f1",
@@ -60,21 +81,14 @@ export async function provisionTenant(opts: {
   const color = opts.color ?? null;
 
   if (!TENANT_ID_RE.test(id)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `tenant id '${id}' must match ${TENANT_ID_RE.source}`,
-      400,
-    );
+    throw new AppError("VALIDATION_FAILED", `workspace id '${id}' must ${ID_RULE}`, 400);
   }
   if (!TENANT_ID_RE.test(slug)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `tenant slug '${slug}' must match ${TENANT_ID_RE.source}`,
-      400,
-    );
+    throw new AppError("VALIDATION_FAILED", `workspace slug '${slug}' must ${ID_RULE}`, 400);
   }
+  assertSlugAllowed(slug);
   if (!label) {
-    throw new AppError("VALIDATION_FAILED", `tenant label cannot be empty`, 400);
+    throw new AppError("VALIDATION_FAILED", `workspace name cannot be empty`, 400);
   }
 
   if (color !== null) assertValidColor(color);
@@ -91,8 +105,16 @@ export async function provisionTenant(opts: {
     [id, slug, label, color],
   );
   if (!row) {
-    throw new AppError("ALREADY_EXISTS", `tenant '${id}' already exists (id or slug taken)`, 409);
+    throw new AppError(
+      "ALREADY_EXISTS",
+      `workspace '${id}' already exists (id or slug taken)`,
+      409,
+    );
   }
+
+  // A live workspace outranks another workspace's stale redirect: drop any
+  // alias sitting on the slug we just claimed.
+  await clearSlugAlias(slug);
 
   // Warehouse provisioning. Compensating-DELETE on failure: the repo-warehouse
   // writers call pgRun directly (no pgContext.tx threading), so we can't share
@@ -130,7 +152,7 @@ export async function provisionTenant(opts: {
  *  soft-deleted (deleted_at = now()). Refuses to act on the 'default' tenant. */
 export async function teardownTenant(tenantId: string): Promise<void> {
   if (tenantId === "default") {
-    throw new AppError("VALIDATION_FAILED", "cannot teardown the default tenant", 400);
+    throw new AppError("VALIDATION_FAILED", "cannot delete the default workspace", 400);
   }
   await pgTxRaw(async (tx) => {
     // Capture dynamic dim_/map_ table names BEFORE deleting registry rows.
@@ -318,6 +340,69 @@ export async function createInvite(
   );
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** RFC 5321's cap on an address. Checked BEFORE EMAIL_RE: that pattern's last
+ *  two groups both admit '.', so it backtracks over every dot in the domain —
+ *  quadratic, and a 40k-character address blocks the event loop for seconds. */
+const EMAIL_MAX = 254;
+
+/** What adding an email to a workspace actually did. */
+export type AddMemberOutcome = { kind: "member"; userId: string } | { kind: "invite" };
+
+/** Adds `email` to a workspace from the Members screen.
+ *
+ *  An address that already has an account becomes a member on the spot: an
+ *  invite only turns into a membership inside login/signup (acceptInvitesFor),
+ *  and GET /api/me/memberships reads tenant_member, so an already-signed-in
+ *  user would otherwise never see the workspace until they signed out and back
+ *  in. Addresses with no account yet still get a pending invite.
+ *
+ *  Rejects what the Members screen already has copy for: a malformed or
+ *  out-of-domain address (400) and someone already on the team or already
+ *  invited (409). */
+export async function addMemberOrInvite(
+  tenantId: string,
+  email: string,
+  role: "admin" | "editor" | "viewer",
+  invitedBy: string,
+): Promise<AddMemberOutcome> {
+  const normalized = email.trim().toLowerCase();
+  if (normalized.length > EMAIL_MAX || !EMAIL_RE.test(normalized)) {
+    throw new AppError("VALIDATION_FAILED", `'${email}' is not an email address`, 400);
+  }
+  if (env.allowedDomain && normalized.split("@")[1] !== env.allowedDomain) {
+    throw new AppError("VALIDATION_FAILED", `must be a @${env.allowedDomain} address`, 400);
+  }
+
+  const user = await pgGet<{ id: string }>(
+    `SELECT id FROM "zugzug_app"."users" WHERE lower(email) = $1`,
+    [normalized],
+  );
+  if (user && (await memberRole(tenantId, user.id)) !== null) {
+    throw new AppError("ALREADY_EXISTS", `${normalized} is already on the team`, 409);
+  }
+  const pending = await pgGet<{ email: string }>(
+    `SELECT email FROM "zugzug_app"."tenant_invite"
+      WHERE tenant_id = $1 AND lower(email) = $2`,
+    [tenantId, normalized],
+  );
+  if (pending) {
+    throw new AppError("ALREADY_EXISTS", `${normalized} is already invited`, 409);
+  }
+
+  if (!user) {
+    await createInvite(tenantId, normalized, role, invitedBy);
+    return { kind: "invite" };
+  }
+  await pgRun(
+    `INSERT INTO "zugzug_app"."tenant_member" (tenant_id, user_id, role, created_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (tenant_id, user_id) DO NOTHING`,
+    [tenantId, user.id, role],
+  );
+  return { kind: "member", userId: user.id };
+}
+
 export async function revokeInvite(tenantId: string, email: string): Promise<void> {
   await pgRun(
     `DELETE FROM "zugzug_app"."tenant_invite" WHERE tenant_id = $1 AND lower(email) = lower($2)`,
@@ -394,12 +479,9 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
     throw new AppError("FORBIDDEN", "cannot change slug of the default workspace", 403);
   }
   if (!TENANT_ID_RE.test(next)) {
-    throw new AppError(
-      "VALIDATION_FAILED",
-      `slug '${next}' must match ${TENANT_ID_RE.source}`,
-      400,
-    );
+    throw new AppError("VALIDATION_FAILED", `slug '${next}' must ${ID_RULE}`, 400);
   }
+  assertSlugAllowed(next);
   if (next === currentSlug) return;
   const existing = await pgGet<{ id: string }>(
     `SELECT id FROM "zugzug_app"."tenant" WHERE slug = $1 AND deleted_at IS NULL`,
@@ -413,13 +495,16 @@ export async function updateTenantSlug(currentSlug: string, newSlug: string): Pr
     [currentSlug],
   );
   if (!current) {
-    throw new AppError("NOT_FOUND", `tenant '${currentSlug}' not found`, 404);
+    throw new AppError("NOT_FOUND", `workspace '${currentSlug}' not found`, 404);
   }
   // PR2 Task 12: persists old slug for 30-day redirect grace window.
   // Fired before the UPDATE so an UPDATE failure leaves a benign alias row
   // pointing at the unchanged slug. Idempotent on old_slug.
   await recordSlugAlias(currentSlug, current.id);
   await pgRun(`UPDATE "zugzug_app"."tenant" SET slug = $1 WHERE slug = $2`, [next, currentSlug]);
+  // Claiming a slug drops any alias still redirecting away from it, so the
+  // workspace that now owns it can never be shadowed by an older rename.
+  await clearSlugAlias(next);
 }
 
 /**

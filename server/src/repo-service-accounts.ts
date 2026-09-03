@@ -24,16 +24,18 @@ export interface CreateResult {
   value: string; // shown once; recovery requires revoke + reissue
 }
 
+/** Wire shape. snake_case like the rest of the v1 surface — the client type
+ *  `ServiceAccount` in app/src/lib/integrations-api.ts declares exactly these
+ *  keys. revoked_at is not carried: the list only ever returns live rows. */
 export interface ServiceAccountSummary {
   id: string;
   name: string;
-  tokenPrefix: string;
+  token_prefix: string;
   scopes: string[];
-  createdAt: string;
-  createdBy: string;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-  revokedAt: string | null;
+  created_at: string;
+  created_by: string;
+  last_used_at: string | null;
+  expires_at: string | null;
 }
 
 function generateTokenValue(): string {
@@ -78,39 +80,17 @@ export async function createServiceAccount(input: CreateInput): Promise<CreateRe
 }
 
 export async function listServiceAccounts(tenantId: string): Promise<ServiceAccountSummary[]> {
-  const rows = await pgAll<{
-    id: string;
-    name: string;
-    token_prefix: string;
-    scopes: string[];
-    created_at: string;
-    created_by: string;
-    last_used_at: string | null;
-    expires_at: string | null;
-    revoked_at: string | null;
-  }>(
+  return await pgAll<ServiceAccountSummary>(
     `SELECT id, name, token_prefix, scopes,
             created_at::text AS created_at,
             created_by,
             last_used_at::text AS last_used_at,
-            expires_at::text AS expires_at,
-            revoked_at::text AS revoked_at
+            expires_at::text AS expires_at
        FROM ${pg("service_account")}
       WHERE tenant_id = $1 AND revoked_at IS NULL
       ORDER BY created_at DESC`,
     [tenantId],
   );
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    tokenPrefix: r.token_prefix,
-    scopes: r.scopes,
-    createdAt: r.created_at,
-    createdBy: r.created_by,
-    lastUsedAt: r.last_used_at,
-    expiresAt: r.expires_at,
-    revokedAt: r.revoked_at,
-  }));
 }
 
 /** Returns true if the row matched the tenant AND was newly revoked. */

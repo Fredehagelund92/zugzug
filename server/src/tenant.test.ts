@@ -55,6 +55,10 @@ describe("updateTenantSlug — alias hook", () => {
     await pgRun(`DELETE FROM "zugzug_app"."tenant" WHERE id = $1`, [TID]).catch(() => {});
   });
 
+  it("rejects a rename onto a reserved slug", async () => {
+    await expect(updateTenantSlug(OLD, "admin")).rejects.toThrow(/reserved/i);
+  });
+
   it("records old slug → tenant alias when slug changes", async () => {
     await updateTenantSlug(OLD, NEW);
     const aliased = await lookupAliasedSlug(OLD);

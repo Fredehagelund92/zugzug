@@ -282,6 +282,10 @@ export interface RefTableMeta {
  *  warehouse isn't attached); counts are 0 when empty/unreachable. Always returned
  *  so the UI can show the wiring even before any data lands. */
 export interface SourceInfo {
+  /** warehouse_database.id the column was registered against. */
+  databaseId: string;
+  /** Its database_name — two databases can hold the same schema.table.column. */
+  databaseName: string;
   table: string;
   column: string;
   refTable: string;
@@ -291,6 +295,9 @@ export interface SourceInfo {
   values: number;
   unmapped: number;
   scanned: boolean;
+  /** Why the last scan failed, or null when it reached the warehouse. A failed
+   *  scan says nothing about whether the column exists. */
+  scanError: string | null;
   schedule?: string | null; // null | 'hourly' | 'daily'
   scannedAt?: string | null; // ISO timestamp of last scan
 }
@@ -342,6 +349,10 @@ export interface Draft {
   targetKey: string | null;
   user: User;
   at: string;
+  /** ISO creation timestamp. The draft key is (table, value, author), so the
+   *  client needs the real ordering to reproduce the newest-wins fold publish
+   *  applies — `at` is a display string ("5m ago") and can't be sorted. */
+  createdAt: string;
   source: "user" | "ai";
   confidence: "high" | "medium" | "low" | null;
   reasoning: string | null;
@@ -392,6 +403,7 @@ export interface Preferences {
   suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
   requireSecondPublisher: boolean;
+  autoPublishEnabled: boolean;
 }
 
 /* ---- shared helpers ---- */
@@ -436,13 +448,19 @@ export function refOf(s: { databaseName: string; schemaName: string; tableName: 
 }
 
 /** Resolve an adapter Ref for a bare 'schema.table' string by looking up the
- *  warehouse catalog from any reference_table_source row that already registered
- *  this (refTable, schema, table). Used for nameTable / topUnmapped / similar where
- *  the caller has a stored string but no databaseId in hand. */
+ *  warehouse catalog from a reference_table_source row that already registered
+ *  this (refTable, schema, table). Used for nameTable / topUnmapped / similar
+ *  where the caller has a stored string.
+ *
+ *  Pass databaseId whenever the caller knows it: the same schema.table can be
+ *  registered against two databases, and picking the wrong one reads the wrong
+ *  warehouse. Without it the lowest database_id wins — arbitrary but stable, so
+ *  the answer does not change between identical calls. */
 export async function refForRegisteredTable(
   refTableId: string,
   stored: string,
   tenantId: string,
+  databaseId?: string,
 ): Promise<Ref | null> {
   const parts = stored.split(".");
   if (parts.length !== 2) return null;
@@ -451,9 +469,12 @@ export async function refForRegisteredTable(
        FROM ${pg("reference_table_source")} s
        JOIN ${pg("warehouse_database")} wd ON wd.id = s.database_id
       WHERE s.tenant_id = $1 AND s.reference_table_id = $2
-        AND s.schema_name = $3 AND s.table_name = $4
+        AND s.schema_name = $3 AND s.table_name = $4${databaseId ? ` AND s.database_id = $5` : ""}
+      ORDER BY s.database_id
       LIMIT 1`,
-    [tenantId, refTableId, parts[0], parts[1]],
+    databaseId
+      ? [tenantId, refTableId, parts[0], parts[1], databaseId]
+      : [tenantId, refTableId, parts[0], parts[1]],
   );
   return row ? { catalog: row.catalog, schema: parts[0], table: parts[1] } : null;
 }

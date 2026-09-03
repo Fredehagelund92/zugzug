@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { authFetch } from "../api";
-import { setMemberships } from "../store";
+import { setMemberships, useMemberships } from "../store";
 import { Mark } from "./Mark";
 import { Button } from "./Button";
 import { NoWorkspaceLanding } from "./NoWorkspaceLanding";
+import { LAST_SLUG_KEY } from "../lib/tenant-storage";
+import { loginUrlWithReturnTo } from "../lib/return-to";
 import type { Membership } from "./TenantLayout";
 
 export interface BootData {
@@ -15,22 +17,36 @@ export interface BootData {
 type State =
   | { kind: "loading" }
   | { kind: "ready"; data: BootData }
-  | { kind: "no-workspace" }
   | { kind: "error"; detail: string };
 
-const LAST_SLUG_KEY = "zugzug:last-tenant-slug";
+/** Where "/app" lands. Reads memberships live from the store, so a leave,
+ *  delete or rename that bounced the user here can never send them straight
+ *  back into a workspace they no longer belong to (the old snapshot did, and
+ *  the two <Navigate>s ping-ponged until React gave up). Order: the workspace
+ *  last used if it is still a membership, else the first membership, else the
+ *  super-admin shell, else the no-workspace landing. */
+export function AppIndex({ isSuperAdmin }: { isSuperAdmin: boolean }) {
+  const memberships = useMemberships();
+  const last = localStorage.getItem(LAST_SLUG_KEY);
+  const slug =
+    memberships.find((m) => m.slug === last)?.slug ??
+    memberships[0]?.slug ??
+    (isSuperAdmin ? "admin" : null);
+  if (!slug) return <NoWorkspaceLanding />;
+  return <Navigate to={`/app/${slug}`} replace />;
+}
 
 export function BootGate({ children }: { children: (data: BootData) => ReactNode }) {
   const [state, setState] = useState<State>({ kind: "loading" });
-  const navigate = useNavigate();
-  const location = useLocation();
 
   const boot = () => {
     setState({ kind: "loading" });
     (async () => {
       const meRes = await authFetch("/auth/me");
       if (meRes.status === 401) {
-        window.location.replace("/login");
+        // Carry the page they asked for, so signing in lands them there and
+        // not on the default workspace.
+        window.location.replace(loginUrlWithReturnTo(window.location));
         return;
       }
       if (!meRes.ok) throw new Error(`API unreachable (${meRes.status})`);
@@ -39,25 +55,11 @@ export function BootGate({ children }: { children: (data: BootData) => ReactNode
       if (!memRes.ok) throw new Error(`memberships ${memRes.status}`);
       const body = (await memRes.json()) as BootData;
 
-      // Seed the memberships slice so TenantLayout / WorkspaceSwitcher and any
-      // other consumer can react to live updates (rename, leave, delete) via
-      // invalidate.memberships() without a prop refresh.
+      // Seed the memberships slice. Every routing decision downstream reads it
+      // live (AppIndex, TenantLayout, AppShell), so invalidate.memberships()
+      // after a leave/delete/rename re-routes instead of stranding the app on
+      // a boot-time snapshot. "/" and "/app" resolve through AppIndex.
       setMemberships(body.memberships);
-
-      if (body.memberships.length === 0 && !body.isSuperAdmin) {
-        setState({ kind: "no-workspace" });
-        return;
-      }
-
-      // Redirect from / or /app to the resolved slug.
-      if (location.pathname === "/" || location.pathname === "/app") {
-        const last = localStorage.getItem(LAST_SLUG_KEY);
-        const preferred =
-          (last && body.memberships.find((m) => m.slug === last)?.slug) ??
-          body.memberships[0]?.slug ??
-          (body.isSuperAdmin ? "admin" : null);
-        if (preferred) navigate(`/app/${preferred}`, { replace: true });
-      }
 
       setState({ kind: "ready", data: body });
     })().catch((e: unknown) =>
@@ -65,10 +67,9 @@ export function BootGate({ children }: { children: (data: BootData) => ReactNode
     );
   };
 
-  useEffect(boot, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(boot, []);
 
   if (state.kind === "ready") return <>{children(state.data)}</>;
-  if (state.kind === "no-workspace") return <NoWorkspaceLanding />;
 
   if (state.kind === "error") {
     return (

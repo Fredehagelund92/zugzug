@@ -78,8 +78,9 @@ export function Sources() {
 
   const scanAction = useAsyncAction(async () => {
     try {
+      // scanSources() returns the number of source COLUMNS it scanned, not values.
       const n = await scanSources();
-      toast(`Scanned ${n} value${n === 1 ? "" : "s"}.`);
+      toast(`Scanned ${n} source${n === 1 ? "" : "s"}.`);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't scan.", "error");
     }
@@ -113,7 +114,9 @@ export function Sources() {
 
   const deriveAction = useAsyncAction(async (s: SourceInfo) => {
     try {
-      const result = await deriveRecord(s.refTableId, s.table, s.column);
+      const result = await deriveRecord(s.refTableId, s.table, s.column, undefined, {
+        databaseId: s.databaseId,
+      });
       toast(`Re-scanned ${s.table}.${s.column} · ${outcomeText(result)}`);
     } catch (e) {
       toast(
@@ -134,8 +137,13 @@ export function Sources() {
     )
       return;
     try {
-      await removeSource(s.refTableId, s.table, s.column);
-      toast(`Removed ${s.table}.${s.column}.`);
+      const removed = await removeSource(s.refTableId, s.table, s.column, s.databaseId);
+      toast(
+        removed
+          ? `Removed ${s.table}.${s.column}.`
+          : `${s.table}.${s.column} was already gone — nothing to remove.`,
+        removed ? "success" : "error",
+      );
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't remove source.", "error");
     }
@@ -155,7 +163,10 @@ export function Sources() {
       }
     }
     const systems = new Set(sources.map((s) => s.table.split(".")[0])).size;
-    return { columns: sources.length, systems, unmapped, worst };
+    // With one database the name adds nothing; with two it's the only thing
+    // telling two same-named columns apart.
+    const multiDb = new Set(sources.map((s) => s.databaseId)).size > 1;
+    return { columns: sources.length, systems, unmapped, worst, multiDb };
   }, [sources]);
 
   /* ---- group by schema ---- */
@@ -297,6 +308,7 @@ export function Sources() {
                   onToggle={() => toggleSchema(g.schema)}
                   canEdit={canEdit}
                   busy={deriveAction.isPending}
+                  showDatabase={agg.multiDb}
                   mapHref={(r) => nav.table(r.refTableId, "match")}
                   onDerive={(r) => void deriveAction.run(r)}
                   onRemove={(r) => void removeAction.run(r)}
@@ -329,6 +341,7 @@ function SchemaSection({
   onToggle,
   canEdit,
   busy,
+  showDatabase,
   mapHref,
   onDerive,
   onRemove,
@@ -338,6 +351,7 @@ function SchemaSection({
   onToggle: () => void;
   canEdit?: boolean;
   busy?: boolean;
+  showDatabase?: boolean;
   mapHref: (r: SourceInfo) => string;
   onDerive: (r: SourceInfo) => void;
   onRemove: (r: SourceInfo) => void;
@@ -375,11 +389,12 @@ function SchemaSection({
         <div>
           {group.columns.map((r) => (
             <SourceRow
-              key={`${r.refTableId}::${r.table}::${r.column}`}
+              key={`${r.refTableId}::${r.databaseId}::${r.table}::${r.column}`}
               row={r}
               mapValuesHref={mapHref(r)}
               canEdit={canEdit}
               busy={busy}
+              showDatabase={showDatabase}
               onDerive={() => onDerive(r)}
               onRemove={() => onRemove(r)}
             />

@@ -1,4 +1,7 @@
 import { apiFetch } from "../api";
+import { WEBHOOK_WIRE_KEYS, SERVICE_ACCOUNT_WIRE_KEYS } from "./integrations-wire-keys";
+
+export { WEBHOOK_WIRE_KEYS, SERVICE_ACCOUNT_WIRE_KEYS };
 
 export class IntegrationsApiError extends Error {
   constructor(
@@ -117,8 +120,10 @@ export interface Webhook {
   paused_at: string | null;
   disabled_at: string | null;
   disabled_reason: string | null;
-  last_delivery_at?: string | null;
-  last_delivery_status?: number | null;
+  last_delivery_at: string | null;
+  last_delivery_status: number | null;
+  /** Deliveries waiting to be sent — non-zero while the webhook is paused. */
+  queued_count: number;
 }
 
 export interface WebhookDelivery {
@@ -153,6 +158,18 @@ export interface ServiceAccount {
   last_used_at: string | null;
   expires_at: string | null;
 }
+
+type SameKeys<A extends string, B extends string> = [Exclude<A, B> | Exclude<B, A>] extends [never]
+  ? true
+  : never;
+
+/** Compile-time proof that integrations-wire-keys.ts names exactly the keys
+ *  these interfaces declare — `true` stops assigning the moment either side
+ *  gains or loses a field, which is how the route test stays truthful. */
+export const WIRE_KEYS_IN_SYNC: [
+  SameKeys<keyof Webhook, (typeof WEBHOOK_WIRE_KEYS)[number]>,
+  SameKeys<keyof ServiceAccount, (typeof SERVICE_ACCOUNT_WIRE_KEYS)[number]>,
+] = [true, true];
 
 export interface RefTableSummary {
   slug: string;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { createHmac } from "node:crypto";
-import { signPayload, parseSignatureHeader } from "./webhook-signing.ts";
+import { signPayload, signPayloadMulti, parseSignatureHeader } from "./webhook-signing.ts";
 
 const SECRET = "whsec_b8K3kP9mQ2vN7L4xR8jH3sT5uW8yA1zE6cD9fG2J";
 
@@ -34,11 +34,37 @@ describe("parseSignatureHeader", () => {
   it("parses valid header", () => {
     const header = "t=1700000000,kid=current,v1=sha256=abc";
     const parts = parseSignatureHeader(header);
-    expect(parts).toEqual({ t: 1700000000, kid: "current", v1: "abc" });
+    expect(parts).toEqual({
+      t: 1700000000,
+      kid: "current",
+      v1: "abc",
+      entries: [{ kid: "current", v1: "abc" }],
+    });
   });
   it("rejects malformed header", () => {
     expect(parseSignatureHeader("garbage")).toBeNull();
     expect(parseSignatureHeader("")).toBeNull();
     expect(parseSignatureHeader("t=,kid=current,v1=sha256=abc")).toBeNull();
+  });
+  it("keeps every signature when a rotation puts two keys in the header", () => {
+    const header = signPayloadMulti(
+      "body",
+      [
+        { kid: "current", secret: "new-secret" },
+        { kid: "previous", secret: "old-secret" },
+      ],
+      1700000000,
+    );
+    const parts = parseSignatureHeader(header)!;
+    expect(parts.t).toBe(1700000000);
+    expect(parts.entries.map((e) => e.kid)).toEqual(["current", "previous"]);
+    expect(parts.entries[0]!.v1).not.toBe(parts.entries[1]!.v1);
+    // The first pair is still what the single-signature accessors report.
+    expect(parts.kid).toBe("current");
+    expect(parts.v1).toBe(parts.entries[0]!.v1);
+    // Each digest is the plain single-key signature for its own secret.
+    expect(parts.entries[1]!.v1).toBe(
+      parseSignatureHeader(signPayload("body", "old-secret", "previous", 1700000000))!.v1,
+    );
   });
 });

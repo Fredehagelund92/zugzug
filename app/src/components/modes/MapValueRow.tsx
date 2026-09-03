@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { Cluster } from "../../lib/use-ref-table-clusters";
 import type { MappingRefTable } from "../../data";
 import { ComboSelect, type ComboSelectHandle } from "../ComboSelect";
-import { saveDraft, discardDraft, useDrafts, useCanEdit, slug, dkey } from "../../store";
+import { saveDraft, discardDraft, useDraftsByValue, useCanEdit, slug, dkey } from "../../store";
 import { recordKeyByLabel, suggestRecordLabel } from "../../lib/map-value-helpers";
 import { cx } from "../../lib/cx";
 
@@ -28,7 +28,7 @@ export function MapValueRow({
   onFocus,
   comboRef,
 }: MapValueRowProps) {
-  const drafts = useDrafts();
+  const drafts = useDraftsByValue();
   const canEdit = useCanEdit();
   const [expanded, setExpanded] = useState(false);
 

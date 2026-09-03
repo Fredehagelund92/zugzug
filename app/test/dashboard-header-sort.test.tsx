@@ -140,6 +140,17 @@ function renderDashboard() {
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
+describe("Dashboard header counts", () => {
+  test("the map-table total is labelled mappings, not records", () => {
+    // rows = 100 + 50 + 75 map rows; every table has zero approved records.
+    // Calling that "225 records" contradicted the Records column on the same
+    // page (CONTEXT.md: a record is an approved row, a mapping is the link).
+    const { container } = renderDashboard();
+    expect(container.textContent).toContain("225 mappings");
+    expect(container.textContent).not.toContain("225 records");
+  });
+});
+
 describe("Dashboard header sorting", () => {
   test("defaults to In review descending and re-sorts when a header is clicked", async () => {
     renderDashboard();

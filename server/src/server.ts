@@ -7,7 +7,7 @@ import { initSentry, captureError, flushSentry } from "./observability.ts";
 import type { NumberFormat, GridLayoutConfig, OptionDef, PaletteName } from "./repo-shared.ts";
 import type { ImportRow } from "./repo-record.ts";
 import { rebalanceRefTablePositions } from "./repo-record.ts";
-import { publishSummaryFor } from "./repo-drafts.ts";
+import { publishSummaryFor, type DraftSelector } from "./repo-drafts.ts";
 import { refTableMeta } from "./repo-shared.ts";
 import {
   getSessionUser,
@@ -17,6 +17,7 @@ import {
   handleDevLogin,
   canMutate,
   requireAdmin,
+  capabilitiesFor,
   updateUserName,
   listUsers,
   setSuperAdmin,
@@ -46,7 +47,7 @@ import {
   listMembershipsForUser,
   listMembersForTenant,
   listInvitesForTenant,
-  createInvite,
+  addMemberOrInvite,
   revokeInvite,
   setMemberRole,
   countAdmins,
@@ -56,6 +57,7 @@ import {
   updateTenantSlug,
   leaveTenant,
 } from "./tenant.ts";
+import { lookupAliasedSlug } from "./slug-alias.ts";
 import { appendAuditAs } from "./repo-meta.ts";
 import { pgRun } from "./pg.ts";
 import { pg } from "./env.ts";
@@ -63,7 +65,7 @@ import type { ServerWebSocket } from "bun";
 
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
 import { checkHealth } from "./health.ts"; // used by the /api/health/connections route below
-import { generateSuggestion, AINotEnabledError } from "./suggestion.ts";
+import { generateSuggestion, AINotEnabledError, isAIConfigured } from "./suggestion.ts";
 import {
   InvalidAPIKeyError,
   AIProviderError,
@@ -86,6 +88,23 @@ const json = (data: unknown, status = 200) =>
 const noContent = () => new Response(null, { status: 204, headers: corsHeaders });
 const err = (e: unknown, status = 500) =>
   json({ error: e instanceof Error ? e.message : String(e) }, status);
+
+/** Parse a draft selection from a request body. Accepts bare source values
+ *  ("publish this value, whichever draft is newest" — what the publish footer
+ *  sends) and {raw, userId} objects ("exactly this person's draft" — what the
+ *  Approve inbox sends, where a row per author is on screen). Returns null when
+ *  the field is absent or not an array. */
+function draftSelectors(v: unknown): DraftSelector[] | null {
+  if (!Array.isArray(v)) return null;
+  return v.map((k) =>
+    typeof k === "string"
+      ? k
+      : {
+          raw: String((k as { raw?: unknown }).raw ?? ""),
+          userId: ((k as { userId?: unknown }).userId as string | undefined) ?? null,
+        },
+  );
+}
 
 /** Returns a 403 Response if the role cannot perform op; null otherwise.
  * Super-admin short-circuits to allowed per the 2026-06-13 settings spec —
@@ -201,9 +220,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       return handleOidcCallback(req);
     }
 
-    // Dev bypass — local testing only
-    if (seg[2] === "dev" && method === "GET") {
+    // Dev bypass — local testing only. GET only reports whether the operator
+    // enabled it (no session, no cookie — the Login page probes it on render);
+    // POST is the side-effecting login.
+    if (seg[2] === "dev" && (method === "GET" || method === "POST")) {
       if (!env.devBypassAuth) return json({ error: "not found" }, 404);
+      if (method === "GET") return json({ enabled: true });
       return handleDevLogin();
     }
 
@@ -233,11 +255,15 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
   // GET /api/me/memberships — list workspaces this user can enter + super-admin flag.
   if (pathname === "/api/me/memberships" && method === "GET") {
     const memberships = await listMembershipsForUser(sessionUser.id);
+    // `capabilities` is the role→capability matrix from auth.ts, resolved for
+    // this caller. The client gates its controls on it (app/src/lib/permissions.ts)
+    // so an enabled control is one the server will accept.
     let workspaces: {
       slug: string;
       label: string;
       role: "admin" | "editor" | "viewer";
       color: string | null;
+      capabilities: Operation[];
     }[];
     if (sessionUser.isSuperAdmin) {
       const allTenants = await listTenants();
@@ -247,6 +273,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         label: t.label,
         role: memberMap.get(t.id) ?? "admin",
         color: t.color ?? null,
+        capabilities: capabilitiesFor(memberMap.get(t.id) ?? "admin", true),
       }));
     } else {
       workspaces = memberships.map((m) => ({
@@ -254,9 +281,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         label: m.tenant.label,
         role: m.role,
         color: m.tenant.color ?? null,
+        capabilities: capabilitiesFor(m.role),
       }));
     }
     return json({ isSuperAdmin: sessionUser.isSuperAdmin, memberships: workspaces });
+  }
+
+  // GET /api/me/slug-alias/:slug — resolve a workspace address that was renamed
+  // within the grace window to its current one, so an old bookmark or shared
+  // link lands in the right workspace instead of bouncing to another. A live
+  // workspace on that address wins, and we only answer for workspaces the
+  // caller can actually enter.
+  if (seg[1] === "me" && seg[2] === "slug-alias" && seg.length === 4 && method === "GET") {
+    const oldSlug = decodeURIComponent(seg[3]!);
+    const alias = await lookupAliasedSlug(oldSlug);
+    if (!alias || (await tenantBySlug(oldSlug))) return json({ error: "not_found" }, 404);
+    if (!sessionUser.isSuperAdmin && (await memberRole(alias.tenantId, sessionUser.id)) === null) {
+      return json({ error: "not_found" }, 404);
+    }
+    return json({ slug: alias.currentSlug });
   }
 
   // Admin block — hoisted OUT of the pgContext.run wrapper because admin routes
@@ -271,17 +314,28 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       if (seg[2] === "tenants" && seg.length === 3) {
         if (method === "GET") return json({ tenants: await listTenantsForAdmin() });
         if (method === "POST") {
-          const body = (await req.json()) as {
-            id: string;
-            label: string;
-            slug?: string;
-            color?: string;
+          // The client sends what the form asks for: `slug` (the address) and
+          // `label`. It doubles as the workspace id — reading a different field
+          // name here made every Create click a 500 (missing id → TypeError).
+          const body = (await req.json().catch(() => ({}))) as {
+            slug?: unknown;
+            label?: unknown;
+            color?: unknown;
           };
+          const slug = typeof body.slug === "string" ? body.slug.trim() : "";
+          const label = typeof body.label === "string" ? body.label.trim() : "";
+          if (!slug || !label) {
+            throw new AppError(
+              "VALIDATION_FAILED",
+              "a workspace needs both an address and a name",
+              400,
+            );
+          }
           const tenant = await provisionTenant({
-            id: body.id,
-            label: body.label,
-            slug: body.slug,
-            color: body.color,
+            id: slug,
+            label,
+            slug,
+            color: typeof body.color === "string" ? body.color : undefined,
           });
           return json(tenant, 201);
         }
@@ -727,6 +781,13 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           (m) => m.user_id === targetUserId,
         );
         if (!exists) return json({ error: "not_found" }, 404);
+        if (
+          exists.role === "admin" &&
+          body.role !== "admin" &&
+          (await countAdmins(tenantCtx.tenantId)) <= 1
+        ) {
+          return json({ error: "last_admin" }, 409);
+        }
         await setMemberRole(tenantCtx.tenantId, targetUserId, body.role);
         await appendAuditAs(me, "member.role", `set ${targetUserId} role to ${body.role}`, {
           tenantId: tenantCtx.tenantId,
@@ -761,12 +822,26 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         const gate = requireAdmin(tenantCtx);
         if (!gate.ok) return json({ error: "forbidden" }, 403);
         const body = (await req.json()) as { email: string; role: "admin" | "editor" | "viewer" };
-        await createInvite(tenantCtx.tenantId, body.email, body.role, me);
-        await appendAuditAs(me, "invite.create", `invited ${body.email} as ${body.role}`, {
-          tenantId: tenantCtx.tenantId,
-          metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
-        });
-        return json({ ok: true }, 201);
+        let outcome;
+        try {
+          outcome = await addMemberOrInvite(tenantCtx.tenantId, body.email, body.role, me);
+        } catch (e) {
+          if (e instanceof AppError) {
+            return json({ error: e.code, message: e.message }, e.status);
+          }
+          throw e;
+        }
+        const added = outcome.kind === "member";
+        await appendAuditAs(
+          me,
+          added ? "member.add" : "invite.create",
+          `${added ? "added" : "invited"} ${body.email} as ${body.role}`,
+          {
+            tenantId: tenantCtx.tenantId,
+            metadata: { actor_super_admin: gate.elevated, invitee_email: body.email },
+          },
+        );
+        return json({ ok: true, added }, 201);
       }
       // DELETE /api/t/:slug/team/invites/:email
       if (seg[2] === "invites" && seg.length === 4 && method === "DELETE") {
@@ -880,35 +955,45 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     return await pgTxScoped(tenantCtx.tenantId, async () => {
-      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule, requireSecondPublisher?}
+      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule, requireSecondPublisher?, autoPublishEnabled?}
       if (seg[1] === "preferences" && seg.length === 2) {
         if (method === "GET") return json(await reqRepo.getPreferences());
         if (method === "PUT") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_workspace");
           if (denied) return denied;
           const p = (await req.json()) as {
             publishThreshold: number;
             suggestThreshold: number;
             scanSchedule: "hourly" | "daily" | null;
             requireSecondPublisher?: boolean;
+            autoPublishEnabled?: boolean;
           };
           await reqRepo.setPreferences({
             publishThreshold: p.publishThreshold,
             suggestThreshold: p.suggestThreshold,
             scanSchedule: p.scanSchedule,
             requireSecondPublisher: p.requireSecondPublisher ?? false,
+            autoPublishEnabled: p.autoPublishEnabled ?? false,
           });
           return noContent();
         }
       }
 
-      if (seg[1] === "triage" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
+      // GET /api/ai/status — whether any AI provider is set up for this
+      // workspace. The Review page asks before rendering "Suggest with AI", so
+      // a deployment with no AI shows no affordance instead of a retry loop.
+      if (seg[1] === "ai" && seg[2] === "status" && seg.length === 3 && method === "GET") {
+        return json({ configured: await isAIConfigured(tenantCtx.tenantId) });
+      }
+
+      if (seg[1] === "review" && seg[2] === "ai-hint" && seg.length === 3 && method === "GET") {
         const refTableId = url.searchParams.get("refTableId") ?? "";
         const raw = url.searchParams.get("raw") ?? "";
         if (!refTableId || !raw) return err("refTableId and raw required", 400);
         const refTable = await reqRepo.getRefTable(refTableId);
         if (!refTable) return json({ error: "not found" }, 404);
-        if (!env.anthropicApiKey) return json({ error: "ai_not_configured" }, 503);
+        if (!(await isAIConfigured(tenantCtx.tenantId)))
+          return json({ error: "ai_not_configured" }, 503);
         try {
           const recordLabels = refTable.record.map((c) => c.label);
           const hint = await reqRepo.getAiHint(refTableId, raw, recordLabels, {
@@ -927,8 +1012,11 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
       // GET /api/users → { currentUser, collaborators }
       if (seg[1] === "users" && seg.length === 2 && method === "GET") {
         const users = await reqRepo.listUsers();
+        const mine = users.find((u) => u.id === me) ?? users[0];
         return json({
-          currentUser: users.find((u) => u.id === me) ?? users[0],
+          // Own email only — collaborators stay name + initials, never other
+          // members' addresses.
+          currentUser: mine && { ...mine, email: sessionUser.email },
           collaborators: users,
         });
       }
@@ -960,7 +1048,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[2] === "scan-status" && seg.length === 3 && method === "GET")
           return json(await reqRepo.scanStatus());
         if (seg[2] === "scan" && seg.length === 3 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           return json({ scanned: await reqRepo.scanSources() });
         }
@@ -970,9 +1058,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const table = url.searchParams.get("table") ?? "";
           const column = url.searchParams.get("column") ?? "";
           const limit = Number(url.searchParams.get("limit") ?? 5);
+          const databaseId = url.searchParams.get("databaseId") ?? undefined;
           if (!refTableId || !table || !column)
             return err("refTableId, table, column required", 400);
-          return json(await reqRepo.topUnmapped(refTableId, table, column, limit));
+          return json(await reqRepo.topUnmapped(refTableId, table, column, limit, databaseId));
         }
       }
 
@@ -1019,7 +1108,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
 
       if (seg[1] === "tables") {
         if (seg.length === 2 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           try {
             const input = (await req.json()) as tables.CreateTableInput;
@@ -1090,7 +1179,12 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // GET /api/tables/:id
         if (seg.length === 3 && id && method === "GET") {
           const refTable = await reqRepo.getRefTable(id);
-          return refTable ? json(refTable) : json({ error: "not found" }, 404);
+          // Carries `publish` like the ?full=true list route: the client swaps
+          // the whole cached table in after every mutation, so leaving it out
+          // blanked the Dashboard's publish summary until the next full load.
+          return refTable
+            ? json({ ...refTable, publish: await publishSummaryFor(id, tenantCtx.tenantId) })
+            : json({ error: "not found" }, 404);
         }
         // GET /api/tables/:id/scan-values?filter=new|mapped|all&q=&after=&limit=
         if (seg[3] === "scan-values" && seg.length === 4 && id && method === "GET") {
@@ -1114,7 +1208,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // POST /api/tables/:id/scan — rescan this refTable's wired sources and
         // re-materialize its source_scan_value rows. Faster than POST /api/sources/scan.
         if (seg[3] === "scan" && seg.length === 4 && id && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           await reqRepo.scanOneDim(id);
           return json({ ok: true });
@@ -1149,7 +1243,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // DELETE /api/tables/:id — permanently remove a table
         if (seg.length === 3 && id && method === "DELETE") {
-          const denied = gateOrJson(tenantCtx, "curate");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const ok = await reqRepo.deleteRefTable(id, me);
           return ok ? json({ ok: true }) : json({ error: "not found" }, 404);
@@ -1179,17 +1273,25 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           if (seg.length === 5 && method === "DELETE") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
-            await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me);
-            return noContent();
+            // A draft is keyed per author, so a DELETE can legitimately match
+            // nothing (someone else's draft for the same value). Report the
+            // count instead of a 204 the client would read as success.
+            return json(await reqRepo.discardDraft(id, decodeURIComponent(seg[4]!), me));
           }
           // POST /api/tables/:id/drafts/reject
+          // { drafts: [{raw, userId?}] | raws: string[], reason }
           if (seg.length === 5 && seg[4] === "reject" && method === "POST") {
             const denied = gateOrJson(tenantCtx, "curate");
             if (denied) return denied;
-            const b = (await req.json()) as { raws: string[]; reason: string };
-            if (!Array.isArray(b.raws)) return err("raws must be an array", 400);
+            const b = (await req.json()) as {
+              drafts?: unknown;
+              raws?: unknown;
+              reason: string;
+            };
+            const keys = draftSelectors(b.drafts ?? b.raws);
+            if (!keys) return err("drafts must be an array", 400);
             if (typeof b.reason !== "string") return err("reason is required", 400);
-            const result = await reqRepo.rejectDrafts(id, b.raws, b.reason, me);
+            const result = await reqRepo.rejectDrafts(id, keys, b.reason, me);
             return json(result);
           }
         }
@@ -1201,7 +1303,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // resolveDefaultDatabase(). Bumps the user's MRU
         // (user_warehouse_state.recent_database_id) to the database written.
         if (seg[3] === "sources" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const raw = (await req.json()) as {
             source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
@@ -1258,7 +1360,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         // shapes as the POST above (bare "schema.table"+column resolves to the
         // default database; qualified passes databaseId explicitly).
         if (seg[3] === "sources" && seg.length === 4 && method === "DELETE") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const raw = (await req.json()) as {
             source?: import("./repo-record.ts").QualifiedSource | { table: string; column: string };
@@ -1289,20 +1391,28 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               columnName: input.column,
             };
           }
-          await removeSource(id, qualified, tenantCtx.tenantId);
-          return new Response(null, { status: 204, headers: corsHeaders });
+          const removed = await removeSource(id, qualified, tenantCtx.tenantId);
+          // 200 + {removed} rather than a blanket 204: the UI used to toast
+          // "Removed …" for a DELETE that matched nothing (wrong database).
+          return json({ removed });
         }
-        // POST /api/tables/:id/derive {table, column, nameColumn?} — seed record
+        // POST /api/tables/:id/derive {table, column, nameColumn?, databaseId?} — seed record.
+        // databaseId names the warehouse database the caller browsed; without it
+        // the wiring falls back to an existing registration for the same table,
+        // then to the default database.
         if (seg[3] === "derive" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
-          const { table, column, nameColumn, force } = (await req.json()) as {
+          const { table, column, nameColumn, force, databaseId } = (await req.json()) as {
             table: string;
             column: string;
             nameColumn?: string;
             force?: boolean;
+            databaseId?: string;
           };
-          return json(await reqRepo.deriveRecord(id, table, column, nameColumn, { force }, me));
+          return json(
+            await reqRepo.deriveRecord(id, table, column, nameColumn, { force, databaseId }, me),
+          );
         }
         // POST /api/tables/:id/import {rows} — bulk CSV import (create new keys, update fields on existing)
         if (seg[3] === "import" && seg.length === 4 && method === "POST") {
@@ -1319,7 +1429,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         }
         // POST /api/tables/:id/fields {label, type?, options?, numberFormat?, ratingMax?, referencedRefTableId?, displayFields?} — add an attribute column
         if (seg[3] === "fields" && seg.length === 4 && method === "POST") {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const {
             label,
@@ -1380,7 +1490,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           seg.length === 5 &&
           method === "POST"
         ) {
-          const denied = gateOrJson(tenantCtx, "manage_adapter");
+          const denied = gateOrJson(tenantCtx, "manage_tables");
           if (denied) return denied;
           const { expr } = (await req.json()) as { expr?: string };
           return json(await reqRepo.validateTableFormula(id, expr ?? "", me));
@@ -1405,7 +1515,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "fields" && seg.length === 5) {
           const field = decodeURIComponent(seg[4]!);
           if (method === "PUT") {
-            const denied = gateOrJson(tenantCtx, "manage_adapter");
+            const denied = gateOrJson(tenantCtx, "manage_tables");
             if (denied) return denied;
             const body = (await req.json()) as {
               label?: string;
@@ -1432,7 +1542,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "PATCH") {
-            const denied = gateOrJson(tenantCtx, "curate");
+            const denied = gateOrJson(tenantCtx, "manage_tables");
             if (denied) return denied;
             const body = (await req.json()) as {
               description?: string | null;
@@ -1447,7 +1557,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return noContent();
           }
           if (method === "DELETE") {
-            const denied = gateOrJson(tenantCtx, "manage_adapter");
+            const denied = gateOrJson(tenantCtx, "manage_tables");
             if (denied) return denied;
             return json(await reqRepo.deleteColumn(id, field, me));
           }
@@ -1553,9 +1663,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           const body = req.headers.get("content-length")
             ? ((await req.json().catch(() => null)) as { draftKeys?: unknown } | null)
             : null;
-          const draftKeys = Array.isArray(body?.draftKeys)
-            ? (body.draftKeys as string[])
-            : undefined;
+          const draftKeys = draftSelectors(body?.draftKeys) ?? undefined;
           return json(await reqRepo.commit(id, me, draftKeys));
         }
         // POST /api/tables/:id/revert — restore all changed records to the last published version
@@ -1595,7 +1703,10 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             const retryAfter = Math.ceil((60_000 - (Date.now() - lastMs)) / 1000);
             return json(
               {
-                error: "REBALANCE_RATE_LIMITED",
+                // `code` is what the client branches on — without it the body
+                // surfaced as a generic Error nobody caught.
+                code: "REBALANCE_RATE_LIMITED",
+                error: `Positions were just rebalanced — try again in ${Math.max(1, retryAfter)}s.`,
                 lastRebalancedAt: existing?.last_rebalanced_at ?? null,
                 retryAfterSeconds: Math.max(1, retryAfter),
               },
@@ -1628,38 +1739,57 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
             return json(
               {
                 error: "INVALID_REQUEST",
-                detail: "raw_value is required and must be a string",
+                detail: "source value is required and must be a string",
               },
               400,
             );
           }
           try {
-            const refTable = await reqRepo.getRefTableBasic(id);
+            const refTable = await reqRepo.getRefTable(id);
             if (!refTable) {
               return json(
                 {
-                  error: "DIMENSION_NOT_FOUND",
-                  detail: `RefTable ${id} not found in workspace`,
+                  error: "TABLE_NOT_FOUND",
+                  detail: `Table ${id} not found in workspace`,
                 },
                 404,
               );
             }
-            const records = await reqRepo.getRecordValues(id, { limit: 30 });
             const suggestion = await generateSuggestion(
               tenantCtx.tenantId,
               {
                 refTableId: id,
-                refTableName: refTable.label,
+                refTableName: refTable.refTable,
                 rawValue,
-                existingRecordValues: records,
+                existingRecordValues: refTable.record.slice(0, 30).map((c) => c.label),
               },
               { forceRefresh },
             );
+            // Every publish path filters on target_key, so a draft without one
+            // shows as ready but can never ship — and blocks the whole publish
+            // when it's included. Only stage the mapping when the suggested
+            // label resolves to a real record; otherwise hand the suggestion
+            // back and let the user pick.
+            const target = refTable.record.find((c) => c.label === suggestion.record);
+            if (!target) {
+              return json({
+                draft_id: null,
+                draft: null,
+                suggestion: {
+                  target_label: suggestion.record,
+                  confidence: suggestion.confidence,
+                  reasoning: suggestion.reasoning ?? null,
+                },
+                detail: `"${suggestion.record}" is not a record in this table — nothing was staged`,
+                cached: suggestion.cached,
+              });
+            }
             const draft = await reqRepo.createDraft(
               {
                 reference_table_id: id,
                 raw: rawValue,
-                target_label: suggestion.record,
+                target_label: target.label,
+                target_key: target.key,
                 source: "ai",
                 confidence: suggestion.confidence,
                 reasoning: suggestion.reasoning ?? null,
@@ -1690,7 +1820,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
               return json(
                 {
                   error: "AI_NOT_CONFIGURED",
-                  detail: "Enable AI in Workspace Settings",
+                  detail: "AI suggestions aren't set up for this workspace",
                 },
                 400,
               );
@@ -1770,7 +1900,7 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         seg[2] === "seed-scan-values" &&
         method === "POST"
       ) {
-        const denied = gateOrJson(tenantCtx, "manage_adapter");
+        const denied = gateOrJson(tenantCtx, "manage_workspace");
         if (denied) return denied;
         const { materializeSourceScanValues } = await import("./repo-source-scan.ts");
         const body = (await req.json()) as {
@@ -1825,11 +1955,9 @@ if (import.meta.main) {
 
   const scheduler = createScheduler({
     tickIntervalMs: 60_000,
-    shouldRun: async (tenantId) => {
-      // Per-tenant gate: only run jobs for tenants whose scan_run cadence is due.
-      const probe = new TenantRepo(tenantId, "admin", true);
-      return probe.anyScanDue(new Date());
-    },
+    // No tenant-level gate: each job decides for itself (SchedulerJob.shouldRun).
+    // The scan cadence used to gate every job, so a workspace with scans "Off"
+    // also lost auto-matching and auto-publishing.
     jobs: buildJobs(),
   });
   scheduler.start();

@@ -379,7 +379,7 @@ describe("retireRecord fires record.deleted outbound event inside the tx", () =>
     }
   }
 
-  it("writes outbound_event with dim_slug/key/label/deleted_by when retire succeeds", async () => {
+  it("writes outbound_event with table_slug/key/label/deleted_by when retire succeeds", async () => {
     await cleanup();
     const refTableId = await addRefTable(DEL_DIM_NAME, [], {}, USER_ID, T);
     expect(refTableId).toBe(DEL_DIM_ID);
@@ -416,7 +416,7 @@ describe("retireRecord fires record.deleted outbound event inside the tx", () =>
       typeof evt!.payload === "string"
         ? (JSON.parse(evt!.payload) as Record<string, unknown>)
         : (evt!.payload as Record<string, unknown>);
-    expect(payload.dim_slug).toBe(refTableId);
+    expect(payload.table_slug).toBe(refTableId);
     expect(payload.key).toBe("beta");
     expect(payload.label).toBe("Beta");
     const deletedBy = payload.deleted_by as { id: string } | undefined;

@@ -4,10 +4,18 @@ process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import { test, expect, beforeEach, afterAll } from "bun:test";
 import { pgGet, pgAll, pgRun } from "../src/pg.ts";
-import { provisionTenant, listTenants } from "../src/tenant.ts";
+import { provisionTenant, listTenants, tenantBySlug } from "../src/tenant.ts";
 import { promoteSuperAdmin } from "../src/admin.ts";
 
-const TEST_TENANT_IDS = ["tprov_a", "tprov_b", "tprov_dup"];
+const TEST_TENANT_IDS = [
+  "tprov_a",
+  "tprov_b",
+  "tprov_dup",
+  "tprov_api",
+  "tprov_login",
+  "tprov_signup",
+  "tprov_design",
+];
 const TEST_USER_EMAILS = ["promo@example.com"];
 
 beforeEach(async () => {
@@ -72,6 +80,33 @@ test("provisionTenant rejects invalid id formats", async () => {
       thrown = e as Error;
     }
     expect(thrown).not.toBeNull();
+  }
+});
+
+test("provisionTenant rejects a slug the app's URL space reserves", async () => {
+  // /app/admin/* is the super-admin shell — a workspace slugged 'admin' is
+  // unreachable and apiFetch rewrites its requests to /api/admin/...
+  let thrown: Error | null = null;
+  try {
+    await provisionTenant({ id: "tprov_a", slug: "admin", label: "x" });
+  } catch (e) {
+    thrown = e as Error;
+  }
+  expect(thrown).not.toBeNull();
+  expect(thrown!.message.toLowerCase()).toContain("reserved");
+  // The id defaults to the slug, so the bare form is rejected too.
+  await expect(provisionTenant({ id: "admin", label: "x" })).rejects.toThrow(/reserved/i);
+});
+
+test("provisionTenant allows names that only look like routes", async () => {
+  // Workspaces live at /app/<slug>, so the top-level /login, /signup and /design
+  // routes can never be shadowed by one, and a slug never reaches /api directly
+  // (the Pull API nests it under /api/t/<slug>/). Reserving these would block
+  // perfectly ordinary team names — an "API" team, a "Design" team.
+  for (const ok of ["api", "login", "signup", "design"]) {
+    await provisionTenant({ id: `tprov_${ok}`, slug: ok, label: ok });
+    const t = await tenantBySlug(ok);
+    expect(t?.slug).toBe(ok);
   }
 });
 

@@ -3,6 +3,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { resetDb } from "./setup.ts";
 import { pgAll, pgRun } from "../src/pg.ts";
 import * as repo from "../src/repo.ts";
+import { getSnapshot } from "../src/repo-versions.ts";
 
 const U = "u_publish";
 
@@ -236,4 +237,33 @@ test("publish with nothing to publish is a no-op (no version bump)", async () =>
 
   const s = await repo.getPublishState(refTableId, "default");
   expect(s.version).toBe(1);
+});
+
+test("manual reorder counts as an unpublished change and ships in the next version", async () => {
+  const refTableId = await repo.addRefTable("Tier", [], { keyKind: "slug" }, U, "default");
+  await repo.updateRefTableMeta(refTableId, { orderingMode: "manual" }, U, "default");
+  await repo.addRecordOne(refTableId, "Gold", undefined, U, "default");
+  await repo.addRecordOne(refTableId, "Silver", undefined, U, "default");
+  await repo.addRecordOne(refTableId, "Bronze", undefined, U, "default");
+
+  await repo.commit(refTableId, U, "default");
+  let s = await repo.getPublishState(refTableId, "default");
+  expect(s.version).toBe(1);
+  expect(s.changedKeys).toEqual([]);
+
+  // Drag Bronze to the top. No drafts are involved — this is the only change.
+  await repo.reorderRecordRow(refTableId, "bronze", null, "gold", U, "default");
+
+  s = await repo.getPublishState(refTableId, "default");
+  expect(s.changedKeys).toEqual(["bronze"]);
+
+  await repo.commit(refTableId, U, "default");
+  s = await repo.getPublishState(refTableId, "default");
+  expect(s.version).toBe(2);
+  expect(s.changedKeys).toEqual([]);
+
+  // The published snapshot carries the new order.
+  const snap = await getSnapshot(refTableId, "default", 2);
+  const ordered = [...snap!.records].sort((a, b) => Number(a.position) - Number(b.position));
+  expect(ordered.map((r) => r.label)).toEqual(["Bronze", "Gold", "Silver"]);
 });

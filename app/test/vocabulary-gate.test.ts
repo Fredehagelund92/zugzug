@@ -34,6 +34,16 @@ const FILES = [
   "app/src/routes/Sources.tsx",
   "app/src/components/warehouse/RemoveDatabaseConfirm.tsx",
   "app/src/routes/settings/Matching.tsx",
+  "app/src/components/warehouse/AddDatabaseDialog.tsx",
+  "app/src/components/warehouse/DatabaseTable.tsx",
+  "app/src/components/catalog/CatalogSearchResults.tsx",
+  "app/src/routes/integrations/PullApi.tsx",
+  "app/src/routes/integrations/CreateWebhookModal.tsx",
+  "app/src/routes/Login.tsx",
+  "app/src/routes/Signup.tsx",
+  "app/src/routes/Triage.tsx",
+  "app/src/routes/account/Profile.tsx",
+  "app/src/components/modes/MapValuesBody.tsx",
 ];
 
 const BANNED = [
@@ -199,6 +209,66 @@ describe("vocabulary gate", () => {
     expect(source, 'ShortcutsOverlay shortcut still says "commit + edit"').not.toContain(
       "commit + edit",
     );
+  });
+
+  test("warehouse + catalog copy calls each thing by its defined name", () => {
+    const dialog = readFileSync(
+      join(REPO_ROOT, "app/src/components/warehouse/AddDatabaseDialog.tsx"),
+      "utf8",
+    );
+    expect(dialog, 'label placeholder still surfaces "raw"').not.toContain("Production raw");
+
+    // A registered warehouse COLUMN is a "source"; a "source value" is the
+    // distinct string scanned out of one. The database row counts the former.
+    const table = readFileSync(
+      join(REPO_ROOT, "app/src/components/warehouse/DatabaseTable.tsx"),
+      "utf8",
+    );
+    expect(table, 'database row still labels sources as "source value"').not.toContain(
+      "source value",
+    );
+
+    // A per-database search that failed is a database, not a "source".
+    const results = readFileSync(
+      join(REPO_ROOT, "app/src/components/catalog/CatalogSearchResults.tsx"),
+      "utf8",
+    );
+    expect(results, 'failed-search banner still calls databases "sources"').not.toContain(
+      "source{failedCount",
+    );
+  });
+
+  // The pull API and webhook pages describe what a consumer does with the data;
+  // they used the implementation's word for it.
+  test("integration copy avoids banned vocabulary", () => {
+    const pull = readFileSync(join(REPO_ROOT, "app/src/routes/integrations/PullApi.tsx"), "utf8");
+    expect(pull, 'pull API blurb still says "sync into dbt"').not.toContain("sync into");
+    expect(pull, 'section heading still says "incremental sync"').not.toContain("incremental sync");
+    expect(pull, 'cursor paragraph still says "resync"').not.toContain("resync");
+
+    const webhook = readFileSync(
+      join(REPO_ROOT, "app/src/routes/integrations/CreateWebhookModal.tsx"),
+      "utf8",
+    );
+    expect(webhook, 'description placeholder still says "Sync into…"').not.toContain("Sync into");
+  });
+
+  // audit-format.tsx is deliberately absent from the general scan: its map KEYS
+  // are the server's own action codes ("Warehouse synced"), which must stay
+  // verbatim to match rows already in audit_log. What those codes RENDER as is
+  // gated by audit-history-vocabulary.test.tsx and audit-action-label.test.ts.
+
+  // One page, one name: the nav item is "Members", so every pointer to it says
+  // so. It used to be called three things ("Settings → Team", "Settings", …).
+  test("copy points at the members page by the name the nav uses", () => {
+    for (const relPath of ["app/src/routes/Login.tsx", "app/src/routes/Signup.tsx"]) {
+      const source = readFileSync(join(REPO_ROOT, relPath), "utf8");
+      expect(source, `${relPath} still calls the members page "Team"`).not.toContain(
+        "Settings → Team",
+      );
+      expect(source, `${relPath} still points at bare "Settings"`).not.toMatch(/in Settings\./);
+      expect(source, `${relPath} should name Settings → Members`).toContain("Settings → Members");
+    }
   });
 
   test("Dashboard intro avoids weak 'messy' copy", () => {

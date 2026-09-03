@@ -113,3 +113,87 @@ test("updateField fieldConfig merge: setting options does not wipe existing rule
   expect(field?.options).toEqual(options);
   expect(field?.rules).toEqual(rules);
 });
+
+test("changing a column's type keeps its conditional rules and required flag", async () => {
+  const userId = "u_test";
+  const refTableId = await repo.addRefTable("TypeChange", [], {}, userId, "default");
+  await repo.addField(
+    refTableId,
+    "Website",
+    "text",
+    undefined,
+    { silent: true },
+    userId,
+    "default",
+  );
+
+  const rules = [
+    {
+      id: "r1",
+      field: "website",
+      trigger: { kind: "equals" as const, value: "bad" },
+      style: { rowStripe: "rose" as const },
+    },
+  ];
+  await repo.updateField(
+    refTableId,
+    "website",
+    {
+      fieldConfig: JSON.stringify({ rules, required: true, validation: { unique: true, min: 3 } }),
+    },
+    userId,
+    "default",
+  );
+
+  const res = await repo.changeColumnType(
+    refTableId,
+    "website",
+    { newType: "url", coerceInvalidToNull: false, userId },
+    "default",
+  );
+  expect(res.ok).toBe(true);
+
+  const refTable = await repo.getRefTable(refTableId, "default");
+  const f = refTable?.fields.find((x) => x.field === "website");
+  expect(f?.type).toBe("url");
+  expect(f?.rules).toEqual(rules);
+  expect(f?.required).toBe(true);
+  // unique survives on url; the text length bound does not apply any more.
+  expect(f?.validation?.unique).toBe(true);
+  expect(f?.validation?.min).toBeUndefined();
+});
+
+test("changing a column to number keeps rules and required alongside the number format", async () => {
+  const userId = "u_test";
+  const refTableId = await repo.addRefTable("TypeChange2", [], {}, userId, "default");
+  await repo.addField(refTableId, "Score", "text", undefined, { silent: true }, userId, "default");
+  const rules = [
+    {
+      id: "r2",
+      field: "score",
+      trigger: { kind: "equals" as const, value: "9" },
+      style: { rowStripe: "teal" as const },
+    },
+  ];
+  await repo.updateField(
+    refTableId,
+    "score",
+    { fieldConfig: JSON.stringify({ rules, required: true }) },
+    userId,
+    "default",
+  );
+
+  const res = await repo.changeColumnType(
+    refTableId,
+    "score",
+    { newType: "number", numberFormat: { format: "integer" }, coerceInvalidToNull: false, userId },
+    "default",
+  );
+  expect(res.ok).toBe(true);
+
+  const refTable = await repo.getRefTable(refTableId, "default");
+  const f = refTable?.fields.find((x) => x.field === "score");
+  expect(f?.numberFormat).toEqual({ format: "integer" });
+  expect(f?.rules).toEqual(rules);
+  expect(f?.required).toBe(true);
+});

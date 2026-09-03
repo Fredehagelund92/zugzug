@@ -3,8 +3,28 @@ import { Mark } from "../Mark";
 import { ThemeToggle } from "../ThemeToggle";
 import { SettingsShell } from "../settings/SettingsShell";
 import { AdminSidebar } from "./AdminSidebar";
+import { authFetch } from "../../api";
+import { useMemberships } from "../../store";
+import { LAST_SLUG_KEY } from "../../lib/tenant-storage";
+
+const headerLink =
+  "text-xs text-ink-2 transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-sm px-1";
 
 export function AdminLayout() {
+  // Account lives inside a workspace, so point at the one this admin would
+  // land in — same order as AppIndex. A super-admin who belongs to none has
+  // no account page to offer, and gets sign-out only.
+  const memberships = useMemberships();
+  const last = localStorage.getItem(LAST_SLUG_KEY);
+  const accountSlug =
+    memberships.find((m) => m.slug === last)?.slug ?? memberships[0]?.slug ?? null;
+
+  const signOut = () => {
+    void authFetch("/auth/logout", { method: "POST" }).finally(() => {
+      window.location.href = "/login";
+    });
+  };
+
   return (
     // Fixed-height shell with the scroll confined to the content region (like
     // AppShell) and scrollbarGutter:"stable" reserving the gutter — otherwise
@@ -27,7 +47,15 @@ export function AdminLayout() {
           >
             ADMIN
           </span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            {accountSlug && (
+              <Link to={`/app/${accountSlug}/account/profile`} className={headerLink}>
+                Account
+              </Link>
+            )}
+            <button type="button" onClick={signOut} className={headerLink}>
+              Sign out
+            </button>
             <ThemeToggle />
           </div>
         </div>

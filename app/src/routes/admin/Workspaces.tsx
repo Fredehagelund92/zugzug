@@ -7,6 +7,7 @@ import { SkeletonList } from "../../components/Skeleton";
 import { EmptyState } from "../../components/EmptyState";
 import { ago } from "../../components/sources/utils";
 import { invalidate, subscribeInvalidate } from "../../store";
+import { readServerError } from "../../lib/api-errors";
 import { WorkspaceColorPicker } from "../../components/WorkspaceColorPicker";
 import { WORKSPACE_COLORS } from "../../lib/workspace-colors";
 
@@ -15,10 +16,12 @@ interface Tenant {
   slug: string;
   label: string;
   color: string | null;
-  warehouse_id: string;
   member_count?: number;
   last_activity_at?: string | null;
 }
+
+/** What the server accepts as a workspace address (and id). */
+const SLUG_RE = /^[a-z][a-z0-9_]{0,20}$/;
 
 const inputCls =
   "w-full rounded-sm bg-surface-2 border border-line-2 px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:border-accent transition-colors";
@@ -31,6 +34,7 @@ export function Workspaces() {
   const [label, setLabel] = useState("");
   const [color, setColor] = useState<string>(WORKSPACE_COLORS[0]);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
 
@@ -72,24 +76,40 @@ export function Workspaces() {
   }, []);
 
   const create = async () => {
-    if (!slug || !label) return;
+    const nextSlug = slug.trim();
+    const nextLabel = label.trim();
+    if (!nextSlug || !nextLabel) return;
+    // Check the address before spending a round-trip on it: the server rejects
+    // anything outside this shape, and a silent no-op reads as a broken button.
+    if (!SLUG_RE.test(nextSlug)) {
+      setCreateError(
+        "Use lowercase letters, digits and underscores, starting with a letter (21 characters max).",
+      );
+      return;
+    }
+    setCreateError(null);
     setCreating(true);
-    const r = await apiFetch("/tenants", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ slug, label, color }),
-    });
-    if (r.ok) {
+    try {
+      const r = await apiFetch("/tenants", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ slug: nextSlug, label: nextLabel, color }),
+      });
+      if (!r.ok) {
+        setCreateError(`Couldn't create the workspace — ${await readServerError(r)}.`);
+        return;
+      }
       setSlug("");
       setLabel("");
       setColor(WORKSPACE_COLORS[0]);
       setShowForm(false);
       invalidate.tenantList();
-      // Creating a workspace auto-joins the super-admin per the server, so
-      // refresh memberships so the switcher dropdown gains the row.
+      // Super-admins see every workspace in the switcher, so refresh
+      // memberships to pick the new one up without a reload.
       await invalidate.memberships();
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   return (
@@ -172,11 +192,9 @@ export function Workspaces() {
                     </button>
                   )}
 
-                  {/* Secondary line: slug · warehouse · members · last activity */}
+                  {/* Secondary line: address · members · last activity */}
                   <div className="flex items-center gap-2 text-xs text-ink-3 truncate">
                     <code className="font-mono text-accent/70">{t.slug}</code>
-                    <span className="text-ink-3/40">·</span>
-                    <code className="font-mono truncate">{t.warehouse_id}</code>
                     <span className="text-ink-3/40">·</span>
                     <span className="shrink-0">
                       {t.member_count ?? 0} {(t.member_count ?? 0) === 1 ? "member" : "members"}
@@ -214,7 +232,7 @@ export function Workspaces() {
                 className={inputCls + " font-mono"}
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                placeholder="my-workspace"
+                placeholder="my_workspace"
                 autoFocus
               />
             </div>
@@ -268,6 +286,12 @@ export function Workspaces() {
               </div>
             </div>
           </div>
+
+          {createError && (
+            <p className="mt-4 text-xs text-danger" role="status">
+              {createError}
+            </p>
+          )}
 
           <div className="flex items-center justify-between">
             <p className="text-xs text-ink-3">

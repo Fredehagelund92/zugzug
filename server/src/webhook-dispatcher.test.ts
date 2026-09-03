@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { createHmac } from "node:crypto";
+import { parseSignatureHeader } from "./webhook-signing.ts";
 import { pgRun, pgGet, pgAll } from "./pg.ts";
 import { webhookDispatcherJob, _setHttpTimeoutMsForTest } from "./webhook-dispatcher.ts";
 import { _setMasterKeyForTest } from "./webhook-secrets.ts";
@@ -372,5 +374,152 @@ describe("webhookDispatcherJob", () => {
     expect(["success", "retry"]).toContain(row.status);
     // Most importantly: the row is NOT stuck in_flight anymore.
     expect(row.status).not.toBe("in_flight");
+  });
+});
+
+/* --- rotation grace + pause ---------------------------------------------- */
+
+/** Mirror repo-webhooks.rotateSecret: demote the live secret, install a new one. */
+async function rotate(webhookId: string, next: string, graceSeconds = 3600): Promise<void> {
+  const enc = encryptSecret(next, masterKey, 1);
+  await pgRun(
+    `UPDATE "zugzug_app"."webhook" SET
+        secret_ciphertext_previous = secret_ciphertext,
+        secret_nonce_previous      = secret_nonce,
+        secret_prefix_previous     = secret_prefix,
+        secret_previous_expires_at = now() + ($2::int || ' seconds')::interval,
+        secret_ciphertext = $3::bytea,
+        secret_nonce      = $4::bytea,
+        secret_prefix     = $5
+      WHERE id = $1`,
+    [
+      webhookId,
+      graceSeconds,
+      Buffer.from(enc.ciphertext),
+      Buffer.from(enc.nonce),
+      next.slice(0, 12),
+    ],
+  );
+}
+
+async function setWebhookStatus(webhookId: string, status: string): Promise<void> {
+  await pgRun(`UPDATE "zugzug_app"."webhook" SET status = $2 WHERE id = $1`, [webhookId, status]);
+}
+
+/** Does any signature in the header verify `body` under `secret`? */
+function verifiesUnder(header: string, body: string, secret: string): boolean {
+  const parts = parseSignatureHeader(header);
+  if (!parts) return false;
+  const expected = createHmac("sha256", secret).update(`${parts.t}.${body}`).digest("hex");
+  return parts.entries.some((e) => e.v1 === expected);
+}
+
+/* Rotating a secret used to re-sign every queued retry with the brand-new key
+   the instant the rotation landed, so consumers who followed the UI's "valid
+   during the 24h overlap" copy started failing immediately and the endpoint
+   auto-disabled after 50 failures. Deliveries inside the grace window now carry
+   a signature for each key. */
+describe("secret rotation grace", () => {
+  it("a retry enqueued before the rotation still verifies under the key it was enqueued with", async () => {
+    const T = "test_disp_rotate";
+    await seedTenant(T);
+    const wh = await seedWebhook(T, { plaintext: "whsec_rotate_old_key_value_aaa" });
+    let received: { sig: string; body: string } | null = null;
+    handler = async (req) => {
+      received = {
+        sig: req.headers.get("x-zugzug-signature") ?? "",
+        body: await req.text(),
+      };
+      return new Response("ok", { status: 200 });
+    };
+
+    const id = await seedDelivery({
+      tenantId: T,
+      webhookId: wh.id,
+      status: "retry",
+      attempts: 1,
+      nextAttemptAt: "past",
+    });
+    // The rotation lands while the delivery is still queued.
+    await rotate(wh.id, "whsec_rotate_new_key_value_bbb");
+
+    await webhookDispatcherJob.run(ctx);
+    expect(await getRow(id)).toMatchObject({ status: "success" });
+
+    const r = received as unknown as { sig: string; body: string };
+    expect(r).not.toBeNull();
+    expect(verifiesUnder(r.sig, r.body, "whsec_rotate_old_key_value_aaa")).toBe(true);
+    expect(verifiesUnder(r.sig, r.body, "whsec_rotate_new_key_value_bbb")).toBe(true);
+    expect(parseSignatureHeader(r.sig)!.entries.map((e) => e.kid)).toEqual(["current", "previous"]);
+  });
+
+  it("signs with the new key alone once the grace window has closed", async () => {
+    const T = "test_disp_rotate_exp";
+    await seedTenant(T);
+    const wh = await seedWebhook(T, { plaintext: "whsec_expired_old_key_value" });
+    let received: { sig: string; body: string } | null = null;
+    handler = async (req) => {
+      received = {
+        sig: req.headers.get("x-zugzug-signature") ?? "",
+        body: await req.text(),
+      };
+      return new Response("ok", { status: 200 });
+    };
+    await seedDelivery({ tenantId: T, webhookId: wh.id, nextAttemptAt: "past" });
+    await rotate(wh.id, "whsec_expired_new_key_value", -60);
+
+    await webhookDispatcherJob.run(ctx);
+    const r = received as unknown as { sig: string; body: string };
+    expect(r).not.toBeNull();
+    expect(parseSignatureHeader(r.sig)!.entries.length).toBe(1);
+    expect(verifiesUnder(r.sig, r.body, "whsec_expired_new_key_value")).toBe(true);
+    expect(verifiesUnder(r.sig, r.body, "whsec_expired_old_key_value")).toBe(false);
+  });
+});
+
+/* Pause used to be a lie in both directions: queued rows kept POSTing to the
+   paused endpoint, and events fired during the pause were never enqueued at
+   all, so they were lost. Now the queue holds and drains on resume. */
+describe("paused and disabled webhooks", () => {
+  it("does not POST while the webhook is paused, and delivers on resume", async () => {
+    const T = "test_disp_paused";
+    await seedTenant(T);
+    const wh = await seedWebhook(T);
+    const seen: string[] = [];
+    handler = (req) => {
+      seen.push(req.headers.get("x-zugzug-delivery") ?? "");
+      return new Response("ok", { status: 200 });
+    };
+
+    const id = await seedDelivery({ tenantId: T, webhookId: wh.id, nextAttemptAt: "past" });
+    await setWebhookStatus(wh.id, "paused");
+
+    await webhookDispatcherJob.run(ctx);
+    expect(seen).not.toContain(id);
+    const held = await getRow(id);
+    expect(held.status).toBe("pending");
+    expect(held.attempts).toBe(0);
+
+    await setWebhookStatus(wh.id, "active");
+    await webhookDispatcherJob.run(ctx);
+    expect(seen).toContain(id);
+    expect((await getRow(id)).status).toBe("success");
+  });
+
+  it("does not POST to an auto-disabled webhook", async () => {
+    const T = "test_disp_disabled";
+    await seedTenant(T);
+    const wh = await seedWebhook(T);
+    const seen: string[] = [];
+    handler = (req) => {
+      seen.push(req.headers.get("x-zugzug-delivery") ?? "");
+      return new Response("ok", { status: 200 });
+    };
+    const id = await seedDelivery({ tenantId: T, webhookId: wh.id, nextAttemptAt: "past" });
+    await setWebhookStatus(wh.id, "disabled");
+
+    await webhookDispatcherJob.run(ctx);
+    expect(seen).not.toContain(id);
+    expect((await getRow(id)).status).toBe("pending");
   });
 });

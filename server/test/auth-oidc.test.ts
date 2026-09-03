@@ -17,6 +17,7 @@ import {
 } from "../src/auth-oidc.ts";
 import { pgGet, pgRun } from "../src/pg.ts";
 import { pg } from "../src/env.ts";
+import { provisionTenant, listMembershipsForUser } from "../src/tenant.ts";
 
 // Fake Configuration — openid-client v6 functional API doesn't introspect
 // the Configuration internals in tests, so a plain object is fine here.
@@ -140,6 +141,22 @@ test("oidc callback — token-exchange failure redirects with error=token", asyn
 });
 
 // ---------------------------------------------------------------------------
+// Test 4b: the user cancelled at the provider → error=no_code ("Login was
+// cancelled."), not the generic "Authentication failed".
+// ---------------------------------------------------------------------------
+
+test("oidc callback — provider reports access_denied redirects with error=no_code", async () => {
+  mockShouldThrow = new Error("should not reach the token exchange");
+  const req = new Request(
+    "http://localhost/api/auth/oidc/callback?error=access_denied&state=test-state",
+    { headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" } },
+  );
+  const res = await handleOidcCallback(req);
+  expect(res.status).toBe(302);
+  expect(res.headers.get("Location")).toContain("error=no_code");
+});
+
+// ---------------------------------------------------------------------------
 // Test 5: upserts existing user by sub (creates first, updates name on second)
 // ---------------------------------------------------------------------------
 
@@ -230,6 +247,43 @@ test("oidc callback — second user gets role='editor'", async () => {
     `SELECT role FROM ${pg("tenant_member")} WHERE user_id = 'u_sub-second' AND tenant_id = 'default'`,
   );
   expect(user?.role).toBe("editor");
+});
+
+// ---------------------------------------------------------------------------
+// Test 7b: an invited OIDC user joins only the inviting workspace
+// ---------------------------------------------------------------------------
+
+test("oidc callback — invited user joins ONLY the inviting workspace, not default", async () => {
+  // First user bootstraps the default workspace as admin.
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-boot", email: "boot@example.com", name: "Boot User" }),
+  };
+  await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+  expect((await listMembershipsForUser("u_sub-boot")).map((m) => m.tenant.id)).toEqual(["default"]);
+
+  // Second user is invited to toidc_x only.
+  await provisionTenant({ id: "toidc_x", label: "Invite Target" });
+  await pgRun(
+    `INSERT INTO ${pg("tenant_invite")} (tenant_id, email, role, invited_by, invited_at)
+     VALUES ('toidc_x', 'invitee@example.com', 'viewer', 'u_sub-boot', now())`,
+  );
+  mockTokenResult = {
+    claims: () => ({ sub: "sub-invitee", email: "invitee@example.com", name: "Invitee" }),
+  };
+  const res = await handleOidcCallback(
+    new Request("http://localhost/api/auth/oidc/callback?code=def&state=test-state", {
+      headers: { cookie: "zz_oidc_state=test-state; zz_oidc_nonce=test-nonce" },
+    }),
+  );
+  expect(res.status).toBe(302);
+
+  const memberships = await listMembershipsForUser("u_sub-invitee");
+  expect(memberships.map((m) => m.tenant.id)).toEqual(["toidc_x"]);
+  expect(memberships[0]?.role).toBe("viewer");
 });
 
 // ---------------------------------------------------------------------------

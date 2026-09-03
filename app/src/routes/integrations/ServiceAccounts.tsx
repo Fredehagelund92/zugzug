@@ -33,6 +33,7 @@ export function ServiceAccounts() {
 
   const [items, setItems] = useState<ServiceAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState<(typeof EXPIRY_OPTIONS)[number]>(EXPIRY_OPTIONS[1]);
@@ -40,10 +41,18 @@ export function ServiceAccounts() {
   const [secret, setSecret] = useState<string | null>(null);
   const [revoke, setRevoke] = useState<{ id: string; name: string } | null>(null);
 
+  // A refused or failed list must land on an error, not leave the skeleton up
+  // forever with an unhandled rejection behind it.
   const refresh = async () => {
     setLoading(true);
-    setItems(await listServiceAccounts());
-    setLoading(false);
+    setLoadError(null);
+    try {
+      setItems(await listServiceAccounts());
+    } catch (e) {
+      setLoadError(e instanceof IntegrationsApiError ? e.code : "load_failed");
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => {
     if (canView) void refresh();
@@ -54,6 +63,13 @@ export function ServiceAccounts() {
   }
 
   if (loading) return <SkeletonList rows={3} columns={[100, 80, 120, 100, 100, 50]} />;
+
+  if (loadError)
+    return (
+      <p className="text-[13px] text-danger">
+        Could not load service accounts: {humanError(loadError)}
+      </p>
+    );
 
   const submit = async () => {
     setCreateError(null);
