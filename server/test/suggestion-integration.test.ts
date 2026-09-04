@@ -61,8 +61,8 @@ async function setAIConfig(
 ): Promise<void> {
   const query = `
     INSERT INTO ${pgTable("preferences")}
-      (tenant_id, ai_enabled, ai_provider, ai_api_key, publish_threshold, suggest_threshold, updated_at)
-    VALUES ($1, $2, $3, $4, 1, 1, now())
+      (tenant_id, ai_enabled, ai_provider, ai_api_key, updated_at)
+    VALUES ($1, $2, $3, $4, now())
     ON CONFLICT (tenant_id) DO UPDATE SET
       ai_enabled = EXCLUDED.ai_enabled,
       ai_provider = EXCLUDED.ai_provider,

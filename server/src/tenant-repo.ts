@@ -23,7 +23,6 @@ import type {
   Draft,
   SourceInfo,
   SchemaFacet,
-  CatalogTable,
   User,
 } from "./repo-shared.ts";
 
@@ -508,14 +507,6 @@ export class TenantRepo {
   scanStatus(): Promise<repoScan.ScanStatusResult> {
     const scope = this.isSuperAdmin && this.tenantId === "*" ? "*" : this.tenantId;
     return this.withClearCtx(() => repoScan.scanStatus(scope));
-  }
-
-  searchCatalog(opts: { q?: string; schema?: string; limit?: number; offset?: number }): Promise<{
-    rows: CatalogTable[];
-    total: number;
-    schemas: { schema: string; tables: number }[];
-  }> {
-    return this.withClearCtx(() => repoScan.searchCatalog({ ...opts, tenantId: this.tenantId }));
   }
 
   getSourceScanScalars(): Promise<repoSourceScan.SourceScanScalars[]> {

@@ -13,6 +13,7 @@ import {
   pgRun,
   pg,
   parseJsonbMeta,
+  likeEscape,
 } from "./repo-shared.ts";
 import { presence } from "./realtime/presence-room.ts";
 
@@ -102,7 +103,7 @@ export async function listAudit(
 
   const q = filter.q?.trim();
   if (q) {
-    const like = bind(`%${q}%`);
+    const like = bind(`%${likeEscape(q)}%`);
     clauses.push(`(a.action ILIKE ${like} OR a.detail ILIKE ${like} OR u.name ILIKE ${like})`);
   }
 
@@ -166,14 +167,11 @@ export async function listAuditActions(tenantId: string = "default"): Promise<st
 /* --- workspace-global preferences (one row per tenant) --- */
 export async function getPreferences(tenantId: string = "default"): Promise<Preferences> {
   const row = await pgGet<{
-    publish_threshold: number;
-    suggest_threshold: number;
     scan_schedule: string | null;
     require_second_publisher: boolean;
     auto_publish_enabled: boolean;
   }>(
-    `SELECT publish_threshold, suggest_threshold, scan_schedule, require_second_publisher,
-            auto_publish_enabled
+    `SELECT scan_schedule, require_second_publisher, auto_publish_enabled
      FROM ${pg("preferences")}
      WHERE tenant_id = $1
      ORDER BY id LIMIT 1`,
@@ -182,8 +180,6 @@ export async function getPreferences(tenantId: string = "default"): Promise<Pref
   const validSchedule = ["hourly", "daily"] as const;
   const sched = row?.scan_schedule ?? null;
   return {
-    publishThreshold: row?.publish_threshold ?? 95,
-    suggestThreshold: row?.suggest_threshold ?? 80,
     scanSchedule: validSchedule.includes(sched as (typeof validSchedule)[number])
       ? (sched as Preferences["scanSchedule"])
       : null,
@@ -198,24 +194,14 @@ export async function setPreferences(p: Preferences, tenantId: string = "default
 
   await pgRun(
     `INSERT INTO ${pg("preferences")}
-       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id, require_second_publisher,
-        auto_publish_enabled)
-     VALUES ($1, $2, $3, current_timestamp, $4, $5, $6)
+       (scan_schedule, updated_at, tenant_id, require_second_publisher, auto_publish_enabled)
+     VALUES ($1, current_timestamp, $2, $3, $4)
      ON CONFLICT (tenant_id) DO UPDATE
-       SET publish_threshold        = EXCLUDED.publish_threshold,
-           suggest_threshold        = EXCLUDED.suggest_threshold,
-           scan_schedule            = EXCLUDED.scan_schedule,
+       SET scan_schedule            = EXCLUDED.scan_schedule,
            updated_at               = EXCLUDED.updated_at,
            require_second_publisher = EXCLUDED.require_second_publisher,
            auto_publish_enabled     = EXCLUDED.auto_publish_enabled`,
-    [
-      p.publishThreshold,
-      p.suggestThreshold,
-      p.scanSchedule,
-      tenantId,
-      p.requireSecondPublisher ?? false,
-      p.autoPublishEnabled ?? false,
-    ],
+    [p.scanSchedule, tenantId, p.requireSecondPublisher ?? false, p.autoPublishEnabled ?? false],
   );
 }
 

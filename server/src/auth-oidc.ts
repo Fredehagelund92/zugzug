@@ -71,6 +71,7 @@ async function getOidcConfig(): Promise<defaultClient.Configuration> {
 
 const STATE_COOKIE = "zz_oidc_state";
 const NONCE_COOKIE = "zz_oidc_nonce";
+const NEXT_COOKIE = "zz_oidc_next";
 const STATE_TTL_SECONDS = 600;
 
 function isSecure(): boolean {
@@ -113,6 +114,30 @@ function loginErrorRedirect(error: string, ...clearCookies: string[]): Response 
 
 // ---- internal helpers -------------------------------------------------------
 
+/** The same-origin path to return to after sign-in, or null. Mirror of
+ *  safePath() in app/src/lib/return-to.ts — the destination arrives from the
+ *  browser before the user is authenticated, so an unchecked value here is an
+ *  open redirect on the SSO callback. Resolved against a sentinel origin
+ *  rather than prefix-checked: browsers strip tab/newline before resolving, so
+ *  "/\t/evil.com" slips past a startsWith("//") test and then loads
+ *  //evil.com. */
+const RETURN_TO_SENTINEL = "https://return-to.invalid";
+
+function safeReturnPath(to: string | undefined): string | null {
+  if (!to) return null;
+  let u: URL;
+  try {
+    u = new URL(to, RETURN_TO_SENTINEL);
+  } catch {
+    return null;
+  }
+  if (u.origin !== RETURN_TO_SENTINEL) return null;
+  // /login and /signup would bounce the user straight back out.
+  if (/^\/(login|signup)(\/|$)/.test(u.pathname)) return null;
+  const path = `${u.pathname}${u.search}${u.hash}`;
+  return path === "/" ? null : path;
+}
+
 function initialsOf(name: string): string {
   return (
     name
@@ -126,9 +151,12 @@ function initialsOf(name: string): string {
 
 // ---- route handlers ---------------------------------------------------------
 
-/** GET /api/auth/oidc/start — kick off the OIDC redirect. */
-export async function handleOidcStart(_req: Request): Promise<Response> {
+/** GET /api/auth/oidc/start — kick off the OIDC redirect. `?next=` carries the
+ *  deep link the user was bounced off, in the same short cookie style as state
+ *  and nonce; the provider never sees it. */
+export async function handleOidcStart(req: Request): Promise<Response> {
   const config = await getOidcConfig();
+  const next = safeReturnPath(new URL(req.url).searchParams.get("next") ?? undefined);
   const state = _client.randomState();
   const nonce = _client.randomNonce();
   const redirectUri = `${env.origin}/api/auth/oidc/callback`;
@@ -143,6 +171,7 @@ export async function handleOidcStart(_req: Request): Promise<Response> {
   const headers = new Headers({ Location: url.toString() });
   headers.append("Set-Cookie", shortCookie(STATE_COOKIE, state, STATE_TTL_SECONDS));
   headers.append("Set-Cookie", shortCookie(NONCE_COOKIE, nonce, STATE_TTL_SECONDS));
+  if (next) headers.append("Set-Cookie", shortCookie(NEXT_COOKIE, next, STATE_TTL_SECONDS));
   return new Response(null, { status: 302, headers });
 }
 
@@ -153,9 +182,10 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   const expectedNonce = cookies[NONCE_COOKIE];
   const clearState = clearShortCookie(STATE_COOKIE);
   const clearNonce = clearShortCookie(NONCE_COOKIE);
+  const clearNext = clearShortCookie(NEXT_COOKIE);
 
   if (!expectedState || !expectedNonce) {
-    return loginErrorRedirect("state", clearState, clearNonce);
+    return loginErrorRedirect("state", clearState, clearNonce, clearNext);
   }
 
   const callbackUrl = new URL(req.url);
@@ -164,7 +194,7 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   // and no code. The grant below would report that as a generic failure, so
   // answer with the message that says what actually happened.
   if (callbackUrl.searchParams.get("error") === "access_denied") {
-    return loginErrorRedirect("no_code", clearState, clearNonce);
+    return loginErrorRedirect("no_code", clearState, clearNonce, clearNext);
   }
 
   const config = await getOidcConfig();
@@ -184,20 +214,20 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
     claims = tokens.claims() as typeof claims;
   } catch (e) {
     console.warn(`oidc callback error: ${e instanceof Error ? e.message : String(e)}`);
-    return loginErrorRedirect("token", clearState, clearNonce);
+    return loginErrorRedirect("token", clearState, clearNonce, clearNext);
   }
 
   const sub = claims.sub;
   const email = (claims.email ?? "").toLowerCase();
   const name = claims.name ?? email;
 
-  if (!email) return loginErrorRedirect("no_email", clearState, clearNonce);
+  if (!email) return loginErrorRedirect("no_email", clearState, clearNonce, clearNext);
 
   // Domain check — reads live from process.env via _getAllowedDomain() so that
   // test files that set ALLOWED_DOMAIN before imports still see the correct value.
   const allowedDomain = _getAllowedDomain();
   if (allowedDomain && email.split("@")[1] !== allowedDomain) {
-    return loginErrorRedirect("domain", clearState, clearNonce);
+    return loginErrorRedirect("domain", clearState, clearNonce, clearNext);
   }
 
   const initials =
@@ -261,7 +291,7 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   });
 
   if (oidcResult.denied) {
-    return loginErrorRedirect("not_allowed", clearState, clearNonce);
+    return loginErrorRedirect("not_allowed", clearState, clearNonce, clearNext);
   }
 
   try {
@@ -271,9 +301,12 @@ export async function handleOidcCallback(req: Request): Promise<Response> {
   }
 
   const { cookie } = await issueSession(userId);
-  const headers = new Headers({ Location: "/app" });
+  // Re-validated here: the cookie came back from the browser, so it is checked
+  // on the way out as well as on the way in.
+  const headers = new Headers({ Location: safeReturnPath(cookies[NEXT_COOKIE]) ?? "/app" });
   headers.append("Set-Cookie", clearState);
   headers.append("Set-Cookie", clearNonce);
+  headers.append("Set-Cookie", clearNext);
   headers.append("Set-Cookie", cookie);
   return new Response(null, { status: 302, headers });
 }

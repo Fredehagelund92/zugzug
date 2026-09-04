@@ -1719,9 +1719,9 @@ export async function deleteColumn(
       `SELECT reference_table_id, field, field_config FROM ${pg("reference_table_field")}
        WHERE type = 'linked'
        AND tenant_id = $3
-       AND field_config::jsonb @> $1::jsonb
+       AND field_config::jsonb ->> 'targetRefTableId' = $1
        AND field_config::jsonb -> 'displayFields' ? $2`,
-      [JSON.stringify({ targetRefTableId: refTableId }), field, tenantId],
+      [refTableId, field, tenantId],
     );
     for (const ref of linkedRefs) {
       const cfg = JSON.parse(ref.field_config) as {

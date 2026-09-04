@@ -25,16 +25,12 @@ test("setPreferences + getPreferences round-trip per tenant", async () => {
   const repo = new TenantRepo("tpref_a", "admin");
 
   await repo.setPreferences({
-    publishThreshold: 90,
-    suggestThreshold: 70,
     scanSchedule: "hourly",
     requireSecondPublisher: false,
   });
 
   const got = await repo.getPreferences();
   expect(got).toEqual({
-    publishThreshold: 90,
-    suggestThreshold: 70,
     scanSchedule: "hourly",
     requireSecondPublisher: false,
     autoPublishEnabled: false,
@@ -48,15 +44,15 @@ test("tenant A preferences are independent from tenant B preferences", async () 
   const a = new TenantRepo("tpref_a", "admin");
   const b = new TenantRepo("tpref_b", "admin");
 
-  await a.setPreferences({ publishThreshold: 80, suggestThreshold: 60, scanSchedule: "hourly" });
-  await b.setPreferences({ publishThreshold: 99, suggestThreshold: 90, scanSchedule: "daily" });
+  await a.setPreferences({ scanSchedule: "hourly", requireSecondPublisher: true });
+  await b.setPreferences({ scanSchedule: "daily", requireSecondPublisher: false });
 
   const gotA = await a.getPreferences();
   const gotB = await b.getPreferences();
 
-  expect(gotA.publishThreshold).toBe(80);
+  expect(gotA.requireSecondPublisher).toBe(true);
   expect(gotA.scanSchedule).toBe("hourly");
-  expect(gotB.publishThreshold).toBe(99);
+  expect(gotB.requireSecondPublisher).toBe(false);
   expect(gotB.scanSchedule).toBe("daily");
 });
 
@@ -66,8 +62,6 @@ test("setPreferences as viewer → 403 FORBIDDEN", async () => {
   let thrown: AppError | null = null;
   try {
     await viewer.setPreferences({
-      publishThreshold: 1,
-      suggestThreshold: 1,
       scanSchedule: null,
       requireSecondPublisher: false,
     });
@@ -81,12 +75,10 @@ test("super-admin bypasses the role check even with role='viewer'", async () => 
   await provisionTenant({ id: "tpref_a", label: "A" });
   const sa = new TenantRepo("tpref_a", "viewer", true);
   await sa.setPreferences({
-    publishThreshold: 50,
-    suggestThreshold: 50,
-    scanSchedule: null,
+    scanSchedule: "daily",
     requireSecondPublisher: false,
   });
-  expect((await sa.getPreferences()).publishThreshold).toBe(50);
+  expect((await sa.getPreferences()).scanSchedule).toBe("daily");
 });
 
 test("default tenant getPreferences returns hardcoded fallback when no preferences row exists", async () => {
@@ -95,7 +87,7 @@ test("default tenant getPreferences returns hardcoded fallback when no preferenc
   );
   const defaultRepo = new TenantRepo("default", "admin");
   const prefs = await defaultRepo.getPreferences();
-  expect(prefs.publishThreshold).toBe(95);
-  expect(prefs.suggestThreshold).toBe(80);
   expect(prefs.scanSchedule).toBeNull();
+  expect(prefs.requireSecondPublisher).toBe(false);
+  expect(prefs.autoPublishEnabled).toBe(false);
 });

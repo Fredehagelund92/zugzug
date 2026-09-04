@@ -88,8 +88,8 @@ async function createTestCtx(): Promise<TestCtx> {
   try {
     await pgRun(
       `INSERT INTO ${pgTable("preferences")}
-         (tenant_id, ai_enabled, ai_provider, ai_api_key, publish_threshold, suggest_threshold, updated_at)
-       VALUES ($1, false, 'openai', null, 1, 1, now())
+         (tenant_id, ai_enabled, ai_provider, ai_api_key, updated_at)
+       VALUES ($1, false, 'openai', null, now())
        ON CONFLICT (tenant_id) DO NOTHING`,
       [TEST_TENANT_ID],
     );

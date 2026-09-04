@@ -147,10 +147,15 @@ function PasswordForm({ allowedDomain }: { allowedDomain: string | null }) {
 }
 
 function OidcSection({ label, allowedDomain }: { label: string; allowedDomain: string | null }) {
+  // Carry the deep link BootGate bounced off through the provider round-trip —
+  // the password form reads the same `?next=`, the SSO callback redirects to it.
+  const next = returnToFrom(window.location.search, "");
   return (
     <div className="space-y-3">
       <a
-        href="/api/auth/oidc/start"
+        href={
+          next ? `/api/auth/oidc/start?next=${encodeURIComponent(next)}` : "/api/auth/oidc/start"
+        }
         className="flex w-full items-center justify-center gap-2.5 rounded-sm border border-line-2 bg-surface-2 px-4 py-[11px] text-sm font-semibold text-ink transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
         Sign in with {label}

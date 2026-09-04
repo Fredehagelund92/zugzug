@@ -13,7 +13,7 @@ vi.mock("../src/store", async (orig) => {
     useRefTables: () => [],
     useAudit: () => [],
     useConnectionHealth: () => undefined,
-    usePreferences: () => ({ publishThreshold: 95, suggestThreshold: 80, scanSchedule: null }),
+    usePreferences: () => ({ scanSchedule: null }),
   };
 });
 

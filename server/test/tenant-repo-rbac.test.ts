@@ -59,8 +59,6 @@ test("manage_tables: admin can addField (no FORBIDDEN)", async () => {
 // ---------------------------------------------------------------------------
 
 const PREFS = {
-  publishThreshold: 1,
-  suggestThreshold: 1,
   scanSchedule: null,
   requireSecondPublisher: false,
   autoPublishEnabled: false,

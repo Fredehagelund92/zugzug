@@ -33,8 +33,8 @@ const PREFS_ID = 9101;
 async function setPrefs(enabled: boolean, provider: string, key: string | null): Promise<void> {
   await pgRun(
     `INSERT INTO ${pg("preferences")}
-       (id, publish_threshold, suggest_threshold, updated_at, tenant_id, ai_enabled, ai_provider, ai_api_key)
-     VALUES ($1, 90, 60, current_timestamp, $2, $3, $4, $5)
+       (id, updated_at, tenant_id, ai_enabled, ai_provider, ai_api_key)
+     VALUES ($1, current_timestamp, $2, $3, $4, $5)
      ON CONFLICT (id) DO UPDATE
        SET tenant_id   = EXCLUDED.tenant_id,
            ai_enabled  = EXCLUDED.ai_enabled,

@@ -9,8 +9,16 @@ read path (the distinct-value scan) and an optional write path.
 
 ## Production-ready
 
-- **DuckDB / MotherDuck** — the reference read path, and the writable adapter
-  (`MERGE` into MotherDuck) behind `MOTHERDUCK_WRITABLE`. This is what the demo runs on.
+- **DuckDB / MotherDuck** — the reference read path. This is what the demo runs on.
+
+## Opt-in, and not yet verified against MotherDuck
+
+- **Writable adapter** (`MERGE` into MotherDuck, behind `MOTHERDUCK_WRITABLE`) — the
+  write path is exercised end-to-end against a local writable DuckDB, but nobody has
+  run it against a live MotherDuck account, so whether MotherDuck accepts the
+  qualified table references it emits is unproven. Validate on a staging database
+  first. Publishing is [pull-first](/docs/guides/publishing) by design, so this is a
+  convenience rather than the recommended path.
 
 ## Experimental
 

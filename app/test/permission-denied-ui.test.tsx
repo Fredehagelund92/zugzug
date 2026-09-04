@@ -99,8 +99,6 @@ vi.mock("../src/store", async (importOriginal) => {
   return {
     ...actual,
     usePreferences: () => ({
-      publishThreshold: 90,
-      suggestThreshold: 60,
       scanSchedule: null,
       requireSecondPublisher: false,
       autoPublishEnabled: false,

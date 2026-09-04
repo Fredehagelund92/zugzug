@@ -307,11 +307,6 @@ export interface SchemaFacet {
   unmapped: number;
   missing: number;
 }
-export interface CatalogTable {
-  schema: string;
-  table: string;
-  columns: string[];
-}
 /** Compact per-table publish state for the refTable list (ADR-0005). The
  *  count-only sibling of PublishState — the dashboard needs the size of the
  *  delta, not the keys. changedRecords = PublishState.changedKeys.length. */
@@ -399,8 +394,6 @@ export interface GridLayoutConfig {
   filterSet?: FilterSetConfig | null;
 }
 export interface Preferences {
-  publishThreshold: number;
-  suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
   requireSecondPublisher: boolean;
   autoPublishEnabled: boolean;
@@ -418,6 +411,10 @@ export const qid = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
 /** record table: display 'zugzug.dim_country' → '"zugzug"."dim_country"' (2-part Postgres). */
 export const cq = (display: string) => display.split(".").map(qid).join(".");
+
+/** Escape ILIKE wildcards so a search for "100%" or "a_b" means those
+ *  characters, not "anything". Backslash is Postgres' default LIKE escape. */
+export const likeEscape = (s: string): string => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export const rel = (secs: number): string => {
   if (secs < 45) return "just now";

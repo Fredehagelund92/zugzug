@@ -14,8 +14,6 @@ const { apiFetch, scanSources, setPreferences, toast, prefs } = vi.hoisted(() =>
   setPreferences: vi.fn(),
   toast: vi.fn(),
   prefs: {
-    publishThreshold: 90,
-    suggestThreshold: 60,
     scanSchedule: "daily" as string | null,
     requireSecondPublisher: false,
     autoPublishEnabled: false,

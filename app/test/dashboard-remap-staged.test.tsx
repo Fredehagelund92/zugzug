@@ -92,7 +92,7 @@ vi.mock("../src/store", () => ({
     postgres: { status: "ok", lastCheckedAt: new Date().toISOString() },
   }),
   refreshConnectionHealth: vi.fn(async () => undefined),
-  usePreferences: () => ({ scanSchedule: null, publishThreshold: 0.9, suggestThreshold: 0.6 }),
+  usePreferences: () => ({ scanSchedule: null }),
   setPreferences: vi.fn(),
   scanSources: vi.fn(async () => 0),
   invalidate: {

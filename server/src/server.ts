@@ -956,22 +956,18 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
     }
 
     return await pgTxScoped(tenantCtx.tenantId, async () => {
-      // GET /api/preferences ; PUT /api/preferences {publishThreshold, suggestThreshold, scanSchedule, requireSecondPublisher?, autoPublishEnabled?}
+      // GET /api/preferences ; PUT /api/preferences {scanSchedule, requireSecondPublisher?, autoPublishEnabled?}
       if (seg[1] === "preferences" && seg.length === 2) {
         if (method === "GET") return json(await reqRepo.getPreferences());
         if (method === "PUT") {
           const denied = gateOrJson(tenantCtx, "manage_workspace");
           if (denied) return denied;
           const p = (await req.json()) as {
-            publishThreshold: number;
-            suggestThreshold: number;
             scanSchedule: "hourly" | "daily" | null;
             requireSecondPublisher?: boolean;
             autoPublishEnabled?: boolean;
           };
           await reqRepo.setPreferences({
-            publishThreshold: p.publishThreshold,
-            suggestThreshold: p.suggestThreshold,
             scanSchedule: p.scanSchedule,
             requireSecondPublisher: p.requireSecondPublisher ?? false,
             autoPublishEnabled: p.autoPublishEnabled ?? false,
@@ -1065,17 +1061,6 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
           return json(await reqRepo.topUnmapped(refTableId, table, column, limit, databaseId));
         }
       }
-
-      // GET /api/catalog — browse/search the warehouse catalog (the 1000+ tables)
-      if (seg[1] === "catalog" && seg.length === 2 && method === "GET")
-        return json(
-          await reqRepo.searchCatalog({
-            q: url.searchParams.get("q") ?? undefined,
-            schema: url.searchParams.get("schema") ?? undefined,
-            limit: Number(url.searchParams.get("limit") ?? 50),
-            offset: Number(url.searchParams.get("offset") ?? 0),
-          }),
-        );
 
       // GET /api/audit ; POST /api/audit {action, detail}
       if (seg[1] === "audit" && seg.length === 2) {

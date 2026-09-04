@@ -266,3 +266,13 @@ describe("GET /api/t/:slug/drafts (paginated boot path)", () => {
     expect(body.drafts.length).toBeLessThanOrEqual(1);
   });
 });
+
+// GET /api/catalog is gone: it called listTables without a database, which the
+// adapters reject, and no client ever used it — /warehouse/tables is the route
+// the browser calls, and it takes the database the catalog route never had.
+describe("GET /api/catalog (removed)", () => {
+  it("has no route", async () => {
+    const res = await handle(tenantReq("/catalog"), noop);
+    expect(res.status).toBe(404);
+  });
+});

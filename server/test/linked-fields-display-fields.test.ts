@@ -165,3 +165,18 @@ test("displayFields update appends audit entry with before/after", async () => {
   expect(meta.before).toEqual(["label"]);
   expect(meta.after).toEqual(["label", "iso_code"]);
 });
+
+test("deleting a target field strips it from displayFields of linked columns elsewhere", async () => {
+  const { srcDim, fkField, tgtDim } = await setupLink();
+  await repo.updateField(
+    srcDim,
+    fkField,
+    { fieldConfig: JSON.stringify({ displayFields: ["label", "iso_code"] }) },
+    userId,
+    tenantId,
+  );
+  await repo.deleteColumn(tgtDim, "iso_code", userId, tenantId);
+  const refTable = await repo.getRefTable(srcDim, tenantId);
+  const cfg = refTable?.fields.find((f) => f.field === fkField);
+  expect(cfg?.displayFields).toEqual(["label"]);
+});

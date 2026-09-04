@@ -18,6 +18,7 @@
 import { env, pg } from "./env.ts";
 import { pgRun as run, pgGet as get, pgAll, type TxHelpers } from "./pg.ts";
 import { AppError } from "./errors.ts";
+import { likeEscape } from "./repo-shared.ts";
 
 /** Count real login accounts — the single source of truth for the first-admin
  *  election, shared by the password (auth-password.ts) and OIDC (auth-oidc.ts)
@@ -267,7 +268,7 @@ export interface AdminUserRecord {
 export async function listUsers(q?: string, limit = 50, offset = 0): Promise<AdminUserRecord[]> {
   const params: unknown[] = [limit, offset];
   const filter = q ? `WHERE (u.email ILIKE $3 OR u.name ILIKE $3)` : "";
-  if (q) params.push(`%${q}%`);
+  if (q) params.push(`%${likeEscape(q)}%`);
   return pgAll<AdminUserRecord>(
     `SELECT u.id, u.email, u.name, u.initials,
             u.is_super_admin AS "isSuperAdmin",

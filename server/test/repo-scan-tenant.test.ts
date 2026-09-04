@@ -66,9 +66,9 @@ test("anyScanDue('*') is true iff any tenant has a schedule with work pending", 
   // Set scan_schedule on tenant A's preferences. lastScan is null → due.
   await pgRun(
     `INSERT INTO "zugzug_app"."preferences"
-       (id, scan_schedule, publish_threshold, suggest_threshold, updated_at, tenant_id)
+       (id, scan_schedule, updated_at, tenant_id)
      VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM "zugzug_app"."preferences"),
-             '15m', 95, 75, current_timestamp, $1)
+             '15m', current_timestamp, $1)
      ON CONFLICT (tenant_id) DO UPDATE SET scan_schedule = '15m'`,
     [TA],
   );

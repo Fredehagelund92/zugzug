@@ -36,45 +36,17 @@ await runMigrations();
 
 // 1. preferences round-trip
 const before = await repo.getPreferences();
-check(
-  "getPreferences returns numeric thresholds",
-  Number.isFinite(before.publishThreshold) && Number.isFinite(before.suggestThreshold),
-  `publish=${before.publishThreshold}, suggest=${before.suggestThreshold}`,
-);
 
 await repo.setPreferences({
-  publishThreshold: 88,
-  suggestThreshold: 60,
-  scanSchedule: null,
+  scanSchedule: "daily",
   requireSecondPublisher: false,
   autoPublishEnabled: false,
 });
 const after = await repo.getPreferences();
-check(
-  "setPreferences round-trips",
-  after.publishThreshold === 88 && after.suggestThreshold === 60,
-  `got publish=${after.publishThreshold}, suggest=${after.suggestThreshold}`,
-);
-
-// clamp invariant: suggest <= publish
-await repo.setPreferences({
-  publishThreshold: 70,
-  suggestThreshold: 90,
-  scanSchedule: null,
-  requireSecondPublisher: false,
-  autoPublishEnabled: false,
-});
-const clamped = await repo.getPreferences();
-check(
-  "setPreferences clamps suggest <= publish",
-  clamped.suggestThreshold <= clamped.publishThreshold,
-  `publish=${clamped.publishThreshold}, suggest=${clamped.suggestThreshold}`,
-);
+check("setPreferences round-trips", after.scanSchedule === "daily", `got ${after.scanSchedule}`);
 
 // reset to defaults
 await repo.setPreferences({
-  publishThreshold: before.publishThreshold,
-  suggestThreshold: before.suggestThreshold,
   scanSchedule: before.scanSchedule,
   requireSecondPublisher: before.requireSecondPublisher,
   autoPublishEnabled: before.autoPublishEnabled,

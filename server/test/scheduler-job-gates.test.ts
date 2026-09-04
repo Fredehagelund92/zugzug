@@ -34,8 +34,8 @@ beforeEach(async () => {
 async function setSchedule(schedule: string | null): Promise<void> {
   await pgRun(
     `INSERT INTO "zugzug_app"."preferences"
-       (publish_threshold, suggest_threshold, scan_schedule, updated_at, tenant_id)
-     VALUES (90, 70, $2, now(), $1)
+       (scan_schedule, updated_at, tenant_id)
+     VALUES ($2, now(), $1)
      ON CONFLICT (tenant_id) DO UPDATE SET scan_schedule = EXCLUDED.scan_schedule`,
     [T, schedule],
   );

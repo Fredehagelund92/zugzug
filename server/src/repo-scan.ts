@@ -6,10 +6,10 @@
 import {
   type SourceInfo,
   type SchemaFacet,
-  type CatalogTable,
   slug,
   qid,
   cq,
+  likeEscape,
   liveSources,
   pgAll,
   pgGet,
@@ -45,7 +45,7 @@ export async function listSources(opts: {
   const params: unknown[] = [opts.tenantId];
   const where: string[] = [`s.tenant_id = $1`];
   if (opts.q) {
-    params.push(`%${opts.q}%`);
+    params.push(`%${likeEscape(opts.q)}%`);
     const p = `$${params.length}`;
     where.push(`((s.schema_name || '.' || s.table_name) ILIKE ${p} OR s.column_name ILIKE ${p})`);
   }
@@ -715,47 +715,6 @@ export async function scanStatus(tenantId: string = "default"): Promise<ScanStat
     lastAutoPublishAt: lastAuto?.at ?? null,
     lastAutoPublishDetail: lastAuto?.detail ?? null,
   };
-}
-
-/** Browse/search the warehouse catalog (the 1000+ tables) — server-side search +
- *  schema facets + pagination, metadata only (no row counts). The scale surface. */
-export async function searchCatalog(opts: {
-  q?: string;
-  schema?: string;
-  limit?: number;
-  offset?: number;
-  tenantId: string;
-}): Promise<{
-  rows: CatalogTable[];
-  total: number;
-  schemas: { schema: string; tables: number }[];
-}> {
-  if (!env.attachWarehouse) return { rows: [], total: 0, schemas: [] };
-  const adapter = await getAdapter();
-  const limit = Math.min(100, Math.max(1, opts.limit ?? 50));
-  const offset = Math.max(0, opts.offset ?? 0);
-
-  const tables = await adapter.listTables({
-    schema: opts.schema,
-    search: opts.q,
-  });
-  const schemas = Object.values(
-    tables.reduce<Record<string, { schema: string; tables: number }>>((acc, t) => {
-      acc[t.schema] ??= { schema: t.schema, tables: 0 };
-      acc[t.schema].tables += 1;
-      return acc;
-    }, {}),
-  )
-    .sort((a, b) => b.tables - a.tables || a.schema.localeCompare(b.schema))
-    .slice(0, 100);
-
-  const rows = tables.slice(offset, offset + limit).map((t) => ({
-    schema: t.schema,
-    table: `${t.schema}.${t.table}`,
-    columns: [...t.columns],
-  }));
-
-  return { rows, total: tables.length, schemas };
 }
 
 /* ---- record bootstrap from warehouse ---- */

@@ -50,8 +50,8 @@ export const refTable = app.table(
   },
   (t) => [
     primaryKey({ columns: [t.tenant_id, t.id] }),
-    index("refTable_tenant_idx").on(t.tenant_id),
-    check("refTable_ordering_mode_chk", sql`${t.ordering_mode} IN ('derived', 'manual')`),
+    index("reference_table_tenant_idx").on(t.tenant_id),
+    check("reference_table_ordering_mode_chk", sql`${t.ordering_mode} IN ('derived', 'manual')`),
   ],
 );
 
@@ -69,6 +69,7 @@ export const refTableSource = app.table(
   },
   (t) => [
     primaryKey({
+      name: "reference_table_source_pk",
       columns: [t.tenant_id, t.reference_table_id, t.database_id, t.schema_name, t.table_name, t.column_name],
     }),
     index("reference_table_source_ref_table_idx").on(t.tenant_id, t.reference_table_id),
@@ -118,6 +119,7 @@ export const sourceStat = app.table(
   },
   (t) => [
     primaryKey({
+      name: "source_stat_pk",
       columns: [t.tenant_id, t.reference_table_id, t.database_id, t.schema_name, t.table_name, t.column_name],
     }),
     foreignKey({
@@ -218,8 +220,6 @@ export const preferences = app.table(
   "preferences",
   {
     id:                serial("id").primaryKey(),
-    publish_threshold: integer("publish_threshold").notNull(),
-    suggest_threshold: integer("suggest_threshold").notNull(),
     scan_schedule:     varchar("scan_schedule", { length: 10 }),
     updated_at:        timestamp("updated_at").notNull(),
     ai_enabled:        boolean("ai_enabled").notNull().default(false),
@@ -317,6 +317,7 @@ export const sourceScanOccurrence = app.table(
   },
   (t) => [
     primaryKey({
+      name: "source_scan_occurrence_pk",
       columns: [t.tenant_id, t.reference_table_id, t.raw_lower, t.table_name, t.column_name],
     }),
     check("source_scan_occurrence_rows_nonneg", sql`${t.rows} >= 0`),

@@ -73,3 +73,19 @@ test("appendAudit as viewer → 403", async () => {
   }
   expect(thrown).toBe(true);
 });
+
+test("audit search treats % as a literal, not a wildcard", async () => {
+  await provisionTenant({ id: "taudit_a", label: "A" });
+  await pgRun(
+    `INSERT INTO "zugzug_app"."users" (id, name, initials, email)
+     VALUES ('u_audit', 'U', 'XX', 'u_audit@x')
+     ON CONFLICT (id) DO NOTHING`,
+  );
+
+  const a = new TenantRepo("taudit_a", "editor");
+  await a.appendAudit("u_audit", "edit", "discount 100% off");
+  await a.appendAudit("u_audit", "edit", "discount 1000 off");
+
+  const hits = await a.listAudit(50, { q: "100%" });
+  expect(hits.map((r) => r.detail)).toEqual(["discount 100% off"]);
+});

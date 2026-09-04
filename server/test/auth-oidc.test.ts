@@ -326,3 +326,59 @@ test("oidc callback — re-login does not overwrite existing role", async () => 
   );
   expect(user?.role).toBe("admin");
 });
+
+// ---------------------------------------------------------------------------
+// Return-to: the deep link survives the provider round-trip, but only if it is
+// an in-app path. The destination reaches the callback before the user is
+// authenticated, so an off-site one would be a pre-auth open redirect.
+// ---------------------------------------------------------------------------
+
+test("oidc start — an in-app ?next= is stored in a short cookie", async () => {
+  const res = await handleOidcStart(
+    new Request("http://localhost/api/auth/oidc/start?next=%2Fapp%2Facme%2Ftables%2Fcountry"),
+  );
+  const next = res.headers.getSetCookie().find((c) => c.startsWith("zz_oidc_next="));
+  expect(next).toContain(encodeURIComponent("/app/acme/tables/country"));
+  expect(next).toContain("Max-Age=600");
+});
+
+test("oidc start — an off-site ?next= is not stored", async () => {
+  const res = await handleOidcStart(
+    new Request("http://localhost/api/auth/oidc/start?next=https%3A%2F%2Fevil.example%2Fx"),
+  );
+  expect(res.headers.getSetCookie().some((c) => c.startsWith("zz_oidc_next="))).toBe(false);
+});
+
+test("oidc callback — redirects to the in-app destination and clears the cookie", async () => {
+  mockTokenResult = {
+    claims: () => ({ sub: "user-sub-next", email: "next@example.com", name: "Nex Tuser" }),
+  };
+  const req = new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+    headers: {
+      cookie: `zz_oidc_state=test-state; zz_oidc_nonce=test-nonce; zz_oidc_next=${encodeURIComponent("/app/acme/tables/country")}`,
+    },
+  });
+  const res = await handleOidcCallback(req);
+  expect(res.headers.get("Location")).toBe("/app/acme/tables/country");
+  expect(
+    res.headers
+      .getSetCookie()
+      .some((c) => c.startsWith("zz_oidc_next=;") && c.includes("Max-Age=0")),
+  ).toBe(true);
+});
+
+test("oidc callback — an off-site destination cookie is refused, not followed", async () => {
+  mockTokenResult = {
+    claims: () => ({ sub: "user-sub-evil", email: "evil@example.com", name: "E Vil" }),
+  };
+  // A forged cookie: the browser holds it, so the callback re-checks it.
+  for (const forged of ["https://evil.example/x", "//evil.example/x", "/\t/evil.example"]) {
+    const req = new Request("http://localhost/api/auth/oidc/callback?code=abc&state=test-state", {
+      headers: {
+        cookie: `zz_oidc_state=test-state; zz_oidc_nonce=test-nonce; zz_oidc_next=${encodeURIComponent(forged)}`,
+      },
+    });
+    const res = await handleOidcCallback(req);
+    expect(res.headers.get("Location")).toBe("/app");
+  }
+});

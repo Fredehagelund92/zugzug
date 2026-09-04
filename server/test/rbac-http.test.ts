@@ -145,8 +145,6 @@ const CASES: Case[] = [
     method: "PUT",
     path: (f) => `/api/t/${f.ws}/preferences`,
     body: {
-      publishThreshold: 1,
-      suggestThreshold: 1,
       scanSchedule: null,
       requireSecondPublisher: false,
     },

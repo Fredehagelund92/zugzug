@@ -13,8 +13,8 @@ async function seedTenant(t: string): Promise<void> {
   );
   await pgRun(
     `INSERT INTO "zugzug_app"."preferences"
-       (publish_threshold, suggest_threshold, updated_at, tenant_id)
-     VALUES (90, 70, now(), $1)
+       (updated_at, tenant_id)
+     VALUES (now(), $1)
      ON CONFLICT (tenant_id) DO UPDATE SET last_outbound_sweep_at = NULL`,
     [t],
   );

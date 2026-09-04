@@ -60,9 +60,8 @@ test("GET /api/t/:slug/preferences returns the tenant's preferences", async () =
   });
   const { TenantRepo } = await import("../src/tenant-repo.ts");
   await new TenantRepo("troute_a", "admin").setPreferences({
-    publishThreshold: 77,
-    suggestThreshold: 55,
     scanSchedule: "hourly",
+    requireSecondPublisher: true,
   });
 
   const { handle } = await import("../src/server.ts");
@@ -71,8 +70,8 @@ test("GET /api/t/:slug/preferences returns the tenant's preferences", async () =
   });
   const res = await handle(req, () => {});
   expect(res.status).toBe(200);
-  const body = (await res.json()) as { publishThreshold: number; scanSchedule: string };
-  expect(body.publishThreshold).toBe(77);
+  const body = (await res.json()) as { requireSecondPublisher: boolean; scanSchedule: string };
+  expect(body.requireSecondPublisher).toBe(true);
   expect(body.scanSchedule).toBe("hourly");
 });
 
@@ -130,7 +129,7 @@ test("PUT /api/t/:slug/preferences as viewer → 403", async () => {
   const req = new Request("http://localhost/api/t/troute_a/preferences", {
     method: "PUT",
     headers: { cookie, "content-type": "application/json" },
-    body: JSON.stringify({ publishThreshold: 1, suggestThreshold: 1, scanSchedule: null }),
+    body: JSON.stringify({ scanSchedule: null }),
   });
   const res = await handle(req, () => {});
   expect(res.status).toBe(403);

@@ -1,5 +1,5 @@
 import { pgTxRaw, pgAll } from "./pg.ts";
-import { cq, qid } from "./repo-shared.ts";
+import { cq, likeEscape, qid } from "./repo-shared.ts";
 import { clusterScanRows, type ScanValueCluster } from "./cluster-values.ts";
 
 export interface ScanOccurrence {
@@ -217,12 +217,6 @@ export interface ValuesPage {
   items: ScanValueRow[];
   hasMore: boolean;
   nextCursor: string | null;
-}
-
-/** Escape ILIKE wildcards so a search for "100%" or "a_b" means those
- *  characters, not "anything". Backslash is Postgres' default LIKE escape. */
-function likeEscape(s: string): string {
-  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 function encodeCursor(totalRows: number, rawLower: string): string {

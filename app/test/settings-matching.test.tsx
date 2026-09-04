@@ -13,8 +13,6 @@ const { setPreferences, invalidateTenant, toast, prefs } = vi.hoisted(() => ({
   invalidateTenant: vi.fn(),
   toast: vi.fn(),
   prefs: {
-    publishThreshold: 90,
-    suggestThreshold: 60,
     scanSchedule: null as string | null,
     requireSecondPublisher: false,
     autoPublishEnabled: false,

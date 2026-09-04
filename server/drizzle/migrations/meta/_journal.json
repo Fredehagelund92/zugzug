@@ -309,6 +309,20 @@
       "when": 1785114058613,
       "tag": "0043_rename_dim_index_names",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785204058613,
+      "tag": "0044_drop_confidence_thresholds",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1785294058613,
+      "tag": "0045_rename_dim_constraint_names",
+      "breakpoints": true
     }
   ]
 }

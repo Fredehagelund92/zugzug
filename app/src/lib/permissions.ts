@@ -57,7 +57,7 @@ const REQUIRES: Record<Action, Capability | "always" | "super_admin"> = {
   "settings.warehouse.view": "always",
   "settings.audit.view": "always",
 
-  // Workspace settings — thresholds, scan schedule, four-eyes, auto-publish,
+  // Workspace settings — scan schedule, four-eyes, auto-publish,
   // members and the danger zone all sit behind PUT /preferences and the
   // requireAdmin routes.
   "settings.general.edit": "manage_workspace",

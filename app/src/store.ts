@@ -142,8 +142,6 @@ export let collaborators: User[] = [currentUser];
 let currentUserFull: CurrentUser | null = null;
 
 export interface Preferences {
-  publishThreshold: number;
-  suggestThreshold: number;
   scanSchedule: "hourly" | "daily" | null;
   requireSecondPublisher: boolean;
   autoPublishEnabled: boolean;
@@ -198,8 +196,6 @@ function resetStore(): void {
   draftsFlat = {};
   audit = [];
   preferences = {
-    publishThreshold: 95,
-    suggestThreshold: 80,
     scanSchedule: null,
     requireSecondPublisher: false,
     autoPublishEnabled: false,
@@ -287,8 +283,6 @@ let sources: SourceInfo[] = [];
 let draftsFlat: Record<string, Draft> = {};
 let audit: AuditEntry[] = [];
 let preferences: Preferences = {
-  publishThreshold: 95,
-  suggestThreshold: 80,
   scanSchedule: null,
   requireSecondPublisher: false,
   autoPublishEnabled: false,

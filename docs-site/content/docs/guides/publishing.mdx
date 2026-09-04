@@ -29,7 +29,9 @@ straight into a MotherDuck database. It's simpler for a solo setup, but it write
 into your warehouse out-of-band — no environment promotion, tables mutated in
 place. Validate against a staging warehouse first.
 
-<Callout type="warn" title="It's the least-tested path">
-Direct write is a convenience, not the default. If a data team owns your
-warehouse, pull-first is almost always the right call.
+<Callout type="warn" title="Not yet verified against MotherDuck">
+The write path is covered end-to-end against a local writable DuckDB, but has not
+been run against a live MotherDuck account — validate on a staging database before
+relying on it. Direct write is a convenience, not the default: if a data team owns
+your warehouse, pull-first is almost always the right call.
 </Callout>
