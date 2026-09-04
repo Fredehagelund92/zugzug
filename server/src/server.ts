@@ -66,6 +66,7 @@ import type { ServerWebSocket } from "bun";
 export { checkHealth, _resetHealthCache, type HealthSnapshot } from "./health.ts";
 import { checkHealth } from "./health.ts"; // used by the /api/health/connections route below
 import { generateSuggestion, AINotEnabledError, isAIConfigured } from "./suggestion.ts";
+import { checkRateLimit } from "./rate-limit.ts";
 import {
   InvalidAPIKeyError,
   AIProviderError,
@@ -1729,6 +1730,24 @@ export async function handle(req: Request, setUid: (uid: string) => void): Promi
         if (seg[3] === "suggest" && seg.length === 4 && method === "POST") {
           const denied = gateOrJson(tenantCtx, "curate");
           if (denied) return denied;
+          // Every call here can cost a paid provider call — force_refresh skips
+          // the cache and guarantees one — so a looping client bills real money
+          // rather than merely burning CPU. Budgeted per WORKSPACE because the
+          // workspace is what pays: one member's runaway loop spends their own
+          // allowance, not the deployment's. That does mean one member can use
+          // up the shared budget for a minute; per-member fairness is a
+          // separate concern from cost, and is not what this guards.
+          const aiRate = await checkRateLimit(`ai:${tenantCtx.tenantId}`, env.aiRpm);
+          if (!aiRate.ok) {
+            return new Response(JSON.stringify({ error: "RATE_LIMITED" }), {
+              status: 429,
+              headers: {
+                "content-type": "application/json",
+                "retry-after": String(aiRate.retryAfterSeconds),
+                ...corsHeaders,
+              },
+            });
+          }
           const body = (await req.json()) as {
             raw_value?: unknown;
             force_refresh?: unknown;
