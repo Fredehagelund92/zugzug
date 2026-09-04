@@ -13,7 +13,7 @@ process.env.ATTACH_WAREHOUSE = "false";
 process.env.MOTHERDUCK_TOKEN = "test-stub";
 
 import "./setup.ts";
-import { test, expect, beforeEach, afterEach } from "bun:test";
+import { test, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { pgRun } from "../src/pg.ts";
 import { pg as pgTable, env } from "../src/env.ts";
 import { provisionTenant } from "../src/tenant.ts";
@@ -68,7 +68,11 @@ async function suggest(tenantId: string, cookie: string): Promise<Response> {
 beforeEach(async () => {
   savedRpm = env.aiRpm;
   (env as { aiRpm: number }).aiRpm = BUDGET;
-  await pgRun(`DELETE FROM ${pgTable("auth_credential_quota")}`);
+  // Scoped to this file's own keys: the table is shared with the auth and
+  // Pull-API limiters, and wiping it wholesale would clear their counters too.
+  await pgRun(
+    `DELETE FROM ${pgTable("auth_credential_quota")} WHERE credential_id LIKE 'ai:airl_%'`,
+  );
 });
 afterEach(() => {
   (env as { aiRpm: number }).aiRpm = savedRpm;
@@ -100,4 +104,24 @@ test("the budget is per workspace — one spending it does not block another", a
   // A global limiter would refuse this too, letting any workspace deny AI
   // suggestions to every other one.
   expect((await suggest(WS_B, bCookie)).status).not.toBe(429);
+});
+
+/* Leaving the fixtures behind makes this file's effect on any later test
+   depend on run order, which is exactly the kind of thing that passes locally
+   and fails elsewhere. */
+afterAll(async () => {
+  for (const t of [WS_A, WS_B]) {
+    await pgRun(`DELETE FROM ${pgTable("audit_log")} WHERE tenant_id = $1`, [t]).catch(() => {});
+    await pgRun(`DELETE FROM ${pgTable("tenant_member")} WHERE tenant_id = $1`, [t]).catch(
+      () => {},
+    );
+    await pgRun(`DELETE FROM ${pgTable("sessions")} WHERE user_id LIKE $1`, [`u_${t}_%`]).catch(
+      () => {},
+    );
+    await pgRun(`DELETE FROM ${pgTable("users")} WHERE id LIKE $1`, [`u_${t}_%`]).catch(() => {});
+    await pgRun(`DELETE FROM ${pgTable("tenant")} WHERE id = $1`, [t]).catch(() => {});
+  }
+  await pgRun(
+    `DELETE FROM ${pgTable("auth_credential_quota")} WHERE credential_id LIKE 'ai:airl_%'`,
+  ).catch(() => {});
 });
